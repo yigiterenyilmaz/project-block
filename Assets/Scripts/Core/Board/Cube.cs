@@ -18,7 +18,16 @@ namespace ProjectBlock.Core
         Obsidian = 3,
         Gold = 4,
         Transparent = 5,
-        Dynamite = 7
+        Dynamite = 7,
+
+        /// <summary>"Kara delik" trap: placeable-over like Transparent, but the cube that
+        /// lands on it is destroyed instead, and the void is consumed.</summary>
+        Void = 9,
+
+        /// <summary>Frozen water ("Buzluk" joker). Unlike obsidian/gold it CAN be exploded
+        /// and pays a bonus when it is, but it does not block a clean sweep - a board that
+        /// holds nothing but ice counts as swept.</summary>
+        Ice = 8
     }
 
     /// <summary>A cube occupying one board cell.</summary>
@@ -44,7 +53,9 @@ namespace ProjectBlock.Core
         /// are the confirmed exceptions.</summary>
         public static bool CountsForCleanSweep(Cube cube)
         {
-            return cube.Kind != CubeKind.Obsidian && cube.Kind != CubeKind.Gold;
+            return cube.Kind != CubeKind.Obsidian
+                && cube.Kind != CubeKind.Gold
+                && cube.Kind != CubeKind.Ice;
         }
 
         /// <summary>Can an explosion destroy this cube?</summary>
@@ -63,6 +74,7 @@ namespace ProjectBlock.Core
             if (card.Has(BlockElement.Gold)) return CubeKind.Gold;
             if (card.Has(BlockElement.Transparent)) return CubeKind.Transparent;
             if (card.Has(BlockElement.Dynamite)) return CubeKind.Dynamite;
+            if (card.Has(BlockElement.Void)) return CubeKind.Void;
             return CubeKind.Normal;
         }
     }

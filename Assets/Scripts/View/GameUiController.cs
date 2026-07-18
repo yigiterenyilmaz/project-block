@@ -338,7 +338,7 @@ namespace ProjectBlock.View
                 Debug.Log("[project_block] " + joker.DisplayName + " cannot be used right now.");
                 return;
             }
-            if (joker.Targeting == JokerTargeting.HandCard)
+            if (joker.Targeting != JokerTargeting.None)
             {
                 pendingTargetJokerId = joker.InstanceId;
                 UpdateHud();
@@ -346,6 +346,13 @@ namespace ProjectBlock.View
                 return;
             }
             RunActivation(joker, ActivationTarget.None);
+        }
+
+        private void CancelTargeting()
+        {
+            pendingTargetJokerId = null;
+            UpdateHud();
+            jokerBar.Refresh(session, null);
         }
 
         private void RunActivation(Joker joker, ActivationTarget target)
@@ -380,19 +387,33 @@ namespace ProjectBlock.View
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
 
-            // Targeting mode: the next hand card clicked is the joker's target.
+            // Targeting mode: the next click picks the joker's target - a hand card or a
+            // board cell, depending on what the joker asked for.
             if (pendingTargetJokerId.HasValue)
             {
                 if (mouse.leftButton.wasPressedThisFrame)
                 {
                     Joker joker = session.Jokers.Find(pendingTargetJokerId.Value);
-                    CardVisual hit = cardLayer.CardAt(world);
-                    if (joker == null || hit == null || hit.SlotIndex < 0
-                        || hit.SlotIndex >= round.Hand.Count)
+                    if (joker == null)
                     {
-                        pendingTargetJokerId = null;
-                        UpdateHud();
-                        jokerBar.Refresh(session, null);
+                        CancelTargeting();
+                        return;
+                    }
+                    if (joker.Targeting == JokerTargeting.BoardCell)
+                    {
+                        GridPos cell;
+                        if (!boardView.TryWorldToCell(world, out cell))
+                        {
+                            CancelTargeting();
+                            return;
+                        }
+                        RunActivation(joker, ActivationTarget.Board(cell));
+                        return;
+                    }
+                    CardVisual hit = cardLayer.CardAt(world);
+                    if (hit == null || hit.SlotIndex < 0 || hit.SlotIndex >= round.Hand.Count)
+                    {
+                        CancelTargeting();
                         return;
                     }
                     RunActivation(joker, ActivationTarget.Hand(hit.SlotIndex));
@@ -661,8 +682,11 @@ namespace ProjectBlock.View
             if (pendingTargetJokerId.HasValue)
             {
                 Joker targeting = session.Jokers.Find(pendingTargetJokerId.Value);
+                string what = targeting != null && targeting.Targeting == JokerTargeting.BoardCell
+                    ? "oyun alanından bir küp seç"
+                    : "elinden bir blok seç";
                 messageText.text = (targeting != null ? targeting.DisplayName : "Joker")
-                    + ": iade edilecek bloğu seç\n[Esc] vazgeç";
+                    + ": " + what + "\n[Esc] vazgeç";
                 return;
             }
 

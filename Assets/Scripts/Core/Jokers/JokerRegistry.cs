@@ -53,6 +53,24 @@ namespace ProjectBlock.Core
             Register(() => new DomuzKumbarasiJoker());
             Register(() => new CimriKumbaraJoker());
             Register(() => new AltinKumbaraJoker());
+            Register(() => new SeriTetikJoker());
+            Register(() => new KaziCalismasiJoker());
+            Register(() => new BuldozerJoker());
+            Register(() => new RobotSupurgeJoker());
+            Register(() => new KayitDefteriJoker());
+            Register(() => new KentselDonusumJoker());
+            Register(() => new BatakJoker());
+            Register(() => new MidasJoker());
+            Register(() => new ElmasKazmaJoker());
+            Register(() => new TutusturJoker());
+            Register(() => new YanginJoker());
+            Register(() => new TaskinJoker());
+            Register(() => new BuzlukJoker());
+            Register(() => new SimyaJoker());
+            Register(() => new DamlayaJoker());
+            Register(() => new IhaleJoker());
+            Register(() => new KaraDelikJoker());
+            Register(() => new EnfeksiyonJoker());
         }
 
         /// <summary>All known jokers, in design order.</summary>

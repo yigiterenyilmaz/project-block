@@ -39,7 +39,12 @@ namespace ProjectBlock.Core
 
         /// <summary>Reshapeable into any shape that exists in the current deck
         /// (RoundEngine.SetFoxShape; right-click opens the picker).</summary>
-        Fox = 9
+        Fox = 9,
+
+        /// <summary>"Kara delik" joker only: a 1x1 trap. Blocks may be placed on top of it,
+        /// but the cube that lands there is destroyed on contact and the void goes with it.
+        /// Round-scoped - these cards never join the owned deck.</summary>
+        Void = 10
 
         // Mirror ("ayna") and PiggyBank ("kumbara") were cut from the design 2026-07-18.
     }

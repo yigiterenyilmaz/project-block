@@ -223,6 +223,18 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>Runs the market-offer filter through every joker, in inventory order.</summary>
+        public BlockCard FilterMarketOffer(BlockCard card)
+        {
+            SessionContext ctx = SessionCtx();
+            Snapshot();
+            for (int i = 0; i < dispatchBuffer.Count; i++)
+            {
+                card = dispatchBuffer[i].FilterMarketOffer(ctx, card) ?? card;
+            }
+            return card;
+        }
+
         public void DispatchMarketLeft(bool anythingPurchased)
         {
             SessionContext ctx = SessionCtx();

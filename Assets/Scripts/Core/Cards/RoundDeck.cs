@@ -108,6 +108,33 @@ namespace ProjectBlock.Core
             return removed;
         }
 
+        /// <summary>Pulls a specific card out of the draw or discard pile and returns it, or
+        /// null if it is in neither (it may be in hand, on the board, or removed from the
+        /// round). "Kazı çalışması" uses this to fetch a card back wherever it drifted to
+        /// after a reshuffle.</summary>
+        public BlockCard TakeCard(int cardId)
+        {
+            for (int i = 0; i < drawPile.Count; i++)
+            {
+                if (drawPile[i].Id == cardId)
+                {
+                    BlockCard card = drawPile[i];
+                    drawPile.RemoveAt(i);
+                    return card;
+                }
+            }
+            for (int i = 0; i < discardPile.Count; i++)
+            {
+                if (discardPile[i].Id == cardId)
+                {
+                    BlockCard card = discardPile[i];
+                    discardPile.RemoveAt(i);
+                    return card;
+                }
+            }
+            return null;
+        }
+
         /// <summary>Puts a card (already outside all piles) into the removed zone.</summary>
         public void RemoveFromRound(BlockCard card)
         {

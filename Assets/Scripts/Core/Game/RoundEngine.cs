@@ -112,6 +112,21 @@ namespace ProjectBlock.Core
         private readonly Dictionary<int, BlockShape> foxShapes = new Dictionary<int, BlockShape>();
         private readonly Dictionary<int, int> rotations = new Dictionary<int, int>();
 
+        /// <summary>Cubes each card put on the board, so "the whole block went at once"
+        /// can be told apart from "its last surviving cube went" ("Kazı çalışması").</summary>
+        private readonly Dictionary<int, int> cardPlacedSize = new Dictionary<int, int>();
+
+        // ---- destruction tracking: the board is diffed against a snapshot, so every
+        // source (lines, fire chains, dynamite, joker effects) is captured the same way ----
+        private readonly Dictionary<GridPos, Cube> boardSnapshot = new Dictionary<GridPos, Cube>();
+        private readonly Dictionary<int, int> cardCubesAtTurnStart = new Dictionary<int, int>();
+        private readonly List<DestroyedCube> destroyedThisTurn = new List<DestroyedCube>();
+        private readonly List<int> cardsFullyDestroyedThisTurn = new List<int>();
+
+        /// <summary>"Kayıt defteri": while true, emptying the board is no longer a sweep.
+        /// Only ForceCleanSweep can raise the event.</summary>
+        internal bool SuppressNaturalSweep { get; set; }
+
         // ---- per-turn state, valid only while a placement is resolving ----
         private readonly ScoreBreakdown breakdown = new ScoreBreakdown();
         private TurnReport currentReport;
@@ -404,6 +419,10 @@ namespace ProjectBlock.Core
             sweepResolvedThisTurn = false;
             cubesDestroyedThisTurn = 0;
             pendingAdvanceOffer = false;
+            destroyedThisTurn.Clear();
+            cardsFullyDestroyedThisTurn.Clear();
+            report.DestroyedCubes = destroyedThisTurn;
+            report.CardsFullyDestroyed = cardsFullyDestroyedThisTurn;
 
             // 1. place + score
             report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
@@ -419,9 +438,13 @@ namespace ProjectBlock.Core
             var waterFrames = new List<IReadOnlyList<WaterMove>>();
             Board.SettleWaterAndReact(waterFrames); // placed water falls before lines are judged
 
+            cardPlacedSize[card.Id] = report.PlacedCells.Count;
+
             // Sampled AFTER the placement and the water settling: whatever sits on the board
             // now is what a real sweep has to clear, and it must not already be "clean".
             boardCleanBeforeExplosion = Board.IsCleanForSweep();
+            ResyncSnapshot();
+            CaptureTurnStartCardCounts();
 
             // 2. explode full lines + score (fire chains resolve inside the board)
             LineExplosionResult explosion = Board.ResolveFullLines();
@@ -468,10 +491,14 @@ namespace ProjectBlock.Core
             }
             report.CubesExploded = cubesExploded;
             cubesDestroyedThisTurn += cubesExploded;
+            // Logged BEFORE the post-explosion settle: settling MOVES water, and a moved
+            // cube would otherwise look like a destroyed one to the snapshot diff.
+            LogDestruction();
             if (explosion.LineCount > 0)
             {
                 breakdown.BaseLines = scorer.ScoreLineExplosion(explosion.LineCount, cubesExploded);
                 Board.SettleWaterAndReact(waterFrames); // explosions pull the floor out from water
+                ResyncSnapshot();
             }
             report.WaterFallFrames = waterFrames;
             hooks.AfterLineExplosion(currentTurn);
@@ -569,13 +596,26 @@ namespace ProjectBlock.Core
         /// </summary>
         internal bool TryResolveCleanSweep()
         {
+            return ResolveCleanSweep(false);
+        }
+
+        private bool ResolveCleanSweep(bool forced)
+        {
             if (sweepResolvedThisTurn || currentReport == null)
             {
                 return false;
             }
-            if (cubesDestroyedThisTurn <= 0 || boardCleanBeforeExplosion || !Board.IsCleanForSweep())
+            if (!forced)
             {
-                return false;
+                if (SuppressNaturalSweep)
+                {
+                    return false;
+                }
+                if (cubesDestroyedThisTurn <= 0 || boardCleanBeforeExplosion
+                    || !Board.IsCleanForSweep())
+                {
+                    return false;
+                }
             }
 
             sweepResolvedThisTurn = true;
@@ -610,10 +650,18 @@ namespace ProjectBlock.Core
         /// will accept it. EXTENSION POINT for Robot supurge, Buldozer, Enfeksiyon.</summary>
         internal IReadOnlyList<GridPos> DestroyCubes(IEnumerable<GridPos> cells, bool countsForSweep)
         {
+            return DestroyCubes(cells, countsForSweep, false);
+        }
+
+        /// <summary>As above; forced ignores cube-kind indestructibility ("elmas kazma").</summary>
+        internal IReadOnlyList<GridPos> DestroyCubes(IEnumerable<GridPos> cells, bool countsForSweep,
+            bool forced)
+        {
             var destroyed = new List<GridPos>();
             foreach (GridPos pos in cells)
             {
-                if (Board.DestroyCube(pos))
+                bool gone = forced ? Board.DestroyCubeForced(pos) : Board.DestroyCube(pos);
+                if (gone)
                 {
                     destroyed.Add(pos);
                 }
@@ -622,7 +670,113 @@ namespace ProjectBlock.Core
             {
                 cubesDestroyedThisTurn += destroyed.Count;
             }
+            LogDestruction();
             return destroyed;
+        }
+
+        /// <summary>Cubes destroyed this turn by sources that COUNT (line explosions, fire
+        /// chains, dynamite, joker effects that opted in). Buldozer's scoreless wipe is
+        /// excluded, which is what keeps it from feeding "Kayıt defteri".</summary>
+        internal int CubesDestroyedThisTurn
+        {
+            get { return cubesDestroyedThisTurn; }
+        }
+
+        /// <summary>Fetches a played card back out of the draw/discard piles, or null if it
+        /// is not in either. Used by "Kazı çalışması" to hand a block back to the player.</summary>
+        internal BlockCard TakeCardFromPiles(int cardId)
+        {
+            return Deck.TakeCard(cardId);
+        }
+
+        /// <summary>Ends the round with a joker-defined reason ("Batak" losing its bet).
+        /// Obeys the standing rule that a pending advance offer outranks a same-turn loss.</summary>
+        internal void DeclareLoss(LossReason reason)
+        {
+            if (Loss == null)
+            {
+                Loss = reason;
+            }
+            if (!pendingAdvanceOffer && currentReport == null)
+            {
+                SetStatus(RoundStatus.Lost);
+            }
+        }
+
+        /// <summary>Raises the clean sweep from a joker rule rather than from an empty board
+        /// ("Kayıt defteri" hitting its cube count). Still at most one sweep per turn.</summary>
+        internal bool ForceCleanSweep()
+        {
+            return ResolveCleanSweep(true);
+        }
+
+        /// <summary>Diffs the board against the snapshot and records everything that vanished,
+        /// then re-snapshots. Called after every destruction so that jokers see the cube KIND
+        /// and SOURCE CARD, both of which the board itself no longer holds.</summary>
+        private void LogDestruction()
+        {
+            if (currentReport == null)
+            {
+                ResyncSnapshot();
+                return;
+            }
+            List<int> touchedCards = null;
+            foreach (KeyValuePair<GridPos, Cube> entry in boardSnapshot)
+            {
+                if (Board.GetCube(entry.Key).HasValue)
+                {
+                    continue;
+                }
+                destroyedThisTurn.Add(new DestroyedCube(entry.Key, entry.Value));
+                int cardId = entry.Value.SourceCardId;
+                if (touchedCards == null)
+                {
+                    touchedCards = new List<int>();
+                }
+                if (!touchedCards.Contains(cardId))
+                {
+                    touchedCards.Add(cardId);
+                }
+            }
+            if (touchedCards != null)
+            {
+                foreach (int cardId in touchedCards)
+                {
+                    if (Board.CountCubesOf(cardId) > 0 || cardsFullyDestroyedThisTurn.Contains(cardId))
+                    {
+                        continue;
+                    }
+                    // "In one go" means the block was still whole when this turn began.
+                    int atTurnStart;
+                    int placed;
+                    if (cardCubesAtTurnStart.TryGetValue(cardId, out atTurnStart)
+                        && cardPlacedSize.TryGetValue(cardId, out placed)
+                        && atTurnStart == placed)
+                    {
+                        cardsFullyDestroyedThisTurn.Add(cardId);
+                    }
+                }
+            }
+            ResyncSnapshot();
+        }
+
+        /// <summary>Re-reads the board into the snapshot WITHOUT logging. Used after water
+        /// settles, where cubes move rather than die.</summary>
+        private void ResyncSnapshot()
+        {
+            Board.SnapshotInto(boardSnapshot);
+        }
+
+        private void CaptureTurnStartCardCounts()
+        {
+            cardCubesAtTurnStart.Clear();
+            foreach (KeyValuePair<GridPos, Cube> entry in boardSnapshot)
+            {
+                int cardId = entry.Value.SourceCardId;
+                int count;
+                cardCubesAtTurnStart.TryGetValue(cardId, out count);
+                cardCubesAtTurnStart[cardId] = count + 1;
+            }
         }
 
         /// <summary>Routes a joker's flat score into this turn - before finalization it joins

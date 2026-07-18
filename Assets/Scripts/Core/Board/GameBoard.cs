@@ -112,7 +112,7 @@ namespace ProjectBlock.Core
                     return false;
                 }
                 Cube? occupant = cells[pos.X, pos.Y];
-                if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent)
+                if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent && occupant.Value.Kind != CubeKind.Void)
                 {
                     return false;
                 }
@@ -135,7 +135,7 @@ namespace ProjectBlock.Core
                 if (IsInside(pos))
                 {
                     Cube? occupant = cells[pos.X, pos.Y];
-                    if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent)
+                    if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent && occupant.Value.Kind != CubeKind.Void)
                     {
                         return false;
                     }
@@ -179,7 +179,16 @@ namespace ProjectBlock.Core
                 GridPos pos = origin + offset;
                 if (IsInside(pos))
                 {
-                    if (!cells[pos.X, pos.Y].HasValue)
+                    Cube? occupant = cells[pos.X, pos.Y];
+                    if (occupant.HasValue && occupant.Value.Kind == CubeKind.Void)
+                    {
+                        // "Kara delik" trap: the arriving cube is swallowed and the void goes
+                        // with it, leaving the cell empty. Both are gone, so nothing is placed.
+                        cells[pos.X, pos.Y] = null;
+                        OccupiedCount--;
+                        continue;
+                    }
+                    if (!occupant.HasValue)
                     {
                         OccupiedCount++; // replaced transparents were already counted
                     }
@@ -414,6 +423,97 @@ namespace ProjectBlock.Core
             cells[pos.X, pos.Y] = null;
             OccupiedCount--;
             return true;
+        }
+
+        /// <summary>Destroys a cube even if its kind is normally indestructible. Only for
+        /// effects that explicitly break that rule ("elmas kazma" cracking obsidian).</summary>
+        public bool DestroyCubeForced(GridPos pos)
+        {
+            if (!IsInside(pos) || !cells[pos.X, pos.Y].HasValue)
+            {
+                return false;
+            }
+            cells[pos.X, pos.Y] = null;
+            OccupiedCount--;
+            return true;
+        }
+
+        /// <summary>Retypes an existing cube, keeping its source card ("Taskin" turning
+        /// neighbours to water, "Yangin" to fire, "Buzluk" freezing water into ice).</summary>
+        public bool SetCubeKind(GridPos pos, CubeKind kind)
+        {
+            if (!IsInside(pos))
+            {
+                return false;
+            }
+            Cube? cube = cells[pos.X, pos.Y];
+            if (!cube.HasValue || cube.Value.Kind == kind)
+            {
+                return false;
+            }
+            cells[pos.X, pos.Y] = new Cube(kind, cube.Value.SourceCardId);
+            return true;
+        }
+
+        /// <summary>Every cell holding a cube of this kind, in the same fixed order as
+        /// GetOccupiedCells (determinism: joker effects pick from a stable list).</summary>
+        public List<GridPos> CellsOfKind(CubeKind kind)
+        {
+            var found = new List<GridPos>();
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    Cube? cube = cells[x, y];
+                    if (cube.HasValue && cube.Value.Kind == kind)
+                    {
+                        found.Add(new GridPos(x, y));
+                    }
+                }
+            }
+            return found;
+        }
+
+        /// <summary>Copies the whole board into a map, for diffing what a turn destroyed.</summary>
+        public void SnapshotInto(Dictionary<GridPos, Cube> target)
+        {
+            target.Clear();
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    Cube? cube = cells[x, y];
+                    if (cube.HasValue)
+                    {
+                        target[new GridPos(x, y)] = cube.Value;
+                    }
+                }
+            }
+        }
+
+        /// <summary>The 4-neighbourhood of a cell, clipped to the board.</summary>
+        public List<GridPos> Neighbours(GridPos pos)
+        {
+            var found = new List<GridPos>(4);
+            AddIfInside(found, new GridPos(pos.X + 1, pos.Y));
+            AddIfInside(found, new GridPos(pos.X - 1, pos.Y));
+            AddIfInside(found, new GridPos(pos.X, pos.Y + 1));
+            AddIfInside(found, new GridPos(pos.X, pos.Y - 1));
+            return found;
+        }
+
+        private void AddIfInside(List<GridPos> target, GridPos pos)
+        {
+            if (IsInside(pos))
+            {
+                target.Add(pos);
+            }
+        }
+
+        /// <summary>True if the cell touches an outer wall of the board.</summary>
+        public bool IsOnEdge(GridPos pos)
+        {
+            return pos.X == 0 || pos.Y == 0 || pos.X == Width - 1 || pos.Y == Height - 1;
         }
 
         /// <summary>Every occupied cell, in a fixed left-to-right, bottom-to-top order.

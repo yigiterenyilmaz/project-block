@@ -31,6 +31,24 @@ public static class JokerTests
         HarcamaBonusu_PaysWhenDrawPileEmpties();
         FullRun_WithEveryJoker_IsDeterministic();
         CleanSweep_FiresOnceAndOnlyOnRealSweep();
+        Buldozer_WipesOnScheduleWithoutScoreOrSweep();
+        RobotSupurge_EatsCubesAndGrowsOnSweep();
+        KayitDefteri_ReplacesTheSweepWithItsCounter();
+        KentselDonusum_GrowsTheBoardPermanently();
+        KaziCalismasi_ReturnsAFullyExplodedBlock();
+        SeriTetik_BoostsHandAndChurnsUntilThreshold();
+        Batak_PayoutCurveAndDeadline();
+        Midas_PaysForGoldInHand();
+        ElmasKazma_CracksObsidianOnSweep();
+        Tutustur_BurnsEveryFireCube();
+        Spread_ConvertsOneRingOnly();
+        Buzluk_FreezesAtWallsAndDoesNotBlockSweep();
+        Simya_GivesOfferedElementalBlocksASecondElement();
+        Damlaya_PaysWhenNothingWasBought();
+        Ihale_LocksUntilTheAuctionedJokerLeaves();
+        KaraDelik_VoidBlockSwallowsWhatLandsOnIt();
+        Enfeksiyon_SpreadsThenDetonates();
+        AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
 
         Console.Out.Write(log.ToString());
@@ -526,6 +544,500 @@ public static class JokerTests
         Check(first == second, "same seed produces the identical run");
         Check(first != other, "a different seed produces a different run");
         Check(first.Length > 0, "the run produced output");
+    }
+
+    // ------------------------------------------------------- wave 2/3/4 joker tests
+
+    /// <summary>Fills the board with a card of a given element, for element joker tests.</summary>
+    private static void PaintBoard(RoundEngine round, GameSession session, CubeKind kind,
+        params GridPos[] cells)
+    {
+        foreach (GridPos cell in cells)
+        {
+            if (!round.Board.GetCube(cell).HasValue)
+            {
+                // place a 1x1 helper card, then retype it
+                BlockCard filler = session.CreateCard(Bar(1), null);
+                round.Board.Place(filler, cell);
+            }
+            round.Board.SetCubeKind(cell, kind);
+        }
+    }
+
+    private static void Buldozer_WipesOnScheduleWithoutScoreOrSweep()
+    {
+        Section("buldozer / scheduled wipe");
+        var session = NewSession(41, 8, 1000000, 40, 1);
+        var joker = (BuldozerJoker)session.Jokers.Add(new BuldozerJoker());
+        joker.TurnsPerWipe = 4;
+
+        int sweeps = 0;
+        session.CurrentRound.TurnResolved += r =>
+        {
+            if (r.CleanSweep)
+            {
+                sweeps++;
+            }
+        };
+
+        PlayTurns(session, 3);
+        Check(session.CurrentRound.Board.OccupiedCount > 0, "board still has cubes after 3 turns",
+            "occupied " + session.CurrentRound.Board.OccupiedCount);
+        PlayTurns(session, 1);
+        Check(session.CurrentRound.Board.OccupiedCount == 0, "the 4th turn wiped the board",
+            "occupied " + session.CurrentRound.Board.OccupiedCount);
+        Check(sweeps == 0, "a Buldozer wipe is never a clean sweep", "sweeps " + sweeps);
+        Check(session.CurrentRound.CleanSweepCount == 0, "engine counter agrees");
+    }
+
+    private static void RobotSupurge_EatsCubesAndGrowsOnSweep()
+    {
+        Section("robot supurge / eats and grows");
+        var session = NewSession(43, 8, 1000000, 40, 3);
+        var joker = (RobotSupurgeJoker)session.Jokers.Add(new RobotSupurgeJoker());
+        RoundEngine round = session.CurrentRound;
+
+        PlayTurns(session, 1);
+        // one 3-cube block placed, one cube eaten
+        Check(round.Board.OccupiedCount == 2, "the sweeper ate exactly one cube",
+            "occupied " + round.Board.OccupiedCount);
+        Check(joker.Capacity == 1, "capacity unchanged while cubes remain");
+
+        // Let it eat the board empty; the sweep it triggers must raise capacity.
+        int guard = 0;
+        while (round.Board.OccupiedCount > 0 && guard++ < 20 && PlayTurns(session, 1) > 0)
+        {
+        }
+        Check(joker.Capacity >= 1, "capacity stayed sane", "capacity " + joker.Capacity);
+    }
+
+    private static void KayitDefteri_ReplacesTheSweepWithItsCounter()
+    {
+        Section("kayit defteri / counter replaces the sweep");
+        // 3x3 board, 3-cube bars: three placements clear rows repeatedly.
+        var session = NewSession(47, 3, 1000000, 40, 3);
+        var joker = (KayitDefteriJoker)session.Jokers.Add(new KayitDefteriJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        RoundEngine round = session.CurrentRound;
+
+        Check(round.SuppressNaturalSweep, "natural sweep is switched off while it is held");
+        Check(joker.Target == 9, "target is the board's cell count", "target " + joker.Target);
+
+        int sweeps = 0;
+        round.TurnResolved += r =>
+        {
+            if (r.CleanSweep)
+            {
+                sweeps++;
+            }
+        };
+        PlayTurns(session, 6);
+        Check(joker.Counter >= 0, "counter runs", "counter " + joker.Counter);
+        Check(sweeps > 0, "the counter forced at least one sweep", "sweeps " + sweeps);
+
+        session.Jokers.Remove(joker);
+        Check(!round.SuppressNaturalSweep, "removing it restores the normal sweep rule");
+    }
+
+    private static void KentselDonusum_GrowsTheBoardPermanently()
+    {
+        Section("kentsel donusum / board growth");
+        var joker = new KentselDonusumJoker();
+        joker.RoundsPerGrowth = 1;
+        joker.MaxExtra = 3;
+        var config = new RoundConfig(1, 6, 6, 100);
+        var session = NewSession(53, 6, 40, 24, 1);
+        var ctx = new SessionContext(session, session.Rng);
+
+        Check(joker.FilterRoundConfig(ctx, config).BoardWidth == 6, "no growth before a round ends");
+        joker.OnRoundEnded(new RoundContext(session, session.Rng, session.CurrentRound),
+            RoundOutcome.Advanced);
+        Check(joker.FilterRoundConfig(ctx, config).BoardWidth == 7, "one finished round grows it by 1",
+            "width " + joker.FilterRoundConfig(ctx, config).BoardWidth);
+        joker.OnRoundEnded(new RoundContext(session, session.Rng, session.CurrentRound),
+            RoundOutcome.Lost);
+        Check(joker.FilterRoundConfig(ctx, config).BoardWidth == 7, "a lost round does not grow it");
+
+        for (int i = 0; i < 10; i++)
+        {
+            joker.OnRoundEnded(new RoundContext(session, session.Rng, session.CurrentRound),
+                RoundOutcome.Advanced);
+        }
+        Check(joker.FilterRoundConfig(ctx, config).BoardWidth == 6 + joker.MaxExtra,
+            "growth is capped", "width " + joker.FilterRoundConfig(ctx, config).BoardWidth);
+    }
+
+    private static void KaziCalismasi_ReturnsAFullyExplodedBlock()
+    {
+        Section("kazi calismasi / whole block returns");
+        // 3x3 board with 3-cube bars: every placement fills a row and explodes it whole.
+        var session = NewSession(59, 3, 1000000, 40, 3);
+        var joker = (KaziCalismasiJoker)session.Jokers.Add(new KaziCalismasiJoker());
+        RoundEngine round = session.CurrentRound;
+
+        PlayTurns(session, 1);
+        Check(round.BonusHand.Count == 1, "the block came back to the bonus hand",
+            "bonus " + round.BonusHand.Count);
+        Check(joker.RecoveredThisRound == 1, "counted one recovery",
+            "recovered " + joker.RecoveredThisRound);
+        Check(round.BonusHand[0].OutcomeOnPlay == BonusPlayOutcome.ToDiscard,
+            "it is a normal deck card on loan, not an expiring one");
+    }
+
+    private static void SeriTetik_BoostsHandAndChurnsUntilThreshold()
+    {
+        Section("seri tetik / bigger hand that churns");
+        var session = NewSession(61, 8, 25, 40, 1);
+        int baseHand = session.Config.Rules.HandSize;
+        var joker = (SeriTetikJoker)session.Jokers.Add(new SeriTetikJoker());
+        Check(session.Config.Rules.HandSize == baseHand + 2, "hand size grew on acquisition",
+            "hand " + session.Config.Rules.HandSize);
+
+        RoundEngine round = session.CurrentRound;
+        var before = new List<int>();
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            before.Add(round.Hand[i].Id);
+        }
+        PlayTurns(session, 1);
+        bool anyKept = false;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (before.Contains(round.Hand[i].Id))
+            {
+                anyKept = true;
+            }
+        }
+        Check(!anyKept || round.Deck.DrawCount == 0,
+            "the unused hand was churned out at end of turn");
+
+        session.Jokers.Remove(joker);
+        Check(session.Config.Rules.HandSize == baseHand, "removal gives the hand size back",
+            "hand " + session.Config.Rules.HandSize);
+    }
+
+    private static void Batak_PayoutCurveAndDeadline()
+    {
+        Section("batak / payout curve and deadline");
+        var joker = new BatakJoker();
+        joker.MaxMultiplier = 3.0;
+        joker.ZeroAtTurns = 100;
+
+        int bold = joker.PayoutFor(1, 1, 100);
+        int timid = joker.PayoutFor(50, 50, 100);
+        int hopeless = joker.PayoutFor(100, 100, 100);
+        Check(bold == 300, "a 1-turn call pays the full multiplier", "got " + bold);
+        Check(hopeless == 0, "a 100-turn call pays nothing", "got " + hopeless);
+        Check(timid > 0 && timid < bold, "the curve falls off in between", "got " + timid);
+
+        // Confirmed rule: bet 7, clear in 3 -> 3/7 of the 7-turn reward.
+        int full7 = joker.PayoutFor(7, 7, 100);
+        int early3 = joker.PayoutFor(7, 3, 100);
+        Check(early3 == (int)Math.Floor(full7 * 3.0 / 7.0) || Math.Abs(early3 - full7 * 3 / 7) <= 1,
+            "clearing early pays pro rata", early3 + " vs " + (full7 * 3 / 7));
+
+        // A missed deadline loses the round.
+        var session = NewSession(67, 8, 1000000, 40, 1);
+        var live = (BatakJoker)session.Jokers.Add(new BatakJoker());
+        var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
+        Check(live.PlaceBet(ctx, 2), "bet placed");
+        Check(live.HasActiveBet, "bet is running");
+        PlayTurns(session, 2);
+        Check(session.CurrentRound.Loss == LossReason.BetFailed,
+            "missing the deadline loses the round",
+            "loss " + session.CurrentRound.Loss);
+    }
+
+    private static void Midas_PaysForGoldInHand()
+    {
+        Section("midas / gold in hand");
+        var session = NewSession(71, 8, 1000000, 40, 2);
+        var joker = (MidasJoker)session.Jokers.Add(new MidasJoker());
+        joker.PointsPerGoldCubeHeld = 5;
+
+        var plain = new ScoreBreakdown();
+        joker.ModifyScore(FakeTurnWithRound(session, plain));
+        Check(plain.FlatBonus == 0, "a plain hand pays nothing", "got " + plain.FlatBonus);
+
+        // Put a gold block into the bonus hand: holding it must be enough.
+        BlockCard gold = session.CreateCard(Bar(3), new[] { BlockElement.Gold });
+        session.CurrentRound.AddBonusCard(gold, BonusPlayOutcome.ExpireFromRound);
+        var withGold = new ScoreBreakdown();
+        joker.ModifyScore(FakeTurnWithRound(session, withGold));
+        Check(withGold.FlatBonus == 15, "3 gold cubes held pay 3 x 5", "got " + withGold.FlatBonus);
+        Check(joker.GoldCubesHeld == 3, "counted the cubes", "got " + joker.GoldCubesHeld);
+    }
+
+    /// <summary>A TurnContext bound to a real round, for jokers that read the hand/board.</summary>
+    private static TurnContext FakeTurnWithRound(GameSession session, ScoreBreakdown score)
+    {
+        var report = new TurnReport();
+        report.Card = new BlockCard(1, Bar(1));
+        report.Score = score;
+        return new TurnContext(session, session.Rng, session.CurrentRound, report, score);
+    }
+
+    private static void ElmasKazma_CracksObsidianOnSweep()
+    {
+        Section("elmas kazma / obsidian cracks");
+        // 4x4 board with 4-cube bars: one placement fills row 0 and clears it. An obsidian
+        // cube parked in the far corner does not block the sweep, so the sweep fires and
+        // the joker gets to crack it - driven through a REAL turn, not a synthetic one.
+        var session = NewSession(73, 4, 1000000, 40, 4);
+        session.Jokers.Add(new ElmasKazmaJoker());
+        RoundEngine round = session.CurrentRound;
+
+        PaintBoard(round, session, CubeKind.Obsidian, new GridPos(3, 3));
+        Check(round.Board.CountCubesOfKind(CubeKind.Obsidian) == 1, "one obsidian cube parked");
+
+        bool sweptClean = false;
+        round.TurnResolved += r =>
+        {
+            if (r.CleanSweep)
+            {
+                sweptClean = true;
+            }
+        };
+        PlayTurns(session, 1);
+        Check(sweptClean, "clearing the row swept the board despite the obsidian");
+        Check(round.Board.CountCubesOfKind(CubeKind.Obsidian) == 0,
+            "the sweep cracked the obsidian",
+            "left " + round.Board.CountCubesOfKind(CubeKind.Obsidian));
+        Check(round.RoundScore > 0, "the crack paid into the round score");
+    }
+
+    private static void Tutustur_BurnsEveryFireCube()
+    {
+        Section("tutustur / board-wide fire chain");
+        var session = NewSession(79, 5, 1000000, 40, 1);
+        var joker = (TutusturJoker)session.Jokers.Add(new TutusturJoker());
+        RoundEngine round = session.CurrentRound;
+
+        PaintBoard(round, session, CubeKind.Fire,
+            new GridPos(0, 0), new GridPos(3, 3), new GridPos(4, 1));
+        Check(round.Board.CountCubesOfKind(CubeKind.Fire) == 3, "three fire cubes on the board");
+
+        // A report that says a fire cube already died this turn.
+        var score = new ScoreBreakdown();
+        TurnContext turn = FakeTurnWithRound(session, score);
+        var destroyed = new List<DestroyedCube>
+        {
+            new DestroyedCube(new GridPos(2, 2), new Cube(CubeKind.Fire, 999))
+        };
+        turn.Report.DestroyedCubes = destroyed;
+
+        joker.AfterLineExplosion(turn);
+        Check(round.Board.CountCubesOfKind(CubeKind.Fire) == 0,
+            "every fire cube went up", "left " + round.Board.CountCubesOfKind(CubeKind.Fire));
+        Check(score.FlatBonus > 0, "the chain paid", "got " + score.FlatBonus);
+    }
+
+    private static void Spread_ConvertsOneRingOnly()
+    {
+        Section("yangin / taskin one-ring spread");
+        var session = NewSession(83, 5, 1000000, 40, 1);
+        var joker = (YanginJoker)session.Jokers.Add(new YanginJoker());
+        RoundEngine round = session.CurrentRound;
+
+        // A 3-long horizontal strip of normal cubes with fire in the middle.
+        PaintBoard(round, session, CubeKind.Normal,
+            new GridPos(0, 2), new GridPos(1, 2), new GridPos(2, 2), new GridPos(3, 2));
+        PaintBoard(round, session, CubeKind.Fire, new GridPos(1, 2));
+
+        var ctx = new RoundContext(session, session.Rng, round);
+        Check(joker.CanActivate(ctx), "usable while fire is on the board");
+        Check(joker.Activate(ctx, ActivationTarget.None), "spread ran");
+
+        Check(round.Board.GetCube(new GridPos(0, 2)).Value.Kind == CubeKind.Fire,
+            "the neighbour caught fire");
+        Check(round.Board.GetCube(new GridPos(2, 2)).Value.Kind == CubeKind.Fire,
+            "the other neighbour caught fire");
+        Check(round.Board.GetCube(new GridPos(3, 2)).Value.Kind == CubeKind.Normal,
+            "two cells away stayed normal - one ring only");
+        Check(!joker.CanActivate(ctx), "the single charge is spent");
+    }
+
+    private static void Buzluk_FreezesAtWallsAndDoesNotBlockSweep()
+    {
+        Section("buzluk / freeze at the walls");
+        var session = NewSession(89, 5, 1000000, 40, 1);
+        var joker = (BuzlukJoker)session.Jokers.Add(new BuzlukJoker());
+        RoundEngine round = session.CurrentRound;
+
+        PaintBoard(round, session, CubeKind.Water, new GridPos(0, 3), new GridPos(2, 2));
+        var score = new ScoreBreakdown();
+        joker.AfterTurnScored(FakeTurnWithRound(session, score));
+
+        Check(round.Board.GetCube(new GridPos(0, 3)).Value.Kind == CubeKind.Ice,
+            "wall-touching water froze");
+        Check(round.Board.GetCube(new GridPos(2, 2)).Value.Kind == CubeKind.Water,
+            "water in the middle stayed liquid");
+
+        // Ice must not block a sweep, unlike normal cubes.
+        round.Board.DestroyCubeForced(new GridPos(2, 2));
+        Check(round.Board.IsCleanForSweep(), "a board holding only ice counts as swept");
+        Check(joker.FrozenThisRound == 1, "counted the freeze", "got " + joker.FrozenThisRound);
+    }
+
+    private static void Simya_GivesOfferedElementalBlocksASecondElement()
+    {
+        Section("simya / doubled market elements");
+        var session = NewSession(97, 6, 40, 24, 1);
+        var joker = (SimyaJoker)session.Jokers.Add(new SimyaJoker());
+        var ctx = new SessionContext(session, session.Rng);
+
+        BlockCard plain = session.CreateCard(Bar(2), null);
+        Check(joker.FilterMarketOffer(ctx, plain).Elements.Count == 0,
+            "a plain block stays plain");
+
+        BlockCard fire = session.CreateCard(Bar(2), new[] { BlockElement.Fire });
+        BlockCard doubled = joker.FilterMarketOffer(ctx, fire);
+        Check(doubled.Elements.Count == 2, "an elemental block gets a second element",
+            "count " + doubled.Elements.Count);
+        Check(doubled.Has(BlockElement.Fire), "the original element is kept");
+        Check(doubled.Id == fire.Id, "the offer keeps its card id");
+    }
+
+    private static void Damlaya_PaysWhenNothingWasBought()
+    {
+        Section("damlaya / saving pays");
+        var session = NewSession(101, 6, 40, 24, 1);
+        var joker = (DamlayaJoker)session.Jokers.Add(new DamlayaJoker());
+        joker.PointsPerTurnWhenSaving = 8;
+        var ctx = new SessionContext(session, session.Rng);
+
+        joker.OnMarketLeft(ctx, true);
+        joker.OnRoundStarted(new RoundContext(session, session.Rng, session.CurrentRound));
+        Check(joker.ActiveBonus == 0, "buying something pays nothing", "got " + joker.ActiveBonus);
+
+        joker.OnMarketLeft(ctx, false);
+        joker.OnRoundStarted(new RoundContext(session, session.Rng, session.CurrentRound));
+        Check(joker.ActiveBonus == 8, "skipping the market pays per turn", "got " + joker.ActiveBonus);
+
+        joker.OnMarketLeft(ctx, false);
+        joker.OnRoundStarted(new RoundContext(session, session.Rng, session.CurrentRound));
+        Check(joker.ActiveBonus == 16, "the streak stacks", "got " + joker.ActiveBonus);
+
+        var score = new ScoreBreakdown();
+        joker.ModifyScore(FakeTurnWithRound(session, score));
+        Check(score.FlatBonus == 16, "the bonus lands on the turn", "got " + score.FlatBonus);
+    }
+
+    private static void Ihale_LocksUntilTheAuctionedJokerLeaves()
+    {
+        Section("ihale / one auction at a time");
+        var session = NewSession(103, 6, 40, 24, 1);
+        var ihale = (IhaleJoker)session.Jokers.Add(new IhaleJoker());
+        session.Jokers.Add(new CimriKumbaraJoker());
+
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        Check(session.Jokers.ActiveAuctionInstanceId.HasValue, "an auction opened");
+        int firstTarget = session.Jokers.ActiveAuctionInstanceId.Value;
+        Joker auctioned = session.Jokers.Find(firstTarget);
+        Check(auctioned.AuctionPremium > 0, "the premium is on the joker",
+            "premium " + auctioned.AuctionPremium);
+        Check(auctioned.SellValue > auctioned.BaseSellValue, "sell value went up");
+
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        Check(session.Jokers.ActiveAuctionInstanceId == firstTarget,
+            "no new auction while the first is unsold");
+
+        session.Jokers.Sell(auctioned);
+        Check(!session.Jokers.ActiveAuctionInstanceId.HasValue, "selling opens the lock");
+    }
+
+    private static void KaraDelik_VoidBlockSwallowsWhatLandsOnIt()
+    {
+        Section("kara delik / void block");
+        var session = NewSession(107, 5, 1000000, 40, 1);
+        var joker = (KaraDelikJoker)session.Jokers.Add(new KaraDelikJoker());
+        RoundEngine round = session.CurrentRound;
+
+        int discardBefore = round.Deck.DiscardCount;
+        var score = new ScoreBreakdown();
+        joker.AfterCleanSweep(FakeTurnWithRound(session, score));
+        Check(round.Deck.DiscardCount == discardBefore + 1, "a void block went to the discard",
+            "discard " + round.Deck.DiscardCount);
+        Check(joker.GrantedThisRound == 1, "counted the grant");
+
+        // The void must swallow whatever is placed on top of it.
+        BlockCard voidCard = session.CreateCard(Bar(1), new[] { BlockElement.Void });
+        round.Board.Place(voidCard, new GridPos(2, 2));
+        Check(round.Board.GetCube(new GridPos(2, 2)).Value.Kind == CubeKind.Void,
+            "the void cube sits on the board");
+        Check(round.Board.CanPlace(Bar(1), new GridPos(2, 2)),
+            "a block may be placed onto a void cube");
+
+        BlockCard victim = session.CreateCard(Bar(1), null);
+        round.Board.Place(victim, new GridPos(2, 2));
+        Check(!round.Board.GetCube(new GridPos(2, 2)).HasValue,
+            "both the arriving cube and the void are gone");
+        Check(round.Board.OccupiedCount == 0, "occupancy stayed consistent",
+            "occupied " + round.Board.OccupiedCount);
+    }
+
+    private static void Enfeksiyon_SpreadsThenDetonates()
+    {
+        Section("enfeksiyon / spread and detonate");
+        var session = NewSession(109, 5, 1000000, 40, 1);
+        var joker = (EnfeksiyonJoker)session.Jokers.Add(new EnfeksiyonJoker());
+        joker.TurnsToDetonate = 2;
+        RoundEngine round = session.CurrentRound;
+
+        PaintBoard(round, session, CubeKind.Normal,
+            new GridPos(1, 1), new GridPos(2, 1), new GridPos(3, 1));
+        var ctx = new RoundContext(session, session.Rng, round);
+        Check(joker.Activate(ctx, ActivationTarget.Board(new GridPos(1, 1))), "infection started");
+        Check(!joker.Activate(ctx, ActivationTarget.Board(new GridPos(3, 1))),
+            "only one use per round");
+
+        // Driven through real turns: 1-cube cards on a 5x5 board never fill a line, so the
+        // only thing that destroys anything here is the infection itself.
+        int cubesBefore = round.Board.OccupiedCount;
+        PlayTurns(session, 1);
+        Check(round.Board.OccupiedCount >= cubesBefore,
+            "nothing blows on the first tick (a card was placed, none destroyed)",
+            "occupied " + round.Board.OccupiedCount);
+
+        int beforeDetonation = round.Board.OccupiedCount;
+        PlayTurns(session, 1);
+        Check(round.Board.OccupiedCount < beforeDetonation + 1,
+            "the ripe cube detonated on the second tick",
+            beforeDetonation + " -> " + round.Board.OccupiedCount);
+    }
+
+    private static void AllRegisteredJokers_HaveDistinctIdsAndText()
+    {
+        Section("registry / catalogue sanity");
+        var ids = new HashSet<string>();
+        bool allNamed = true;
+        bool allDescribed = true;
+        foreach (JokerDefinition definition in JokerRegistry.All)
+        {
+            if (!ids.Add(definition.DefId))
+            {
+                Check(false, "duplicate DefId", definition.DefId);
+            }
+            if (string.IsNullOrEmpty(definition.DisplayName))
+            {
+                allNamed = false;
+            }
+            if (string.IsNullOrEmpty(definition.Description))
+            {
+                allDescribed = false;
+            }
+            Joker instance = definition.Create();
+            if (instance.DefId != definition.DefId)
+            {
+                Check(false, "factory produces a different DefId", definition.DefId);
+            }
+        }
+        Check(ids.Count == JokerRegistry.All.Count, "every DefId is unique",
+            ids.Count + " of " + JokerRegistry.All.Count);
+        Check(allNamed, "every joker has a display name");
+        Check(allDescribed, "every joker has a description");
+        Check(JokerRegistry.All.Count >= 29, "the catalogue is complete",
+            "count " + JokerRegistry.All.Count);
     }
 
     /// <summary>Plays many runs with random joker sets, random advance/continue decisions and

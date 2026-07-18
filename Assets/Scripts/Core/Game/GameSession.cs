@@ -172,6 +172,14 @@ namespace ProjectBlock.Core
             return new BlockCard(nextCardId++, shape);
         }
 
+        /// <summary>Mints a specific card. Round-scoped joker cards ("Kara delik" void
+        /// blocks) use this so their ids stay unique across the run without joining the
+        /// owned deck - they simply are never added to ownedCards.</summary>
+        public BlockCard CreateCard(BlockShape shape, IEnumerable<BlockElement> elements)
+        {
+            return new BlockCard(nextCardId++, shape, elements);
+        }
+
         private void StartRound()
         {
             RoundConfig roundConfig = Jokers.FilterRoundConfig(Config.Progression.GetRound(RoundNumber));
@@ -227,6 +235,7 @@ namespace ProjectBlock.Core
                     };
                 }
                 var card = new BlockCard(nextCardId++, shape, elements);
+                card = Jokers.FilterMarketOffer(card); // "Simya" adds a second element here
                 int price = market.BlockBasePrice
                     + market.BlockPricePerCube * card.Shape.Size
                     + market.ElementPriceSurcharge * card.Elements.Count;

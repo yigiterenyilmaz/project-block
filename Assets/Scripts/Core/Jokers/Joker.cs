@@ -208,9 +208,17 @@ namespace ProjectBlock.Core
         {
         }
 
-        /// <summary>Reserved: market left. "Damlaya damlaya" watches anythingPurchased.</summary>
+        /// <summary>Market left. "Damlaya damlaya" watches anythingPurchased.</summary>
         public virtual void OnMarketLeft(SessionContext ctx, bool anythingPurchased)
         {
+        }
+
+        /// <summary>Rewrites a card the market is about to offer, before it is priced
+        /// ("Simya" giving elemental blocks a second element). Return the card unchanged to
+        /// leave the offer alone; the replacement MUST keep the same Id.</summary>
+        public virtual BlockCard FilterMarketOffer(SessionContext ctx, BlockCard card)
+        {
+            return card;
         }
 
         /// <summary>Reserved: a power was used. Powerbank refills one use here.</summary>

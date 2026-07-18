@@ -35,9 +35,28 @@ namespace ProjectBlock.Core
         /// full size because both draw and discard piles were empty.</summary>
         HandCannotBeRefilled = 1,
 
+        /// <summary>"Batak": the player bet on clearing the board within N turns and the
+        /// deadline passed without a clean sweep.</summary>
+        BetFailed = 3,
+
         /// <summary>Overtime rule: after the threshold was passed, the draw pile ran dry
         /// before a clean sweep re-shuffled it.</summary>
         DrawPileEmptyAfterThreshold = 2
+    }
+
+    /// <summary>One cube that was removed from the board during a turn, with the value it
+    /// held. Jokers need the KIND (was it fire? ice?) and the SOURCE CARD, both of which
+    /// are gone from the board by the time a hook runs.</summary>
+    public readonly struct DestroyedCube
+    {
+        public readonly GridPos Pos;
+        public readonly Cube Cube;
+
+        public DestroyedCube(GridPos pos, Cube cube)
+        {
+            Pos = pos;
+            Cube = cube;
+        }
     }
 
     /// <summary>Immutable-after-resolution record of one turn.</summary>
@@ -55,6 +74,14 @@ namespace ProjectBlock.Core
 
         /// <summary>True if this turn emptied the board ("temizlik").</summary>
         public bool CleanSweep { get; internal set; }
+
+        /// <summary>Every cube removed this turn, from any source (lines, fire chains,
+        /// dynamite, joker effects), with the value it held. Grows as the turn resolves.</summary>
+        public IReadOnlyList<DestroyedCube> DestroyedCubes { get; internal set; }
+
+        /// <summary>Cards whose LAST cube on the board was destroyed this turn while the
+        /// block was still intact - i.e. the whole block went at once ("Kazı çalışması").</summary>
+        public IReadOnlyList<int> CardsFullyDestroyed { get; internal set; }
 
         /// <summary>True if a dynamite block fully exploded on its placement turn and
         /// cleared the board.</summary>
@@ -99,6 +126,8 @@ namespace ProjectBlock.Core
             ExplodedRows = Array.Empty<int>();
             ExplodedColumns = Array.Empty<int>();
             WaterFallFrames = Array.Empty<IReadOnlyList<WaterMove>>();
+            DestroyedCubes = Array.Empty<DestroyedCube>();
+            CardsFullyDestroyed = Array.Empty<int>();
         }
     }
 }
