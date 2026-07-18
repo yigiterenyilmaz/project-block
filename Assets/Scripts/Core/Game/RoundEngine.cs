@@ -434,6 +434,9 @@ namespace ProjectBlock.Core
                 boardCleanBeforeExplosion = Board.IsCleanForSweep();
                 explosion = Board.ResolveFullLines();
             }
+            // Frames appended after this point are post-explosion falls; the UI plays the
+            // boom between the two batches.
+            report.WaterFramesBeforeExplosion = waterFrames.Count;
             report.ExplodedRows = explosion.Rows;
             report.ExplodedColumns = explosion.Columns;
             int cubesExploded = explosion.ExplodedCells.Count;

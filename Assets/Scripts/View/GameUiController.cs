@@ -610,27 +610,34 @@ namespace ProjectBlock.View
                         LogTurn(report);
                     }
                     sfx.Place();
-                    if (report.CleanSweep)
-                    {
-                        // the sweep bling rises in pitch with every sweep this round
-                        sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
-                        sfx.Flame();
-                    }
-                    else if (report.CubesExploded > 0)
-                    {
-                        sfx.Explode();
-                    }
                     if (report.DiscardWasReshuffled)
                     {
                         sfx.Shuffle();
                     }
-                    HandleBlastFeedback(round, report);
                     RefreshAll(report);
-                    if (report.WaterFallFrames.Count > 0)
+                    IReadOnlyList<IReadOnlyList<WaterMove>> frames = report.WaterFallFrames;
+                    if (frames.Count == 0)
                     {
+                        PlayExplosionFeedback(round, report);
+                    }
+                    else
+                    {
+                        // Water falls first, THEN the boom it caused - and any post-explosion
+                        // falls play after the boom (WaterFramesBeforeExplosion splits them).
+                        int boomAt = Mathf.Clamp(report.WaterFramesBeforeExplosion, 0, frames.Count);
+                        var preFall = new List<IReadOnlyList<WaterMove>>();
+                        var postFall = new List<IReadOnlyList<WaterMove>>();
+                        for (int f = 0; f < frames.Count; f++)
+                        {
+                            (f < boomAt ? preFall : postFall).Add(frames[f]);
+                        }
                         waterAnimating = true;
-                        boardView.PlayWaterAnimation(report.WaterFallFrames,
-                            delegate { waterAnimating = false; });
+                        boardView.PlayWaterAnimation(preFall, delegate
+                        {
+                            PlayExplosionFeedback(round, report);
+                            boardView.PlayWaterAnimation(postFall,
+                                delegate { waterAnimating = false; });
+                        });
                     }
                 }
                 else
@@ -639,6 +646,23 @@ namespace ProjectBlock.View
                     boardView.ClearPreview();
                 }
             }
+        }
+
+        /// <summary>Explosion sound + blast feedback for one turn. Deferred until after the
+        /// pre-explosion water falls when the flow is what completed the line.</summary>
+        private void PlayExplosionFeedback(RoundEngine round, TurnReport report)
+        {
+            if (report.CleanSweep)
+            {
+                // the sweep bling rises in pitch with every sweep this round
+                sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
+                sfx.Flame();
+            }
+            else if (report.CubesExploded > 0)
+            {
+                sfx.Explode();
+            }
+            HandleBlastFeedback(round, report);
         }
 
         /// <summary>Particles, shake, combo popups and the sweep celebration for one turn.</summary>

@@ -68,6 +68,11 @@ namespace ProjectBlock.Core
         /// while doing so.</summary>
         public IReadOnlyList<IReadOnlyList<WaterMove>> WaterFallFrames { get; internal set; }
 
+        /// <summary>How many WaterFallFrames happened BEFORE the line explosion (the rest
+        /// are post-explosion falls). Equals the frame count when nothing exploded. The UI
+        /// uses it to play the boom at the right point of the fall animation.</summary>
+        public int WaterFramesBeforeExplosion { get; internal set; }
+
         public int ScoreGained { get; internal set; }
         public int RoundScoreAfter { get; internal set; }
 
