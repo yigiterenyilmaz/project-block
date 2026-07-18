@@ -2,6 +2,7 @@
 // placement preview under the mouse. Pure presentation - reads GameBoard, never
 // mutates it. Rebuilt whenever a round starts (board sizes differ per round).
 
+using System.Collections.Generic;
 using ProjectBlock.Core;
 using UnityEngine;
 
@@ -19,6 +20,7 @@ namespace ProjectBlock.View
         private GameBoard board;
         private SpriteRenderer[,] cellRenderers;
         private SpriteRenderer[,] previewRenderers;
+        private readonly List<SpriteRenderer> ghostSprites = new List<SpriteRenderer>();
         private float cellSize = 1f;
         private Vector2 bottomLeft;
 
@@ -49,6 +51,7 @@ namespace ProjectBlock.View
             {
                 Destroy(transform.GetChild(i).gameObject);
             }
+            ghostSprites.Clear();
             board = newBoard;
             cellSize = Mathf.Min(maxWorldSize / board.Width, maxWorldSize / board.Height);
             bottomLeft = center - new Vector2(board.Width, board.Height) * (cellSize * 0.5f);
@@ -96,6 +99,26 @@ namespace ProjectBlock.View
                         ? ViewUtil.CubeDisplayColor(cube.Value)
                         : EmptyColor;
                 }
+            }
+            RefreshGhostTraces();
+        }
+
+        /// <summary>Ghost cubes hanging outside the grid render as faint traces.</summary>
+        private void RefreshGhostTraces()
+        {
+            foreach (SpriteRenderer sprite in ghostSprites)
+            {
+                if (sprite != null)
+                {
+                    Destroy(sprite.gameObject);
+                }
+            }
+            ghostSprites.Clear();
+            foreach (KeyValuePair<GridPos, Cube> entry in board.OutsideCubes)
+            {
+                ghostSprites.Add(ViewUtil.MakeCell(transform, "GhostCube",
+                    CellToWorld(entry.Key), cellSize * 0.86f,
+                    new Color(0.8f, 0.8f, 0.95f, 0.35f), 1));
             }
         }
 

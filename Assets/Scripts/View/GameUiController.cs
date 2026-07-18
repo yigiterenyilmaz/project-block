@@ -255,7 +255,8 @@ namespace ProjectBlock.View
             }
 
             draggedCard.SnapTo(world);
-            BlockShape shape = ShapeOfSlot(round, draggedCard.SlotIndex);
+            BlockCard slotCard = CardOfSlot(round, draggedCard.SlotIndex);
+            BlockShape shape = slotCard != null ? slotCard.Shape : null;
             GridPos hovered;
             bool overBoard = shape != null && boardView.TryWorldToCell(world, out hovered);
             var origin = default(GridPos);
@@ -265,7 +266,7 @@ namespace ProjectBlock.View
                 boardView.TryWorldToCell(world, out hovered);
                 // Anchor the shape so the cursor sits roughly at its center.
                 origin = new GridPos(hovered.X - (shape.Width - 1) / 2, hovered.Y - (shape.Height - 1) / 2);
-                valid = round.Board.CanPlace(shape, origin);
+                valid = round.CanPlaceCard(slotCard, origin);
                 boardView.ShowPreview(shape, origin, valid);
             }
             else
@@ -405,7 +406,7 @@ namespace ProjectBlock.View
             shakeRoutine = null;
         }
 
-        private static BlockShape ShapeOfSlot(RoundEngine round, int slot)
+        private static BlockCard CardOfSlot(RoundEngine round, int slot)
         {
             if (slot < 0)
             {
@@ -413,10 +414,10 @@ namespace ProjectBlock.View
             }
             if (slot < round.Hand.Count)
             {
-                return round.Hand[slot].Shape;
+                return round.Hand[slot];
             }
             int bonusIndex = slot - round.Hand.Count;
-            return bonusIndex < round.BonusHand.Count ? round.BonusHand[bonusIndex].Card.Shape : null;
+            return bonusIndex < round.BonusHand.Count ? round.BonusHand[bonusIndex].Card : null;
         }
 
         private void RefreshAll(TurnReport report)

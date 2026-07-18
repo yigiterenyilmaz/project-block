@@ -26,7 +26,8 @@ namespace ProjectBlock.Core
         /// <summary>Other blocks can be placed on top of it; the new cube replaces it.</summary>
         Transparent = 4,
 
-        /// <summary>NOT IMPLEMENTED: placeable partially outside the board.</summary>
+        /// <summary>Placeable partially outside the board (at least one cube inside);
+        /// outside cubes persist as ghostly traces for the future Tılsım power.</summary>
         Ghost = 5,
 
         /// <summary>If the whole block explodes at once on the turn it was placed,

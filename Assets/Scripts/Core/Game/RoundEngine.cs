@@ -132,6 +132,13 @@ namespace ProjectBlock.Core
             return Board.GetValidOrigins(shape);
         }
 
+        /// <summary>The one placement-legality check for a specific card (ghost blocks
+        /// may hang off the board). UI and play methods both use this.</summary>
+        public bool CanPlaceCard(BlockCard card, GridPos origin)
+        {
+            return Board.CanPlace(card.Shape, origin, card.Has(BlockElement.Ghost));
+        }
+
         /// <summary>Plays a hand card onto the board. Validate with Board.CanPlace first;
         /// an illegal call throws.</summary>
         public TurnReport PlayFromHand(int handIndex, GridPos origin)
@@ -142,7 +149,7 @@ namespace ProjectBlock.Core
                 throw new ArgumentOutOfRangeException("handIndex");
             }
             BlockCard card = Hand[handIndex];
-            if (!Board.CanPlace(card.Shape, origin))
+            if (!CanPlaceCard(card, origin))
             {
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
             }
@@ -159,7 +166,7 @@ namespace ProjectBlock.Core
                 throw new ArgumentOutOfRangeException("bonusIndex");
             }
             BonusSlot slot = bonusHand[bonusIndex];
-            if (!Board.CanPlace(slot.Card.Shape, origin))
+            if (!CanPlaceCard(slot.Card, origin))
             {
                 throw new InvalidOperationException("Illegal placement of " + slot.Card + " at " + origin + ".");
             }
@@ -279,7 +286,7 @@ namespace ProjectBlock.Core
             report.Origin = origin;
 
             // 1. place + score
-            report.PlacedCells = Board.Place(card, origin);
+            report.PlacedCells = Board.Place(card, origin, card.Has(BlockElement.Ghost));
             if (card.Has(BlockElement.PiggyBank) && !piggyBanks.ContainsKey(card.Id))
             {
                 piggyBanks[card.Id] = 0;
@@ -492,14 +499,14 @@ namespace ProjectBlock.Core
         {
             for (int i = 0; i < Hand.Count; i++)
             {
-                if (Board.AnyPlacementExists(Hand[i].Shape))
+                if (Board.AnyPlacementExists(Hand[i].Shape, Hand[i].Has(BlockElement.Ghost)))
                 {
                     return;
                 }
             }
             foreach (BonusSlot slot in bonusHand)
             {
-                if (Board.AnyPlacementExists(slot.Card.Shape))
+                if (Board.AnyPlacementExists(slot.Card.Shape, slot.Card.Has(BlockElement.Ghost)))
                 {
                     return;
                 }

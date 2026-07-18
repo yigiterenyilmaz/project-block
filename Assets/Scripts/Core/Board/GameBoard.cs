@@ -46,6 +46,16 @@ namespace ProjectBlock.Core
     {
         private readonly Cube?[,] cells;
 
+        /// <summary>GHOST RULE: cubes placed outside the grid persist here (visible as a
+        /// ghostly trace; the future Tılsım power converts their space into board).
+        /// They take no part in lines, sweeps or explosions.</summary>
+        private readonly Dictionary<GridPos, Cube> outsideCubes = new Dictionary<GridPos, Cube>();
+
+        public IReadOnlyDictionary<GridPos, Cube> OutsideCubes
+        {
+            get { return outsideCubes; }
+        }
+
         public int Width { get; }
         public int Height { get; }
         public int OccupiedCount { get; private set; }
@@ -68,6 +78,11 @@ namespace ProjectBlock.Core
 
         public Cube? GetCube(GridPos pos)
         {
+            if (!IsInside(pos))
+            {
+                Cube outside;
+                return outsideCubes.TryGetValue(pos, out outside) ? (Cube?)outside : null;
+            }
             return cells[pos.X, pos.Y];
         }
 
@@ -92,11 +107,47 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>Ghost placement check: cubes may hang outside the grid (onto free
+        /// outside space), but at least one cube must land inside.</summary>
+        public bool CanPlace(BlockShape shape, GridPos origin, bool allowOutside)
+        {
+            if (!allowOutside)
+            {
+                return CanPlace(shape, origin);
+            }
+            int insideCount = 0;
+            foreach (GridPos offset in shape.Cells)
+            {
+                GridPos pos = origin + offset;
+                if (IsInside(pos))
+                {
+                    Cube? occupant = cells[pos.X, pos.Y];
+                    if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent)
+                    {
+                        return false;
+                    }
+                    insideCount++;
+                }
+                else if (outsideCubes.ContainsKey(pos))
+                {
+                    return false;
+                }
+            }
+            return insideCount >= 1;
+        }
+
         /// <summary>Places the card's cubes. Caller must have validated with CanPlace.
         /// Transparent cubes underneath are replaced.</summary>
         public IReadOnlyList<GridPos> Place(BlockCard card, GridPos origin)
         {
-            if (!CanPlace(card.Shape, origin))
+            return Place(card, origin, false);
+        }
+
+        /// <summary>Placement with optional ghost overhang (cubes outside the grid
+        /// persist in OutsideCubes).</summary>
+        public IReadOnlyList<GridPos> Place(BlockCard card, GridPos origin, bool allowOutside)
+        {
+            if (!CanPlace(card.Shape, origin, allowOutside))
             {
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
             }
@@ -105,11 +156,18 @@ namespace ProjectBlock.Core
             foreach (GridPos offset in card.Shape.Cells)
             {
                 GridPos pos = origin + offset;
-                if (!cells[pos.X, pos.Y].HasValue)
+                if (IsInside(pos))
                 {
-                    OccupiedCount++; // replaced transparents were already counted
+                    if (!cells[pos.X, pos.Y].HasValue)
+                    {
+                        OccupiedCount++; // replaced transparents were already counted
+                    }
+                    cells[pos.X, pos.Y] = new Cube(kind, card.Id);
                 }
-                cells[pos.X, pos.Y] = new Cube(kind, card.Id);
+                else
+                {
+                    outsideCubes[pos] = new Cube(kind, card.Id);
+                }
                 placed.Add(pos);
             }
             return placed;
@@ -318,7 +376,7 @@ namespace ProjectBlock.Core
             return CountCubesOf(cardId) > 0;
         }
 
-        /// <summary>Cubes of this card remaining on the board (piggy value, dynamite).</summary>
+        /// <summary>Cubes of this card remaining on (or hanging off) the board.</summary>
         public int CountCubesOf(int cardId)
         {
             int count = 0;
@@ -331,6 +389,13 @@ namespace ProjectBlock.Core
                     {
                         count++;
                     }
+                }
+            }
+            foreach (KeyValuePair<GridPos, Cube> entry in outsideCubes)
+            {
+                if (entry.Value.SourceCardId == cardId)
+                {
+                    count++;
                 }
             }
             return count;
@@ -434,6 +499,26 @@ namespace ProjectBlock.Core
                 }
             }
             return true;
+        }
+
+        /// <summary>Legal-origin check with optional ghost overhang.</summary>
+        public bool AnyPlacementExists(BlockShape shape, bool allowOutside)
+        {
+            if (!allowOutside)
+            {
+                return AnyPlacementExists(shape);
+            }
+            for (int x = 1 - shape.Width; x < Width; x++)
+            {
+                for (int y = 1 - shape.Height; y < Height; y++)
+                {
+                    if (CanPlace(shape, new GridPos(x, y), true))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         /// <summary>Is there at least one legal origin for this shape?</summary>

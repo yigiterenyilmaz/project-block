@@ -39,6 +39,7 @@ namespace ProjectBlock.Core
             BlockElement.Obsidian,
             BlockElement.Gold,
             BlockElement.Transparent,
+            BlockElement.Ghost,
             BlockElement.Dynamite,
             BlockElement.PiggyBank
         };
