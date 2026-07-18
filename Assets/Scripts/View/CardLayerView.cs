@@ -310,7 +310,9 @@ namespace ProjectBlock.View
             int layers = LayersFor(pile.Count);
             for (int i = 0; i < layers; i++)
             {
-                int cardIndex = Mathf.Min(i * CardsPerStackLayer, pile.Count - 1);
+                // anchor sampling at the TOP: the topmost visible back is always the
+                // pile's actual top card, so drawing visibly changes the pile
+                int cardIndex = Mathf.Max(pile.Count - 1 - (layers - 1 - i) * CardsPerStackLayer, 0);
                 var layerRoot = new GameObject("Back_" + i).transform;
                 layerRoot.SetParent(stackRoot, false);
                 layerRoot.localPosition = new Vector3(i * StackOffset, i * StackOffset, 0f);
