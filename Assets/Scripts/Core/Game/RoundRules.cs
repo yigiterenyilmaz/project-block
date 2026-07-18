@@ -14,5 +14,9 @@ namespace ProjectBlock.Core
         /// <summary>Overtime rule: cards removed face-down from the draw pile per clean sweep
         /// after the threshold has been passed.</summary>
         public int OvertimeCardsRemovedPerCleanSweep = 3;
+
+        /// <summary>Pure UI flag: show the top card of the draw pile face-up ("Insider").
+        /// The core never reads it - the draw order is unchanged either way.</summary>
+        public bool RevealTopDrawCard = false;
     }
 }

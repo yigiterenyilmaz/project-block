@@ -175,6 +175,45 @@ namespace ProjectBlock.Core
             exploded.Add(pos);
         }
 
+        /// <summary>Destroys one cube outside a line explosion, if the cell holds a
+        /// destructible one. Returns false for empty cells and indestructible cubes.
+        /// EXTENSION POINT: joker/power effects (Robot supurge, Buldozer, Enfeksiyon,
+        /// Kara delik's void cube) go through here so cube-kind rules stay in one place.</summary>
+        public bool DestroyCube(GridPos pos)
+        {
+            if (!IsInside(pos))
+            {
+                return false;
+            }
+            Cube? cube = cells[pos.X, pos.Y];
+            if (!cube.HasValue || !CubeRules.IsDestructible(cube.Value))
+            {
+                return false;
+            }
+            cells[pos.X, pos.Y] = null;
+            OccupiedCount--;
+            return true;
+        }
+
+        /// <summary>Every occupied cell, in a fixed left-to-right, bottom-to-top order.
+        /// Deterministic on purpose: joker effects that pick a random cube must draw from a
+        /// stable list, or replays break.</summary>
+        public List<GridPos> GetOccupiedCells()
+        {
+            var occupied = new List<GridPos>(OccupiedCount);
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    if (cells[x, y].HasValue)
+                    {
+                        occupied.Add(new GridPos(x, y));
+                    }
+                }
+            }
+            return occupied;
+        }
+
         /// <summary>Clean-sweep check: no remaining cube that counts (obsidian/gold later won't).</summary>
         public bool IsCleanForSweep()
         {

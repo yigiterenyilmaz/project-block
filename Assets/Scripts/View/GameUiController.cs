@@ -2,14 +2,20 @@
 // GameSession, builds the debug UI at runtime (no scene-authored visuals), and turns
 // player input into calls on the core engine.
 // CONTROLS: drag a card from the hand onto the board to place it,
-//           A = advance / C = continue on an offer, N = leave market, R = new run.
+//           A = advance / C = continue on an offer, N = leave market, R = new run,
+//           S = redraw hand (debug), J = grant the next joker, K = sell the last joker,
+//           1-9 = activate that joker (a joker that needs a target then waits for a click,
+//           Esc cancels).
 // NOTE FOR AGENTS: this is placeholder presentation. Extend gameplay in
-// ProjectBlock.Core; only wiring/visuals belong here.
+// ProjectBlock.Core; only wiring/visuals belong here. The joker hotkeys stand in for the
+// market, which does not exist yet - delete them once jokers can be bought.
 
+using System.Collections.Generic;
 using System.Text;
 using ProjectBlock.Core;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 using UnityEngine.UI;
 
 namespace ProjectBlock.View
@@ -27,11 +33,18 @@ namespace ProjectBlock.View
         private BoardView boardView;
         private CardLayerView cardLayer;
         private DeckOverlayView deckOverlay;
+        private JokerBarView jokerBar;
         private Text infoText;
         private Text messageText;
         private Camera cam;
         private CardVisual draggedCard;
         private int lastSeedUsed;
+
+        /// <summary>Set while an activated joker waits for the player to pick a target.</summary>
+        private int? pendingTargetJokerId;
+
+        /// <summary>Debug grant order: walks the registry so every joker is reachable.</summary>
+        private int nextGrantIndex;
 
         private void Start()
         {
@@ -47,6 +60,8 @@ namespace ProjectBlock.View
             config.RngSeed = lastSeedUsed;
             session = new GameSession(config);
             draggedCard = null;
+            pendingTargetJokerId = null;
+            nextGrantIndex = 0;
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
             StartRoundPresentation();
         }
@@ -63,6 +78,7 @@ namespace ProjectBlock.View
             boardView.ClearPreview();
             cardLayer.AnimateRoundStart(round);
             UpdateHud();
+            jokerBar.Refresh(session, pendingTargetJokerId);
         }
 
         private void Update()
@@ -89,6 +105,7 @@ namespace ProjectBlock.View
                 }
                 return;
             }
+            HandleJokerInput(kb);
             switch (session.Phase)
             {
                 case GamePhase.Market:
@@ -131,6 +148,101 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Debug joker controls. These stand in for the market: J grants the next
+        /// joker in the registry, K sells the last one, 1-9 activate.</summary>
+        private void HandleJokerInput(Keyboard kb)
+        {
+            if (kb == null)
+            {
+                return;
+            }
+            if (kb.escapeKey.wasPressedThisFrame && pendingTargetJokerId.HasValue)
+            {
+                pendingTargetJokerId = null;
+                UpdateHud();
+                return;
+            }
+            if (kb.jKey.wasPressedThisFrame)
+            {
+                IReadOnlyList<JokerDefinition> all = JokerRegistry.All;
+                JokerDefinition definition = all[nextGrantIndex % all.Count];
+                nextGrantIndex++;
+                Joker granted = session.Jokers.Add(definition.Create());
+                Debug.Log("[project_block] Joker granted: " + granted.DisplayName
+                    + " - " + granted.Description);
+                RefreshAll(null);
+                return;
+            }
+            if (kb.kKey.wasPressedThisFrame && session.Jokers.Count > 0)
+            {
+                Joker last = session.Jokers.Jokers[session.Jokers.Count - 1];
+                int paid = session.Jokers.Sell(last);
+                Debug.Log("[project_block] Joker sold: " + last.DisplayName + " for " + paid);
+                pendingTargetJokerId = null;
+                RefreshAll(null);
+                return;
+            }
+
+            if (session.Phase != GamePhase.Round)
+            {
+                return;
+            }
+            ButtonControl[] digits =
+            {
+                kb.digit1Key, kb.digit2Key, kb.digit3Key, kb.digit4Key, kb.digit5Key,
+                kb.digit6Key, kb.digit7Key, kb.digit8Key, kb.digit9Key
+            };
+            for (int i = 0; i < digits.Length && i < session.Jokers.Count; i++)
+            {
+                if (digits[i].wasPressedThisFrame)
+                {
+                    BeginActivation(session.Jokers.Jokers[i]);
+                    return;
+                }
+            }
+        }
+
+        /// <summary>Runs a joker, or arms targeting mode if it needs to be pointed at something.</summary>
+        private void BeginActivation(Joker joker)
+        {
+            if (!session.Jokers.CanActivate(joker.InstanceId))
+            {
+                Debug.Log("[project_block] " + joker.DisplayName + " cannot be used right now.");
+                return;
+            }
+            if (joker.Targeting == JokerTargeting.HandCard)
+            {
+                pendingTargetJokerId = joker.InstanceId;
+                UpdateHud();
+                jokerBar.Refresh(session, pendingTargetJokerId);
+                return;
+            }
+            RunActivation(joker, ActivationTarget.None);
+        }
+
+        private void RunActivation(Joker joker, ActivationTarget target)
+        {
+            pendingTargetJokerId = null;
+            if (!session.Jokers.TryActivate(joker.InstanceId, target))
+            {
+                Debug.Log("[project_block] " + joker.DisplayName + " could not be used.");
+                RefreshAll(null);
+                return;
+            }
+            Debug.Log("[project_block] Joker used: " + joker.DisplayName);
+            RoundEngine round = session.CurrentRound;
+            // The whole-hand redraw has its own animation; everything else just re-syncs.
+            if (joker.DefId == "renovasyon" && round.Status != RoundStatus.Lost)
+            {
+                cardLayer.AnimateRedraw(round);
+                boardView.Refresh();
+                UpdateHud();
+                jokerBar.Refresh(session, null);
+                return;
+            }
+            RefreshAll(null);
+        }
+
         private void HandleDrag(RoundEngine round, Mouse mouse)
         {
             if (mouse == null)
@@ -138,6 +250,26 @@ namespace ProjectBlock.View
                 return;
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+
+            // Targeting mode: the next hand card clicked is the joker's target.
+            if (pendingTargetJokerId.HasValue)
+            {
+                if (mouse.leftButton.wasPressedThisFrame)
+                {
+                    Joker joker = session.Jokers.Find(pendingTargetJokerId.Value);
+                    CardVisual hit = cardLayer.CardAt(world);
+                    if (joker == null || hit == null || hit.SlotIndex < 0
+                        || hit.SlotIndex >= round.Hand.Count)
+                    {
+                        pendingTargetJokerId = null;
+                        UpdateHud();
+                        jokerBar.Refresh(session, null);
+                        return;
+                    }
+                    RunActivation(joker, ActivationTarget.Hand(hit.SlotIndex));
+                }
+                return;
+            }
 
             if (draggedCard == null)
             {
@@ -229,6 +361,7 @@ namespace ProjectBlock.View
             boardView.ClearPreview();
             cardLayer.Sync(round, report);
             UpdateHud();
+            jokerBar.Refresh(session, pendingTargetJokerId);
         }
 
         private void UpdateHud()
@@ -247,9 +380,23 @@ namespace ProjectBlock.View
             sb.Append("Draw ").Append(round.Deck.DrawCount)
                 .Append("   Discard ").Append(round.Deck.DiscardCount)
                 .Append("   Removed ").Append(round.Deck.RemovedCount).Append('\n');
+            sb.Append("Jokers ").Append(session.Jokers.Count);
+            if (session.Jokers.Count > 0)
+            {
+                sb.Append("   (1-9 activate)");
+            }
+            sb.Append('\n');
             sb.Append("Drag a card onto the board to place it.   Click draw pile: view deck\n");
-            sb.Append("S: redraw hand (debug)   R: new run");
+            sb.Append("S: redraw hand (debug)   J: grant joker   K: sell last joker   R: new run");
             infoText.text = sb.ToString();
+
+            if (pendingTargetJokerId.HasValue)
+            {
+                Joker targeting = session.Jokers.Find(pendingTargetJokerId.Value);
+                messageText.text = (targeting != null ? targeting.DisplayName : "Joker")
+                    + ": iade edilecek bloğu seç\n[Esc] vazgeç";
+                return;
+            }
 
             switch (session.Phase)
             {
@@ -301,6 +448,10 @@ namespace ProjectBlock.View
             overlayGo.transform.SetParent(transform, false);
             deckOverlay = overlayGo.AddComponent<DeckOverlayView>();
 
+            var jokerGo = new GameObject("JokerBarView");
+            jokerGo.transform.SetParent(transform, false);
+            jokerBar = jokerGo.AddComponent<JokerBarView>();
+
             var canvasGo = new GameObject("HudCanvas");
             canvasGo.transform.SetParent(transform, false);
             Canvas canvas = canvasGo.AddComponent<Canvas>();
@@ -313,6 +464,8 @@ namespace ProjectBlock.View
                 new Vector2(16f, -16f), TextAnchor.UpperLeft, 22, Color.white);
             messageText = MakeText(canvasGo.transform, "MessageText", new Vector2(0.5f, 1f),
                 new Vector2(0f, -16f), TextAnchor.UpperCenter, 28, new Color(1f, 0.92f, 0.45f));
+
+            jokerBar.Build(canvasGo.transform);
         }
 
         private static Text MakeText(Transform parent, string name, Vector2 anchor,

@@ -1,0 +1,252 @@
+// PURPOSE: Base type of every joker. All hooks are virtual no-ops, so a joker file only
+// contains the moments it actually cares about. JokerInventory calls the hooks in
+// inventory order (left to right = acquisition order) - that order is the ONE canonical
+// ordering rule of the game, see ScoreBreakdown for how it applies to score.
+//
+// CONFIRMED RULES BAKED IN HERE:
+//  - Overtime ("uzatma") disabling is CENTRAL: a joker sets DisabledInOvertime and the
+//    inventory skips all of its hooks once the threshold is passed. Never write an
+//    "if (overtime) return;" inside a joker.
+//  - Sell value works before the market exists: BaseSellValue + AccruedValue +
+//    AuctionPremium. The kumbara jokers grow AccruedValue from their own hooks.
+//  - Per-round charges (Renovasyon, Iade, later Taskin/Yangin/Powerbank) reset centrally
+//    at round start; a joker just declares ChargesPerRound and calls TrySpendCharge.
+//
+// EXTENSION POINT: market and power hooks are declared but never dispatched yet - they
+// go live untouched when MarketStub and the power system land.
+
+namespace ProjectBlock.Core
+{
+    /// <summary>How a round ended, for OnRoundEnded.</summary>
+    public enum RoundOutcome
+    {
+        /// <summary>Player took the advance offer; the run continues in the market.</summary>
+        Advanced = 0,
+
+        /// <summary>Round lost; the run is over.</summary>
+        Lost = 1
+    }
+
+    /// <summary>What an activated joker needs to be pointed at before it can run. The UI
+    /// reads this to decide whether to ask for a target first.</summary>
+    public enum JokerTargeting
+    {
+        /// <summary>Fires immediately (Renovasyon).</summary>
+        None = 0,
+
+        /// <summary>Needs a card in hand (İade).</summary>
+        HandCard = 1,
+
+        /// <summary>Needs a board cell (future: Enfeksiyon).</summary>
+        BoardCell = 2
+    }
+
+    /// <summary>Where an attached joker lives (Parazit). Reserved: nothing sets it yet.</summary>
+    public readonly struct CubeAttachment
+    {
+        /// <summary>Id of the BlockCard the joker rides on.</summary>
+        public readonly int CardId;
+
+        /// <summary>Index into that card's BlockShape.Cells - the host cube.</summary>
+        public readonly int CellIndex;
+
+        public CubeAttachment(int cardId, int cellIndex)
+        {
+            CardId = cardId;
+            CellIndex = cellIndex;
+        }
+    }
+
+    /// <summary>A joker the player owns. Subclass and override only the hooks you need.</summary>
+    public abstract class Joker
+    {
+        protected Joker(string defId, string displayName)
+        {
+            DefId = defId;
+            DisplayName = displayName;
+        }
+
+        /// <summary>Stable content id ("domuz_kumbarasi"). This is the save/replay key -
+        /// never rename it, even if DisplayName changes.</summary>
+        public string DefId { get; }
+
+        /// <summary>Human-readable name for the UI (Turkish).</summary>
+        public string DisplayName { get; }
+
+        /// <summary>One-line rules text for the UI (Turkish). Set by the subclass.</summary>
+        public string Description { get; protected set; } = string.Empty;
+
+        /// <summary>Short live state for the UI ("seri 3", "x4"), or null if the joker has
+        /// nothing to show. Charges and sell value are rendered generically, not here.</summary>
+        public virtual string StatusText
+        {
+            get { return null; }
+        }
+
+        /// <summary>Unique within the session. Assigned by JokerInventory on acquisition,
+        /// so two copies of the same joker are still distinguishable.</summary>
+        public int InstanceId { get; internal set; }
+
+        // ---------------------------------------------------------------- sell value
+
+        /// <summary>Base price the market will buy this joker back for.</summary>
+        public int BaseSellValue { get; protected set; } = 25;
+
+        /// <summary>Value the joker earned by itself (the three kumbara jokers).</summary>
+        public int AccruedValue { get; private set; }
+
+        /// <summary>Extra price put on this joker by "ihale". Written from outside.</summary>
+        public int AuctionPremium { get; internal set; }
+
+        /// <summary>What the market pays for this joker right now.</summary>
+        public int SellValue
+        {
+            get { return BaseSellValue + AccruedValue + AuctionPremium; }
+        }
+
+        /// <summary>Grows SellValue. The kumbara jokers call this from their hooks.</summary>
+        protected void Accrue(int amount)
+        {
+            AccruedValue += amount;
+        }
+
+        // ------------------------------------------------------------- round charges
+
+        /// <summary>Uses per round for an activated joker. 0 = passive joker.</summary>
+        public int ChargesPerRound { get; protected set; }
+
+        /// <summary>Uses left this round. Reset centrally at round start.</summary>
+        public int ChargesLeft { get; private set; }
+
+        internal void ResetCharges()
+        {
+            ChargesLeft = ChargesPerRound;
+        }
+
+        /// <summary>Spends one charge if any is left. Returns false when empty.</summary>
+        protected bool TrySpendCharge()
+        {
+            if (ChargesLeft <= 0)
+            {
+                return false;
+            }
+            ChargesLeft--;
+            return true;
+        }
+
+        // -------------------------------------------------------------------- gating
+
+        /// <summary>True = every hook is skipped while the round is in overtime.
+        /// Used by "Kayit defteri" and "Seri tetik"; checked by the inventory, not here.</summary>
+        public virtual bool DisabledInOvertime
+        {
+            get { return false; }
+        }
+
+        /// <summary>Non-null once Parazit has bound this joker to a cube. Reserved:
+        /// dispatch treats null as "always active", which is every joker today.</summary>
+        public CubeAttachment? Attachment { get; internal set; }
+
+        /// <summary>What Activate needs in its ActivationTarget. None for passive jokers.</summary>
+        public virtual JokerTargeting Targeting
+        {
+            get { return JokerTargeting.None; }
+        }
+
+        /// <summary>True if the player can activate this joker right now. Activated jokers
+        /// override this; passive ones stay false and the UI hides the button.</summary>
+        public virtual bool CanActivate(RoundContext ctx)
+        {
+            return false;
+        }
+
+        /// <summary>Runs the player-triggered ability. Returns false if it could not run.
+        /// Implementations must call TrySpendCharge themselves.</summary>
+        public virtual bool Activate(RoundContext ctx, ActivationTarget target)
+        {
+            return false;
+        }
+
+        // -------------------------------------------------------- session / round life
+
+        /// <summary>Bought or granted. Apply permanent rule changes here (Seri tetik: +2 hand).</summary>
+        public virtual void OnAcquired(SessionContext ctx)
+        {
+        }
+
+        /// <summary>Sold or destroyed. MUST undo whatever OnAcquired changed.</summary>
+        public virtual void OnRemoved(SessionContext ctx)
+        {
+        }
+
+        /// <summary>Another joker left the inventory (ihale re-auctions on this).</summary>
+        public virtual void OnJokerRemoved(SessionContext ctx, Joker other)
+        {
+        }
+
+        /// <summary>A new round started. Charges are already reset when this runs.</summary>
+        public virtual void OnRoundStarted(RoundContext ctx)
+        {
+        }
+
+        /// <summary>The round ended, either way. Check the outcome before paying out.</summary>
+        public virtual void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
+        {
+        }
+
+        /// <summary>Last chance to change a round's setup before its board is built.
+        /// Reserved for "Kentsel Donusum" (permanent extra board space).</summary>
+        public virtual RoundConfig FilterRoundConfig(SessionContext ctx, RoundConfig config)
+        {
+            return config;
+        }
+
+        // ------------------------------------------------------------ market (reserved)
+
+        /// <summary>Reserved: market phase opened.</summary>
+        public virtual void OnMarketEntered(SessionContext ctx)
+        {
+        }
+
+        /// <summary>Reserved: market left. "Damlaya damlaya" watches anythingPurchased.</summary>
+        public virtual void OnMarketLeft(SessionContext ctx, bool anythingPurchased)
+        {
+        }
+
+        /// <summary>Reserved: a power was used. Powerbank refills one use here.</summary>
+        public virtual void OnPowerUsed(RoundContext ctx, string powerId)
+        {
+        }
+
+        // ------------------------------------------------------------------ in-turn
+
+        /// <summary>After full lines exploded, before the clean-sweep check. Extra cubes may
+        /// still be destroyed here (Tutustur, Enfeksiyon, Buldozer, Kayit defteri).</summary>
+        public virtual void AfterLineExplosion(TurnContext turn)
+        {
+        }
+
+        /// <summary>The clean sweep ("temizlik") fired this turn. Single central event -
+        /// joker-triggered sweeps raise it too, so listeners never re-implement the check.</summary>
+        public virtual void AfterCleanSweep(TurnContext turn)
+        {
+        }
+
+        /// <summary>The scoring hook: add flat bonuses and multipliers for this turn.
+        /// Runs once, after every base value is known and before the score is banked.</summary>
+        public virtual void ModifyScore(TurnContext turn)
+        {
+        }
+
+        /// <summary>End of turn: the card is gone and the hand is refilled, but the
+        /// threshold has NOT been checked yet - score added here still counts toward it.</summary>
+        public virtual void AfterTurnScored(TurnContext turn)
+        {
+        }
+
+        public override string ToString()
+        {
+            return DisplayName + "#" + InstanceId;
+        }
+    }
+}

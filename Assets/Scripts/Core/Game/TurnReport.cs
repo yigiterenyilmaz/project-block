@@ -59,6 +59,15 @@ namespace ProjectBlock.Core
         public int ScoreGained { get; internal set; }
         public int RoundScoreAfter { get; internal set; }
 
+        /// <summary>How ScoreGained was built up (base values, then each joker's flat bonus
+        /// and multiplier in inventory order). Null when the round runs without jokers.</summary>
+        public ScoreBreakdown Score { get; internal set; }
+
+        /// <summary>True if a draw attempt found the draw pile empty at any point this turn.
+        /// Before the threshold that just means the discard was recycled; in overtime it is
+        /// the loss condition. "Harcama bonusu" pays out on this.</summary>
+        public bool DrawPileEmptiedThisTurn { get; internal set; }
+
         /// <summary>Bonus-hand plays only: draw pile card flipped face-up into the discard.</summary>
         public BlockCard BurnedCard { get; internal set; }
 
