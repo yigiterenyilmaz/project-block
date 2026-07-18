@@ -190,5 +190,42 @@ namespace ProjectBlock.View
             visual.SetSortingBoost(3);
             visual.FlyToAndDestroy(CardLayerView.DrawPilePos, 0.35f);
         }
+
+        /// <summary>Flies a stand-in joker tile from the offer slot toward the joker bar
+        /// (target is world-space, computed by the controller). Call BEFORE Show() rebuilds;
+        /// the fx object is parented outside this view so the rebuild leaves it alone.</summary>
+        public void PlayJokerBuyFx(int offerIndex, Vector2 target)
+        {
+            if (offerIndex < 0 || offerIndex >= offerCenters.Count)
+            {
+                return;
+            }
+            var root = new GameObject("JokerBuyFx");
+            root.transform.SetParent(transform.parent, false);
+            root.transform.localPosition = offerCenters[offerIndex];
+            ViewUtil.MakeRect(root.transform, "Body", Vector2.zero,
+                new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight), JokerBodyColor, 39);
+            ViewUtil.MakeText3D(root.transform, "Tag", Vector2.zero, "JOKER",
+                90, 0.016f, JokerTagColor, 39, TextAnchor.MiddleCenter);
+            StartCoroutine(FlyShrinkAndDestroy(root.transform, target, 0.4f));
+        }
+
+        private static System.Collections.IEnumerator FlyShrinkAndDestroy(Transform fx,
+            Vector2 target, float duration)
+        {
+            Vector3 from = fx.position;
+            var to = new Vector3(target.x, target.y, from.z);
+            float time = 0f;
+            while (time < duration)
+            {
+                time += Time.deltaTime;
+                float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(time / duration));
+                fx.position = Vector3.Lerp(from, to, t);
+                float scale = Mathf.Lerp(1f, 0.35f, t);
+                fx.localScale = new Vector3(scale, scale, 1f);
+                yield return null;
+            }
+            Object.Destroy(fx.gameObject);
+        }
     }
 }

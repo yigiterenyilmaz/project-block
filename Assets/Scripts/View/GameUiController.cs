@@ -186,11 +186,19 @@ namespace ProjectBlock.View
                         BlockCard card = deckOverlay.CardAt(sellWorld);
                         if (card != null)
                         {
+                            deckOverlay.PlaySellFx(card); // before the rebuild eats the visual
                             long paid = session.SellCard(card);
                             Debug.Log("[project_block] Sold card " + card + " for " + paid);
                             if (paid > 0)
                             {
                                 sfx.Buy();
+                                FloatingTextFx.Spawn(transform, sellWorld, "+" + paid,
+                                    new Color(1f, 0.92f, 0.45f), 60, 0.05f);
+                            }
+                            else
+                            {
+                                FloatingTextFx.Spawn(transform, sellWorld, "worthless",
+                                    new Color(0.6f, 0.6f, 0.6f), 50, 0.045f);
                             }
                             deckOverlay.Show(session.OwnedCards, c => session.Config.Market.SellValue(c));
                             marketView.Show(session);
@@ -240,6 +248,9 @@ namespace ProjectBlock.View
                         {
                             // continuing costs cards and redraws the hand (see RoundEngine)
                             round.DecideAdvance(false);
+                            // the overtime fire ignites the moment the player chooses to
+                            // continue, not on their next placement
+                            flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
                             if (round.Status == RoundStatus.InProgress)
                             {
                                 sfx.Shuffle();
@@ -307,11 +318,18 @@ namespace ProjectBlock.View
                 return false;
             }
             Joker joker = session.Jokers.Jokers[index];
+            Vector2? panelScreen = jokerBar.PanelScreenCenter(index);
             long paid = session.Jokers.Sell(joker);
             Debug.Log("[project_block] Sold joker " + joker.DisplayName + " for " + paid);
             sfx.Buy();
+            if (panelScreen.HasValue)
+            {
+                Vector2 world = cam.ScreenToWorldPoint(panelScreen.Value);
+                FloatingTextFx.Spawn(transform, world, "+" + paid,
+                    new Color(1f, 0.92f, 0.45f), 60, 0.05f);
+            }
             marketView.Show(session);
-            jokerBar.Refresh(session, null);
+            jokerBar.AnimateJokerSold(index, session); // shrink, then refresh the strip
             UpdateHud();
             return true;
         }
@@ -339,7 +357,16 @@ namespace ProjectBlock.View
             {
                 Debug.Log("[project_block] Bought " + offer + " for " + offer.Price);
                 sfx.Buy();
-                marketView.PlayBuyFx(offerIndex);
+                if (offer.Kind == MarketOfferKind.Joker)
+                {
+                    // fly the tile up toward the joker bar (top-right of the view)
+                    Vector2 barWorld = cam.ViewportToWorldPoint(new Vector3(0.9f, 0.92f, -cam.transform.position.z));
+                    marketView.PlayJokerBuyFx(offerIndex, barWorld);
+                }
+                else
+                {
+                    marketView.PlayBuyFx(offerIndex);
+                }
                 marketView.Show(session);
                 UpdateHud();
                 if (offer.Kind == MarketOfferKind.Joker)
@@ -431,6 +458,15 @@ namespace ProjectBlock.View
         private void RunActivation(Joker joker, ActivationTarget target)
         {
             pendingTargetJokerId = null;
+            RoundEngine round = session.CurrentRound;
+            // Remember which card a hand-targeted joker (İade) is about to replace, so the
+            // swap can be animated after the engine has already done it.
+            int replacedCardId = -1;
+            if (target.HandIndex.HasValue && round != null
+                && target.HandIndex.Value >= 0 && target.HandIndex.Value < round.Hand.Count)
+            {
+                replacedCardId = round.Hand[target.HandIndex.Value].Id;
+            }
             if (!session.Jokers.TryActivate(joker.InstanceId, target))
             {
                 Debug.Log("[project_block] " + joker.DisplayName + " could not be used.");
@@ -438,12 +474,21 @@ namespace ProjectBlock.View
                 return;
             }
             Debug.Log("[project_block] Joker used: " + joker.DisplayName);
-            RoundEngine round = session.CurrentRound;
-            // The whole-hand redraw has its own animation; everything else just re-syncs.
+            jokerBar.PulseJoker(joker.InstanceId);
+            // The whole-hand redraw has its own animation; a single-card swap flies the
+            // returned card out and deals its replacement; everything else just re-syncs.
             if (joker.DefId == "renovasyon" && round.Status != RoundStatus.Lost)
             {
                 sfx.Shuffle();
                 cardLayer.AnimateRedraw(round);
+                boardView.Refresh();
+                UpdateHud();
+                jokerBar.Refresh(session, null);
+                return;
+            }
+            if (replacedCardId >= 0 && round.Status != RoundStatus.Lost)
+            {
+                cardLayer.AnimateReplaceCard(round, replacedCardId);
                 boardView.Refresh();
                 UpdateHud();
                 jokerBar.Refresh(session, null);

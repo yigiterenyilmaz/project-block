@@ -101,6 +101,21 @@ namespace ProjectBlock.View
             SyncInternal(round, null, true);
         }
 
+        /// <summary>Single-card swap animation (İade): flies the returned card to the discard
+        /// and deals its replacement from the draw pile. Call AFTER ReplaceHandCard().</summary>
+        public void AnimateReplaceCard(RoundEngine round, int replacedCardId)
+        {
+            CardVisual old;
+            if (heldVisuals.TryGetValue(replacedCardId, out old) && old != null)
+            {
+                heldVisuals.Remove(replacedCardId);
+                old.SlotIndex = -1;
+                old.SetSortingBoost(8);
+                old.FlyToAndDestroy(DiscardPilePos, DiscardDuration);
+            }
+            SyncInternal(round, null, true); // deals the replacement from the draw pile
+        }
+
         /// <summary>Round-start presentation: shuffle flourish on the draw pile, then the
         /// opening deal. Replaces Clear()+Sync(null) when a round begins.</summary>
         public void AnimateRoundStart(RoundEngine round)

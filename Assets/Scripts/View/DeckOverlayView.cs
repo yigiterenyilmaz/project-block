@@ -22,6 +22,7 @@ namespace ProjectBlock.View
         private readonly List<Vector2> entryCenters = new List<Vector2>();
         private readonly List<BlockShape> entryShapes = new List<BlockShape>();
         private readonly List<BlockCard> entryCards = new List<BlockCard>();
+        private readonly List<CardVisual> entryVisuals = new List<CardVisual>();
 
         /// <summary>Shows the overlay with the given cards (normally the whole owned deck).</summary>
         public void Show(IReadOnlyList<BlockCard> cards)
@@ -41,7 +42,7 @@ namespace ProjectBlock.View
             if (sellValue != null)
             {
                 ViewUtil.MakeText3D(transform, "SellTitle", new Vector2(0f, 4.4f),
-                    "SELL CARDS  -  click a card to sell it", 44, 0.06f,
+                    "SELL CARDS  -  click a card to sell it", 90, 0.03f,
                     new Color(1f, 0.92f, 0.45f), 42, TextAnchor.MiddleCenter);
             }
 
@@ -64,13 +65,33 @@ namespace ProjectBlock.View
                     int value = sellValue(sorted[i]);
                     ViewUtil.MakeText3D(transform, "SellPrice_" + i,
                         position + new Vector2(0f, -CardVisual.BodyHeight * CardScale * 0.5f - 0.16f),
-                        value > 0 ? "sell " + value : "worthless", 34, 0.045f,
+                        value > 0 ? "sell " + value : "worthless", 90, 0.017f,
                         value > 0 ? new Color(1f, 0.92f, 0.45f) : new Color(0.6f, 0.6f, 0.6f),
                         42, TextAnchor.MiddleCenter);
                 }
                 entryCenters.Add(position);
                 entryShapes.Add(sorted[i].Shape);
                 entryCards.Add(sorted[i]);
+                entryVisuals.Add(visual);
+            }
+        }
+
+        /// <summary>Sold-card feedback: detaches that card's visual and flies it off toward
+        /// the discard pile. Call BEFORE Show() rebuilds the overlay.</summary>
+        public void PlaySellFx(BlockCard card)
+        {
+            for (int i = 0; i < entryCards.Count; i++)
+            {
+                if (entryCards[i] != card || entryVisuals[i] == null)
+                {
+                    continue;
+                }
+                CardVisual visual = entryVisuals[i];
+                entryVisuals[i] = null;
+                visual.transform.SetParent(transform.parent, true);
+                visual.SetSortingBoost(3);
+                visual.FlyToAndDestroy(CardLayerView.DiscardPilePos, 0.32f);
+                return;
             }
         }
 
@@ -107,6 +128,7 @@ namespace ProjectBlock.View
             entryCenters.Clear();
             entryShapes.Clear();
             entryCards.Clear();
+            entryVisuals.Clear();
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Destroy(transform.GetChild(i).gameObject);
