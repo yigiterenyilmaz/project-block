@@ -58,6 +58,10 @@ public static class JokerTests
         Imitasyon_HandTracksTheDiscardPile();
         Fraksiyon_SplitsAtRoundStartAndAllowsOneSwap();
         Parazit_FreesASlotAndDiesWithItsHostCube();
+        Powers_CentralRulesHold();
+        Powers_BoardEffects();
+        Powers_DeckEffects();
+        Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
 
@@ -1212,6 +1216,177 @@ public static class JokerTests
         Check(session.Jokers.Find(passenger.InstanceId) == null, "and it left the inventory");
     }
 
+    // ------------------------------------------------------------------- powers
+
+    private static void Powers_CentralRulesHold()
+    {
+        Section("powers / the four central rules");
+        var session = NewSession(311, 8, 1000000, 40, 1);
+        var power = (CercevePower)session.Powers.Add(new CercevePower());
+        RoundEngine round = session.CurrentRound;
+
+        Check(power.Charged, "a new power arrives charged");
+        Check(session.Powers.Count == 1, "powers live in their own inventory");
+
+        PlayTurns(session, 2); // put something on the board for Çerçeve to clear
+        int turnsBefore = round.TurnNumber;
+        Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.None), "power ran");
+        Check(round.TurnNumber == turnsBefore, "using a power never costs a turn",
+            round.TurnNumber + " vs " + turnsBefore);
+        Check(!power.Charged, "the charge was spent");
+        Check(!session.Powers.TryUse(power.InstanceId, ActivationTarget.None),
+            "a spent power cannot be used again");
+
+        // At most one power per turn, even with a second charged power in hand.
+        var second = (BuyutecPower)session.Powers.Add(new BuyutecPower());
+        Check(second.Charged, "the second power is charged");
+        Check(!session.Powers.TryUse(second.InstanceId, ActivationTarget.None),
+            "this turn's single power slot is already spent");
+        PlayTurns(session, 1);
+        Check(session.Powers.TryUse(second.InstanceId, ActivationTarget.None),
+            "a new turn frees the power slot");
+
+        session.Powers.DispatchRoundStarted(session.CurrentRound);
+        Check(power.Charged && second.Charged, "a new round recharges every power");
+    }
+
+    private static void Powers_BoardEffects()
+    {
+        Section("powers / board effects");
+
+        var s1 = NewSession(313, 7, 1000000, 40, 1);
+        var capraz = (CaprazlamaPower)s1.Powers.Add(new CaprazlamaPower());
+        capraz.ArmLength = 1;
+        RoundEngine r1 = s1.CurrentRound;
+        PaintBoard(r1, s1, CubeKind.Normal, new GridPos(3, 3), new GridPos(4, 3),
+            new GridPos(3, 4), new GridPos(5, 5));
+        s1.Powers.TryUse(capraz.InstanceId, ActivationTarget.Board(new GridPos(3, 3)));
+        Check(!r1.Board.GetCube(new GridPos(3, 3)).HasValue, "the plus centre went");
+        Check(!r1.Board.GetCube(new GridPos(4, 3)).HasValue, "an arm cell went");
+        Check(r1.Board.GetCube(new GridPos(5, 5)).HasValue, "a cell outside the plus survived");
+
+        var s2 = NewSession(317, 5, 1000000, 40, 1);
+        var cerceve = (CercevePower)s2.Powers.Add(new CercevePower());
+        RoundEngine r2 = s2.CurrentRound;
+        PaintBoard(r2, s2, CubeKind.Normal, new GridPos(0, 0), new GridPos(4, 4),
+            new GridPos(2, 2));
+        s2.Powers.TryUse(cerceve.InstanceId, ActivationTarget.None);
+        Check(!r2.Board.GetCube(new GridPos(0, 0)).HasValue, "a rim corner was cleared");
+        Check(!r2.Board.GetCube(new GridPos(4, 4)).HasValue, "the far rim corner too");
+        Check(r2.Board.GetCube(new GridPos(2, 2)).HasValue, "the middle survived");
+
+        var s3 = NewSession(319, 4, 1000000, 40, 1);
+        var invert = (BardaginBosTarafiPower)s3.Powers.Add(new BardaginBosTarafiPower());
+        RoundEngine r3 = s3.CurrentRound;
+        PaintBoard(r3, s3, CubeKind.Normal, new GridPos(0, 0));
+        int filledBefore = r3.Board.OccupiedCount;
+        int cells = r3.Board.Width * r3.Board.Height;
+        s3.Powers.TryUse(invert.InstanceId, ActivationTarget.None);
+        Check(r3.Board.OccupiedCount == cells - filledBefore, "filled and empty swapped",
+            r3.Board.OccupiedCount + " vs " + (cells - filledBefore));
+        Check(!r3.Board.GetCube(new GridPos(0, 0)).HasValue, "the old cube is gone");
+
+        var s4 = NewSession(323, 5, 1000000, 40, 1);
+        var mayin = (MayinPower)s4.Powers.Add(new MayinPower());
+        RoundEngine r4 = s4.CurrentRound;
+        PaintBoard(r4, s4, CubeKind.Normal, new GridPos(1, 1));
+        s4.Powers.TryUse(mayin.InstanceId, ActivationTarget.Board(new GridPos(1, 1)));
+        Check(!r4.Board.GetCube(new GridPos(1, 1)).HasValue, "the chosen cube popped");
+
+        var s5 = NewSession(329, 5, 1000000, 40, 1);
+        var mayin2 = (MayinPower)s5.Powers.Add(new MayinPower());
+        RoundEngine r5 = s5.CurrentRound;
+        s5.Powers.TryUse(mayin2.InstanceId, ActivationTarget.Board(new GridPos(2, 2)));
+        Check(r5.Board.GetCube(new GridPos(2, 2)).Value.Kind == CubeKind.Mine,
+            "an empty cell got armed instead");
+        Check(r5.Board.CanPlace(Bar(1), new GridPos(2, 2)), "a block may be placed onto a mine");
+        r5.Board.Place(s5.CreateCard(Bar(1), null), new GridPos(2, 2));
+        Check(!r5.Board.GetCube(new GridPos(2, 2)).HasValue, "the mine took the arriving cube");
+    }
+
+    private static void Powers_DeckEffects()
+    {
+        Section("powers / deck and hand effects");
+
+        var s6 = NewSession(331, 8, 1000000, 40, 2);
+        var klon = (KlonPower)s6.Powers.Add(new KlonPower());
+        RoundEngine r6 = s6.CurrentRound;
+        BlockCard original = r6.Hand[0];
+        s6.Powers.TryUse(klon.InstanceId, ActivationTarget.Hand(0));
+        Check(r6.BonusHand.Count == 2, "two copies arrived", "bonus " + r6.BonusHand.Count);
+        Check(r6.BonusHand[0].Card.Shape.CanonicalKey == original.Shape.CanonicalKey,
+            "a copy has the same shape");
+        Check(r6.BonusHand[0].Card.Id != original.Id, "but its own card id");
+
+        var s7 = NewSession(337, 8, 1000000, 40, 1);
+        var transfer = (TransferPower)s7.Powers.Add(new TransferPower());
+        RoundEngine r7 = s7.CurrentRound;
+        PlayTurns(s7, 1); // put a card into the discard
+        int discardTopId = r7.Deck.DiscardPile[r7.Deck.DiscardCount - 1].Id;
+        int drawTopId = r7.Deck.DrawPile[r7.Deck.DrawCount - 1].Id;
+        Check(s7.Powers.TryUse(transfer.InstanceId, ActivationTarget.None), "transfer ran");
+        Check(r7.Deck.DiscardPile[r7.Deck.DiscardCount - 1].Id == drawTopId,
+            "the draw pile's top card is now face-up on the discard");
+        Check(r7.Deck.DrawPile[r7.Deck.DrawCount - 1].Id == discardTopId,
+            "and the discarded card went into the draw pile");
+
+        var s8 = NewSession(347, 8, 1000000, 40, 1);
+        var buyutec = (BuyutecPower)s8.Powers.Add(new BuyutecPower());
+        Check(s8.Config.Rules.RevealedDrawCount == 0, "nothing revealed to begin with");
+        s8.Powers.TryUse(buyutec.InstanceId, ActivationTarget.None);
+        Check(s8.Config.Rules.RevealedDrawCount == 2, "two cards revealed",
+            "count " + s8.Config.Rules.RevealedDrawCount);
+
+        var s9 = NewSession(349, 8, 1000000, 40, 1);
+        var sarjor = (HizliCekimSarjoruPower)s9.Powers.Add(new HizliCekimSarjoruPower());
+        RoundEngine r9 = s9.CurrentRound;
+        PlayTurns(s9, 2);
+        int totalBefore = r9.Deck.DrawCount + r9.Deck.DiscardCount;
+        int shufflesBefore = r9.Deck.ShuffleCount;
+        Check(s9.Powers.TryUse(sarjor.InstanceId, ActivationTarget.None), "the magazine ran");
+        Check(r9.Deck.ShuffleCount > shufflesBefore, "it forced a reshuffle");
+        Check(r9.Deck.DrawCount + r9.Deck.DiscardCount == totalBefore, "no card was lost",
+            (r9.Deck.DrawCount + r9.Deck.DiscardCount) + " vs " + totalBefore);
+        Check(r9.Deck.DiscardCount == 0, "everything ended up in the draw pile");
+
+        var s10 = NewSession(353, 8, 1000000, 40, 1);
+        var hologram = (HologramPower)s10.Powers.Add(new HologramPower());
+        RoundEngine r10 = s10.CurrentRound;
+        r10.AddBonusCard(s10.CreateCard(Bar(2), null), BonusPlayOutcome.ExpireFromRound);
+        int discardBefore = r10.Deck.DiscardCount;
+        Check(s10.Powers.TryUse(hologram.InstanceId, ActivationTarget.Hand(0)), "hologram ran");
+        Check(r10.BonusHand.Count == 0, "the bonus card left the bonus hand");
+        Check(r10.Deck.DiscardCount == discardBefore + 1, "and landed in the discard");
+
+        var s11 = NewSession(359, 8, 1000000, 40, 3);
+        var cimbiz = (CimbizPower)s11.Powers.Add(new CimbizPower());
+        RoundEngine r11 = s11.CurrentRound;
+        BlockShape before = r11.EffectiveShape(r11.Hand[0]);
+        Check(s11.Powers.TryUse(cimbiz.InstanceId, ActivationTarget.Hand(0)), "cimbiz ran");
+        BlockShape after = r11.EffectiveShape(r11.Hand[0]);
+        Check(before.CanonicalKey != after.CanonicalKey, "a plain block rotated",
+            before.CanonicalKey + " -> " + after.CanonicalKey);
+    }
+
+    private static void Powerbank_RechargesASpentPower()
+    {
+        Section("powerbank / refills a power without a sweep");
+        var session = NewSession(367, 8, 1000000, 40, 1);
+        var power = (BuyutecPower)session.Powers.Add(new BuyutecPower());
+        var joker = (PowerbankJoker)session.Jokers.Add(new PowerbankJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+
+        Check(!session.Jokers.CanActivate(joker.InstanceId),
+            "refuses while every power is already charged");
+
+        session.Powers.TryUse(power.InstanceId, ActivationTarget.None);
+        Check(!power.Charged, "the power was spent");
+        Check(session.Jokers.CanActivate(joker.InstanceId), "now it has something to do");
+        Check(session.Jokers.TryActivate(joker.InstanceId, ActivationTarget.None), "powerbank ran");
+        Check(power.Charged, "the power is charged again");
+        Check(!session.Jokers.CanActivate(joker.InstanceId), "its own single charge is spent");
+    }
+
     private static void AllRegisteredJokers_HaveDistinctIdsAndText()
     {
         Section("registry / catalogue sanity");
@@ -1242,7 +1417,7 @@ public static class JokerTests
             ids.Count + " of " + JokerRegistry.All.Count);
         Check(allNamed, "every joker has a display name");
         Check(allDescribed, "every joker has a description");
-        Check(JokerRegistry.All.Count >= 34, "the catalogue is complete",
+        Check(JokerRegistry.All.Count >= 35, "the catalogue is complete",
             "count " + JokerRegistry.All.Count);
     }
 
@@ -1364,7 +1539,7 @@ public static class JokerTests
                     Joker joker = session.Jokers.Jokers[picker.NextInt(0, session.Jokers.Count)];
                     if (session.Jokers.CanActivate(joker.InstanceId))
                     {
-                        ActivationTarget target = joker.Targeting == JokerTargeting.HandCard
+                        ActivationTarget target = joker.Targeting == ActivationTargeting.HandCard
                             ? ActivationTarget.Hand(picker.NextInt(0, Math.Max(1, round.Hand.Count)))
                             : ActivationTarget.None;
                         if (session.Jokers.TryActivate(joker.InstanceId, target))

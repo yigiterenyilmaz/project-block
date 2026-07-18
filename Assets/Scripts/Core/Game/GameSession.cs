@@ -52,6 +52,10 @@ namespace ProjectBlock.Core
         /// <summary>The player's jokers. Session-scoped: they outlive every round.</summary>
         public JokerInventory Jokers { get; }
 
+        /// <summary>The player's powers. Session-scoped like the jokers, but a separate
+        /// pool: powers and jokers do not compete for the same slots.</summary>
+        public PowerInventory Powers { get; }
+
         private readonly List<BlockCard> ownedCards = new List<BlockCard>();
 
         /// <summary>The player's whole collection ("oyun destesi").</summary>
@@ -79,6 +83,7 @@ namespace ProjectBlock.Core
             scorer = new DefaultScoreCalculator(config.Scoring);
             Market = new Market();
             Jokers = new JokerInventory(this, rng);
+            Powers = new PowerInventory(this, rng);
             if (config.Deck.FixedShapes != null)
             {
                 // static deck: identical composition every run
@@ -261,6 +266,7 @@ namespace ProjectBlock.Core
                 return;
             }
             Jokers.DispatchRoundStarted(CurrentRound);
+            Powers.DispatchRoundStarted(CurrentRound);
         }
 
         private void OnTurnResolved(TurnReport report)

@@ -29,6 +29,10 @@ namespace ProjectBlock.Core
         /// ("Fraksiyon"). 0 means only the usual top card.</summary>
         public int RevealedDiscardCount = 0;
 
+        /// <summary>Pure UI flag: how many cards of the DRAW pile are shown face-up
+        /// ("Büyüteç"). Insider uses RevealTopDrawCard for the single-card case.</summary>
+        public int RevealedDrawCount = 0;
+
         /// <summary>"Oryantasyon": a card that would go to the discard is buried at a random
         /// depth in the DRAW pile instead. The discard therefore stays nearly empty, which
         /// also means the deck effectively never runs out.</summary>

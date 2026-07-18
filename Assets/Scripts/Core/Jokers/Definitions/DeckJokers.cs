@@ -216,9 +216,9 @@ namespace ProjectBlock.Core
             get { return SwapAvailable ? "takas hazır" : "takas yok"; }
         }
 
-        public override JokerTargeting Targeting
+        public override ActivationTargeting Targeting
         {
-            get { return JokerTargeting.None; }
+            get { return ActivationTargeting.None; }
         }
 
         public override void OnRemoved(SessionContext ctx)

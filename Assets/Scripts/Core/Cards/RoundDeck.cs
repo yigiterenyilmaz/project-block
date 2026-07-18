@@ -122,6 +122,30 @@ namespace ProjectBlock.Core
 
         private readonly List<BlockCard> swapBuffer = new List<BlockCard>();
 
+        /// <summary>"Transfer": the most recently discarded card and the top of the draw
+        /// pile change places. Returns false if either pile is empty.</summary>
+        public bool SwapDiscardTopWithDrawTop()
+        {
+            if (drawPile.Count == 0 || discardPile.Count == 0)
+            {
+                return false;
+            }
+            int drawTop = drawPile.Count - 1;
+            int discardTop = discardPile.Count - 1;
+            BlockCard fromDraw = drawPile[drawTop];
+            drawPile[drawTop] = discardPile[discardTop];
+            discardPile[discardTop] = fromDraw;
+            return true;
+        }
+
+        /// <summary>"Hızlı çekim şarjörü": empties the draw pile into the discard without
+        /// drawing any of it. Pair it with ShuffleDiscardIntoDraw to recycle everything.</summary>
+        public void DumpDrawPileIntoDiscard()
+        {
+            discardPile.AddRange(drawPile);
+            drawPile.Clear();
+        }
+
         /// <summary>Shuffles the discard pile together with what is left of the draw pile.</summary>
         public void ShuffleDiscardIntoDraw()
         {

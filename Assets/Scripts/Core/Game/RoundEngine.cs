@@ -127,6 +127,16 @@ namespace ProjectBlock.Core
         /// Only ForceCleanSweep can raise the event.</summary>
         internal bool SuppressNaturalSweep { get; set; }
 
+        /// <summary>Powers used since the last placement. The confirmed rule is at most ONE
+        /// power per turn; using one never costs a turn, so this is the only thing limiting
+        /// them. Reset when a placement resolves.</summary>
+        public int PowersUsedThisTurn { get; private set; }
+
+        internal void NotePowerUsed()
+        {
+            PowersUsedThisTurn++;
+        }
+
         // ---- per-turn state, valid only while a placement is resolving ----
         private readonly ScoreBreakdown breakdown = new ScoreBreakdown();
         private TurnReport currentReport;
@@ -214,13 +224,20 @@ namespace ProjectBlock.Core
         /// UI). Only mechanical blocks rotate; the orientation persists for the round.</summary>
         public void RotateCard(int handIndex)
         {
+            RotateCard(handIndex, false);
+        }
+
+        /// <summary>Rotation with an override for the "Cımbız" power, which grants a single
+        /// turn of the mechanical block's ability to any held card.</summary>
+        public void RotateCard(int handIndex, bool ignoreMechanicalRequirement)
+        {
             EnsurePlacingAllowed();
             if (handIndex < 0 || handIndex >= Hand.Count)
             {
                 throw new ArgumentOutOfRangeException("handIndex");
             }
             BlockCard card = Hand[handIndex];
-            if (!card.Has(BlockElement.Mechanical))
+            if (!ignoreMechanicalRequirement && !card.Has(BlockElement.Mechanical))
             {
                 throw new InvalidOperationException("Only mechanical blocks can rotate.");
             }
@@ -581,6 +598,10 @@ namespace ProjectBlock.Core
 
             // 8. end-of-turn effects (may still add score - see step 9)
             hooks.AfterTurnScored(currentTurn);
+            if (session != null)
+            {
+                session.Powers.DispatchAfterTurnScored(currentTurn);
+            }
 
             // 9. threshold check (first pass only)
             if (!ThresholdPassed && RoundScore >= Config.ScoreThreshold)
@@ -607,6 +628,8 @@ namespace ProjectBlock.Core
             report.StatusAfter = Status;
             report.DiscardWasReshuffled = Deck.ShuffleCount != shufflesBeforeTurn;
 
+            // A new turn begins: its single power slot is free again.
+            PowersUsedThisTurn = 0;
             currentReport = null;
             currentTurn = null;
 
@@ -670,6 +693,11 @@ namespace ProjectBlock.Core
             }
 
             hooks.AfterCleanSweep(currentTurn);
+            if (session != null)
+            {
+                // The sweep is the powers' economy: it puts every charge back.
+                session.Powers.DispatchCleanSweep(currentTurn);
+            }
             return true;
         }
 
@@ -714,6 +742,20 @@ namespace ProjectBlock.Core
                 return;
             }
             Deck.Discard(card);
+        }
+
+        /// <summary>"Hologram": moves a bonus-hand card into the discard, folding it back
+        /// into the round's pile economy instead of letting it expire unused.</summary>
+        internal bool MoveBonusCardToDiscard(int bonusIndex)
+        {
+            if (bonusIndex < 0 || bonusIndex >= bonusHand.Count)
+            {
+                return false;
+            }
+            BlockCard card = bonusHand[bonusIndex].Card;
+            bonusHand.RemoveAt(bonusIndex);
+            Deck.Discard(card);
+            return true;
         }
 
         /// <summary>Cubes destroyed this turn by sources that COUNT (line explosions, fire

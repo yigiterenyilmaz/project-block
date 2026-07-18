@@ -265,6 +265,21 @@ namespace ProjectBlock.Core
             return card;
         }
 
+        /// <summary>A power was used. "Powerbank" is what this hook was reserved for.</summary>
+        public void DispatchPowerUsed(RoundEngine round, string powerId)
+        {
+            RoundContext ctx = RoundCtx(round);
+            Snapshot();
+            for (int i = 0; i < dispatchBuffer.Count; i++)
+            {
+                if (!IsGated(dispatchBuffer[i], round))
+                {
+                    dispatchBuffer[i].OnPowerUsed(ctx, powerId);
+                }
+            }
+            RaiseChanged();
+        }
+
         public void DispatchMarketLeft(bool anythingPurchased)
         {
             SessionContext ctx = SessionCtx();

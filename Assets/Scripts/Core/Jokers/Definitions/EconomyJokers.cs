@@ -1,11 +1,8 @@
 // PURPOSE: The jokers wired into the run economy and the market: Damlaya Damlaya Göl Olur,
 // ihale, Kara delik, Enfeksiyon.
 //
-// "Parazit" and "Powerbank" are the two jokers still missing, for reasons outside this file:
-//   Parazit  - needs a market-phase action to bind a joker to a card, plus a per-card
-//              attachment slot. The runtime half exists (Joker.Attachment, and the
-//              destruction log reports the host cube's source card), only the UI is absent.
-//   Powerbank - refills a POWER, and the power system does not exist yet.
+// "Powerbank" lives here too, now that powers exist: it is the only joker that reaches into
+// the power inventory.
 //
 // All numbers are BALANCE PLACEHOLDERS.
 
@@ -54,6 +51,51 @@ namespace ProjectBlock.Core
             {
                 turn.Score.AddFlat(ActiveBonus, DefId);
             }
+        }
+    }
+
+    /// <summary>"Powerbank" - once per round, puts one spent power back on charge without
+    /// needing a clean sweep. Player-activated so the timing is a real decision.
+    /// It refuses to fire when every power is already charged, so the charge is not wasted.</summary>
+    public sealed class PowerbankJoker : Joker
+    {
+        public PowerbankJoker()
+            : base("powerbank", "Powerbank")
+        {
+            Description = "Raunt başına 1 kez, harcanmış bir gücü temizlik beklemeden doldurur.";
+            ChargesPerRound = 1;
+            BaseSellValue = 55;
+        }
+
+        public override string StatusText
+        {
+            get { return ChargesLeft > 0 ? "hazır" : "kullanıldı"; }
+        }
+
+        public override bool CanActivate(RoundContext ctx)
+        {
+            if (ChargesLeft <= 0 || ctx.Round.Status != RoundStatus.InProgress)
+            {
+                return false;
+            }
+            IReadOnlyList<Power> powers = ctx.Session.Powers.Powers;
+            for (int i = 0; i < powers.Count; i++)
+            {
+                if (!powers[i].Charged)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public override bool Activate(RoundContext ctx, ActivationTarget target)
+        {
+            if (!CanActivate(ctx) || !TrySpendCharge())
+            {
+                return false;
+            }
+            return ctx.Session.Powers.RechargeOne();
         }
     }
 
@@ -227,9 +269,9 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>The player points at the cube to infect.</summary>
-        public override JokerTargeting Targeting
+        public override ActivationTargeting Targeting
         {
-            get { return JokerTargeting.BoardCell; }
+            get { return ActivationTargeting.BoardCell; }
         }
 
         public override string StatusText

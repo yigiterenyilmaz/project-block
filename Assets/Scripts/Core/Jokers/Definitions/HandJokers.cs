@@ -61,9 +61,9 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>The player picks which held block to send back.</summary>
-        public override JokerTargeting Targeting
+        public override ActivationTargeting Targeting
         {
-            get { return JokerTargeting.HandCard; }
+            get { return ActivationTargeting.HandCard; }
         }
 
         public override bool CanActivate(RoundContext ctx)

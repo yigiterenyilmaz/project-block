@@ -112,7 +112,8 @@ namespace ProjectBlock.Core
                     return false;
                 }
                 Cube? occupant = cells[pos.X, pos.Y];
-                if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent && occupant.Value.Kind != CubeKind.Void)
+                if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent && occupant.Value.Kind != CubeKind.Void
+                    && occupant.Value.Kind != CubeKind.Mine)
                 {
                     return false;
                 }
@@ -135,7 +136,8 @@ namespace ProjectBlock.Core
                 if (IsInside(pos))
                 {
                     Cube? occupant = cells[pos.X, pos.Y];
-                    if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent && occupant.Value.Kind != CubeKind.Void)
+                    if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent && occupant.Value.Kind != CubeKind.Void
+                    && occupant.Value.Kind != CubeKind.Mine)
                     {
                         return false;
                     }
@@ -180,10 +182,11 @@ namespace ProjectBlock.Core
                 if (IsInside(pos))
                 {
                     Cube? occupant = cells[pos.X, pos.Y];
-                    if (occupant.HasValue && occupant.Value.Kind == CubeKind.Void)
+                    if (occupant.HasValue && (occupant.Value.Kind == CubeKind.Void
+                        || occupant.Value.Kind == CubeKind.Mine))
                     {
-                        // "Kara delik" trap: the arriving cube is swallowed and the void goes
-                        // with it, leaving the cell empty. Both are gone, so nothing is placed.
+                        // Traps: "Kara delik" swallows the arriving cube, "Mayın" blows it up.
+                        // Either way both are gone, so nothing is placed.
                         cells[pos.X, pos.Y] = null;
                         OccupiedCount--;
                         continue;
@@ -436,6 +439,22 @@ namespace ProjectBlock.Core
             cells[pos.X, pos.Y] = null;
             OccupiedCount--;
             return true;
+        }
+
+        /// <summary>Writes a cube into a cell, replacing whatever was there. For effects that
+        /// conjure cubes rather than place a card ("Bardağın boş tarafı" inverting the board,
+        /// "Mayın" arming an empty cell).</summary>
+        public void SetCubeAt(GridPos pos, Cube cube)
+        {
+            if (!IsInside(pos))
+            {
+                return;
+            }
+            if (!cells[pos.X, pos.Y].HasValue)
+            {
+                OccupiedCount++;
+            }
+            cells[pos.X, pos.Y] = cube;
         }
 
         /// <summary>Retypes an existing cube, keeping its source card ("Taskin" turning

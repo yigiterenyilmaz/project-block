@@ -29,7 +29,7 @@ namespace ProjectBlock.Core
 
     /// <summary>What an activated joker needs to be pointed at before it can run. The UI
     /// reads this to decide whether to ask for a target first.</summary>
-    public enum JokerTargeting
+    public enum ActivationTargeting
     {
         /// <summary>Fires immediately (Renovasyon).</summary>
         None = 0,
@@ -148,9 +148,9 @@ namespace ProjectBlock.Core
         public CubeAttachment? Attachment { get; internal set; }
 
         /// <summary>What Activate needs in its ActivationTarget. None for passive jokers.</summary>
-        public virtual JokerTargeting Targeting
+        public virtual ActivationTargeting Targeting
         {
-            get { return JokerTargeting.None; }
+            get { return ActivationTargeting.None; }
         }
 
         /// <summary>True if the player can activate this joker right now. Activated jokers

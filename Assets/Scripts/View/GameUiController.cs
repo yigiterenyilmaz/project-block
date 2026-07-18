@@ -445,7 +445,7 @@ namespace ProjectBlock.View
                 Debug.Log("[project_block] " + joker.DisplayName + " cannot be used right now.");
                 return;
             }
-            if (joker.Targeting != JokerTargeting.None)
+            if (joker.Targeting != ActivationTargeting.None)
             {
                 pendingTargetJokerId = joker.InstanceId;
                 UpdateHud();
@@ -524,7 +524,7 @@ namespace ProjectBlock.View
                         CancelTargeting();
                         return;
                     }
-                    if (joker.Targeting == JokerTargeting.BoardCell)
+                    if (joker.Targeting == ActivationTargeting.BoardCell)
                     {
                         GridPos cell;
                         if (!boardView.TryWorldToCell(world, out cell))
@@ -831,7 +831,7 @@ namespace ProjectBlock.View
             if (pendingTargetJokerId.HasValue)
             {
                 Joker targeting = session.Jokers.Find(pendingTargetJokerId.Value);
-                string what = targeting != null && targeting.Targeting == JokerTargeting.BoardCell
+                string what = targeting != null && targeting.Targeting == ActivationTargeting.BoardCell
                     ? "oyun alanından bir küp seç"
                     : "elinden bir blok seç";
                 messageText.text = (targeting != null ? targeting.DisplayName : "Joker")
