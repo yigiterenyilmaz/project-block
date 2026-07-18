@@ -47,6 +47,17 @@ namespace ProjectBlock.Core
             get { return jokers.Count; }
         }
 
+        /// <summary>How many jokers the player may hold at once. The market refuses to sell
+        /// past this; Add itself stays uncapped so debug grants and tests are unaffected.
+        /// Balance placeholder.</summary>
+        public int MaxSlots = 5;
+
+        /// <summary>True when every joker slot is taken (the market can sell no more).</summary>
+        public bool IsFull
+        {
+            get { return jokers.Count >= MaxSlots; }
+        }
+
         /// <summary>Instance id of the joker "ihale" is currently auctioning, if any.</summary>
         public int? ActiveAuctionInstanceId { get; internal set; }
 
