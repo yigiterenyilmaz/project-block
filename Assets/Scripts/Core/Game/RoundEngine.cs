@@ -330,7 +330,8 @@ namespace ProjectBlock.Core
                 dynamiteBlocks[card.Id] = state;
             }
             int scoreGained = scorer.ScorePlacement(report.PlacedCells.Count);
-            Board.SettleWaterAndReact(); // freshly placed water falls before lines are judged
+            var waterFrames = new List<IReadOnlyList<WaterMove>>();
+            Board.SettleWaterAndReact(waterFrames); // placed water falls before lines are judged
 
             // 2. explode full lines + score (fire chains resolve inside the board)
             LineExplosionResult explosion = Board.ResolveFullLines();
@@ -379,8 +380,9 @@ namespace ProjectBlock.Core
             if (explosion.LineCount > 0)
             {
                 scoreGained += scorer.ScoreLineExplosion(explosion.LineCount, cubesExploded);
-                Board.SettleWaterAndReact(); // explosions can pull the floor out from water
+                Board.SettleWaterAndReact(waterFrames); // explosions pull the floor out from water
             }
+            report.WaterFallFrames = waterFrames;
 
             // 3. clean sweep. Requires at least one explosion this turn so that future
             // sweep-exempt cubes (obsidian/gold) cannot make an untouched board "sweep"

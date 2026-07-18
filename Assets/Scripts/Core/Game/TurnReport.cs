@@ -63,6 +63,11 @@ namespace ProjectBlock.Core
         /// <summary>Per-turn bonus earned from gold cubes on the board.</summary>
         public int GoldBonus { get; internal set; }
 
+        /// <summary>Water fall animation frames: each entry is one pass of single-cell
+        /// drops. Empty when no water moved. The UI replays these and blocks input
+        /// while doing so.</summary>
+        public IReadOnlyList<IReadOnlyList<WaterMove>> WaterFallFrames { get; internal set; }
+
         public int ScoreGained { get; internal set; }
         public int RoundScoreAfter { get; internal set; }
 
@@ -84,6 +89,7 @@ namespace ProjectBlock.Core
             PlacedCells = Array.Empty<GridPos>();
             ExplodedRows = Array.Empty<int>();
             ExplodedColumns = Array.Empty<int>();
+            WaterFallFrames = Array.Empty<IReadOnlyList<WaterMove>>();
         }
     }
 }

@@ -42,6 +42,7 @@ namespace ProjectBlock.View
         private Coroutine shakeRoutine;
         private CardVisual draggedCard;
         private int foxPickSlot = -1;
+        private bool waterAnimating;
         private int lastSeedUsed;
 
         private void Start()
@@ -61,6 +62,7 @@ namespace ProjectBlock.View
             session = new GameSession(config);
             draggedCard = null;
             foxPickSlot = -1;
+            waterAnimating = false;
             marketView.Hide();
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
             StartRoundPresentation();
@@ -85,9 +87,9 @@ namespace ProjectBlock.View
 
         private void Update()
         {
-            if (session == null)
+            if (session == null || waterAnimating)
             {
-                return;
+                return; // input is locked while the water fall animation plays
             }
             Keyboard kb = Keyboard.current;
             Mouse mouse = Mouse.current;
@@ -304,13 +306,19 @@ namespace ProjectBlock.View
             draggedCard.SnapTo(world);
             BlockCard slotCard = CardOfSlot(round, draggedCard.SlotIndex);
             BlockShape shape = slotCard != null ? round.EffectiveShape(slotCard) : null;
-            GridPos hovered;
-            bool overBoard = shape != null && boardView.TryWorldToCell(world, out hovered);
+            GridPos hovered = default(GridPos);
+            bool overBoard = false;
+            if (shape != null)
+            {
+                // ghost blocks anchor loosely so they can overhang any edge
+                overBoard = slotCard.Has(BlockElement.Ghost)
+                    ? boardView.TryWorldToCellLoose(world, 2, out hovered)
+                    : boardView.TryWorldToCell(world, out hovered);
+            }
             var origin = default(GridPos);
             bool valid = false;
             if (overBoard)
             {
-                boardView.TryWorldToCell(world, out hovered);
                 // Anchor the shape so the cursor sits roughly at its center.
                 origin = new GridPos(hovered.X - (shape.Width - 1) / 2, hovered.Y - (shape.Height - 1) / 2);
                 valid = round.CanPlaceCard(slotCard, origin);
@@ -354,6 +362,12 @@ namespace ProjectBlock.View
                     }
                     HandleBlastFeedback(round, report);
                     RefreshAll(report);
+                    if (report.WaterFallFrames.Count > 0)
+                    {
+                        waterAnimating = true;
+                        boardView.PlayWaterAnimation(report.WaterFallFrames,
+                            delegate { waterAnimating = false; });
+                    }
                 }
                 else
                 {

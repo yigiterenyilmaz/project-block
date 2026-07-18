@@ -41,6 +41,19 @@ namespace ProjectBlock.Core
         }
     }
 
+    /// <summary>One water cube dropping one cell (for the UI's fall animation).</summary>
+    public readonly struct WaterMove
+    {
+        public readonly GridPos From;
+        public readonly GridPos To;
+
+        public WaterMove(GridPos from, GridPos to)
+        {
+            From = from;
+            To = to;
+        }
+    }
+
     /// <summary>Closed rectangular grid the player places blocks on.</summary>
     public sealed class GameBoard
     {
@@ -181,19 +194,26 @@ namespace ProjectBlock.Core
             return placed;
         }
 
-        /// <summary>
-        /// WATER RULE (confirmed: settles every turn): water falls straight down, then
-        /// diagonally down, until stable; afterwards any fire touching water turns to
-        /// obsidian (the water persists). Returns true if anything changed.
-        /// </summary>
         public bool SettleWaterAndReact()
+        {
+            return SettleWaterAndReact(null);
+        }
+
+        /// <summary>
+        /// WATER RULE (confirmed 2026-07-18): water simply DROPS straight down until it
+        /// rests, one cell per pass. Each pass's moves are appended to fallFrames (when
+        /// given) so the UI can show the fall step by step. Afterwards any fire touching
+        /// water turns to obsidian (the water persists). Returns true if anything changed.
+        /// </summary>
+        public bool SettleWaterAndReact(List<IReadOnlyList<WaterMove>> fallFrames)
         {
             bool anyChange = false;
             bool moved = true;
-            int guard = Width * Height * 4;
+            int guard = Height + 2;
             while (moved && guard-- > 0)
             {
                 moved = false;
+                List<WaterMove> frame = null;
                 for (int y = 1; y < Height; y++)
                 {
                     for (int x = 0; x < Width; x++)
@@ -203,15 +223,27 @@ namespace ProjectBlock.Core
                         {
                             continue;
                         }
-                        int firstDx = ((x + y) & 1) == 0 ? -1 : 1; // deterministic spread
-                        if (TryMoveWater(x, y, x, y - 1)
-                            || TryMoveWater(x, y, x + firstDx, y - 1)
-                            || TryMoveWater(x, y, x - firstDx, y - 1))
+                        if (cells[x, y - 1].HasValue)
                         {
-                            moved = true;
-                            anyChange = true;
+                            continue;
+                        }
+                        cells[x, y - 1] = cube;
+                        cells[x, y] = null;
+                        moved = true;
+                        anyChange = true;
+                        if (fallFrames != null)
+                        {
+                            if (frame == null)
+                            {
+                                frame = new List<WaterMove>();
+                            }
+                            frame.Add(new WaterMove(new GridPos(x, y), new GridPos(x, y - 1)));
                         }
                     }
+                }
+                if (frame != null)
+                {
+                    fallFrames.Add(frame);
                 }
             }
             // douse: fire adjacent to water becomes obsidian
@@ -250,20 +282,6 @@ namespace ProjectBlock.Core
             return cube.HasValue && cube.Value.Kind == CubeKind.Water;
         }
 
-        private bool TryMoveWater(int x, int y, int targetX, int targetY)
-        {
-            if (targetX < 0 || targetX >= Width || targetY < 0)
-            {
-                return false;
-            }
-            if (cells[targetX, targetY].HasValue)
-            {
-                return false;
-            }
-            cells[targetX, targetY] = cells[x, y];
-            cells[x, y] = null;
-            return true;
-        }
 
         /// <summary>Detects all full rows and columns, explodes their destructible cubes.</summary>
         public LineExplosionResult ResolveFullLines()

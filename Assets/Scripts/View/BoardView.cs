@@ -2,6 +2,7 @@
 // placement preview under the mouse. Pure presentation - reads GameBoard, never
 // mutates it. Rebuilt whenever a round starts (board sizes differ per round).
 
+using System.Collections;
 using System.Collections.Generic;
 using ProjectBlock.Core;
 using UnityEngine;
@@ -23,8 +24,10 @@ namespace ProjectBlock.View
         private CubeKind?[,] kindCache;
         private Color[,] baseColorCache;
         private readonly List<SpriteRenderer> ghostSprites = new List<SpriteRenderer>();
+        private readonly List<SpriteRenderer> outsidePreviewSprites = new List<SpriteRenderer>();
         private ParticleSystem ambient;
         private float ambientTimer;
+        private bool animatingWater;
 
         private void Awake()
         {
@@ -56,7 +59,10 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            AnimateElementCubes();
+            if (!animatingWater)
+            {
+                AnimateElementCubes(); // would fight the fall animation's cell painting
+            }
             ambientTimer += Time.deltaTime;
             while (ambientTimer >= 0.12f)
             {
@@ -188,11 +194,14 @@ namespace ProjectBlock.View
         /// <summary>Destroys and recreates the whole grid for a (new) board.</summary>
         public void Rebuild(GameBoard newBoard, float maxWorldSize, Vector2 center)
         {
+            StopAllCoroutines();
+            animatingWater = false;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Destroy(transform.GetChild(i).gameObject);
             }
             ghostSprites.Clear();
+            outsidePreviewSprites.Clear();
             board = newBoard;
             cellSize = Mathf.Min(maxWorldSize / board.Width, maxWorldSize / board.Height);
             bottomLeft = center - new Vector2(board.Width, board.Height) * (cellSize * 0.5f);
@@ -283,6 +292,18 @@ namespace ProjectBlock.View
             return board != null && x >= 0 && x < board.Width && y >= 0 && y < board.Height;
         }
 
+        /// <summary>Unclamped world-to-cell with a margin around the grid, so ghost
+        /// blocks can be anchored to overhang ANY edge (including left/bottom).</summary>
+        public bool TryWorldToCellLoose(Vector2 world, int margin, out GridPos cell)
+        {
+            int x = Mathf.FloorToInt((world.x - bottomLeft.x) / cellSize);
+            int y = Mathf.FloorToInt((world.y - bottomLeft.y) / cellSize);
+            cell = new GridPos(x, y);
+            return board != null
+                && x >= -margin && x < board.Width + margin
+                && y >= -margin && y < board.Height + margin;
+        }
+
         /// <summary>Highlights the shape's target cells (green legal / red illegal) and, for
         /// legal placements, tints every cell of the rows/columns that would explode.</summary>
         public void ShowPreview(BlockShape shape, GridPos origin, bool valid)
@@ -300,6 +321,12 @@ namespace ProjectBlock.View
                 {
                     previewRenderers[pos.X, pos.Y].color = color;
                     previewRenderers[pos.X, pos.Y].enabled = true;
+                }
+                else
+                {
+                    // ghost overhang: preview outside the grid with temporary sprites
+                    outsidePreviewSprites.Add(ViewUtil.MakeCell(transform, "PreviewGhost",
+                        CellToWorld(pos), cellSize * 0.92f, color, 2));
                 }
             }
             if (!valid)
@@ -326,6 +353,107 @@ namespace ProjectBlock.View
                 {
                     previewRenderers[x, y].enabled = false;
                 }
+            }
+            foreach (SpriteRenderer sprite in outsidePreviewSprites)
+            {
+                if (sprite != null)
+                {
+                    Destroy(sprite.gameObject);
+                }
+            }
+            outsidePreviewSprites.Clear();
+        }
+
+        /// <summary>Replays the water fall frames as discrete cell steps, then restores
+        /// the true board state and invokes onDone (the controller unlocks input).</summary>
+        public void PlayWaterAnimation(IReadOnlyList<IReadOnlyList<WaterMove>> frames,
+            System.Action onDone)
+        {
+            StartCoroutine(WaterFallRoutine(frames, onDone));
+        }
+
+        private IEnumerator WaterFallRoutine(IReadOnlyList<IReadOnlyList<WaterMove>> frames,
+            System.Action onDone)
+        {
+            animatingWater = true;
+            const float tickSeconds = 0.09f;
+            Color waterColor = ViewUtil.ElementColor(BlockElement.Water);
+            // hide the fallen cubes at their final cells so they can visibly arrive
+            var finalCells = new HashSet<GridPos>();
+            foreach (IReadOnlyList<WaterMove> frame in frames)
+            {
+                foreach (WaterMove move in frame)
+                {
+                    finalCells.Remove(move.From);
+                    finalCells.Add(move.To);
+                }
+            }
+            foreach (GridPos pos in finalCells)
+            {
+                PaintCell(pos, EmptyColor);
+            }
+            var current = new HashSet<GridPos>();
+            var previous = new HashSet<GridPos>();
+            foreach (IReadOnlyList<WaterMove> frame in frames)
+            {
+                bool introduced = false;
+                foreach (WaterMove move in frame)
+                {
+                    if (current.Add(move.From))
+                    {
+                        introduced = true;
+                    }
+                }
+                if (introduced)
+                {
+                    PaintWaterState(current, previous, waterColor);
+                    yield return new WaitForSeconds(tickSeconds);
+                }
+                foreach (WaterMove move in frame)
+                {
+                    current.Remove(move.From);
+                }
+                foreach (WaterMove move in frame)
+                {
+                    current.Add(move.To);
+                }
+                PaintWaterState(current, previous, waterColor);
+                yield return new WaitForSeconds(tickSeconds);
+            }
+            animatingWater = false;
+            Refresh();
+            if (onDone != null)
+            {
+                onDone();
+            }
+        }
+
+        private void PaintWaterState(HashSet<GridPos> current, HashSet<GridPos> previous,
+            Color waterColor)
+        {
+            foreach (GridPos pos in previous)
+            {
+                if (!current.Contains(pos))
+                {
+                    PaintCell(pos, EmptyColor);
+                }
+            }
+            foreach (GridPos pos in current)
+            {
+                PaintCell(pos, waterColor);
+            }
+            previous.Clear();
+            foreach (GridPos pos in current)
+            {
+                previous.Add(pos);
+            }
+        }
+
+        private void PaintCell(GridPos pos, Color color)
+        {
+            if (board != null && board.IsInside(pos))
+            {
+                cellRenderers[pos.X, pos.Y].color = color;
             }
         }
     }
