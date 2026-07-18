@@ -261,11 +261,15 @@ namespace ProjectBlock.View
             MarketOffer offer = session.Market.Offers[offerIndex];
             if (session.TryBuyOffer(offerIndex))
             {
-                Debug.Log("[project_block] Bought " + offer.Card + " for " + offer.Price);
+                Debug.Log("[project_block] Bought " + offer + " for " + offer.Price);
                 sfx.Buy();
                 marketView.PlayBuyFx(offerIndex);
                 marketView.Show(session);
                 UpdateHud();
+                if (offer.Kind == MarketOfferKind.Joker)
+                {
+                    jokerBar.Refresh(session, null);
+                }
             }
             else
             {

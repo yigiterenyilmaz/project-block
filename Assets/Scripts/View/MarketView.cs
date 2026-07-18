@@ -1,7 +1,7 @@
-// PURPOSE: The between-rounds market screen: block-card offers with prices, click to
-// buy. Rebuilt from scratch on every change (cheap at this scale). Purchases go
-// through GameSession.TryBuyOffer - this view never touches money or the deck.
-// Sorting orders: backdrop 33, frames 34, offer cards 36/37, price labels 38
+// PURPOSE: The between-rounds market screen: block-card and joker offers with prices,
+// click to buy. Rebuilt from scratch on every change (cheap at this scale). Purchases go
+// through GameSession.TryBuyOffer - this view never touches money, the deck or jokers.
+// Sorting orders: backdrop 33, frames 34, offer cards/joker tiles 36/37, price labels 38
 // (under the deck overlay at 40+).
 
 using System.Collections.Generic;
@@ -21,6 +21,10 @@ namespace ProjectBlock.View
         private static readonly Color AffordablePriceColor = new Color(1f, 0.92f, 0.45f);
         private static readonly Color TooExpensiveColor = new Color(1f, 0.45f, 0.4f);
         private static readonly Color SoldColor = new Color(0.55f, 0.55f, 0.55f);
+        private static readonly Color JokerBodyColor = new Color(0.30f, 0.22f, 0.40f);
+        private static readonly Color JokerTagColor = new Color(0.82f, 0.68f, 1f);
+        private static readonly Color JokerNameColor = new Color(1f, 0.93f, 0.72f);
+        private static readonly Color JokerDescColor = new Color(0.82f, 0.86f, 0.92f);
 
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
@@ -51,14 +55,70 @@ namespace ProjectBlock.View
                         60, 0.07f, SoldColor, 38, TextAnchor.MiddleCenter);
                     continue;
                 }
-                offerVisuals.Add(CardVisual.Create(transform, "Offer_" + i, offer.Card,
-                    true, false, slotCenter, 36));
+                if (offer.Kind == MarketOfferKind.Joker)
+                {
+                    // Joker tiles have no CardVisual; a null keeps offerVisuals index-aligned
+                    // with the offers so PlayBuyFx and OfferAt stay correct.
+                    offerVisuals.Add(null);
+                    BuildJokerTile(slotCenter, i, offer.Joker);
+                }
+                else
+                {
+                    offerVisuals.Add(CardVisual.Create(transform, "Offer_" + i, offer.Card,
+                        true, false, slotCenter, 36));
+                }
                 bool affordable = session.TotalScore >= offer.Price;
                 ViewUtil.MakeText3D(transform, "Price_" + i,
                     slotCenter + new Vector2(0f, -1.35f), offer.Price.ToString(),
                     60, 0.07f, affordable ? AffordablePriceColor : TooExpensiveColor,
                     38, TextAnchor.MiddleCenter);
             }
+        }
+
+        /// <summary>Draws a joker offer: a tinted body with its name and wrapped description
+        /// (there is no BlockCard to render, so this stands in for the offer card).</summary>
+        private void BuildJokerTile(Vector2 center, int index, JokerDefinition joker)
+        {
+            ViewUtil.MakeRect(transform, "JokerBody_" + index, center,
+                new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight), JokerBodyColor, 36);
+            ViewUtil.MakeText3D(transform, "JokerTag_" + index,
+                center + new Vector2(0f, CardVisual.BodyHeight * 0.5f - 0.17f), "JOKER",
+                34, 0.04f, JokerTagColor, 37, TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "JokerName_" + index,
+                center + new Vector2(0f, 0.5f), Wrap(joker.DisplayName, 13),
+                40, 0.05f, JokerNameColor, 37, TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "JokerDesc_" + index,
+                center + new Vector2(0f, 0.12f), Wrap(joker.Description, 16),
+                30, 0.037f, JokerDescColor, 37, TextAnchor.UpperCenter);
+        }
+
+        /// <summary>Greedy word wrap for the placeholder TextMesh (no auto-wrapping).</summary>
+        private static string Wrap(string text, int maxCharsPerLine)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return string.Empty;
+            }
+            string[] words = text.Split(' ');
+            var sb = new System.Text.StringBuilder();
+            int lineLength = 0;
+            for (int i = 0; i < words.Length; i++)
+            {
+                string word = words[i];
+                if (lineLength > 0 && lineLength + 1 + word.Length > maxCharsPerLine)
+                {
+                    sb.Append('\n');
+                    lineLength = 0;
+                }
+                else if (lineLength > 0)
+                {
+                    sb.Append(' ');
+                    lineLength++;
+                }
+                sb.Append(word);
+                lineLength += word.Length;
+            }
+            return sb.ToString();
         }
 
         public void Hide()
