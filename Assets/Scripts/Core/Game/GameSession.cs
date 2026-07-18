@@ -70,6 +70,23 @@ namespace ProjectBlock.Core
             StartRound();
         }
 
+        /// <summary>
+        /// DEBUG helper: puts a freshly generated random card into the current round's
+        /// bonus hand. The card is round-scoped and does NOT join the owned deck (bonus
+        /// cards expire when played or when the round ends). Real bonus-card sources
+        /// arrive with the powers (Klon, Dolly, Olta, Kara delik).
+        /// </summary>
+        public BlockCard DebugAddRandomBonusCard()
+        {
+            if (Phase != GamePhase.Round)
+            {
+                throw new InvalidOperationException("Bonus cards can only be added during a round.");
+            }
+            BlockCard card = CreateRandomCard();
+            CurrentRound.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
+            return card;
+        }
+
         /// <summary>Leaves the (empty) market and starts the next round.</summary>
         public void LeaveMarket()
         {

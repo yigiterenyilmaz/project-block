@@ -126,6 +126,13 @@ namespace ProjectBlock.View
                             cardLayer.AnimateRedraw(round);
                             UpdateHud();
                         }
+                        else if (kb != null && kb.bKey.wasPressedThisFrame)
+                        {
+                            // debug: random bonus card to test the bonus hand
+                            BlockCard bonus = session.DebugAddRandomBonusCard();
+                            Debug.Log("[project_block] Debug bonus card: " + bonus);
+                            RefreshAll(null);
+                        }
                         else
                         {
                             HandleDrag(round, mouse);
@@ -149,7 +156,7 @@ namespace ProjectBlock.View
                 {
                     if (cardLayer.IsDrawPileAt(world))
                     {
-                        deckOverlay.Show(round.Deck.DrawPile);
+                        deckOverlay.Show(session.OwnedCards);
                         return;
                     }
                     CardVisual hit = cardLayer.CardAt(world);
@@ -282,7 +289,7 @@ namespace ProjectBlock.View
                 .Append("   Discard ").Append(round.Deck.DiscardCount)
                 .Append("   Removed ").Append(round.Deck.RemovedCount).Append('\n');
             sb.Append("Drag a card onto the board to place it.   Click draw pile: view deck\n");
-            sb.Append("S: redraw hand (debug)   R: new run");
+            sb.Append("S: redraw hand (debug)   B: bonus card (debug)   R: new run");
             infoText.text = sb.ToString();
 
             switch (session.Phase)

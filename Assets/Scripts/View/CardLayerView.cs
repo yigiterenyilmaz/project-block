@@ -18,13 +18,24 @@ namespace ProjectBlock.View
         public static readonly Vector2 DiscardPilePos = new Vector2(-6.4f, -4.05f);
         private static readonly Vector2 HandCenter = new Vector2(0f, -4.05f);
         private const float HandSpacing = 1.7f;
-        private const int MaxStackLayers = 5;
-        private const float StackOffset = 0.05f;
+        private const int MaxStackLayers = 10;
+        private const int CardsPerStackLayer = 3; // one visible card edge per N cards
+        private const float StackOffset = 0.075f;
         private const float DealDuration = 0.3f;
         private const float DiscardDuration = 0.28f;
 
+        // Sorting order tiers (board uses 0-2): pile slot 2, stack layers 3+, discard top
+        // card 15, hand/bonus cards 20 (+8 fly boost, +10 drag boost), pile fx 25+.
+        private const int StackBaseOrder = 3;
+        private const int DiscardTopOrder = 15;
+        private const int HeldCardOrder = 20;
+        private const int FxOrder = 25;
+
         private static readonly Color PileSlotColor = new Color(0.10f, 0.11f, 0.13f);
-        private static readonly Color DiscardStackColor = new Color(0.42f, 0.40f, 0.36f);
+        private static readonly Color DrawStackColorA = new Color(0.18f, 0.26f, 0.44f);
+        private static readonly Color DrawStackColorB = new Color(0.25f, 0.34f, 0.54f);
+        private static readonly Color DiscardStackColorA = new Color(0.40f, 0.38f, 0.34f);
+        private static readonly Color DiscardStackColorB = new Color(0.50f, 0.48f, 0.43f);
 
         private readonly Dictionary<int, CardVisual> heldVisuals = new Dictionary<int, CardVisual>();
         private readonly List<SpriteRenderer> drawStack = new List<SpriteRenderer>();
@@ -115,7 +126,7 @@ namespace ProjectBlock.View
                     ? DiscardPilePos
                     : DrawPilePos + new Vector2(i % 2 == 0 ? 1.1f : -1.1f, 0.9f);
                 CardVisual fx = CardVisual.Create(transform, "ShuffleFx", null,
-                    false, false, from, 7 + i);
+                    false, false, from, FxOrder + i);
                 fx.FlyToAndDestroy(DrawPilePos + new Vector2(0f, (1 - i) * 0.1f), 0.24f);
                 yield return new WaitForSeconds(0.06f);
             }
@@ -198,7 +209,7 @@ namespace ProjectBlock.View
                         ? round.Hand[slot]
                         : round.BonusHand[slot - handCount].Card;
                     visual = CardVisual.Create(transform, "Card_" + id, card, true,
-                        bonusIds.Contains(id), animate ? DrawPilePos : slotPos, 5);
+                        bonusIds.Contains(id), animate ? DrawPilePos : slotPos, HeldCardOrder);
                     heldVisuals[id] = visual;
                     if (animate)
                     {
@@ -223,7 +234,7 @@ namespace ProjectBlock.View
                 if (report.BurnedCard != null)
                 {
                     CardVisual burnFx = CardVisual.Create(transform, "BurnFx", report.BurnedCard,
-                        true, false, DrawPilePos, 7);
+                        true, false, DrawPilePos, FxOrder);
                     burnFx.FlyToAndDestroy(DiscardPilePos, DiscardDuration);
                 }
             }
@@ -274,19 +285,21 @@ namespace ProjectBlock.View
             drawPileRoot = MakePileRoot("DrawPile", DrawPilePos);
             discardPileRoot = MakePileRoot("DiscardPile", DiscardPilePos);
             var slotSize = new Vector2(CardVisual.BodyWidth + 0.18f, CardVisual.BodyHeight + 0.18f);
-            ViewUtil.MakeRect(drawPileRoot, "Slot", Vector2.zero, slotSize, PileSlotColor, 3);
-            ViewUtil.MakeRect(discardPileRoot, "Slot", Vector2.zero, slotSize, PileSlotColor, 3);
+            ViewUtil.MakeRect(drawPileRoot, "Slot", Vector2.zero, slotSize, PileSlotColor, 2);
+            ViewUtil.MakeRect(discardPileRoot, "Slot", Vector2.zero, slotSize, PileSlotColor, 2);
             for (int i = 0; i < MaxStackLayers; i++)
             {
+                // alternating shades + a diagonal offset per layer keep the cards readable
+                // as separate cards instead of one solid block
                 Vector2 offset = new Vector2(i * StackOffset, i * StackOffset);
                 SpriteRenderer drawLayer = ViewUtil.MakeRect(drawPileRoot, "Stack_" + i,
                     offset, new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight),
-                    new Color(0.18f, 0.26f, 0.44f), 4);
+                    i % 2 == 0 ? DrawStackColorA : DrawStackColorB, StackBaseOrder + i);
                 drawLayer.enabled = false;
                 drawStack.Add(drawLayer);
                 SpriteRenderer discardLayer = ViewUtil.MakeRect(discardPileRoot, "Stack_" + i,
                     offset, new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight),
-                    DiscardStackColor, 4);
+                    i % 2 == 0 ? DiscardStackColorA : DiscardStackColorB, StackBaseOrder + i);
                 discardLayer.enabled = false;
                 discardStack.Add(discardLayer);
             }
@@ -300,10 +313,22 @@ namespace ProjectBlock.View
             return go.transform;
         }
 
+        /// <summary>Visible stack layers for a card count: one edge per few cards,
+        /// so the stack keeps growing noticeably for realistic deck sizes.</summary>
+        private static int LayersFor(int cardCount)
+        {
+            if (cardCount <= 0)
+            {
+                return 0;
+            }
+            return Mathf.Clamp((cardCount + CardsPerStackLayer - 1) / CardsPerStackLayer,
+                1, MaxStackLayers);
+        }
+
         private void UpdatePiles(RoundEngine round)
         {
-            int drawLayers = Mathf.Min(MaxStackLayers, round.Deck.DrawCount);
-            int discardLayers = Mathf.Min(MaxStackLayers, round.Deck.DiscardCount);
+            int drawLayers = LayersFor(round.Deck.DrawCount);
+            int discardLayers = LayersFor(round.Deck.DiscardCount);
             for (int i = 0; i < MaxStackLayers; i++)
             {
                 drawStack[i].enabled = i < drawLayers;
@@ -326,7 +351,7 @@ namespace ProjectBlock.View
             {
                 Vector2 offset = new Vector2(discardLayers * StackOffset, discardLayers * StackOffset);
                 discardTopVisual = CardVisual.Create(discardPileRoot, "DiscardTop",
-                    discardPile[discardPile.Count - 1], true, false, offset, 5);
+                    discardPile[discardPile.Count - 1], true, false, offset, DiscardTopOrder);
             }
         }
     }
