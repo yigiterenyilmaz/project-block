@@ -3,25 +3,37 @@
 //
 // TURN RESOLUTION ORDER (keep this order stable; mechanics depend on it):
 //   1. place cubes on the board, score the placement
-//   2. explode full rows/columns, score them
-//   3. clean-sweep check + bonus; if in overtime: reshuffle discard into draw and
-//      queue a new advance offer
-//   4. played card leaves the hand -> discard (bonus cards: expire + burn top of draw)
-//   5. refill the hand (loss rules live here, see RefillHand)
-//   6. threshold check: first time the round score reaches the threshold ->
+//   2. explode full rows/columns, score them       -> hook: AfterLineExplosion
+//   3. clean-sweep check + bonus                   -> hook: AfterCleanSweep
+//      if in overtime: reshuffle discard into draw and queue a new advance offer
+//   4. element upkeep: gold pays per turn while it sits on the board
+//   5. finalize the score                          -> hook: ModifyScore (jokers add here)
+//      the turn's points are banked into RoundScore exactly once, floored once
+//   6. played card leaves the hand -> discard (bonus cards: expire + burn top of draw)
+//   7. refill the hand (loss rules live here, see RefillHand)
+//   8. end-of-turn effects                         -> hook: AfterTurnScored
+//      score granted here still counts toward the threshold (checked next)
+//   9. threshold check: first time the round score reaches the threshold ->
 //      reshuffle discard into draw, queue advance offer
-//   7. status update: pending advance offer outranks a same-turn loss (the player who
+//  10. status update: pending advance offer outranks a same-turn loss (the player who
 //      just earned an offer may escape by advancing; if they continue, the loss hits)
-//   8. otherwise: lose if no held block fits the board
+//  11. otherwise: lose if no held block fits the board
 //
 // CONTINUING HAS A PRICE (confirmed 2026-07-18): declining an advance offer shuffles
 // the whole hand back into the draw pile, removes Rules.CardsRemovedPerContinue
 // random cards face-down for the round, and draws a fresh hand - see DecideAdvance.
 //
+// CLEAN SWEEP IS ONE CENTRAL EVENT. TryResolveCleanSweep is the only place it can fire,
+// at most once per turn, and it requires the board to have gone from "not clean" to
+// "clean" through an actual destruction this turn. Note this is STRICTER than a plain
+// "a line exploded" test: a full line made only of indestructible cubes destroys nothing,
+// so it no longer re-triggers a sweep every turn once obsidian/gold sit on the board.
+// Joker effects that can trigger a sweep call this; they never re-check the board.
+//
 // EXTENSION POINTS:
 //  - Powers ("güçler") = new public methods here (they act on the round state).
-//  - Jokers = subscribers of TurnResolved/StatusChanged + decorators of IScoreCalculator
-//    + mutations of RoundRules. Avoid hardcoding joker logic into this class.
+//  - Jokers = ITurnHooks (see JokerInventory) + mutations of RoundRules. Never hardcode
+//    joker logic into this class.
 //  - Bonus-hand sources (Klon, Dolly, Olta, Kara delik) call AddBonusCard.
 
 using System;
@@ -82,6 +94,8 @@ namespace ProjectBlock.Core
 
         private readonly IRandomSource rng;
         private readonly IScoreCalculator scorer;
+        private readonly GameSession session;
+        private readonly ITurnHooks hooks;
 
         private sealed class DynamiteState
         {
@@ -98,7 +112,18 @@ namespace ProjectBlock.Core
         private readonly Dictionary<int, BlockShape> foxShapes = new Dictionary<int, BlockShape>();
         private readonly Dictionary<int, int> rotations = new Dictionary<int, int>();
 
-        /// <summary>Fires after every resolved placement. Jokers and UI subscribe here.</summary>
+        // ---- per-turn state, valid only while a placement is resolving ----
+        private readonly ScoreBreakdown breakdown = new ScoreBreakdown();
+        private TurnReport currentReport;
+        private TurnContext currentTurn;
+        private bool scoreFinalized;
+        private bool sweepResolvedThisTurn;
+        private bool boardCleanBeforeExplosion;
+        private int cubesDestroyedThisTurn;
+        private bool pendingAdvanceOffer;
+
+        /// <summary>Fires after every resolved placement. The UI subscribes here.
+        /// Jokers do NOT - they get ordered, mid-turn callbacks through ITurnHooks.</summary>
         public event Action<TurnReport> TurnResolved;
 
         /// <summary>Fires on every Status change. NOTE: not fired for a loss detected during
@@ -107,11 +132,21 @@ namespace ProjectBlock.Core
 
         public RoundEngine(RoundConfig config, RoundRules rules, IEnumerable<BlockCard> ownedCards,
             IRandomSource rng, IScoreCalculator scorer)
+            : this(config, rules, ownedCards, rng, scorer, null, null)
+        {
+        }
+
+        /// <summary>Full constructor. session/hooks are null when a round is driven directly
+        /// by a test or a simulation; the engine then behaves exactly as the base game.</summary>
+        public RoundEngine(RoundConfig config, RoundRules rules, IEnumerable<BlockCard> ownedCards,
+            IRandomSource rng, IScoreCalculator scorer, GameSession session, ITurnHooks hooks)
         {
             Config = config;
             Rules = rules;
             this.rng = rng;
             this.scorer = scorer;
+            this.session = session;
+            this.hooks = hooks ?? NoTurnHooks.Instance;
             Board = new GameBoard(config.BoardWidth, config.BoardHeight);
             Deck = new RoundDeck(ownedCards, rng);
             Hand = new Hand();
@@ -291,6 +326,47 @@ namespace ProjectBlock.Core
             CheckForNoPlayableMove();
         }
 
+        /// <summary>
+        /// Swaps ONE card out of the hand for the top of the draw pile ("Iade" joker).
+        /// The replacement lands in the same slot so the hand does not reorder. Does NOT
+        /// consume a turn and does NOT reshuffle - it follows the normal draw rules, so in
+        /// overtime an empty draw pile is a loss exactly like any other draw.
+        /// </summary>
+        public BlockCard ReplaceHandCard(int handIndex)
+        {
+            EnsurePlacingAllowed();
+            if (handIndex < 0 || handIndex >= Hand.Count)
+            {
+                throw new ArgumentOutOfRangeException("handIndex");
+            }
+            BlockCard returned = Hand.RemoveAt(handIndex);
+            Deck.Discard(returned);
+            BlockCard drawn = DrawWithRules();
+            if (drawn == null)
+            {
+                if (Loss == null)
+                {
+                    Loss = LossReason.HandCannotBeRefilled;
+                }
+                SetStatus(RoundStatus.Lost);
+                return null;
+            }
+            Hand.Insert(handIndex, drawn);
+            CheckForNoPlayableMove();
+            return drawn;
+        }
+
+        /// <summary>Discards the whole hand and draws a full new one WITHOUT recycling the
+        /// discard. "Seri tetik" will use this at end of turn. Consumes no turn.</summary>
+        internal void CycleHandWithoutReshuffle()
+        {
+            while (Hand.Count > 0)
+            {
+                Deck.Discard(Hand.RemoveAt(Hand.Count - 1));
+            }
+            RefillHand();
+        }
+
         private void DiscardHandAndReshuffle()
         {
             while (Hand.Count > 0)
@@ -313,11 +389,21 @@ namespace ProjectBlock.Core
         {
             TurnNumber++;
             int shufflesBeforeTurn = Deck.ShuffleCount;
+
+            breakdown.Reset();
             var report = new TurnReport();
             report.TurnNumber = TurnNumber;
             report.Card = card;
             report.PlayedFromBonusHand = fromBonus;
             report.Origin = origin;
+            report.Score = breakdown;
+
+            currentReport = report;
+            currentTurn = new TurnContext(session, rng, this, report, breakdown);
+            scoreFinalized = false;
+            sweepResolvedThisTurn = false;
+            cubesDestroyedThisTurn = 0;
+            pendingAdvanceOffer = false;
 
             // 1. place + score
             report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
@@ -329,9 +415,13 @@ namespace ProjectBlock.Core
                 state.RemainingAtTurnStart = report.PlacedCells.Count;
                 dynamiteBlocks[card.Id] = state;
             }
-            int scoreGained = scorer.ScorePlacement(report.PlacedCells.Count);
+            breakdown.BasePlacement = scorer.ScorePlacement(report.PlacedCells.Count);
             var waterFrames = new List<IReadOnlyList<WaterMove>>();
             Board.SettleWaterAndReact(waterFrames); // placed water falls before lines are judged
+
+            // Sampled AFTER the placement and the water settling: whatever sits on the board
+            // now is what a real sweep has to clear, and it must not already be "clean".
+            boardCleanBeforeExplosion = Board.IsCleanForSweep();
 
             // 2. explode full lines + score (fire chains resolve inside the board)
             LineExplosionResult explosion = Board.ResolveFullLines();
@@ -377,43 +467,34 @@ namespace ProjectBlock.Core
                 }
             }
             report.CubesExploded = cubesExploded;
+            cubesDestroyedThisTurn += cubesExploded;
             if (explosion.LineCount > 0)
             {
-                scoreGained += scorer.ScoreLineExplosion(explosion.LineCount, cubesExploded);
+                breakdown.BaseLines = scorer.ScoreLineExplosion(explosion.LineCount, cubesExploded);
                 Board.SettleWaterAndReact(waterFrames); // explosions pull the floor out from water
             }
             report.WaterFallFrames = waterFrames;
+            hooks.AfterLineExplosion(currentTurn);
 
-            // 3. clean sweep. Requires at least one explosion this turn so that future
-            // sweep-exempt cubes (obsidian/gold) cannot make an untouched board "sweep"
-            // on every placement.
-            bool offerAdvance = false;
-            if (explosion.LineCount > 0 && Board.IsCleanForSweep())
-            {
-                report.CleanSweep = true;
-                CleanSweepCount++;
-                scoreGained += scorer.ScoreCleanSweep();
-                if (ThresholdPassed)
-                {
-                    // Overtime reward: a fresh draw pile and a new chance to leave.
-                    Deck.ShuffleDiscardIntoDraw();
-                    offerAdvance = true;
-                }
-            }
+            // 3. clean sweep (single central event - see the file header)
+            TryResolveCleanSweep();
 
-            // element upkeep: gold pays while it sits on the board
+            // 4. element upkeep: gold pays while it sits on the board
             int goldCubes = Board.CountCubesOfKind(CubeKind.Gold);
             if (goldCubes > 0)
             {
                 report.GoldBonus = scorer.ScoreGoldBonus(goldCubes);
-                scoreGained += report.GoldBonus;
+                breakdown.BaseGold = report.GoldBonus;
             }
 
-            RoundScore += scoreGained;
-            report.ScoreGained = scoreGained;
+            // 5. finalize the score
+            hooks.ModifyScore(currentTurn);
+            scoreFinalized = true;
+            RoundScore += breakdown.Total;
+            report.ScoreGained = breakdown.Total;
             report.RoundScoreAfter = RoundScore;
 
-            // 4. card disposition
+            // 6. card disposition
             if (fromBonus)
             {
                 if (bonusOutcome == BonusPlayOutcome.ToDiscard)
@@ -438,20 +519,24 @@ namespace ProjectBlock.Core
             else
             {
                 Deck.Discard(card);
+                // 7. refill
                 RefillHand();
             }
 
-            // 6. threshold check (first pass only)
+            // 8. end-of-turn effects (may still add score - see step 9)
+            hooks.AfterTurnScored(currentTurn);
+
+            // 9. threshold check (first pass only)
             if (!ThresholdPassed && RoundScore >= Config.ScoreThreshold)
             {
                 ThresholdPassed = true;
                 report.ThresholdJustPassed = true;
                 Deck.ShuffleDiscardIntoDraw();
-                offerAdvance = true;
+                pendingAdvanceOffer = true;
             }
 
-            // 7./8. status update - see file header for why the offer outranks the loss.
-            if (offerAdvance)
+            // 10./11. status update - see file header for why the offer outranks the loss.
+            if (pendingAdvanceOffer)
             {
                 SetStatus(RoundStatus.AwaitingAdvanceDecision);
             }
@@ -466,11 +551,109 @@ namespace ProjectBlock.Core
             report.StatusAfter = Status;
             report.DiscardWasReshuffled = Deck.ShuffleCount != shufflesBeforeTurn;
 
+            currentReport = null;
+            currentTurn = null;
+
             if (TurnResolved != null)
             {
                 TurnResolved(report);
             }
             return report;
+        }
+
+        /// <summary>
+        /// THE clean-sweep check. Fires at most once per turn and only when this turn's
+        /// destruction actually emptied a board that was not already empty. Joker effects
+        /// that can trigger a sweep (Robot supurge's last cube, Kayit defteri's counter)
+        /// call this instead of testing the board themselves. Returns true if it fired.
+        /// </summary>
+        internal bool TryResolveCleanSweep()
+        {
+            if (sweepResolvedThisTurn || currentReport == null)
+            {
+                return false;
+            }
+            if (cubesDestroyedThisTurn <= 0 || boardCleanBeforeExplosion || !Board.IsCleanForSweep())
+            {
+                return false;
+            }
+
+            sweepResolvedThisTurn = true;
+            CleanSweepCount++;
+            currentReport.CleanSweep = true;
+
+            int sweepBonus = scorer.ScoreCleanSweep();
+            if (scoreFinalized)
+            {
+                // A sweep triggered by an end-of-turn effect still belongs to this turn.
+                AddLateTurnScore(sweepBonus, "base.sweep");
+            }
+            else
+            {
+                breakdown.BaseSweep += sweepBonus;
+            }
+
+            if (ThresholdPassed)
+            {
+                // Overtime reward: a fresh draw pile and a new chance to leave.
+                Deck.ShuffleDiscardIntoDraw();
+                pendingAdvanceOffer = true;
+            }
+
+            hooks.AfterCleanSweep(currentTurn);
+            return true;
+        }
+
+        /// <summary>Destroys cubes outside the normal line explosion (joker/power effects).
+        /// Scoreless by itself - the caller decides whether to award points. Feeds the
+        /// central sweep pre-condition, so a joker can empty the board and TryResolveCleanSweep
+        /// will accept it. EXTENSION POINT for Robot supurge, Buldozer, Enfeksiyon.</summary>
+        internal IReadOnlyList<GridPos> DestroyCubes(IEnumerable<GridPos> cells, bool countsForSweep)
+        {
+            var destroyed = new List<GridPos>();
+            foreach (GridPos pos in cells)
+            {
+                if (Board.DestroyCube(pos))
+                {
+                    destroyed.Add(pos);
+                }
+            }
+            if (countsForSweep)
+            {
+                cubesDestroyedThisTurn += destroyed.Count;
+            }
+            return destroyed;
+        }
+
+        /// <summary>Routes a joker's flat score into this turn - before finalization it joins
+        /// the multiplied pool, after it is added on top. Called via TurnContext.</summary>
+        internal void AddLateTurnScore(int amount, string source)
+        {
+            if (currentReport == null)
+            {
+                throw new InvalidOperationException("Score can only be granted while a turn is resolving.");
+            }
+            if (!scoreFinalized)
+            {
+                breakdown.AddFlat(amount, source);
+                return;
+            }
+            breakdown.AddLateFlat(amount, source);
+            RoundScore += amount;
+            currentReport.ScoreGained = breakdown.Total;
+            currentReport.RoundScoreAfter = RoundScore;
+        }
+
+        /// <summary>Called via TurnContext. Multipliers are only meaningful before the score
+        /// is finalized, so a late call is a bug in the joker, not a silent no-op.</summary>
+        internal void AddTurnMultiplier(double factor, string source)
+        {
+            if (currentReport == null || scoreFinalized)
+            {
+                throw new InvalidOperationException(
+                    "Multipliers can only be added from ModifyScore, before the turn score is finalized.");
+            }
+            breakdown.AddMultiplier(factor, source);
         }
 
         /// <summary>
@@ -487,6 +670,10 @@ namespace ProjectBlock.Core
             if (card != null)
             {
                 return card;
+            }
+            if (currentReport != null)
+            {
+                currentReport.DrawPileEmptiedThisTurn = true;
             }
             if (ThresholdPassed)
             {

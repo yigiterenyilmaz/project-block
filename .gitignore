@@ -15,6 +15,10 @@
 /[Uu]ser[Ss]ettings/
 /[Mm]emoryCaptures/
 
+# dotnet build output of the Tools/ console harnesses (outside Assets, Unity ignores them)
+/[Tt]ools/**/bin/
+/[Tt]ools/**/obj/
+
 # Asset meta data should only be ignored when the corresponding asset is also ignored
 !/[Aa]ssets/**/*.meta
 
@@ -116,3 +120,4 @@ desktop.ini
 .env
 .env.*
 !.env.example
+*.slnx

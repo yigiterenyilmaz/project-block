@@ -1,11 +1,17 @@
-// PURPOSE: The whole run: owned card collection, round sequence, market phase, and
-// the two score meanings (confirmed design):
+// PURPOSE: The whole run: owned card collection, joker inventory, round sequence, market
+// phase, and the two score meanings (confirmed design):
 //   - RoundEngine.RoundScore : resets every round, compared against the threshold
 //   - TotalScore             : accumulates across the run, spent in the market later
 // Every round starts with the FULL owned deck reshuffled into a fresh draw pile
 // (confirmed). The session survives rounds; RoundEngine instances do not.
-// EXTENSION POINT: the joker/power inventories will live here (session-scoped state),
-// subscribing to each new RoundEngine's events in StartRound.
+//
+// JOKER WIRING (all of it lives in StartRound / OnRoundStatusChanged):
+//   1. jokers may rewrite the round setup BEFORE the board exists (FilterRoundConfig)
+//   2. the inventory is handed to the engine as ITurnHooks - not as event subscribers,
+//      because in-turn hooks must run mid-resolution and may change the turn
+//   3. charges reset + OnRoundStarted after the engine exists
+//   4. OnRoundEnded when the round resolves either way
+// EXTENSION POINT: the power inventory belongs here too, wired the same way.
 
 using System;
 using System.Collections.Generic;
@@ -43,6 +49,9 @@ namespace ProjectBlock.Core
         /// <summary>Restocked with block-card offers every time a round is won.</summary>
         public Market Market { get; }
 
+        /// <summary>The player's jokers. Session-scoped: they outlive every round.</summary>
+        public JokerInventory Jokers { get; }
+
         private readonly List<BlockCard> ownedCards = new List<BlockCard>();
 
         /// <summary>The player's whole collection ("oyun destesi").</summary>
@@ -55,6 +64,10 @@ namespace ProjectBlock.Core
         private readonly IScoreCalculator scorer;
         private int nextCardId = 1;
 
+        /// <summary>True if the player bought anything during the current market visit.
+        /// "Damlaya damlaya" reads it when the market is left.</summary>
+        private bool purchasedThisMarket;
+
         public event Action<GamePhase> PhaseChanged;
 
         public GameSession(GameConfig config)
@@ -63,6 +76,7 @@ namespace ProjectBlock.Core
             rng = new SeededRandom(config.RngSeed ?? Environment.TickCount);
             scorer = new DefaultScoreCalculator(config.Scoring);
             Market = new Market();
+            Jokers = new JokerInventory(this, rng);
             if (config.Deck.FixedShapes != null)
             {
                 // static deck: identical composition every run
@@ -122,6 +136,7 @@ namespace ProjectBlock.Core
             TotalScore -= offer.Price;
             offer.Sold = true;
             ownedCards.Add(offer.Card);
+            purchasedThisMarket = true;
             return true;
         }
 
@@ -132,11 +147,26 @@ namespace ProjectBlock.Core
             {
                 throw new InvalidOperationException("Not in the market phase.");
             }
+            Jokers.DispatchMarketLeft(purchasedThisMarket);
             RoundNumber++;
             StartRound();
         }
 
-        private BlockCard CreateRandomCard()
+        /// <summary>Adds run currency (a joker sale today; market refunds later).</summary>
+        public void AddCurrency(long amount)
+        {
+            TotalScore += amount;
+        }
+
+        /// <summary>The session RNG. Everything random in the run must come from here.</summary>
+        public IRandomSource Rng
+        {
+            get { return rng; }
+        }
+
+        /// <summary>Mints a new card owned by the player. Public so jokers that hand out
+        /// cards (Kara delik's void block...) keep the id counter unique across the run.</summary>
+        public BlockCard CreateRandomCard()
         {
             BlockShape shape = Config.Deck.ShapeGenerator.NextShape(rng);
             return new BlockCard(nextCardId++, shape);
@@ -144,16 +174,19 @@ namespace ProjectBlock.Core
 
         private void StartRound()
         {
-            RoundConfig roundConfig = Config.Progression.GetRound(RoundNumber);
-            CurrentRound = new RoundEngine(roundConfig, Config.Rules, ownedCards, rng, scorer);
+            RoundConfig roundConfig = Jokers.FilterRoundConfig(Config.Progression.GetRound(RoundNumber));
+            CurrentRound = new RoundEngine(roundConfig, Config.Rules, ownedCards, rng, scorer, this, Jokers);
             CurrentRound.TurnResolved += OnTurnResolved;
             CurrentRound.StatusChanged += OnRoundStatusChanged;
             SetPhase(GamePhase.Round);
             if (CurrentRound.Status == RoundStatus.Lost)
             {
                 // Degenerate case (e.g. deck smaller than hand size): lost on round start.
+                Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Lost);
                 SetPhase(GamePhase.GameOver);
+                return;
             }
+            Jokers.DispatchRoundStarted(CurrentRound);
         }
 
         private void OnTurnResolved(TurnReport report)
@@ -165,11 +198,15 @@ namespace ProjectBlock.Core
         {
             if (status == RoundStatus.Advanced)
             {
+                Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Advanced);
                 RestockMarket();
+                purchasedThisMarket = false;
                 SetPhase(GamePhase.Market);
+                Jokers.DispatchMarketEntered();
             }
             else if (status == RoundStatus.Lost)
             {
+                Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Lost);
                 SetPhase(GamePhase.GameOver);
             }
         }

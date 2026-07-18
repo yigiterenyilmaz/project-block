@@ -32,6 +32,13 @@ namespace ProjectBlock.Core
             cards.Add(card);
         }
 
+        /// <summary>Puts a card at a specific slot - used when a card is swapped in place
+        /// ("Iade") so the rest of the hand does not shuffle around under the player.</summary>
+        internal void Insert(int index, BlockCard card)
+        {
+            cards.Insert(index, card);
+        }
+
         internal BlockCard RemoveAt(int index)
         {
             BlockCard card = cards[index];

@@ -41,6 +41,8 @@ namespace ProjectBlock.View
         private CardVisual discardTopVisual;
         private TextMesh drawCountLabel;
         private int discardTopId = -1;
+        private CardVisual drawTopVisual;
+        private int drawTopId = -1;
         private bool pilesBuilt;
         private Transform drawPileRoot;
         private Transform discardPileRoot;
@@ -63,6 +65,12 @@ namespace ProjectBlock.View
                 discardTopVisual = null;
             }
             discardTopId = -1;
+            if (drawTopVisual != null)
+            {
+                Destroy(drawTopVisual.gameObject);
+                drawTopVisual = null;
+            }
+            drawTopId = -1;
         }
 
         /// <summary>
@@ -358,10 +366,15 @@ namespace ProjectBlock.View
             drawCountLabel.text = round.Deck.DrawCount.ToString();
             RebuildStack(drawStackRoot, round.Deck.DrawPile);
             RebuildStack(discardStackRoot, round.Deck.DiscardPile);
-            int discardLayers = LayersFor(round.Deck.DiscardCount);
+            UpdateDiscardTop(round);
+            UpdateDrawTop(round);
+        }
 
+        private void UpdateDiscardTop(RoundEngine round)
+        {
             IReadOnlyList<BlockCard> discardPile = round.Deck.DiscardPile;
-            int topId = discardPile.Count > 0 ? discardPile[discardPile.Count - 1].Id : -1;
+            BlockCard top = discardPile.Count > 0 ? discardPile[discardPile.Count - 1] : null;
+            int topId = top != null ? top.Id : -1;
             if (topId == discardTopId)
             {
                 return;
@@ -372,11 +385,40 @@ namespace ProjectBlock.View
                 discardTopVisual = null;
             }
             discardTopId = topId;
-            if (topId >= 0)
+            if (top != null)
             {
-                Vector2 offset = new Vector2(discardLayers * StackOffset, discardLayers * StackOffset);
+                int layers = LayersFor(round.Deck.DiscardCount);
+                Vector2 offset = new Vector2(layers * StackOffset, layers * StackOffset);
                 discardTopVisual = CardVisual.Create(discardPileRoot, "DiscardTop",
-                    discardPile[discardPile.Count - 1], true, false, offset, DiscardTopOrder);
+                    top, true, false, offset, DiscardTopOrder);
+            }
+        }
+
+        /// <summary>"Insider": shows the top of the DRAW pile face-up. Gated on the rule
+        /// flag, because the draw pile is face-down by default and its order must not leak.</summary>
+        private void UpdateDrawTop(RoundEngine round)
+        {
+            IReadOnlyList<BlockCard> drawPile = round.Deck.DrawPile;
+            BlockCard top = round.Rules.RevealTopDrawCard && drawPile.Count > 0
+                ? drawPile[drawPile.Count - 1]
+                : null;
+            int topId = top != null ? top.Id : -1;
+            if (topId == drawTopId)
+            {
+                return;
+            }
+            if (drawTopVisual != null)
+            {
+                Destroy(drawTopVisual.gameObject);
+                drawTopVisual = null;
+            }
+            drawTopId = topId;
+            if (top != null)
+            {
+                int layers = LayersFor(round.Deck.DrawCount);
+                Vector2 offset = new Vector2(layers * StackOffset, layers * StackOffset);
+                drawTopVisual = CardVisual.Create(drawPileRoot, "DrawTop",
+                    top, true, false, offset, DiscardTopOrder);
             }
         }
     }
