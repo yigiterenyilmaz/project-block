@@ -56,6 +56,9 @@ namespace ProjectBlock.View
                 new Vector2(Mathf.Max(span + CardVisual.BodyWidth + 1.2f, 3f), 4.4f), BackdropColor, 33);
             ViewUtil.MakeText3D(transform, "Title", Center + new Vector2(0f, 2.0f), "MARKET",
                 60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "SellHint", Center + new Vector2(0f, 1.62f),
+                "click a joker to sell it  -  click the deck pile to sell cards", 30, 0.04f,
+                SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             float cursor = startX;
             bool gapInserted = false;

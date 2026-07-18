@@ -26,11 +26,24 @@ namespace ProjectBlock.View
         /// <summary>Shows the overlay with the given cards (normally the whole owned deck).</summary>
         public void Show(IReadOnlyList<BlockCard> cards)
         {
+            Show(cards, null);
+        }
+
+        /// <summary>Shows the owned deck. When sellValue is non-null the overlay is a SELL
+        /// screen: each card gets its sell price and clicking one sells it.</summary>
+        public void Show(IReadOnlyList<BlockCard> cards, System.Func<BlockCard, int> sellValue)
+        {
             Hide();
             IsOpen = true;
 
             ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(30f, 14f),
                 new Color(0f, 0f, 0f, 0.78f), 40);
+            if (sellValue != null)
+            {
+                ViewUtil.MakeText3D(transform, "SellTitle", new Vector2(0f, 4.4f),
+                    "SELL CARDS  -  click a card to sell it", 44, 0.06f,
+                    new Color(1f, 0.92f, 0.45f), 42, TextAnchor.MiddleCenter);
+            }
 
             var sorted = new List<BlockCard>(cards);
             sorted.Sort(CompareCards);
@@ -46,6 +59,15 @@ namespace ProjectBlock.View
                 CardVisual visual = CardVisual.Create(transform, "Overlay_" + sorted[i].Id,
                     sorted[i], true, false, position, 41);
                 visual.transform.localScale = new Vector3(CardScale, CardScale, 1f);
+                if (sellValue != null)
+                {
+                    int value = sellValue(sorted[i]);
+                    ViewUtil.MakeText3D(transform, "SellPrice_" + i,
+                        position + new Vector2(0f, -CardVisual.BodyHeight * CardScale * 0.5f - 0.16f),
+                        value > 0 ? "sell " + value : "worthless", 34, 0.045f,
+                        value > 0 ? new Color(1f, 0.92f, 0.45f) : new Color(0.6f, 0.6f, 0.6f),
+                        42, TextAnchor.MiddleCenter);
+                }
                 entryCenters.Add(position);
                 entryShapes.Add(sorted[i].Shape);
                 entryCards.Add(sorted[i]);

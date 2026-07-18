@@ -50,6 +50,7 @@ namespace ProjectBlock.View
         private CardVisual draggedCard;
         private int foxPickSlot = -1;
         private bool waterAnimating;
+        private bool sellCardsMode;
         private int lastSeedUsed;
 
         // Hover tooltip (world-space): a small panel rebuilt only when the target changes.
@@ -84,6 +85,7 @@ namespace ProjectBlock.View
             session = new GameSession(config);
             draggedCard = null;
             foxPickSlot = -1;
+            sellCardsMode = false;
             waterAnimating = false;
             pendingTargetJokerId = null;
             nextGrantIndex = 0;
@@ -150,10 +152,11 @@ namespace ProjectBlock.View
             }
             if (deckOverlay.IsOpen)
             {
-                // modal: click picks (fox mode) or closes; Escape always closes
+                // modal: click picks (fox mode), sells (sell mode) or closes; Escape closes
                 if (kb != null && kb.escapeKey.wasPressedThisFrame)
                 {
                     foxPickSlot = -1;
+                    sellCardsMode = false;
                     deckOverlay.Hide();
                     return;
                 }
@@ -177,6 +180,25 @@ namespace ProjectBlock.View
                         RefreshAll(null);
                         return;
                     }
+                    if (sellCardsMode)
+                    {
+                        Vector2 sellWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                        BlockCard card = deckOverlay.CardAt(sellWorld);
+                        if (card != null)
+                        {
+                            long paid = session.SellCard(card);
+                            Debug.Log("[project_block] Sold card " + card + " for " + paid);
+                            if (paid > 0)
+                            {
+                                sfx.Buy();
+                            }
+                            deckOverlay.Show(session.OwnedCards, c => session.Config.Market.SellValue(c));
+                            marketView.Show(session);
+                            UpdateHud();
+                            return;
+                        }
+                    }
+                    sellCardsMode = false;
                     deckOverlay.Hide();
                 }
                 return;
@@ -247,6 +269,10 @@ namespace ProjectBlock.View
                             Debug.Log("[project_block] Debug bonus card: " + bonus);
                             RefreshAll(null);
                         }
+                        else if (TryUseJokerFromBar(mouse))
+                        {
+                            // clicking a joker in the top bar uses it (like the 1-9 keys)
+                        }
                         else
                         {
                             HandleDrag(round, mouse);
@@ -256,16 +282,55 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Clicking a joker panel in the bar activates it, mirroring the 1-9 keys.</summary>
+        private bool TryUseJokerFromBar(Mouse mouse)
+        {
+            if (mouse == null || !mouse.leftButton.wasPressedThisFrame || pendingTargetJokerId.HasValue)
+            {
+                return false;
+            }
+            int index = jokerBar.JokerIndexAt(mouse.position.ReadValue());
+            if (index < 0 || index >= session.Jokers.Count)
+            {
+                return false;
+            }
+            BeginActivation(session.Jokers.Jokers[index]);
+            return true;
+        }
+
+        /// <summary>In the market, clicking a joker panel sells it for its SellValue.</summary>
+        private bool TrySellJokerFromBar(Mouse mouse)
+        {
+            int index = jokerBar.JokerIndexAt(mouse.position.ReadValue());
+            if (index < 0 || index >= session.Jokers.Count)
+            {
+                return false;
+            }
+            Joker joker = session.Jokers.Jokers[index];
+            long paid = session.Jokers.Sell(joker);
+            Debug.Log("[project_block] Sold joker " + joker.DisplayName + " for " + paid);
+            sfx.Buy();
+            marketView.Show(session);
+            jokerBar.Refresh(session, null);
+            UpdateHud();
+            return true;
+        }
+
         private void HandleMarketClick(Mouse mouse)
         {
+            if (TrySellJokerFromBar(mouse))
+            {
+                return;
+            }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
             int offerIndex = marketView.OfferAt(world);
             if (offerIndex < 0)
             {
-                // browsing the owned deck helps purchase decisions
+                // clicking the deck opens the owned cards as a SELL screen
                 if (cardLayer.IsDrawPileAt(world))
                 {
-                    deckOverlay.Show(session.OwnedCards);
+                    sellCardsMode = true;
+                    deckOverlay.Show(session.OwnedCards, c => session.Config.Market.SellValue(c));
                 }
                 return;
             }

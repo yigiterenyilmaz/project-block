@@ -73,6 +73,25 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Index of the joker panel under a screen point, or -1. The index matches
+        /// GameSession.Jokers order (used to click a joker to use it / sell it).</summary>
+        public int JokerIndexAt(Vector2 screenPos)
+        {
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (!panels[i].Root.activeSelf)
+                {
+                    continue;
+                }
+                var rect = panels[i].Root.GetComponent<RectTransform>();
+                if (RectTransformUtility.RectangleContainsScreenPoint(rect, screenPos, null))
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
         private void Fill(Panel panel, Joker joker, int index, GameSession session,
             int? targetingInstanceId)
         {
