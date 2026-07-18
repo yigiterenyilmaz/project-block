@@ -83,9 +83,6 @@ namespace ProjectBlock.Core
         private readonly IRandomSource rng;
         private readonly IScoreCalculator scorer;
 
-        /// <summary>Accrued value per piggy-bank card currently on the board.</summary>
-        private readonly Dictionary<int, int> piggyBanks = new Dictionary<int, int>();
-
         private sealed class DynamiteState
         {
             public int FullSize;
@@ -234,29 +231,6 @@ namespace ProjectBlock.Core
             CheckForNoPlayableMove();
         }
 
-        /// <summary>Piggy banks accrue value each turn they survive; destroyed ones pay
-        /// out their accumulated value. Returns the total payout this turn.</summary>
-        private int ProcessPiggyBanks(TurnReport report)
-        {
-            int payout = 0;
-            var trackedIds = new List<int>(piggyBanks.Keys);
-            foreach (int cardId in trackedIds)
-            {
-                int cubes = Board.CountCubesOf(cardId);
-                if (cubes > 0)
-                {
-                    piggyBanks[cardId] += scorer.ScorePiggyBankGain(cubes);
-                }
-                else
-                {
-                    payout += piggyBanks[cardId];
-                    piggyBanks.Remove(cardId);
-                }
-            }
-            report.PiggyBankPayout = payout;
-            return payout;
-        }
-
         private void DiscardHandAndReshuffle()
         {
             while (Hand.Count > 0)
@@ -287,10 +261,6 @@ namespace ProjectBlock.Core
 
             // 1. place + score
             report.PlacedCells = Board.Place(card, origin, card.Has(BlockElement.Ghost));
-            if (card.Has(BlockElement.PiggyBank) && !piggyBanks.ContainsKey(card.Id))
-            {
-                piggyBanks[card.Id] = 0;
-            }
             if (card.Has(BlockElement.Dynamite))
             {
                 var state = new DynamiteState();
@@ -368,16 +338,12 @@ namespace ProjectBlock.Core
                 }
             }
 
-            // element upkeep: gold pays while it sits on the board, piggy banks accrue/pay
+            // element upkeep: gold pays while it sits on the board
             int goldCubes = Board.CountCubesOfKind(CubeKind.Gold);
             if (goldCubes > 0)
             {
                 report.GoldBonus = scorer.ScoreGoldBonus(goldCubes);
                 scoreGained += report.GoldBonus;
-            }
-            if (piggyBanks.Count > 0)
-            {
-                scoreGained += ProcessPiggyBanks(report);
             }
 
             RoundScore += scoreGained;

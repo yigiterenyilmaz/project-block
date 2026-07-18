@@ -21,9 +21,6 @@ namespace ProjectBlock.Core
 
         /// <summary>Per-turn bonus for gold cubes sitting on the board.</summary>
         int ScoreGoldBonus(int goldCubesOnBoard);
-
-        /// <summary>Value a piggy-bank block accrues this turn (per surviving cube).</summary>
-        int ScorePiggyBankGain(int cubesOnBoard);
     }
 
     /// <summary>Base-game scoring driven entirely by ScoringConfig.</summary>
@@ -60,11 +57,6 @@ namespace ProjectBlock.Core
         public int ScoreGoldBonus(int goldCubesOnBoard)
         {
             return goldCubesOnBoard * config.GoldPointsPerCubePerTurn;
-        }
-
-        public int ScorePiggyBankGain(int cubesOnBoard)
-        {
-            return cubesOnBoard * config.PiggyBankPointsPerCubePerTurn;
         }
     }
 }

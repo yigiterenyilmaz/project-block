@@ -63,9 +63,6 @@ namespace ProjectBlock.Core
         /// <summary>Per-turn bonus earned from gold cubes on the board.</summary>
         public int GoldBonus { get; internal set; }
 
-        /// <summary>Accumulated value paid out by piggy-bank blocks destroyed this turn.</summary>
-        public int PiggyBankPayout { get; internal set; }
-
         public int ScoreGained { get; internal set; }
         public int RoundScoreAfter { get; internal set; }
 

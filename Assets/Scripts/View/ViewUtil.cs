@@ -52,7 +52,6 @@ namespace ProjectBlock.View
                 case BlockElement.Mechanical: return new Color(0.6f, 0.65f, 0.7f);
                 case BlockElement.Mirror: return new Color(0.75f, 0.82f, 0.85f);
                 case BlockElement.Fox: return new Color(0.85f, 0.5f, 0.2f);
-                case BlockElement.PiggyBank: return new Color(1f, 0.55f, 0.7f);
                 default: return Color.gray;
             }
         }
@@ -68,7 +67,6 @@ namespace ProjectBlock.View
                 case CubeKind.Obsidian: return ElementColor(BlockElement.Obsidian);
                 case CubeKind.Gold: return ElementColor(BlockElement.Gold);
                 case CubeKind.Transparent: return ElementColor(BlockElement.Transparent);
-                case CubeKind.PiggyBank: return ElementColor(BlockElement.PiggyBank);
                 case CubeKind.Dynamite: return ElementColor(BlockElement.Dynamite);
                 default: return ColorForCard(cube.SourceCardId);
             }
@@ -80,7 +78,6 @@ namespace ProjectBlock.View
             switch (element)
             {
                 case BlockElement.Dynamite: return "TNT";
-                case BlockElement.PiggyBank: return "PIGGY";
                 case BlockElement.Mechanical: return "GEARS";
                 case BlockElement.Transparent: return "GLASS";
                 default: return element.ToString().ToUpperInvariant();

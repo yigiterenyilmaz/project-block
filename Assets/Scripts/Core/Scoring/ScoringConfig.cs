@@ -27,9 +27,5 @@ namespace ProjectBlock.Core
 
         /// <summary>Per-turn bonus per gold cube sitting on the board.</summary>
         public int GoldPointsPerCubePerTurn = 1;
-
-        /// <summary>Value a piggy-bank block accrues per CUBE per turn it survives
-        /// on the board (confirmed 2026-07-18: per cube, not per block).</summary>
-        public int PiggyBankPointsPerCubePerTurn = 6;
     }
 }

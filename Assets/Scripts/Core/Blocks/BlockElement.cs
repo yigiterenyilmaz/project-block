@@ -41,9 +41,8 @@ namespace ProjectBlock.Core
         Mirror = 8,
 
         /// <summary>NOT IMPLEMENTED: reshapeable before placement.</summary>
-        Fox = 9,
+        Fox = 9
 
-        /// <summary>Accrues value each turn it stays on the board; pays it out when exploded.</summary>
-        PiggyBank = 10
+        // PiggyBank ("kumbara") was cut from the design on 2026-07-18.
     }
 }

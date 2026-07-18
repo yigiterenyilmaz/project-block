@@ -18,7 +18,6 @@ namespace ProjectBlock.Core
         Obsidian = 3,
         Gold = 4,
         Transparent = 5,
-        PiggyBank = 6,
         Dynamite = 7
     }
 
@@ -63,7 +62,6 @@ namespace ProjectBlock.Core
             if (card.Has(BlockElement.Obsidian)) return CubeKind.Obsidian;
             if (card.Has(BlockElement.Gold)) return CubeKind.Gold;
             if (card.Has(BlockElement.Transparent)) return CubeKind.Transparent;
-            if (card.Has(BlockElement.PiggyBank)) return CubeKind.PiggyBank;
             if (card.Has(BlockElement.Dynamite)) return CubeKind.Dynamite;
             return CubeKind.Normal;
         }

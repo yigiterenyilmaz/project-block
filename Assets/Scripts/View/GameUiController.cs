@@ -335,11 +335,6 @@ namespace ProjectBlock.View
                 FloatingTextFx.Spawn(transform, new Vector2(0f, 3.4f),
                     "DYNAMITE!", new Color(0.95f, 0.3f, 0.2f), 72, 0.09f);
             }
-            if (report.PiggyBankPayout > 0)
-            {
-                FloatingTextFx.Spawn(transform, new Vector2(2.4f, 2.0f),
-                    "+" + report.PiggyBankPayout + " PIGGY!", new Color(1f, 0.6f, 0.75f), 56, 0.07f);
-            }
             if (comboStreak >= 2)
             {
                 FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
