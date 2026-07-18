@@ -63,7 +63,7 @@ namespace ProjectBlock.Core
             rng = new SeededRandom(config.RngSeed ?? Environment.TickCount);
             scorer = new DefaultScoreCalculator(config.Scoring);
             Market = new Market();
-            for (int i = 0; i < config.StartingDeckSize; i++)
+            for (int i = 0; i < config.Deck.Size; i++)
             {
                 ownedCards.Add(CreateRandomCard());
             }
@@ -127,7 +127,7 @@ namespace ProjectBlock.Core
 
         private BlockCard CreateRandomCard()
         {
-            BlockShape shape = Config.ShapeGenerator.NextShape(rng);
+            BlockShape shape = Config.Deck.ShapeGenerator.NextShape(rng);
             return new BlockCard(nextCardId++, shape);
         }
 

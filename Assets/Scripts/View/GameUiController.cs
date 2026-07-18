@@ -28,7 +28,9 @@ namespace ProjectBlock.View
         private BoardView boardView;
         private CardLayerView cardLayer;
         private DeckOverlayView deckOverlay;
+        private DeckSelectView deckSelect;
         private MarketView marketView;
+        private DeckDefinition currentDeck = DeckLibrary.Classic;
         private SoundFx sfx;
         private Text infoText;
         private Text messageText;
@@ -51,6 +53,7 @@ namespace ProjectBlock.View
             lastSeedUsed = seed != 0 ? seed : System.Environment.TickCount;
             var config = new GameConfig();
             config.RngSeed = lastSeedUsed;
+            config.Deck = currentDeck;
             session = new GameSession(config);
             draggedCard = null;
             marketView.Hide();
@@ -87,6 +90,28 @@ namespace ProjectBlock.View
                 NewGame();
                 return;
             }
+            if (deckSelect.IsOpen)
+            {
+                // modal: click a deck to start a new run with it, anything else closes
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                {
+                    deckSelect.Hide();
+                    return;
+                }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                {
+                    Vector2 clickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                    int deckIndex = deckSelect.DeckAt(clickWorld);
+                    deckSelect.Hide();
+                    if (deckIndex >= 0)
+                    {
+                        currentDeck = DeckLibrary.All[deckIndex];
+                        Debug.Log("[project_block] Deck selected: " + currentDeck.Name);
+                        NewGame();
+                    }
+                }
+                return;
+            }
             if (deckOverlay.IsOpen)
             {
                 // modal: any click or Escape closes, everything else is blocked
@@ -95,6 +120,11 @@ namespace ProjectBlock.View
                 {
                     deckOverlay.Hide();
                 }
+                return;
+            }
+            if (kb != null && kb.dKey.wasPressedThisFrame && draggedCard == null)
+            {
+                deckSelect.Show(DeckLibrary.All, currentDeck);
                 return;
             }
             switch (session.Phase)
@@ -338,7 +368,8 @@ namespace ProjectBlock.View
         {
             RoundEngine round = session.CurrentRound;
             var sb = new StringBuilder();
-            sb.Append("Seed ").Append(lastSeedUsed).Append('\n');
+            sb.Append("Seed ").Append(lastSeedUsed)
+                .Append("   Deck: ").Append(currentDeck.Name).Append('\n');
             sb.Append("Round ").Append(session.RoundNumber).Append("   Turn ").Append(round.TurnNumber).Append('\n');
             sb.Append("Score ").Append(round.RoundScore).Append(" / ").Append(round.Config.ScoreThreshold);
             if (round.ThresholdPassed)
@@ -351,7 +382,7 @@ namespace ProjectBlock.View
                 .Append("   Discard ").Append(round.Deck.DiscardCount)
                 .Append("   Removed ").Append(round.Deck.RemovedCount).Append('\n');
             sb.Append("Drag a card onto the board to place it.   Click draw pile: view deck\n");
-            sb.Append("S: redraw hand (debug)   B: bonus card (debug)   R: new run");
+            sb.Append("Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run");
             infoText.text = sb.ToString();
 
             switch (session.Phase)
@@ -404,6 +435,10 @@ namespace ProjectBlock.View
             var overlayGo = new GameObject("DeckOverlay");
             overlayGo.transform.SetParent(transform, false);
             deckOverlay = overlayGo.AddComponent<DeckOverlayView>();
+
+            var deckSelectGo = new GameObject("DeckSelect");
+            deckSelectGo.transform.SetParent(transform, false);
+            deckSelect = deckSelectGo.AddComponent<DeckSelectView>();
 
             var marketGo = new GameObject("MarketView");
             marketGo.transform.SetParent(transform, false);

@@ -11,14 +11,14 @@ namespace ProjectBlock.Core
         /// <summary>Seed for the whole run; null = time-based random seed.</summary>
         public int? RngSeed = null;
 
-        /// <summary>Number of random block cards the starting deck is built from.
-        /// Must be at least Rules.HandSize or the first refill loses instantly.</summary>
-        public int StartingDeckSize = 24;
+        /// <summary>Starting-deck recipe (see DeckLibrary for the built-in archetypes).
+        /// Its Size must be at least Rules.HandSize or the first refill loses instantly.
+        /// Market offers also draw from this deck's shape source.</summary>
+        public DeckDefinition Deck = DeckLibrary.Classic;
 
         public RoundRules Rules = new RoundRules();
         public ScoringConfig Scoring = new ScoringConfig();
         public MarketConfig Market = new MarketConfig();
-        public IShapeGenerator ShapeGenerator = new RandomPolyominoGenerator();
         public IRoundProgression Progression = new DefaultRoundProgression();
     }
 }
