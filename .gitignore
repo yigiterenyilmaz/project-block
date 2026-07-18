@@ -116,3 +116,4 @@ desktop.ini
 .env
 .env.*
 !.env.example
+*.slnx
