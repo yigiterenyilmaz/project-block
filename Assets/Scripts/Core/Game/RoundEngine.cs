@@ -450,18 +450,33 @@ namespace ProjectBlock.Core
             }
             breakdown.BasePlacement = scorer.ScorePlacement(report.PlacedCells.Count);
             var waterFrames = new List<IReadOnlyList<WaterMove>>();
-            Board.SettleWaterAndReact(waterFrames); // placed water falls before lines are judged
 
             cardPlacedSize[card.Id] = report.PlacedCells.Count;
 
-            // Sampled AFTER the placement and the water settling: whatever sits on the board
-            // now is what a real sweep has to clear, and it must not already be "clean".
+            // 2. explode full lines + score (fire chains resolve inside the board).
+            // WATER RULE (confirmed 2026-07-19): a freshly placed water block that completes a
+            // line explodes IN PLACE, before it would drop into any empty space beneath it.
+            // Only when the placement triggers no explosion does the water settle and we
+            // re-check the lines it may complete after falling.
+            // boardCleanBeforeExplosion is sampled right before the destruction we score, so a
+            // sweep still sees the pre-explosion board. Water only moves cubes (a fall never
+            // changes the clean check), but a fire->obsidian douse can, hence the resample.
+            // The destruction snapshot baselines here, before the first explosion attempt,
+            // and is resynced after every settle - moved water must not read as destroyed.
             boardCleanBeforeExplosion = Board.IsCleanForSweep();
             ResyncSnapshot();
             CaptureTurnStartCardCounts();
-
-            // 2. explode full lines + score (fire chains resolve inside the board)
             LineExplosionResult explosion = Board.ResolveFullLines();
+            if (explosion.LineCount == 0)
+            {
+                Board.SettleWaterAndReact(waterFrames); // nothing exploded in place -> water falls
+                ResyncSnapshot(); // water moved, nothing died - re-baseline the destruction diff
+                boardCleanBeforeExplosion = Board.IsCleanForSweep();
+                explosion = Board.ResolveFullLines();
+            }
+            // Frames appended after this point are post-explosion falls; the UI plays the
+            // boom between the two batches.
+            report.WaterFramesBeforeExplosion = waterFrames.Count;
             report.ExplodedRows = explosion.Rows;
             report.ExplodedColumns = explosion.Columns;
             int cubesExploded = explosion.ExplodedCells.Count;

@@ -61,6 +61,7 @@ namespace ProjectBlock.Core
         }
 
         private readonly IRandomSource rng;
+        private readonly int resolvedSeed;
         private readonly IScoreCalculator scorer;
         private int nextCardId = 1;
 
@@ -73,7 +74,8 @@ namespace ProjectBlock.Core
         public GameSession(GameConfig config)
         {
             Config = config;
-            rng = new SeededRandom(config.RngSeed ?? Environment.TickCount);
+            resolvedSeed = config.RngSeed ?? Environment.TickCount;
+            rng = new SeededRandom(resolvedSeed);
             scorer = new DefaultScoreCalculator(config.Scoring);
             Market = new Market();
             Jokers = new JokerInventory(this, rng);
@@ -114,9 +116,9 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
-        /// Buys a market offer: deducts the price from TotalScore and permanently adds
-        /// the card to the owned deck (it joins the shuffle from the next round on).
-        /// Returns false when the offer is already sold or unaffordable.
+        /// Buys a market offer with TotalScore. A block joins the owned deck (it shuffles in
+        /// from the next round on); a joker joins the inventory. Returns false when the offer
+        /// is already sold, unaffordable, or (for jokers) there is no free joker slot.
         /// </summary>
         public bool TryBuyOffer(int offerIndex)
         {
@@ -133,11 +135,36 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
+            if (offer.Kind == MarketOfferKind.Joker)
+            {
+                if (Jokers.IsFull || offer.Joker == null)
+                {
+                    return false;
+                }
+                Jokers.Add(offer.Joker.Create());
+            }
+            else
+            {
+                ownedCards.Add(offer.Card);
+            }
             TotalScore -= offer.Price;
             offer.Sold = true;
-            ownedCards.Add(offer.Card);
             purchasedThisMarket = true;
             return true;
+        }
+
+        /// <summary>Sells an owned card back for its sell value (added to TotalScore) and
+        /// removes it from the deck. Plain blocks pay nothing; elemental ones pay a fraction
+        /// of their buy price. Returns what was paid, or 0 if the card was not owned.</summary>
+        public long SellCard(BlockCard card)
+        {
+            if (card == null || !ownedCards.Remove(card))
+            {
+                return 0;
+            }
+            int value = Config.Market.SellValue(card);
+            TotalScore += value;
+            return value;
         }
 
         /// <summary>Leaves the market and starts the next round.</summary>
@@ -236,12 +263,49 @@ namespace ProjectBlock.Core
                 }
                 var card = new BlockCard(nextCardId++, shape, elements);
                 card = Jokers.FilterMarketOffer(card); // "Simya" adds a second element here
-                int price = market.BlockBasePrice
-                    + market.BlockPricePerCube * card.Shape.Size
-                    + market.ElementPriceSurcharge * card.Elements.Count;
-                newOffers.Add(new MarketOffer(card, price));
+                // priced AFTER the filter so a joker-added element is surcharged too
+                newOffers.Add(new MarketOffer(card, market.BuyPrice(card)));
             }
+            AddJokerOffers(market, newOffers);
             Market.SetOffers(newOffers);
+        }
+
+        /// <summary>Appends this visit's joker offers. Uses a SEPARATE rng derived from the
+        /// run seed and round number, so joker stocking is deterministic yet never disturbs
+        /// the main rng stream that drives deck shuffles and block play.</summary>
+        private void AddJokerOffers(MarketConfig market, List<MarketOffer> newOffers)
+        {
+            IReadOnlyList<JokerDefinition> catalogue = JokerRegistry.All;
+            if (market.JokerOfferCount <= 0 || catalogue.Count == 0)
+            {
+                return;
+            }
+            var jokerRng = new SeededRandom(unchecked(resolvedSeed * 486187739 + RoundNumber));
+            // Never offer a joker the player already owns. Distinct picks within this visit:
+            // shuffle the remaining pool and take the first N.
+            var owned = new HashSet<string>();
+            foreach (Joker held in Jokers.Jokers)
+            {
+                owned.Add(held.DefId);
+            }
+            var pool = new List<JokerDefinition>();
+            foreach (JokerDefinition definition in catalogue)
+            {
+                if (!owned.Contains(definition.DefId))
+                {
+                    pool.Add(definition);
+                }
+            }
+            if (pool.Count == 0)
+            {
+                return;
+            }
+            jokerRng.Shuffle(pool);
+            int count = Math.Min(market.JokerOfferCount, pool.Count);
+            for (int i = 0; i < count; i++)
+            {
+                newOffers.Add(new MarketOffer(pool[i], market.JokerPrice));
+            }
         }
 
         private void SetPhase(GamePhase newPhase)

@@ -34,6 +34,7 @@ namespace ProjectBlock.View
             public Image Background;
             public Text Title;
             public Text Body;
+            public int InstanceId = -1;
         }
 
         /// <summary>Creates the strip under the HUD canvas. Call once.</summary>
@@ -73,9 +74,96 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Index of the joker panel under a screen point, or -1. The index matches
+        /// GameSession.Jokers order (used to click a joker to use it / sell it).</summary>
+        public int JokerIndexAt(Vector2 screenPos)
+        {
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (!panels[i].Root.activeSelf)
+                {
+                    continue;
+                }
+                var rect = panels[i].Root.GetComponent<RectTransform>();
+                if (RectTransformUtility.RectangleContainsScreenPoint(rect, screenPos, null))
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        /// <summary>Screen-space center of a panel (for spawning fx near it), or null.</summary>
+        public Vector2? PanelScreenCenter(int index)
+        {
+            if (index < 0 || index >= panels.Count || !panels[index].Root.activeSelf)
+            {
+                return null;
+            }
+            // Screen-space-overlay canvas: rect corners ARE screen pixels.
+            var corners = new Vector3[4];
+            panels[index].Root.GetComponent<RectTransform>().GetWorldCorners(corners);
+            return (Vector2)((corners[0] + corners[2]) * 0.5f);
+        }
+
+        /// <summary>Quick scale pulse on the panel showing that joker (activation feedback).</summary>
+        public void PulseJoker(int instanceId)
+        {
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i].Root.activeSelf && panels[i].InstanceId == instanceId)
+                {
+                    StartCoroutine(PulseRoutine(panels[i].Root.transform));
+                    return;
+                }
+            }
+        }
+
+        /// <summary>Sold feedback: the panel shrinks away, then the strip refreshes to the
+        /// post-sale inventory. Call AFTER JokerInventory.Sell.</summary>
+        public void AnimateJokerSold(int index, GameSession session)
+        {
+            if (index < 0 || index >= panels.Count || !panels[index].Root.activeSelf)
+            {
+                Refresh(session, null);
+                return;
+            }
+            StartCoroutine(ShrinkThenRefresh(panels[index].Root.transform, session));
+        }
+
+        private System.Collections.IEnumerator PulseRoutine(Transform target)
+        {
+            const float duration = 0.22f;
+            float time = 0f;
+            while (time < duration)
+            {
+                time += Time.deltaTime;
+                float k = Mathf.Sin(Mathf.Clamp01(time / duration) * Mathf.PI);
+                target.localScale = Vector3.one * (1f + 0.14f * k);
+                yield return null;
+            }
+            target.localScale = Vector3.one;
+        }
+
+        private System.Collections.IEnumerator ShrinkThenRefresh(Transform target, GameSession session)
+        {
+            const float duration = 0.14f;
+            float time = 0f;
+            while (time < duration)
+            {
+                time += Time.deltaTime;
+                float k = 1f - Mathf.Clamp01(time / duration);
+                target.localScale = new Vector3(k, k, 1f);
+                yield return null;
+            }
+            target.localScale = Vector3.one;
+            Refresh(session, null);
+        }
+
         private void Fill(Panel panel, Joker joker, int index, GameSession session,
             int? targetingInstanceId)
         {
+            panel.InstanceId = joker.InstanceId;
             bool ready = session.Jokers.CanActivate(joker.InstanceId);
             bool targeting = targetingInstanceId.HasValue
                 && targetingInstanceId.Value == joker.InstanceId;

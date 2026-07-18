@@ -101,6 +101,21 @@ namespace ProjectBlock.View
             SyncInternal(round, null, true);
         }
 
+        /// <summary>Single-card swap animation (İade): flies the returned card to the discard
+        /// and deals its replacement from the draw pile. Call AFTER ReplaceHandCard().</summary>
+        public void AnimateReplaceCard(RoundEngine round, int replacedCardId)
+        {
+            CardVisual old;
+            if (heldVisuals.TryGetValue(replacedCardId, out old) && old != null)
+            {
+                heldVisuals.Remove(replacedCardId);
+                old.SlotIndex = -1;
+                old.SetSortingBoost(8);
+                old.FlyToAndDestroy(DiscardPilePos, DiscardDuration);
+            }
+            SyncInternal(round, null, true); // deals the replacement from the draw pile
+        }
+
         /// <summary>Round-start presentation: shuffle flourish on the draw pile, then the
         /// opening deal. Replaces Clear()+Sync(null) when a round begins.</summary>
         public void AnimateRoundStart(RoundEngine round)
@@ -255,6 +270,30 @@ namespace ProjectBlock.View
         {
             return Mathf.Abs(world.x - DrawPilePos.x) <= CardVisual.BodyWidth * 0.5f + 0.09f
                 && Mathf.Abs(world.y - DrawPilePos.y) <= CardVisual.BodyHeight * 0.5f + 0.09f;
+        }
+
+        private int hoveredCardId = -1;
+
+        /// <summary>Marks the card under the mouse (-1 = none): it grows slightly.
+        /// Safe to call every frame; only transitions touch the visuals.</summary>
+        public void SetHoveredCard(int cardId)
+        {
+            if (hoveredCardId == cardId)
+            {
+                return;
+            }
+            CardVisual previous;
+            if (hoveredCardId >= 0 && heldVisuals.TryGetValue(hoveredCardId, out previous)
+                && previous != null)
+            {
+                previous.SetHovered(false);
+            }
+            hoveredCardId = cardId;
+            CardVisual current;
+            if (cardId >= 0 && heldVisuals.TryGetValue(cardId, out current) && current != null)
+            {
+                current.SetHovered(true);
+            }
         }
 
         /// <summary>Drops a card's visual so the next Sync rebuilds it (used after a

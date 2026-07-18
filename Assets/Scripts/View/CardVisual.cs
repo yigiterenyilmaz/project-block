@@ -104,10 +104,16 @@ namespace ProjectBlock.View
                     {
                         labels.Add(ViewUtil.ElementLabel(element));
                     }
-                    TrackText(ViewUtil.MakeText3D(transform, "ElementLabel",
-                        new Vector2(0f, BodyHeight * 0.5f - 0.15f), string.Join("+", labels),
-                        34, 0.05f, ViewUtil.ElementColor(card.Elements[0]), order + 2,
-                        TextAnchor.MiddleCenter), order + 2);
+                    // A dark band behind plain text - outlines ghost on TextMesh, this doesn't.
+                    var bandCenter = new Vector2(0f, BodyHeight * 0.5f - 0.15f);
+                    Track(ViewUtil.MakeRect(transform, "ElementBand", bandCenter,
+                        new Vector2(BodyWidth - 0.1f, 0.22f), new Color(0.1f, 0.11f, 0.14f, 0.92f),
+                        order + 2), order + 2);
+                    Color labelColor = Color.Lerp(ViewUtil.ElementColor(card.Elements[0]),
+                        Color.white, 0.4f); // dark elements (obsidian) must read on the band
+                    TrackText(ViewUtil.MakeText3D(transform, "ElementLabel", bandCenter,
+                        string.Join("+", labels), 90, 0.016f, labelColor, order + 3,
+                        TextAnchor.MiddleCenter), order + 3);
                 }
             }
             else
@@ -224,6 +230,14 @@ namespace ProjectBlock.View
                 color.a *= Mathf.Clamp01(alpha);
                 textMeshes[i].color = color;
             }
+        }
+
+        /// <summary>Hover highlight for hand/bonus cards: a slight grow while the mouse is
+        /// over the card. Scale-only, so it never fights the drag alpha/sorting effects.</summary>
+        public void SetHovered(bool hovered)
+        {
+            float scale = hovered ? 1.07f : 1f;
+            transform.localScale = new Vector3(scale, scale, 1f);
         }
 
         /// <summary>Raises (or resets, with 0) the sorting order of the whole card,

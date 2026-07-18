@@ -27,6 +27,11 @@ public static class JokerTests
         Renovasyon_OvertimeDoesNotRecycleDiscard();
         Iade_SwapsOneCardInPlace();
         Kumbara_AccrueAndSell();
+        Water_ExplodesInPlaceBeforeFalling();
+        Market_CardSellValueByElement();
+        Market_StocksAndSellsJokers();
+        Market_NeverOffersOwnedJokers();
+        Market_RefusesJokerWhenSlotsFull();
         Overtime_GatedJokerIsSkipped();
         HarcamaBonusu_PaysWhenDrawPileEmpties();
         FullRun_WithEveryJoker_IsDeterministic();
@@ -1315,6 +1320,249 @@ public static class JokerTests
         Check(activations > 0, "activated jokers were exercised", "activations " + activations);
         Check(sweeps > 0, "clean sweeps happened", "sweeps " + sweeps);
         Check(overtimeRounds > 0, "overtime was entered", "overtime " + overtimeRounds);
+    }
+
+    private static void Water_ExplodesInPlaceBeforeFalling()
+    {
+        Section("water / explosion before fall");
+        var normalLeft = new BlockCard(1, Bar(1));
+        var normalRight = new BlockCard(2, Bar(1));
+        var water = new BlockCard(3, Bar(1), new[] { BlockElement.Water });
+
+        // Row y=1 is one cube short at column 1, and the cell below it (1,0) is empty.
+        // Dropping the water there would leave the row incomplete; exploding first clears it.
+        GameBoard Build()
+        {
+            var b = new GameBoard(3, 3);
+            b.Place(normalLeft, new GridPos(0, 1));
+            b.Place(normalRight, new GridPos(2, 1));
+            b.Place(water, new GridPos(1, 1));
+            return b;
+        }
+
+        GameBoard explodeFirst = Build();
+        LineExplosionResult inPlace = explodeFirst.ResolveFullLines();
+        Check(inPlace.LineCount == 1 && inPlace.ExplodedCells.Count == 3,
+            "water completing a line explodes in place", "lines " + inPlace.LineCount);
+
+        GameBoard settleFirst = Build();
+        settleFirst.SettleWaterAndReact(null);
+        LineExplosionResult afterFall = settleFirst.ResolveFullLines();
+        Check(afterFall.LineCount == 0,
+            "settling first would drop the water and miss the line", "lines " + afterFall.LineCount);
+    }
+
+    private static void Market_CardSellValueByElement()
+    {
+        Section("market / card sell value");
+        var config = new MarketConfig();
+        var vanilla = new BlockCard(1, Bar(3));
+        var golden = new BlockCard(2, Bar(3), new[] { BlockElement.Gold });
+        Check(config.SellValue(vanilla) == 0, "a plain block sells for nothing",
+            "got " + config.SellValue(vanilla));
+        int sell = config.SellValue(golden);
+        Check(sell > 0 && sell < config.BuyPrice(golden),
+            "an elemental block sells for less than its buy price",
+            "sell " + sell + " buy " + config.BuyPrice(golden));
+
+        // The session path removes the card and pays exactly that value.
+        var session = new GameSession(new GameConfig { RngSeed = 5 });
+        BlockCard owned = session.OwnedCards[0]; // starting deck is plain
+        int before = session.OwnedCards.Count;
+        long money = session.TotalScore;
+        long paid = session.SellCard(owned);
+        Check(paid == 0 && session.TotalScore == money, "selling a plain owned card pays nothing");
+        Check(session.OwnedCards.Count == before - 1, "the sold card leaves the deck",
+            "count " + session.OwnedCards.Count);
+        Check(session.SellCard(owned) == 0, "selling the same card twice is a no-op");
+    }
+
+    private static void Market_StocksAndSellsJokers()
+    {
+        Section("market / joker offers");
+        GameSession session = DriveToMarket(101);
+        Check(session.Phase == GamePhase.Market, "reached the market", "phase " + session.Phase);
+        if (session.Phase != GamePhase.Market)
+        {
+            return;
+        }
+
+        int index = FirstJokerOffer(session);
+        Check(index >= 0, "the market stocks at least one joker offer");
+        if (index < 0)
+        {
+            return;
+        }
+
+        MarketOffer offer = session.Market.Offers[index];
+        Check(offer.Joker != null && offer.Card == null, "a joker offer carries a joker, not a card");
+
+        // Same seed -> same joker line-up (the joker rng derives from the run seed).
+        string here = JokerOffersKey(session);
+        string twin = JokerOffersKey(DriveToMarket(101));
+        Check(here.Length > 0 && here == twin, "joker offers are deterministic for a seed",
+            here + " vs " + twin);
+
+        int before = session.Jokers.Count;
+        long money = session.TotalScore;
+        session.AddCurrency(offer.Price); // guarantee affordability regardless of round score
+        bool bought = session.TryBuyOffer(index);
+        Check(bought, "the joker offer can be bought");
+        Check(session.Jokers.Count == before + 1, "buying a joker adds it to the inventory",
+            "count " + session.Jokers.Count);
+        Check(offer.Sold, "the bought offer is marked sold");
+        Check(session.TotalScore == money, "exactly the price was paid", "total " + session.TotalScore);
+        Check(!session.TryBuyOffer(index), "a sold offer cannot be bought again");
+    }
+
+    private static void Market_NeverOffersOwnedJokers()
+    {
+        Section("market / owned jokers excluded");
+        // Owning part of the catalogue: offers must come from the rest.
+        var config = new GameConfig();
+        config.RngSeed = 303;
+        var session = new GameSession(config);
+        var ownedIds = new HashSet<string>();
+        for (int i = 0; i < JokerRegistry.All.Count - 1; i++)
+        {
+            Joker granted = session.Jokers.Add(JokerRegistry.All[i].Create());
+            ownedIds.Add(granted.DefId);
+        }
+        session = DriveOwnedToMarket(session);
+        bool clean = true;
+        int jokerOffers = 0;
+        foreach (MarketOffer offer in session.Market.Offers)
+        {
+            if (offer.Kind != MarketOfferKind.Joker)
+            {
+                continue;
+            }
+            jokerOffers++;
+            if (ownedIds.Contains(offer.Joker.DefId))
+            {
+                clean = false;
+            }
+        }
+        Check(session.Phase == GamePhase.Market, "reached the market", "phase " + session.Phase);
+        Check(clean, "no owned joker is offered");
+        Check(jokerOffers <= 1, "offers cannot exceed the unowned pool", "offers " + jokerOffers);
+
+        // Owning everything: the joker section simply stays empty.
+        var full = new GameSession(new GameConfig { RngSeed = 304 });
+        foreach (JokerDefinition definition in JokerRegistry.All)
+        {
+            full.Jokers.Add(definition.Create());
+        }
+        full = DriveOwnedToMarket(full);
+        int fullOffers = 0;
+        foreach (MarketOffer offer in full.Market.Offers)
+        {
+            if (offer.Kind == MarketOfferKind.Joker)
+            {
+                fullOffers++;
+            }
+        }
+        Check(full.Phase == GamePhase.Market && fullOffers == 0,
+            "a full catalogue owner sees no joker offers", "offers " + fullOffers);
+    }
+
+    /// <summary>Like DriveToMarket but continues an existing session (jokers pre-granted).</summary>
+    private static GameSession DriveOwnedToMarket(GameSession session)
+    {
+        int safety = 0;
+        while (session.Phase != GamePhase.GameOver && safety++ < 400)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                break;
+            }
+            RoundEngine round = session.CurrentRound;
+            if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                round.DecideAdvance(true);
+                continue;
+            }
+            if (round.Status != RoundStatus.InProgress || PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        return session;
+    }
+
+    private static void Market_RefusesJokerWhenSlotsFull()
+    {
+        Section("market / joker slot cap");
+        GameSession session = DriveToMarket(202);
+        if (session.Phase != GamePhase.Market)
+        {
+            Check(false, "reached the market", "phase " + session.Phase);
+            return;
+        }
+        int index = FirstJokerOffer(session);
+        if (index < 0)
+        {
+            Check(false, "the market stocks a joker offer");
+            return;
+        }
+
+        session.Jokers.MaxSlots = session.Jokers.Count; // leave no free slot
+        session.AddCurrency(session.Market.Offers[index].Price);
+        Check(!session.TryBuyOffer(index), "a full inventory refuses a joker purchase");
+        Check(!session.Market.Offers[index].Sold, "the refused offer stays available");
+    }
+
+    /// <summary>Plays greedily, always taking the advance offer, until the first market.</summary>
+    private static GameSession DriveToMarket(int seed)
+    {
+        var config = new GameConfig();
+        config.RngSeed = seed;
+        var session = new GameSession(config);
+        int safety = 0;
+        while (session.Phase != GamePhase.GameOver && safety++ < 400)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                break;
+            }
+            RoundEngine round = session.CurrentRound;
+            if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                round.DecideAdvance(true);
+                continue;
+            }
+            if (round.Status != RoundStatus.InProgress || PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        return session;
+    }
+
+    private static int FirstJokerOffer(GameSession session)
+    {
+        IReadOnlyList<MarketOffer> offers = session.Market.Offers;
+        for (int i = 0; i < offers.Count; i++)
+        {
+            if (offers[i].Kind == MarketOfferKind.Joker)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static string JokerOffersKey(GameSession session)
+    {
+        var sb = new StringBuilder();
+        foreach (MarketOffer offer in session.Market.Offers)
+        {
+            if (offer.Kind == MarketOfferKind.Joker)
+            {
+                sb.Append(offer.Joker.DefId).Append(';');
+            }
+        }
+        return sb.ToString();
     }
 
     private static string RunWithAllJokers(int seed)

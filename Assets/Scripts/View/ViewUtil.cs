@@ -83,6 +83,64 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>One-line rules text of a block type, for hover tooltips (English for now;
+        /// mirrors the enum docs in BlockElement.cs).</summary>
+        public static string ElementDescription(BlockElement element)
+        {
+            switch (element)
+            {
+                case BlockElement.Fire:
+                    return "When one cube explodes, the whole block goes with it.";
+                case BlockElement.Water:
+                    return "Falls and spreads each turn; turns touching fire to obsidian.";
+                case BlockElement.Obsidian:
+                    return "Indestructible, but ignored by the clean-sweep check.";
+                case BlockElement.Gold:
+                    return "Indestructible and sweep-exempt; pays a bonus every turn on the board.";
+                case BlockElement.Transparent:
+                    return "A block can be placed on top of it; the new cube replaces it.";
+                case BlockElement.Ghost:
+                    return "Can be placed partly off the board (at least one cube on).";
+                case BlockElement.Dynamite:
+                    return "If the whole block explodes the turn it lands, the board is cleared.";
+                case BlockElement.Mechanical:
+                    return "Right-click it in hand to rotate 90 degrees.";
+                case BlockElement.Fox:
+                    return "Right-click it in hand to reshape into any shape in your deck.";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        /// <summary>Greedy word wrap for the placeholder TextMesh labels (no auto-wrapping).</summary>
+        public static string WrapText(string text, int maxCharsPerLine)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return string.Empty;
+            }
+            string[] words = text.Split(' ');
+            var sb = new System.Text.StringBuilder();
+            int lineLength = 0;
+            for (int i = 0; i < words.Length; i++)
+            {
+                string word = words[i];
+                if (lineLength > 0 && lineLength + 1 + word.Length > maxCharsPerLine)
+                {
+                    sb.Append('\n');
+                    lineLength = 0;
+                }
+                else if (lineLength > 0)
+                {
+                    sb.Append(' ');
+                    lineLength++;
+                }
+                sb.Append(word);
+                lineLength += word.Length;
+            }
+            return sb.ToString();
+        }
+
         /// <summary>Creates a square sprite object. Scale is uniform (a cell/tile).</summary>
         public static SpriteRenderer MakeCell(Transform parent, string name, Vector2 position,
             float scale, Color color, int sortingOrder)
@@ -92,7 +150,9 @@ namespace ProjectBlock.View
             return renderer;
         }
 
-        /// <summary>Creates a world-space text (TextMesh) for labels like market prices.</summary>
+        /// <summary>Creates a world-space text (TextMesh) for labels like market prices.
+        /// Keep fontSize high (~90) and characterSize small or TextMesh renders blurry;
+        /// for text over busy backgrounds put a dark rect behind it (outline copies ghost).</summary>
         public static TextMesh MakeText3D(Transform parent, string name, Vector2 position,
             string text, int fontSize, float characterSize, Color color, int sortingOrder,
             TextAnchor anchor)

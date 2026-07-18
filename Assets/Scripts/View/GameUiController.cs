@@ -50,7 +50,17 @@ namespace ProjectBlock.View
         private CardVisual draggedCard;
         private int foxPickSlot = -1;
         private bool waterAnimating;
+        private bool sellCardsMode;
         private int lastSeedUsed;
+
+        // Hover tooltip (world-space): a small panel rebuilt only when the target changes.
+        private GameObject tooltipRoot;
+        private string tooltipKey;
+        private float tooltipWidth;
+        private float tooltipHeight;
+        private static readonly Color TooltipBgColor = new Color(0.05f, 0.06f, 0.09f, 0.95f);
+        private static readonly Color TooltipTitleColor = new Color(1f, 0.93f, 0.72f);
+        private static readonly Color TooltipBodyColor = new Color(0.82f, 0.86f, 0.92f);
 
         /// <summary>Set while an activated joker waits for the player to pick a target.</summary>
         private int? pendingTargetJokerId;
@@ -75,10 +85,12 @@ namespace ProjectBlock.View
             session = new GameSession(config);
             draggedCard = null;
             foxPickSlot = -1;
+            sellCardsMode = false;
             waterAnimating = false;
             pendingTargetJokerId = null;
             nextGrantIndex = 0;
             marketView.Hide();
+            HideTooltip();
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
             StartRoundPresentation();
         }
@@ -92,7 +104,7 @@ namespace ProjectBlock.View
             {
                 boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
             }
-            flameStreak.SetState(round.CleanSweepCount, boardView.WorldRect);
+            flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
             boardView.Refresh();
             boardView.ClearPreview();
             sfx.Shuffle();
@@ -109,6 +121,7 @@ namespace ProjectBlock.View
             }
             Keyboard kb = Keyboard.current;
             Mouse mouse = Mouse.current;
+            UpdateHover(mouse);
             if (kb != null && kb.rKey.wasPressedThisFrame)
             {
                 deckOverlay.Hide();
@@ -139,10 +152,11 @@ namespace ProjectBlock.View
             }
             if (deckOverlay.IsOpen)
             {
-                // modal: click picks (fox mode) or closes; Escape always closes
+                // modal: click picks (fox mode), sells (sell mode) or closes; Escape closes
                 if (kb != null && kb.escapeKey.wasPressedThisFrame)
                 {
                     foxPickSlot = -1;
+                    sellCardsMode = false;
                     deckOverlay.Hide();
                     return;
                 }
@@ -166,6 +180,33 @@ namespace ProjectBlock.View
                         RefreshAll(null);
                         return;
                     }
+                    if (sellCardsMode)
+                    {
+                        Vector2 sellWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                        BlockCard card = deckOverlay.CardAt(sellWorld);
+                        if (card != null)
+                        {
+                            deckOverlay.PlaySellFx(card); // before the rebuild eats the visual
+                            long paid = session.SellCard(card);
+                            Debug.Log("[project_block] Sold card " + card + " for " + paid);
+                            if (paid > 0)
+                            {
+                                sfx.Buy();
+                                FloatingTextFx.Spawn(transform, sellWorld, "+" + paid,
+                                    new Color(1f, 0.92f, 0.45f), 60, 0.05f);
+                            }
+                            else
+                            {
+                                FloatingTextFx.Spawn(transform, sellWorld, "worthless",
+                                    new Color(0.6f, 0.6f, 0.6f), 50, 0.045f);
+                            }
+                            deckOverlay.Show(session.OwnedCards, c => session.Config.Market.SellValue(c));
+                            marketView.Show(session);
+                            UpdateHud();
+                            return;
+                        }
+                    }
+                    sellCardsMode = false;
                     deckOverlay.Hide();
                 }
                 return;
@@ -207,6 +248,9 @@ namespace ProjectBlock.View
                         {
                             // continuing costs cards and redraws the hand (see RoundEngine)
                             round.DecideAdvance(false);
+                            // the overtime fire ignites the moment the player chooses to
+                            // continue, not on their next placement
+                            flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
                             if (round.Status == RoundStatus.InProgress)
                             {
                                 sfx.Shuffle();
@@ -236,6 +280,10 @@ namespace ProjectBlock.View
                             Debug.Log("[project_block] Debug bonus card: " + bonus);
                             RefreshAll(null);
                         }
+                        else if (TryUseJokerFromBar(mouse))
+                        {
+                            // clicking a joker in the top bar uses it (like the 1-9 keys)
+                        }
                         else
                         {
                             HandleDrag(round, mouse);
@@ -245,27 +293,86 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Clicking a joker panel in the bar activates it, mirroring the 1-9 keys.</summary>
+        private bool TryUseJokerFromBar(Mouse mouse)
+        {
+            if (mouse == null || !mouse.leftButton.wasPressedThisFrame || pendingTargetJokerId.HasValue)
+            {
+                return false;
+            }
+            int index = jokerBar.JokerIndexAt(mouse.position.ReadValue());
+            if (index < 0 || index >= session.Jokers.Count)
+            {
+                return false;
+            }
+            BeginActivation(session.Jokers.Jokers[index]);
+            return true;
+        }
+
+        /// <summary>In the market, clicking a joker panel sells it for its SellValue.</summary>
+        private bool TrySellJokerFromBar(Mouse mouse)
+        {
+            int index = jokerBar.JokerIndexAt(mouse.position.ReadValue());
+            if (index < 0 || index >= session.Jokers.Count)
+            {
+                return false;
+            }
+            Joker joker = session.Jokers.Jokers[index];
+            Vector2? panelScreen = jokerBar.PanelScreenCenter(index);
+            long paid = session.Jokers.Sell(joker);
+            Debug.Log("[project_block] Sold joker " + joker.DisplayName + " for " + paid);
+            sfx.Buy();
+            if (panelScreen.HasValue)
+            {
+                Vector2 world = cam.ScreenToWorldPoint(panelScreen.Value);
+                FloatingTextFx.Spawn(transform, world, "+" + paid,
+                    new Color(1f, 0.92f, 0.45f), 60, 0.05f);
+            }
+            marketView.Show(session);
+            jokerBar.AnimateJokerSold(index, session); // shrink, then refresh the strip
+            UpdateHud();
+            return true;
+        }
+
         private void HandleMarketClick(Mouse mouse)
         {
+            if (TrySellJokerFromBar(mouse))
+            {
+                return;
+            }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
             int offerIndex = marketView.OfferAt(world);
             if (offerIndex < 0)
             {
-                // browsing the owned deck helps purchase decisions
+                // clicking the deck opens the owned cards as a SELL screen
                 if (cardLayer.IsDrawPileAt(world))
                 {
-                    deckOverlay.Show(session.OwnedCards);
+                    sellCardsMode = true;
+                    deckOverlay.Show(session.OwnedCards, c => session.Config.Market.SellValue(c));
                 }
                 return;
             }
             MarketOffer offer = session.Market.Offers[offerIndex];
             if (session.TryBuyOffer(offerIndex))
             {
-                Debug.Log("[project_block] Bought " + offer.Card + " for " + offer.Price);
+                Debug.Log("[project_block] Bought " + offer + " for " + offer.Price);
                 sfx.Buy();
-                marketView.PlayBuyFx(offerIndex);
+                if (offer.Kind == MarketOfferKind.Joker)
+                {
+                    // fly the tile up toward the joker bar (top-right of the view)
+                    Vector2 barWorld = cam.ViewportToWorldPoint(new Vector3(0.9f, 0.92f, -cam.transform.position.z));
+                    marketView.PlayJokerBuyFx(offerIndex, barWorld);
+                }
+                else
+                {
+                    marketView.PlayBuyFx(offerIndex);
+                }
                 marketView.Show(session);
                 UpdateHud();
+                if (offer.Kind == MarketOfferKind.Joker)
+                {
+                    jokerBar.Refresh(session, null);
+                }
             }
             else
             {
@@ -358,6 +465,15 @@ namespace ProjectBlock.View
         private void RunActivation(Joker joker, ActivationTarget target)
         {
             pendingTargetJokerId = null;
+            RoundEngine round = session.CurrentRound;
+            // Remember which card a hand-targeted joker (İade) is about to replace, so the
+            // swap can be animated after the engine has already done it.
+            int replacedCardId = -1;
+            if (target.HandIndex.HasValue && round != null
+                && target.HandIndex.Value >= 0 && target.HandIndex.Value < round.Hand.Count)
+            {
+                replacedCardId = round.Hand[target.HandIndex.Value].Id;
+            }
             if (!session.Jokers.TryActivate(joker.InstanceId, target))
             {
                 Debug.Log("[project_block] " + joker.DisplayName + " could not be used.");
@@ -365,12 +481,21 @@ namespace ProjectBlock.View
                 return;
             }
             Debug.Log("[project_block] Joker used: " + joker.DisplayName);
-            RoundEngine round = session.CurrentRound;
-            // The whole-hand redraw has its own animation; everything else just re-syncs.
+            jokerBar.PulseJoker(joker.InstanceId);
+            // The whole-hand redraw has its own animation; a single-card swap flies the
+            // returned card out and deals its replacement; everything else just re-syncs.
             if (joker.DefId == "renovasyon" && round.Status != RoundStatus.Lost)
             {
                 sfx.Shuffle();
                 cardLayer.AnimateRedraw(round);
+                boardView.Refresh();
+                UpdateHud();
+                jokerBar.Refresh(session, null);
+                return;
+            }
+            if (replacedCardId >= 0 && round.Status != RoundStatus.Lost)
+            {
+                cardLayer.AnimateReplaceCard(round, replacedCardId);
                 boardView.Refresh();
                 UpdateHud();
                 jokerBar.Refresh(session, null);
@@ -506,27 +631,34 @@ namespace ProjectBlock.View
                         LogTurn(report);
                     }
                     sfx.Place();
-                    if (report.CleanSweep)
-                    {
-                        // the sweep bling rises in pitch with every sweep this round
-                        sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
-                        sfx.Flame();
-                    }
-                    else if (report.CubesExploded > 0)
-                    {
-                        sfx.Explode();
-                    }
                     if (report.DiscardWasReshuffled)
                     {
                         sfx.Shuffle();
                     }
-                    HandleBlastFeedback(round, report);
                     RefreshAll(report);
-                    if (report.WaterFallFrames.Count > 0)
+                    IReadOnlyList<IReadOnlyList<WaterMove>> frames = report.WaterFallFrames;
+                    if (frames.Count == 0)
                     {
+                        PlayExplosionFeedback(round, report);
+                    }
+                    else
+                    {
+                        // Water falls first, THEN the boom it caused - and any post-explosion
+                        // falls play after the boom (WaterFramesBeforeExplosion splits them).
+                        int boomAt = Mathf.Clamp(report.WaterFramesBeforeExplosion, 0, frames.Count);
+                        var preFall = new List<IReadOnlyList<WaterMove>>();
+                        var postFall = new List<IReadOnlyList<WaterMove>>();
+                        for (int f = 0; f < frames.Count; f++)
+                        {
+                            (f < boomAt ? preFall : postFall).Add(frames[f]);
+                        }
                         waterAnimating = true;
-                        boardView.PlayWaterAnimation(report.WaterFallFrames,
-                            delegate { waterAnimating = false; });
+                        boardView.PlayWaterAnimation(preFall, delegate
+                        {
+                            PlayExplosionFeedback(round, report);
+                            boardView.PlayWaterAnimation(postFall,
+                                delegate { waterAnimating = false; });
+                        });
                     }
                 }
                 else
@@ -535,6 +667,23 @@ namespace ProjectBlock.View
                     boardView.ClearPreview();
                 }
             }
+        }
+
+        /// <summary>Explosion sound + blast feedback for one turn. Deferred until after the
+        /// pre-explosion water falls when the flow is what completed the line.</summary>
+        private void PlayExplosionFeedback(RoundEngine round, TurnReport report)
+        {
+            if (report.CleanSweep)
+            {
+                // the sweep bling rises in pitch with every sweep this round
+                sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
+                sfx.Flame();
+            }
+            else if (report.CubesExploded > 0)
+            {
+                sfx.Explode();
+            }
+            HandleBlastFeedback(round, report);
         }
 
         /// <summary>Particles, shake, combo popups and the sweep celebration for one turn.</summary>
@@ -646,7 +795,7 @@ namespace ProjectBlock.View
             boardView.Refresh();
             boardView.ClearPreview();
             cardLayer.Sync(round, report);
-            flameStreak.SetState(round.CleanSweepCount, boardView.WorldRect);
+            flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
         }
@@ -737,6 +886,147 @@ namespace ProjectBlock.View
                 + report.CubesExploded + " cubes" + sweep + "), status " + report.StatusAfter);
         }
 
+        /// <summary>Picks what the mouse is hovering (market offer, deck-overlay card, or a
+        /// hand card in play) and shows its info tooltip, or hides it.</summary>
+        private void UpdateHover(Mouse mouse)
+        {
+            if (mouse == null || tooltipRoot == null || cam == null || session == null)
+            {
+                return;
+            }
+            if (draggedCard != null || deckSelect.IsOpen)
+            {
+                cardLayer.SetHoveredCard(-1);
+                HideTooltip();
+                return;
+            }
+            Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+
+            if (deckOverlay.IsOpen)
+            {
+                cardLayer.SetHoveredCard(-1);
+                BlockCard card = deckOverlay.CardAt(world);
+                if (card != null) ShowCardTooltip(card, world); else HideTooltip();
+                return;
+            }
+            if (session.Phase == GamePhase.Market)
+            {
+                cardLayer.SetHoveredCard(-1);
+                int index = marketView.OfferAt(world);
+                if (index < 0 || index >= session.Market.Offers.Count)
+                {
+                    HideTooltip();
+                    return;
+                }
+                MarketOffer offer = session.Market.Offers[index];
+                if (offer.Sold)
+                {
+                    HideTooltip();
+                }
+                else if (offer.Kind == MarketOfferKind.Joker)
+                {
+                    ShowJokerTooltip(offer.Joker, offer.Price, world);
+                }
+                else
+                {
+                    ShowCardTooltip(offer.Card, world);
+                }
+                return;
+            }
+            if (session.Phase == GamePhase.Round
+                && session.CurrentRound != null
+                && session.CurrentRound.Status == RoundStatus.InProgress)
+            {
+                CardVisual hit = cardLayer.CardAt(world);
+                BlockCard card = hit != null ? CardOfSlot(session.CurrentRound, hit.SlotIndex) : null;
+                cardLayer.SetHoveredCard(card != null ? card.Id : -1);
+                if (card != null) ShowCardTooltip(card, world); else HideTooltip();
+                return;
+            }
+            cardLayer.SetHoveredCard(-1);
+            HideTooltip();
+        }
+
+        private void ShowCardTooltip(BlockCard card, Vector2 nearWorld)
+        {
+            // Plain blocks carry no special info - no tooltip for them.
+            if (card.Elements.Count == 0)
+            {
+                HideTooltip();
+                return;
+            }
+            string title = "BLOCK - " + card.Shape.Size + (card.Shape.Size == 1 ? " cube" : " cubes")
+                + "  (" + card.Shape.Width + "x" + card.Shape.Height + ")";
+            var body = new StringBuilder();
+            for (int i = 0; i < card.Elements.Count; i++)
+            {
+                if (i > 0) body.Append("\n\n");
+                BlockElement element = card.Elements[i];
+                body.Append(ViewUtil.ElementLabel(element)).Append('\n')
+                    .Append(ViewUtil.WrapText(ViewUtil.ElementDescription(element), 34));
+            }
+            RenderTooltip("card:" + card.Id, title, body.ToString(), nearWorld);
+        }
+
+        private void ShowJokerTooltip(JokerDefinition joker, int price, Vector2 nearWorld)
+        {
+            string body = ViewUtil.WrapText(joker.Description, 34) + "\n\nCost " + price;
+            RenderTooltip("joker:" + joker.DefId, joker.DisplayName, body, nearWorld);
+        }
+
+        /// <summary>Rebuilds the tooltip panel only when the hovered target changes; always
+        /// repositions it next to the cursor, clamped inside the camera view.</summary>
+        private void RenderTooltip(string key, string title, string body, Vector2 nearWorld)
+        {
+            tooltipRoot.SetActive(true);
+            if (key != tooltipKey)
+            {
+                tooltipKey = key;
+                for (int i = tooltipRoot.transform.childCount - 1; i >= 0; i--)
+                {
+                    Destroy(tooltipRoot.transform.GetChild(i).gameObject);
+                }
+                int bodyLines = 1;
+                for (int i = 0; i < body.Length; i++)
+                {
+                    if (body[i] == '\n') bodyLines++;
+                }
+                const float margin = 0.14f;
+                const float titleHeight = 0.34f;
+                const float lineHeight = 0.30f;
+                tooltipWidth = 3.4f;
+                tooltipHeight = margin * 2f + titleHeight + bodyLines * lineHeight;
+
+                ViewUtil.MakeRect(tooltipRoot.transform, "TipBg",
+                    new Vector2(tooltipWidth * 0.5f, -tooltipHeight * 0.5f),
+                    new Vector2(tooltipWidth, tooltipHeight), TooltipBgColor, 50);
+                // High fontSize + small characterSize keeps TextMesh crisp; the dark panel
+                // gives contrast so no outline is needed here.
+                ViewUtil.MakeText3D(tooltipRoot.transform, "TipTitle",
+                    new Vector2(margin, -margin), title, 90, 0.017f, TooltipTitleColor, 51,
+                    TextAnchor.UpperLeft);
+                ViewUtil.MakeText3D(tooltipRoot.transform, "TipBody",
+                    new Vector2(margin, -margin - titleHeight), body, 90, 0.014f, TooltipBodyColor,
+                    51, TextAnchor.UpperLeft);
+            }
+
+            // Anchor the panel's top-left just up-right of the cursor, then clamp on screen.
+            Vector3 topLeft = cam.ViewportToWorldPoint(new Vector3(0f, 1f, cam.nearClipPlane));
+            Vector3 bottomRight = cam.ViewportToWorldPoint(new Vector3(1f, 0f, cam.nearClipPlane));
+            float ax = Mathf.Clamp(nearWorld.x + 0.3f, topLeft.x + 0.1f, bottomRight.x - 0.1f - tooltipWidth);
+            float ay = Mathf.Clamp(nearWorld.y + 0.4f, bottomRight.y + 0.1f + tooltipHeight, topLeft.y - 0.1f);
+            tooltipRoot.transform.position = new Vector3(ax, ay, 0f);
+        }
+
+        private void HideTooltip()
+        {
+            if (tooltipRoot != null)
+            {
+                tooltipRoot.SetActive(false);
+            }
+            tooltipKey = null;
+        }
+
         private void BuildViews()
         {
             var boardGo = new GameObject("BoardView");
@@ -774,6 +1064,10 @@ namespace ProjectBlock.View
             var jokerGo = new GameObject("JokerBarView");
             jokerGo.transform.SetParent(transform, false);
             jokerBar = jokerGo.AddComponent<JokerBarView>();
+
+            tooltipRoot = new GameObject("Tooltip");
+            tooltipRoot.transform.SetParent(transform, false);
+            tooltipRoot.SetActive(false);
 
             var canvasGo = new GameObject("HudCanvas");
             canvasGo.transform.SetParent(transform, false);
