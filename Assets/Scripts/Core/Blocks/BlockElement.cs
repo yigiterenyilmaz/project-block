@@ -12,7 +12,8 @@ namespace ProjectBlock.Core
         /// <summary>When one cube of the block explodes, the whole block explodes.</summary>
         Fire = 0,
 
-        /// <summary>NOT IMPLEMENTED: flows with gravity; turns touching fire to obsidian.</summary>
+        /// <summary>Settles every turn (falls, spreads diagonally); turns touching fire
+        /// to obsidian and persists.</summary>
         Water = 1,
 
         /// <summary>Ignored by the clean-sweep check, but indestructible.</summary>
@@ -22,7 +23,7 @@ namespace ProjectBlock.Core
         /// to its cube count while it sits on the board.</summary>
         Gold = 3,
 
-        /// <summary>NOT IMPLEMENTED: other blocks can be placed on top of it.</summary>
+        /// <summary>Other blocks can be placed on top of it; the new cube replaces it.</summary>
         Transparent = 4,
 
         /// <summary>NOT IMPLEMENTED: placeable partially outside the board.</summary>

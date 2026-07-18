@@ -35,8 +35,10 @@ namespace ProjectBlock.Core
         public List<BlockElement> ElementPool = new List<BlockElement>
         {
             BlockElement.Fire,
+            BlockElement.Water,
             BlockElement.Obsidian,
             BlockElement.Gold,
+            BlockElement.Transparent,
             BlockElement.Dynamite,
             BlockElement.PiggyBank
         };

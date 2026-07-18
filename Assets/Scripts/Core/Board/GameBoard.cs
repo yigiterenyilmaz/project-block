@@ -71,13 +71,20 @@ namespace ProjectBlock.Core
             return cells[pos.X, pos.Y];
         }
 
-        /// <summary>True if every cell of the shape (anchored at origin) is inside and empty.</summary>
+        /// <summary>True if every cell of the shape (anchored at origin) is inside and
+        /// empty - or holds a transparent cube, which placements may cover (it gets
+        /// replaced, confirmed 2026-07-18).</summary>
         public bool CanPlace(BlockShape shape, GridPos origin)
         {
             foreach (GridPos offset in shape.Cells)
             {
                 GridPos pos = origin + offset;
-                if (!IsInside(pos) || cells[pos.X, pos.Y].HasValue)
+                if (!IsInside(pos))
+                {
+                    return false;
+                }
+                Cube? occupant = cells[pos.X, pos.Y];
+                if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent)
                 {
                     return false;
                 }
@@ -85,7 +92,8 @@ namespace ProjectBlock.Core
             return true;
         }
 
-        /// <summary>Places the card's cubes. Caller must have validated with CanPlace.</summary>
+        /// <summary>Places the card's cubes. Caller must have validated with CanPlace.
+        /// Transparent cubes underneath are replaced.</summary>
         public IReadOnlyList<GridPos> Place(BlockCard card, GridPos origin)
         {
             if (!CanPlace(card.Shape, origin))
@@ -97,11 +105,98 @@ namespace ProjectBlock.Core
             foreach (GridPos offset in card.Shape.Cells)
             {
                 GridPos pos = origin + offset;
+                if (!cells[pos.X, pos.Y].HasValue)
+                {
+                    OccupiedCount++; // replaced transparents were already counted
+                }
                 cells[pos.X, pos.Y] = new Cube(kind, card.Id);
                 placed.Add(pos);
             }
-            OccupiedCount += placed.Count;
             return placed;
+        }
+
+        /// <summary>
+        /// WATER RULE (confirmed: settles every turn): water falls straight down, then
+        /// diagonally down, until stable; afterwards any fire touching water turns to
+        /// obsidian (the water persists). Returns true if anything changed.
+        /// </summary>
+        public bool SettleWaterAndReact()
+        {
+            bool anyChange = false;
+            bool moved = true;
+            int guard = Width * Height * 4;
+            while (moved && guard-- > 0)
+            {
+                moved = false;
+                for (int y = 1; y < Height; y++)
+                {
+                    for (int x = 0; x < Width; x++)
+                    {
+                        Cube? cube = cells[x, y];
+                        if (!cube.HasValue || cube.Value.Kind != CubeKind.Water)
+                        {
+                            continue;
+                        }
+                        int firstDx = ((x + y) & 1) == 0 ? -1 : 1; // deterministic spread
+                        if (TryMoveWater(x, y, x, y - 1)
+                            || TryMoveWater(x, y, x + firstDx, y - 1)
+                            || TryMoveWater(x, y, x - firstDx, y - 1))
+                        {
+                            moved = true;
+                            anyChange = true;
+                        }
+                    }
+                }
+            }
+            // douse: fire adjacent to water becomes obsidian
+            var doused = new List<GridPos>();
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    Cube? cube = cells[x, y];
+                    if (!cube.HasValue || cube.Value.Kind != CubeKind.Fire)
+                    {
+                        continue;
+                    }
+                    if (IsWaterAt(x + 1, y) || IsWaterAt(x - 1, y)
+                        || IsWaterAt(x, y + 1) || IsWaterAt(x, y - 1))
+                    {
+                        doused.Add(new GridPos(x, y));
+                    }
+                }
+            }
+            foreach (GridPos pos in doused)
+            {
+                cells[pos.X, pos.Y] = new Cube(CubeKind.Obsidian, cells[pos.X, pos.Y].Value.SourceCardId);
+                anyChange = true;
+            }
+            return anyChange;
+        }
+
+        private bool IsWaterAt(int x, int y)
+        {
+            if (x < 0 || x >= Width || y < 0 || y >= Height)
+            {
+                return false;
+            }
+            Cube? cube = cells[x, y];
+            return cube.HasValue && cube.Value.Kind == CubeKind.Water;
+        }
+
+        private bool TryMoveWater(int x, int y, int targetX, int targetY)
+        {
+            if (targetX < 0 || targetX >= Width || targetY < 0)
+            {
+                return false;
+            }
+            if (cells[targetX, targetY].HasValue)
+            {
+                return false;
+            }
+            cells[targetX, targetY] = cells[x, y];
+            cells[x, y] = null;
+            return true;
         }
 
         /// <summary>Detects all full rows and columns, explodes their destructible cubes.</summary>
