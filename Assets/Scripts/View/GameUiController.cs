@@ -102,7 +102,7 @@ namespace ProjectBlock.View
             {
                 boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
             }
-            flameStreak.SetState(round.CleanSweepCount, boardView.WorldRect);
+            flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
             boardView.Refresh();
             boardView.ClearPreview();
             sfx.Shuffle();
@@ -640,7 +640,7 @@ namespace ProjectBlock.View
             boardView.Refresh();
             boardView.ClearPreview();
             cardLayer.Sync(round, report);
-            flameStreak.SetState(round.CleanSweepCount, boardView.WorldRect);
+            flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
         }

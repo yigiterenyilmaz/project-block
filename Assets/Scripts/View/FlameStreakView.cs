@@ -1,8 +1,8 @@
-// PURPOSE: Clean-sweep streak feedback: a particle FIRE burning along the arena's
-// border. Sweep count raises the intensity - emission rate, particle size and rise
-// speed all grow (the fire gets bigger, it does not multiply). Reset per round via
-// SetState(0, ...). Rendered just above the board cells so the fire licks over the
-// arena's edge.
+// PURPOSE: Overtime ("uzatma") feedback: a particle FIRE burning along the arena's
+// border. It ignites once the player continues past an advance offer and grows deeper
+// into overtime - emission rate, particle size and rise speed all grow (the fire gets
+// bigger, it does not multiply). Reset per round via SetState(0, ...). Rendered just
+// above the board cells so the fire licks over the arena's edge.
 
 using UnityEngine;
 
@@ -61,10 +61,11 @@ namespace ProjectBlock.View
             particleRenderer.sortingOrder = 3;
         }
 
-        /// <summary>Sets the fire intensity (0 = off) and the arena to burn around.</summary>
-        public void SetState(int sweepCount, Rect boardArea)
+        /// <summary>Sets the fire intensity (0 = off, grows with overtime depth) and the
+        /// arena to burn around.</summary>
+        public void SetState(int overtimeLevel, Rect boardArea)
         {
-            int newLevel = Mathf.Min(sweepCount, MaxLevel);
+            int newLevel = Mathf.Min(overtimeLevel, MaxLevel);
             if (newLevel == 0 && level > 0)
             {
                 particles.Clear();
