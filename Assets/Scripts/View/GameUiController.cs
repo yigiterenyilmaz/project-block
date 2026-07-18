@@ -52,6 +52,15 @@ namespace ProjectBlock.View
         private bool waterAnimating;
         private int lastSeedUsed;
 
+        // Hover tooltip (world-space): a small panel rebuilt only when the target changes.
+        private GameObject tooltipRoot;
+        private string tooltipKey;
+        private float tooltipWidth;
+        private float tooltipHeight;
+        private static readonly Color TooltipBgColor = new Color(0.05f, 0.06f, 0.09f, 0.95f);
+        private static readonly Color TooltipTitleColor = new Color(1f, 0.93f, 0.72f);
+        private static readonly Color TooltipBodyColor = new Color(0.82f, 0.86f, 0.92f);
+
         /// <summary>Set while an activated joker waits for the player to pick a target.</summary>
         private int? pendingTargetJokerId;
 
@@ -79,6 +88,7 @@ namespace ProjectBlock.View
             pendingTargetJokerId = null;
             nextGrantIndex = 0;
             marketView.Hide();
+            HideTooltip();
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
             StartRoundPresentation();
         }
@@ -109,6 +119,7 @@ namespace ProjectBlock.View
             }
             Keyboard kb = Keyboard.current;
             Mouse mouse = Mouse.current;
+            UpdateHover(mouse);
             if (kb != null && kb.rKey.wasPressedThisFrame)
             {
                 deckOverlay.Hide();
@@ -717,6 +728,141 @@ namespace ProjectBlock.View
                 + report.CubesExploded + " cubes" + sweep + "), status " + report.StatusAfter);
         }
 
+        /// <summary>Picks what the mouse is hovering (market offer, deck-overlay card, or a
+        /// hand card in play) and shows its info tooltip, or hides it.</summary>
+        private void UpdateHover(Mouse mouse)
+        {
+            if (mouse == null || tooltipRoot == null || cam == null || session == null)
+            {
+                return;
+            }
+            if (draggedCard != null || deckSelect.IsOpen)
+            {
+                HideTooltip();
+                return;
+            }
+            Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+
+            if (deckOverlay.IsOpen)
+            {
+                BlockCard card = deckOverlay.CardAt(world);
+                if (card != null) ShowCardTooltip(card, world); else HideTooltip();
+                return;
+            }
+            if (session.Phase == GamePhase.Market)
+            {
+                int index = marketView.OfferAt(world);
+                if (index < 0 || index >= session.Market.Offers.Count)
+                {
+                    HideTooltip();
+                    return;
+                }
+                MarketOffer offer = session.Market.Offers[index];
+                if (offer.Sold)
+                {
+                    HideTooltip();
+                }
+                else if (offer.Kind == MarketOfferKind.Joker)
+                {
+                    ShowJokerTooltip(offer.Joker, offer.Price, world);
+                }
+                else
+                {
+                    ShowCardTooltip(offer.Card, world);
+                }
+                return;
+            }
+            if (session.Phase == GamePhase.Round
+                && session.CurrentRound != null
+                && session.CurrentRound.Status == RoundStatus.InProgress)
+            {
+                CardVisual hit = cardLayer.CardAt(world);
+                BlockCard card = hit != null ? CardOfSlot(session.CurrentRound, hit.SlotIndex) : null;
+                if (card != null) ShowCardTooltip(card, world); else HideTooltip();
+                return;
+            }
+            HideTooltip();
+        }
+
+        private void ShowCardTooltip(BlockCard card, Vector2 nearWorld)
+        {
+            string title = "BLOCK - " + card.Shape.Size + (card.Shape.Size == 1 ? " cube" : " cubes")
+                + "  (" + card.Shape.Width + "x" + card.Shape.Height + ")";
+            var body = new StringBuilder();
+            if (card.Elements.Count == 0)
+            {
+                body.Append("No special type.");
+            }
+            else
+            {
+                for (int i = 0; i < card.Elements.Count; i++)
+                {
+                    if (i > 0) body.Append("\n\n");
+                    BlockElement element = card.Elements[i];
+                    body.Append(ViewUtil.ElementLabel(element)).Append('\n')
+                        .Append(ViewUtil.WrapText(ViewUtil.ElementDescription(element), 34));
+                }
+            }
+            RenderTooltip("card:" + card.Id, title, body.ToString(), nearWorld);
+        }
+
+        private void ShowJokerTooltip(JokerDefinition joker, int price, Vector2 nearWorld)
+        {
+            string body = ViewUtil.WrapText(joker.Description, 34) + "\n\nCost " + price;
+            RenderTooltip("joker:" + joker.DefId, joker.DisplayName, body, nearWorld);
+        }
+
+        /// <summary>Rebuilds the tooltip panel only when the hovered target changes; always
+        /// repositions it next to the cursor, clamped inside the camera view.</summary>
+        private void RenderTooltip(string key, string title, string body, Vector2 nearWorld)
+        {
+            tooltipRoot.SetActive(true);
+            if (key != tooltipKey)
+            {
+                tooltipKey = key;
+                for (int i = tooltipRoot.transform.childCount - 1; i >= 0; i--)
+                {
+                    Destroy(tooltipRoot.transform.GetChild(i).gameObject);
+                }
+                int bodyLines = 1;
+                for (int i = 0; i < body.Length; i++)
+                {
+                    if (body[i] == '\n') bodyLines++;
+                }
+                const float margin = 0.14f;
+                const float titleHeight = 0.34f;
+                const float lineHeight = 0.30f;
+                tooltipWidth = 3.4f;
+                tooltipHeight = margin * 2f + titleHeight + bodyLines * lineHeight;
+
+                ViewUtil.MakeRect(tooltipRoot.transform, "TipBg",
+                    new Vector2(tooltipWidth * 0.5f, -tooltipHeight * 0.5f),
+                    new Vector2(tooltipWidth, tooltipHeight), TooltipBgColor, 50);
+                ViewUtil.MakeText3D(tooltipRoot.transform, "TipTitle",
+                    new Vector2(margin, -margin), title, 34, 0.045f, TooltipTitleColor, 51,
+                    TextAnchor.UpperLeft);
+                ViewUtil.MakeText3D(tooltipRoot.transform, "TipBody",
+                    new Vector2(margin, -margin - titleHeight), body, 30, 0.04f, TooltipBodyColor,
+                    51, TextAnchor.UpperLeft);
+            }
+
+            // Anchor the panel's top-left just up-right of the cursor, then clamp on screen.
+            Vector3 topLeft = cam.ViewportToWorldPoint(new Vector3(0f, 1f, cam.nearClipPlane));
+            Vector3 bottomRight = cam.ViewportToWorldPoint(new Vector3(1f, 0f, cam.nearClipPlane));
+            float ax = Mathf.Clamp(nearWorld.x + 0.3f, topLeft.x + 0.1f, bottomRight.x - 0.1f - tooltipWidth);
+            float ay = Mathf.Clamp(nearWorld.y + 0.4f, bottomRight.y + 0.1f + tooltipHeight, topLeft.y - 0.1f);
+            tooltipRoot.transform.position = new Vector3(ax, ay, 0f);
+        }
+
+        private void HideTooltip()
+        {
+            if (tooltipRoot != null)
+            {
+                tooltipRoot.SetActive(false);
+            }
+            tooltipKey = null;
+        }
+
         private void BuildViews()
         {
             var boardGo = new GameObject("BoardView");
@@ -754,6 +900,10 @@ namespace ProjectBlock.View
             var jokerGo = new GameObject("JokerBarView");
             jokerGo.transform.SetParent(transform, false);
             jokerBar = jokerGo.AddComponent<JokerBarView>();
+
+            tooltipRoot = new GameObject("Tooltip");
+            tooltipRoot.transform.SetParent(transform, false);
+            tooltipRoot.SetActive(false);
 
             var canvasGo = new GameObject("HudCanvas");
             canvasGo.transform.SetParent(transform, false);

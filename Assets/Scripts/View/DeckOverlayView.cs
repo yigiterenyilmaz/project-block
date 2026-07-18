@@ -21,6 +21,7 @@ namespace ProjectBlock.View
 
         private readonly List<Vector2> entryCenters = new List<Vector2>();
         private readonly List<BlockShape> entryShapes = new List<BlockShape>();
+        private readonly List<BlockCard> entryCards = new List<BlockCard>();
 
         /// <summary>Shows the overlay with the given cards (normally the whole owned deck).</summary>
         public void Show(IReadOnlyList<BlockCard> cards)
@@ -47,21 +48,35 @@ namespace ProjectBlock.View
                 visual.transform.localScale = new Vector3(CardScale, CardScale, 1f);
                 entryCenters.Add(position);
                 entryShapes.Add(sorted[i].Shape);
+                entryCards.Add(sorted[i]);
             }
         }
 
         /// <summary>The displayed shape under a world point (fox shape picker), or null.</summary>
         public BlockShape ShapeAt(Vector2 world)
         {
+            int index = EntryAt(world);
+            return index >= 0 ? entryShapes[index] : null;
+        }
+
+        /// <summary>The card under a world point (hover tooltip), or null.</summary>
+        public BlockCard CardAt(Vector2 world)
+        {
+            int index = EntryAt(world);
+            return index >= 0 ? entryCards[index] : null;
+        }
+
+        private int EntryAt(Vector2 world)
+        {
             for (int i = 0; i < entryCenters.Count; i++)
             {
                 if (Mathf.Abs(world.x - entryCenters[i].x) <= CardVisual.BodyWidth * CardScale * 0.5f
                     && Mathf.Abs(world.y - entryCenters[i].y) <= CardVisual.BodyHeight * CardScale * 0.5f)
                 {
-                    return entryShapes[i];
+                    return i;
                 }
             }
-            return null;
+            return -1;
         }
 
         public void Hide()
@@ -69,6 +84,7 @@ namespace ProjectBlock.View
             IsOpen = false;
             entryCenters.Clear();
             entryShapes.Clear();
+            entryCards.Clear();
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Destroy(transform.GetChild(i).gameObject);
