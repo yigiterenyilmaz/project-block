@@ -1,94 +1,127 @@
-// PURPOSE: Clean-sweep streak feedback: flames surround the game arena and GROW with
-// every sweep of the round (fixed positions, increasing size - not increasing count).
-// They render BEHIND the board, so only their outer halves lick out around the edges.
-// Reset every round via SetState(0, ...).
+// PURPOSE: Clean-sweep streak feedback: a particle FIRE burning along the arena's
+// border. Sweep count raises the intensity - emission rate, particle size and rise
+// speed all grow (the fire gets bigger, it does not multiply). Reset per round via
+// SetState(0, ...). Rendered just above the board cells so the fire licks over the
+// arena's edge.
 
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace ProjectBlock.View
 {
-    /// <summary>Arena border flames that scale with the round's clean-sweep count.</summary>
+    /// <summary>Arena border fire that scales with the round's clean-sweep count.</summary>
     public sealed class FlameStreakView : MonoBehaviour
     {
         private const int MaxLevel = 6;
-        private const float Spacing = 0.85f;
 
-        private static readonly Color OuterColor = new Color(1f, 0.55f, 0.15f);
-        private static readonly Color InnerColor = new Color(1f, 0.85f, 0.3f);
+        private static readonly Color EmberOrange = new Color(1f, 0.55f, 0.12f);
+        private static readonly Color EmberYellow = new Color(1f, 0.88f, 0.35f);
 
-        private readonly List<Transform> flames = new List<Transform>();
-        private readonly List<float> flameSizes = new List<float>();
-        private int shownLevel = -1;
-        private Rect shownArea;
+        private ParticleSystem particles;
+        private int level;
+        private Rect area;
+        private float emitAccumulator;
 
-        /// <summary>Rebuilds the flame ring for a sweep count around the board area.</summary>
+        private void Awake()
+        {
+            particles = gameObject.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule main = particles.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.startSpeed = 0f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.75f);
+            main.maxParticles = 1500;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            ParticleSystem.EmissionModule emission = particles.emission;
+            emission.enabled = false;
+            ParticleSystem.ShapeModule shape = particles.shape;
+            shape.enabled = false;
+            // taper to a tip and fade to dark red - this is what makes it read as fire
+            ParticleSystem.SizeOverLifetimeModule sizeModule = particles.sizeOverLifetime;
+            sizeModule.enabled = true;
+            sizeModule.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0.1f));
+            ParticleSystem.ColorOverLifetimeModule colorModule = particles.colorOverLifetime;
+            colorModule.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(Color.white, 0f),
+                    new GradientColorKey(new Color(1f, 0.4f, 0.1f), 0.55f),
+                    new GradientColorKey(new Color(0.55f, 0.1f, 0.05f), 1f)
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0.95f, 0f),
+                    new GradientAlphaKey(0.7f, 0.5f),
+                    new GradientAlphaKey(0f, 1f)
+                });
+            colorModule.color = new ParticleSystem.MinMaxGradient(gradient);
+            var particleRenderer = GetComponent<ParticleSystemRenderer>();
+            particleRenderer.material = new Material(Shader.Find("Sprites/Default"));
+            particleRenderer.sortingOrder = 3;
+        }
+
+        /// <summary>Sets the fire intensity (0 = off) and the arena to burn around.</summary>
         public void SetState(int sweepCount, Rect boardArea)
         {
-            int level = Mathf.Min(sweepCount, MaxLevel);
-            if (level == shownLevel && boardArea == shownArea)
+            int newLevel = Mathf.Min(sweepCount, MaxLevel);
+            if (newLevel == 0 && level > 0)
             {
-                return;
+                particles.Clear();
             }
-            shownLevel = level;
-            shownArea = boardArea;
-            flames.Clear();
-            flameSizes.Clear();
-            for (int i = transform.childCount - 1; i >= 0; i--)
-            {
-                Destroy(transform.GetChild(i).gameObject);
-            }
-            if (level <= 0 || boardArea.width <= 0f)
-            {
-                return;
-            }
-            float baseSize = 0.3f + 0.17f * level;
-            foreach (Vector2 position in PerimeterPoints(boardArea))
-            {
-                CreateFlame(position, baseSize * Random.Range(0.85f, 1.15f));
-            }
-        }
-
-        private static IEnumerable<Vector2> PerimeterPoints(Rect area)
-        {
-            int countX = Mathf.Max(2, Mathf.RoundToInt(area.width / Spacing));
-            int countY = Mathf.Max(2, Mathf.RoundToInt(area.height / Spacing));
-            for (int i = 0; i <= countX; i++)
-            {
-                float x = Mathf.Lerp(area.xMin, area.xMax, i / (float)countX);
-                yield return new Vector2(x, area.yMin);
-                yield return new Vector2(x, area.yMax);
-            }
-            for (int i = 1; i < countY; i++)
-            {
-                float y = Mathf.Lerp(area.yMin, area.yMax, i / (float)countY);
-                yield return new Vector2(area.xMin, y);
-                yield return new Vector2(area.xMax, y);
-            }
-        }
-
-        private void CreateFlame(Vector2 position, float size)
-        {
-            var flame = new GameObject("Flame").transform;
-            flame.SetParent(transform, false);
-            flame.localPosition = new Vector3(position.x, position.y, 0f);
-            // negative orders: the board background (order 0) hides the inner halves
-            SpriteRenderer outer = ViewUtil.MakeCell(flame, "Outer", Vector2.zero, size, OuterColor, -2);
-            outer.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
-            SpriteRenderer inner = ViewUtil.MakeCell(flame, "Inner",
-                new Vector2(0f, -size * 0.12f), size * 0.55f, InnerColor, -1);
-            inner.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
-            flames.Add(flame);
-            flameSizes.Add(size);
+            level = newLevel;
+            area = boardArea;
         }
 
         private void Update()
         {
-            for (int i = 0; i < flames.Count; i++)
+            if (level <= 0 || area.width <= 0f)
             {
-                float flicker = 1f + 0.12f * Mathf.Sin(Time.time * 6f + i * 1.7f);
-                flames[i].localScale = new Vector3(flicker, flicker, 1f);
+                return;
             }
+            emitAccumulator += Time.deltaTime * (20f + 26f * level);
+            while (emitAccumulator >= 1f)
+            {
+                emitAccumulator -= 1f;
+                EmitOne();
+            }
+        }
+
+        private void EmitOne()
+        {
+            var emitParams = new ParticleSystem.EmitParams();
+            Vector2 point = RandomPerimeterPoint();
+            emitParams.position = new Vector3(point.x, point.y, 0f);
+            emitParams.velocity = new Vector3(
+                Random.Range(-0.3f, 0.3f),
+                Random.Range(0.9f, 1.6f) * (0.8f + 0.18f * level),
+                0f);
+            emitParams.startSize = Random.Range(0.13f, 0.3f) * (0.85f + 0.2f * level);
+            emitParams.startColor = Color.Lerp(EmberOrange, EmberYellow, Random.value);
+            particles.Emit(emitParams, 1);
+        }
+
+        private Vector2 RandomPerimeterPoint()
+        {
+            float w = area.width;
+            float h = area.height;
+            float d = Random.value * (2f * (w + h));
+            if (d < w)
+            {
+                return new Vector2(area.xMin + d, area.yMin);
+            }
+            d -= w;
+            if (d < w)
+            {
+                return new Vector2(area.xMin + d, area.yMax);
+            }
+            d -= w;
+            if (d < h)
+            {
+                return new Vector2(area.xMin, area.yMin + d);
+            }
+            d -= h;
+            return new Vector2(area.xMax, area.yMin + d);
         }
     }
 }
