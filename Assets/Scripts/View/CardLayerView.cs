@@ -20,7 +20,7 @@ namespace ProjectBlock.View
         private const float HandSpacing = 1.7f;
         private const int MaxStackLayers = 10;
         private const int CardsPerStackLayer = 3; // one visible card edge per N cards
-        private const float StackOffset = 0.075f;
+        private const float StackOffset = 0.035f;
         private const float DealDuration = 0.3f;
         private const float DiscardDuration = 0.28f;
 

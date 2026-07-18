@@ -29,6 +29,7 @@ namespace ProjectBlock.View
         private CardLayerView cardLayer;
         private DeckOverlayView deckOverlay;
         private MarketView marketView;
+        private SoundFx sfx;
         private Text infoText;
         private Text messageText;
         private Camera cam;
@@ -67,6 +68,7 @@ namespace ProjectBlock.View
             }
             boardView.Refresh();
             boardView.ClearPreview();
+            sfx.Shuffle();
             cardLayer.AnimateRoundStart(round);
             UpdateHud();
         }
@@ -131,6 +133,7 @@ namespace ProjectBlock.View
                         {
                             // debug: discard the hand, shuffle it into the draw pile, redraw
                             round.RedrawHand();
+                            sfx.Shuffle();
                             cardLayer.AnimateRedraw(round);
                             UpdateHud();
                         }
@@ -167,6 +170,7 @@ namespace ProjectBlock.View
             if (session.TryBuyOffer(offerIndex))
             {
                 Debug.Log("[project_block] Bought " + offer.Card + " for " + offer.Price);
+                sfx.Buy();
                 marketView.PlayBuyFx(offerIndex);
                 marketView.Show(session);
                 UpdateHud();
@@ -239,6 +243,19 @@ namespace ProjectBlock.View
                     if (verboseTurnLogs)
                     {
                         LogTurn(report);
+                    }
+                    sfx.Place();
+                    if (report.CleanSweep)
+                    {
+                        sfx.CleanSweep();
+                    }
+                    else if (report.CubesExploded > 0)
+                    {
+                        sfx.Explode();
+                    }
+                    if (report.DiscardWasReshuffled)
+                    {
+                        sfx.Shuffle();
                     }
                     if (report.CubesExploded > 0)
                     {
@@ -381,6 +398,10 @@ namespace ProjectBlock.View
             var marketGo = new GameObject("MarketView");
             marketGo.transform.SetParent(transform, false);
             marketView = marketGo.AddComponent<MarketView>();
+
+            var sfxGo = new GameObject("SoundFx");
+            sfxGo.transform.SetParent(transform, false);
+            sfx = sfxGo.AddComponent<SoundFx>();
 
             var canvasGo = new GameObject("HudCanvas");
             canvasGo.transform.SetParent(transform, false);
