@@ -42,6 +42,10 @@ namespace ProjectBlock.View
         private readonly List<SpriteRenderer> renderers = new List<SpriteRenderer>();
         private readonly List<int> baseOrders = new List<int>();
         private readonly List<Color> baseColors = new List<Color>();
+        private readonly List<TextMesh> textMeshes = new List<TextMesh>();
+        private readonly List<MeshRenderer> textRenderers = new List<MeshRenderer>();
+        private readonly List<int> textBaseOrders = new List<int>();
+        private readonly List<Color> textBaseColors = new List<Color>();
 
         private Vector2 moveStart;
         private Vector2 moveTarget;
@@ -71,6 +75,9 @@ namespace ProjectBlock.View
                 Track(ViewUtil.MakeRect(transform, "Body", Vector2.zero, bodySize,
                     bonusTint ? BonusFaceColor : FaceColor, order), order);
                 BlockShape shape = card.Shape;
+                Color miniColor = card.Elements.Count > 0
+                    ? ViewUtil.ElementColor(card.Elements[0])
+                    : ViewUtil.ColorForCard(card.Id);
                 float mini = Mathf.Min(1.0f / Mathf.Max(shape.Width, shape.Height), 0.28f);
                 Vector2 bottomLeft = new Vector2(-shape.Width * mini * 0.5f + mini * 0.5f,
                     -shape.Height * mini * 0.5f + mini * 0.5f);
@@ -78,7 +85,19 @@ namespace ProjectBlock.View
                 {
                     Track(ViewUtil.MakeCell(transform, "Mini",
                         bottomLeft + new Vector2(cell.X * mini, cell.Y * mini),
-                        mini * 0.9f, ViewUtil.ColorForCard(card.Id), order + 1), order + 1);
+                        mini * 0.9f, miniColor, order + 1), order + 1);
+                }
+                if (card.Elements.Count > 0)
+                {
+                    var labels = new List<string>();
+                    foreach (BlockElement element in card.Elements)
+                    {
+                        labels.Add(ViewUtil.ElementLabel(element));
+                    }
+                    TrackText(ViewUtil.MakeText3D(transform, "ElementLabel",
+                        new Vector2(0f, BodyHeight * 0.5f - 0.15f), string.Join("+", labels),
+                        34, 0.05f, ViewUtil.ElementColor(card.Elements[0]), order + 2,
+                        TextAnchor.MiddleCenter), order + 2);
                 }
             }
             else
@@ -171,6 +190,14 @@ namespace ProjectBlock.View
             baseColors.Add(renderer.color);
         }
 
+        private void TrackText(TextMesh textMesh, int baseOrder)
+        {
+            textMeshes.Add(textMesh);
+            textRenderers.Add(textMesh.GetComponent<MeshRenderer>());
+            textBaseOrders.Add(baseOrder);
+            textBaseColors.Add(textMesh.color);
+        }
+
         /// <summary>Fades the whole card (1 = opaque). Used while dragging so the board
         /// and placement preview stay visible underneath.</summary>
         public void SetAlpha(float alpha)
@@ -181,6 +208,12 @@ namespace ProjectBlock.View
                 color.a *= Mathf.Clamp01(alpha);
                 renderers[i].color = color;
             }
+            for (int i = 0; i < textMeshes.Count; i++)
+            {
+                Color color = textBaseColors[i];
+                color.a *= Mathf.Clamp01(alpha);
+                textMeshes[i].color = color;
+            }
         }
 
         /// <summary>Raises (or resets, with 0) the sorting order of the whole card,
@@ -190,6 +223,10 @@ namespace ProjectBlock.View
             for (int i = 0; i < renderers.Count; i++)
             {
                 renderers[i].sortingOrder = baseOrders[i] + boost;
+            }
+            for (int i = 0; i < textRenderers.Count; i++)
+            {
+                textRenderers[i].sortingOrder = textBaseOrders[i] + boost;
             }
         }
 

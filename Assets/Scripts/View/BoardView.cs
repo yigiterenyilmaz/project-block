@@ -93,7 +93,7 @@ namespace ProjectBlock.View
                 {
                     Cube? cube = board.GetCube(new GridPos(x, y));
                     cellRenderers[x, y].color = cube.HasValue
-                        ? ViewUtil.ColorForCard(cube.Value.SourceCardId)
+                        ? ViewUtil.CubeDisplayColor(cube.Value)
                         : EmptyColor;
                 }
             }

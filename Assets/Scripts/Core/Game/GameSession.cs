@@ -165,12 +165,23 @@ namespace ProjectBlock.Core
 
         private void RestockMarket()
         {
+            MarketConfig market = Config.Market;
             var newOffers = new List<MarketOffer>();
-            for (int i = 0; i < Config.Market.BlockOfferCount; i++)
+            for (int i = 0; i < market.BlockOfferCount; i++)
             {
-                BlockCard card = CreateRandomCard();
-                int price = Config.Market.BlockBasePrice
-                    + Config.Market.BlockPricePerCube * card.Shape.Size;
+                BlockShape shape = Config.Deck.ShapeGenerator.NextShape(rng);
+                List<BlockElement> elements = null;
+                if (market.ElementPool.Count > 0 && rng.NextDouble() < market.ElementChance)
+                {
+                    elements = new List<BlockElement>
+                    {
+                        market.ElementPool[rng.NextInt(0, market.ElementPool.Count)]
+                    };
+                }
+                var card = new BlockCard(nextCardId++, shape, elements);
+                int price = market.BlockBasePrice
+                    + market.BlockPricePerCube * card.Shape.Size
+                    + market.ElementPriceSurcharge * card.Elements.Count;
                 newOffers.Add(new MarketOffer(card, price));
             }
             Market.SetOffers(newOffers);

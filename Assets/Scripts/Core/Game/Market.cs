@@ -21,9 +21,25 @@ namespace ProjectBlock.Core
         /// <summary>Block-card offers shown per market visit.</summary>
         public int BlockOfferCount = 3;
 
-        /// <summary>Block price = base + per-cube * cube count.</summary>
+        /// <summary>Block price = base + per-cube * cube count (+ element surcharge).</summary>
         public int BlockBasePrice = 10;
         public int BlockPricePerCube = 6;
+        public int ElementPriceSurcharge = 12;
+
+        /// <summary>Chance a market block rolls an element ("bloklar markette çeşitli
+        /// türlerle çıkabilir").</summary>
+        public double ElementChance = 0.45;
+
+        /// <summary>Elements the market can roll. ONLY add elements whose behavior is
+        /// implemented (see BlockElement docs).</summary>
+        public List<BlockElement> ElementPool = new List<BlockElement>
+        {
+            BlockElement.Fire,
+            BlockElement.Obsidian,
+            BlockElement.Gold,
+            BlockElement.Dynamite,
+            BlockElement.PiggyBank
+        };
     }
 
     /// <summary>One purchasable item in the market.</summary>

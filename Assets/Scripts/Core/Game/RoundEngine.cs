@@ -68,6 +68,9 @@ namespace ProjectBlock.Core
         private readonly IRandomSource rng;
         private readonly IScoreCalculator scorer;
 
+        /// <summary>Accrued value per piggy-bank card currently on the board.</summary>
+        private readonly Dictionary<int, int> piggyBanks = new Dictionary<int, int>();
+
         /// <summary>Fires after every resolved placement. Jokers and UI subscribe here.</summary>
         public event Action<TurnReport> TurnResolved;
 
@@ -199,6 +202,40 @@ namespace ProjectBlock.Core
             CheckForNoPlayableMove();
         }
 
+        private bool AllCellsEmpty(IReadOnlyList<GridPos> positions)
+        {
+            foreach (GridPos pos in positions)
+            {
+                if (Board.GetCube(pos).HasValue)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>Piggy banks accrue value each turn they survive; destroyed ones pay
+        /// out their accumulated value. Returns the total payout this turn.</summary>
+        private int ProcessPiggyBanks(TurnReport report)
+        {
+            int payout = 0;
+            var trackedIds = new List<int>(piggyBanks.Keys);
+            foreach (int cardId in trackedIds)
+            {
+                if (Board.HasCubesOf(cardId))
+                {
+                    piggyBanks[cardId] += scorer.PiggyBankGainPerTurn();
+                }
+                else
+                {
+                    payout += piggyBanks[cardId];
+                    piggyBanks.Remove(cardId);
+                }
+            }
+            report.PiggyBankPayout = payout;
+            return payout;
+        }
+
         private void DiscardHandAndReshuffle()
         {
             while (Hand.Count > 0)
@@ -229,16 +266,30 @@ namespace ProjectBlock.Core
 
             // 1. place + score
             report.PlacedCells = Board.Place(card, origin);
+            if (card.Has(BlockElement.PiggyBank) && !piggyBanks.ContainsKey(card.Id))
+            {
+                piggyBanks[card.Id] = 0;
+            }
             int scoreGained = scorer.ScorePlacement(report.PlacedCells.Count);
 
-            // 2. explode full lines + score
+            // 2. explode full lines + score (fire chains resolve inside the board)
             LineExplosionResult explosion = Board.ResolveFullLines();
             report.ExplodedRows = explosion.Rows;
             report.ExplodedColumns = explosion.Columns;
-            report.CubesExploded = explosion.ExplodedCells.Count;
+            int cubesExploded = explosion.ExplodedCells.Count;
+
+            // DYNAMITE RULE: whole block exploded at once on its own placement turn
+            // -> the entire board is cleared (indestructibles excepted).
+            if (explosion.LineCount > 0 && card.Has(BlockElement.Dynamite)
+                && AllCellsEmpty(report.PlacedCells))
+            {
+                cubesExploded += Board.DestroyAllDestructible().Count;
+                report.DynamiteTriggered = true;
+            }
+            report.CubesExploded = cubesExploded;
             if (explosion.LineCount > 0)
             {
-                scoreGained += scorer.ScoreLineExplosion(explosion.LineCount, explosion.ExplodedCells.Count);
+                scoreGained += scorer.ScoreLineExplosion(explosion.LineCount, cubesExploded);
             }
 
             // 3. clean sweep. Requires at least one explosion this turn so that future
@@ -256,6 +307,18 @@ namespace ProjectBlock.Core
                     Deck.ShuffleDiscardIntoDraw();
                     offerAdvance = true;
                 }
+            }
+
+            // element upkeep: gold pays while it sits on the board, piggy banks accrue/pay
+            int goldCubes = Board.CountCubesOfKind(CubeKind.Gold);
+            if (goldCubes > 0)
+            {
+                report.GoldBonus = scorer.ScoreGoldBonus(goldCubes);
+                scoreGained += report.GoldBonus;
+            }
+            if (piggyBanks.Count > 0)
+            {
+                scoreGained += ProcessPiggyBanks(report);
             }
 
             RoundScore += scoreGained;

@@ -24,5 +24,11 @@ namespace ProjectBlock.Core
         /// Rebalanced 2026-07-18: 150 dwarfed early thresholds and made overtime
         /// farming explode (1600+ points in round 1).</summary>
         public int CleanSweepBonus = 75;
+
+        /// <summary>Per-turn bonus per gold cube sitting on the board.</summary>
+        public int GoldPointsPerCubePerTurn = 1;
+
+        /// <summary>Value a piggy-bank block accrues per turn it survives on the board.</summary>
+        public int PiggyBankPointsPerTurn = 4;
     }
 }

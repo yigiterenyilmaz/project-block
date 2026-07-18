@@ -56,6 +56,16 @@ namespace ProjectBlock.Core
         /// <summary>True if this turn emptied the board ("temizlik").</summary>
         public bool CleanSweep { get; internal set; }
 
+        /// <summary>True if a dynamite block fully exploded on its placement turn and
+        /// cleared the board.</summary>
+        public bool DynamiteTriggered { get; internal set; }
+
+        /// <summary>Per-turn bonus earned from gold cubes on the board.</summary>
+        public int GoldBonus { get; internal set; }
+
+        /// <summary>Accumulated value paid out by piggy-bank blocks destroyed this turn.</summary>
+        public int PiggyBankPayout { get; internal set; }
+
         public int ScoreGained { get; internal set; }
         public int RoundScoreAfter { get; internal set; }
 

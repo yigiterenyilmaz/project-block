@@ -1,21 +1,24 @@
 // PURPOSE: One occupied cell on the board and the central rule table about cube kinds.
-// EXTENSION POINT (IMPORTANT FOR FUTURE AGENTS): all elemental block types from the
-// design plan (fire, water, obsidian, gold, ghost, dynamite, transparent, mechanical,
-// mirror, fox, piggy bank, ice, void...) start here:
-//   1. add a CubeKind member,
-//   2. teach CubeRules how the kind behaves (counts for clean sweep? destructible?),
-//   3. add the kind-specific behavior where the board resolves explosions/placement.
-// The base game only has Normal cubes, but ALL core logic already asks CubeRules
-// instead of assuming behavior, so new kinds plug in without touching the flow.
+// A cube's kind comes from its card's element (CubeRules.KindForCard). Query CubeRules
+// for behavior - never hardcode kind checks in the flow.
+// IMPLEMENTED kinds: Normal, Fire (chain explosion, handled in GameBoard), Obsidian,
+// Gold (both sweep-exempt + indestructible; gold also pays a per-turn bonus, handled
+// in RoundEngine), PiggyBank (accrues value, pays on destruction - RoundEngine).
+// Water and Transparent exist in the enum but their behaviors are NOT implemented yet;
+// keep them out of MarketConfig.ElementPool until they are.
 
 namespace ProjectBlock.Core
 {
-    /// <summary>The element/type of a placed cube. Base game: Normal only.</summary>
+    /// <summary>The element/type of a placed cube.</summary>
     public enum CubeKind
     {
-        Normal = 0
-        // Future: Fire, Water, Obsidian, Gold, Ghost, Dynamite, Transparent,
-        // Mechanical, Mirror, Fox, PiggyBank, Ice, Void ...
+        Normal = 0,
+        Fire = 1,
+        Water = 2,
+        Obsidian = 3,
+        Gold = 4,
+        Transparent = 5,
+        PiggyBank = 6
     }
 
     /// <summary>A cube occupying one board cell.</summary>
@@ -23,8 +26,8 @@ namespace ProjectBlock.Core
     {
         public readonly CubeKind Kind;
 
-        /// <summary>Id of the BlockCard that placed this cube (whole-block effects need it,
-        /// e.g. fire spreading to the rest of the block, "Kazı çalışması" joker).</summary>
+        /// <summary>Id of the BlockCard that placed this cube (whole-block effects need it:
+        /// fire chains, dynamite, piggy banks, "Kazı çalışması" joker...).</summary>
         public readonly int SourceCardId;
 
         public Cube(CubeKind kind, int sourceCardId)
@@ -37,16 +40,30 @@ namespace ProjectBlock.Core
     /// <summary>Central per-kind rule answers. Query this, never hardcode kind behavior.</summary>
     public static class CubeRules
     {
-        /// <summary>Does this cube block a clean sweep ("temizlik")? Obsidian/gold later: no.</summary>
+        /// <summary>Does this cube block a clean sweep ("temizlik")? Obsidian and gold
+        /// are the confirmed exceptions.</summary>
         public static bool CountsForCleanSweep(Cube cube)
         {
-            return true;
+            return cube.Kind != CubeKind.Obsidian && cube.Kind != CubeKind.Gold;
         }
 
-        /// <summary>Can a line explosion destroy this cube? Obsidian/map-placed gold later: no.</summary>
+        /// <summary>Can an explosion destroy this cube?</summary>
         public static bool IsDestructible(Cube cube)
         {
-            return true;
+            return cube.Kind != CubeKind.Obsidian && cube.Kind != CubeKind.Gold;
+        }
+
+        /// <summary>The cube kind a card's cubes take when placed (first board-state
+        /// element wins; placement-trait elements like Ghost/Mechanical leave Normal cubes).</summary>
+        public static CubeKind KindForCard(BlockCard card)
+        {
+            if (card.Has(BlockElement.Fire)) return CubeKind.Fire;
+            if (card.Has(BlockElement.Water)) return CubeKind.Water;
+            if (card.Has(BlockElement.Obsidian)) return CubeKind.Obsidian;
+            if (card.Has(BlockElement.Gold)) return CubeKind.Gold;
+            if (card.Has(BlockElement.Transparent)) return CubeKind.Transparent;
+            if (card.Has(BlockElement.PiggyBank)) return CubeKind.PiggyBank;
+            return CubeKind.Normal;
         }
     }
 }
