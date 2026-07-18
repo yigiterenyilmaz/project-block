@@ -30,6 +30,7 @@ public static class JokerTests
         Water_ExplodesInPlaceBeforeFalling();
         Market_CardSellValueByElement();
         Market_StocksAndSellsJokers();
+        Market_NeverOffersOwnedJokers();
         Market_RefusesJokerWhenSlotsFull();
         Overtime_GatedJokerIsSkipped();
         HarcamaBonusu_PaysWhenDrawPileEmpties();
@@ -784,6 +785,81 @@ public static class JokerTests
         Check(offer.Sold, "the bought offer is marked sold");
         Check(session.TotalScore == money, "exactly the price was paid", "total " + session.TotalScore);
         Check(!session.TryBuyOffer(index), "a sold offer cannot be bought again");
+    }
+
+    private static void Market_NeverOffersOwnedJokers()
+    {
+        Section("market / owned jokers excluded");
+        // Owning part of the catalogue: offers must come from the rest.
+        var config = new GameConfig();
+        config.RngSeed = 303;
+        var session = new GameSession(config);
+        var ownedIds = new HashSet<string>();
+        for (int i = 0; i < JokerRegistry.All.Count - 1; i++)
+        {
+            Joker granted = session.Jokers.Add(JokerRegistry.All[i].Create());
+            ownedIds.Add(granted.DefId);
+        }
+        session = DriveOwnedToMarket(session);
+        bool clean = true;
+        int jokerOffers = 0;
+        foreach (MarketOffer offer in session.Market.Offers)
+        {
+            if (offer.Kind != MarketOfferKind.Joker)
+            {
+                continue;
+            }
+            jokerOffers++;
+            if (ownedIds.Contains(offer.Joker.DefId))
+            {
+                clean = false;
+            }
+        }
+        Check(session.Phase == GamePhase.Market, "reached the market", "phase " + session.Phase);
+        Check(clean, "no owned joker is offered");
+        Check(jokerOffers <= 1, "offers cannot exceed the unowned pool", "offers " + jokerOffers);
+
+        // Owning everything: the joker section simply stays empty.
+        var full = new GameSession(new GameConfig { RngSeed = 304 });
+        foreach (JokerDefinition definition in JokerRegistry.All)
+        {
+            full.Jokers.Add(definition.Create());
+        }
+        full = DriveOwnedToMarket(full);
+        int fullOffers = 0;
+        foreach (MarketOffer offer in full.Market.Offers)
+        {
+            if (offer.Kind == MarketOfferKind.Joker)
+            {
+                fullOffers++;
+            }
+        }
+        Check(full.Phase == GamePhase.Market && fullOffers == 0,
+            "a full catalogue owner sees no joker offers", "offers " + fullOffers);
+    }
+
+    /// <summary>Like DriveToMarket but continues an existing session (jokers pre-granted).</summary>
+    private static GameSession DriveOwnedToMarket(GameSession session)
+    {
+        int safety = 0;
+        while (session.Phase != GamePhase.GameOver && safety++ < 400)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                break;
+            }
+            RoundEngine round = session.CurrentRound;
+            if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                round.DecideAdvance(true);
+                continue;
+            }
+            if (round.Status != RoundStatus.InProgress || PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        return session;
     }
 
     private static void Market_RefusesJokerWhenSlotsFull()

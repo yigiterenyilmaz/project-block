@@ -271,8 +271,25 @@ namespace ProjectBlock.Core
                 return;
             }
             var jokerRng = new SeededRandom(unchecked(resolvedSeed * 486187739 + RoundNumber));
-            // Distinct picks within this visit: shuffle a working copy and take the first N.
-            var pool = new List<JokerDefinition>(catalogue);
+            // Never offer a joker the player already owns. Distinct picks within this visit:
+            // shuffle the remaining pool and take the first N.
+            var owned = new HashSet<string>();
+            foreach (Joker held in Jokers.Jokers)
+            {
+                owned.Add(held.DefId);
+            }
+            var pool = new List<JokerDefinition>();
+            foreach (JokerDefinition definition in catalogue)
+            {
+                if (!owned.Contains(definition.DefId))
+                {
+                    pool.Add(definition);
+                }
+            }
+            if (pool.Count == 0)
+            {
+                return;
+            }
             jokerRng.Shuffle(pool);
             int count = Math.Min(market.JokerOfferCount, pool.Count);
             for (int i = 0; i < count; i++)
