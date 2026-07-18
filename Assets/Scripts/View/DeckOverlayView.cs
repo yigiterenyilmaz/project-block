@@ -1,7 +1,7 @@
-// PURPOSE: Full-screen overlay that lists the cards of a pile (opened by clicking the
-// draw pile). Cards are shown SORTED (by size, then id), never in actual draw order -
-// the draw pile is face-down and its order must not leak. Future reveal jokers
-// (Insider, Büyüteç) will get their own explicit reveal UI instead.
+// PURPOSE: Full-screen overlay that lists the player's WHOLE owned deck ("oyun
+// destesi"), opened by clicking the draw pile. Cards are shown SORTED (by size, then
+// id), never in draw order - the draw pile is face-down and its order must not leak.
+// Future reveal jokers (Insider, Büyüteç) will get their own explicit reveal UI.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -19,14 +19,14 @@ namespace ProjectBlock.View
 
         public bool IsOpen { get; private set; }
 
-        /// <summary>Shows the overlay with the given cards (a pile snapshot).</summary>
+        /// <summary>Shows the overlay with the given cards (normally the whole owned deck).</summary>
         public void Show(IReadOnlyList<BlockCard> cards)
         {
             Hide();
             IsOpen = true;
 
             ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(30f, 14f),
-                new Color(0f, 0f, 0f, 0.78f), 15);
+                new Color(0f, 0f, 0f, 0.78f), 40);
 
             var sorted = new List<BlockCard>(cards);
             sorted.Sort(CompareCards);
@@ -40,7 +40,7 @@ namespace ProjectBlock.View
                 float startX = -(columnsInRow - 1) * SpacingX * 0.5f;
                 var position = new Vector2(startX + column * SpacingX, startY - row * SpacingY);
                 CardVisual visual = CardVisual.Create(transform, "Overlay_" + sorted[i].Id,
-                    sorted[i], true, false, position, 16);
+                    sorted[i], true, false, position, 41);
                 visual.transform.localScale = new Vector3(CardScale, CardScale, 1f);
             }
         }

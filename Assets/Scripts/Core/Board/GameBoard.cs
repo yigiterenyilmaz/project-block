@@ -93,11 +93,11 @@ namespace ProjectBlock.Core
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
             }
             var placed = new List<GridPos>(card.Shape.Size);
+            CubeKind kind = CubeRules.KindForCard(card);
             foreach (GridPos offset in card.Shape.Cells)
             {
                 GridPos pos = origin + offset;
-                // Future: elemental cards will decide the CubeKind per cube here.
-                cells[pos.X, pos.Y] = new Cube(CubeKind.Normal, card.Id);
+                cells[pos.X, pos.Y] = new Cube(kind, card.Id);
                 placed.Add(pos);
             }
             OccupiedCount += placed.Count;
@@ -142,24 +142,42 @@ namespace ProjectBlock.Core
 
             var exploded = new List<GridPos>();
             var seen = new HashSet<GridPos>(); // row/column intersections explode once
+            var fireBlockIds = new HashSet<int>();
             foreach (int y in fullRows)
             {
                 for (int x = 0; x < Width; x++)
                 {
-                    ExplodeCell(new GridPos(x, y), seen, exploded);
+                    ExplodeCell(new GridPos(x, y), seen, exploded, fireBlockIds);
                 }
             }
             foreach (int x in fullColumns)
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    ExplodeCell(new GridPos(x, y), seen, exploded);
+                    ExplodeCell(new GridPos(x, y), seen, exploded, fireBlockIds);
+                }
+            }
+            // FIRE RULE: when one cube of a fire block explodes, its whole block explodes.
+            // One pass suffices: chained cubes always belong to an already-collected block.
+            if (fireBlockIds.Count > 0)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    for (int y = 0; y < Height; y++)
+                    {
+                        Cube? cube = cells[x, y];
+                        if (cube.HasValue && fireBlockIds.Contains(cube.Value.SourceCardId))
+                        {
+                            ExplodeCell(new GridPos(x, y), seen, exploded, fireBlockIds);
+                        }
+                    }
                 }
             }
             return new LineExplosionResult(fullRows, fullColumns, exploded);
         }
 
-        private void ExplodeCell(GridPos pos, HashSet<GridPos> seen, List<GridPos> exploded)
+        private void ExplodeCell(GridPos pos, HashSet<GridPos> seen, List<GridPos> exploded,
+            HashSet<int> fireBlockIds)
         {
             if (!seen.Add(pos))
             {
@@ -170,12 +188,36 @@ namespace ProjectBlock.Core
             {
                 return;
             }
+            if (cube.Value.Kind == CubeKind.Fire)
+            {
+                fireBlockIds.Add(cube.Value.SourceCardId);
+            }
             cells[pos.X, pos.Y] = null;
             OccupiedCount--;
             exploded.Add(pos);
         }
 
-        /// <summary>Destroys one cube outside a line explosion, if the cell holds a
+        /// <summary>Dynamite: destroys every destructible cube on the board.</summary>
+        public List<GridPos> DestroyAllDestructible()
+        {
+            var destroyed = new List<GridPos>();
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    Cube? cube = cells[x, y];
+                    if (cube.HasValue && CubeRules.IsDestructible(cube.Value))
+                    {
+                        cells[x, y] = null;
+                        OccupiedCount--;
+                        destroyed.Add(new GridPos(x, y));
+                    }
+                }
+            }
+            return destroyed;
+        }
+
+        /// <summary>Destroys ONE cube outside a line explosion, if the cell holds a
         /// destructible one. Returns false for empty cells and indestructible cubes.
         /// EXTENSION POINT: joker/power effects (Robot supurge, Buldozer, Enfeksiyon,
         /// Kara delik's void cube) go through here so cube-kind rules stay in one place.</summary>
@@ -212,6 +254,106 @@ namespace ProjectBlock.Core
                 }
             }
             return occupied;
+        }
+
+        /// <summary>Does any cube of this card remain on the board? (piggy banks, fire...)</summary>
+        public bool HasCubesOf(int cardId)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    Cube? cube = cells[x, y];
+                    if (cube.HasValue && cube.Value.SourceCardId == cardId)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Number of cubes of a kind on the board (gold bonus...).</summary>
+        public int CountCubesOfKind(CubeKind kind)
+        {
+            int count = 0;
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    Cube? cube = cells[x, y];
+                    if (cube.HasValue && cube.Value.Kind == kind)
+                    {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// Pure query: which rows/columns WOULD become full if the shape were placed at
+        /// origin. Never mutates the board - the UI calls this every frame to highlight
+        /// the lines a placement would explode. Assumes the placement is legal.
+        /// </summary>
+        public LineExplosionResult PredictExplosions(BlockShape shape, GridPos origin)
+        {
+            var shapeCells = new HashSet<GridPos>();
+            foreach (GridPos offset in shape.Cells)
+            {
+                shapeCells.Add(origin + offset);
+            }
+            var fullRows = new List<int>();
+            for (int y = 0; y < Height; y++)
+            {
+                bool full = true;
+                for (int x = 0; x < Width; x++)
+                {
+                    if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x, y)))
+                    {
+                        full = false;
+                        break;
+                    }
+                }
+                if (full) fullRows.Add(y);
+            }
+            var fullColumns = new List<int>();
+            for (int x = 0; x < Width; x++)
+            {
+                bool full = true;
+                for (int y = 0; y < Height; y++)
+                {
+                    if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x, y)))
+                    {
+                        full = false;
+                        break;
+                    }
+                }
+                if (full) fullColumns.Add(x);
+            }
+            if (fullRows.Count == 0 && fullColumns.Count == 0)
+            {
+                return LineExplosionResult.None;
+            }
+            var lineCells = new List<GridPos>();
+            var seen = new HashSet<GridPos>();
+            foreach (int y in fullRows)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    var pos = new GridPos(x, y);
+                    if (seen.Add(pos)) lineCells.Add(pos);
+                }
+            }
+            foreach (int x in fullColumns)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    var pos = new GridPos(x, y);
+                    if (seen.Add(pos)) lineCells.Add(pos);
+                }
+            }
+            return new LineExplosionResult(fullRows, fullColumns, lineCells);
         }
 
         /// <summary>Clean-sweep check: no remaining cube that counts (obsidian/gold later won't).</summary>

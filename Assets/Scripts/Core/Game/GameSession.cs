@@ -46,7 +46,8 @@ namespace ProjectBlock.Core
         /// <summary>Engine of the current round. Replaced wholesale every round.</summary>
         public RoundEngine CurrentRound { get; private set; }
 
-        public MarketStub Market { get; }
+        /// <summary>Restocked with block-card offers every time a round is won.</summary>
+        public Market Market { get; }
 
         /// <summary>The player's jokers. Session-scoped: they outlive every round.</summary>
         public JokerInventory Jokers { get; }
@@ -74,23 +75,72 @@ namespace ProjectBlock.Core
             Config = config;
             rng = new SeededRandom(config.RngSeed ?? Environment.TickCount);
             scorer = new DefaultScoreCalculator(config.Scoring);
-            Market = new MarketStub();
+            Market = new Market();
             Jokers = new JokerInventory(this, rng);
-            for (int i = 0; i < config.StartingDeckSize; i++)
+            if (config.Deck.FixedShapes != null)
             {
-                ownedCards.Add(CreateRandomCard());
+                // static deck: identical composition every run
+                foreach (BlockShape shape in config.Deck.FixedShapes)
+                {
+                    ownedCards.Add(new BlockCard(nextCardId++, shape));
+                }
+            }
+            else
+            {
+                for (int i = 0; i < config.Deck.Size; i++)
+                {
+                    ownedCards.Add(CreateRandomCard());
+                }
             }
             RoundNumber = 1;
             StartRound();
         }
 
-        /// <summary>The session RNG. Everything random in the run must come from here.</summary>
-        public IRandomSource Rng
+        /// <summary>
+        /// DEBUG helper: puts a freshly generated random card into the current round's
+        /// bonus hand. The card is round-scoped and does NOT join the owned deck (bonus
+        /// cards expire when played or when the round ends). Real bonus-card sources
+        /// arrive with the powers (Klon, Dolly, Olta, Kara delik).
+        /// </summary>
+        public BlockCard DebugAddRandomBonusCard()
         {
-            get { return rng; }
+            if (Phase != GamePhase.Round)
+            {
+                throw new InvalidOperationException("Bonus cards can only be added during a round.");
+            }
+            BlockCard card = CreateRandomCard();
+            CurrentRound.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
+            return card;
         }
 
-        /// <summary>Leaves the (empty) market and starts the next round.</summary>
+        /// <summary>
+        /// Buys a market offer: deducts the price from TotalScore and permanently adds
+        /// the card to the owned deck (it joins the shuffle from the next round on).
+        /// Returns false when the offer is already sold or unaffordable.
+        /// </summary>
+        public bool TryBuyOffer(int offerIndex)
+        {
+            if (Phase != GamePhase.Market)
+            {
+                throw new InvalidOperationException("Not in the market phase.");
+            }
+            if (offerIndex < 0 || offerIndex >= Market.Offers.Count)
+            {
+                throw new ArgumentOutOfRangeException("offerIndex");
+            }
+            MarketOffer offer = Market.Offers[offerIndex];
+            if (offer.Sold || TotalScore < offer.Price)
+            {
+                return false;
+            }
+            TotalScore -= offer.Price;
+            offer.Sold = true;
+            ownedCards.Add(offer.Card);
+            purchasedThisMarket = true;
+            return true;
+        }
+
+        /// <summary>Leaves the market and starts the next round.</summary>
         public void LeaveMarket()
         {
             if (Phase != GamePhase.Market)
@@ -108,18 +158,17 @@ namespace ProjectBlock.Core
             TotalScore += amount;
         }
 
-        /// <summary>Records that something was bought this market visit.
-        /// EXTENSION POINT: the real market calls this from every purchase.</summary>
-        public void NotifyPurchase()
+        /// <summary>The session RNG. Everything random in the run must come from here.</summary>
+        public IRandomSource Rng
         {
-            purchasedThisMarket = true;
+            get { return rng; }
         }
 
-        /// <summary>Mints a new random card owned by the player (market purchases, and the
-        /// temporary cards future jokers hand out). Ids stay unique across the run.</summary>
+        /// <summary>Mints a new card owned by the player. Public so jokers that hand out
+        /// cards (Kara delik's void block...) keep the id counter unique across the run.</summary>
         public BlockCard CreateRandomCard()
         {
-            BlockShape shape = Config.ShapeGenerator.NextShape(rng);
+            BlockShape shape = Config.Deck.ShapeGenerator.NextShape(rng);
             return new BlockCard(nextCardId++, shape);
         }
 
@@ -150,6 +199,7 @@ namespace ProjectBlock.Core
             if (status == RoundStatus.Advanced)
             {
                 Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Advanced);
+                RestockMarket();
                 purchasedThisMarket = false;
                 SetPhase(GamePhase.Market);
                 Jokers.DispatchMarketEntered();
@@ -159,6 +209,30 @@ namespace ProjectBlock.Core
                 Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Lost);
                 SetPhase(GamePhase.GameOver);
             }
+        }
+
+        private void RestockMarket()
+        {
+            MarketConfig market = Config.Market;
+            var newOffers = new List<MarketOffer>();
+            for (int i = 0; i < market.BlockOfferCount; i++)
+            {
+                BlockShape shape = Config.Deck.ShapeGenerator.NextShape(rng);
+                List<BlockElement> elements = null;
+                if (market.ElementPool.Count > 0 && rng.NextDouble() < market.ElementChance)
+                {
+                    elements = new List<BlockElement>
+                    {
+                        market.ElementPool[rng.NextInt(0, market.ElementPool.Count)]
+                    };
+                }
+                var card = new BlockCard(nextCardId++, shape, elements);
+                int price = market.BlockBasePrice
+                    + market.BlockPricePerCube * card.Shape.Size
+                    + market.ElementPriceSurcharge * card.Elements.Count;
+                newOffers.Add(new MarketOffer(card, price));
+            }
+            Market.SetOffers(newOffers);
         }
 
         private void SetPhase(GamePhase newPhase)

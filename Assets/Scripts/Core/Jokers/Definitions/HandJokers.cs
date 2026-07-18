@@ -2,10 +2,13 @@
 // The first two are the game's first PLAYER-ACTIVATED jokers - they spend a per-round
 // charge and call an engine primitive; they consume no turn.
 //
-// CONFIRMED OVERTIME RULE (both redraw jokers): they stay usable after the threshold, but
-// the engine does not recycle the discard for them there. Redrawing in overtime is
-// therefore a deliberate gamble on the remaining draw pile - see RoundEngine.RedrawHand
-// and RoundEngine.ReplaceHandCard.
+// OVERTIME, AND WHY THE TWO DIFFER (open design question, see docs/jokers-plan.md):
+//  - Renovasyon is OFF in overtime. It calls RoundEngine.RedrawHand, which always
+//    reshuffles the discard into the draw pile. In overtime the discard is otherwise
+//    never recycled, so leaving it on would hand the player a free deck refill and defuse
+//    the deck-out loss entirely - strictly better than paying the continue cost.
+//  - İade stays ON: ReplaceHandCard draws through the normal rules, so in overtime an
+//    empty draw pile is a loss like any other draw. Using it there is a real gamble.
 //
 // All numbers below are BALANCE PLACEHOLDERS.
 
@@ -17,9 +20,16 @@ namespace ProjectBlock.Core
         public RenovasyonJoker()
             : base("renovasyon", "Renovasyon")
         {
-            Description = "Raunt başına 2 kez tüm elini ıskartaya atıp yeni el çekersin. Tur harcamaz.";
+            Description = "Raunt başına 2 kez tüm elini ıskartaya atıp yeni el çekersin. "
+                + "Tur harcamaz, uzatmada çalışmaz.";
             ChargesPerRound = 2;
             BaseSellValue = 30;
+        }
+
+        /// <summary>See the file header: a free discard recycle would break overtime.</summary>
+        public override bool DisabledInOvertime
+        {
+            get { return true; }
         }
 
         public override bool CanActivate(RoundContext ctx)

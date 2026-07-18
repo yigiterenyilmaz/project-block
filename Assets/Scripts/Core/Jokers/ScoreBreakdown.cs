@@ -50,6 +50,12 @@ namespace ProjectBlock.Core
         /// <summary>Clean-sweep bonus, if the sweep fired this turn.</summary>
         public int BaseSweep { get; internal set; }
 
+        /// <summary>Per-turn payout of the gold cubes sitting on the board.</summary>
+        public int BaseGold { get; internal set; }
+
+        /// <summary>Piggy-bank blocks that paid out this turn.</summary>
+        public int BasePiggyBank { get; internal set; }
+
         /// <summary>Sum of every flat bonus added by jokers (may be negative).</summary>
         public int FlatBonus { get; private set; }
 
@@ -70,7 +76,7 @@ namespace ProjectBlock.Core
         /// <summary>Everything before jokers touched it.</summary>
         public int BaseTotal
         {
-            get { return BasePlacement + BaseLines + BaseSweep; }
+            get { return BasePlacement + BaseLines + BaseSweep + BaseGold + BasePiggyBank; }
         }
 
         /// <summary>Final score of the turn. Floored once, per the ordering rule above.</summary>
@@ -118,6 +124,8 @@ namespace ProjectBlock.Core
             BasePlacement = 0;
             BaseLines = 0;
             BaseSweep = 0;
+            BaseGold = 0;
+            BasePiggyBank = 0;
             FlatBonus = 0;
             Multiplier = 1.0;
             LateFlat = 0;

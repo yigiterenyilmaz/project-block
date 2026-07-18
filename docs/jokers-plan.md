@@ -31,6 +31,29 @@ ilgilendirenler uygulandı; 2. dalga (Kayıt defteri, Buldozer, Robot süpürge,
 Dönüşüm, Batak, Seri tetik, Kazı çalışması) için 2.1–2.4 ve 2.11–2.13 maddelerinin
 onaylanması gerekiyor.
 
+### 0.1 enes dalıyla birleşme (2026-07-18)
+
+Joker katmanı `origin/enes` üzerine taşındı. Alınan kararlar:
+
+- **Uzatma kuralı enes'in sürümü.** Devam etmenin bedeli var: el desteye karışır, artan
+  sayıda kart raunt dışına çıkar (`RoundRules.CardsRemovedPerContinue` +
+  `ContinueCostEscalation`). Benim "her temizlikte N kart" sürümüm kaldırıldı.
+- **Renovasyon uzatmada kapalı.** `RedrawHand` ıskartayı her zaman desteye karıştırıyor;
+  uzatmada başka hiçbir şey karıştırmadığı için bu bedava deste yenilemesi olurdu ve
+  deste-bitti kaybını tamamen delerdi. İade açık kaldı: normal çekme kuralından geçtiği
+  için uzatmada boş deste yine kayıp. **Açık soru:** Renovasyon uzatmada bambaşka bir
+  bedelle (ör. karıştırmadan, sadece destenin üstünden) çalışsın ister misin?
+- **Domuz Kumbarası** joker olarak kaldı; blok elementi sürümünü enes kaldırıyor.
+- **midas** artık yazılabilir: altın blok tahtada durdukça puan veriyor
+  (`IScoreCalculator.ScoreGoldBonus`), midas bunu **elde** (bonus el dahil) tutmaya da
+  genişletecek.
+- **Temizlik koşulu biraz sıkılaştı:** "bir satır patladı" yerine "bu tur gerçekten küp
+  yok edildi" şartı geldi. Sadece kırılmaz küplerden oluşan bir satır artık her turda
+  yeniden temizlik tetiklemiyor — obsidyen/altın sahadayken oluşan farm açığı kapandı.
+
+Doğrulama: enes'in motorunun oyun izi joker katmanı eklendikten sonra **birebir aynı**
+(24 senaryo), 73 assert geçiyor, View+Core Unity assembly'lerine karşı temiz derleniyor.
+
 ## 1. Özet tablo
 
 | Joker | Zorluk | Bekleyen alt sistem |

@@ -43,11 +43,15 @@ Unity 6 (6000.3.6f1), 2D URP, **new Input System only**.
 2. **Clean sweep is ONE central event.** Only `RoundEngine.TryResolveCleanSweep` may fire
    it, at most once per turn, and only when this turn's destruction emptied a board that
    was not already empty. Effects that can trigger a sweep call it; they never re-check
-   the board themselves. This guard is what stops future sweep-exempt cubes (ice,
-   obsidian, gold) from re-triggering a sweep on every later explosion.
+   the board themselves. Note this is stricter than "a line exploded": a full line of
+   indestructible cubes destroys nothing, so it no longer re-triggers a sweep every turn
+   once obsidian/gold sit on the board.
 3. **Overtime disabling is central.** A joker sets `DisabledInOvertime` and
    `JokerInventory` skips all of its hooks once `ThresholdPassed`. Never write
-   `if (overtime)` inside a joker.
+   `if (overtime)` inside a joker. Overtime itself follows the continue-cost rule
+   (declining an offer reshuffles the hand and removes an escalating number of cards),
+   so anything that hands the player a free discard recycle there — like `RedrawHand` —
+   must be gated. That is why Renovasyon is overtime-disabled and İade is not.
 
 Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe

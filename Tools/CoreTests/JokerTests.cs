@@ -109,8 +109,8 @@ public static class JokerTests
     {
         var config = new GameConfig();
         config.RngSeed = seed;
-        config.StartingDeckSize = deckSize;
-        config.ShapeGenerator = new SizedShapeGenerator(shapeSizes.Length > 0 ? shapeSizes : new[] { 1 });
+        config.Deck = new DeckDefinition("test", deckSize,
+            new SizedShapeGenerator(shapeSizes.Length > 0 ? shapeSizes : new[] { 1 }));
         config.Progression = new FixedProgression(boardSize, threshold);
         return new GameSession(config);
     }
@@ -364,9 +364,12 @@ public static class JokerTests
 
     private static void Renovasyon_OvertimeDoesNotRecycleDiscard()
     {
-        Section("renovasyon / overtime gamble");
+        Section("renovasyon / disabled in overtime");
         // Threshold 1 so the very first placement puts the round into overtime.
         var session = NewSession(5, 6, 1, 24, 1);
+        var joker = (RenovasyonJoker)session.Jokers.Add(new RenovasyonJoker());
+        Check(session.Jokers.CanActivate(joker.InstanceId), "usable before the threshold");
+
         PlayTurns(session, 1);
         RoundEngine round = session.CurrentRound;
         Check(round.ThresholdPassed, "threshold passed on turn 1");
@@ -375,24 +378,16 @@ public static class JokerTests
             round.DecideAdvance(false);
         }
 
-        // Passing the threshold already recycled the discard, so play on in overtime until
-        // the discard has cards again - that is what the redraw must NOT be allowed to reuse.
-        PlayTurns(session, 2);
-        int discardBefore = round.Deck.DiscardCount;
-        int drawBefore = round.Deck.DrawCount;
+        // RoundEngine.RedrawHand always recycles the discard. In overtime nothing else
+        // does, so letting the joker run there would defuse the deck-out loss entirely.
+        Check(!session.Jokers.CanActivate(joker.InstanceId), "refused once in overtime");
         int shufflesBefore = round.Deck.ShuffleCount;
-        Check(discardBefore > 0, "there is something in the discard", "got " + discardBefore);
-
-        int handBefore = round.Hand.Count;
-        round.RedrawHand();
+        Check(!session.Jokers.TryActivate(joker.InstanceId, ActivationTarget.None),
+            "activation is rejected");
         Check(round.Deck.ShuffleCount == shufflesBefore,
-            "overtime redraw does NOT reshuffle the discard into the draw pile");
-        Check(round.Deck.DiscardCount == discardBefore + handBefore,
-            "the whole discarded hand stays in the discard pile",
-            round.Deck.DiscardCount + " vs " + (discardBefore + handBefore));
-        Check(round.Deck.DrawCount == drawBefore - round.Hand.Count,
-            "the new hand came out of the draw pile only",
-            round.Deck.DrawCount + " vs " + (drawBefore - round.Hand.Count));
+            "no free discard recycle happened", "shuffles moved");
+        Check(joker.ChargesLeft == joker.ChargesPerRound,
+            "a refused activation spends no charge", "left " + joker.ChargesLeft);
     }
 
     private static void Iade_SwapsOneCardInPlace()
@@ -550,6 +545,13 @@ public static class JokerTests
             var picker = new SeededRandom(seed * 7919);
             var config = new GameConfig();
             config.RngSeed = seed;
+            if (seed % 2 == 0)
+            {
+                // Half the runs use a cramped board so clean sweeps actually occur - the
+                // default 6x6 with the Classic deck almost never empties under greedy play.
+                config.Deck = new DeckDefinition("fuzz", 20, new SizedShapeGenerator(1, 2, 3));
+                config.Progression = new FixedProgression(3, 120);
+            }
             var session = new GameSession(config);
 
             foreach (JokerDefinition definition in JokerRegistry.All)

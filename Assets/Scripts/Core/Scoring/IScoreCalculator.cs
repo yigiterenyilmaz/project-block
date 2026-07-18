@@ -18,6 +18,12 @@ namespace ProjectBlock.Core
 
         /// <summary>Bonus for emptying the board ("temizlik").</summary>
         int ScoreCleanSweep();
+
+        /// <summary>Per-turn bonus for gold cubes sitting on the board.</summary>
+        int ScoreGoldBonus(int goldCubesOnBoard);
+
+        /// <summary>Value a piggy-bank block accrues per surviving turn.</summary>
+        int PiggyBankGainPerTurn();
     }
 
     /// <summary>Base-game scoring driven entirely by ScoringConfig.</summary>
@@ -49,6 +55,16 @@ namespace ProjectBlock.Core
         public int ScoreCleanSweep()
         {
             return config.CleanSweepBonus;
+        }
+
+        public int ScoreGoldBonus(int goldCubesOnBoard)
+        {
+            return goldCubesOnBoard * config.GoldPointsPerCubePerTurn;
+        }
+
+        public int PiggyBankGainPerTurn()
+        {
+            return config.PiggyBankPointsPerTurn;
         }
     }
 }

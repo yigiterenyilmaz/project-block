@@ -14,6 +14,7 @@ namespace ProjectBlock.View
         private static readonly Color EmptyColor = new Color(0.17f, 0.18f, 0.22f);
         private static readonly Color ValidPreviewColor = new Color(0.35f, 1f, 0.45f, 0.6f);
         private static readonly Color InvalidPreviewColor = new Color(1f, 0.35f, 0.35f, 0.6f);
+        private static readonly Color ExplosionPreviewColor = new Color(1f, 0.78f, 0.25f, 0.65f);
 
         private GameBoard board;
         private SpriteRenderer[,] cellRenderers;
@@ -25,6 +26,20 @@ namespace ProjectBlock.View
         public GameBoard Board
         {
             get { return board; }
+        }
+
+        /// <summary>World-space rectangle the grid covers (for effects around the arena).</summary>
+        public Rect WorldRect
+        {
+            get
+            {
+                if (board == null)
+                {
+                    return new Rect(0f, 0f, 0f, 0f);
+                }
+                return new Rect(bottomLeft.x, bottomLeft.y,
+                    board.Width * cellSize, board.Height * cellSize);
+            }
         }
 
         /// <summary>Destroys and recreates the whole grid for a (new) board.</summary>
@@ -78,7 +93,7 @@ namespace ProjectBlock.View
                 {
                     Cube? cube = board.GetCube(new GridPos(x, y));
                     cellRenderers[x, y].color = cube.HasValue
-                        ? ViewUtil.ColorForCard(cube.Value.SourceCardId)
+                        ? ViewUtil.CubeDisplayColor(cube.Value)
                         : EmptyColor;
                 }
             }
@@ -99,7 +114,8 @@ namespace ProjectBlock.View
             return board != null && x >= 0 && x < board.Width && y >= 0 && y < board.Height;
         }
 
-        /// <summary>Highlights the shape's target cells; green if the placement is legal.</summary>
+        /// <summary>Highlights the shape's target cells (green legal / red illegal) and, for
+        /// legal placements, tints every cell of the rows/columns that would explode.</summary>
         public void ShowPreview(BlockShape shape, GridPos origin, bool valid)
         {
             ClearPreview();
@@ -116,6 +132,16 @@ namespace ProjectBlock.View
                     previewRenderers[pos.X, pos.Y].color = color;
                     previewRenderers[pos.X, pos.Y].enabled = true;
                 }
+            }
+            if (!valid)
+            {
+                return;
+            }
+            LineExplosionResult predicted = board.PredictExplosions(shape, origin);
+            foreach (GridPos pos in predicted.ExplodedCells)
+            {
+                previewRenderers[pos.X, pos.Y].color = ExplosionPreviewColor;
+                previewRenderers[pos.X, pos.Y].enabled = true;
             }
         }
 

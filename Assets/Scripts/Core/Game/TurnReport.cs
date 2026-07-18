@@ -56,6 +56,16 @@ namespace ProjectBlock.Core
         /// <summary>True if this turn emptied the board ("temizlik").</summary>
         public bool CleanSweep { get; internal set; }
 
+        /// <summary>True if a dynamite block fully exploded on its placement turn and
+        /// cleared the board.</summary>
+        public bool DynamiteTriggered { get; internal set; }
+
+        /// <summary>Per-turn bonus earned from gold cubes on the board.</summary>
+        public int GoldBonus { get; internal set; }
+
+        /// <summary>Accumulated value paid out by piggy-bank blocks destroyed this turn.</summary>
+        public int PiggyBankPayout { get; internal set; }
+
         public int ScoreGained { get; internal set; }
         public int RoundScoreAfter { get; internal set; }
 
@@ -79,10 +89,6 @@ namespace ProjectBlock.Core
         /// for the shuffle animation.</summary>
         public bool DiscardWasReshuffled { get; internal set; }
 
-        /// <summary>Overtime clean sweeps only: cards removed face-down from the draw pile
-        /// until round end. The player must NOT be shown which cards these are.</summary>
-        public IReadOnlyList<BlockCard> CardsRemovedForRound { get; internal set; }
-
         public RoundStatus StatusAfter { get; internal set; }
 
         internal TurnReport()
@@ -90,7 +96,6 @@ namespace ProjectBlock.Core
             PlacedCells = Array.Empty<GridPos>();
             ExplodedRows = Array.Empty<int>();
             ExplodedColumns = Array.Empty<int>();
-            CardsRemovedForRound = Array.Empty<BlockCard>();
         }
     }
 }

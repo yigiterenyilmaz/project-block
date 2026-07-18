@@ -88,7 +88,6 @@ public static class Baseline
               .Append(" thr=").Append(report.ThresholdJustPassed ? 1 : 0)
               .Append(" shuf=").Append(report.DiscardWasReshuffled ? 1 : 0)
               .Append(" burn=").Append(report.BurnedCard == null ? 0 : 1)
-              .Append(" removed=").Append(report.CardsRemovedForRound.Count)
               .Append(" draw=").Append(round.Deck.DrawCount)
               .Append(" disc=").Append(round.Deck.DiscardCount)
               .Append(" hand=").Append(round.Hand.Count)

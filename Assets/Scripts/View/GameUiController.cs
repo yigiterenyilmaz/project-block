@@ -3,13 +3,14 @@
 // player input into calls on the core engine.
 // CONTROLS: drag a card from the hand onto the board to place it,
 //           A = advance / C = continue on an offer, N = leave market, R = new run,
-//           S = redraw hand (debug), J = grant the next joker, K = sell the last joker,
-//           1-9 = activate that joker (a joker that needs a target then waits for a click,
+//           D = deck select, J = grant the next joker, K = sell the last joker,
+//           1-9 = activate that joker (one that needs a target then waits for a click,
 //           Esc cancels).
 // NOTE FOR AGENTS: this is placeholder presentation. Extend gameplay in
-// ProjectBlock.Core; only wiring/visuals belong here. The joker hotkeys stand in for the
-// market, which does not exist yet - delete them once jokers can be bought.
+// ProjectBlock.Core; only wiring/visuals belong here. The J/K joker keys stand in until
+// jokers can be bought in the market - delete them then.
 
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using ProjectBlock.Core;
@@ -33,10 +34,19 @@ namespace ProjectBlock.View
         private BoardView boardView;
         private CardLayerView cardLayer;
         private DeckOverlayView deckOverlay;
+        private DeckSelectView deckSelect;
+        private MarketView marketView;
         private JokerBarView jokerBar;
+        private DeckDefinition currentDeck = DeckLibrary.Classic;
+        private SoundFx sfx;
+        private FlameStreakView flameStreak;
+        private BlastFxView blastFx;
+        private int comboStreak;
         private Text infoText;
         private Text messageText;
         private Camera cam;
+        private Vector3 camBasePosition;
+        private Coroutine shakeRoutine;
         private CardVisual draggedCard;
         private int lastSeedUsed;
 
@@ -49,6 +59,7 @@ namespace ProjectBlock.View
         private void Start()
         {
             cam = Camera.main;
+            camBasePosition = cam.transform.position;
             BuildViews();
             NewGame();
         }
@@ -58,10 +69,12 @@ namespace ProjectBlock.View
             lastSeedUsed = seed != 0 ? seed : System.Environment.TickCount;
             var config = new GameConfig();
             config.RngSeed = lastSeedUsed;
+            config.Deck = currentDeck;
             session = new GameSession(config);
             draggedCard = null;
             pendingTargetJokerId = null;
             nextGrantIndex = 0;
+            marketView.Hide();
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
             StartRoundPresentation();
         }
@@ -69,13 +82,16 @@ namespace ProjectBlock.View
         /// <summary>Board + HUD refresh with the round-start shuffle-and-deal animation.</summary>
         private void StartRoundPresentation()
         {
+            comboStreak = 0;
             RoundEngine round = session.CurrentRound;
             if (boardView.Board != round.Board)
             {
                 boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
             }
+            flameStreak.SetState(round.CleanSweepCount, boardView.WorldRect);
             boardView.Refresh();
             boardView.ClearPreview();
+            sfx.Shuffle();
             cardLayer.AnimateRoundStart(round);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
@@ -95,6 +111,28 @@ namespace ProjectBlock.View
                 NewGame();
                 return;
             }
+            if (deckSelect.IsOpen)
+            {
+                // modal: click a deck to start a new run with it, anything else closes
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                {
+                    deckSelect.Hide();
+                    return;
+                }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                {
+                    Vector2 clickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                    int deckIndex = deckSelect.DeckAt(clickWorld);
+                    deckSelect.Hide();
+                    if (deckIndex >= 0)
+                    {
+                        currentDeck = DeckLibrary.All[deckIndex];
+                        Debug.Log("[project_block] Deck selected: " + currentDeck.Name);
+                        NewGame();
+                    }
+                }
+                return;
+            }
             if (deckOverlay.IsOpen)
             {
                 // modal: any click or Escape closes, everything else is blocked
@@ -105,14 +143,27 @@ namespace ProjectBlock.View
                 }
                 return;
             }
-            HandleJokerInput(kb);
+            if (kb != null && kb.dKey.wasPressedThisFrame && draggedCard == null)
+            {
+                deckSelect.Show(DeckLibrary.All, currentDeck);
+                return;
+            }
+            if (HandleJokerInput(kb))
+            {
+                return;
+            }
             switch (session.Phase)
             {
                 case GamePhase.Market:
                     if (kb != null && kb.nKey.wasPressedThisFrame)
                     {
                         session.LeaveMarket();
+                        marketView.Hide();
                         StartRoundPresentation();
+                    }
+                    else if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                    {
+                        HandleMarketClick(mouse);
                     }
                     break;
                 case GamePhase.Round:
@@ -123,11 +174,22 @@ namespace ProjectBlock.View
                         {
                             round.DecideAdvance(true);
                             RefreshAll(null);
+                            marketView.Show(session);
                         }
                         else if (kb != null && kb.cKey.wasPressedThisFrame)
                         {
+                            // continuing costs cards and redraws the hand (see RoundEngine)
                             round.DecideAdvance(false);
-                            RefreshAll(null);
+                            if (round.Status == RoundStatus.InProgress)
+                            {
+                                sfx.Shuffle();
+                                cardLayer.AnimateRedraw(round);
+                                UpdateHud();
+                            }
+                            else
+                            {
+                                RefreshAll(null);
+                            }
                         }
                     }
                     else if (round.Status == RoundStatus.InProgress)
@@ -136,8 +198,16 @@ namespace ProjectBlock.View
                         {
                             // debug: discard the hand, shuffle it into the draw pile, redraw
                             round.RedrawHand();
+                            sfx.Shuffle();
                             cardLayer.AnimateRedraw(round);
                             UpdateHud();
+                        }
+                        else if (kb != null && kb.bKey.wasPressedThisFrame)
+                        {
+                            // debug: random bonus card to test the bonus hand
+                            BlockCard bonus = session.DebugAddRandomBonusCard();
+                            Debug.Log("[project_block] Debug bonus card: " + bonus);
+                            RefreshAll(null);
                         }
                         else
                         {
@@ -148,19 +218,49 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Debug joker controls. These stand in for the market: J grants the next
-        /// joker in the registry, K sells the last one, 1-9 activate.</summary>
-        private void HandleJokerInput(Keyboard kb)
+        private void HandleMarketClick(Mouse mouse)
+        {
+            Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+            int offerIndex = marketView.OfferAt(world);
+            if (offerIndex < 0)
+            {
+                // browsing the owned deck helps purchase decisions
+                if (cardLayer.IsDrawPileAt(world))
+                {
+                    deckOverlay.Show(session.OwnedCards);
+                }
+                return;
+            }
+            MarketOffer offer = session.Market.Offers[offerIndex];
+            if (session.TryBuyOffer(offerIndex))
+            {
+                Debug.Log("[project_block] Bought " + offer.Card + " for " + offer.Price);
+                sfx.Buy();
+                marketView.PlayBuyFx(offerIndex);
+                marketView.Show(session);
+                UpdateHud();
+            }
+            else
+            {
+                Debug.Log("[project_block] Cannot buy offer " + offerIndex + " (sold or too expensive).");
+            }
+        }
+
+        /// <summary>Debug joker controls, standing in for the market: J grants the next
+        /// joker in the registry, K sells the last one, 1-9 activate. Returns true when the
+        /// key was consumed and the rest of Update should be skipped this frame.</summary>
+        private bool HandleJokerInput(Keyboard kb)
         {
             if (kb == null)
             {
-                return;
+                return false;
             }
             if (kb.escapeKey.wasPressedThisFrame && pendingTargetJokerId.HasValue)
             {
                 pendingTargetJokerId = null;
                 UpdateHud();
-                return;
+                jokerBar.Refresh(session, null);
+                return true;
             }
             if (kb.jKey.wasPressedThisFrame)
             {
@@ -171,7 +271,7 @@ namespace ProjectBlock.View
                 Debug.Log("[project_block] Joker granted: " + granted.DisplayName
                     + " - " + granted.Description);
                 RefreshAll(null);
-                return;
+                return true;
             }
             if (kb.kKey.wasPressedThisFrame && session.Jokers.Count > 0)
             {
@@ -180,12 +280,12 @@ namespace ProjectBlock.View
                 Debug.Log("[project_block] Joker sold: " + last.DisplayName + " for " + paid);
                 pendingTargetJokerId = null;
                 RefreshAll(null);
-                return;
+                return true;
             }
 
             if (session.Phase != GamePhase.Round)
             {
-                return;
+                return false;
             }
             ButtonControl[] digits =
             {
@@ -197,12 +297,13 @@ namespace ProjectBlock.View
                 if (digits[i].wasPressedThisFrame)
                 {
                     BeginActivation(session.Jokers.Jokers[i]);
-                    return;
+                    return true;
                 }
             }
+            return false;
         }
 
-        /// <summary>Runs a joker, or arms targeting mode if it needs to be pointed at something.</summary>
+        /// <summary>Runs a joker, or arms targeting mode if it must be pointed at something.</summary>
         private void BeginActivation(Joker joker)
         {
             if (!session.Jokers.CanActivate(joker.InstanceId))
@@ -234,6 +335,7 @@ namespace ProjectBlock.View
             // The whole-hand redraw has its own animation; everything else just re-syncs.
             if (joker.DefId == "renovasyon" && round.Status != RoundStatus.Lost)
             {
+                sfx.Shuffle();
                 cardLayer.AnimateRedraw(round);
                 boardView.Refresh();
                 UpdateHud();
@@ -277,7 +379,7 @@ namespace ProjectBlock.View
                 {
                     if (cardLayer.IsDrawPileAt(world))
                     {
-                        deckOverlay.Show(round.Deck.DrawPile);
+                        deckOverlay.Show(session.OwnedCards);
                         return;
                     }
                     CardVisual hit = cardLayer.CardAt(world);
@@ -326,6 +428,22 @@ namespace ProjectBlock.View
                     {
                         LogTurn(report);
                     }
+                    sfx.Place();
+                    if (report.CleanSweep)
+                    {
+                        // the sweep bling rises in pitch with every sweep this round
+                        sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
+                        sfx.Flame();
+                    }
+                    else if (report.CubesExploded > 0)
+                    {
+                        sfx.Explode();
+                    }
+                    if (report.DiscardWasReshuffled)
+                    {
+                        sfx.Shuffle();
+                    }
+                    HandleBlastFeedback(round, report);
                     RefreshAll(report);
                 }
                 else
@@ -334,6 +452,96 @@ namespace ProjectBlock.View
                     boardView.ClearPreview();
                 }
             }
+        }
+
+        /// <summary>Particles, shake, combo popups and the sweep celebration for one turn.</summary>
+        private void HandleBlastFeedback(RoundEngine round, TurnReport report)
+        {
+            if (report.CubesExploded == 0)
+            {
+                comboStreak = 0;
+                return;
+            }
+            comboStreak++;
+            EmitBlastParticles(round, report);
+            // shake grows with the combo streak
+            float shakeAmplitude = report.DynamiteTriggered ? 0.22f : report.CleanSweep ? 0.16f : 0.09f;
+            shakeAmplitude *= 1f + 0.25f * Mathf.Min(comboStreak - 1, 5);
+            ShakeCamera(shakeAmplitude, 0.2f);
+            if (report.DynamiteTriggered)
+            {
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 3.4f),
+                    "DYNAMITE!", new Color(0.95f, 0.3f, 0.2f), 72, 0.09f);
+            }
+            if (report.PiggyBankPayout > 0)
+            {
+                FloatingTextFx.Spawn(transform, new Vector2(2.4f, 2.0f),
+                    "+" + report.PiggyBankPayout + " PIGGY!", new Color(1f, 0.6f, 0.75f), 56, 0.07f);
+            }
+            if (comboStreak >= 2)
+            {
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
+                    "COMBO x" + comboStreak + "!", new Color(1f, 0.6f, 0.2f), 64, 0.08f);
+            }
+            if (report.CleanSweep)
+            {
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 1.4f),
+                    "CLEAN SWEEP!", new Color(1f, 0.85f, 0.3f), 80, 0.1f);
+            }
+        }
+
+        private void EmitBlastParticles(RoundEngine round, TurnReport report)
+        {
+            var blastColor = new Color(1f, 0.72f, 0.35f);
+            foreach (int y in report.ExplodedRows)
+            {
+                for (int x = 0; x < round.Board.Width; x++)
+                {
+                    blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), blastColor, 4);
+                }
+            }
+            foreach (int x in report.ExplodedColumns)
+            {
+                for (int y = 0; y < round.Board.Height; y++)
+                {
+                    blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), blastColor, 4);
+                }
+            }
+            if (report.CleanSweep)
+            {
+                var gold = new Color(1f, 0.85f, 0.3f);
+                for (int i = 0; i < 70; i++)
+                {
+                    var pos = new Vector2(Random.Range(-3.2f, 3.2f), Random.Range(-2.2f, 4f));
+                    blastFx.EmitAt(pos, gold, 2);
+                }
+            }
+        }
+
+        /// <summary>Very small camera shake for explosions (slightly bigger on clean sweeps).</summary>
+        private void ShakeCamera(float amplitude, float duration)
+        {
+            if (shakeRoutine != null)
+            {
+                StopCoroutine(shakeRoutine);
+                cam.transform.position = camBasePosition;
+            }
+            shakeRoutine = StartCoroutine(ShakeRoutine(amplitude, duration));
+        }
+
+        private IEnumerator ShakeRoutine(float amplitude, float duration)
+        {
+            float time = 0f;
+            while (time < duration)
+            {
+                time += Time.deltaTime;
+                float falloff = 1f - Mathf.Clamp01(time / duration);
+                Vector2 offset = Random.insideUnitCircle * (amplitude * falloff);
+                cam.transform.position = camBasePosition + new Vector3(offset.x, offset.y, 0f);
+                yield return null;
+            }
+            cam.transform.position = camBasePosition;
+            shakeRoutine = null;
         }
 
         private static BlockShape ShapeOfSlot(RoundEngine round, int slot)
@@ -360,6 +568,7 @@ namespace ProjectBlock.View
             boardView.Refresh();
             boardView.ClearPreview();
             cardLayer.Sync(round, report);
+            flameStreak.SetState(round.CleanSweepCount, boardView.WorldRect);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
         }
@@ -368,7 +577,8 @@ namespace ProjectBlock.View
         {
             RoundEngine round = session.CurrentRound;
             var sb = new StringBuilder();
-            sb.Append("Seed ").Append(lastSeedUsed).Append('\n');
+            sb.Append("Seed ").Append(lastSeedUsed)
+                .Append("   Deck: ").Append(currentDeck.Name).Append('\n');
             sb.Append("Round ").Append(session.RoundNumber).Append("   Turn ").Append(round.TurnNumber).Append('\n');
             sb.Append("Score ").Append(round.RoundScore).Append(" / ").Append(round.Config.ScoreThreshold);
             if (round.ThresholdPassed)
@@ -387,7 +597,8 @@ namespace ProjectBlock.View
             }
             sb.Append('\n');
             sb.Append("Drag a card onto the board to place it.   Click draw pile: view deck\n");
-            sb.Append("S: redraw hand (debug)   J: grant joker   K: sell last joker   R: new run");
+            sb.Append("Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run\n");
+            sb.Append("Debug - J: grant joker   K: sell last joker");
             infoText.text = sb.ToString();
 
             if (pendingTargetJokerId.HasValue)
@@ -404,12 +615,23 @@ namespace ProjectBlock.View
                     messageText.text = "GAME OVER - " + DescribeLoss(round.Loss) + "\n[R] new run";
                     break;
                 case GamePhase.Market:
-                    messageText.text = "MARKET (empty for now)\n[N] start round " + (session.RoundNumber + 1);
+                    messageText.text = "Click a card to add it to your deck (price below it)\n[N] start round "
+                        + (session.RoundNumber + 1);
                     break;
                 default:
-                    messageText.text = round.Status == RoundStatus.AwaitingAdvanceDecision
-                        ? "Threshold reached!\n[A] advance to market    [C] continue this round (risky)"
-                        : string.Empty;
+                    if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+                    {
+                        int continueCost = round.NextContinueCost;
+                        int drawAfter = round.PredictDrawCountAfterContinue();
+                        string warning = drawAfter < 0 ? "  DECK OUT!" : string.Empty;
+                        messageText.text = "Threshold reached!\n[A] advance to market    [C] continue: removes "
+                            + continueCost + " cards, draw pile " + round.Deck.DrawCount
+                            + " -> " + Mathf.Max(drawAfter, 0) + warning;
+                    }
+                    else
+                    {
+                        messageText.text = string.Empty;
+                    }
                     break;
             }
         }
@@ -447,6 +669,26 @@ namespace ProjectBlock.View
             var overlayGo = new GameObject("DeckOverlay");
             overlayGo.transform.SetParent(transform, false);
             deckOverlay = overlayGo.AddComponent<DeckOverlayView>();
+
+            var deckSelectGo = new GameObject("DeckSelect");
+            deckSelectGo.transform.SetParent(transform, false);
+            deckSelect = deckSelectGo.AddComponent<DeckSelectView>();
+
+            var marketGo = new GameObject("MarketView");
+            marketGo.transform.SetParent(transform, false);
+            marketView = marketGo.AddComponent<MarketView>();
+
+            var sfxGo = new GameObject("SoundFx");
+            sfxGo.transform.SetParent(transform, false);
+            sfx = sfxGo.AddComponent<SoundFx>();
+
+            var flamesGo = new GameObject("FlameStreak");
+            flamesGo.transform.SetParent(transform, false);
+            flameStreak = flamesGo.AddComponent<FlameStreakView>();
+
+            var blastGo = new GameObject("BlastFx");
+            blastGo.transform.SetParent(transform, false);
+            blastFx = blastGo.AddComponent<BlastFxView>();
 
             var jokerGo = new GameObject("JokerBarView");
             jokerGo.transform.SetParent(transform, false);
