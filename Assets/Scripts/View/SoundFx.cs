@@ -43,7 +43,13 @@ namespace ProjectBlock.View
 
         public void CleanSweep()
         {
-            PlayWithPitch(sweepClip, 1f, 1f);
+            CleanSweep(1f);
+        }
+
+        /// <summary>The sweep "bling" - pitchMultiplier rises with the round's sweep count.</summary>
+        public void CleanSweep(float pitchMultiplier)
+        {
+            PlayWithPitch(sweepClip, pitchMultiplier, pitchMultiplier);
         }
 
         public void Shuffle()

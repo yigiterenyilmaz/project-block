@@ -32,6 +32,9 @@ namespace ProjectBlock.View
         private MarketView marketView;
         private DeckDefinition currentDeck = DeckLibrary.Classic;
         private SoundFx sfx;
+        private FlameStreakView flameStreak;
+        private BlastFxView blastFx;
+        private int comboStreak;
         private Text infoText;
         private Text messageText;
         private Camera cam;
@@ -64,7 +67,9 @@ namespace ProjectBlock.View
         /// <summary>Board + HUD refresh with the round-start shuffle-and-deal animation.</summary>
         private void StartRoundPresentation()
         {
+            comboStreak = 0;
             RoundEngine round = session.CurrentRound;
+            flameStreak.SetCount(round.CleanSweepCount);
             if (boardView.Board != round.Board)
             {
                 boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
@@ -287,7 +292,8 @@ namespace ProjectBlock.View
                     sfx.Place();
                     if (report.CleanSweep)
                     {
-                        sfx.CleanSweep();
+                        // the sweep bling rises in pitch with every sweep this round
+                        sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
                     }
                     else if (report.CubesExploded > 0)
                     {
@@ -297,16 +303,63 @@ namespace ProjectBlock.View
                     {
                         sfx.Shuffle();
                     }
-                    if (report.CubesExploded > 0)
-                    {
-                        ShakeCamera(report.CleanSweep ? 0.16f : 0.09f, 0.2f);
-                    }
+                    HandleBlastFeedback(round, report);
                     RefreshAll(report);
                 }
                 else
                 {
                     released.MoveTo(released.HomePosition, 0.2f, null);
                     boardView.ClearPreview();
+                }
+            }
+        }
+
+        /// <summary>Particles, shake, combo popups and the sweep celebration for one turn.</summary>
+        private void HandleBlastFeedback(RoundEngine round, TurnReport report)
+        {
+            if (report.CubesExploded == 0)
+            {
+                comboStreak = 0;
+                return;
+            }
+            comboStreak++;
+            EmitBlastParticles(round, report);
+            ShakeCamera(report.CleanSweep ? 0.16f : 0.09f, 0.2f);
+            if (comboStreak >= 2)
+            {
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
+                    "COMBO x" + comboStreak + "!", new Color(1f, 0.6f, 0.2f), 64, 0.08f);
+            }
+            if (report.CleanSweep)
+            {
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 1.4f),
+                    "CLEAN SWEEP!", new Color(1f, 0.85f, 0.3f), 80, 0.1f);
+            }
+        }
+
+        private void EmitBlastParticles(RoundEngine round, TurnReport report)
+        {
+            foreach (int y in report.ExplodedRows)
+            {
+                for (int x = 0; x < round.Board.Width; x++)
+                {
+                    blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), ViewUtil.CubeColor, 4);
+                }
+            }
+            foreach (int x in report.ExplodedColumns)
+            {
+                for (int y = 0; y < round.Board.Height; y++)
+                {
+                    blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), ViewUtil.CubeColor, 4);
+                }
+            }
+            if (report.CleanSweep)
+            {
+                var gold = new Color(1f, 0.85f, 0.3f);
+                for (int i = 0; i < 70; i++)
+                {
+                    var pos = new Vector2(Random.Range(-3.2f, 3.2f), Random.Range(-2.2f, 4f));
+                    blastFx.EmitAt(pos, gold, 2);
                 }
             }
         }
@@ -361,6 +414,7 @@ namespace ProjectBlock.View
             boardView.Refresh();
             boardView.ClearPreview();
             cardLayer.Sync(round, report);
+            flameStreak.SetCount(round.CleanSweepCount);
             UpdateHud();
         }
 
@@ -447,6 +501,14 @@ namespace ProjectBlock.View
             var sfxGo = new GameObject("SoundFx");
             sfxGo.transform.SetParent(transform, false);
             sfx = sfxGo.AddComponent<SoundFx>();
+
+            var flamesGo = new GameObject("FlameStreak");
+            flamesGo.transform.SetParent(transform, false);
+            flameStreak = flamesGo.AddComponent<FlameStreakView>();
+
+            var blastGo = new GameObject("BlastFx");
+            blastGo.transform.SetParent(transform, false);
+            blastFx = blastGo.AddComponent<BlastFxView>();
 
             var canvasGo = new GameObject("HudCanvas");
             canvasGo.transform.SetParent(transform, false);

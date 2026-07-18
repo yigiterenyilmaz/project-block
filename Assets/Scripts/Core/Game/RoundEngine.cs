@@ -52,6 +52,10 @@ namespace ProjectBlock.Core
         /// <summary>True once RoundScore has reached the threshold; enables overtime rules.</summary>
         public bool ThresholdPassed { get; private set; }
 
+        /// <summary>Clean sweeps ("temizlik") triggered this round. Drives the escalating
+        /// UI/sound feedback; future jokers (Batak, Kayıt defteri...) will also read it.</summary>
+        public int CleanSweepCount { get; private set; }
+
         public RoundStatus Status { get; private set; }
 
         /// <summary>Set when Status is Lost (may be set earlier if an advance offer is
@@ -238,6 +242,7 @@ namespace ProjectBlock.Core
             if (explosion.LineCount > 0 && Board.IsCleanForSweep())
             {
                 report.CleanSweep = true;
+                CleanSweepCount++;
                 scoreGained += scorer.ScoreCleanSweep();
                 if (ThresholdPassed)
                 {
