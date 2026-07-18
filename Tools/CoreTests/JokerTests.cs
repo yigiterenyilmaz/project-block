@@ -27,6 +27,7 @@ public static class JokerTests
         Renovasyon_OvertimeDoesNotRecycleDiscard();
         Iade_SwapsOneCardInPlace();
         Kumbara_AccrueAndSell();
+        Water_ExplodesInPlaceBeforeFalling();
         Market_StocksAndSellsJokers();
         Market_RefusesJokerWhenSlotsFull();
         Overtime_GatedJokerIsSkipped();
@@ -689,6 +690,36 @@ public static class JokerTests
         Check(activations > 0, "activated jokers were exercised", "activations " + activations);
         Check(sweeps > 0, "clean sweeps happened", "sweeps " + sweeps);
         Check(overtimeRounds > 0, "overtime was entered", "overtime " + overtimeRounds);
+    }
+
+    private static void Water_ExplodesInPlaceBeforeFalling()
+    {
+        Section("water / explosion before fall");
+        var normalLeft = new BlockCard(1, Bar(1));
+        var normalRight = new BlockCard(2, Bar(1));
+        var water = new BlockCard(3, Bar(1), new[] { BlockElement.Water });
+
+        // Row y=1 is one cube short at column 1, and the cell below it (1,0) is empty.
+        // Dropping the water there would leave the row incomplete; exploding first clears it.
+        GameBoard Build()
+        {
+            var b = new GameBoard(3, 3);
+            b.Place(normalLeft, new GridPos(0, 1));
+            b.Place(normalRight, new GridPos(2, 1));
+            b.Place(water, new GridPos(1, 1));
+            return b;
+        }
+
+        GameBoard explodeFirst = Build();
+        LineExplosionResult inPlace = explodeFirst.ResolveFullLines();
+        Check(inPlace.LineCount == 1 && inPlace.ExplodedCells.Count == 3,
+            "water completing a line explodes in place", "lines " + inPlace.LineCount);
+
+        GameBoard settleFirst = Build();
+        settleFirst.SettleWaterAndReact(null);
+        LineExplosionResult afterFall = settleFirst.ResolveFullLines();
+        Check(afterFall.LineCount == 0,
+            "settling first would drop the water and miss the line", "lines " + afterFall.LineCount);
     }
 
     private static void Market_StocksAndSellsJokers()
