@@ -325,7 +325,10 @@ namespace ProjectBlock.View
             }
             comboStreak++;
             EmitBlastParticles(round, report);
-            ShakeCamera(report.DynamiteTriggered ? 0.22f : report.CleanSweep ? 0.16f : 0.09f, 0.2f);
+            // shake grows with the combo streak
+            float shakeAmplitude = report.DynamiteTriggered ? 0.22f : report.CleanSweep ? 0.16f : 0.09f;
+            shakeAmplitude *= 1f + 0.25f * Mathf.Min(comboStreak - 1, 5);
+            ShakeCamera(shakeAmplitude, 0.2f);
             if (report.DynamiteTriggered)
             {
                 FloatingTextFx.Spawn(transform, new Vector2(0f, 3.4f),
@@ -461,9 +464,19 @@ namespace ProjectBlock.View
                         + (session.RoundNumber + 1);
                     break;
                 default:
-                    messageText.text = round.Status == RoundStatus.AwaitingAdvanceDecision
-                        ? "Threshold reached!\n[A] advance to market    [C] continue this round (risky)"
-                        : string.Empty;
+                    if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+                    {
+                        int continueCost = round.NextContinueCost;
+                        int drawAfter = round.PredictDrawCountAfterContinue();
+                        string warning = drawAfter < 0 ? "  DECK OUT!" : string.Empty;
+                        messageText.text = "Threshold reached!\n[A] advance to market    [C] continue: removes "
+                            + continueCost + " cards, draw pile " + round.Deck.DrawCount
+                            + " -> " + Mathf.Max(drawAfter, 0) + warning;
+                    }
+                    else
+                    {
+                        messageText.text = string.Empty;
+                    }
                     break;
             }
         }

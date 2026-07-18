@@ -39,6 +39,7 @@ namespace ProjectBlock.View
         private Transform drawStackRoot;
         private Transform discardStackRoot;
         private CardVisual discardTopVisual;
+        private TextMesh drawCountLabel;
         private int discardTopId = -1;
         private bool pilesBuilt;
         private Transform drawPileRoot;
@@ -289,6 +290,9 @@ namespace ProjectBlock.View
             drawStackRoot.SetParent(drawPileRoot, false);
             discardStackRoot = MakePileRoot("Stack", Vector2.zero);
             discardStackRoot.SetParent(discardPileRoot, false);
+            drawCountLabel = ViewUtil.MakeText3D(drawPileRoot, "Count",
+                new Vector2(0f, CardVisual.BodyHeight * 0.5f + 0.34f), "0",
+                56, 0.07f, Color.white, 37, TextAnchor.MiddleCenter);
         }
 
         private Transform MakePileRoot(string name, Vector2 position)
@@ -335,6 +339,7 @@ namespace ProjectBlock.View
 
         private void UpdatePiles(RoundEngine round)
         {
+            drawCountLabel.text = round.Deck.DrawCount.ToString();
             RebuildStack(drawStackRoot, round.Deck.DrawPile);
             RebuildStack(discardStackRoot, round.Deck.DiscardPile);
             int discardLayers = LayersFor(round.Deck.DiscardCount);

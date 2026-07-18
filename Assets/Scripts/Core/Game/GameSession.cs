@@ -63,9 +63,20 @@ namespace ProjectBlock.Core
             rng = new SeededRandom(config.RngSeed ?? Environment.TickCount);
             scorer = new DefaultScoreCalculator(config.Scoring);
             Market = new Market();
-            for (int i = 0; i < config.Deck.Size; i++)
+            if (config.Deck.FixedShapes != null)
             {
-                ownedCards.Add(CreateRandomCard());
+                // static deck: identical composition every run
+                foreach (BlockShape shape in config.Deck.FixedShapes)
+                {
+                    ownedCards.Add(new BlockCard(nextCardId++, shape));
+                }
+            }
+            else
+            {
+                for (int i = 0; i < config.Deck.Size; i++)
+                {
+                    ownedCards.Add(CreateRandomCard());
+                }
             }
             RoundNumber = 1;
             StartRound();

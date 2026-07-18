@@ -59,6 +59,21 @@ namespace ProjectBlock.Core
         /// <summary>Advance offers declined this round; raises the next continue's price.</summary>
         public int ContinueCount { get; private set; }
 
+        /// <summary>Cards the NEXT continue would remove (the price escalates per continue).</summary>
+        public int NextContinueCost
+        {
+            get { return Rules.CardsRemovedPerContinue + Rules.ContinueCostEscalation * ContinueCount; }
+        }
+
+        /// <summary>Draw-pile size right after a continue (hand + discard reshuffled in,
+        /// the continue cost removed, a fresh hand drawn). Negative means the continue
+        /// would immediately deck-out. The UI shows this on the advance offer.</summary>
+        public int PredictDrawCountAfterContinue()
+        {
+            return Deck.DrawCount + Deck.DiscardCount + Hand.Count
+                - NextContinueCost - Rules.HandSize;
+        }
+
         public RoundStatus Status { get; private set; }
 
         /// <summary>Set when Status is Lost (may be set earlier if an advance offer is
@@ -163,10 +178,9 @@ namespace ProjectBlock.Core
                 return;
             }
             SetStatus(RoundStatus.InProgress);
+            int continueCost = NextContinueCost; // escalates with every continue
             DiscardHandAndReshuffle();
-            // escalating price: every further continue this round removes more cards
-            Deck.RemoveRandomFromDraw(
-                Rules.CardsRemovedPerContinue + Rules.ContinueCostEscalation * ContinueCount);
+            Deck.RemoveRandomFromDraw(continueCost);
             ContinueCount++;
             RefillHand();
             if (Loss != null)

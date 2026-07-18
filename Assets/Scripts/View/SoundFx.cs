@@ -64,11 +64,11 @@ namespace ProjectBlock.View
             PlayWithPitch(buyClip, 1f, 1f);
         }
 
-        /// <summary>Fire whoosh when the arena flames grow (clean sweeps). Louder and
-        /// longer than the rest so it survives playing on top of the sweep chime.</summary>
+        /// <summary>Fire whoosh when the arena flames grow (clean sweeps). Slightly
+        /// boosted so it reads under the sweep chime without booming.</summary>
         public void Flame()
         {
-            PlayWithPitch(flameClip, 0.9f, 1.1f, 1.7f);
+            PlayWithPitch(flameClip, 0.9f, 1.1f, 1.1f);
         }
 
         private void PlayWithPitch(AudioClip clip, float minPitch, float maxPitch)
@@ -170,12 +170,12 @@ namespace ProjectBlock.View
         {
             float[] buffer = Buffer(0.85f);
             var rng = new System.Random(5);
-            AddNoise(buffer, 0, 0.85f, 0.8f, 1.1f, rng);       // long roaring body
-            AddTone(buffer, 0, 0.7f, 140f, 60f, 0.45f, 1.2f);  // low rumble
+            AddNoise(buffer, 0, 0.85f, 0.5f, 1.1f, rng);      // roaring body (toned down)
+            AddTone(buffer, 0, 0.7f, 140f, 60f, 0.28f, 1.2f); // low rumble
             for (int i = 0; i < 8; i++)
             {
                 int start = (int)(SampleRate * (0.05f + 0.09f * i));
-                AddNoise(buffer, start, 0.025f, 0.55f, 1f, rng); // crackles
+                AddNoise(buffer, start, 0.025f, 0.4f, 1f, rng); // crackles
             }
             return Finish("flame", buffer);
         }
