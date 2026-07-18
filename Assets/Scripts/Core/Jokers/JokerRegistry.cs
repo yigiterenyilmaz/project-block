@@ -75,6 +75,7 @@ namespace ProjectBlock.Core
             Register(() => new DezenformasyonJoker());
             Register(() => new ImitasyonJoker());
             Register(() => new FraksiyonJoker());
+            Register(() => new ParazitJoker());
         }
 
         /// <summary>All known jokers, in design order.</summary>

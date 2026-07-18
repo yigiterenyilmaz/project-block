@@ -167,6 +167,45 @@ namespace ProjectBlock.Core
             return value;
         }
 
+        /// <summary>
+        /// "Parazit": binds a joker to one cube of an owned block. Market-phase only, because
+        /// the deck is only stable between rounds. Returns false if there is no Parazit, it
+        /// already carries a binding, or the joker/card/cube is not a legal target.
+        /// EXTENSION POINT: the market UI calls this once it can ask for the three picks.
+        /// </summary>
+        public bool TryAttachJokerToCard(int jokerInstanceId, int cardId, int cellIndex)
+        {
+            if (Phase != GamePhase.Market)
+            {
+                throw new InvalidOperationException("Jokers can only be attached in the market.");
+            }
+            ParazitJoker parazit = null;
+            foreach (Joker joker in Jokers.Jokers)
+            {
+                parazit = joker as ParazitJoker;
+                if (parazit != null && !parazit.HasBinding)
+                {
+                    break;
+                }
+                parazit = null;
+            }
+            if (parazit == null)
+            {
+                return false;
+            }
+            Joker target = Jokers.Find(jokerInstanceId);
+            BlockCard card = null;
+            for (int i = 0; i < ownedCards.Count; i++)
+            {
+                if (ownedCards[i].Id == cardId)
+                {
+                    card = ownedCards[i];
+                    break;
+                }
+            }
+            return parazit.TryBind(new SessionContext(this, rng), target, card, cellIndex);
+        }
+
         /// <summary>Leaves the market and starts the next round.</summary>
         public void LeaveMarket()
         {

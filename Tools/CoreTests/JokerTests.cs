@@ -57,6 +57,7 @@ public static class JokerTests
         Dezenformasyon_SplitsAndSwapsThePilesEachTurn();
         Imitasyon_HandTracksTheDiscardPile();
         Fraksiyon_SplitsAtRoundStartAndAllowsOneSwap();
+        Parazit_FreesASlotAndDiesWithItsHostCube();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
 
@@ -1127,6 +1128,90 @@ public static class JokerTests
         Check(session.Config.Rules.RevealedDiscardCount == 0, "removal hides the discard again");
     }
 
+    private static void Parazit_FreesASlotAndDiesWithItsHostCube()
+    {
+        Section("parazit / rides a block instead of a slot");
+        // 3x3 board, 3-cube bars, tiny deck and a low threshold: one placement fills a row
+        // and explodes the whole block, which is what kills the host cube, and the round
+        // reaches the market on turn one so the binding can be made.
+        var session = NewSession(233, 3, 10, 4, 3);
+        var parazit = (ParazitJoker)session.Jokers.Add(new ParazitJoker());
+        var passenger = (CimriKumbaraJoker)session.Jokers.Add(new CimriKumbaraJoker());
+
+        Check(session.Jokers.OccupiedSlots == 2, "both jokers take a slot to begin with",
+            "slots " + session.Jokers.OccupiedSlots);
+
+        // Binding is a market action; drive the round to the market first.
+        int guard = 0;
+        while (session.Phase == GamePhase.Round && guard++ < 40)
+        {
+            if (session.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                session.CurrentRound.DecideAdvance(true);
+                break;
+            }
+            if (PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        if (session.Phase != GamePhase.Market)
+        {
+            Check(false, "could not reach the market to bind", "phase " + session.Phase);
+            return;
+        }
+
+        BlockCard host = session.OwnedCards[0];
+        Check(session.TryAttachJokerToCard(passenger.InstanceId, host.Id, 0), "binding accepted");
+        Check(passenger.Attachment.HasValue, "the passenger knows its host");
+        Check(session.Jokers.OccupiedSlots == 1, "the bound joker stopped taking a slot",
+            "slots " + session.Jokers.OccupiedSlots);
+        Check(session.Jokers.Count == 2, "but it is still in the inventory and still working");
+        Check(!session.TryAttachJokerToCard(passenger.InstanceId, host.Id, 0),
+            "a second binding is refused while one is live");
+
+        // Play the host card itself: redraw until it is in hand, then place it.
+        session.LeaveMarket();
+        guard = 0;
+        while (session.Jokers.Count > 1 && guard++ < 30 && session.Phase == GamePhase.Round)
+        {
+            RoundEngine round = session.CurrentRound;
+            if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                round.DecideAdvance(false);
+                continue;
+            }
+            if (round.Status != RoundStatus.InProgress)
+            {
+                break;
+            }
+            int hostIndex = -1;
+            for (int i = 0; i < round.Hand.Count; i++)
+            {
+                if (round.Hand[i].Id == host.Id)
+                {
+                    hostIndex = i;
+                    break;
+                }
+            }
+            if (hostIndex < 0)
+            {
+                round.RedrawHand();
+                continue;
+            }
+            var origins = round.GetValidOrigins(round.Hand[hostIndex].Shape);
+            if (origins.Count == 0)
+            {
+                break;
+            }
+            round.PlayFromHand(hostIndex, origins[0]);
+        }
+        Check(session.Jokers.Count == 1, "the passenger died with its host cube",
+            "jokers " + session.Jokers.Count);
+        Check(!parazit.HasBinding, "the binding was cleared", "still bound");
+        Check(session.Jokers.Find(passenger.InstanceId) == null, "and it left the inventory");
+    }
+
     private static void AllRegisteredJokers_HaveDistinctIdsAndText()
     {
         Section("registry / catalogue sanity");
@@ -1157,7 +1242,7 @@ public static class JokerTests
             ids.Count + " of " + JokerRegistry.All.Count);
         Check(allNamed, "every joker has a display name");
         Check(allDescribed, "every joker has a description");
-        Check(JokerRegistry.All.Count >= 33, "the catalogue is complete",
+        Check(JokerRegistry.All.Count >= 34, "the catalogue is complete",
             "count " + JokerRegistry.All.Count);
     }
 

@@ -52,10 +52,29 @@ namespace ProjectBlock.Core
         /// Balance placeholder.</summary>
         public int MaxSlots = 5;
 
+        /// <summary>Jokers that actually take up a slot. A joker bound to a block by
+        /// "Parazit" rides along on the card instead, which is exactly what that joker buys
+        /// you - Parazit itself keeps occupying its own slot.</summary>
+        public int OccupiedSlots
+        {
+            get
+            {
+                int used = 0;
+                for (int i = 0; i < jokers.Count; i++)
+                {
+                    if (!jokers[i].Attachment.HasValue)
+                    {
+                        used++;
+                    }
+                }
+                return used;
+            }
+        }
+
         /// <summary>True when every joker slot is taken (the market can sell no more).</summary>
         public bool IsFull
         {
-            get { return jokers.Count >= MaxSlots; }
+            get { return OccupiedSlots >= MaxSlots; }
         }
 
         /// <summary>Instance id of the joker "ihale" is currently auctioning, if any.</summary>
