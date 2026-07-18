@@ -94,6 +94,13 @@ namespace ProjectBlock.Core
         {
         }
 
+        /// <summary>Last chance to change a round's setup before its board is built. The
+        /// twin of Joker.FilterRoundConfig - "Tılsım" hands over the ground it converted.</summary>
+        public virtual RoundConfig FilterRoundConfig(SessionContext ctx, RoundConfig config)
+        {
+            return config;
+        }
+
         /// <summary>End of a turn, for powers with a lifetime (the inflation powers count
         /// down here). Runs for every power, charged or not.</summary>
         public virtual void AfterTurnScored(TurnContext turn)

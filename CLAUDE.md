@@ -64,8 +64,12 @@ Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.
 
-34 of the 35 planned jokers are implemented. Only Powerbank is left, and it waits on the
-power system. See `docs/jokers-plan.md`.
+All 35 planned jokers are implemented, and so are 17 of the 18 powers - only "Dolly" is
+left, set aside by the designer. See `docs/jokers-plan.md`.
+
+- `Assets/Scripts/Core/Powers/` — the power system. `Power.cs` is the base type,
+  `PowerInventory.cs` the only caller. Powers are ACTIVE: one charge, refilled by a clean
+  sweep or a new round, at most one per turn, and using one never costs a turn.
 
 ## Testing
 

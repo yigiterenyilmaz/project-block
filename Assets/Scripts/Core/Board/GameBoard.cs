@@ -150,6 +150,83 @@ namespace ProjectBlock.Core
             PlayableCellCount = count;
         }
 
+        /// <summary>Board built from an explicit mask; only CreateResized uses this.</summary>
+        private GameBoard(int width, int height, bool[,] mask, int playableCount)
+        {
+            Width = width;
+            Height = height;
+            cells = new Cube?[width, height];
+            playable = mask;
+            PlayableCellCount = playableCount;
+        }
+
+        /// <summary>
+        /// A copy of <paramref name="source"/> grown (positive) or shrunk (negative) on each
+        /// side, with every surviving cube carried across. The inflation powers use this to
+        /// resize the board MID-ROUND.
+        ///
+        /// Cubes standing in a band that is being removed are simply dropped - the caller is
+        /// expected to have pushed them inward first (RoundEngine.ShrinkBoardPushingInward).
+        /// Returns null if the requested size would not be a board at all.
+        /// </summary>
+        public static GameBoard CreateResized(GameBoard source, int left, int right,
+            int bottom, int top)
+        {
+            int newWidth = source.Width + left + right;
+            int newHeight = source.Height + bottom + top;
+            if (newWidth < 1 || newHeight < 1)
+            {
+                return null;
+            }
+
+            var mask = new bool[newWidth, newHeight];
+            int count = 0;
+            for (int x = 0; x < newWidth; x++)
+            {
+                for (int y = 0; y < newHeight; y++)
+                {
+                    int sx = x - left;
+                    int sy = y - bottom;
+                    bool inSource = sx >= 0 && sx < source.Width && sy >= 0 && sy < source.Height;
+                    // Inside the old board: keep its mask, holes and all. Outside it: this is
+                    // freshly inflated ground, so it is play area.
+                    mask[x, y] = inSource ? source.playable[sx, sy] : true;
+                    if (mask[x, y])
+                    {
+                        count++;
+                    }
+                }
+            }
+
+            var board = new GameBoard(newWidth, newHeight, mask, count);
+            for (int sx = 0; sx < source.Width; sx++)
+            {
+                for (int sy = 0; sy < source.Height; sy++)
+                {
+                    Cube? cube = source.cells[sx, sy];
+                    if (!cube.HasValue)
+                    {
+                        continue;
+                    }
+                    var target = new GridPos(sx + left, sy + bottom);
+                    if (board.IsInside(target))
+                    {
+                        board.cells[target.X, target.Y] = cube.Value;
+                        board.OccupiedCount++;
+                    }
+                }
+            }
+            foreach (KeyValuePair<GridPos, Cube> ghost in source.outsideCubes)
+            {
+                var shifted = new GridPos(ghost.Key.X + left, ghost.Key.Y + bottom);
+                if (!board.IsInside(shifted))
+                {
+                    board.outsideCubes[shifted] = ghost.Value;
+                }
+            }
+            return board;
+        }
+
         /// <summary>True for a real play cell. On a plain rectangle this is just a bounds
         /// check; on a grown board it also rejects the holes in the bounding box.</summary>
         public bool IsInside(GridPos pos)
@@ -577,6 +654,40 @@ namespace ProjectBlock.Core
                 }
             }
             return found;
+        }
+
+        /// <summary>Puts the board back to a snapshot ("Kum saati" rewinding time). Only the
+        /// cubes are restored - the shape of the board is not part of a snapshot, so a board
+        /// that grew in between keeps its new cells (they simply come back empty).</summary>
+        public void RestoreFrom(Dictionary<GridPos, Cube> snapshot)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    cells[x, y] = null;
+                }
+            }
+            OccupiedCount = 0;
+            foreach (KeyValuePair<GridPos, Cube> entry in snapshot)
+            {
+                if (!IsInside(entry.Key))
+                {
+                    continue; // the cell no longer exists on this board
+                }
+                cells[entry.Key.X, entry.Key.Y] = entry.Value;
+                OccupiedCount++;
+            }
+        }
+
+        /// <summary>Turns ghost traces into real play area and hands back the cells that were
+        /// converted ("Tılsım"). The outside cubes themselves are dropped - the power explodes
+        /// them - and the caller feeds the cells into the next board through RoundConfig.</summary>
+        public List<GridPos> TakeOutsideCellsForConversion()
+        {
+            var converted = new List<GridPos>(outsideCubes.Keys);
+            outsideCubes.Clear();
+            return converted;
         }
 
         /// <summary>Copies the whole board into a map, for diffing what a turn destroyed.</summary>

@@ -54,6 +54,12 @@ namespace ProjectBlock.Core
             Register(() => new HologramPower());
             Register(() => new HizliCekimSarjoruPower());
             Register(() => new BardaginBosTarafiPower());
+            Register(() => new KumSaatiPower());
+            Register(() => new OltaPower());
+            Register(() => new TilsimPower());
+            Register(() => new YatayEnflasyonPower());
+            Register(() => new DikeyEnflasyonPower());
+            Register(() => new HiperEnflasyonPower());
         }
 
         /// <summary>All known powers, in design order.</summary>

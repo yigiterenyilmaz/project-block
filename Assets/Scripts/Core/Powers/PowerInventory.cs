@@ -144,6 +144,18 @@ namespace ProjectBlock.Core
 
         // -------------------------------------------------------------- lifecycle
 
+        /// <summary>Runs before a round's board exists, so a power can reshape it.</summary>
+        public RoundConfig FilterRoundConfig(RoundConfig config)
+        {
+            SessionContext ctx = SessionCtx();
+            Snapshot();
+            for (int i = 0; i < dispatchBuffer.Count; i++)
+            {
+                config = dispatchBuffer[i].FilterRoundConfig(ctx, config);
+            }
+            return config;
+        }
+
         /// <summary>New round: every power comes back charged, then OnRoundStarted runs.</summary>
         public void DispatchRoundStarted(RoundEngine round)
         {

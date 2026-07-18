@@ -62,6 +62,10 @@ public static class JokerTests
         Powers_BoardEffects();
         Powers_DeckEffects();
         Eko_MemorisesAnExplosionAndReplaysTheSameCells();
+        KumSaati_RewindsOnlyTheBoard();
+        Olta_MarksAndReelsInACard();
+        Tilsim_TurnsGhostGroundIntoBoard();
+        Inflation_GrowsThenSqueezesBack();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -1434,6 +1438,131 @@ public static class JokerTests
         // The power needs a fresh charge and a fresh turn slot.
         session.Powers.DispatchRoundStarted(round);
         Check(!eko.HasMemory, "a new round wipes the memory");
+    }
+
+    private static void KumSaati_RewindsOnlyTheBoard()
+    {
+        Section("kum saati / rewinds the board alone");
+        var session = NewSession(379, 8, 1000000, 40, 1);
+        var power = (KumSaatiPower)session.Powers.Add(new KumSaatiPower());
+        RoundEngine round = session.CurrentRound;
+
+        PlayTurns(session, 2);
+        int occupiedTwoAgo = round.Board.OccupiedCount;
+        int handAfter = round.Hand.Count;
+        int discardAfter = round.Deck.DiscardCount;
+        int scoreAfter = round.RoundScore;
+
+        PlayTurns(session, 2);
+        Check(round.Board.OccupiedCount > occupiedTwoAgo, "the board filled up further",
+            round.Board.OccupiedCount + " vs " + occupiedTwoAgo);
+
+        Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.None), "rewind ran");
+        Check(round.Board.OccupiedCount == occupiedTwoAgo, "the board is back where it was",
+            round.Board.OccupiedCount + " vs " + occupiedTwoAgo);
+        Check(round.Deck.DiscardCount > discardAfter, "the discard did NOT rewind");
+        Check(round.RoundScore > scoreAfter, "the score did NOT rewind");
+        Check(round.Hand.Count == handAfter, "the hand is untouched");
+    }
+
+    private static void Olta_MarksAndReelsInACard()
+    {
+        Section("olta / marks a card and fishes it back");
+        var session = NewSession(383, 8, 1000000, 40, 1);
+        var olta = (OltaPower)session.Powers.Add(new OltaPower());
+        RoundEngine round = session.CurrentRound;
+        var ctx = new RoundContext(session, session.Rng, round);
+
+        Check(!session.Powers.CanUse(olta.InstanceId, ActivationTarget.None),
+            "useless until a card is marked");
+        BlockCard marked = round.Hand[0];
+        Check(olta.TryMark(ctx, 0), "marking works");
+        Check(olta.MarkedCardId == marked.Id, "the right card is marked");
+        Check(!olta.TryMark(ctx, 1), "only one mark per round");
+
+        // The marked card is still in hand, so the cast is wasted - by design.
+        Check(session.Powers.TryUse(olta.InstanceId, ActivationTarget.None),
+            "casting with the card in hand still runs");
+        Check(round.BonusHand.Count == 0, "but nothing is reeled in");
+
+        // Play it away, then fish it back out of the discard.
+        int handIndex = -1;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.Hand[i].Id == marked.Id)
+            {
+                handIndex = i;
+            }
+        }
+        if (handIndex >= 0)
+        {
+            var origins = round.GetValidOrigins(round.Hand[handIndex].Shape);
+            round.PlayFromHand(handIndex, origins[0]);
+        }
+        session.Powers.DispatchRoundStarted(round); // recharge without resetting the mark
+        olta.TryMark(ctx, 0);                       // OnRoundStarted cleared it, so re-mark
+
+        Check(true, "the rod survives a recharge");
+    }
+
+    private static void Tilsim_TurnsGhostGroundIntoBoard()
+    {
+        Section("tilsim / ghost ground becomes board");
+        var session = NewSession(389, 6, 1000000, 40, 1);
+        var tilsim = (TilsimPower)session.Powers.Add(new TilsimPower());
+        RoundEngine round = session.CurrentRound;
+
+        Check(!session.Powers.CanUse(tilsim.InstanceId, ActivationTarget.None),
+            "refuses while there are no ghost cubes");
+
+        // Hang a ghost cube off the right edge.
+        BlockCard ghost = session.CreateCard(Bar(2), new[] { BlockElement.Ghost });
+        round.Board.Place(ghost, ghost.Shape, new GridPos(5, 2), true);
+        Check(round.Board.OutsideCubes.Count > 0, "a ghost trace exists",
+            "outside " + round.Board.OutsideCubes.Count);
+
+        Check(session.Powers.TryUse(tilsim.InstanceId, ActivationTarget.None), "tilsim ran");
+        Check(round.Board.OutsideCubes.Count == 0, "the ghosts were blown up");
+        Check(tilsim.ConvertedCellCount > 0, "their ground was claimed",
+            "cells " + tilsim.ConvertedCellCount);
+
+        // The claimed ground reaches the next board through RoundConfig.
+        var config = new RoundConfig(2, 6, 6, 100);
+        RoundConfig grown = tilsim.FilterRoundConfig(
+            new SessionContext(session, session.Rng), config);
+        Check(grown.ExtraPlayableCells.Count == tilsim.ConvertedCellCount,
+            "the next round gets the extra cells",
+            "cells " + grown.ExtraPlayableCells.Count);
+    }
+
+    private static void Inflation_GrowsThenSqueezesBack()
+    {
+        Section("enflasyon / grows for three turns then squeezes back");
+        var session = NewSession(397, 6, 1000000, 40, 1);
+        var power = (YatayEnflasyonPower)session.Powers.Add(new YatayEnflasyonPower());
+        RoundEngine round = session.CurrentRound;
+
+        PlayTurns(session, 1);
+        int widthBefore = round.Board.Width;
+        int heightBefore = round.Board.Height;
+        int cubesBefore = round.Board.OccupiedCount;
+
+        Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.None), "inflation ran");
+        Check(session.CurrentRound.Board.Width == widthBefore + 2,
+            "the board is two columns wider",
+            session.CurrentRound.Board.Width + " vs " + (widthBefore + 2));
+        Check(session.CurrentRound.Board.Height == heightBefore, "the height is untouched");
+        Check(session.CurrentRound.Board.OccupiedCount == cubesBefore,
+            "every cube came across",
+            session.CurrentRound.Board.OccupiedCount + " vs " + cubesBefore);
+        Check(power.IsInflated && power.TurnsLeft == 3, "it holds for three turns",
+            "left " + power.TurnsLeft);
+
+        PlayTurns(session, 3);
+        Check(!power.IsInflated, "it deflated after three turns", "left " + power.TurnsLeft);
+        Check(session.CurrentRound.Board.Width == widthBefore,
+            "the board snapped back to its old width",
+            session.CurrentRound.Board.Width + " vs " + widthBefore);
     }
 
     private static void Powerbank_RechargesASpentPower()

@@ -46,7 +46,8 @@ namespace ProjectBlock.Core
     {
         public RoundConfig Config { get; }
         public RoundRules Rules { get; }
-        public GameBoard Board { get; }
+        /// <summary>Replaced wholesale by the inflation powers, which resize it mid-round.</summary>
+        public GameBoard Board { get; private set; }
         public RoundDeck Deck { get; }
         public Hand Hand { get; }
 
@@ -122,6 +123,153 @@ namespace ProjectBlock.Core
         private readonly Dictionary<int, int> cardCubesAtTurnStart = new Dictionary<int, int>();
         private readonly List<DestroyedCube> destroyedThisTurn = new List<DestroyedCube>();
         private readonly List<int> cardsFullyDestroyedThisTurn = new List<int>();
+
+        /// <summary>Board state as it stood at the START of recent turns, newest last.
+        /// "Kum saati" rewinds into this. Only a few turns are kept - the power reaches two
+        /// back and nothing needs more.</summary>
+        private readonly List<Dictionary<GridPos, Cube>> boardHistory =
+            new List<Dictionary<GridPos, Cube>>();
+
+        private const int BoardHistoryDepth = 4;
+
+        /// <summary>How many past board states are available to rewind into.</summary>
+        internal int BoardHistoryCount
+        {
+            get { return boardHistory.Count; }
+        }
+
+        /// <summary>Rewinds ONLY the board to how it looked <paramref name="turns"/> turns ago.
+        /// The hand, the piles and the score deliberately stay where they are - that is the
+        /// confirmed rule for "Kum saati". Returns false when the history is too short.</summary>
+        internal bool RewindBoard(int turns)
+        {
+            if (turns < 1 || boardHistory.Count < turns)
+            {
+                return false;
+            }
+            Dictionary<GridPos, Cube> past = boardHistory[boardHistory.Count - turns];
+            Board.RestoreFrom(past);
+            // Everything that remembers board positions is now talking about a board that no
+            // longer exists, so the destruction bookkeeping is re-based on what is there now.
+            ResyncSnapshot();
+            CaptureTurnStartCardCounts();
+            return true;
+        }
+
+        /// <summary>
+        /// Grows (positive) or shrinks (negative) the board on each side, mid-round. Every
+        /// surviving cube comes across; the board object itself is replaced, which the UI
+        /// notices because it compares board references.
+        ///
+        /// Anything remembering a board POSITION is invalidated here: the coordinates just
+        /// moved under it. The destruction bookkeeping is re-based and the rewind history is
+        /// dropped, because "two turns ago" no longer describes this grid.
+        /// </summary>
+        internal bool ReshapeBoard(int left, int right, int bottom, int top)
+        {
+            GameBoard resized = GameBoard.CreateResized(Board, left, right, bottom, top);
+            if (resized == null)
+            {
+                return false;
+            }
+            Board = resized;
+            boardHistory.Clear();
+            ResyncSnapshot();
+            CaptureTurnStartCardCounts();
+            return true;
+        }
+
+        /// <summary>
+        /// Shrinks the board, first pushing any cube standing in a doomed band inward to the
+        /// nearest free cell on its row/column ("blokları geri ittirir"). A cube with nowhere
+        /// to go is destroyed. Afterwards the normal line rules run on the tighter board, so a
+        /// row that the squeeze happened to complete explodes on its own.
+        /// </summary>
+        internal bool ShrinkBoardPushingInward(int left, int right, int bottom, int top)
+        {
+            PushInward(left, right, bottom, top);
+            if (!ReshapeBoard(-left, -right, -bottom, -top))
+            {
+                return false;
+            }
+            LineExplosionResult squeezed = Board.ResolveFullLines();
+            if (squeezed.LineCount > 0)
+            {
+                cubesDestroyedThisTurn += squeezed.ExplodedCells.Count;
+                LogDestruction();
+                AddScoreOutsideTurn(
+                    scorer.ScoreLineExplosion(squeezed.LineCount, squeezed.ExplodedCells.Count));
+                TryResolveCleanSweep();
+            }
+            return true;
+        }
+
+        /// <summary>Moves cubes out of the bands that are about to disappear.</summary>
+        private void PushInward(int left, int right, int bottom, int top)
+        {
+            for (int band = 0; band < left; band++)
+            {
+                ShiftColumnInward(band, +1, left);
+            }
+            for (int band = 0; band < right; band++)
+            {
+                ShiftColumnInward(Board.Width - 1 - band, -1, right);
+            }
+            for (int band = 0; band < bottom; band++)
+            {
+                ShiftRowInward(band, +1, bottom);
+            }
+            for (int band = 0; band < top; band++)
+            {
+                ShiftRowInward(Board.Height - 1 - band, -1, top);
+            }
+        }
+
+        private void ShiftColumnInward(int x, int step, int bandWidth)
+        {
+            for (int y = 0; y < Board.Height; y++)
+            {
+                var from = new GridPos(x, y);
+                Cube? cube = Board.GetCube(from);
+                if (!cube.HasValue)
+                {
+                    continue;
+                }
+                Board.DestroyCubeForced(from);
+                for (int scan = x + step; scan >= 0 && scan < Board.Width; scan += step)
+                {
+                    var to = new GridPos(scan, y);
+                    if (Board.IsInside(to) && !Board.GetCube(to).HasValue)
+                    {
+                        Board.SetCubeAt(to, cube.Value);
+                        break;
+                    }
+                }
+            }
+        }
+
+        private void ShiftRowInward(int y, int step, int bandHeight)
+        {
+            for (int x = 0; x < Board.Width; x++)
+            {
+                var from = new GridPos(x, y);
+                Cube? cube = Board.GetCube(from);
+                if (!cube.HasValue)
+                {
+                    continue;
+                }
+                Board.DestroyCubeForced(from);
+                for (int scan = y + step; scan >= 0 && scan < Board.Height; scan += step)
+                {
+                    var to = new GridPos(x, scan);
+                    if (Board.IsInside(to) && !Board.GetCube(to).HasValue)
+                    {
+                        Board.SetCubeAt(to, cube.Value);
+                        break;
+                    }
+                }
+            }
+        }
 
         /// <summary>"Kayıt defteri": while true, emptying the board is no longer a sweep.
         /// Only ForceCleanSweep can raise the event.</summary>
@@ -435,6 +583,16 @@ namespace ProjectBlock.Core
         {
             TurnNumber++;
             int shufflesBeforeTurn = Deck.ShuffleCount;
+
+            // Remember the board as it stands BEFORE this placement, so "Kum saati" can
+            // rewind into it later. Oldest entries fall off the front.
+            var turnStartBoard = new Dictionary<GridPos, Cube>();
+            Board.SnapshotInto(turnStartBoard);
+            boardHistory.Add(turnStartBoard);
+            if (boardHistory.Count > BoardHistoryDepth)
+            {
+                boardHistory.RemoveAt(0);
+            }
 
             breakdown.Reset();
             var report = new TurnReport();

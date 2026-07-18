@@ -253,7 +253,9 @@ namespace ProjectBlock.Core
 
         private void StartRound()
         {
-            RoundConfig roundConfig = Jokers.FilterRoundConfig(Config.Progression.GetRound(RoundNumber));
+            RoundConfig roundConfig = Config.Progression.GetRound(RoundNumber);
+            roundConfig = Jokers.FilterRoundConfig(roundConfig);
+            roundConfig = Powers.FilterRoundConfig(roundConfig);
             CurrentRound = new RoundEngine(roundConfig, Config.Rules, ownedCards, rng, scorer, this, Jokers);
             CurrentRound.TurnResolved += OnTurnResolved;
             CurrentRound.StatusChanged += OnRoundStatusChanged;
