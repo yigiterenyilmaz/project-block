@@ -848,6 +848,7 @@ namespace ProjectBlock.View
             }
             if (draggedCard != null || deckSelect.IsOpen)
             {
+                cardLayer.SetHoveredCard(-1);
                 HideTooltip();
                 return;
             }
@@ -855,12 +856,14 @@ namespace ProjectBlock.View
 
             if (deckOverlay.IsOpen)
             {
+                cardLayer.SetHoveredCard(-1);
                 BlockCard card = deckOverlay.CardAt(world);
                 if (card != null) ShowCardTooltip(card, world); else HideTooltip();
                 return;
             }
             if (session.Phase == GamePhase.Market)
             {
+                cardLayer.SetHoveredCard(-1);
                 int index = marketView.OfferAt(world);
                 if (index < 0 || index >= session.Market.Offers.Count)
                 {
@@ -888,9 +891,11 @@ namespace ProjectBlock.View
             {
                 CardVisual hit = cardLayer.CardAt(world);
                 BlockCard card = hit != null ? CardOfSlot(session.CurrentRound, hit.SlotIndex) : null;
+                cardLayer.SetHoveredCard(card != null ? card.Id : -1);
                 if (card != null) ShowCardTooltip(card, world); else HideTooltip();
                 return;
             }
+            cardLayer.SetHoveredCard(-1);
             HideTooltip();
         }
 

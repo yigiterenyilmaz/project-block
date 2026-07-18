@@ -272,6 +272,30 @@ namespace ProjectBlock.View
                 && Mathf.Abs(world.y - DrawPilePos.y) <= CardVisual.BodyHeight * 0.5f + 0.09f;
         }
 
+        private int hoveredCardId = -1;
+
+        /// <summary>Marks the card under the mouse (-1 = none): it grows slightly.
+        /// Safe to call every frame; only transitions touch the visuals.</summary>
+        public void SetHoveredCard(int cardId)
+        {
+            if (hoveredCardId == cardId)
+            {
+                return;
+            }
+            CardVisual previous;
+            if (hoveredCardId >= 0 && heldVisuals.TryGetValue(hoveredCardId, out previous)
+                && previous != null)
+            {
+                previous.SetHovered(false);
+            }
+            hoveredCardId = cardId;
+            CardVisual current;
+            if (cardId >= 0 && heldVisuals.TryGetValue(cardId, out current) && current != null)
+            {
+                current.SetHovered(true);
+            }
+        }
+
         /// <summary>Drops a card's visual so the next Sync rebuilds it (used after a
         /// mechanical rotation or fox reshape changed its displayed shape).</summary>
         public void ForgetCard(int cardId)

@@ -232,6 +232,14 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Hover highlight for hand/bonus cards: a slight grow while the mouse is
+        /// over the card. Scale-only, so it never fights the drag alpha/sorting effects.</summary>
+        public void SetHovered(bool hovered)
+        {
+            float scale = hovered ? 1.07f : 1f;
+            transform.localScale = new Vector3(scale, scale, 1f);
+        }
+
         /// <summary>Raises (or resets, with 0) the sorting order of the whole card,
         /// so dragged/flying cards render above resting ones.</summary>
         public void SetSortingBoost(int boost)
