@@ -70,10 +70,6 @@ namespace ProjectBlock.Core
         /// for the shuffle animation.</summary>
         public bool DiscardWasReshuffled { get; internal set; }
 
-        /// <summary>Overtime clean sweeps only: cards removed face-down from the draw pile
-        /// until round end. The player must NOT be shown which cards these are.</summary>
-        public IReadOnlyList<BlockCard> CardsRemovedForRound { get; internal set; }
-
         public RoundStatus StatusAfter { get; internal set; }
 
         internal TurnReport()
@@ -81,7 +77,6 @@ namespace ProjectBlock.Core
             PlacedCells = Array.Empty<GridPos>();
             ExplodedRows = Array.Empty<int>();
             ExplodedColumns = Array.Empty<int>();
-            CardsRemovedForRound = Array.Empty<BlockCard>();
         }
     }
 }

@@ -11,8 +11,9 @@ namespace ProjectBlock.Core
         /// <summary>Cards the hand is refilled to after every normal placement.</summary>
         public int HandSize = 3;
 
-        /// <summary>Overtime rule: cards removed face-down from the draw pile per clean sweep
-        /// after the threshold has been passed.</summary>
-        public int OvertimeCardsRemovedPerCleanSweep = 3;
+        /// <summary>Confirmed rule (2026-07-18 feedback): declining an advance offer
+        /// ("continue") removes this many random cards from the draw pile for the rest of
+        /// the round, on top of the mandatory hand redraw.</summary>
+        public int CardsRemovedPerContinue = 2;
     }
 }

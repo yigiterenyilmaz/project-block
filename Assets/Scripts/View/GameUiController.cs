@@ -123,8 +123,18 @@ namespace ProjectBlock.View
                         }
                         else if (kb != null && kb.cKey.wasPressedThisFrame)
                         {
+                            // continuing costs cards and redraws the hand (see RoundEngine)
                             round.DecideAdvance(false);
-                            RefreshAll(null);
+                            if (round.Status == RoundStatus.InProgress)
+                            {
+                                sfx.Shuffle();
+                                cardLayer.AnimateRedraw(round);
+                                UpdateHud();
+                            }
+                            else
+                            {
+                                RefreshAll(null);
+                            }
                         }
                     }
                     else if (round.Status == RoundStatus.InProgress)

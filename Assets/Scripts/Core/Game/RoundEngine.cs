@@ -4,8 +4,8 @@
 // TURN RESOLUTION ORDER (keep this order stable; mechanics depend on it):
 //   1. place cubes on the board, score the placement
 //   2. explode full rows/columns, score them
-//   3. clean-sweep check + bonus; if in overtime: reshuffle discard into draw,
-//      remove N random cards from the draw pile for the round, queue advance offer
+//   3. clean-sweep check + bonus; if in overtime: reshuffle discard into draw and
+//      queue a new advance offer
 //   4. played card leaves the hand -> discard (bonus cards: expire + burn top of draw)
 //   5. refill the hand (loss rules live here, see RefillHand)
 //   6. threshold check: first time the round score reaches the threshold ->
@@ -13,6 +13,10 @@
 //   7. status update: pending advance offer outranks a same-turn loss (the player who
 //      just earned an offer may escape by advancing; if they continue, the loss hits)
 //   8. otherwise: lose if no held block fits the board
+//
+// CONTINUING HAS A PRICE (confirmed 2026-07-18): declining an advance offer shuffles
+// the whole hand back into the draw pile, removes Rules.CardsRemovedPerContinue
+// random cards face-down for the round, and draws a fresh hand - see DecideAdvance.
 //
 // EXTENSION POINTS:
 //  - Powers ("güçler") = new public methods here (they act on the round state).
@@ -128,7 +132,9 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Resolves the pending advance offer. Advancing ends the round (-> market);
-        /// continuing resumes play under overtime rules.</summary>
+        /// continuing resumes play under overtime rules AND has a price: the hand is
+        /// reshuffled into the draw pile, random cards leave the round face-down, and a
+        /// fresh hand is drawn (see the file header).</summary>
         public void DecideAdvance(bool advanceToNextRound)
         {
             if (Status != RoundStatus.AwaitingAdvanceDecision)
@@ -147,6 +153,14 @@ namespace ProjectBlock.Core
                 return;
             }
             SetStatus(RoundStatus.InProgress);
+            DiscardHandAndReshuffle();
+            Deck.RemoveRandomFromDraw(Rules.CardsRemovedPerContinue);
+            RefillHand();
+            if (Loss != null)
+            {
+                SetStatus(RoundStatus.Lost);
+                return;
+            }
             CheckForNoPlayableMove();
         }
 
@@ -165,11 +179,7 @@ namespace ProjectBlock.Core
         public void RedrawHand()
         {
             EnsurePlacingAllowed();
-            while (Hand.Count > 0)
-            {
-                Deck.Discard(Hand.RemoveAt(Hand.Count - 1));
-            }
-            Deck.ShuffleDiscardIntoDraw();
+            DiscardHandAndReshuffle();
             RefillHand();
             if (Loss != null)
             {
@@ -177,6 +187,15 @@ namespace ProjectBlock.Core
                 return;
             }
             CheckForNoPlayableMove();
+        }
+
+        private void DiscardHandAndReshuffle()
+        {
+            while (Hand.Count > 0)
+            {
+                Deck.Discard(Hand.RemoveAt(Hand.Count - 1));
+            }
+            Deck.ShuffleDiscardIntoDraw();
         }
 
         private void EnsurePlacingAllowed()
@@ -222,10 +241,8 @@ namespace ProjectBlock.Core
                 scoreGained += scorer.ScoreCleanSweep();
                 if (ThresholdPassed)
                 {
-                    // Overtime reward+price: fresh draw pile, minus N random cards, new offer.
+                    // Overtime reward: a fresh draw pile and a new chance to leave.
                     Deck.ShuffleDiscardIntoDraw();
-                    report.CardsRemovedForRound =
-                        Deck.RemoveRandomFromDraw(Rules.OvertimeCardsRemovedPerCleanSweep);
                     offerAdvance = true;
                 }
             }
