@@ -19,6 +19,9 @@ namespace ProjectBlock.View
 
         public bool IsOpen { get; private set; }
 
+        private readonly List<Vector2> entryCenters = new List<Vector2>();
+        private readonly List<BlockShape> entryShapes = new List<BlockShape>();
+
         /// <summary>Shows the overlay with the given cards (normally the whole owned deck).</summary>
         public void Show(IReadOnlyList<BlockCard> cards)
         {
@@ -42,12 +45,30 @@ namespace ProjectBlock.View
                 CardVisual visual = CardVisual.Create(transform, "Overlay_" + sorted[i].Id,
                     sorted[i], true, false, position, 41);
                 visual.transform.localScale = new Vector3(CardScale, CardScale, 1f);
+                entryCenters.Add(position);
+                entryShapes.Add(sorted[i].Shape);
             }
+        }
+
+        /// <summary>The displayed shape under a world point (fox shape picker), or null.</summary>
+        public BlockShape ShapeAt(Vector2 world)
+        {
+            for (int i = 0; i < entryCenters.Count; i++)
+            {
+                if (Mathf.Abs(world.x - entryCenters[i].x) <= CardVisual.BodyWidth * CardScale * 0.5f
+                    && Mathf.Abs(world.y - entryCenters[i].y) <= CardVisual.BodyHeight * CardScale * 0.5f)
+                {
+                    return entryShapes[i];
+                }
+            }
+            return null;
         }
 
         public void Hide()
         {
             IsOpen = false;
+            entryCenters.Clear();
+            entryShapes.Clear();
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Destroy(transform.GetChild(i).gameObject);

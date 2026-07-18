@@ -94,6 +94,10 @@ namespace ProjectBlock.Core
         private readonly Dictionary<int, DynamiteState> dynamiteBlocks =
             new Dictionary<int, DynamiteState>();
 
+        /// <summary>Fox reshape choices and mechanical rotation steps, per card id.</summary>
+        private readonly Dictionary<int, BlockShape> foxShapes = new Dictionary<int, BlockShape>();
+        private readonly Dictionary<int, int> rotations = new Dictionary<int, int>();
+
         /// <summary>Fires after every resolved placement. Jokers and UI subscribe here.</summary>
         public event Action<TurnReport> TurnResolved;
 
@@ -133,7 +137,63 @@ namespace ProjectBlock.Core
         /// may hang off the board). UI and play methods both use this.</summary>
         public bool CanPlaceCard(BlockCard card, GridPos origin)
         {
-            return Board.CanPlace(card.Shape, origin, card.Has(BlockElement.Ghost));
+            return Board.CanPlace(EffectiveShape(card), origin, card.Has(BlockElement.Ghost));
+        }
+
+        /// <summary>The shape this card currently places: fox reshapes replace the base
+        /// shape, mechanical rotations spin it. Plain cards return their own shape.</summary>
+        public BlockShape EffectiveShape(BlockCard card)
+        {
+            BlockShape shape;
+            if (!foxShapes.TryGetValue(card.Id, out shape))
+            {
+                shape = card.Shape;
+            }
+            int steps;
+            if (rotations.TryGetValue(card.Id, out steps))
+            {
+                for (int i = 0; i < steps; i++)
+                {
+                    shape = shape.RotatedClockwise();
+                }
+            }
+            return shape;
+        }
+
+        /// <summary>MECHANICAL RULE: rotates the block 90° clockwise (right-click in the
+        /// UI). Only mechanical blocks rotate; the orientation persists for the round.</summary>
+        public void RotateCard(int handIndex)
+        {
+            EnsurePlacingAllowed();
+            if (handIndex < 0 || handIndex >= Hand.Count)
+            {
+                throw new ArgumentOutOfRangeException("handIndex");
+            }
+            BlockCard card = Hand[handIndex];
+            if (!card.Has(BlockElement.Mechanical))
+            {
+                throw new InvalidOperationException("Only mechanical blocks can rotate.");
+            }
+            int steps;
+            rotations.TryGetValue(card.Id, out steps);
+            rotations[card.Id] = (steps + 1) % 4;
+        }
+
+        /// <summary>FOX RULE (confirmed): a fox block can take any shape that exists in
+        /// the current deck. The UI offers only deck shapes; this trusts its caller.</summary>
+        public void SetFoxShape(int handIndex, BlockShape shape)
+        {
+            EnsurePlacingAllowed();
+            if (handIndex < 0 || handIndex >= Hand.Count)
+            {
+                throw new ArgumentOutOfRangeException("handIndex");
+            }
+            BlockCard card = Hand[handIndex];
+            if (!card.Has(BlockElement.Fox))
+            {
+                throw new InvalidOperationException("Only fox blocks can be reshaped.");
+            }
+            foxShapes[card.Id] = shape;
         }
 
         /// <summary>Plays a hand card onto the board. Validate with Board.CanPlace first;
@@ -260,7 +320,8 @@ namespace ProjectBlock.Core
             report.Origin = origin;
 
             // 1. place + score
-            report.PlacedCells = Board.Place(card, origin, card.Has(BlockElement.Ghost));
+            report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
+                card.Has(BlockElement.Ghost));
             if (card.Has(BlockElement.Dynamite))
             {
                 var state = new DynamiteState();
@@ -465,20 +526,75 @@ namespace ProjectBlock.Core
         {
             for (int i = 0; i < Hand.Count; i++)
             {
-                if (Board.AnyPlacementExists(Hand[i].Shape, Hand[i].Has(BlockElement.Ghost)))
+                if (CanPlayCardAnywhere(Hand[i]))
                 {
                     return;
                 }
             }
             foreach (BonusSlot slot in bonusHand)
             {
-                if (Board.AnyPlacementExists(slot.Card.Shape, slot.Card.Has(BlockElement.Ghost)))
+                if (CanPlayCardAnywhere(slot.Card))
                 {
                     return;
                 }
             }
             Loss = LossReason.NoPlayableMove;
             SetStatus(RoundStatus.Lost);
+        }
+
+        /// <summary>No-move check that accounts for the card's options: mechanical
+        /// blocks may rotate into a fit, fox blocks may reshape into any deck shape.</summary>
+        private bool CanPlayCardAnywhere(BlockCard card)
+        {
+            bool ghost = card.Has(BlockElement.Ghost);
+            BlockShape shape = EffectiveShape(card);
+            if (Board.AnyPlacementExists(shape, ghost))
+            {
+                return true;
+            }
+            if (card.Has(BlockElement.Mechanical))
+            {
+                BlockShape rotated = shape;
+                for (int i = 0; i < 3; i++)
+                {
+                    rotated = rotated.RotatedClockwise();
+                    if (Board.AnyPlacementExists(rotated, ghost))
+                    {
+                        return true;
+                    }
+                }
+            }
+            if (card.Has(BlockElement.Fox))
+            {
+                foreach (BlockShape deckShape in AllRoundShapes())
+                {
+                    if (Board.AnyPlacementExists(deckShape, ghost))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private IEnumerable<BlockShape> AllRoundShapes()
+        {
+            for (int i = 0; i < Hand.Count; i++)
+            {
+                yield return Hand[i].Shape;
+            }
+            foreach (BlockCard card in Deck.DrawPile)
+            {
+                yield return card.Shape;
+            }
+            foreach (BlockCard card in Deck.DiscardPile)
+            {
+                yield return card.Shape;
+            }
+            foreach (BlockCard card in Deck.RemovedFromRound)
+            {
+                yield return card.Shape;
+            }
         }
 
         private void SetStatus(RoundStatus newStatus)

@@ -40,7 +40,9 @@ namespace ProjectBlock.Core
             BlockElement.Gold,
             BlockElement.Transparent,
             BlockElement.Ghost,
-            BlockElement.Dynamite
+            BlockElement.Dynamite,
+            BlockElement.Mechanical,
+            BlockElement.Fox
         };
     }
 

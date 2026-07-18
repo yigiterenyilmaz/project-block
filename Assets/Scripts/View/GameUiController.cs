@@ -41,6 +41,7 @@ namespace ProjectBlock.View
         private Vector3 camBasePosition;
         private Coroutine shakeRoutine;
         private CardVisual draggedCard;
+        private int foxPickSlot = -1;
         private int lastSeedUsed;
 
         private void Start()
@@ -59,6 +60,7 @@ namespace ProjectBlock.View
             config.Deck = currentDeck;
             session = new GameSession(config);
             draggedCard = null;
+            foxPickSlot = -1;
             marketView.Hide();
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
             StartRoundPresentation();
@@ -119,10 +121,33 @@ namespace ProjectBlock.View
             }
             if (deckOverlay.IsOpen)
             {
-                // modal: any click or Escape closes, everything else is blocked
-                if ((mouse != null && mouse.leftButton.wasPressedThisFrame)
-                    || (kb != null && kb.escapeKey.wasPressedThisFrame))
+                // modal: click picks (fox mode) or closes; Escape always closes
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
                 {
+                    foxPickSlot = -1;
+                    deckOverlay.Hide();
+                    return;
+                }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                {
+                    if (foxPickSlot >= 0)
+                    {
+                        Vector2 pickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                        BlockShape picked = deckOverlay.ShapeAt(pickWorld);
+                        RoundEngine pickRound = session.CurrentRound;
+                        BlockCard foxCard = CardOfSlot(pickRound, foxPickSlot);
+                        if (picked != null && foxCard != null
+                            && pickRound.Status == RoundStatus.InProgress)
+                        {
+                            pickRound.SetFoxShape(foxPickSlot, picked);
+                            cardLayer.ForgetCard(foxCard.Id);
+                            Debug.Log("[project_block] Fox reshaped to " + picked);
+                        }
+                        foxPickSlot = -1;
+                        deckOverlay.Hide();
+                        RefreshAll(null);
+                        return;
+                    }
                     deckOverlay.Hide();
                 }
                 return;
@@ -236,6 +261,28 @@ namespace ProjectBlock.View
 
             if (draggedCard == null)
             {
+                if (mouse.rightButton.wasPressedThisFrame)
+                {
+                    // right-click: rotate mechanical blocks, open the fox shape picker
+                    CardVisual rightHit = cardLayer.CardAt(world);
+                    if (rightHit != null && rightHit.SlotIndex >= 0
+                        && rightHit.SlotIndex < round.Hand.Count)
+                    {
+                        BlockCard rightCard = round.Hand[rightHit.SlotIndex];
+                        if (rightCard.Has(BlockElement.Mechanical))
+                        {
+                            round.RotateCard(rightHit.SlotIndex);
+                            cardLayer.ForgetCard(rightCard.Id);
+                            RefreshAll(null);
+                        }
+                        else if (rightCard.Has(BlockElement.Fox))
+                        {
+                            foxPickSlot = rightHit.SlotIndex;
+                            deckOverlay.Show(session.OwnedCards);
+                        }
+                    }
+                    return;
+                }
                 if (mouse.leftButton.wasPressedThisFrame)
                 {
                     if (cardLayer.IsDrawPileAt(world))
@@ -256,7 +303,7 @@ namespace ProjectBlock.View
 
             draggedCard.SnapTo(world);
             BlockCard slotCard = CardOfSlot(round, draggedCard.SlotIndex);
-            BlockShape shape = slotCard != null ? slotCard.Shape : null;
+            BlockShape shape = slotCard != null ? round.EffectiveShape(slotCard) : null;
             GridPos hovered;
             bool overBoard = shape != null && boardView.TryWorldToCell(world, out hovered);
             var origin = default(GridPos);
@@ -446,7 +493,7 @@ namespace ProjectBlock.View
             sb.Append("Draw ").Append(round.Deck.DrawCount)
                 .Append("   Discard ").Append(round.Deck.DiscardCount)
                 .Append("   Removed ").Append(round.Deck.RemovedCount).Append('\n');
-            sb.Append("Drag a card onto the board to place it.   Click draw pile: view deck\n");
+            sb.Append("Drag to place.  Click draw pile: deck.  Right-click: rotate GEARS / reshape FOX\n");
             sb.Append("Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run");
             infoText.text = sb.ToString();
 

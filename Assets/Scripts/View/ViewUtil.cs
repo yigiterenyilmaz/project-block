@@ -50,7 +50,6 @@ namespace ProjectBlock.View
                 case BlockElement.Ghost: return new Color(0.78f, 0.78f, 0.95f);
                 case BlockElement.Dynamite: return new Color(0.88f, 0.2f, 0.15f);
                 case BlockElement.Mechanical: return new Color(0.6f, 0.65f, 0.7f);
-                case BlockElement.Mirror: return new Color(0.75f, 0.82f, 0.85f);
                 case BlockElement.Fox: return new Color(0.85f, 0.5f, 0.2f);
                 default: return Color.gray;
             }

@@ -34,15 +34,13 @@ namespace ProjectBlock.Core
         /// the entire board is cleared.</summary>
         Dynamite = 6,
 
-        /// <summary>NOT IMPLEMENTED: rotatable before placement.</summary>
+        /// <summary>Rotatable 90° per right-click while in hand (RoundEngine.RotateCard).</summary>
         Mechanical = 7,
 
-        /// <summary>NOT IMPLEMENTED: mirrorable before placement.</summary>
-        Mirror = 8,
-
-        /// <summary>NOT IMPLEMENTED: reshapeable before placement.</summary>
+        /// <summary>Reshapeable into any shape that exists in the current deck
+        /// (RoundEngine.SetFoxShape; right-click opens the picker).</summary>
         Fox = 9
 
-        // PiggyBank ("kumbara") was cut from the design on 2026-07-18.
+        // Mirror ("ayna") and PiggyBank ("kumbara") were cut from the design 2026-07-18.
     }
 }

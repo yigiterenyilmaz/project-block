@@ -57,24 +57,34 @@ namespace ProjectBlock.View
         public static CardVisual Create(Transform parent, string name, BlockCard card,
             bool faceUp, bool bonusTint, Vector2 position, int sortingOrder)
         {
+            return Create(parent, name, card, faceUp, bonusTint, position, sortingOrder, null);
+        }
+
+        /// <summary>Variant with an explicit display shape (mechanical rotation / fox
+        /// reshape show the card's EFFECTIVE shape instead of its printed one).</summary>
+        public static CardVisual Create(Transform parent, string name, BlockCard card,
+            bool faceUp, bool bonusTint, Vector2 position, int sortingOrder,
+            BlockShape displayShape)
+        {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             go.transform.localPosition = new Vector3(position.x, position.y, 0f);
             var visual = go.AddComponent<CardVisual>();
             visual.CardId = card != null && faceUp ? card.Id : -1;
             visual.HomePosition = position;
-            visual.BuildSprites(card, faceUp, bonusTint, sortingOrder);
+            visual.BuildSprites(card, faceUp, bonusTint, sortingOrder, displayShape);
             return visual;
         }
 
-        private void BuildSprites(BlockCard card, bool faceUp, bool bonusTint, int order)
+        private void BuildSprites(BlockCard card, bool faceUp, bool bonusTint, int order,
+            BlockShape displayShape)
         {
             var bodySize = new Vector2(BodyWidth, BodyHeight);
             if (faceUp && card != null)
             {
                 Track(ViewUtil.MakeRect(transform, "Body", Vector2.zero, bodySize,
                     bonusTint ? BonusFaceColor : FaceColor, order), order);
-                BlockShape shape = card.Shape;
+                BlockShape shape = displayShape != null ? displayShape : card.Shape;
                 Color miniColor = card.Elements.Count > 0
                     ? ViewUtil.ElementColor(card.Elements[0])
                     : ViewUtil.ColorForCard(card.Id);

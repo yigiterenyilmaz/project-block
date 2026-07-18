@@ -147,13 +147,21 @@ namespace ProjectBlock.Core
         /// persist in OutsideCubes).</summary>
         public IReadOnlyList<GridPos> Place(BlockCard card, GridPos origin, bool allowOutside)
         {
-            if (!CanPlace(card.Shape, origin, allowOutside))
+            return Place(card, card.Shape, origin, allowOutside);
+        }
+
+        /// <summary>Placement of an explicit shape (mechanical rotation / fox reshape
+        /// place a transformed shape on behalf of the card).</summary>
+        public IReadOnlyList<GridPos> Place(BlockCard card, BlockShape shape, GridPos origin,
+            bool allowOutside)
+        {
+            if (!CanPlace(shape, origin, allowOutside))
             {
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
             }
-            var placed = new List<GridPos>(card.Shape.Size);
+            var placed = new List<GridPos>(shape.Size);
             CubeKind kind = CubeRules.KindForCard(card);
-            foreach (GridPos offset in card.Shape.Cells)
+            foreach (GridPos offset in shape.Cells)
             {
                 GridPos pos = origin + offset;
                 if (IsInside(pos))

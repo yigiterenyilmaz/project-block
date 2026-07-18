@@ -208,7 +208,8 @@ namespace ProjectBlock.View
                         ? round.Hand[slot]
                         : round.BonusHand[slot - handCount].Card;
                     visual = CardVisual.Create(transform, "Card_" + id, card, true,
-                        bonusIds.Contains(id), animate ? DrawPilePos : slotPos, HeldCardOrder);
+                        bonusIds.Contains(id), animate ? DrawPilePos : slotPos, HeldCardOrder,
+                        round.EffectiveShape(card));
                     heldVisuals[id] = visual;
                     if (animate)
                     {
@@ -246,6 +247,21 @@ namespace ProjectBlock.View
         {
             return Mathf.Abs(world.x - DrawPilePos.x) <= CardVisual.BodyWidth * 0.5f + 0.09f
                 && Mathf.Abs(world.y - DrawPilePos.y) <= CardVisual.BodyHeight * 0.5f + 0.09f;
+        }
+
+        /// <summary>Drops a card's visual so the next Sync rebuilds it (used after a
+        /// mechanical rotation or fox reshape changed its displayed shape).</summary>
+        public void ForgetCard(int cardId)
+        {
+            CardVisual visual;
+            if (heldVisuals.TryGetValue(cardId, out visual))
+            {
+                if (visual != null)
+                {
+                    Destroy(visual.gameObject);
+                }
+                heldVisuals.Remove(cardId);
+            }
         }
 
         /// <summary>The held card under a world point (for drag pickup), or null.</summary>
