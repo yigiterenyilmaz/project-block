@@ -28,6 +28,7 @@ public static class JokerTests
         Iade_SwapsOneCardInPlace();
         Kumbara_AccrueAndSell();
         Water_ExplodesInPlaceBeforeFalling();
+        Market_CardSellValueByElement();
         Market_StocksAndSellsJokers();
         Market_RefusesJokerWhenSlotsFull();
         Overtime_GatedJokerIsSkipped();
@@ -720,6 +721,31 @@ public static class JokerTests
         LineExplosionResult afterFall = settleFirst.ResolveFullLines();
         Check(afterFall.LineCount == 0,
             "settling first would drop the water and miss the line", "lines " + afterFall.LineCount);
+    }
+
+    private static void Market_CardSellValueByElement()
+    {
+        Section("market / card sell value");
+        var config = new MarketConfig();
+        var vanilla = new BlockCard(1, Bar(3));
+        var golden = new BlockCard(2, Bar(3), new[] { BlockElement.Gold });
+        Check(config.SellValue(vanilla) == 0, "a plain block sells for nothing",
+            "got " + config.SellValue(vanilla));
+        int sell = config.SellValue(golden);
+        Check(sell > 0 && sell < config.BuyPrice(golden),
+            "an elemental block sells for less than its buy price",
+            "sell " + sell + " buy " + config.BuyPrice(golden));
+
+        // The session path removes the card and pays exactly that value.
+        var session = new GameSession(new GameConfig { RngSeed = 5 });
+        BlockCard owned = session.OwnedCards[0]; // starting deck is plain
+        int before = session.OwnedCards.Count;
+        long money = session.TotalScore;
+        long paid = session.SellCard(owned);
+        Check(paid == 0 && session.TotalScore == money, "selling a plain owned card pays nothing");
+        Check(session.OwnedCards.Count == before - 1, "the sold card leaves the deck",
+            "count " + session.OwnedCards.Count);
+        Check(session.SellCard(owned) == 0, "selling the same card twice is a no-op");
     }
 
     private static void Market_StocksAndSellsJokers()

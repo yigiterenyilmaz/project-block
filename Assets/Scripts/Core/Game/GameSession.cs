@@ -153,6 +153,20 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>Sells an owned card back for its sell value (added to TotalScore) and
+        /// removes it from the deck. Plain blocks pay nothing; elemental ones pay a fraction
+        /// of their buy price. Returns what was paid, or 0 if the card was not owned.</summary>
+        public long SellCard(BlockCard card)
+        {
+            if (card == null || !ownedCards.Remove(card))
+            {
+                return 0;
+            }
+            int value = Config.Market.SellValue(card);
+            TotalScore += value;
+            return value;
+        }
+
         /// <summary>Leaves the market and starts the next round.</summary>
         public void LeaveMarket()
         {
@@ -240,10 +254,7 @@ namespace ProjectBlock.Core
                     };
                 }
                 var card = new BlockCard(nextCardId++, shape, elements);
-                int price = market.BlockBasePrice
-                    + market.BlockPricePerCube * card.Shape.Size
-                    + market.ElementPriceSurcharge * card.Elements.Count;
-                newOffers.Add(new MarketOffer(card, price));
+                newOffers.Add(new MarketOffer(card, market.BuyPrice(card)));
             }
             AddJokerOffers(market, newOffers);
             Market.SetOffers(newOffers);

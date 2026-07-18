@@ -36,6 +36,29 @@ namespace ProjectBlock.Core
         /// <summary>Flat price of a joker offer. Balance placeholder.</summary>
         public int JokerPrice = 40;
 
+        /// <summary>Fraction of a card's buy price returned when it is sold. Balance
+        /// placeholder; sell is always below buy.</summary>
+        public double CardSellFraction = 0.5;
+
+        /// <summary>The market price of a block card: base + per-cube + per-element.</summary>
+        public int BuyPrice(BlockCard card)
+        {
+            return BlockBasePrice
+                + BlockPricePerCube * card.Shape.Size
+                + ElementPriceSurcharge * card.Elements.Count;
+        }
+
+        /// <summary>What selling a card pays. Plain blocks are worth nothing; elemental
+        /// blocks return a fraction of their buy price (always less than buying one).</summary>
+        public int SellValue(BlockCard card)
+        {
+            if (card.Elements.Count == 0)
+            {
+                return 0;
+            }
+            return (int)(BuyPrice(card) * CardSellFraction);
+        }
+
         /// <summary>Elements the market can roll. ONLY add elements whose behavior is
         /// implemented (see BlockElement docs).</summary>
         public List<BlockElement> ElementPool = new List<BlockElement>
