@@ -56,6 +56,9 @@ namespace ProjectBlock.Core
         /// UI/sound feedback; future jokers (Batak, Kayıt defteri...) will also read it.</summary>
         public int CleanSweepCount { get; private set; }
 
+        /// <summary>Advance offers declined this round; raises the next continue's price.</summary>
+        public int ContinueCount { get; private set; }
+
         public RoundStatus Status { get; private set; }
 
         /// <summary>Set when Status is Lost (may be set earlier if an advance offer is
@@ -158,7 +161,10 @@ namespace ProjectBlock.Core
             }
             SetStatus(RoundStatus.InProgress);
             DiscardHandAndReshuffle();
-            Deck.RemoveRandomFromDraw(Rules.CardsRemovedPerContinue);
+            // escalating price: every further continue this round removes more cards
+            Deck.RemoveRandomFromDraw(
+                Rules.CardsRemovedPerContinue + Rules.ContinueCostEscalation * ContinueCount);
+            ContinueCount++;
             RefillHand();
             if (Loss != null)
             {

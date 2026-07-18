@@ -15,5 +15,10 @@ namespace ProjectBlock.Core
         /// ("continue") removes this many random cards from the draw pile for the rest of
         /// the round, on top of the mandatory hand redraw.</summary>
         public int CardsRemovedPerContinue = 2;
+
+        /// <summary>Balance: each further continue in the same round costs this many MORE
+        /// cards (k-th continue removes CardsRemovedPerContinue + k * this). Caps how long
+        /// overtime can be farmed - without it a 60-point round could yield 1600+.</summary>
+        public int ContinueCostEscalation = 2;
     }
 }

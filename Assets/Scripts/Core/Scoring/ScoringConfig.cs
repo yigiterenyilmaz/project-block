@@ -20,7 +20,9 @@ namespace ProjectBlock.Core
         /// <summary>Extra score per line beyond the first when several explode at once.</summary>
         public int MultiLineBonusPerExtraLine = 10;
 
-        /// <summary>Flat bonus for a clean sweep ("temizlik" - board fully emptied).</summary>
-        public int CleanSweepBonus = 150;
+        /// <summary>Flat bonus for a clean sweep ("temizlik" - board fully emptied).
+        /// Rebalanced 2026-07-18: 150 dwarfed early thresholds and made overtime
+        /// farming explode (1600+ points in round 1).</summary>
+        public int CleanSweepBonus = 75;
     }
 }
