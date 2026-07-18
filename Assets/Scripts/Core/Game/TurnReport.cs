@@ -65,6 +65,11 @@ namespace ProjectBlock.Core
         /// <summary>True the one time the round score first reached the threshold.</summary>
         public bool ThresholdJustPassed { get; internal set; }
 
+        /// <summary>True if the discard pile was shuffled into the draw pile at any point
+        /// during this turn (refill recycle, threshold pass, overtime sweep). UI uses this
+        /// for the shuffle animation.</summary>
+        public bool DiscardWasReshuffled { get; internal set; }
+
         /// <summary>Overtime clean sweeps only: cards removed face-down from the draw pile
         /// until round end. The player must NOT be shown which cards these are.</summary>
         public IReadOnlyList<BlockCard> CardsRemovedForRound { get; internal set; }

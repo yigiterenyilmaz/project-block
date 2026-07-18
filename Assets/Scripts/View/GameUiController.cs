@@ -1,7 +1,7 @@
 // PURPOSE: The single scene component (lives in Assets/Scenes/enes.unity). Creates the
 // GameSession, builds the debug UI at runtime (no scene-authored visuals), and turns
 // player input into calls on the core engine.
-// CONTROLS: click a card or press 1-9 to select, click the board to place,
+// CONTROLS: drag a card from the hand onto the board to place it,
 //           A = advance / C = continue on an offer, N = leave market, R = new run.
 // NOTE FOR AGENTS: this is placeholder presentation. Extend gameplay in
 // ProjectBlock.Core; only wiring/visuals belong here.
@@ -21,17 +21,16 @@ namespace ProjectBlock.View
         [SerializeField] private float maxBoardWorldSize = 6.5f;
         [SerializeField] private bool verboseTurnLogs = true;
 
-        private static readonly Vector2 BoardCenter = new Vector2(0f, 0.7f);
-        private static readonly Vector2 HandCenter = new Vector2(0f, -4.1f);
-        private const float HandSpacing = 2.0f;
+        private static readonly Vector2 BoardCenter = new Vector2(0f, 0.9f);
 
         private GameSession session;
         private BoardView boardView;
-        private HandView handView;
+        private CardLayerView cardLayer;
+        private DeckOverlayView deckOverlay;
         private Text infoText;
         private Text messageText;
         private Camera cam;
-        private int selectedSlot = -1;
+        private CardVisual draggedCard;
         private int lastSeedUsed;
 
         private void Start()
@@ -47,9 +46,23 @@ namespace ProjectBlock.View
             var config = new GameConfig();
             config.RngSeed = lastSeedUsed;
             session = new GameSession(config);
-            selectedSlot = -1;
+            draggedCard = null;
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
-            RefreshAll();
+            StartRoundPresentation();
+        }
+
+        /// <summary>Board + HUD refresh with the round-start shuffle-and-deal animation.</summary>
+        private void StartRoundPresentation()
+        {
+            RoundEngine round = session.CurrentRound;
+            if (boardView.Board != round.Board)
+            {
+                boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
+            }
+            boardView.Refresh();
+            boardView.ClearPreview();
+            cardLayer.AnimateRoundStart(round);
+            UpdateHud();
         }
 
         private void Update()
@@ -59,9 +72,21 @@ namespace ProjectBlock.View
                 return;
             }
             Keyboard kb = Keyboard.current;
+            Mouse mouse = Mouse.current;
             if (kb != null && kb.rKey.wasPressedThisFrame)
             {
+                deckOverlay.Hide();
                 NewGame();
+                return;
+            }
+            if (deckOverlay.IsOpen)
+            {
+                // modal: any click or Escape closes, everything else is blocked
+                if ((mouse != null && mouse.leftButton.wasPressedThisFrame)
+                    || (kb != null && kb.escapeKey.wasPressedThisFrame))
+                {
+                    deckOverlay.Hide();
+                }
                 return;
             }
             switch (session.Phase)
@@ -70,8 +95,7 @@ namespace ProjectBlock.View
                     if (kb != null && kb.nKey.wasPressedThisFrame)
                     {
                         session.LeaveMarket();
-                        selectedSlot = -1;
-                        RefreshAll();
+                        StartRoundPresentation();
                     }
                     break;
                 case GamePhase.Round:
@@ -81,81 +105,102 @@ namespace ProjectBlock.View
                         if (kb != null && kb.aKey.wasPressedThisFrame)
                         {
                             round.DecideAdvance(true);
-                            RefreshAll();
+                            RefreshAll(null);
                         }
                         else if (kb != null && kb.cKey.wasPressedThisFrame)
                         {
                             round.DecideAdvance(false);
-                            RefreshAll();
+                            RefreshAll(null);
                         }
                     }
                     else if (round.Status == RoundStatus.InProgress)
                     {
-                        HandlePlacementInput(round, kb, Mouse.current);
+                        if (kb != null && kb.sKey.wasPressedThisFrame)
+                        {
+                            // debug: discard the hand, shuffle it into the draw pile, redraw
+                            round.RedrawHand();
+                            cardLayer.AnimateRedraw(round);
+                            UpdateHud();
+                        }
+                        else
+                        {
+                            HandleDrag(round, mouse);
+                        }
                     }
                     break;
             }
         }
 
-        private void HandlePlacementInput(RoundEngine round, Keyboard kb, Mouse mouse)
+        private void HandleDrag(RoundEngine round, Mouse mouse)
         {
-            int slotCount = round.Hand.Count + round.BonusHand.Count;
-            if (kb != null)
-            {
-                for (int i = 0; i < slotCount && i < 9; i++)
-                {
-                    if (kb[(Key)((int)Key.Digit1 + i)].wasPressedThisFrame)
-                    {
-                        selectedSlot = i;
-                        RefreshAll();
-                    }
-                }
-            }
             if (mouse == null)
             {
                 return;
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
-            bool clicked = mouse.leftButton.wasPressedThisFrame;
 
-            if (clicked)
+            if (draggedCard == null)
             {
-                int slotHit = handView.SlotIndexAt(world);
-                if (slotHit >= 0)
+                if (mouse.leftButton.wasPressedThisFrame)
                 {
-                    selectedSlot = slotHit;
-                    RefreshAll();
-                    return;
+                    if (cardLayer.IsDrawPileAt(world))
+                    {
+                        deckOverlay.Show(round.Deck.DrawPile);
+                        return;
+                    }
+                    CardVisual hit = cardLayer.CardAt(world);
+                    if (hit != null)
+                    {
+                        draggedCard = hit;
+                        draggedCard.SetSortingBoost(10);
+                        draggedCard.SetAlpha(0.55f);
+                    }
                 }
-            }
-
-            BlockShape shape = ShapeOfSlot(round, selectedSlot);
-            if (shape == null)
-            {
-                boardView.ClearPreview();
                 return;
             }
+
+            draggedCard.SnapTo(world);
+            BlockShape shape = ShapeOfSlot(round, draggedCard.SlotIndex);
             GridPos hovered;
-            if (!boardView.TryWorldToCell(world, out hovered))
+            bool overBoard = shape != null && boardView.TryWorldToCell(world, out hovered);
+            var origin = default(GridPos);
+            bool valid = false;
+            if (overBoard)
+            {
+                boardView.TryWorldToCell(world, out hovered);
+                // Anchor the shape so the cursor sits roughly at its center.
+                origin = new GridPos(hovered.X - (shape.Width - 1) / 2, hovered.Y - (shape.Height - 1) / 2);
+                valid = round.Board.CanPlace(shape, origin);
+                boardView.ShowPreview(shape, origin, valid);
+            }
+            else
             {
                 boardView.ClearPreview();
-                return;
             }
-            // Anchor the shape so the cursor sits roughly at its center.
-            var origin = new GridPos(hovered.X - (shape.Width - 1) / 2, hovered.Y - (shape.Height - 1) / 2);
-            bool valid = round.Board.CanPlace(shape, origin);
-            boardView.ShowPreview(shape, origin, valid);
-            if (clicked && valid)
+
+            if (mouse.leftButton.wasReleasedThisFrame)
             {
-                TurnReport report = selectedSlot < round.Hand.Count
-                    ? round.PlayFromHand(selectedSlot, origin)
-                    : round.PlayFromBonus(selectedSlot - round.Hand.Count, origin);
-                if (verboseTurnLogs)
+                CardVisual released = draggedCard;
+                draggedCard = null;
+                released.SetSortingBoost(0);
+                released.SetAlpha(1f);
+                if (overBoard && valid)
                 {
-                    LogTurn(report);
+                    int slot = released.SlotIndex;
+                    TurnReport report = slot < round.Hand.Count
+                        ? round.PlayFromHand(slot, origin)
+                        : round.PlayFromBonus(slot - round.Hand.Count, origin);
+                    if (verboseTurnLogs)
+                    {
+                        LogTurn(report);
+                    }
+                    RefreshAll(report);
                 }
-                selectedSlot = -1;
-                RefreshAll();
+                else
+                {
+                    released.MoveTo(released.HomePosition, 0.2f, null);
+                    boardView.ClearPreview();
+                }
             }
         }
 
@@ -173,25 +218,16 @@ namespace ProjectBlock.View
             return bonusIndex < round.BonusHand.Count ? round.BonusHand[bonusIndex].Card.Shape : null;
         }
 
-        private void RefreshAll()
+        private void RefreshAll(TurnReport report)
         {
             RoundEngine round = session.CurrentRound;
             if (boardView.Board != round.Board)
             {
                 boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
             }
-            int slotCount = round.Hand.Count + round.BonusHand.Count;
-            if (selectedSlot >= slotCount)
-            {
-                selectedSlot = slotCount - 1;
-            }
-            if (selectedSlot < 0 && slotCount > 0)
-            {
-                selectedSlot = 0;
-            }
             boardView.Refresh();
             boardView.ClearPreview();
-            handView.Refresh(round, selectedSlot, HandCenter, HandSpacing);
+            cardLayer.Sync(round, report);
             UpdateHud();
         }
 
@@ -211,7 +247,8 @@ namespace ProjectBlock.View
             sb.Append("Draw ").Append(round.Deck.DrawCount)
                 .Append("   Discard ").Append(round.Deck.DiscardCount)
                 .Append("   Removed ").Append(round.Deck.RemovedCount).Append('\n');
-            sb.Append("Select card: click / 1-9   Place: click board   R: new run");
+            sb.Append("Drag a card onto the board to place it.   Click draw pile: view deck\n");
+            sb.Append("S: redraw hand (debug)   R: new run");
             infoText.text = sb.ToString();
 
             switch (session.Phase)
@@ -256,9 +293,13 @@ namespace ProjectBlock.View
             boardGo.transform.SetParent(transform, false);
             boardView = boardGo.AddComponent<BoardView>();
 
-            var handGo = new GameObject("HandView");
-            handGo.transform.SetParent(transform, false);
-            handView = handGo.AddComponent<HandView>();
+            var cardsGo = new GameObject("CardLayer");
+            cardsGo.transform.SetParent(transform, false);
+            cardLayer = cardsGo.AddComponent<CardLayerView>();
+
+            var overlayGo = new GameObject("DeckOverlay");
+            overlayGo.transform.SetParent(transform, false);
+            deckOverlay = overlayGo.AddComponent<DeckOverlayView>();
 
             var canvasGo = new GameObject("HudCanvas");
             canvasGo.transform.SetParent(transform, false);

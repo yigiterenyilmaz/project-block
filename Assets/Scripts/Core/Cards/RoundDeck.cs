@@ -60,6 +60,10 @@ namespace ProjectBlock.Core
             get { return removedFromRound; }
         }
 
+        /// <summary>Times the discard has been shuffled into the draw pile this round
+        /// (lets observers detect that a reshuffle happened during an action).</summary>
+        public int ShuffleCount { get; private set; }
+
         /// <summary>Takes the top card of the draw pile, or null if it is empty.</summary>
         public BlockCard DrawTop()
         {
@@ -83,6 +87,7 @@ namespace ProjectBlock.Core
             drawPile.AddRange(discardPile);
             discardPile.Clear();
             rng.Shuffle(drawPile);
+            ShuffleCount++;
         }
 
         /// <summary>

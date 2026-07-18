@@ -40,10 +40,19 @@ namespace ProjectBlock.View
         public static SpriteRenderer MakeCell(Transform parent, string name, Vector2 position,
             float scale, Color color, int sortingOrder)
         {
+            SpriteRenderer renderer = MakeRect(parent, name, position,
+                new Vector2(scale, scale), color, sortingOrder);
+            return renderer;
+        }
+
+        /// <summary>Creates a rectangular sprite object (position and size in local space).</summary>
+        public static SpriteRenderer MakeRect(Transform parent, string name, Vector2 position,
+            Vector2 size, Color color, int sortingOrder)
+        {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             go.transform.localPosition = new Vector3(position.x, position.y, 0f);
-            go.transform.localScale = new Vector3(scale, scale, 1f);
+            go.transform.localScale = new Vector3(size.x, size.y, 1f);
             var renderer = go.AddComponent<SpriteRenderer>();
             renderer.sprite = WhiteSprite;
             renderer.color = color;

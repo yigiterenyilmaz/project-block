@@ -157,6 +157,28 @@ namespace ProjectBlock.Core
             bonusHand.Add(new BonusSlot(card, outcomeOnPlay));
         }
 
+        /// <summary>
+        /// Discards the entire hand, shuffles the discard pile into the draw pile, and
+        /// draws a fresh hand. Does NOT consume a turn. Currently bound to a debug key in
+        /// the UI; this is also the primitive the future "Renovasyon" joker will use.
+        /// </summary>
+        public void RedrawHand()
+        {
+            EnsurePlacingAllowed();
+            while (Hand.Count > 0)
+            {
+                Deck.Discard(Hand.RemoveAt(Hand.Count - 1));
+            }
+            Deck.ShuffleDiscardIntoDraw();
+            RefillHand();
+            if (Loss != null)
+            {
+                SetStatus(RoundStatus.Lost);
+                return;
+            }
+            CheckForNoPlayableMove();
+        }
+
         private void EnsurePlacingAllowed()
         {
             if (Status != RoundStatus.InProgress)
@@ -169,6 +191,7 @@ namespace ProjectBlock.Core
             BonusPlayOutcome bonusOutcome)
         {
             TurnNumber++;
+            int shufflesBeforeTurn = Deck.ShuffleCount;
             var report = new TurnReport();
             report.TurnNumber = TurnNumber;
             report.Card = card;
@@ -222,9 +245,11 @@ namespace ProjectBlock.Core
                 {
                     Deck.RemoveFromRound(card);
                 }
-                // Burn: flip the top draw-pile card face-up into the discard. If the pile is
-                // empty there is simply nothing to burn (no reshuffle, no loss).
-                report.BurnedCard = Deck.DrawTop();
+                // Burn: the next available card is flipped face-up into the discard.
+                // "Next available" follows the normal draw rules (confirmed design):
+                // before the threshold an empty draw pile recycles the discard first;
+                // in overtime an empty pile on any draw attempt is a loss.
+                report.BurnedCard = DrawWithRules();
                 if (report.BurnedCard != null)
                 {
                     Deck.Discard(report.BurnedCard);
@@ -260,6 +285,7 @@ namespace ProjectBlock.Core
                 CheckForNoPlayableMove();
             }
             report.StatusAfter = Status;
+            report.DiscardWasReshuffled = Deck.ShuffleCount != shufflesBeforeTurn;
 
             if (TurnResolved != null)
             {
@@ -269,31 +295,49 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
-        /// Draws until the hand reaches Rules.HandSize. All deck-based loss rules live here:
-        ///  - overtime (threshold passed): an empty draw pile on a draw attempt is a loss;
-        ///    the discard is NOT recycled anymore (only clean sweeps recycle it).
-        ///  - before the threshold: an empty draw pile recycles the discard; if both piles
-        ///    are empty and the hand is still short, that is a loss (confirmed rule - even
-        ///    if some cards remain in hand).
+        /// The ONE way a card ever leaves the draw pile (hand refills AND bonus burns).
+        /// Deck-based loss rules live here:
+        ///  - overtime (threshold passed): an empty draw pile on any draw attempt is a
+        ///    loss; the discard is NOT recycled anymore (only clean sweeps recycle it).
+        ///  - before the threshold: an empty draw pile recycles the discard first;
+        ///    null is returned only when no card exists in either pile.
+        /// </summary>
+        private BlockCard DrawWithRules()
+        {
+            BlockCard card = Deck.DrawTop();
+            if (card != null)
+            {
+                return card;
+            }
+            if (ThresholdPassed)
+            {
+                Loss = LossReason.DrawPileEmptyAfterThreshold;
+                return null;
+            }
+            if (Deck.DiscardCount > 0)
+            {
+                Deck.ShuffleDiscardIntoDraw();
+                return Deck.DrawTop();
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Draws until the hand reaches Rules.HandSize. Confirmed rule: if the hand cannot
+        /// be refilled to full size (no card left in either pile), that is a loss - even
+        /// if some cards remain in hand.
         /// </summary>
         private void RefillHand()
         {
             while (Hand.Count < Rules.HandSize)
             {
-                BlockCard card = Deck.DrawTop();
+                BlockCard card = DrawWithRules();
                 if (card == null)
                 {
-                    if (ThresholdPassed)
+                    if (Loss == null)
                     {
-                        Loss = LossReason.DrawPileEmptyAfterThreshold;
-                        return;
+                        Loss = LossReason.HandCannotBeRefilled;
                     }
-                    if (Deck.DiscardCount > 0)
-                    {
-                        Deck.ShuffleDiscardIntoDraw();
-                        continue;
-                    }
-                    Loss = LossReason.HandCannotBeRefilled;
                     return;
                 }
                 Hand.Add(card);
