@@ -28,9 +28,13 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>The one shared cube/block color. Cards are told apart by the id label
-        /// stamped on their face, not by color (user request 2026-07-18).</summary>
-        public static readonly Color CubeColor = new Color(0.45f, 0.62f, 0.85f);
+        /// <summary>Stable, distinct-ish color per card id (golden-ratio hue walk).</summary>
+        public static Color ColorForCard(int cardId)
+        {
+            float hue = (cardId * 0.618034f) % 1f;
+            if (hue < 0f) hue += 1f;
+            return Color.HSVToRGB(hue, 0.55f, 0.95f);
+        }
 
         /// <summary>Creates a square sprite object. Scale is uniform (a cell/tile).</summary>
         public static SpriteRenderer MakeCell(Transform parent, string name, Vector2 position,

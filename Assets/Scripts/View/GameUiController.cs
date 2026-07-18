@@ -339,18 +339,19 @@ namespace ProjectBlock.View
 
         private void EmitBlastParticles(RoundEngine round, TurnReport report)
         {
+            var blastColor = new Color(1f, 0.72f, 0.35f);
             foreach (int y in report.ExplodedRows)
             {
                 for (int x = 0; x < round.Board.Width; x++)
                 {
-                    blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), ViewUtil.CubeColor, 4);
+                    blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), blastColor, 4);
                 }
             }
             foreach (int x in report.ExplodedColumns)
             {
                 for (int y = 0; y < round.Board.Height; y++)
                 {
-                    blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), ViewUtil.CubeColor, 4);
+                    blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), blastColor, 4);
                 }
             }
             if (report.CleanSweep)

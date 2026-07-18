@@ -24,22 +24,20 @@ namespace ProjectBlock.View
         private const float DealDuration = 0.3f;
         private const float DiscardDuration = 0.28f;
 
-        // Sorting order tiers (board uses 0-2): pile slot 2, stack layers 3+, discard top
-        // card 15, hand/bonus cards 20 (+8 fly boost, +10 drag boost), pile fx 25+.
+        // Sorting order tiers (board uses 0-2): pile slot 2, stack layers 3..35 (each card
+        // back needs 3 orders), discard top card 36, hand/bonus cards 20 (+8 fly boost,
+        // +10 drag boost - piles and hand never overlap spatially), pile fx 25+.
         private const int StackBaseOrder = 3;
-        private const int DiscardTopOrder = 15;
+        private const int StackOrderStep = 3;
+        private const int DiscardTopOrder = 36;
         private const int HeldCardOrder = 20;
         private const int FxOrder = 25;
 
         private static readonly Color PileSlotColor = new Color(0.10f, 0.11f, 0.13f);
-        private static readonly Color DrawStackColorA = new Color(0.18f, 0.26f, 0.44f);
-        private static readonly Color DrawStackColorB = new Color(0.25f, 0.34f, 0.54f);
-        private static readonly Color DiscardStackColorA = new Color(0.40f, 0.38f, 0.34f);
-        private static readonly Color DiscardStackColorB = new Color(0.50f, 0.48f, 0.43f);
 
         private readonly Dictionary<int, CardVisual> heldVisuals = new Dictionary<int, CardVisual>();
-        private readonly List<SpriteRenderer> drawStack = new List<SpriteRenderer>();
-        private readonly List<SpriteRenderer> discardStack = new List<SpriteRenderer>();
+        private Transform drawStackRoot;
+        private Transform discardStackRoot;
         private CardVisual discardTopVisual;
         private int discardTopId = -1;
         private bool pilesBuilt;
@@ -287,22 +285,10 @@ namespace ProjectBlock.View
             var slotSize = new Vector2(CardVisual.BodyWidth + 0.18f, CardVisual.BodyHeight + 0.18f);
             ViewUtil.MakeRect(drawPileRoot, "Slot", Vector2.zero, slotSize, PileSlotColor, 2);
             ViewUtil.MakeRect(discardPileRoot, "Slot", Vector2.zero, slotSize, PileSlotColor, 2);
-            for (int i = 0; i < MaxStackLayers; i++)
-            {
-                // alternating shades + a diagonal offset per layer keep the cards readable
-                // as separate cards instead of one solid block
-                Vector2 offset = new Vector2(i * StackOffset, i * StackOffset);
-                SpriteRenderer drawLayer = ViewUtil.MakeRect(drawPileRoot, "Stack_" + i,
-                    offset, new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight),
-                    i % 2 == 0 ? DrawStackColorA : DrawStackColorB, StackBaseOrder + i);
-                drawLayer.enabled = false;
-                drawStack.Add(drawLayer);
-                SpriteRenderer discardLayer = ViewUtil.MakeRect(discardPileRoot, "Stack_" + i,
-                    offset, new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight),
-                    i % 2 == 0 ? DiscardStackColorA : DiscardStackColorB, StackBaseOrder + i);
-                discardLayer.enabled = false;
-                discardStack.Add(discardLayer);
-            }
+            drawStackRoot = MakePileRoot("Stack", Vector2.zero);
+            drawStackRoot.SetParent(drawPileRoot, false);
+            discardStackRoot = MakePileRoot("Stack", Vector2.zero);
+            discardStackRoot.SetParent(discardPileRoot, false);
         }
 
         private Transform MakePileRoot(string name, Vector2 position)
@@ -311,6 +297,26 @@ namespace ProjectBlock.View
             go.transform.SetParent(transform, false);
             go.transform.localPosition = new Vector3(position.x, position.y, 0f);
             return go.transform;
+        }
+
+        /// <summary>Rebuilds a pile's stack as the decorated BACKS of its actual cards
+        /// (sampled every few cards), so individual cards can be told apart.</summary>
+        private void RebuildStack(Transform stackRoot, IReadOnlyList<BlockCard> pile)
+        {
+            for (int i = stackRoot.childCount - 1; i >= 0; i--)
+            {
+                Destroy(stackRoot.GetChild(i).gameObject);
+            }
+            int layers = LayersFor(pile.Count);
+            for (int i = 0; i < layers; i++)
+            {
+                int cardIndex = Mathf.Min(i * CardsPerStackLayer, pile.Count - 1);
+                var layerRoot = new GameObject("Back_" + i).transform;
+                layerRoot.SetParent(stackRoot, false);
+                layerRoot.localPosition = new Vector3(i * StackOffset, i * StackOffset, 0f);
+                CardVisual.BuildBack(layerRoot, pile[cardIndex],
+                    StackBaseOrder + i * StackOrderStep, null);
+            }
         }
 
         /// <summary>Visible stack layers for a card count: one edge per few cards,
@@ -327,13 +333,9 @@ namespace ProjectBlock.View
 
         private void UpdatePiles(RoundEngine round)
         {
-            int drawLayers = LayersFor(round.Deck.DrawCount);
+            RebuildStack(drawStackRoot, round.Deck.DrawPile);
+            RebuildStack(discardStackRoot, round.Deck.DiscardPile);
             int discardLayers = LayersFor(round.Deck.DiscardCount);
-            for (int i = 0; i < MaxStackLayers; i++)
-            {
-                drawStack[i].enabled = i < drawLayers;
-                discardStack[i].enabled = i < discardLayers;
-            }
 
             IReadOnlyList<BlockCard> discardPile = round.Deck.DiscardPile;
             int topId = discardPile.Count > 0 ? discardPile[discardPile.Count - 1].Id : -1;

@@ -18,8 +18,17 @@ namespace ProjectBlock.View
 
         private static readonly Color FaceColor = new Color(0.88f, 0.86f, 0.80f);
         private static readonly Color BonusFaceColor = new Color(0.62f, 0.80f, 0.78f);
-        private static readonly Color BackColor = new Color(0.18f, 0.26f, 0.44f);
-        private static readonly Color BackInnerColor = new Color(0.26f, 0.36f, 0.56f);
+        private static readonly Color BackInnerColor = new Color(0.15f, 0.19f, 0.31f);
+
+        /// <summary>Frame colors card backs cycle through (combined with 6 symbols this
+        /// gives 24 distinct backs before repeating).</summary>
+        private static readonly Color[] BackFramePalette =
+        {
+            new Color(0.66f, 0.34f, 0.32f),
+            new Color(0.30f, 0.56f, 0.52f),
+            new Color(0.68f, 0.57f, 0.30f),
+            new Color(0.52f, 0.42f, 0.66f)
+        };
 
         /// <summary>Id of the shown BlockCard, or -1 for face-down/effect cards.</summary>
         public int CardId { get; private set; }
@@ -30,14 +39,9 @@ namespace ProjectBlock.View
         /// <summary>Rest position the card returns to after a cancelled drag.</summary>
         public Vector2 HomePosition;
 
-        private static readonly Color LabelColor = new Color(0.3f, 0.3f, 0.34f);
-
         private readonly List<SpriteRenderer> renderers = new List<SpriteRenderer>();
         private readonly List<int> baseOrders = new List<int>();
         private readonly List<Color> baseColors = new List<Color>();
-        private TextMesh idLabel;
-        private MeshRenderer idLabelRenderer;
-        private int idLabelBaseOrder;
 
         private Vector2 moveStart;
         private Vector2 moveTarget;
@@ -74,21 +78,90 @@ namespace ProjectBlock.View
                 {
                     Track(ViewUtil.MakeCell(transform, "Mini",
                         bottomLeft + new Vector2(cell.X * mini, cell.Y * mini),
-                        mini * 0.9f, ViewUtil.CubeColor, order + 1), order + 1);
+                        mini * 0.9f, ViewUtil.ColorForCard(card.Id), order + 1), order + 1);
                 }
-                // id stamp so cards can be told apart (colors are uniform on purpose)
-                idLabel = ViewUtil.MakeText3D(transform, "IdLabel",
-                    new Vector2(BodyWidth * 0.5f - 0.09f, -BodyHeight * 0.5f + 0.04f),
-                    "#" + card.Id, 40, 0.045f, LabelColor, order + 2, TextAnchor.LowerRight);
-                idLabelRenderer = idLabel.GetComponent<MeshRenderer>();
-                idLabelBaseOrder = order + 2;
             }
             else
             {
-                Track(ViewUtil.MakeRect(transform, "Back", Vector2.zero, bodySize, BackColor, order), order);
-                Track(ViewUtil.MakeRect(transform, "BackInner", Vector2.zero,
-                    new Vector2(BodyWidth - 0.24f, BodyHeight - 0.24f), BackInnerColor, order + 1), order + 1);
+                BuildBack(transform, card, order, Track);
             }
+        }
+
+        /// <summary>Frame color of a card's back; anonymous backs (id &lt; 0) are neutral.</summary>
+        public static Color FrameColorFor(int cardId)
+        {
+            if (cardId < 0)
+            {
+                return new Color(0.30f, 0.38f, 0.55f);
+            }
+            return BackFramePalette[(cardId / 6) % BackFramePalette.Length];
+        }
+
+        /// <summary>
+        /// Builds a decorated card back (frame + inner + per-card symbol) so cards can be
+        /// told apart in the piles. Uses sorting orders [order, order+2]. Also used by
+        /// CardLayerView for the pile stacks; track is null there (no fade/boost needed).
+        /// Pass a null card for an anonymous back (shuffle fx).
+        /// </summary>
+        public static void BuildBack(Transform parent, BlockCard card, int order,
+            Action<SpriteRenderer, int> track)
+        {
+            int id = card != null ? card.Id : -1;
+            Color frame = FrameColorFor(id);
+            Report(track, ViewUtil.MakeRect(parent, "BackFrame", Vector2.zero,
+                new Vector2(BodyWidth, BodyHeight), frame, order), order);
+            Report(track, ViewUtil.MakeRect(parent, "BackInner", Vector2.zero,
+                new Vector2(BodyWidth - 0.18f, BodyHeight - 0.18f), BackInnerColor, order + 1), order + 1);
+            if (id >= 0)
+            {
+                BuildBackSymbol(parent, id, frame, order + 2, track);
+            }
+        }
+
+        /// <summary>One of 6 sprite-built symbols, chosen by card id. All sprites of a
+        /// symbol share one color and order, so overlap draw order does not matter.</summary>
+        private static void BuildBackSymbol(Transform parent, int id, Color color, int order,
+            Action<SpriteRenderer, int> track)
+        {
+            switch (id % 6)
+            {
+                case 0: // diamond
+                    ReportRotated(track, ViewUtil.MakeCell(parent, "Sym", Vector2.zero, 0.4f, color, order), order);
+                    break;
+                case 1: // plus
+                    Report(track, ViewUtil.MakeRect(parent, "Sym", Vector2.zero, new Vector2(0.46f, 0.13f), color, order), order);
+                    Report(track, ViewUtil.MakeRect(parent, "Sym", Vector2.zero, new Vector2(0.13f, 0.46f), color, order), order);
+                    break;
+                case 2: // cross
+                    ReportRotated(track, ViewUtil.MakeRect(parent, "Sym", Vector2.zero, new Vector2(0.5f, 0.13f), color, order), order);
+                    ReportRotated(track, ViewUtil.MakeRect(parent, "Sym", Vector2.zero, new Vector2(0.13f, 0.5f), color, order), order);
+                    break;
+                case 3: // square
+                    Report(track, ViewUtil.MakeCell(parent, "Sym", Vector2.zero, 0.32f, color, order), order);
+                    break;
+                case 4: // bars
+                    Report(track, ViewUtil.MakeRect(parent, "Sym", new Vector2(0f, 0.12f), new Vector2(0.44f, 0.11f), color, order), order);
+                    Report(track, ViewUtil.MakeRect(parent, "Sym", new Vector2(0f, -0.12f), new Vector2(0.44f, 0.11f), color, order), order);
+                    break;
+                default: // twin diamonds
+                    ReportRotated(track, ViewUtil.MakeCell(parent, "Sym", new Vector2(-0.15f, 0f), 0.24f, color, order), order);
+                    ReportRotated(track, ViewUtil.MakeCell(parent, "Sym", new Vector2(0.15f, 0f), 0.24f, color, order), order);
+                    break;
+            }
+        }
+
+        private static void Report(Action<SpriteRenderer, int> track, SpriteRenderer renderer, int order)
+        {
+            if (track != null)
+            {
+                track(renderer, order);
+            }
+        }
+
+        private static void ReportRotated(Action<SpriteRenderer, int> track, SpriteRenderer renderer, int order)
+        {
+            renderer.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            Report(track, renderer, order);
         }
 
         private void Track(SpriteRenderer renderer, int baseOrder)
@@ -108,12 +181,6 @@ namespace ProjectBlock.View
                 color.a *= Mathf.Clamp01(alpha);
                 renderers[i].color = color;
             }
-            if (idLabel != null)
-            {
-                Color labelColor = LabelColor;
-                labelColor.a *= Mathf.Clamp01(alpha);
-                idLabel.color = labelColor;
-            }
         }
 
         /// <summary>Raises (or resets, with 0) the sorting order of the whole card,
@@ -123,10 +190,6 @@ namespace ProjectBlock.View
             for (int i = 0; i < renderers.Count; i++)
             {
                 renderers[i].sortingOrder = baseOrders[i] + boost;
-            }
-            if (idLabelRenderer != null)
-            {
-                idLabelRenderer.sortingOrder = idLabelBaseOrder + boost;
             }
         }
 
