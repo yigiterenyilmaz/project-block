@@ -86,6 +86,17 @@ namespace ProjectBlock.Core
         /// <summary>Accrued value per piggy-bank card currently on the board.</summary>
         private readonly Dictionary<int, int> piggyBanks = new Dictionary<int, int>();
 
+        private sealed class DynamiteState
+        {
+            public int FullSize;
+            public int RemainingAtTurnStart;
+        }
+
+        /// <summary>Dynamite blocks on the board (confirmed rule: they trigger on ANY
+        /// turn where the still-intact block explodes at once, not just placement turn).</summary>
+        private readonly Dictionary<int, DynamiteState> dynamiteBlocks =
+            new Dictionary<int, DynamiteState>();
+
         /// <summary>Fires after every resolved placement. Jokers and UI subscribe here.</summary>
         public event Action<TurnReport> TurnResolved;
 
@@ -216,18 +227,6 @@ namespace ProjectBlock.Core
             CheckForNoPlayableMove();
         }
 
-        private bool AllCellsEmpty(IReadOnlyList<GridPos> positions)
-        {
-            foreach (GridPos pos in positions)
-            {
-                if (Board.GetCube(pos).HasValue)
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
         /// <summary>Piggy banks accrue value each turn they survive; destroyed ones pay
         /// out their accumulated value. Returns the total payout this turn.</summary>
         private int ProcessPiggyBanks(TurnReport report)
@@ -236,9 +235,10 @@ namespace ProjectBlock.Core
             var trackedIds = new List<int>(piggyBanks.Keys);
             foreach (int cardId in trackedIds)
             {
-                if (Board.HasCubesOf(cardId))
+                int cubes = Board.CountCubesOf(cardId);
+                if (cubes > 0)
                 {
-                    piggyBanks[cardId] += scorer.PiggyBankGainPerTurn();
+                    piggyBanks[cardId] += scorer.ScorePiggyBankGain(cubes);
                 }
                 else
                 {
@@ -284,6 +284,13 @@ namespace ProjectBlock.Core
             {
                 piggyBanks[card.Id] = 0;
             }
+            if (card.Has(BlockElement.Dynamite))
+            {
+                var state = new DynamiteState();
+                state.FullSize = report.PlacedCells.Count;
+                state.RemainingAtTurnStart = report.PlacedCells.Count;
+                dynamiteBlocks[card.Id] = state;
+            }
             int scoreGained = scorer.ScorePlacement(report.PlacedCells.Count);
 
             // 2. explode full lines + score (fire chains resolve inside the board)
@@ -292,13 +299,42 @@ namespace ProjectBlock.Core
             report.ExplodedColumns = explosion.Columns;
             int cubesExploded = explosion.ExplodedCells.Count;
 
-            // DYNAMITE RULE: whole block exploded at once on its own placement turn
-            // -> the entire board is cleared (indestructibles excepted).
-            if (explosion.LineCount > 0 && card.Has(BlockElement.Dynamite)
-                && AllCellsEmpty(report.PlacedCells))
+            // DYNAMITE RULE (confirmed 2026-07-18): any dynamite block that was intact at
+            // turn start and got fully exploded in one shot clears the entire board.
+            if (explosion.LineCount > 0 && dynamiteBlocks.Count > 0)
             {
-                cubesExploded += Board.DestroyAllDestructible().Count;
-                report.DynamiteTriggered = true;
+                bool boom = false;
+                var trackedIds = new List<int>(dynamiteBlocks.Keys);
+                foreach (int id in trackedIds)
+                {
+                    DynamiteState state = dynamiteBlocks[id];
+                    int remaining = Board.CountCubesOf(id);
+                    if (remaining == 0)
+                    {
+                        dynamiteBlocks.Remove(id);
+                        if (state.RemainingAtTurnStart == state.FullSize)
+                        {
+                            boom = true;
+                        }
+                    }
+                    else
+                    {
+                        state.RemainingAtTurnStart = remaining;
+                    }
+                }
+                if (boom)
+                {
+                    cubesExploded += Board.DestroyAllDestructible().Count;
+                    report.DynamiteTriggered = true;
+                    // blocks wiped by the clear must not delayed-trigger next turn
+                    foreach (int id in new List<int>(dynamiteBlocks.Keys))
+                    {
+                        if (Board.CountCubesOf(id) == 0)
+                        {
+                            dynamiteBlocks.Remove(id);
+                        }
+                    }
+                }
             }
             report.CubesExploded = cubesExploded;
             if (explosion.LineCount > 0)

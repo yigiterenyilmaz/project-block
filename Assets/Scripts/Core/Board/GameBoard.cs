@@ -220,6 +220,13 @@ namespace ProjectBlock.Core
         /// <summary>Does any cube of this card remain on the board? (piggy banks, fire...)</summary>
         public bool HasCubesOf(int cardId)
         {
+            return CountCubesOf(cardId) > 0;
+        }
+
+        /// <summary>Cubes of this card remaining on the board (piggy value, dynamite).</summary>
+        public int CountCubesOf(int cardId)
+        {
+            int count = 0;
             for (int x = 0; x < Width; x++)
             {
                 for (int y = 0; y < Height; y++)
@@ -227,11 +234,11 @@ namespace ProjectBlock.Core
                     Cube? cube = cells[x, y];
                     if (cube.HasValue && cube.Value.SourceCardId == cardId)
                     {
-                        return true;
+                        count++;
                     }
                 }
             }
-            return false;
+            return count;
         }
 
         /// <summary>Number of cubes of a kind on the board (gold bonus...).</summary>
