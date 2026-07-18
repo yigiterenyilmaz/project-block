@@ -17,6 +17,7 @@ namespace ProjectBlock.Core
 
         public RoundRules Rules = new RoundRules();
         public ScoringConfig Scoring = new ScoringConfig();
+        public MarketConfig Market = new MarketConfig();
         public IShapeGenerator ShapeGenerator = new RandomPolyominoGenerator();
         public IRoundProgression Progression = new DefaultRoundProgression();
     }

@@ -28,6 +28,7 @@ namespace ProjectBlock.View
         private BoardView boardView;
         private CardLayerView cardLayer;
         private DeckOverlayView deckOverlay;
+        private MarketView marketView;
         private Text infoText;
         private Text messageText;
         private Camera cam;
@@ -51,6 +52,7 @@ namespace ProjectBlock.View
             config.RngSeed = lastSeedUsed;
             session = new GameSession(config);
             draggedCard = null;
+            marketView.Hide();
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
             StartRoundPresentation();
         }
@@ -99,7 +101,12 @@ namespace ProjectBlock.View
                     if (kb != null && kb.nKey.wasPressedThisFrame)
                     {
                         session.LeaveMarket();
+                        marketView.Hide();
                         StartRoundPresentation();
+                    }
+                    else if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                    {
+                        HandleMarketClick(mouse);
                     }
                     break;
                 case GamePhase.Round:
@@ -110,6 +117,7 @@ namespace ProjectBlock.View
                         {
                             round.DecideAdvance(true);
                             RefreshAll(null);
+                            marketView.Show(session);
                         }
                         else if (kb != null && kb.cKey.wasPressedThisFrame)
                         {
@@ -139,6 +147,33 @@ namespace ProjectBlock.View
                         }
                     }
                     break;
+            }
+        }
+
+        private void HandleMarketClick(Mouse mouse)
+        {
+            Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+            int offerIndex = marketView.OfferAt(world);
+            if (offerIndex < 0)
+            {
+                // browsing the owned deck helps purchase decisions
+                if (cardLayer.IsDrawPileAt(world))
+                {
+                    deckOverlay.Show(session.OwnedCards);
+                }
+                return;
+            }
+            MarketOffer offer = session.Market.Offers[offerIndex];
+            if (session.TryBuyOffer(offerIndex))
+            {
+                Debug.Log("[project_block] Bought " + offer.Card + " for " + offer.Price);
+                marketView.PlayBuyFx(offerIndex);
+                marketView.Show(session);
+                UpdateHud();
+            }
+            else
+            {
+                Debug.Log("[project_block] Cannot buy offer " + offerIndex + " (sold or too expensive).");
             }
         }
 
@@ -298,7 +333,8 @@ namespace ProjectBlock.View
                     messageText.text = "GAME OVER - " + DescribeLoss(round.Loss) + "\n[R] new run";
                     break;
                 case GamePhase.Market:
-                    messageText.text = "MARKET (empty for now)\n[N] start round " + (session.RoundNumber + 1);
+                    messageText.text = "Click a card to add it to your deck (price below it)\n[N] start round "
+                        + (session.RoundNumber + 1);
                     break;
                 default:
                     messageText.text = round.Status == RoundStatus.AwaitingAdvanceDecision
@@ -341,6 +377,10 @@ namespace ProjectBlock.View
             var overlayGo = new GameObject("DeckOverlay");
             overlayGo.transform.SetParent(transform, false);
             deckOverlay = overlayGo.AddComponent<DeckOverlayView>();
+
+            var marketGo = new GameObject("MarketView");
+            marketGo.transform.SetParent(transform, false);
+            marketView = marketGo.AddComponent<MarketView>();
 
             var canvasGo = new GameObject("HudCanvas");
             canvasGo.transform.SetParent(transform, false);

@@ -40,7 +40,8 @@ namespace ProjectBlock.Core
         /// <summary>Engine of the current round. Replaced wholesale every round.</summary>
         public RoundEngine CurrentRound { get; private set; }
 
-        public MarketStub Market { get; }
+        /// <summary>Restocked with block-card offers every time a round is won.</summary>
+        public Market Market { get; }
 
         private readonly List<BlockCard> ownedCards = new List<BlockCard>();
 
@@ -61,7 +62,7 @@ namespace ProjectBlock.Core
             Config = config;
             rng = new SeededRandom(config.RngSeed ?? Environment.TickCount);
             scorer = new DefaultScoreCalculator(config.Scoring);
-            Market = new MarketStub();
+            Market = new Market();
             for (int i = 0; i < config.StartingDeckSize; i++)
             {
                 ownedCards.Add(CreateRandomCard());
@@ -87,7 +88,33 @@ namespace ProjectBlock.Core
             return card;
         }
 
-        /// <summary>Leaves the (empty) market and starts the next round.</summary>
+        /// <summary>
+        /// Buys a market offer: deducts the price from TotalScore and permanently adds
+        /// the card to the owned deck (it joins the shuffle from the next round on).
+        /// Returns false when the offer is already sold or unaffordable.
+        /// </summary>
+        public bool TryBuyOffer(int offerIndex)
+        {
+            if (Phase != GamePhase.Market)
+            {
+                throw new InvalidOperationException("Not in the market phase.");
+            }
+            if (offerIndex < 0 || offerIndex >= Market.Offers.Count)
+            {
+                throw new ArgumentOutOfRangeException("offerIndex");
+            }
+            MarketOffer offer = Market.Offers[offerIndex];
+            if (offer.Sold || TotalScore < offer.Price)
+            {
+                return false;
+            }
+            TotalScore -= offer.Price;
+            offer.Sold = true;
+            ownedCards.Add(offer.Card);
+            return true;
+        }
+
+        /// <summary>Leaves the market and starts the next round.</summary>
         public void LeaveMarket()
         {
             if (Phase != GamePhase.Market)
@@ -127,12 +154,26 @@ namespace ProjectBlock.Core
         {
             if (status == RoundStatus.Advanced)
             {
+                RestockMarket();
                 SetPhase(GamePhase.Market);
             }
             else if (status == RoundStatus.Lost)
             {
                 SetPhase(GamePhase.GameOver);
             }
+        }
+
+        private void RestockMarket()
+        {
+            var newOffers = new List<MarketOffer>();
+            for (int i = 0; i < Config.Market.BlockOfferCount; i++)
+            {
+                BlockCard card = CreateRandomCard();
+                int price = Config.Market.BlockBasePrice
+                    + Config.Market.BlockPricePerCube * card.Shape.Size;
+                newOffers.Add(new MarketOffer(card, price));
+            }
+            Market.SetOffers(newOffers);
         }
 
         private void SetPhase(GamePhase newPhase)

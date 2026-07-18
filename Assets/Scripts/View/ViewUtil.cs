@@ -45,6 +45,28 @@ namespace ProjectBlock.View
             return renderer;
         }
 
+        /// <summary>Creates a world-space text (TextMesh) for labels like market prices.</summary>
+        public static TextMesh MakeText3D(Transform parent, string name, Vector2 position,
+            string text, int fontSize, float characterSize, Color color, int sortingOrder,
+            TextAnchor anchor)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(position.x, position.y, 0f);
+            var textMesh = go.AddComponent<TextMesh>();
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            textMesh.font = font;
+            textMesh.fontSize = fontSize;
+            textMesh.characterSize = characterSize;
+            textMesh.color = color;
+            textMesh.anchor = anchor;
+            textMesh.text = text;
+            var meshRenderer = go.GetComponent<MeshRenderer>();
+            meshRenderer.material = font.material;
+            meshRenderer.sortingOrder = sortingOrder;
+            return textMesh;
+        }
+
         /// <summary>Creates a rectangular sprite object (position and size in local space).</summary>
         public static SpriteRenderer MakeRect(Transform parent, string name, Vector2 position,
             Vector2 size, Color color, int sortingOrder)
