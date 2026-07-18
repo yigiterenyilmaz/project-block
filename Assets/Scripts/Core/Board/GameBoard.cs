@@ -175,6 +175,71 @@ namespace ProjectBlock.Core
             exploded.Add(pos);
         }
 
+        /// <summary>
+        /// Pure query: which rows/columns WOULD become full if the shape were placed at
+        /// origin. Never mutates the board - the UI calls this every frame to highlight
+        /// the lines a placement would explode. Assumes the placement is legal.
+        /// </summary>
+        public LineExplosionResult PredictExplosions(BlockShape shape, GridPos origin)
+        {
+            var shapeCells = new HashSet<GridPos>();
+            foreach (GridPos offset in shape.Cells)
+            {
+                shapeCells.Add(origin + offset);
+            }
+            var fullRows = new List<int>();
+            for (int y = 0; y < Height; y++)
+            {
+                bool full = true;
+                for (int x = 0; x < Width; x++)
+                {
+                    if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x, y)))
+                    {
+                        full = false;
+                        break;
+                    }
+                }
+                if (full) fullRows.Add(y);
+            }
+            var fullColumns = new List<int>();
+            for (int x = 0; x < Width; x++)
+            {
+                bool full = true;
+                for (int y = 0; y < Height; y++)
+                {
+                    if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x, y)))
+                    {
+                        full = false;
+                        break;
+                    }
+                }
+                if (full) fullColumns.Add(x);
+            }
+            if (fullRows.Count == 0 && fullColumns.Count == 0)
+            {
+                return LineExplosionResult.None;
+            }
+            var lineCells = new List<GridPos>();
+            var seen = new HashSet<GridPos>();
+            foreach (int y in fullRows)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    var pos = new GridPos(x, y);
+                    if (seen.Add(pos)) lineCells.Add(pos);
+                }
+            }
+            foreach (int x in fullColumns)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    var pos = new GridPos(x, y);
+                    if (seen.Add(pos)) lineCells.Add(pos);
+                }
+            }
+            return new LineExplosionResult(fullRows, fullColumns, lineCells);
+        }
+
         /// <summary>Clean-sweep check: no remaining cube that counts (obsidian/gold later won't).</summary>
         public bool IsCleanForSweep()
         {

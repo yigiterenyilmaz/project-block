@@ -6,6 +6,7 @@
 // NOTE FOR AGENTS: this is placeholder presentation. Extend gameplay in
 // ProjectBlock.Core; only wiring/visuals belong here.
 
+using System.Collections;
 using System.Text;
 using ProjectBlock.Core;
 using UnityEngine;
@@ -30,12 +31,15 @@ namespace ProjectBlock.View
         private Text infoText;
         private Text messageText;
         private Camera cam;
+        private Vector3 camBasePosition;
+        private Coroutine shakeRoutine;
         private CardVisual draggedCard;
         private int lastSeedUsed;
 
         private void Start()
         {
             cam = Camera.main;
+            camBasePosition = cam.transform.position;
             BuildViews();
             NewGame();
         }
@@ -194,6 +198,10 @@ namespace ProjectBlock.View
                     {
                         LogTurn(report);
                     }
+                    if (report.CubesExploded > 0)
+                    {
+                        ShakeCamera(report.CleanSweep ? 0.16f : 0.09f, 0.2f);
+                    }
                     RefreshAll(report);
                 }
                 else
@@ -202,6 +210,32 @@ namespace ProjectBlock.View
                     boardView.ClearPreview();
                 }
             }
+        }
+
+        /// <summary>Very small camera shake for explosions (slightly bigger on clean sweeps).</summary>
+        private void ShakeCamera(float amplitude, float duration)
+        {
+            if (shakeRoutine != null)
+            {
+                StopCoroutine(shakeRoutine);
+                cam.transform.position = camBasePosition;
+            }
+            shakeRoutine = StartCoroutine(ShakeRoutine(amplitude, duration));
+        }
+
+        private IEnumerator ShakeRoutine(float amplitude, float duration)
+        {
+            float time = 0f;
+            while (time < duration)
+            {
+                time += Time.deltaTime;
+                float falloff = 1f - Mathf.Clamp01(time / duration);
+                Vector2 offset = Random.insideUnitCircle * (amplitude * falloff);
+                cam.transform.position = camBasePosition + new Vector3(offset.x, offset.y, 0f);
+                yield return null;
+            }
+            cam.transform.position = camBasePosition;
+            shakeRoutine = null;
         }
 
         private static BlockShape ShapeOfSlot(RoundEngine round, int slot)
