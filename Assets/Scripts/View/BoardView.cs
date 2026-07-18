@@ -20,7 +20,148 @@ namespace ProjectBlock.View
         private GameBoard board;
         private SpriteRenderer[,] cellRenderers;
         private SpriteRenderer[,] previewRenderers;
+        private CubeKind?[,] kindCache;
+        private Color[,] baseColorCache;
         private readonly List<SpriteRenderer> ghostSprites = new List<SpriteRenderer>();
+        private ParticleSystem ambient;
+        private float ambientTimer;
+
+        private void Awake()
+        {
+            // ambient element particles (embers, drips, sparkles) - lives on this GO,
+            // so board rebuilds (which destroy children) leave it alone
+            ambient = gameObject.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule main = ambient.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.startSpeed = 0f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.8f);
+            main.maxParticles = 500;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            ParticleSystem.EmissionModule emission = ambient.emission;
+            emission.enabled = false;
+            ParticleSystem.ShapeModule shape = ambient.shape;
+            shape.enabled = false;
+            ParticleSystem.SizeOverLifetimeModule sizeModule = ambient.sizeOverLifetime;
+            sizeModule.enabled = true;
+            sizeModule.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0.1f));
+            var ambientRenderer = GetComponent<ParticleSystemRenderer>();
+            ambientRenderer.material = new Material(Shader.Find("Sprites/Default"));
+            ambientRenderer.sortingOrder = 3;
+        }
+
+        private void Update()
+        {
+            if (board == null || kindCache == null)
+            {
+                return;
+            }
+            AnimateElementCubes();
+            ambientTimer += Time.deltaTime;
+            while (ambientTimer >= 0.12f)
+            {
+                ambientTimer -= 0.12f;
+                EmitAmbientParticle();
+            }
+            float ghostAlpha = 0.28f + 0.1f * Mathf.Sin(Time.time * 2.5f);
+            foreach (SpriteRenderer sprite in ghostSprites)
+            {
+                if (sprite != null)
+                {
+                    Color color = sprite.color;
+                    color.a = ghostAlpha;
+                    sprite.color = color;
+                }
+            }
+        }
+
+        /// <summary>Element cubes get simple idle animations: fire flickers, water waves,
+        /// gold shimmers, dynamite blinks, transparent breathes.</summary>
+        private void AnimateElementCubes()
+        {
+            float time = Time.time;
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    CubeKind? kind = kindCache[x, y];
+                    if (!kind.HasValue || kind.Value == CubeKind.Normal)
+                    {
+                        continue;
+                    }
+                    Color baseColor = baseColorCache[x, y];
+                    SpriteRenderer cell = cellRenderers[x, y];
+                    switch (kind.Value)
+                    {
+                        case CubeKind.Fire:
+                            cell.color = Color.Lerp(baseColor, new Color(1f, 0.85f, 0.3f),
+                                0.25f + 0.25f * Mathf.Sin(time * 6f + x * 1.3f + y * 2.1f));
+                            break;
+                        case CubeKind.Water:
+                            cell.color = Color.Lerp(baseColor, new Color(0.2f, 0.42f, 0.9f),
+                                0.3f + 0.3f * Mathf.Sin(time * 2.2f + x * 0.9f));
+                            break;
+                        case CubeKind.Gold:
+                            cell.color = Color.Lerp(baseColor, Color.white,
+                                0.15f + 0.15f * Mathf.Sin(time * 3f + x + y));
+                            break;
+                        case CubeKind.Dynamite:
+                            cell.color = Color.Lerp(baseColor, new Color(1f, 0.9f, 0.85f),
+                                0.25f + 0.25f * Mathf.Sin(time * 2.4f));
+                            break;
+                        case CubeKind.Transparent:
+                            Color transparent = baseColor;
+                            transparent.a = 0.65f + 0.2f * Mathf.Sin(time * 2f + x);
+                            cell.color = transparent;
+                            break;
+                    }
+                }
+            }
+        }
+
+        private void EmitAmbientParticle()
+        {
+            for (int attempt = 0; attempt < 6; attempt++)
+            {
+                int x = Random.Range(0, board.Width);
+                int y = Random.Range(0, board.Height);
+                CubeKind? kind = kindCache[x, y];
+                if (!kind.HasValue)
+                {
+                    continue;
+                }
+                Vector2 world = CellToWorld(new GridPos(x, y));
+                switch (kind.Value)
+                {
+                    case CubeKind.Fire:
+                        EmitAmbient(world, new Color(1f, 0.6f, 0.2f),
+                            new Vector2(Random.Range(-0.2f, 0.2f), Random.Range(0.8f, 1.4f)), 0.09f);
+                        return;
+                    case CubeKind.Water:
+                        EmitAmbient(world, new Color(0.4f, 0.65f, 1f),
+                            new Vector2(0f, Random.Range(-0.5f, -0.2f)), 0.07f);
+                        return;
+                    case CubeKind.Gold:
+                        EmitAmbient(world + Random.insideUnitCircle * 0.2f,
+                            new Color(1f, 0.9f, 0.5f), Vector2.zero, 0.06f);
+                        return;
+                    case CubeKind.Dynamite:
+                        EmitAmbient(world, new Color(1f, 0.4f, 0.25f),
+                            Random.insideUnitCircle * 0.5f, 0.05f);
+                        return;
+                }
+            }
+        }
+
+        private void EmitAmbient(Vector2 world, Color color, Vector2 velocity, float size)
+        {
+            var emitParams = new ParticleSystem.EmitParams();
+            emitParams.position = new Vector3(world.x, world.y, 0f);
+            emitParams.velocity = new Vector3(velocity.x, velocity.y, 0f);
+            emitParams.startColor = color;
+            emitParams.startSize = size;
+            ambient.Emit(emitParams, 1);
+        }
         private float cellSize = 1f;
         private Vector2 bottomLeft;
 
@@ -68,6 +209,8 @@ namespace ProjectBlock.View
 
             cellRenderers = new SpriteRenderer[board.Width, board.Height];
             previewRenderers = new SpriteRenderer[board.Width, board.Height];
+            kindCache = new CubeKind?[board.Width, board.Height];
+            baseColorCache = new Color[board.Width, board.Height];
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -95,9 +238,12 @@ namespace ProjectBlock.View
                 for (int y = 0; y < board.Height; y++)
                 {
                     Cube? cube = board.GetCube(new GridPos(x, y));
-                    cellRenderers[x, y].color = cube.HasValue
+                    Color color = cube.HasValue
                         ? ViewUtil.CubeDisplayColor(cube.Value)
                         : EmptyColor;
+                    cellRenderers[x, y].color = color;
+                    kindCache[x, y] = cube.HasValue ? cube.Value.Kind : (CubeKind?)null;
+                    baseColorCache[x, y] = color;
                 }
             }
             RefreshGhostTraces();
