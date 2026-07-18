@@ -150,29 +150,9 @@ namespace ProjectBlock.View
             return renderer;
         }
 
-        /// <summary>Text with a thin dark outline for legibility over a busy background
-        /// (four orthogonal offset copies behind a crisp top copy). Keep fontSize high and
-        /// characterSize small or TextMesh renders blurry. Returns the top copy.</summary>
-        public static TextMesh MakeText3DOutlined(Transform parent, string name, Vector2 position,
-            string text, int fontSize, float characterSize, Color color, int sortingOrder,
-            TextAnchor anchor)
-        {
-            float o = characterSize * 1.4f; // fontSize is high, so this is a hairline offset
-            Vector2[] offsets =
-            {
-                new Vector2(o, 0f), new Vector2(-o, 0f), new Vector2(0f, o), new Vector2(0f, -o)
-            };
-            var outline = new Color(0f, 0f, 0f, 0.85f);
-            for (int i = 0; i < offsets.Length; i++)
-            {
-                MakeText3D(parent, name + "_o" + i, position + offsets[i], text, fontSize,
-                    characterSize, outline, sortingOrder, anchor);
-            }
-            return MakeText3D(parent, name, position, text, fontSize, characterSize, color,
-                sortingOrder + 1, anchor);
-        }
-
-        /// <summary>Creates a world-space text (TextMesh) for labels like market prices.</summary>
+        /// <summary>Creates a world-space text (TextMesh) for labels like market prices.
+        /// Keep fontSize high (~90) and characterSize small or TextMesh renders blurry;
+        /// for text over busy backgrounds put a dark rect behind it (outline copies ghost).</summary>
         public static TextMesh MakeText3D(Transform parent, string name, Vector2 position,
             string text, int fontSize, float characterSize, Color color, int sortingOrder,
             TextAnchor anchor)

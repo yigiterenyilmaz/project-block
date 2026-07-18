@@ -57,7 +57,7 @@ namespace ProjectBlock.View
             ViewUtil.MakeText3D(transform, "Title", Center + new Vector2(0f, 2.0f), "MARKET",
                 60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "SellHint", Center + new Vector2(0f, 1.62f),
-                "click a joker to sell it  -  click the deck pile to sell cards", 30, 0.04f,
+                "click a joker to sell it  -  click the deck pile to sell cards", 90, 0.013f,
                 SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             float cursor = startX;
@@ -92,13 +92,13 @@ namespace ProjectBlock.View
             {
                 ViewUtil.MakeText3D(transform, "BlocksHeader",
                     new Vector2((blockMinX + blockMaxX) * 0.5f, headerY), "BLOCKS",
-                    40, 0.05f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                    90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
             }
             if (jokerCount > 0)
             {
                 ViewUtil.MakeText3D(transform, "JokersHeader",
                     new Vector2((jokerMinX + jokerMaxX) * 0.5f, headerY), "JOKERS",
-                    40, 0.05f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                    90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
             }
 
             for (int i = 0; i < count; i++)
@@ -143,13 +143,13 @@ namespace ProjectBlock.View
                 new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight), JokerBodyColor, 36);
             ViewUtil.MakeText3D(transform, "JokerTag_" + index,
                 center + new Vector2(0f, CardVisual.BodyHeight * 0.5f - 0.17f), "JOKER",
-                34, 0.04f, JokerTagColor, 37, TextAnchor.MiddleCenter);
+                90, 0.015f, JokerTagColor, 37, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "JokerName_" + index,
                 center + new Vector2(0f, 0.5f), ViewUtil.WrapText(joker.DisplayName, 13),
-                40, 0.05f, JokerNameColor, 37, TextAnchor.MiddleCenter);
+                90, 0.022f, JokerNameColor, 37, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "JokerDesc_" + index,
                 center + new Vector2(0f, 0.12f), ViewUtil.WrapText(joker.Description, 16),
-                30, 0.037f, JokerDescColor, 37, TextAnchor.UpperCenter);
+                90, 0.012f, JokerDescColor, 37, TextAnchor.UpperCenter);
         }
 
         public void Hide()
