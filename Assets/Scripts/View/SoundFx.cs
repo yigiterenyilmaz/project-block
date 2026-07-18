@@ -19,6 +19,7 @@ namespace ProjectBlock.View
         private AudioClip sweepClip;
         private AudioClip shuffleClip;
         private AudioClip buyClip;
+        private AudioClip flameClip;
 
         private void Awake()
         {
@@ -29,6 +30,7 @@ namespace ProjectBlock.View
             sweepClip = BuildSweep();
             shuffleClip = BuildShuffle();
             buyClip = BuildBuy();
+            flameClip = BuildFlame();
         }
 
         public void Place()
@@ -60,6 +62,12 @@ namespace ProjectBlock.View
         public void Buy()
         {
             PlayWithPitch(buyClip, 1f, 1f);
+        }
+
+        /// <summary>Little fire whoosh when the arena flames grow (clean sweeps).</summary>
+        public void Flame()
+        {
+            PlayWithPitch(flameClip, 0.9f, 1.1f);
         }
 
         private void PlayWithPitch(AudioClip clip, float minPitch, float maxPitch)
@@ -150,6 +158,20 @@ namespace ProjectBlock.View
                 AddNoise(buffer, start, 0.035f, 0.35f, 1.5f, rng);
             }
             return Finish("shuffle", buffer);
+        }
+
+        private static AudioClip BuildFlame()
+        {
+            float[] buffer = Buffer(0.4f);
+            var rng = new System.Random(5);
+            AddNoise(buffer, 0, 0.4f, 0.3f, 1.8f, rng);
+            AddTone(buffer, 0, 0.35f, 90f, 45f, 0.25f, 1.5f);
+            for (int i = 0; i < 5; i++)
+            {
+                int start = (int)(SampleRate * (0.05f + 0.06f * i));
+                AddNoise(buffer, start, 0.02f, 0.25f, 1f, rng);
+            }
+            return Finish("flame", buffer);
         }
 
         private static AudioClip BuildBuy()

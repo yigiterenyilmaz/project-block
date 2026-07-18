@@ -69,11 +69,11 @@ namespace ProjectBlock.View
         {
             comboStreak = 0;
             RoundEngine round = session.CurrentRound;
-            flameStreak.SetCount(round.CleanSweepCount);
             if (boardView.Board != round.Board)
             {
                 boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
             }
+            flameStreak.SetState(round.CleanSweepCount, boardView.WorldRect);
             boardView.Refresh();
             boardView.ClearPreview();
             sfx.Shuffle();
@@ -294,6 +294,7 @@ namespace ProjectBlock.View
                     {
                         // the sweep bling rises in pitch with every sweep this round
                         sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
+                        sfx.Flame();
                     }
                     else if (report.CubesExploded > 0)
                     {
@@ -415,7 +416,7 @@ namespace ProjectBlock.View
             boardView.Refresh();
             boardView.ClearPreview();
             cardLayer.Sync(round, report);
-            flameStreak.SetCount(round.CleanSweepCount);
+            flameStreak.SetState(round.CleanSweepCount, boardView.WorldRect);
             UpdateHud();
         }
 

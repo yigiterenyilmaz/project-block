@@ -28,6 +28,20 @@ namespace ProjectBlock.View
             get { return board; }
         }
 
+        /// <summary>World-space rectangle the grid covers (for effects around the arena).</summary>
+        public Rect WorldRect
+        {
+            get
+            {
+                if (board == null)
+                {
+                    return new Rect(0f, 0f, 0f, 0f);
+                }
+                return new Rect(bottomLeft.x, bottomLeft.y,
+                    board.Width * cellSize, board.Height * cellSize);
+            }
+        }
+
         /// <summary>Destroys and recreates the whole grid for a (new) board.</summary>
         public void Rebuild(GameBoard newBoard, float maxWorldSize, Vector2 center)
         {
