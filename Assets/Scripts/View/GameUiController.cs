@@ -786,22 +786,21 @@ namespace ProjectBlock.View
 
         private void ShowCardTooltip(BlockCard card, Vector2 nearWorld)
         {
+            // Plain blocks carry no special info - no tooltip for them.
+            if (card.Elements.Count == 0)
+            {
+                HideTooltip();
+                return;
+            }
             string title = "BLOCK - " + card.Shape.Size + (card.Shape.Size == 1 ? " cube" : " cubes")
                 + "  (" + card.Shape.Width + "x" + card.Shape.Height + ")";
             var body = new StringBuilder();
-            if (card.Elements.Count == 0)
+            for (int i = 0; i < card.Elements.Count; i++)
             {
-                body.Append("No special type.");
-            }
-            else
-            {
-                for (int i = 0; i < card.Elements.Count; i++)
-                {
-                    if (i > 0) body.Append("\n\n");
-                    BlockElement element = card.Elements[i];
-                    body.Append(ViewUtil.ElementLabel(element)).Append('\n')
-                        .Append(ViewUtil.WrapText(ViewUtil.ElementDescription(element), 34));
-                }
+                if (i > 0) body.Append("\n\n");
+                BlockElement element = card.Elements[i];
+                body.Append(ViewUtil.ElementLabel(element)).Append('\n')
+                    .Append(ViewUtil.WrapText(ViewUtil.ElementDescription(element), 34));
             }
             RenderTooltip("card:" + card.Id, title, body.ToString(), nearWorld);
         }
@@ -838,10 +837,10 @@ namespace ProjectBlock.View
                 ViewUtil.MakeRect(tooltipRoot.transform, "TipBg",
                     new Vector2(tooltipWidth * 0.5f, -tooltipHeight * 0.5f),
                     new Vector2(tooltipWidth, tooltipHeight), TooltipBgColor, 50);
-                ViewUtil.MakeText3D(tooltipRoot.transform, "TipTitle",
+                ViewUtil.MakeText3DOutlined(tooltipRoot.transform, "TipTitle",
                     new Vector2(margin, -margin), title, 34, 0.045f, TooltipTitleColor, 51,
                     TextAnchor.UpperLeft);
-                ViewUtil.MakeText3D(tooltipRoot.transform, "TipBody",
+                ViewUtil.MakeText3DOutlined(tooltipRoot.transform, "TipBody",
                     new Vector2(margin, -margin - titleHeight), body, 30, 0.04f, TooltipBodyColor,
                     51, TextAnchor.UpperLeft);
             }

@@ -150,6 +150,28 @@ namespace ProjectBlock.View
             return renderer;
         }
 
+        /// <summary>Text with a dark outline (the label is drawn 8 times behind, offset in
+        /// every direction) so it stays readable over any background. Returns the top copy.</summary>
+        public static TextMesh MakeText3DOutlined(Transform parent, string name, Vector2 position,
+            string text, int fontSize, float characterSize, Color color, int sortingOrder,
+            TextAnchor anchor)
+        {
+            float o = characterSize * 0.7f;
+            Vector2[] offsets =
+            {
+                new Vector2(o, 0f), new Vector2(-o, 0f), new Vector2(0f, o), new Vector2(0f, -o),
+                new Vector2(o, o), new Vector2(-o, o), new Vector2(o, -o), new Vector2(-o, -o)
+            };
+            var outline = new Color(0f, 0f, 0f, 0.9f);
+            for (int i = 0; i < offsets.Length; i++)
+            {
+                MakeText3D(parent, name + "_o" + i, position + offsets[i], text, fontSize,
+                    characterSize, outline, sortingOrder, anchor);
+            }
+            return MakeText3D(parent, name, position, text, fontSize, characterSize, color,
+                sortingOrder + 1, anchor);
+        }
+
         /// <summary>Creates a world-space text (TextMesh) for labels like market prices.</summary>
         public static TextMesh MakeText3D(Transform parent, string name, Vector2 position,
             string text, int fontSize, float characterSize, Color color, int sortingOrder,
