@@ -48,6 +48,10 @@ public static class JokerTests
         Ihale_LocksUntilTheAuctionedJokerLeaves();
         KaraDelik_VoidBlockSwallowsWhatLandsOnIt();
         Enfeksiyon_SpreadsThenDetonates();
+        Oryantasyon_BuriesPlayedCardsInTheDrawPile();
+        Dezenformasyon_SplitsAndSwapsThePilesEachTurn();
+        Imitasyon_HandTracksTheDiscardPile();
+        Fraksiyon_SplitsAtRoundStartAndAllowsOneSwap();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
 
@@ -1006,6 +1010,118 @@ public static class JokerTests
             beforeDetonation + " -> " + round.Board.OccupiedCount);
     }
 
+    private static void Oryantasyon_BuriesPlayedCardsInTheDrawPile()
+    {
+        Section("oryantasyon / cards go back into the draw pile");
+        var session = NewSession(211, 8, 1000000, 30, 1);
+        var joker = (OryantasyonJoker)session.Jokers.Add(new OryantasyonJoker());
+        RoundEngine round = session.CurrentRound;
+
+        Check(session.Config.Rules.PlayedCardsReturnToDrawPile, "the rule flag is on");
+        Check(session.Config.Rules.RevealTopDrawCard, "the top of the draw pile is revealed");
+
+        int drawBefore = round.Deck.DrawCount;
+        PlayTurns(session, 3);
+        Check(round.Deck.DiscardCount == 0, "nothing ever reached the discard",
+            "discard " + round.Deck.DiscardCount);
+        // Three cards played back in, three drawn out to refill: the pile size holds.
+        Check(round.Deck.DrawCount == drawBefore, "the draw pile keeps its size",
+            round.Deck.DrawCount + " vs " + drawBefore);
+
+        session.Jokers.Remove(joker);
+        Check(!session.Config.Rules.PlayedCardsReturnToDrawPile, "removal restores discarding");
+        Check(!session.Config.Rules.RevealTopDrawCard, "removal hides the top card again");
+    }
+
+    private static void Dezenformasyon_SplitsAndSwapsThePilesEachTurn()
+    {
+        Section("dezenformasyon / piles split and swap");
+        var session = NewSession(223, 8, 1000000, 30, 1);
+        int baseHand = session.Config.Rules.HandSize;
+        var joker = (DezenformasyonJoker)session.Jokers.Add(new DezenformasyonJoker());
+        Check(session.Config.Rules.HandSize == baseHand + 1, "hand size grew by one",
+            "hand " + session.Config.Rules.HandSize);
+
+        RoundEngine round = session.CurrentRound;
+        int totalBefore = round.Deck.DrawCount + round.Deck.DiscardCount + round.Hand.Count;
+        PlayTurns(session, 1);
+
+        Check(round.Deck.DiscardCount > 0, "the deck was split, so the discard holds cards",
+            "discard " + round.Deck.DiscardCount);
+        Check(round.Deck.DrawCount > 0, "and the draw pile holds cards",
+            "draw " + round.Deck.DrawCount);
+        int halves = round.Deck.DrawCount + round.Deck.DiscardCount;
+        Check(Math.Abs(round.Deck.DrawCount - round.Deck.DiscardCount) <= 1,
+            "the two piles are halves of each other",
+            round.Deck.DrawCount + " vs " + round.Deck.DiscardCount);
+        // The played CARD lands in a pile (only its cubes go to the board), so shuffling
+        // the deck around must conserve every card.
+        Check(halves + round.Hand.Count == totalBefore, "no card was lost or duplicated",
+            (halves + round.Hand.Count) + " vs " + totalBefore);
+        Check(joker.TurnsSeen == 1, "the turn counter drives the swap", "seen " + joker.TurnsSeen);
+
+        session.Jokers.Remove(joker);
+        Check(session.Config.Rules.HandSize == baseHand, "removal gives the hand size back");
+    }
+
+    private static void Imitasyon_HandTracksTheDiscardPile()
+    {
+        Section("imitasyon / hand mirrors the discard");
+        var session = NewSession(227, 8, 1000000, 40, 1);
+        var joker = (ImitasyonJoker)session.Jokers.Add(new ImitasyonJoker());
+        joker.MaxHandSize = 6;
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        RoundEngine round = session.CurrentRound;
+
+        Check(session.Config.Rules.HandSize == 1, "an empty discard means a hand of one",
+            "hand size " + session.Config.Rules.HandSize);
+
+        PlayTurns(session, 1);
+        Check(round.Hand.Count == session.Config.Rules.HandSize,
+            "the hand is filled to the mirrored size",
+            round.Hand.Count + " vs " + session.Config.Rules.HandSize);
+        Check(session.Config.Rules.HandSize == round.Deck.DiscardCount
+                || session.Config.Rules.HandSize == joker.MaxHandSize,
+            "hand size equals the discard count (or the cap)",
+            session.Config.Rules.HandSize + " vs discard " + round.Deck.DiscardCount);
+
+        PlayTurns(session, 4);
+        Check(session.Config.Rules.HandSize <= joker.MaxHandSize, "the cap holds",
+            "hand size " + session.Config.Rules.HandSize);
+        Check(session.Config.Rules.HandSize >= 1, "never drops below one");
+    }
+
+    private static void Fraksiyon_SplitsAtRoundStartAndAllowsOneSwap()
+    {
+        Section("fraksiyon / halve the deck, one swap per cycle");
+        var session = NewSession(229, 8, 1000000, 30, 1);
+        var joker = (FraksiyonJoker)session.Jokers.Add(new FraksiyonJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        RoundEngine round = session.CurrentRound;
+
+        Check(round.Deck.DiscardCount > 0, "half the deck was pushed into the discard",
+            "discard " + round.Deck.DiscardCount);
+        Check(Math.Abs(round.Deck.DrawCount - round.Deck.DiscardCount) <= 1,
+            "the two piles are halves", round.Deck.DrawCount + " vs " + round.Deck.DiscardCount);
+        Check(session.Config.Rules.RevealedDiscardCount == round.Deck.DiscardCount / 2,
+            "half the discard is revealed",
+            "revealed " + session.Config.Rules.RevealedDiscardCount);
+
+        int drawBefore = round.Deck.DrawCount;
+        int discardBefore = round.Deck.DiscardCount;
+        Check(joker.SwapAvailable, "the swap is available after a split");
+        Check(session.Jokers.TryActivate(joker.InstanceId, ActivationTarget.None), "swap ran");
+        Check(round.Deck.DrawCount == discardBefore && round.Deck.DiscardCount == drawBefore,
+            "the piles changed places",
+            round.Deck.DrawCount + "/" + round.Deck.DiscardCount);
+        Check(!joker.SwapAvailable, "the swap is spent");
+        Check(!session.Jokers.TryActivate(joker.InstanceId, ActivationTarget.None),
+            "a second swap is refused before the next split");
+
+        session.Jokers.Remove(joker);
+        Check(session.Config.Rules.RevealedDiscardCount == 0, "removal hides the discard again");
+    }
+
     private static void AllRegisteredJokers_HaveDistinctIdsAndText()
     {
         Section("registry / catalogue sanity");
@@ -1036,7 +1152,7 @@ public static class JokerTests
             ids.Count + " of " + JokerRegistry.All.Count);
         Check(allNamed, "every joker has a display name");
         Check(allDescribed, "every joker has a description");
-        Check(JokerRegistry.All.Count >= 29, "the catalogue is complete",
+        Check(JokerRegistry.All.Count >= 33, "the catalogue is complete",
             "count " + JokerRegistry.All.Count);
     }
 

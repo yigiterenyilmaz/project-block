@@ -355,7 +355,7 @@ namespace ProjectBlock.Core
                 throw new ArgumentOutOfRangeException("handIndex");
             }
             BlockCard returned = Hand.RemoveAt(handIndex);
-            Deck.Discard(returned);
+            DisposeCard(returned);
             BlockCard drawn = DrawWithRules();
             if (drawn == null)
             {
@@ -375,10 +375,24 @@ namespace ProjectBlock.Core
         /// discard. "Seri tetik" will use this at end of turn. Consumes no turn.</summary>
         internal void CycleHandWithoutReshuffle()
         {
+            DiscardWholeHand();
+            RefillHandToSize();
+        }
+
+        /// <summary>Sends the whole hand to the pile without drawing anything back.
+        /// "İmitasyon" needs the two halves apart, because dumping the hand is what decides
+        /// how big the next hand is allowed to be.</summary>
+        internal void DiscardWholeHand()
+        {
             while (Hand.Count > 0)
             {
-                Deck.Discard(Hand.RemoveAt(Hand.Count - 1));
+                DisposeCard(Hand.RemoveAt(Hand.Count - 1));
             }
+        }
+
+        /// <summary>Draws up to the CURRENT Rules.HandSize, applying the normal loss rules.</summary>
+        internal void RefillHandToSize()
+        {
             RefillHand();
         }
 
@@ -386,7 +400,7 @@ namespace ProjectBlock.Core
         {
             while (Hand.Count > 0)
             {
-                Deck.Discard(Hand.RemoveAt(Hand.Count - 1));
+                DisposeCard(Hand.RemoveAt(Hand.Count - 1));
             }
             Deck.ShuffleDiscardIntoDraw();
         }
@@ -526,7 +540,7 @@ namespace ProjectBlock.Core
             {
                 if (bonusOutcome == BonusPlayOutcome.ToDiscard)
                 {
-                    Deck.Discard(card);
+                    DisposeCard(card);
                 }
                 else
                 {
@@ -539,13 +553,13 @@ namespace ProjectBlock.Core
                 report.BurnedCard = DrawWithRules();
                 if (report.BurnedCard != null)
                 {
-                    Deck.Discard(report.BurnedCard);
+                    DisposeCard(report.BurnedCard);
                 }
                 // Bonus plays do not refill the hand - the hand was not touched.
             }
             else
             {
-                Deck.Discard(card);
+                DisposeCard(card);
                 // 7. refill
                 RefillHand();
             }
@@ -672,6 +686,19 @@ namespace ProjectBlock.Core
             }
             LogDestruction();
             return destroyed;
+        }
+
+        /// <summary>THE way a card leaves play into a pile. Normally the discard; with
+        /// "Oryantasyon" it is buried at a random depth in the draw pile instead, which is
+        /// why every disposal in this class goes through here.</summary>
+        private void DisposeCard(BlockCard card)
+        {
+            if (Rules.PlayedCardsReturnToDrawPile)
+            {
+                Deck.InsertRandomIntoDraw(card);
+                return;
+            }
+            Deck.Discard(card);
         }
 
         /// <summary>Cubes destroyed this turn by sources that COUNT (line explosions, fire

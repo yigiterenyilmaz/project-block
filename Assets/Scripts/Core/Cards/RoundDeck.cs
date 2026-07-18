@@ -81,6 +81,47 @@ namespace ProjectBlock.Core
             discardPile.Add(card);
         }
 
+        /// <summary>Buries a card at a random depth in the draw pile instead of discarding it
+        /// ("Oryantasyon"). The card can come back up at any time, which is the point.</summary>
+        public void InsertRandomIntoDraw(BlockCard card)
+        {
+            drawPile.Insert(rng.NextInt(0, drawPile.Count + 1), card);
+        }
+
+        /// <summary>Swaps the two piles wholesale: what you drew from becomes what you
+        /// discard to and vice versa ("Dezenformasyon", "Fraksiyon").</summary>
+        public void SwapPiles()
+        {
+            swapBuffer.Clear();
+            swapBuffer.AddRange(drawPile);
+            drawPile.Clear();
+            drawPile.AddRange(discardPile);
+            discardPile.Clear();
+            discardPile.AddRange(swapBuffer);
+            swapBuffer.Clear();
+        }
+
+        /// <summary>Pours both piles together, shuffles, and deals them back out as two
+        /// halves ("Dezenformasyon" every turn, "Fraksiyon" on every reshuffle). Counts as a
+        /// shuffle, so observers animate it.</summary>
+        public void MergeAndSplitHalves()
+        {
+            drawPile.AddRange(discardPile);
+            discardPile.Clear();
+            rng.Shuffle(drawPile);
+            ShuffleCount++;
+
+            int keep = drawPile.Count / 2;
+            while (drawPile.Count > keep)
+            {
+                int last = drawPile.Count - 1;
+                discardPile.Add(drawPile[last]);
+                drawPile.RemoveAt(last);
+            }
+        }
+
+        private readonly List<BlockCard> swapBuffer = new List<BlockCard>();
+
         /// <summary>Shuffles the discard pile together with what is left of the draw pile.</summary>
         public void ShuffleDiscardIntoDraw()
         {

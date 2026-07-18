@@ -21,8 +21,17 @@ namespace ProjectBlock.Core
         /// overtime can be farmed - without it a 60-point round could yield 1600+.</summary>
         public int ContinueCostEscalation = 2;
 
-        /// <summary>Pure UI flag: show the top card of the draw pile face-up ("Insider").
-        /// The core never reads it - the draw order is unchanged either way.</summary>
+        /// <summary>Pure UI flag: show the top card of the draw pile face-up ("Insider",
+        /// "Oryantasyon"). The core never reads it - the draw order is unchanged either way.</summary>
         public bool RevealTopDrawCard = false;
+
+        /// <summary>Pure UI flag: how many cards of the discard pile are shown face-up
+        /// ("Fraksiyon"). 0 means only the usual top card.</summary>
+        public int RevealedDiscardCount = 0;
+
+        /// <summary>"Oryantasyon": a card that would go to the discard is buried at a random
+        /// depth in the DRAW pile instead. The discard therefore stays nearly empty, which
+        /// also means the deck effectively never runs out.</summary>
+        public bool PlayedCardsReturnToDrawPile = false;
     }
 }

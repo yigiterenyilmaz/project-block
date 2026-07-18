@@ -64,7 +64,7 @@ Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.
 
-29 of the 31 planned jokers are implemented. Powerbank waits on the power system; Parazit
+33 of the 35 planned jokers are implemented. Powerbank waits on the power system; Parazit
 waits on a market-phase action to bind a joker to a card. See `docs/jokers-plan.md`.
 
 ## Testing
