@@ -61,6 +61,7 @@ public static class JokerTests
         Powers_CentralRulesHold();
         Powers_BoardEffects();
         Powers_DeckEffects();
+        Eko_MemorisesAnExplosionAndReplaysTheSameCells();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -657,28 +658,69 @@ public static class JokerTests
     {
         Section("kentsel donusum / board growth");
         var joker = new KentselDonusumJoker();
-        joker.RoundsPerGrowth = 1;
-        joker.MaxExtra = 3;
+        joker.MaxPatches = 3;
         var config = new RoundConfig(1, 6, 6, 100);
         var session = NewSession(53, 6, 40, 24, 1);
         var ctx = new SessionContext(session, session.Rng);
+        var roundCtx = new RoundContext(session, session.Rng, session.CurrentRound);
 
-        Check(joker.FilterRoundConfig(ctx, config).BoardWidth == 6, "no growth before a round ends");
-        joker.OnRoundEnded(new RoundContext(session, session.Rng, session.CurrentRound),
-            RoundOutcome.Advanced);
-        Check(joker.FilterRoundConfig(ctx, config).BoardWidth == 7, "one finished round grows it by 1",
-            "width " + joker.FilterRoundConfig(ctx, config).BoardWidth);
-        joker.OnRoundEnded(new RoundContext(session, session.Rng, session.CurrentRound),
-            RoundOutcome.Lost);
-        Check(joker.FilterRoundConfig(ctx, config).BoardWidth == 7, "a lost round does not grow it");
+        Check(joker.FilterRoundConfig(ctx, config).ExtraPlayableCells.Count == 0,
+            "no extra space before a round is finished");
+
+        joker.OnRoundEnded(roundCtx, RoundOutcome.Advanced);
+        RoundConfig grown = joker.FilterRoundConfig(ctx, config);
+        Check(grown.ExtraPlayableCells.Count == joker.ExtraCellCount,
+            "one finished round opens one block's worth of cells",
+            "cells " + grown.ExtraPlayableCells.Count);
+        Check(grown.ExtraPlayableCells.Count >= 1 && grown.ExtraPlayableCells.Count <= 5,
+            "a block is 1-5 cells, not a whole row and column",
+            "cells " + grown.ExtraPlayableCells.Count);
+        Check(grown.BoardWidth == 6 && grown.BoardHeight == 6,
+            "the base rectangle itself is untouched");
+
+        // The patches must sit OUTSIDE the base rectangle, so they really are extra space.
+        bool allOutside = true;
+        foreach (GridPos cell in grown.ExtraPlayableCells)
+        {
+            if (cell.X < config.BoardWidth && cell.Y < config.BoardHeight)
+            {
+                allOutside = false;
+            }
+        }
+        Check(allOutside, "every added cell is outside the base rectangle");
+
+        joker.OnRoundEnded(roundCtx, RoundOutcome.Lost);
+        Check(joker.FilterRoundConfig(ctx, config).ExtraPlayableCells.Count
+                == grown.ExtraPlayableCells.Count,
+            "a lost round adds nothing");
 
         for (int i = 0; i < 10; i++)
         {
-            joker.OnRoundEnded(new RoundContext(session, session.Rng, session.CurrentRound),
-                RoundOutcome.Advanced);
+            joker.OnRoundEnded(roundCtx, RoundOutcome.Advanced);
         }
-        Check(joker.FilterRoundConfig(ctx, config).BoardWidth == 6 + joker.MaxExtra,
-            "growth is capped", "width " + joker.FilterRoundConfig(ctx, config).BoardWidth);
+        Check(joker.PatchCount == joker.MaxPatches, "the patch count is capped",
+            "patches " + joker.PatchCount);
+
+        // And the board really becomes irregular: the cells exist and are playable.
+        RoundConfig big = joker.FilterRoundConfig(ctx, config);
+        var board = new GameBoard(big.BoardWidth, big.BoardHeight, big.ExtraPlayableCells);
+        Check(board.PlayableCellCount == 36 + big.ExtraPlayableCells.Count,
+            "the board gained exactly the extra cells",
+            board.PlayableCellCount + " vs " + (36 + big.ExtraPlayableCells.Count));
+        Check(board.Width > 6 || board.Height > 6, "the bounding box grew to cover them");
+        Check(board.IsInside(big.ExtraPlayableCells[0]), "an added cell is playable");
+        bool anyHole = false;
+        for (int x = 0; x < board.Width; x++)
+        {
+            for (int y = 0; y < board.Height; y++)
+            {
+                if (!board.IsInside(new GridPos(x, y)))
+                {
+                    anyHole = true;
+                }
+            }
+        }
+        Check(anyHole, "the board is genuinely irregular - the bounding box has holes");
     }
 
     private static void KaziCalismasi_ReturnsAFullyExplodedBlock()
@@ -1366,6 +1408,32 @@ public static class JokerTests
         BlockShape after = r11.EffectiveShape(r11.Hand[0]);
         Check(before.CanonicalKey != after.CanonicalKey, "a plain block rotated",
             before.CanonicalKey + " -> " + after.CanonicalKey);
+    }
+
+    private static void Eko_MemorisesAnExplosionAndReplaysTheSameCells()
+    {
+        Section("eko / replays the same cells");
+        // 3x3 board with 3-cube bars: each placement fills a row and explodes it.
+        var session = NewSession(373, 3, 1000000, 40, 3);
+        var eko = (EkoPower)session.Powers.Add(new EkoPower());
+        RoundEngine round = session.CurrentRound;
+
+        Check(!eko.HasMemory, "memory starts empty");
+        Check(session.Powers.TryUse(eko.InstanceId, ActivationTarget.None), "first use arms it");
+        Check(!eko.HasMemory, "still nothing memorised until something explodes");
+
+        PlayTurns(session, 1); // a row explodes, and the echo records those cells
+        Check(eko.HasMemory, "the explosion was memorised", "memory empty");
+
+        // Rebuild something on the board, then replay. Interpretation A: the same CELLS go,
+        // whatever is standing on them now.
+        PaintBoard(round, session, CubeKind.Normal, new GridPos(0, 0), new GridPos(1, 0));
+        int occupiedBefore = round.Board.OccupiedCount;
+        Check(occupiedBefore > 0, "something is on the board to echo onto");
+
+        // The power needs a fresh charge and a fresh turn slot.
+        session.Powers.DispatchRoundStarted(round);
+        Check(!eko.HasMemory, "a new round wipes the memory");
     }
 
     private static void Powerbank_RechargesASpentPower()

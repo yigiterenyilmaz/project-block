@@ -54,10 +54,31 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>Closed rectangular grid the player places blocks on.</summary>
+    /// <summary>
+    /// The play grid. Usually a plain rectangle, but NOT necessarily: "Kentsel Dönüşüm" and
+    /// "Tılsım" bolt extra cells onto it, so the board is really a bounding box plus a mask
+    /// of which cells are actually playable.
+    ///
+    /// Width/Height are the BOUNDING BOX. Everything that asks "is this a real cell?" goes
+    /// through IsInside, which consults the mask - a plain rectangular board simply has every
+    /// cell playable, which is why the base game behaves exactly as before.
+    ///
+    /// A line is full when every PLAYABLE cell of that row/column is occupied, so an added
+    /// cell genuinely extends the row it sits in. Rows with no playable cells never explode.
+    ///
+    /// Extra cells may only be added at non-negative coordinates: the board grows right and
+    /// up. Growing left or down would shift every existing coordinate and invalidate the
+    /// ghost traces, the destruction log and anything else holding a GridPos.
+    /// </summary>
     public sealed class GameBoard
     {
         private readonly Cube?[,] cells;
+
+        /// <summary>Which cells of the bounding box are real play area.</summary>
+        private readonly bool[,] playable;
+
+        /// <summary>Playable cells in total - the honest "size" of an irregular board.</summary>
+        public int PlayableCellCount { get; }
 
         /// <summary>GHOST RULE: cubes placed outside the grid persist here (visible as a
         /// ghostly trace; the future Tılsım power converts their space into board).
@@ -74,19 +95,74 @@ namespace ProjectBlock.Core
         public int OccupiedCount { get; private set; }
 
         public GameBoard(int width, int height)
+            : this(width, height, null)
+        {
+        }
+
+        /// <summary>Board with extra playable cells bolted onto the base rectangle. The
+        /// bounding box stretches to cover them; everything not in the rectangle and not in
+        /// the extra set stays a hole.</summary>
+        public GameBoard(int width, int height, IEnumerable<GridPos> extraCells)
         {
             if (width < 1 || height < 1)
             {
                 throw new ArgumentException("Board must be at least 1x1.");
             }
-            Width = width;
-            Height = height;
-            cells = new Cube?[width, height];
+            var extra = new List<GridPos>();
+            int boxWidth = width;
+            int boxHeight = height;
+            if (extraCells != null)
+            {
+                foreach (GridPos cell in extraCells)
+                {
+                    if (cell.X < 0 || cell.Y < 0)
+                    {
+                        continue; // the board only grows right and up - see the class docs
+                    }
+                    extra.Add(cell);
+                    if (cell.X >= boxWidth) boxWidth = cell.X + 1;
+                    if (cell.Y >= boxHeight) boxHeight = cell.Y + 1;
+                }
+            }
+
+            Width = boxWidth;
+            Height = boxHeight;
+            cells = new Cube?[boxWidth, boxHeight];
+            playable = new bool[boxWidth, boxHeight];
+
+            int count = 0;
+            for (int x = 0; x < width; x++)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    playable[x, y] = true;
+                    count++;
+                }
+            }
+            foreach (GridPos cell in extra)
+            {
+                if (!playable[cell.X, cell.Y])
+                {
+                    playable[cell.X, cell.Y] = true;
+                    count++;
+                }
+            }
+            PlayableCellCount = count;
         }
 
+        /// <summary>True for a real play cell. On a plain rectangle this is just a bounds
+        /// check; on a grown board it also rejects the holes in the bounding box.</summary>
         public bool IsInside(GridPos pos)
         {
-            return pos.X >= 0 && pos.X < Width && pos.Y >= 0 && pos.Y < Height;
+            return pos.X >= 0 && pos.X < Width && pos.Y >= 0 && pos.Y < Height
+                && playable[pos.X, pos.Y];
+        }
+
+        /// <summary>Same as IsInside; named for callers that are asking about the SHAPE of
+        /// the board (the UI deciding which cells to draw) rather than about a position.</summary>
+        public bool IsPlayable(GridPos pos)
+        {
+            return IsInside(pos);
         }
 
         public Cube? GetCube(GridPos pos)
@@ -301,28 +377,38 @@ namespace ProjectBlock.Core
             var fullRows = new List<int>();
             for (int y = 0; y < Height; y++)
             {
-                bool full = true;
+                bool full = false;
                 for (int x = 0; x < Width; x++)
                 {
+                    if (!playable[x, y])
+                    {
+                        continue; // a hole is not part of the line
+                    }
                     if (!cells[x, y].HasValue)
                     {
                         full = false;
                         break;
                     }
+                    full = true; // at least one playable cell so far, and it is occupied
                 }
                 if (full) fullRows.Add(y);
             }
             var fullColumns = new List<int>();
             for (int x = 0; x < Width; x++)
             {
-                bool full = true;
+                bool full = false;
                 for (int y = 0; y < Height; y++)
                 {
+                    if (!playable[x, y])
+                    {
+                        continue;
+                    }
                     if (!cells[x, y].HasValue)
                     {
                         full = false;
                         break;
                     }
+                    full = true;
                 }
                 if (full) fullColumns.Add(x);
             }
@@ -529,10 +615,19 @@ namespace ProjectBlock.Core
             }
         }
 
-        /// <summary>True if the cell touches an outer wall of the board.</summary>
+        /// <summary>True if the cell touches an outer wall - meaning at least one of its four
+        /// neighbours is not play area. On an irregular board that includes the rim of every
+        /// bolted-on piece, which is what "Buzluk" and "Çerçeve" both want.</summary>
         public bool IsOnEdge(GridPos pos)
         {
-            return pos.X == 0 || pos.Y == 0 || pos.X == Width - 1 || pos.Y == Height - 1;
+            if (!IsInside(pos))
+            {
+                return false;
+            }
+            return !IsInside(new GridPos(pos.X + 1, pos.Y))
+                || !IsInside(new GridPos(pos.X - 1, pos.Y))
+                || !IsInside(new GridPos(pos.X, pos.Y + 1))
+                || !IsInside(new GridPos(pos.X, pos.Y - 1));
         }
 
         /// <summary>Every occupied cell, in a fixed left-to-right, bottom-to-top order.
@@ -618,28 +713,38 @@ namespace ProjectBlock.Core
             var fullRows = new List<int>();
             for (int y = 0; y < Height; y++)
             {
-                bool full = true;
+                bool full = false;
                 for (int x = 0; x < Width; x++)
                 {
+                    if (!playable[x, y])
+                    {
+                        continue;
+                    }
                     if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x, y)))
                     {
                         full = false;
                         break;
                     }
+                    full = true;
                 }
                 if (full) fullRows.Add(y);
             }
             var fullColumns = new List<int>();
             for (int x = 0; x < Width; x++)
             {
-                bool full = true;
+                bool full = false;
                 for (int y = 0; y < Height; y++)
                 {
+                    if (!playable[x, y])
+                    {
+                        continue;
+                    }
                     if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x, y)))
                     {
                         full = false;
                         break;
                     }
+                    full = true;
                 }
                 if (full) fullColumns.Add(x);
             }
@@ -708,9 +813,9 @@ namespace ProjectBlock.Core
         /// <summary>Is there at least one legal origin for this shape?</summary>
         public bool AnyPlacementExists(BlockShape shape)
         {
-            for (int x = 0; x <= Width - shape.Width; x++)
+            for (int x = 0; x < Width; x++)
             {
-                for (int y = 0; y <= Height - shape.Height; y++)
+                for (int y = 0; y < Height; y++)
                 {
                     if (CanPlace(shape, new GridPos(x, y)))
                     {
@@ -725,9 +830,9 @@ namespace ProjectBlock.Core
         public List<GridPos> GetValidOrigins(BlockShape shape)
         {
             var origins = new List<GridPos>();
-            for (int x = 0; x <= Width - shape.Width; x++)
+            for (int x = 0; x < Width; x++)
             {
-                for (int y = 0; y <= Height - shape.Height; y++)
+                for (int y = 0; y < Height; y++)
                 {
                     var origin = new GridPos(x, y);
                     if (CanPlace(shape, origin))

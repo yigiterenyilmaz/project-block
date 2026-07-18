@@ -45,6 +45,7 @@ namespace ProjectBlock.Core
         {
             Register(() => new CimbizPower());
             Register(() => new CaprazlamaPower());
+            Register(() => new EkoPower());
             Register(() => new CercevePower());
             Register(() => new KlonPower());
             Register(() => new BuyutecPower());

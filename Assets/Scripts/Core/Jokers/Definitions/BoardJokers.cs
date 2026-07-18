@@ -153,7 +153,9 @@ namespace ProjectBlock.Core
         public override void OnRoundStarted(RoundContext ctx)
         {
             Counter = 0;
-            Target = ctx.Round.Board.Width * ctx.Round.Board.Height;
+            // PlayableCellCount, not Width*Height: an irregular board ("Kentsel Dönüşüm",
+            // "Tılsım") has holes in its bounding box that are not play area.
+            Target = ctx.Round.Board.PlayableCellCount;
             ctx.Round.SuppressNaturalSweep = true;
         }
 
@@ -204,56 +206,102 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Kentsel Dönüşüm" - the board permanently grows. Simplified first version:
-    /// every N rounds it adds one row AND one column, which keeps the board rectangular.
-    /// EXTENSION POINT: the design asks for "one block of extra space", which needs an
-    /// irregular board (a cell mask in GameBoard) - see docs/jokers-plan.md.</summary>
+    /// <summary>
+    /// "Kentsel Dönüşüm" - every round you finish permanently opens ONE BLOCK's worth of
+    /// extra play area. The patches are real, block-shaped pieces bolted onto the board, so
+    /// the play area stops being a rectangle - that is the whole point of the joker, and it
+    /// is why GameBoard carries a playable-cell mask.
+    ///
+    /// The patches are stored as SHAPES, not as fixed coordinates, and re-laid outside the
+    /// base rectangle every round. That keeps the bonus worth the same when the natural round
+    /// progression grows the base board past where a patch used to sit.
+    ///
+    /// Patches are laid along the right edge because the board may only grow right and up;
+    /// growing left or down would shift every existing coordinate (see GameBoard).
+    /// </summary>
     public sealed class KentselDonusumJoker : Joker
     {
-        public int RoundsPerGrowth = 1;
-        public int MaxExtra = 3;
+        /// <summary>Cap on how many block-patches can accumulate. Balance placeholder.</summary>
+        public int MaxPatches = 5;
 
-        /// <summary>Rounds completed while this joker was held.</summary>
-        public int RoundsHeld { get; private set; }
+        private readonly List<BlockShape> patches = new List<BlockShape>();
 
         public KentselDonusumJoker()
             : base("kentsel_donusum", "Kentsel Dönüşüm")
         {
-            Description = "Tamamladığın her raunt sonunda oyun alanı kalıcı olarak büyür.";
+            Description = "Tamamladığın her raunt sonunda oyun alanına kalıcı olarak "
+                + "bir blokluk ekstra yer açılır.";
             BaseSellValue = 70;
         }
 
-        public int ExtraSize
+        /// <summary>Block-patches accumulated so far.</summary>
+        public int PatchCount
+        {
+            get { return patches.Count; }
+        }
+
+        /// <summary>Extra playable cells the joker is currently worth.</summary>
+        public int ExtraCellCount
         {
             get
             {
-                int grown = RoundsHeld / (RoundsPerGrowth > 0 ? RoundsPerGrowth : 1);
-                return grown < MaxExtra ? grown : MaxExtra;
+                int total = 0;
+                for (int i = 0; i < patches.Count; i++)
+                {
+                    total += patches[i].Size;
+                }
+                return total;
             }
         }
 
         public override string StatusText
         {
-            get { return "+" + ExtraSize; }
+            get { return "+" + ExtraCellCount + " kare"; }
         }
 
         public override void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
         {
-            if (outcome == RoundOutcome.Advanced)
+            if (outcome != RoundOutcome.Advanced || patches.Count >= MaxPatches)
             {
-                RoundsHeld++;
+                return;
             }
+            // One block's worth, drawn from the same generator the deck uses, so the extra
+            // space looks like the blocks the player is holding. Deterministic: session RNG.
+            patches.Add(ctx.Session.Config.Deck.ShapeGenerator.NextShape(ctx.Rng));
         }
 
         public override RoundConfig FilterRoundConfig(SessionContext ctx, RoundConfig config)
         {
-            int extra = ExtraSize;
-            if (extra <= 0)
+            if (patches.Count == 0)
             {
                 return config;
             }
-            return new RoundConfig(config.RoundNumber, config.BoardWidth + extra,
-                config.BoardHeight + extra, config.ScoreThreshold);
+            var cells = new List<GridPos>();
+            int columnX = config.BoardWidth;
+            int cursorY = 0;
+            int columnWidth = 0;
+            for (int i = 0; i < patches.Count; i++)
+            {
+                BlockShape patch = patches[i];
+                // Start a fresh column once this one would run off the top of the board.
+                if (cursorY > 0 && cursorY + patch.Height > config.BoardHeight)
+                {
+                    columnX += columnWidth;
+                    cursorY = 0;
+                    columnWidth = 0;
+                }
+                foreach (GridPos cell in patch.Cells)
+                {
+                    cells.Add(new GridPos(columnX + cell.X, cursorY + cell.Y));
+                }
+                cursorY += patch.Height;
+                if (patch.Width > columnWidth)
+                {
+                    columnWidth = patch.Width;
+                }
+            }
+            return new RoundConfig(config.RoundNumber, config.BoardWidth, config.BoardHeight,
+                config.ScoreThreshold, cells);
         }
     }
 

@@ -138,6 +138,91 @@ namespace ProjectBlock.Core
         public const int InvertedCubeCardId = -1;
     }
 
+    /// <summary>
+    /// "eko" - the first use starts listening; the next explosion is memorised; the use after
+    /// that replays it. Memory is wiped at the start of every round.
+    ///
+    /// CONFIRMED READING: it replays the same CELLS, not the same line. Whatever sits on those
+    /// coordinates when the echo fires is what goes up - even if only two of the six cells are
+    /// occupied now. That way the power always does something.
+    /// </summary>
+    public sealed class EkoPower : Power
+    {
+        /// <summary>Points per cube the echo takes. The replay pays like a real explosion.</summary>
+        public int PointsPerEchoedCube = 6;
+
+        private readonly List<GridPos> memory = new List<GridPos>();
+        private bool listening;
+
+        public EkoPower()
+            : base("eko", "Eko")
+        {
+            Description = "İlk kullanımda sonraki patlamayı hafızaya alır, ikinci kullanımda "
+                + "o patlamayı aynı karelerde tekrar eder. Hafıza her raunt sıfırlanır.";
+            BaseSellValue = 50;
+        }
+
+        public bool HasMemory
+        {
+            get { return memory.Count > 0; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                if (HasMemory)
+                {
+                    return memory.Count + " kare hazır";
+                }
+                return listening ? "dinliyor" : "boş";
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            memory.Clear();
+            listening = false;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            if (!HasMemory)
+            {
+                listening = true; // arm: the next explosion gets recorded
+                return true;
+            }
+            IReadOnlyList<GridPos> echoed = ctx.Round.DestroyCubes(memory, true);
+            memory.Clear();
+            if (echoed.Count > 0)
+            {
+                ctx.Round.AddScoreOutsideTurn(echoed.Count * PointsPerEchoedCube);
+                ctx.Round.TryResolveCleanSweep();
+            }
+            return true;
+        }
+
+        /// <summary>Records the turn's destruction once, while armed. Reads the whole turn's
+        /// log, so fire chains and dynamite are part of the echo too.</summary>
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            if (!listening || HasMemory)
+            {
+                return;
+            }
+            IReadOnlyList<DestroyedCube> destroyed = turn.Report.DestroyedCubes;
+            if (destroyed.Count == 0)
+            {
+                return;
+            }
+            for (int i = 0; i < destroyed.Count; i++)
+            {
+                memory.Add(destroyed[i].Pos);
+            }
+            listening = false;
+        }
+    }
+
     /// <summary>"Mayın" - pops one chosen cube. Dropped on an EMPTY cell it instead leaves a
     /// mine there, which detonates the cube that later lands on it.
     /// Using it costs no turn, like every power.</summary>

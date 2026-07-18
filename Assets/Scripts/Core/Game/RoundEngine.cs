@@ -172,7 +172,7 @@ namespace ProjectBlock.Core
             this.scorer = scorer;
             this.session = session;
             this.hooks = hooks ?? NoTurnHooks.Instance;
-            Board = new GameBoard(config.BoardWidth, config.BoardHeight);
+            Board = new GameBoard(config.BoardWidth, config.BoardHeight, config.ExtraPlayableCells);
             Deck = new RoundDeck(ownedCards, rng);
             Hand = new Hand();
             Status = RoundStatus.InProgress;
@@ -756,6 +756,33 @@ namespace ProjectBlock.Core
             bonusHand.RemoveAt(bonusIndex);
             Deck.Discard(card);
             return true;
+        }
+
+        /// <summary>Banks score from something that happened BETWEEN turns - a power, which
+        /// never costs a turn and therefore has no TurnReport to attach to. Crossing the
+        /// threshold here raises the advance offer exactly as it would mid-turn.</summary>
+        internal void AddScoreOutsideTurn(int amount)
+        {
+            if (amount <= 0)
+            {
+                return;
+            }
+            if (currentReport != null)
+            {
+                AddLateTurnScore(amount, "power");
+                return;
+            }
+            RoundScore += amount;
+            if (session != null)
+            {
+                session.AddCurrency(amount);
+            }
+            if (!ThresholdPassed && RoundScore >= Config.ScoreThreshold)
+            {
+                ThresholdPassed = true;
+                Deck.ShuffleDiscardIntoDraw();
+                SetStatus(RoundStatus.AwaitingAdvanceDecision);
+            }
         }
 
         /// <summary>Cubes destroyed this turn by sources that COUNT (line explosions, fire
