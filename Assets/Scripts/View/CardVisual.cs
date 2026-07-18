@@ -106,7 +106,7 @@ namespace ProjectBlock.View
                     }
                     TrackText(ViewUtil.MakeText3DOutlined(transform, "ElementLabel",
                         new Vector2(0f, BodyHeight * 0.5f - 0.15f), string.Join("+", labels),
-                        34, 0.05f, ViewUtil.ElementColor(card.Elements[0]), order + 2,
+                        90, 0.019f, ViewUtil.ElementColor(card.Elements[0]), order + 2,
                         TextAnchor.MiddleCenter), order + 2);
                 }
             }

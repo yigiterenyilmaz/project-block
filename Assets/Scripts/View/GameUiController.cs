@@ -902,11 +902,13 @@ namespace ProjectBlock.View
                 ViewUtil.MakeRect(tooltipRoot.transform, "TipBg",
                     new Vector2(tooltipWidth * 0.5f, -tooltipHeight * 0.5f),
                     new Vector2(tooltipWidth, tooltipHeight), TooltipBgColor, 50);
-                ViewUtil.MakeText3DOutlined(tooltipRoot.transform, "TipTitle",
-                    new Vector2(margin, -margin), title, 34, 0.045f, TooltipTitleColor, 51,
+                // High fontSize + small characterSize keeps TextMesh crisp; the dark panel
+                // gives contrast so no outline is needed here.
+                ViewUtil.MakeText3D(tooltipRoot.transform, "TipTitle",
+                    new Vector2(margin, -margin), title, 90, 0.017f, TooltipTitleColor, 51,
                     TextAnchor.UpperLeft);
-                ViewUtil.MakeText3DOutlined(tooltipRoot.transform, "TipBody",
-                    new Vector2(margin, -margin - titleHeight), body, 30, 0.04f, TooltipBodyColor,
+                ViewUtil.MakeText3D(tooltipRoot.transform, "TipBody",
+                    new Vector2(margin, -margin - titleHeight), body, 90, 0.014f, TooltipBodyColor,
                     51, TextAnchor.UpperLeft);
             }
 

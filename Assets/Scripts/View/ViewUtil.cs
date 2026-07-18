@@ -150,19 +150,19 @@ namespace ProjectBlock.View
             return renderer;
         }
 
-        /// <summary>Text with a dark outline (the label is drawn 8 times behind, offset in
-        /// every direction) so it stays readable over any background. Returns the top copy.</summary>
+        /// <summary>Text with a thin dark outline for legibility over a busy background
+        /// (four orthogonal offset copies behind a crisp top copy). Keep fontSize high and
+        /// characterSize small or TextMesh renders blurry. Returns the top copy.</summary>
         public static TextMesh MakeText3DOutlined(Transform parent, string name, Vector2 position,
             string text, int fontSize, float characterSize, Color color, int sortingOrder,
             TextAnchor anchor)
         {
-            float o = characterSize * 0.7f;
+            float o = characterSize * 1.4f; // fontSize is high, so this is a hairline offset
             Vector2[] offsets =
             {
-                new Vector2(o, 0f), new Vector2(-o, 0f), new Vector2(0f, o), new Vector2(0f, -o),
-                new Vector2(o, o), new Vector2(-o, o), new Vector2(o, -o), new Vector2(-o, -o)
+                new Vector2(o, 0f), new Vector2(-o, 0f), new Vector2(0f, o), new Vector2(0f, -o)
             };
-            var outline = new Color(0f, 0f, 0f, 0.9f);
+            var outline = new Color(0f, 0f, 0f, 0.85f);
             for (int i = 0; i < offsets.Length; i++)
             {
                 MakeText3D(parent, name + "_o" + i, position + offsets[i], text, fontSize,
