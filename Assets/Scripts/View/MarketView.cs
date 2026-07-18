@@ -21,6 +21,7 @@ namespace ProjectBlock.View
         private static readonly Color AffordablePriceColor = new Color(1f, 0.92f, 0.45f);
         private static readonly Color TooExpensiveColor = new Color(1f, 0.45f, 0.4f);
         private static readonly Color SoldColor = new Color(0.55f, 0.55f, 0.55f);
+        private static readonly Color SectionHeaderColor = new Color(0.70f, 0.75f, 0.82f);
         private static readonly Color JokerBodyColor = new Color(0.30f, 0.22f, 0.40f);
         private static readonly Color JokerTagColor = new Color(0.82f, 0.68f, 1f);
         private static readonly Color JokerNameColor = new Color(1f, 0.93f, 0.72f);
@@ -29,21 +30,77 @@ namespace ProjectBlock.View
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
 
-        /// <summary>(Re)builds the market display from the session's current offers.</summary>
+        /// <summary>(Re)builds the market display: a BLOCKS section and a JOKERS section,
+        /// each centered under its own header, separated by a gap.</summary>
         public void Show(GameSession session)
         {
             Hide();
             IReadOnlyList<MarketOffer> offers = session.Market.Offers;
             int count = offers.Count;
-            ViewUtil.MakeRect(transform, "Backdrop", Center,
-                new Vector2(Mathf.Max(count, 1) * OfferSpacing + 1.2f, 3.9f), BackdropColor, 33);
-            ViewUtil.MakeText3D(transform, "Title", Center + new Vector2(0f, 1.65f), "MARKET",
-                60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
-            float startX = Center.x - (count - 1) * OfferSpacing * 0.5f;
+
+            int blockCount = 0;
+            int jokerCount = 0;
             for (int i = 0; i < count; i++)
             {
-                var slotCenter = new Vector2(startX + i * OfferSpacing, Center.y + 0.1f);
+                if (offers[i].Kind == MarketOfferKind.Joker) jokerCount++; else blockCount++;
+            }
+
+            // Blocks fill the first slots, then a one-slot gap, then jokers (offers are
+            // already ordered blocks-then-jokers). Center the whole run under the title.
+            float sectionGap = (blockCount > 0 && jokerCount > 0) ? OfferSpacing : 0f;
+            float span = (count - 1) * OfferSpacing + sectionGap;
+            float startX = Center.x - span * 0.5f;
+            float tileY = Center.y - 0.05f;
+
+            ViewUtil.MakeRect(transform, "Backdrop", Center,
+                new Vector2(Mathf.Max(span + CardVisual.BodyWidth + 1.2f, 3f), 4.4f), BackdropColor, 33);
+            ViewUtil.MakeText3D(transform, "Title", Center + new Vector2(0f, 2.0f), "MARKET",
+                60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
+
+            float cursor = startX;
+            bool gapInserted = false;
+            float blockMinX = float.MaxValue, blockMaxX = float.MinValue;
+            float jokerMinX = float.MaxValue, jokerMaxX = float.MinValue;
+            for (int i = 0; i < count; i++)
+            {
+                bool isJoker = offers[i].Kind == MarketOfferKind.Joker;
+                if (isJoker && sectionGap > 0f && !gapInserted)
+                {
+                    cursor += sectionGap;
+                    gapInserted = true;
+                }
+                var slotCenter = new Vector2(cursor, tileY);
                 offerCenters.Add(slotCenter);
+                cursor += OfferSpacing;
+                if (isJoker)
+                {
+                    jokerMinX = Mathf.Min(jokerMinX, slotCenter.x);
+                    jokerMaxX = Mathf.Max(jokerMaxX, slotCenter.x);
+                }
+                else
+                {
+                    blockMinX = Mathf.Min(blockMinX, slotCenter.x);
+                    blockMaxX = Mathf.Max(blockMaxX, slotCenter.x);
+                }
+            }
+
+            float headerY = tileY + 1.28f;
+            if (blockCount > 0)
+            {
+                ViewUtil.MakeText3D(transform, "BlocksHeader",
+                    new Vector2((blockMinX + blockMaxX) * 0.5f, headerY), "BLOCKS",
+                    40, 0.05f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+            }
+            if (jokerCount > 0)
+            {
+                ViewUtil.MakeText3D(transform, "JokersHeader",
+                    new Vector2((jokerMinX + jokerMaxX) * 0.5f, headerY), "JOKERS",
+                    40, 0.05f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                Vector2 slotCenter = offerCenters[i];
                 ViewUtil.MakeRect(transform, "Frame_" + i, slotCenter,
                     new Vector2(CardVisual.BodyWidth + 0.18f, CardVisual.BodyHeight + 0.18f),
                     FrameColor, 34);
@@ -85,40 +142,11 @@ namespace ProjectBlock.View
                 center + new Vector2(0f, CardVisual.BodyHeight * 0.5f - 0.17f), "JOKER",
                 34, 0.04f, JokerTagColor, 37, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "JokerName_" + index,
-                center + new Vector2(0f, 0.5f), Wrap(joker.DisplayName, 13),
+                center + new Vector2(0f, 0.5f), ViewUtil.WrapText(joker.DisplayName, 13),
                 40, 0.05f, JokerNameColor, 37, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "JokerDesc_" + index,
-                center + new Vector2(0f, 0.12f), Wrap(joker.Description, 16),
+                center + new Vector2(0f, 0.12f), ViewUtil.WrapText(joker.Description, 16),
                 30, 0.037f, JokerDescColor, 37, TextAnchor.UpperCenter);
-        }
-
-        /// <summary>Greedy word wrap for the placeholder TextMesh (no auto-wrapping).</summary>
-        private static string Wrap(string text, int maxCharsPerLine)
-        {
-            if (string.IsNullOrEmpty(text))
-            {
-                return string.Empty;
-            }
-            string[] words = text.Split(' ');
-            var sb = new System.Text.StringBuilder();
-            int lineLength = 0;
-            for (int i = 0; i < words.Length; i++)
-            {
-                string word = words[i];
-                if (lineLength > 0 && lineLength + 1 + word.Length > maxCharsPerLine)
-                {
-                    sb.Append('\n');
-                    lineLength = 0;
-                }
-                else if (lineLength > 0)
-                {
-                    sb.Append(' ');
-                    lineLength++;
-                }
-                sb.Append(word);
-                lineLength += word.Length;
-            }
-            return sb.ToString();
         }
 
         public void Hide()
