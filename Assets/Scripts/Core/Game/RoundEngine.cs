@@ -161,9 +161,10 @@ namespace ProjectBlock.Core
         /// surviving cube comes across; the board object itself is replaced, which the UI
         /// notices because it compares board references.
         ///
-        /// Anything remembering a board POSITION is invalidated here: the coordinates just
-        /// moved under it. The destruction bookkeeping is re-based and the rewind history is
-        /// dropped, because "two turns ago" no longer describes this grid.
+        /// Coordinates do NOT move: growing on the left or bottom pushes the board's origin
+        /// into negative space instead of renumbering cells, so a cube at (2,3) is still at
+        /// (2,3) afterwards. That is why nothing here has to be invalidated - the rewind
+        /// history, the echo memory and every other remembered position stay valid.
         /// </summary>
         internal bool ReshapeBoard(int left, int right, int bottom, int top)
         {
@@ -173,7 +174,6 @@ namespace ProjectBlock.Core
                 return false;
             }
             Board = resized;
-            boardHistory.Clear();
             ResyncSnapshot();
             CaptureTurnStartCardCounts();
             return true;

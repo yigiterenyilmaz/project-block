@@ -66,9 +66,9 @@ namespace ProjectBlock.Core
     /// A line is full when every PLAYABLE cell of that row/column is occupied, so an added
     /// cell genuinely extends the row it sits in. Rows with no playable cells never explode.
     ///
-    /// Extra cells may only be added at non-negative coordinates: the board grows right and
-    /// up. Growing left or down would shift every existing coordinate and invalidate the
-    /// ghost traces, the destruction log and anything else holding a GridPos.
+    /// Cells added through the CONSTRUCTOR must be non-negative (that path keeps the origin
+    /// at 0,0). Mid-round inflation goes through CreateResized instead, which grows on any
+    /// side by moving MinX/MinY - so existing coordinates never change.
     /// </summary>
     public sealed class GameBoard
     {
@@ -76,6 +76,14 @@ namespace ProjectBlock.Core
 
         /// <summary>Which cells of the bounding box are real play area.</summary>
         private readonly bool[,] playable;
+
+        /// <summary>Coordinate of the leftmost column / bottom row. Normally 0, but a board
+        /// inflated on its left or bottom side extends into NEGATIVE coordinates instead of
+        /// renumbering everything - so a cube that sat at (2,3) still sits at (2,3) after the
+        /// board grows around it. Only the internal array is 0-based; GridPos never is.</summary>
+        public int MinX { get; }
+
+        public int MinY { get; }
 
         /// <summary>Playable cells in total - the honest "size" of an irregular board.</summary>
         public int PlayableCellCount { get; }
@@ -125,6 +133,8 @@ namespace ProjectBlock.Core
                 }
             }
 
+            MinX = 0;
+            MinY = 0;
             Width = boxWidth;
             Height = boxHeight;
             cells = new Cube?[boxWidth, boxHeight];
@@ -151,8 +161,11 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Board built from an explicit mask; only CreateResized uses this.</summary>
-        private GameBoard(int width, int height, bool[,] mask, int playableCount)
+        private GameBoard(int minX, int minY, int width, int height, bool[,] mask,
+            int playableCount)
         {
+            MinX = minX;
+            MinY = minY;
             Width = width;
             Height = height;
             cells = new Cube?[width, height];
@@ -178,27 +191,33 @@ namespace ProjectBlock.Core
             {
                 return null;
             }
+            // Growing on the left/bottom pushes the ORIGIN out instead of renumbering cells,
+            // so every existing cube keeps the coordinate it already had.
+            int newMinX = source.MinX - left;
+            int newMinY = source.MinY - bottom;
 
             var mask = new bool[newWidth, newHeight];
             int count = 0;
-            for (int x = 0; x < newWidth; x++)
+            for (int ix = 0; ix < newWidth; ix++)
             {
-                for (int y = 0; y < newHeight; y++)
+                for (int iy = 0; iy < newHeight; iy++)
                 {
-                    int sx = x - left;
-                    int sy = y - bottom;
+                    int worldX = newMinX + ix;
+                    int worldY = newMinY + iy;
+                    int sx = worldX - source.MinX;
+                    int sy = worldY - source.MinY;
                     bool inSource = sx >= 0 && sx < source.Width && sy >= 0 && sy < source.Height;
                     // Inside the old board: keep its mask, holes and all. Outside it: this is
                     // freshly inflated ground, so it is play area.
-                    mask[x, y] = inSource ? source.playable[sx, sy] : true;
-                    if (mask[x, y])
+                    mask[ix, iy] = inSource ? source.playable[sx, sy] : true;
+                    if (mask[ix, iy])
                     {
                         count++;
                     }
                 }
             }
 
-            var board = new GameBoard(newWidth, newHeight, mask, count);
+            var board = new GameBoard(newMinX, newMinY, newWidth, newHeight, mask, count);
             for (int sx = 0; sx < source.Width; sx++)
             {
                 for (int sy = 0; sy < source.Height; sy++)
@@ -208,20 +227,19 @@ namespace ProjectBlock.Core
                     {
                         continue;
                     }
-                    var target = new GridPos(sx + left, sy + bottom);
-                    if (board.IsInside(target))
+                    var at = new GridPos(source.MinX + sx, source.MinY + sy);
+                    if (board.IsInside(at))
                     {
-                        board.cells[target.X, target.Y] = cube.Value;
+                        board.cells[at.X - board.MinX, at.Y - board.MinY] = cube.Value;
                         board.OccupiedCount++;
                     }
                 }
             }
             foreach (KeyValuePair<GridPos, Cube> ghost in source.outsideCubes)
             {
-                var shifted = new GridPos(ghost.Key.X + left, ghost.Key.Y + bottom);
-                if (!board.IsInside(shifted))
+                if (!board.IsInside(ghost.Key))
                 {
-                    board.outsideCubes[shifted] = ghost.Value;
+                    board.outsideCubes[ghost.Key] = ghost.Value;
                 }
             }
             return board;
@@ -231,8 +249,9 @@ namespace ProjectBlock.Core
         /// check; on a grown board it also rejects the holes in the bounding box.</summary>
         public bool IsInside(GridPos pos)
         {
-            return pos.X >= 0 && pos.X < Width && pos.Y >= 0 && pos.Y < Height
-                && playable[pos.X, pos.Y];
+            int ix = pos.X - MinX;
+            int iy = pos.Y - MinY;
+            return ix >= 0 && ix < Width && iy >= 0 && iy < Height && playable[ix, iy];
         }
 
         /// <summary>Same as IsInside; named for callers that are asking about the SHAPE of
@@ -249,7 +268,7 @@ namespace ProjectBlock.Core
                 Cube outside;
                 return outsideCubes.TryGetValue(pos, out outside) ? (Cube?)outside : null;
             }
-            return cells[pos.X, pos.Y];
+            return cells[pos.X - MinX, pos.Y - MinY];
         }
 
         /// <summary>True if every cell of the shape (anchored at origin) is inside and
@@ -264,7 +283,7 @@ namespace ProjectBlock.Core
                 {
                     return false;
                 }
-                Cube? occupant = cells[pos.X, pos.Y];
+                Cube? occupant = cells[pos.X - MinX, pos.Y - MinY];
                 if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent && occupant.Value.Kind != CubeKind.Void
                     && occupant.Value.Kind != CubeKind.Mine)
                 {
@@ -288,7 +307,7 @@ namespace ProjectBlock.Core
                 GridPos pos = origin + offset;
                 if (IsInside(pos))
                 {
-                    Cube? occupant = cells[pos.X, pos.Y];
+                    Cube? occupant = cells[pos.X - MinX, pos.Y - MinY];
                     if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent && occupant.Value.Kind != CubeKind.Void
                     && occupant.Value.Kind != CubeKind.Mine)
                     {
@@ -334,13 +353,13 @@ namespace ProjectBlock.Core
                 GridPos pos = origin + offset;
                 if (IsInside(pos))
                 {
-                    Cube? occupant = cells[pos.X, pos.Y];
+                    Cube? occupant = cells[pos.X - MinX, pos.Y - MinY];
                     if (occupant.HasValue && (occupant.Value.Kind == CubeKind.Void
                         || occupant.Value.Kind == CubeKind.Mine))
                     {
                         // Traps: "Kara delik" swallows the arriving cube, "Mayın" blows it up.
                         // Either way both are gone, so nothing is placed.
-                        cells[pos.X, pos.Y] = null;
+                        cells[pos.X - MinX, pos.Y - MinY] = null;
                         OccupiedCount--;
                         continue;
                     }
@@ -348,7 +367,7 @@ namespace ProjectBlock.Core
                     {
                         OccupiedCount++; // replaced transparents were already counted
                     }
-                    cells[pos.X, pos.Y] = new Cube(kind, card.Id);
+                    cells[pos.X - MinX, pos.Y - MinY] = new Cube(kind, card.Id);
                 }
                 else
                 {
@@ -402,7 +421,7 @@ namespace ProjectBlock.Core
                             {
                                 frame = new List<WaterMove>();
                             }
-                            frame.Add(new WaterMove(new GridPos(x, y), new GridPos(x, y - 1)));
+                            frame.Add(new WaterMove(new GridPos(x + MinX, y + MinY), new GridPos(x + MinX, y - 1 + MinY)));
                         }
                     }
                 }
@@ -425,13 +444,13 @@ namespace ProjectBlock.Core
                     if (IsWaterAt(x + 1, y) || IsWaterAt(x - 1, y)
                         || IsWaterAt(x, y + 1) || IsWaterAt(x, y - 1))
                     {
-                        doused.Add(new GridPos(x, y));
+                        doused.Add(new GridPos(x + MinX, y + MinY));
                     }
                 }
             }
             foreach (GridPos pos in doused)
             {
-                cells[pos.X, pos.Y] = new Cube(CubeKind.Obsidian, cells[pos.X, pos.Y].Value.SourceCardId);
+                cells[pos.X - MinX, pos.Y - MinY] = new Cube(CubeKind.Obsidian, cells[pos.X - MinX, pos.Y - MinY].Value.SourceCardId);
                 anyChange = true;
             }
             return anyChange;
@@ -501,14 +520,14 @@ namespace ProjectBlock.Core
             {
                 for (int x = 0; x < Width; x++)
                 {
-                    ExplodeCell(new GridPos(x, y), seen, exploded, fireBlockIds);
+                    ExplodeCell(new GridPos(x + MinX, y + MinY), seen, exploded, fireBlockIds);
                 }
             }
             foreach (int x in fullColumns)
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    ExplodeCell(new GridPos(x, y), seen, exploded, fireBlockIds);
+                    ExplodeCell(new GridPos(x + MinX, y + MinY), seen, exploded, fireBlockIds);
                 }
             }
             // FIRE RULE: when one cube of a fire block explodes, its whole block explodes.
@@ -522,7 +541,7 @@ namespace ProjectBlock.Core
                         Cube? cube = cells[x, y];
                         if (cube.HasValue && fireBlockIds.Contains(cube.Value.SourceCardId))
                         {
-                            ExplodeCell(new GridPos(x, y), seen, exploded, fireBlockIds);
+                            ExplodeCell(new GridPos(x + MinX, y + MinY), seen, exploded, fireBlockIds);
                         }
                     }
                 }
@@ -537,7 +556,7 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            Cube? cube = cells[pos.X, pos.Y];
+            Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
             if (!cube.HasValue || !CubeRules.IsDestructible(cube.Value))
             {
                 return;
@@ -546,7 +565,7 @@ namespace ProjectBlock.Core
             {
                 fireBlockIds.Add(cube.Value.SourceCardId);
             }
-            cells[pos.X, pos.Y] = null;
+            cells[pos.X - MinX, pos.Y - MinY] = null;
             OccupiedCount--;
             exploded.Add(pos);
         }
@@ -564,7 +583,7 @@ namespace ProjectBlock.Core
                     {
                         cells[x, y] = null;
                         OccupiedCount--;
-                        destroyed.Add(new GridPos(x, y));
+                        destroyed.Add(new GridPos(x + MinX, y + MinY));
                     }
                 }
             }
@@ -581,12 +600,12 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            Cube? cube = cells[pos.X, pos.Y];
+            Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
             if (!cube.HasValue || !CubeRules.IsDestructible(cube.Value))
             {
                 return false;
             }
-            cells[pos.X, pos.Y] = null;
+            cells[pos.X - MinX, pos.Y - MinY] = null;
             OccupiedCount--;
             return true;
         }
@@ -595,11 +614,11 @@ namespace ProjectBlock.Core
         /// effects that explicitly break that rule ("elmas kazma" cracking obsidian).</summary>
         public bool DestroyCubeForced(GridPos pos)
         {
-            if (!IsInside(pos) || !cells[pos.X, pos.Y].HasValue)
+            if (!IsInside(pos) || !cells[pos.X - MinX, pos.Y - MinY].HasValue)
             {
                 return false;
             }
-            cells[pos.X, pos.Y] = null;
+            cells[pos.X - MinX, pos.Y - MinY] = null;
             OccupiedCount--;
             return true;
         }
@@ -613,11 +632,11 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            if (!cells[pos.X, pos.Y].HasValue)
+            if (!cells[pos.X - MinX, pos.Y - MinY].HasValue)
             {
                 OccupiedCount++;
             }
-            cells[pos.X, pos.Y] = cube;
+            cells[pos.X - MinX, pos.Y - MinY] = cube;
         }
 
         /// <summary>Retypes an existing cube, keeping its source card ("Taskin" turning
@@ -628,12 +647,12 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            Cube? cube = cells[pos.X, pos.Y];
+            Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
             if (!cube.HasValue || cube.Value.Kind == kind)
             {
                 return false;
             }
-            cells[pos.X, pos.Y] = new Cube(kind, cube.Value.SourceCardId);
+            cells[pos.X - MinX, pos.Y - MinY] = new Cube(kind, cube.Value.SourceCardId);
             return true;
         }
 
@@ -649,7 +668,7 @@ namespace ProjectBlock.Core
                     Cube? cube = cells[x, y];
                     if (cube.HasValue && cube.Value.Kind == kind)
                     {
-                        found.Add(new GridPos(x, y));
+                        found.Add(new GridPos(x + MinX, y + MinY));
                     }
                 }
             }
@@ -675,7 +694,7 @@ namespace ProjectBlock.Core
                 {
                     continue; // the cell no longer exists on this board
                 }
-                cells[entry.Key.X, entry.Key.Y] = entry.Value;
+                cells[entry.Key.X - MinX, entry.Key.Y - MinY] = entry.Value;
                 OccupiedCount++;
             }
         }
@@ -701,7 +720,7 @@ namespace ProjectBlock.Core
                     Cube? cube = cells[x, y];
                     if (cube.HasValue)
                     {
-                        target[new GridPos(x, y)] = cube.Value;
+                        target[new GridPos(x + MinX, y + MinY)] = cube.Value;
                     }
                 }
             }
@@ -753,7 +772,7 @@ namespace ProjectBlock.Core
                 {
                     if (cells[x, y].HasValue)
                     {
-                        occupied.Add(new GridPos(x, y));
+                        occupied.Add(new GridPos(x + MinX, y + MinY));
                     }
                 }
             }
@@ -831,7 +850,7 @@ namespace ProjectBlock.Core
                     {
                         continue;
                     }
-                    if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x, y)))
+                    if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x + MinX, y + MinY)))
                     {
                         full = false;
                         break;
@@ -850,7 +869,7 @@ namespace ProjectBlock.Core
                     {
                         continue;
                     }
-                    if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x, y)))
+                    if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x + MinX, y + MinY)))
                     {
                         full = false;
                         break;
@@ -869,7 +888,7 @@ namespace ProjectBlock.Core
             {
                 for (int x = 0; x < Width; x++)
                 {
-                    var pos = new GridPos(x, y);
+                    var pos = new GridPos(x + MinX, y + MinY);
                     if (seen.Add(pos)) lineCells.Add(pos);
                 }
             }
@@ -877,7 +896,7 @@ namespace ProjectBlock.Core
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    var pos = new GridPos(x, y);
+                    var pos = new GridPos(x + MinX, y + MinY);
                     if (seen.Add(pos)) lineCells.Add(pos);
                 }
             }
@@ -912,7 +931,7 @@ namespace ProjectBlock.Core
             {
                 for (int y = 1 - shape.Height; y < Height; y++)
                 {
-                    if (CanPlace(shape, new GridPos(x, y), true))
+                    if (CanPlace(shape, new GridPos(x + MinX, y + MinY), true))
                     {
                         return true;
                     }
@@ -928,7 +947,7 @@ namespace ProjectBlock.Core
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    if (CanPlace(shape, new GridPos(x, y)))
+                    if (CanPlace(shape, new GridPos(x + MinX, y + MinY)))
                     {
                         return true;
                     }
@@ -945,7 +964,7 @@ namespace ProjectBlock.Core
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    var origin = new GridPos(x, y);
+                    var origin = new GridPos(x + MinX, y + MinY);
                     if (CanPlace(shape, origin))
                     {
                         origins.Add(origin);

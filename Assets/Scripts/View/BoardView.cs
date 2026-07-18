@@ -136,7 +136,7 @@ namespace ProjectBlock.View
                 {
                     continue;
                 }
-                Vector2 world = CellToWorld(new GridPos(x, y));
+                Vector2 world = CellToWorld(new GridPos(board.MinX + x, board.MinY + y));
                 switch (kind.Value)
                 {
                     case CubeKind.Fire:
@@ -224,7 +224,7 @@ namespace ProjectBlock.View
             {
                 for (int y = 0; y < board.Height; y++)
                 {
-                    Vector2 pos = CellToWorld(new GridPos(x, y));
+                    Vector2 pos = CellToWorld(new GridPos(board.MinX + x, board.MinY + y));
                     cellRenderers[x, y] = ViewUtil.MakeCell(
                         transform, "Cell_" + x + "_" + y, pos, cellSize * 0.92f, EmptyColor, 1);
                     previewRenderers[x, y] = ViewUtil.MakeCell(
@@ -246,7 +246,7 @@ namespace ProjectBlock.View
             {
                 for (int y = 0; y < board.Height; y++)
                 {
-                    Cube? cube = board.GetCube(new GridPos(x, y));
+                    Cube? cube = board.GetCube(new GridPos(board.MinX + x, board.MinY + y));
                     Color color = cube.HasValue
                         ? ViewUtil.CubeDisplayColor(cube.Value)
                         : EmptyColor;
@@ -288,7 +288,7 @@ namespace ProjectBlock.View
         {
             int x = Mathf.FloorToInt((world.x - bottomLeft.x) / cellSize);
             int y = Mathf.FloorToInt((world.y - bottomLeft.y) / cellSize);
-            cell = new GridPos(x, y);
+            cell = new GridPos(board.MinX + x, board.MinY + y);
             return board != null && x >= 0 && x < board.Width && y >= 0 && y < board.Height;
         }
 
@@ -298,7 +298,7 @@ namespace ProjectBlock.View
         {
             int x = Mathf.FloorToInt((world.x - bottomLeft.x) / cellSize);
             int y = Mathf.FloorToInt((world.y - bottomLeft.y) / cellSize);
-            cell = new GridPos(x, y);
+            cell = new GridPos(board.MinX + x, board.MinY + y);
             return board != null
                 && x >= -margin && x < board.Width + margin
                 && y >= -margin && y < board.Height + margin;

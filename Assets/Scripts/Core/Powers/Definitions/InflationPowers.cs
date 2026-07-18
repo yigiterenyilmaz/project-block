@@ -9,10 +9,10 @@
 //    normal rules take over and it explodes - the engine resolves that right after the
 //    shrink, so nothing special is needed here.
 //
-// WHAT INFLATION COSTS YOU: every coordinate on the board moves when it grows sideways or
-// downward, so anything remembering a position is re-based (see RoundEngine.ReshapeBoard).
-// In practice that means "Kum saati" cannot rewind across an inflation, and an "eko" recorded
-// before one replays onto the shifted grid.
+// COORDINATES DO NOT MOVE. Growing on the left or bottom pushes the board's origin into
+// negative space rather than renumbering cells, so a cube at (2,3) is still at (2,3) while
+// the board is inflated. "Kum saati" can therefore rewind across an inflation and an "eko"
+// recorded before one still replays onto the right cells.
 //
 // All numbers are BALANCE PLACEHOLDERS.
 

@@ -66,6 +66,7 @@ public static class JokerTests
         Olta_MarksAndReelsInACard();
         Tilsim_TurnsGhostGroundIntoBoard();
         Inflation_GrowsThenSqueezesBack();
+        BoardOrigin_CoordinatesSurviveGrowingLeftAndDown();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -1563,6 +1564,53 @@ public static class JokerTests
         Check(session.CurrentRound.Board.Width == widthBefore,
             "the board snapped back to its old width",
             session.CurrentRound.Board.Width + " vs " + widthBefore);
+    }
+
+    /// <summary>The coordinate origin is the part the baseline trace CANNOT check: with
+    /// MinX = 0 the offset maths is a no-op, so these assertions are the only thing standing
+    /// between a wrong offset and a silently broken board.</summary>
+    private static void BoardOrigin_CoordinatesSurviveGrowingLeftAndDown()
+    {
+        Section("board origin / coordinates survive a left/down grow");
+        var session = NewSession(401, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+
+        // Two cubes at known coordinates.
+        PaintBoard(round, session, CubeKind.Normal, new GridPos(0, 0), new GridPos(3, 2));
+        Check(round.Board.MinX == 0 && round.Board.MinY == 0, "a fresh board starts at 0,0");
+
+        Check(round.ReshapeBoard(1, 1, 1, 1), "the board grew on every side");
+        GameBoard grown = round.Board;
+
+        Check(grown.MinX == -1 && grown.MinY == -1,
+            "growing left/down pushed the ORIGIN out instead of renumbering",
+            grown.MinX + "," + grown.MinY);
+        Check(grown.Width == 7 && grown.Height == 7, "the box is two bigger in each axis",
+            grown.Width + "x" + grown.Height);
+
+        // The whole point: old coordinates still address the same cubes.
+        Check(grown.GetCube(new GridPos(0, 0)).HasValue,
+            "the cube at 0,0 is still at 0,0");
+        Check(grown.GetCube(new GridPos(3, 2)).HasValue,
+            "the cube at 3,2 is still at 3,2");
+        Check(grown.IsInside(new GridPos(-1, -1)), "the new corner is playable");
+        Check(!grown.GetCube(new GridPos(-1, -1)).HasValue, "and it is empty");
+        Check(grown.IsInside(new GridPos(5, 5)), "so is the far new corner");
+        Check(!grown.IsInside(new GridPos(-2, 0)), "but nothing beyond the new edge");
+
+        // Placement and destruction must work in negative space too.
+        BlockCard card = session.CreateCard(Bar(2), null);
+        Check(grown.CanPlace(card.Shape, new GridPos(-1, 4)), "a block fits in the new space");
+        grown.Place(card, new GridPos(-1, 4));
+        Check(grown.GetCube(new GridPos(-1, 4)).HasValue, "it landed at a negative coordinate");
+        Check(grown.DestroyCube(new GridPos(-1, 4)), "and it can be destroyed there");
+
+        // Shrinking back restores the original numbering.
+        Check(round.ReshapeBoard(-1, -1, -1, -1), "the board shrank back");
+        Check(round.Board.MinX == 0 && round.Board.MinY == 0, "the origin came home",
+            round.Board.MinX + "," + round.Board.MinY);
+        Check(round.Board.GetCube(new GridPos(3, 2)).HasValue,
+            "and the cube is STILL at 3,2 after a full round trip");
     }
 
     private static void Powerbank_RechargesASpentPower()
