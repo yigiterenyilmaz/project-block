@@ -78,9 +78,7 @@ namespace ProjectBlock.View
                 for (int y = 0; y < board.Height; y++)
                 {
                     Cube? cube = board.GetCube(new GridPos(x, y));
-                    cellRenderers[x, y].color = cube.HasValue
-                        ? ViewUtil.ColorForCard(cube.Value.SourceCardId)
-                        : EmptyColor;
+                    cellRenderers[x, y].color = cube.HasValue ? ViewUtil.CubeColor : EmptyColor;
                 }
             }
         }

@@ -30,9 +30,14 @@ namespace ProjectBlock.View
         /// <summary>Rest position the card returns to after a cancelled drag.</summary>
         public Vector2 HomePosition;
 
+        private static readonly Color LabelColor = new Color(0.3f, 0.3f, 0.34f);
+
         private readonly List<SpriteRenderer> renderers = new List<SpriteRenderer>();
         private readonly List<int> baseOrders = new List<int>();
         private readonly List<Color> baseColors = new List<Color>();
+        private TextMesh idLabel;
+        private MeshRenderer idLabelRenderer;
+        private int idLabelBaseOrder;
 
         private Vector2 moveStart;
         private Vector2 moveTarget;
@@ -69,8 +74,14 @@ namespace ProjectBlock.View
                 {
                     Track(ViewUtil.MakeCell(transform, "Mini",
                         bottomLeft + new Vector2(cell.X * mini, cell.Y * mini),
-                        mini * 0.9f, ViewUtil.ColorForCard(card.Id), order + 1), order + 1);
+                        mini * 0.9f, ViewUtil.CubeColor, order + 1), order + 1);
                 }
+                // id stamp so cards can be told apart (colors are uniform on purpose)
+                idLabel = ViewUtil.MakeText3D(transform, "IdLabel",
+                    new Vector2(BodyWidth * 0.5f - 0.09f, -BodyHeight * 0.5f + 0.04f),
+                    "#" + card.Id, 40, 0.045f, LabelColor, order + 2, TextAnchor.LowerRight);
+                idLabelRenderer = idLabel.GetComponent<MeshRenderer>();
+                idLabelBaseOrder = order + 2;
             }
             else
             {
@@ -97,6 +108,12 @@ namespace ProjectBlock.View
                 color.a *= Mathf.Clamp01(alpha);
                 renderers[i].color = color;
             }
+            if (idLabel != null)
+            {
+                Color labelColor = LabelColor;
+                labelColor.a *= Mathf.Clamp01(alpha);
+                idLabel.color = labelColor;
+            }
         }
 
         /// <summary>Raises (or resets, with 0) the sorting order of the whole card,
@@ -106,6 +123,10 @@ namespace ProjectBlock.View
             for (int i = 0; i < renderers.Count; i++)
             {
                 renderers[i].sortingOrder = baseOrders[i] + boost;
+            }
+            if (idLabelRenderer != null)
+            {
+                idLabelRenderer.sortingOrder = idLabelBaseOrder + boost;
             }
         }
 
