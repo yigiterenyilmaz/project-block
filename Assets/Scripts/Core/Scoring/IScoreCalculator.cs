@@ -21,6 +21,18 @@ namespace ProjectBlock.Core
 
         /// <summary>Per-turn bonus for gold cubes sitting on the board.</summary>
         int ScoreGoldBonus(int goldCubesOnBoard);
+
+        /// <summary>Multiplier applied to the regular base score of a turn played in overtime
+        /// (1.0 before the threshold). See ScoringConfig.OvertimeRegularScoreFactor.</summary>
+        double OvertimeRegularScoreFactor { get; }
+
+        /// <summary>Bonus for winning the <paramref name="overtimeLevel"/>-th sequential
+        /// overtime, scaled to the round threshold. Level is 1-based; level &lt; 1 pays 0.</summary>
+        int ScoreOvertimeWinBonus(int roundThreshold, int overtimeLevel);
+
+        /// <summary>Global economy multiplier (ScoringConfig.ScoreScale). Applied by the engine
+        /// to banked score and threshold checks, and by GameSession to prices and sells.</summary>
+        int ScoreScale { get; }
     }
 
     /// <summary>Base-game scoring driven entirely by ScoringConfig.</summary>
@@ -57,6 +69,27 @@ namespace ProjectBlock.Core
         public int ScoreGoldBonus(int goldCubesOnBoard)
         {
             return goldCubesOnBoard * config.GoldPointsPerCubePerTurn;
+        }
+
+        public double OvertimeRegularScoreFactor
+        {
+            get { return config.OvertimeRegularScoreFactor; }
+        }
+
+        public int ScoreOvertimeWinBonus(int roundThreshold, int overtimeLevel)
+        {
+            if (overtimeLevel < 1)
+            {
+                return 0;
+            }
+            double fraction = config.OvertimeWinBonusBaseFraction
+                + config.OvertimeWinBonusStepFraction * (overtimeLevel - 1);
+            return (int)System.Math.Round(roundThreshold * fraction);
+        }
+
+        public int ScoreScale
+        {
+            get { return config.ScoreScale; }
         }
     }
 }

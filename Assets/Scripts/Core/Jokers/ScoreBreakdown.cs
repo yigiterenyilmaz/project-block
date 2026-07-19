@@ -53,6 +53,23 @@ namespace ProjectBlock.Core
         /// <summary>Per-turn payout of the gold cubes sitting on the board.</summary>
         public int BaseGold { get; internal set; }
 
+        /// <summary>Bonus for winning an overtime this turn (0 otherwise). Unlike the four
+        /// regular base fields it is NOT scaled by RegularScoreFactor - overtime taxes the
+        /// regular play, not the win reward - but it IS subject to joker multipliers, so
+        /// "point upgrades" raise it. See RoundEngine's overtime clean-sweep handling.</summary>
+        public int BaseOvertimeBonus { get; internal set; }
+
+        /// <summary>Multiplier on the four REGULAR base fields (placement/lines/sweep/gold).
+        /// 1.0 normally; set below 1 during overtime so regular actions pay almost nothing
+        /// (ScoringConfig.OvertimeRegularScoreFactor). Never touches BaseOvertimeBonus,
+        /// FlatBonus or the multiplier stage.</summary>
+        public double RegularScoreFactor { get; internal set; } = 1.0;
+
+        /// <summary>Global economy multiplier (ScoringConfig.ScoreScale) applied to the whole
+        /// turn total. 1 by default so a directly-constructed breakdown is unscaled; the engine
+        /// sets it from the scorer each turn. Multipliers stay ratios - only the final points
+        /// are scaled - so the "chips then mult" ordering is untouched.</summary>
+        public int ScoreScale { get; internal set; } = 1;
 
         /// <summary>Sum of every flat bonus added by jokers (may be negative).</summary>
         public int FlatBonus { get; private set; }
@@ -77,10 +94,18 @@ namespace ProjectBlock.Core
             get { return BasePlacement + BaseLines + BaseSweep + BaseGold; }
         }
 
-        /// <summary>Final score of the turn. Floored once, per the ordering rule above.</summary>
+        /// <summary>Final score of the turn. Floored once, per the ordering rule above, then
+        /// multiplied by the global ScoreScale. Overtime taxes only the regular base
+        /// (RegularScoreFactor); the overtime win bonus and all joker contributions keep their
+        /// full weight. Late flats are scaled too so they stay in the same units as the rest.</summary>
         public int Total
         {
-            get { return (int)System.Math.Floor((BaseTotal + FlatBonus) * Multiplier) + LateFlat; }
+            get
+            {
+                double regular = BaseTotal * RegularScoreFactor;
+                return (int)System.Math.Floor((regular + BaseOvertimeBonus + FlatBonus)
+                    * Multiplier * ScoreScale) + LateFlat * ScoreScale;
+            }
         }
 
         public void AddFlat(int amount, string source)
@@ -123,6 +148,9 @@ namespace ProjectBlock.Core
             BaseLines = 0;
             BaseSweep = 0;
             BaseGold = 0;
+            BaseOvertimeBonus = 0;
+            RegularScoreFactor = 1.0;
+            ScoreScale = 1;
             FlatBonus = 0;
             Multiplier = 1.0;
             LateFlat = 0;

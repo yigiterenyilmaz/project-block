@@ -93,7 +93,7 @@ namespace ProjectBlock.Core
             {
                 return 0;
             }
-            int value = power.BaseSellValue;
+            int value = power.BaseSellValue * session.Config.Scoring.ScoreScale;
             if (!Remove(power))
             {
                 return 0;

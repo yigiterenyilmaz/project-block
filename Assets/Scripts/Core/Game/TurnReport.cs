@@ -90,6 +90,11 @@ namespace ProjectBlock.Core
         /// <summary>Per-turn bonus earned from gold cubes on the board.</summary>
         public int GoldBonus { get; internal set; }
 
+        /// <summary>Bonus awarded this turn for winning an overtime (a clean sweep survived
+        /// past the threshold). 0 on turns that did not win an overtime. Pre-multiplier value,
+        /// for the UI popup; the banked amount also runs through this turn's joker multipliers.</summary>
+        public int OvertimeWinBonus { get; internal set; }
+
         /// <summary>Water fall animation frames: each entry is one pass of single-cell
         /// drops. Empty when no water moved. The UI replays these and blocks input
         /// while doing so.</summary>

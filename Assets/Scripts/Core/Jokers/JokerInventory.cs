@@ -140,7 +140,7 @@ namespace ProjectBlock.Core
             {
                 return 0;
             }
-            int value = joker.SellValue;
+            int value = joker.SellValue * session.Config.Scoring.ScoreScale;
             if (!Remove(joker))
             {
                 return 0;

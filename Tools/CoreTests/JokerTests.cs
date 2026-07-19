@@ -16,6 +16,9 @@ public static class JokerTests
     {
         ScorePipeline_NoJokers_MatchesBase();
         ScorePipeline_FlatThenMultiplier_InInventoryOrder();
+        Overtime_WinBonus_EscalatesAndRoughlyDoublesBaseline();
+        Overtime_RegularBaseTrickled_BonusAndJokersFullWeight();
+        Overtime_WinBonusAwardedOnEachOvertimeSweep();
         Streak_Cig_PaysFromMinStreakAndGrows();
         Streak_Cig_EqualSizeRestartsRun();
         Streak_Dondurma_Decreasing();
@@ -215,6 +218,21 @@ public static class JokerTests
         return played;
     }
 
+    /// <summary>Plays the first hand card with a legal origin and RETURNS its report (unlike
+    /// PlayTurns, which only counts). Null if nothing in hand can be placed.</summary>
+    private static TurnReport PlayOneCard(RoundEngine round)
+    {
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            var origins = round.GetValidOrigins(round.Hand[i].Shape);
+            if (origins.Count > 0)
+            {
+                return round.PlayFromHand(i, origins[0]);
+            }
+        }
+        return null;
+    }
+
     // -------------------------------------------------------------------- tests
 
     private static void ScorePipeline_NoJokers_MatchesBase()
@@ -246,6 +264,94 @@ public static class JokerTests
         breakdown.AddLateFlat(7, "late");
         Check(breakdown.Total == 67, "late flat is added after the multiplier stage",
             "got " + breakdown.Total);
+    }
+
+    private static void Overtime_WinBonus_EscalatesAndRoughlyDoublesBaseline()
+    {
+        Section("overtime / win bonus curve");
+        var config = new ScoringConfig();
+        var scorer = new DefaultScoreCalculator(config);
+        int t = 600;
+        int w1 = scorer.ScoreOvertimeWinBonus(t, 1);
+        int w2 = scorer.ScoreOvertimeWinBonus(t, 2);
+        int w3 = scorer.ScoreOvertimeWinBonus(t, 3);
+        Check(w1 == (int)Math.Round(t * config.OvertimeWinBonusBaseFraction),
+            "win #1 pays the base fraction of the threshold", "got " + w1);
+        Check(w2 > w1 && w3 > w2, "the bonus grows with each sequential overtime",
+            w1 + "/" + w2 + "/" + w3);
+        int sum = w1 + w2 + w3;
+        Check(sum >= t && sum <= (int)(t * 1.3),
+            "three overtime wins ~= one extra baseline (roughly doubles the round total)",
+            "sum " + sum + " vs threshold " + t);
+        Check(scorer.ScoreOvertimeWinBonus(t, 0) == 0, "a non-overtime turn (level 0) pays nothing");
+    }
+
+    private static void Overtime_RegularBaseTrickled_BonusAndJokersFullWeight()
+    {
+        Section("overtime / regular trickle vs full-weight bonus");
+        // Regular base 95, an overtime win bonus of 15, a joker +10 flat and a x2 joker.
+        var ot = new ScoreBreakdown();
+        ot.BasePlacement = 4;
+        ot.BaseLines = 16;
+        ot.BaseSweep = 75;               // regular base total = 95
+        ot.BaseOvertimeBonus = 15;
+        ot.RegularScoreFactor = 0.1;     // overtime trickle
+        ot.AddFlat(10, "joker");
+        ot.AddMultiplier(2.0, "jokerx");
+        // (95*0.1 + 15 + 10) * 2 = (9.5 + 25) * 2 = 69  (only the regular base is trickled)
+        Check(ot.Total == 69, "regular base trickled; win bonus + joker flat full; all multiplied",
+            "got " + ot.Total);
+
+        // The SAME breakdown outside overtime (factor 1.0) keeps the regular base whole.
+        var normal = new ScoreBreakdown();
+        normal.BasePlacement = 4;
+        normal.BaseLines = 16;
+        normal.BaseSweep = 75;
+        normal.BaseOvertimeBonus = 15;
+        normal.AddFlat(10, "joker");
+        normal.AddMultiplier(2.0, "jokerx");
+        // (95 + 15 + 10) * 2 = 240
+        Check(normal.Total == 240, "no trickle when RegularScoreFactor is the default 1.0",
+            "got " + normal.Total);
+    }
+
+    private static void Overtime_WinBonusAwardedOnEachOvertimeSweep()
+    {
+        Section("overtime / win bonus wired through a round");
+        // 3x3 board, all size-3 bars: every placement completes its row, explodes, and empties
+        // the board -> a clean sweep every turn. Threshold 60 is crossed on turn 1.
+        var session = NewSession(31, 3, 60, 24, 3);
+        RoundEngine round = session.CurrentRound;
+        ScoringConfig sc = session.Config.Scoring;
+
+        TurnReport r1 = PlayOneCard(round);
+        Check(r1 != null && r1.CleanSweep, "turn 1 sweeps the board");
+        Check(round.ThresholdPassed, "threshold passed on turn 1");
+        Check(r1.OvertimeWinBonus == 0, "no win bonus on the threshold-crossing turn",
+            "got " + (r1 == null ? -1 : r1.OvertimeWinBonus));
+        Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "offered to advance after turn 1");
+        round.DecideAdvance(false); // continue -> overtime #1
+
+        TurnReport r2 = PlayOneCard(round);
+        int expect1 = (int)Math.Round(60 * sc.OvertimeWinBonusBaseFraction);
+        Check(r2 != null && r2.CleanSweep, "overtime turn sweeps");
+        Check(r2 != null && r2.OvertimeWinBonus == expect1,
+            "overtime win #1 pays the base fraction of the threshold",
+            "got " + (r2 == null ? -1 : r2.OvertimeWinBonus) + " want " + expect1);
+        Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "an overtime sweep re-offers advance");
+        Check(r1.ScoreGained > r2.ScoreGained,
+            "regular actions earn far less in overtime despite the win bonus",
+            "r1=" + r1.ScoreGained + " r2=" + (r2 == null ? -1 : r2.ScoreGained));
+        round.DecideAdvance(false); // continue -> overtime #2
+
+        TurnReport r3 = PlayOneCard(round);
+        int expect2 = (int)Math.Round(60 *
+            (sc.OvertimeWinBonusBaseFraction + sc.OvertimeWinBonusStepFraction));
+        Check(r3 != null && r3.OvertimeWinBonus == expect2,
+            "overtime win #2 is one step higher",
+            "got " + (r3 == null ? -1 : r3.OvertimeWinBonus) + " want " + expect2);
+        Check(r3 != null && r3.OvertimeWinBonus > r2.OvertimeWinBonus,
+            "the win bonus escalates with sequential overtimes");
     }
 
     private static void Streak_Cig_PaysFromMinStreakAndGrows()
@@ -403,8 +509,11 @@ public static class JokerTests
     private static void Renovasyon_OvertimeDoesNotRecycleDiscard()
     {
         Section("renovasyon / disabled in overtime");
-        // Threshold 1 so the very first placement puts the round into overtime.
+        // Threshold 1 so the very first placement puts the round into overtime. Placement no
+        // longer scores by default (a joker re-grants it), so this test opts it back on - it
+        // reaches the threshold by placing a single cube, not by clearing a line.
         var session = NewSession(5, 6, 1, 24, 1);
+        session.Config.Scoring.PointsPerCubePlaced = 1;
         var joker = (RenovasyonJoker)session.Jokers.Add(new RenovasyonJoker());
         Check(session.Jokers.CanActivate(joker.InstanceId), "usable before the threshold");
 
@@ -468,7 +577,10 @@ public static class JokerTests
 
         long before = session.TotalScore;
         int paid = session.Jokers.Sell(cimri);
-        Check(paid == baseValue + 12, "sale pays base + accrued", "got " + paid);
+        // Sell values are paid into the scaled run economy (SellValue itself stays logical).
+        int scale = session.Config.Scoring.ScoreScale;
+        Check(paid == (baseValue + 12) * scale, "sale pays (base + accrued) x score scale",
+            "got " + paid + " want " + ((baseValue + 12) * scale));
         Check(session.TotalScore == before + paid, "currency went up by the sale price");
         Check(session.Jokers.Count == 0, "joker left the inventory");
 
@@ -503,7 +615,10 @@ public static class JokerTests
     private static void Overtime_GatedJokerIsSkipped()
     {
         Section("overtime / central gating");
+        // Placement scores nothing by default now, so opt it back on: this test crosses the
+        // threshold-1 with one placed cube to get into overtime immediately.
         var session = NewSession(23, 6, 1, 24, 1);
+        session.Config.Scoring.PointsPerCubePlaced = 1;
         var probe = (OvertimeOnlyProbe)session.Jokers.Add(new OvertimeOnlyProbe());
 
         PlayTurns(session, 1);
@@ -529,7 +644,8 @@ public static class JokerTests
         PlayTurns(session, 8);
         Check(joker.TriggeredThisRound > 0, "the draw pile ran dry at least once",
             "triggered " + joker.TriggeredThisRound);
-        int expectedBonus = joker.TriggeredThisRound * 60;
+        // The 60/trigger is banked through the scaled economy, so scale the expectation too.
+        int expectedBonus = joker.TriggeredThisRound * 60 * session.Config.Scoring.ScoreScale;
         Check(session.CurrentRound.RoundScore >= scoreBefore + expectedBonus,
             "round score contains the bonus", "round score " + session.CurrentRound.RoundScore);
     }
@@ -1685,6 +1801,9 @@ public static class JokerTests
             var picker = new SeededRandom(seed * 7919);
             var config = new GameConfig();
             config.RngSeed = seed;
+            // Placement scores nothing by default now; greedy play on the roomy board barely
+            // clears lines, so keep placement points here to drive long runs like before.
+            config.Scoring.PointsPerCubePlaced = 1;
             if (seed % 2 == 0)
             {
                 // Half the runs use a cramped board so clean sweeps actually occur - the
@@ -1976,6 +2095,8 @@ public static class JokerTests
     /// <summary>Like DriveToMarket but continues an existing session (jokers pre-granted).</summary>
     private static GameSession DriveOwnedToMarket(GameSession session)
     {
+        // Restore placement scoring (default is 0 now) so greedy play reaches the market.
+        session.Config.Scoring.PointsPerCubePlaced = 1;
         int safety = 0;
         while (session.Phase != GamePhase.GameOver && safety++ < 400)
         {
@@ -2024,6 +2145,9 @@ public static class JokerTests
     {
         var config = new GameConfig();
         config.RngSeed = seed;
+        // Placement scores nothing by default; greedy play on the default 6x6 rarely clears a
+        // line, so this driver needs placement points to reach the threshold and the market.
+        config.Scoring.PointsPerCubePlaced = 1;
         var session = new GameSession(config);
         int safety = 0;
         while (session.Phase != GamePhase.GameOver && safety++ < 400)
@@ -2076,6 +2200,9 @@ public static class JokerTests
     {
         var config = new GameConfig();
         config.RngSeed = seed;
+        // Keep placement points so greedy play reaches thresholds and cycles rounds (the
+        // default economy no longer scores placement - see PointsPerCubePlaced).
+        config.Scoring.PointsPerCubePlaced = 1;
         var session = new GameSession(config);
         foreach (JokerDefinition definition in JokerRegistry.All)
         {

@@ -305,7 +305,8 @@ namespace ProjectBlock.View
                                     Loc.Pick("worthless", "değersiz"),
                                     new Color(0.6f, 0.6f, 0.6f), 50, 0.045f);
                             }
-                            deckOverlay.Show(session.OwnedCards, c => session.Config.Market.SellValue(c));
+                            deckOverlay.Show(session.OwnedCards,
+                                c => session.Config.Market.SellValue(c) * session.Config.Scoring.ScoreScale);
                             marketView.Show(session);
                             UpdateHud();
                             return;
@@ -1527,8 +1528,9 @@ namespace ProjectBlock.View
                 .Append(Loc.Pick("   Deck: ", "   Deste: ")).Append(currentDeck.Name).Append('\n');
             sb.Append(Loc.Pick("Round ", "Raunt ")).Append(session.RoundNumber)
                 .Append(Loc.Pick("   Turn ", "   Tur ")).Append(round.TurnNumber).Append('\n');
+            // RoundScore lives in the scaled economy; lift the threshold to match for display.
             sb.Append(Loc.Pick("Score ", "Puan ")).Append(round.RoundScore)
-                .Append(" / ").Append(round.Config.ScoreThreshold);
+                .Append(" / ").Append(round.Config.ScoreThreshold * session.Config.Scoring.ScoreScale);
             if (round.ThresholdPassed)
             {
                 sb.Append(Loc.Pick("  [threshold passed]", "  [eşik geçildi]"));

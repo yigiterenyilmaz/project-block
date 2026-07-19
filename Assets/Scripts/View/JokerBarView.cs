@@ -191,7 +191,8 @@ namespace ProjectBlock.View
             {
                 line.Append('\n');
             }
-            line.Append(Loc.Pick("sell ", "satış ")).Append(joker.SellValue);
+            line.Append(Loc.Pick("sell ", "satış "))
+                .Append(joker.SellValue * session.Config.Scoring.ScoreScale);
             if (joker.DisabledInOvertime)
             {
                 line.Append(Loc.Pick("   (off in overtime)", "   (uzatmada kapalı)"));

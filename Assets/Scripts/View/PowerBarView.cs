@@ -185,7 +185,8 @@ namespace ProjectBlock.View
             line.Append(power.Charged
                 ? Loc.Pick("charged", "dolu")
                 : Loc.Pick("empty (sweep refills)", "boş (temizlik doldurur)"));
-            line.Append('\n').Append(Loc.Pick("sell ", "satış ")).Append(power.BaseSellValue);
+            line.Append('\n').Append(Loc.Pick("sell ", "satış "))
+                .Append(power.BaseSellValue * session.Config.Scoring.ScoreScale);
             panel.Body.text = line.ToString();
         }
 

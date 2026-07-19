@@ -23,6 +23,12 @@
 // the whole hand back into the draw pile, removes Rules.CardsRemovedPerContinue
 // random cards face-down for the round, and draws a fresh hand - see DecideAdvance.
 //
+// OVERTIME SCORING (confirmed 2026-07-19): once the threshold is passed, regular actions
+// pay almost nothing (breakdown.RegularScoreFactor = OvertimeRegularScoreFactor), and the
+// real reward is an escalating per-overtime-win bonus granted at the overtime clean sweep
+// (scorer.ScoreOvertimeWinBonus, scaled to the threshold by ContinueCount). The bonus runs
+// through the score pipeline, so joker multipliers still raise it.
+//
 // CLEAN SWEEP IS ONE CENTRAL EVENT. TryResolveCleanSweep is the only place it can fire,
 // at most once per turn, and it requires the board to have gone from "not clean" to
 // "clean" through an actual destruction this turn. Note this is STRICTER than a plain
@@ -60,7 +66,18 @@ namespace ProjectBlock.Core
         }
 
         public int TurnNumber { get; private set; }
+
+        /// <summary>Round score in the SCALED economy (every banked turn is multiplied by
+        /// ScoringConfig.ScoreScale), so it is compared against ScaledThreshold, not the raw
+        /// Config.ScoreThreshold. The overtime win bonus still reads the raw threshold, because
+        /// it is a logical amount that the score pipeline scales on the way in.</summary>
         public int RoundScore { get; private set; }
+
+        /// <summary>Config.ScoreThreshold lifted into the same scaled units as RoundScore.</summary>
+        private int ScaledThreshold
+        {
+            get { return Config.ScoreThreshold * scorer.ScoreScale; }
+        }
 
         /// <summary>True once RoundScore has reached the threshold; enables overtime rules.</summary>
         public bool ThresholdPassed { get; private set; }
@@ -647,6 +664,7 @@ namespace ProjectBlock.Core
             }
 
             breakdown.Reset();
+            breakdown.ScoreScale = scorer.ScoreScale; // whole-economy x scale, applied to Total
             var report = new TurnReport();
             report.TurnNumber = TurnNumber;
             report.Card = card;
@@ -775,7 +793,11 @@ namespace ProjectBlock.Core
                 breakdown.BaseGold = report.GoldBonus;
             }
 
-            // 5. finalize the score
+            // 5. finalize the score. In overtime the regular base (placement/lines/sweep/gold)
+            //    is taxed down to a trickle; the overtime win bonus and joker contributions are
+            //    exempt. ThresholdPassed is sampled live here, so the turn that crosses the
+            //    threshold still scores in full - only later overtime turns are trickled.
+            breakdown.RegularScoreFactor = ThresholdPassed ? scorer.OvertimeRegularScoreFactor : 1.0;
             hooks.ModifyScore(currentTurn);
             scoreFinalized = true;
             RoundScore += breakdown.Total;
@@ -825,7 +847,7 @@ namespace ProjectBlock.Core
             }
 
             // 9. threshold check (first pass only)
-            if (!ThresholdPassed && RoundScore >= Config.ScoreThreshold)
+            if (!ThresholdPassed && RoundScore >= ScaledThreshold)
             {
                 ThresholdPassed = true;
                 report.ThresholdJustPassed = true;
@@ -931,6 +953,24 @@ namespace ProjectBlock.Core
                 // Overtime reward: a fresh draw pile and a new chance to leave.
                 Deck.ShuffleDiscardIntoDraw();
                 pendingAdvanceOffer = true;
+
+                // Winning this overtime pays an escalating bonus scaled to the threshold
+                // (ContinueCount is the 1-based overtime level). It goes through the score
+                // pipeline - BaseOvertimeBonus before finalization, a late add after - so joker
+                // multipliers raise it just like any other score ("point upgrades" apply).
+                int winBonus = scorer.ScoreOvertimeWinBonus(Config.ScoreThreshold, ContinueCount);
+                if (winBonus > 0)
+                {
+                    if (scoreFinalized)
+                    {
+                        AddLateTurnScore(winBonus, "base.overtime");
+                    }
+                    else
+                    {
+                        breakdown.BaseOvertimeBonus += winBonus;
+                    }
+                    currentReport.OvertimeWinBonus += winBonus;
+                }
             }
 
             hooks.AfterCleanSweep(currentTurn);
@@ -1021,12 +1061,15 @@ namespace ProjectBlock.Core
                 AddLateTurnScore(amount, "power");
                 return;
             }
-            RoundScore += amount;
+            // Between turns there is no breakdown to scale, so lift the logical amount into the
+            // scaled economy here before it touches RoundScore and the run currency.
+            int scaled = amount * scorer.ScoreScale;
+            RoundScore += scaled;
             if (session != null)
             {
-                session.AddCurrency(amount);
+                session.AddCurrency(scaled);
             }
-            if (!ThresholdPassed && RoundScore >= Config.ScoreThreshold)
+            if (!ThresholdPassed && RoundScore >= ScaledThreshold)
             {
                 ThresholdPassed = true;
                 Deck.ShuffleDiscardIntoDraw();
@@ -1068,14 +1111,15 @@ namespace ProjectBlock.Core
         /// Used by "İkinci şans" and "Totem" in overtime, where the score is above threshold.</summary>
         internal void CapRoundScoreAtThreshold()
         {
-            int excess = RoundScore - Config.ScoreThreshold;
+            int excess = RoundScore - ScaledThreshold;
             if (excess <= 0)
             {
                 return;
             }
-            RoundScore = Config.ScoreThreshold;
+            RoundScore = ScaledThreshold;
             if (session != null)
             {
+                // excess is already in scaled units (RoundScore is scaled), so no extra scale.
                 session.AddCurrency(-excess); // remove the overtime-farmed excess from the run
             }
         }
@@ -1198,7 +1242,8 @@ namespace ProjectBlock.Core
                 return;
             }
             breakdown.AddLateFlat(amount, source);
-            RoundScore += amount;
+            // amount is logical; Total scales LateFlat by ScoreScale, so keep RoundScore in step.
+            RoundScore += amount * scorer.ScoreScale;
             currentReport.ScoreGained = breakdown.Total;
             currentReport.RoundScoreAfter = RoundScore;
         }

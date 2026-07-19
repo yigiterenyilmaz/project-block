@@ -251,7 +251,8 @@ namespace ProjectBlock.Core
             {
                 return 0;
             }
-            int value = Config.Market.SellValue(card);
+            // Sell values live in the same currency as the scaled run economy.
+            int value = Config.Market.SellValue(card) * Config.Scoring.ScoreScale;
             TotalScore += value;
             return value;
         }
@@ -396,8 +397,9 @@ namespace ProjectBlock.Core
                     : null;
                 var card = new BlockCard(nextCardId++, shape, elements);
                 card = Jokers.FilterMarketOffer(card); // "Simya" adds a second element here
-                // priced AFTER the filter so a joker-added element is surcharged too
-                newOffers.Add(new MarketOffer(card, market.BuyPrice(card)));
+                // priced AFTER the filter so a joker-added element is surcharged too, and
+                // lifted into the scaled economy so prices track the bigger score numbers
+                newOffers.Add(new MarketOffer(card, market.BuyPrice(card) * Config.Scoring.ScoreScale));
             }
             AddJokerOffers(market, newOffers);
             AddPowerOffers(market, newOffers);
@@ -471,7 +473,7 @@ namespace ProjectBlock.Core
                     }
                     legendaryTaken = true;
                 }
-                newOffers.Add(new MarketOffer(pool[i], market.JokerPrice));
+                newOffers.Add(new MarketOffer(pool[i], market.JokerPrice * Config.Scoring.ScoreScale));
                 taken++;
             }
         }
@@ -508,7 +510,7 @@ namespace ProjectBlock.Core
             int count = Math.Min(market.PowerOfferCount, pool.Count);
             for (int i = 0; i < count; i++)
             {
-                newOffers.Add(new MarketOffer(pool[i], market.PowerPrice));
+                newOffers.Add(new MarketOffer(pool[i], market.PowerPrice * Config.Scoring.ScoreScale));
             }
         }
 
