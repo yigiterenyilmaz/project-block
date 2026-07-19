@@ -3,6 +3,7 @@
 // old 1-8 list so a bet can run up to 99. Placeholder presentation like the other View/ modals; the
 // controller reads Value and calls GameSession.PlaceBatakBet.
 
+using ProjectBlock.Core;
 using UnityEngine;
 
 namespace ProjectBlock.View
