@@ -29,6 +29,12 @@ namespace ProjectBlock.Core
         /// türlerle çıkabilir").</summary>
         public double ElementChance = 0.45;
 
+        /// <summary>Elemental market blocks never come smaller than this many cubes. A 1x1
+        /// fire / dynamite / water / gold block contradicts most element behaviours (fire
+        /// chains, "whole block explodes", per-cube bonuses), so an elemental offer re-rolls
+        /// its shape until it is at least this big. Balance placeholder.</summary>
+        public int MinElementalBlockSize = 2;
+
         /// <summary>Joker offers shown per market visit (drawn from JokerRegistry).</summary>
         public int JokerOfferCount = 2;
 

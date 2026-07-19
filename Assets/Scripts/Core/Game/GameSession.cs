@@ -383,15 +383,17 @@ namespace ProjectBlock.Core
             var newOffers = new List<MarketOffer>();
             for (int i = 0; i < market.BlockOfferCount; i++)
             {
-                BlockShape shape = Config.Deck.ShapeGenerator.NextShape(rng);
-                List<BlockElement> elements = null;
-                if (market.ElementPool.Count > 0 && rng.NextDouble() < market.ElementChance)
-                {
-                    elements = new List<BlockElement>
+                bool giveElement = market.ElementPool.Count > 0
+                    && rng.NextDouble() < market.ElementChance;
+                // An elemental block never comes as a single cube - most element behaviours
+                // (fire chains, "whole block explodes", per-cube bonuses) need more than one.
+                BlockShape shape = NextBlockShape(giveElement ? market.MinElementalBlockSize : 1);
+                List<BlockElement> elements = giveElement
+                    ? new List<BlockElement>
                     {
                         market.ElementPool[rng.NextInt(0, market.ElementPool.Count)]
-                    };
-                }
+                    }
+                    : null;
                 var card = new BlockCard(nextCardId++, shape, elements);
                 card = Jokers.FilterMarketOffer(card); // "Simya" adds a second element here
                 // priced AFTER the filter so a joker-added element is surcharged too
@@ -400,6 +402,19 @@ namespace ProjectBlock.Core
             AddJokerOffers(market, newOffers);
             AddPowerOffers(market, newOffers);
             Market.SetOffers(newOffers);
+        }
+
+        /// <summary>Rolls a block shape of at least <paramref name="minSize"/> cubes, re-rolling
+        /// a few times if the generator hands back something smaller. Capped so a generator that
+        /// only makes tiny shapes cannot loop forever - it just returns its best effort.</summary>
+        private BlockShape NextBlockShape(int minSize)
+        {
+            BlockShape shape = Config.Deck.ShapeGenerator.NextShape(rng);
+            for (int attempt = 0; attempt < 24 && shape.Size < minSize; attempt++)
+            {
+                shape = Config.Deck.ShapeGenerator.NextShape(rng);
+            }
+            return shape;
         }
 
         /// <summary>Appends this visit's joker offers. Uses a SEPARATE rng derived from the
