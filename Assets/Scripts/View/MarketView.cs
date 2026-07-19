@@ -58,7 +58,7 @@ namespace ProjectBlock.View
             ViewUtil.MakeText3D(transform, "Title", Center + new Vector2(0f, 2.0f), "MARKET",
                 60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "SellHint", Center + new Vector2(0f, 1.62f),
-                "click a joker to sell it  -  click the deck pile to sell cards", 90, 0.013f,
+                "click a joker or a power to sell it  -  click the deck pile to sell cards", 90, 0.013f,
                 SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             float cursor = startX;

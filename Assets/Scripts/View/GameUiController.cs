@@ -5,7 +5,8 @@
 //           A = advance / C = continue on an offer, N = leave market, R = new run,
 //           D = deck select, J = grant the next joker, K = sell the last joker,
 //           1-9 = activate that joker (one that needs a target then waits for a click,
-//           Esc cancels).
+//           Esc cancels). Click a power in the left bar to use it (same targeting flow);
+//           in the market, clicking a joker or power panel sells it.
 // NOTE FOR AGENTS: this is placeholder presentation. Extend gameplay in
 // ProjectBlock.Core; only wiring/visuals belong here. The J/K joker keys stand in until
 // jokers can be bought in the market - delete them then.
@@ -37,6 +38,7 @@ namespace ProjectBlock.View
         private DeckSelectView deckSelect;
         private MarketView marketView;
         private JokerBarView jokerBar;
+        private PowerBarView powerBar;
         private DeckDefinition currentDeck = DeckLibrary.Classic;
         private SoundFx sfx;
         private FlameStreakView flameStreak;
@@ -65,6 +67,9 @@ namespace ProjectBlock.View
         /// <summary>Set while an activated joker waits for the player to pick a target.</summary>
         private int? pendingTargetJokerId;
 
+        /// <summary>Set while a used power waits for the player to pick a target.</summary>
+        private int? pendingTargetPowerId;
+
         /// <summary>Debug grant order: walks the registry so every joker is reachable.</summary>
         private int nextGrantIndex;
 
@@ -88,6 +93,7 @@ namespace ProjectBlock.View
             sellCardsMode = false;
             waterAnimating = false;
             pendingTargetJokerId = null;
+            pendingTargetPowerId = null;
             nextGrantIndex = 0;
             marketView.Hide();
             HideTooltip();
@@ -111,6 +117,7 @@ namespace ProjectBlock.View
             cardLayer.AnimateRoundStart(round);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
+            powerBar.Refresh(session, pendingTargetPowerId);
         }
 
         private void Update()
@@ -284,6 +291,10 @@ namespace ProjectBlock.View
                         {
                             // clicking a joker in the top bar uses it (like the 1-9 keys)
                         }
+                        else if (TryUsePowerFromBar(mouse))
+                        {
+                            // clicking a power in the left bar uses it (max one per turn)
+                        }
                         else
                         {
                             HandleDrag(round, mouse);
@@ -296,7 +307,8 @@ namespace ProjectBlock.View
         /// <summary>Clicking a joker panel in the bar activates it, mirroring the 1-9 keys.</summary>
         private bool TryUseJokerFromBar(Mouse mouse)
         {
-            if (mouse == null || !mouse.leftButton.wasPressedThisFrame || pendingTargetJokerId.HasValue)
+            if (mouse == null || !mouse.leftButton.wasPressedThisFrame
+                || pendingTargetJokerId.HasValue || pendingTargetPowerId.HasValue)
             {
                 return false;
             }
@@ -306,6 +318,23 @@ namespace ProjectBlock.View
                 return false;
             }
             BeginActivation(session.Jokers.Jokers[index]);
+            return true;
+        }
+
+        /// <summary>Clicking a power panel in the left bar uses it (or arms targeting).</summary>
+        private bool TryUsePowerFromBar(Mouse mouse)
+        {
+            if (mouse == null || !mouse.leftButton.wasPressedThisFrame
+                || pendingTargetJokerId.HasValue || pendingTargetPowerId.HasValue)
+            {
+                return false;
+            }
+            int index = powerBar.PowerIndexAt(mouse.position.ReadValue());
+            if (index < 0 || index >= session.Powers.Count)
+            {
+                return false;
+            }
+            BeginPowerActivation(session.Powers.Powers[index]);
             return true;
         }
 
@@ -334,9 +363,38 @@ namespace ProjectBlock.View
             return true;
         }
 
+        /// <summary>In the market, clicking a power panel sells it for its BaseSellValue.</summary>
+        private bool TrySellPowerFromBar(Mouse mouse)
+        {
+            int index = powerBar.PowerIndexAt(mouse.position.ReadValue());
+            if (index < 0 || index >= session.Powers.Count)
+            {
+                return false;
+            }
+            Power power = session.Powers.Powers[index];
+            Vector2? panelScreen = powerBar.PanelScreenCenter(index);
+            int paid = session.Powers.Sell(power);
+            Debug.Log("[project_block] Sold power " + power.DisplayName + " for " + paid);
+            sfx.Buy();
+            if (panelScreen.HasValue)
+            {
+                Vector2 world = cam.ScreenToWorldPoint(panelScreen.Value);
+                FloatingTextFx.Spawn(transform, world, "+" + paid,
+                    new Color(1f, 0.92f, 0.45f), 60, 0.05f);
+            }
+            marketView.Show(session); // affordability colors follow the new balance
+            powerBar.AnimatePowerSold(index, session);
+            UpdateHud();
+            return true;
+        }
+
         private void HandleMarketClick(Mouse mouse)
         {
             if (TrySellJokerFromBar(mouse))
+            {
+                return;
+            }
+            if (TrySellPowerFromBar(mouse))
             {
                 return;
             }
@@ -379,6 +437,10 @@ namespace ProjectBlock.View
                 {
                     jokerBar.Refresh(session, null);
                 }
+                else if (offer.Kind == MarketOfferKind.Power)
+                {
+                    powerBar.Refresh(session, null);
+                }
             }
             else
             {
@@ -395,11 +457,10 @@ namespace ProjectBlock.View
             {
                 return false;
             }
-            if (kb.escapeKey.wasPressedThisFrame && pendingTargetJokerId.HasValue)
+            if (kb.escapeKey.wasPressedThisFrame
+                && (pendingTargetJokerId.HasValue || pendingTargetPowerId.HasValue))
             {
-                pendingTargetJokerId = null;
-                UpdateHud();
-                jokerBar.Refresh(session, null);
+                CancelTargeting();
                 return true;
             }
             if (kb.jKey.wasPressedThisFrame)
@@ -464,8 +525,10 @@ namespace ProjectBlock.View
         private void CancelTargeting()
         {
             pendingTargetJokerId = null;
+            pendingTargetPowerId = null;
             UpdateHud();
             jokerBar.Refresh(session, null);
+            powerBar.Refresh(session, null);
         }
 
         private void RunActivation(Joker joker, ActivationTarget target)
@@ -510,6 +573,41 @@ namespace ProjectBlock.View
             RefreshAll(null);
         }
 
+        /// <summary>Uses a power, or arms targeting mode if it must be pointed at something.
+        /// The power twin of BeginActivation.</summary>
+        private void BeginPowerActivation(Power power)
+        {
+            if (!session.Powers.CanBeginUse(power.InstanceId))
+            {
+                Debug.Log("[project_block] " + power.DisplayName + " cannot be used right now.");
+                return;
+            }
+            if (power.Targeting != ActivationTargeting.None)
+            {
+                pendingTargetPowerId = power.InstanceId;
+                UpdateHud();
+                powerBar.Refresh(session, pendingTargetPowerId);
+                return;
+            }
+            RunPowerActivation(power, ActivationTarget.None);
+        }
+
+        private void RunPowerActivation(Power power, ActivationTarget target)
+        {
+            pendingTargetPowerId = null;
+            if (!session.Powers.TryUse(power.InstanceId, target))
+            {
+                Debug.Log("[project_block] " + power.DisplayName + " could not be used.");
+                RefreshAll(null);
+                return;
+            }
+            Debug.Log("[project_block] Power used: " + power.DisplayName);
+            powerBar.PulsePower(power.InstanceId);
+            // Powers can rewrite the board (inflations replace it wholesale, Kum saati
+            // rewinds it) and the piles - a full resync covers every one of them.
+            RefreshAll(null);
+        }
+
         private void HandleDrag(RoundEngine round, Mouse mouse)
         {
             if (mouse == null)
@@ -517,6 +615,42 @@ namespace ProjectBlock.View
                 return;
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+
+            // Targeting mode: the next click picks the power's target - a hand/bonus card
+            // or a board cell. Unlike jokers, hand-targeted powers may point at bonus
+            // slots too (Hologram), so the full slot range is passed through.
+            if (pendingTargetPowerId.HasValue)
+            {
+                if (mouse.leftButton.wasPressedThisFrame)
+                {
+                    Power power = session.Powers.Find(pendingTargetPowerId.Value);
+                    if (power == null)
+                    {
+                        CancelTargeting();
+                        return;
+                    }
+                    if (power.Targeting == ActivationTargeting.BoardCell)
+                    {
+                        GridPos cell;
+                        if (!boardView.TryWorldToCell(world, out cell))
+                        {
+                            CancelTargeting();
+                            return;
+                        }
+                        RunPowerActivation(power, ActivationTarget.Board(cell));
+                        return;
+                    }
+                    CardVisual hit = cardLayer.CardAt(world);
+                    if (hit == null || hit.SlotIndex < 0
+                        || hit.SlotIndex >= round.Hand.Count + round.BonusHand.Count)
+                    {
+                        CancelTargeting();
+                        return;
+                    }
+                    RunPowerActivation(power, ActivationTarget.Hand(hit.SlotIndex));
+                }
+                return;
+            }
 
             // Targeting mode: the next click picks the joker's target - a hand card or a
             // board cell, depending on what the joker asked for.
@@ -804,6 +938,7 @@ namespace ProjectBlock.View
             flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
+            powerBar.Refresh(session, pendingTargetPowerId);
         }
 
         private void UpdateHud()
@@ -828,6 +963,11 @@ namespace ProjectBlock.View
             {
                 sb.Append("   (1-9 activate)");
             }
+            sb.Append("   Powers ").Append(session.Powers.Count);
+            if (session.Powers.Count > 0)
+            {
+                sb.Append("   (click to use, one per turn)");
+            }
             sb.Append('\n');
             sb.Append("Drag to place.  Click draw pile: deck.  Right-click: rotate GEARS / reshape FOX\n");
             sb.Append("Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run\n");
@@ -841,6 +981,16 @@ namespace ProjectBlock.View
                     ? "oyun alanından bir küp seç"
                     : "elinden bir blok seç";
                 messageText.text = (targeting != null ? targeting.DisplayName : "Joker")
+                    + ": " + what + "\n[Esc] vazgeç";
+                return;
+            }
+            if (pendingTargetPowerId.HasValue)
+            {
+                Power targeting = session.Powers.Find(pendingTargetPowerId.Value);
+                string what = targeting != null && targeting.Targeting == ActivationTargeting.BoardCell
+                    ? "oyun alanından bir hücre seç"
+                    : "elinden bir blok seç";
+                messageText.text = (targeting != null ? targeting.DisplayName : "Güç")
                     + ": " + what + "\n[Esc] vazgeç";
                 return;
             }
@@ -1081,6 +1231,10 @@ namespace ProjectBlock.View
             jokerGo.transform.SetParent(transform, false);
             jokerBar = jokerGo.AddComponent<JokerBarView>();
 
+            var powerGo = new GameObject("PowerBarView");
+            powerGo.transform.SetParent(transform, false);
+            powerBar = powerGo.AddComponent<PowerBarView>();
+
             tooltipRoot = new GameObject("Tooltip");
             tooltipRoot.transform.SetParent(transform, false);
             tooltipRoot.SetActive(false);
@@ -1099,6 +1253,7 @@ namespace ProjectBlock.View
                 new Vector2(0f, -16f), TextAnchor.UpperCenter, 28, new Color(1f, 0.92f, 0.45f));
 
             jokerBar.Build(canvasGo.transform);
+            powerBar.Build(canvasGo.transform);
         }
 
         private static Text MakeText(Transform parent, string name, Vector2 anchor,

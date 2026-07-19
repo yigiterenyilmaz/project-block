@@ -104,6 +104,26 @@ namespace ProjectBlock.Core
 
         // ------------------------------------------------------------------- using
 
+        /// <summary>Target-less usability check, for the UI to decide whether clicking a
+        /// power should arm targeting mode (and how to tint its panel). Mirrors CanUse
+        /// minus the target validation - a targeting power's CanRun only ever validates
+        /// its target, which does not exist yet at this point.</summary>
+        public bool CanBeginUse(int instanceId)
+        {
+            Power power = Find(instanceId);
+            RoundEngine round = session.CurrentRound;
+            if (power == null || round == null || !power.Charged)
+            {
+                return false;
+            }
+            if (round.Status != RoundStatus.InProgress || round.PowersUsedThisTurn > 0)
+            {
+                return false;
+            }
+            return power.Targeting != ActivationTargeting.None
+                || power.CanRun(RoundCtx(round), ActivationTarget.None);
+        }
+
         /// <summary>Every condition a power must meet to be usable right now: it exists, it
         /// is charged, a round is running, and this turn's single power slot is still free.</summary>
         public bool CanUse(int instanceId, ActivationTarget target)
