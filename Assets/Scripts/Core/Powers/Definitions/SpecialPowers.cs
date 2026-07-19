@@ -371,4 +371,121 @@ namespace ProjectBlock.Core
                 config.ScoreThreshold, cells);
         }
     }
+
+    /// <summary>"Halüsinasyon" - a power with no fixed identity: it appears as a random power
+    /// and, whenever used, instantly recharges and morphs into a DIFFERENT random one. It only
+    /// ever becomes an instant, self-contained power (one clean Run) - never a legendary /
+    /// reality-bending one, never one that needs special routing (Olta's marking, Hileli zar's
+    /// market picker, Eko's arm-and-replay), and never one that carries state across turns
+    /// (inflation, Bükülme). Everything the current form needs - its targeting, preview, run
+    /// and can-run - is delegated to that inner power, so from the engine's side it behaves
+    /// exactly like whatever it currently is.</summary>
+    public sealed class HalusinasyonPower : Power
+    {
+        /// <summary>The pool it can morph into: instant, single-Run, standard-routed powers
+        /// with no per-round/per-turn lifetime. Ids missing from the registry are skipped.</summary>
+        private static readonly string[] Pool =
+        {
+            "caprazlama", "cerceve", "bardagin_bos_tarafi", "mayin", "cimbiz", "klon",
+            "transfer", "hologram", "hizli_cekim_sarjoru", "asirma", "yedekleme",
+            "soguk_fuzyon", "kum_saati"
+        };
+
+        private Power current;
+
+        public HalusinasyonPower()
+            : base("halusinasyon", "Halüsinasyon")
+        {
+            SetDescription(
+                "Appears as a random power. Using it never spends it - it instantly refills and "
+                    + "morphs into a different random power. Never becomes a legendary power.",
+                "Rastgele bir güç olarak görünür. Kullanmak onu tüketmez - anında dolar ve başka "
+                    + "bir rastgele güce dönüşür. Asla efsanevi bir güce dönüşmez.");
+            BaseSellValue = 55;
+        }
+
+        public override string Description
+        {
+            get
+            {
+                if (current == null)
+                {
+                    return base.Description;
+                }
+                return Loc.Pick(
+                    "Random power - now " + current.DisplayName + ": " + current.Description,
+                    "Rastgele güç - şu an " + current.DisplayName + ": " + current.Description);
+            }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return current == null
+                    ? Loc.Pick("rolling...", "değişiyor...")
+                    : Loc.Pick("now: " + current.DisplayName, "şu an: " + current.DisplayName);
+            }
+        }
+
+        public override ActivationTargeting Targeting
+        {
+            get { return current != null ? current.Targeting : ActivationTargeting.None; }
+        }
+
+        public override System.Collections.Generic.IReadOnlyList<GridPos> PreviewCells(
+            ActivationTarget target)
+        {
+            return current != null ? current.PreviewCells(target) : base.PreviewCells(target);
+        }
+
+        public override void OnAcquired(SessionContext ctx)
+        {
+            if (current == null)
+            {
+                Reroll(ctx.Rng);
+            }
+        }
+
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return current != null && current.CanRun(ctx, target);
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            if (current == null)
+            {
+                Reroll(ctx.Rng);
+            }
+            if (current == null || !current.Run(ctx, target))
+            {
+                return false;
+            }
+            // The whole point: the use is "free" - it keeps its charge and becomes something new.
+            KeepChargeAfterUse = true;
+            Reroll(ctx.Rng);
+            return true;
+        }
+
+        private void Reroll(IRandomSource rng)
+        {
+            string previous = current != null ? current.DefId : null;
+            Power picked = null;
+            for (int attempt = 0; attempt < 8 && picked == null; attempt++)
+            {
+                string id = Pool[rng.NextInt(0, Pool.Length)];
+                if (id == previous && Pool.Length > 1)
+                {
+                    continue; // avoid morphing into the same power twice in a row
+                }
+                picked = PowerRegistry.Create(id); // null if unknown; the loop tries again
+            }
+            if (picked == null)
+            {
+                picked = PowerRegistry.Create(Pool[0]);
+            }
+            current = picked;
+        }
+    }
 }

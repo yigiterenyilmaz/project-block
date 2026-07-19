@@ -37,7 +37,7 @@ namespace ProjectBlock.Core
         /// <summary>One-line rules text for the UI in the ACTIVE language (see Loc).
         /// Subclasses set both languages via SetDescription; reading is always live, so a
         /// language switch takes effect on the next UI refresh.</summary>
-        public string Description
+        public virtual string Description
         {
             get { return Loc.Pick(descriptionEn, descriptionTr); }
         }
