@@ -71,6 +71,7 @@ namespace ProjectBlock.Core
             Register(() => new SogukFuzyonPower());
             Register(() => new IkinciSansPower());
             Register(() => new TotemPower());
+            Register(() => new BukulmePower());
         }
 
         /// <summary>All known powers, in design order.</summary>

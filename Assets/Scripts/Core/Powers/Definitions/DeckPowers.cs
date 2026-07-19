@@ -300,6 +300,99 @@ namespace ProjectBlock.Core
         }
     }
 
+    /// <summary>"Bükülme" - marks a held card and drops a copy in the bonus hand. For the rest
+    /// of the round, every time that marked card is drawn back INTO the hand another copy is
+    /// added. A clean sweep recharges the power, so it can be re-used to mark a new card.</summary>
+    public sealed class BukulmePower : Power
+    {
+        private int? markedCardId;
+        private bool markedInHand;
+
+        public BukulmePower()
+            : base("bukulme", "Bükülme")
+        {
+            SetDescription(
+                "Mark a held card and copy it to your bonus hand. For the rest of the round, "
+                    + "each time the marked card is drawn into your hand another copy is added. "
+                    + "A clean sweep lets you re-mark.",
+                "Elindeki bir kartı işaretler ve kopyasını bonus ele koyarsın. O raunt boyunca "
+                    + "işaretli kart her ele çekildiğinde bir kopyası daha eklenir. Temizlik "
+                    + "yaptığında yeniden işaretleyebilirsin.");
+            BaseSellValue = 55;
+        }
+
+        public override ActivationTargeting Targeting
+        {
+            get { return ActivationTargeting.HandCard; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return markedCardId.HasValue
+                    ? Loc.Pick("marked #" + markedCardId.Value, "işaretli #" + markedCardId.Value)
+                    : Loc.Pick("idle", "boşta");
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            markedCardId = null;
+            markedInHand = false;
+        }
+
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return target.HandIndex.HasValue
+                && target.HandIndex.Value >= 0
+                && target.HandIndex.Value < ctx.Round.Hand.Count;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            BlockCard card = ctx.Round.Hand[target.HandIndex.Value];
+            markedCardId = card.Id;
+            markedInHand = true;
+            AddCopy(ctx.Session, ctx.Round, card);
+            return true;
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            if (!markedCardId.HasValue)
+            {
+                return;
+            }
+            BlockCard inHand = FindInHand(turn.Round, markedCardId.Value);
+            bool present = inHand != null;
+            // A fresh entry into the hand (it was out last turn) spawns another copy.
+            if (present && !markedInHand)
+            {
+                AddCopy(turn.Session, turn.Round, inHand);
+            }
+            markedInHand = present;
+        }
+
+        private static BlockCard FindInHand(RoundEngine round, int cardId)
+        {
+            for (int i = 0; i < round.Hand.Count; i++)
+            {
+                if (round.Hand[i].Id == cardId)
+                {
+                    return round.Hand[i];
+                }
+            }
+            return null;
+        }
+
+        private static void AddCopy(GameSession session, RoundEngine round, BlockCard source)
+        {
+            BlockCard copy = session.CreateCard(source.Shape, source.Elements);
+            round.AddBonusCard(copy, BonusPlayOutcome.ExpireFromRound);
+        }
+    }
+
     /// <summary>"Soğuk füzyon" - copies one DISCARD card and one DRAW card into the bonus
     /// hand (whichever piles have a card; needs at least one).</summary>
     public sealed class SogukFuzyonPower : Power

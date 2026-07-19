@@ -128,4 +128,73 @@ namespace ProjectBlock.Core
             ctx.Rules.RevealTopDrawCard = true;
         }
     }
+
+    /// <summary>"Hafıza" - bonus-hand cards you did not play carry over into the next round.
+    /// If more carry over than the round-start hand size, the excess is trimmed at random.
+    /// Only round-scoped bonus cards (copies) carry; owned deck cards would duplicate the
+    /// ones already reshuffled into the draw pile, so they are left behind.</summary>
+    public sealed class HafizaJoker : Joker
+    {
+        private readonly System.Collections.Generic.List<BlockCard> carried =
+            new System.Collections.Generic.List<BlockCard>();
+        private int baseHandSize = -1;
+
+        public HafizaJoker()
+            : base("hafiza", "Hafıza")
+        {
+            SetDescription(
+                "Bonus-hand cards you did not play carry over to the next round. Any beyond "
+                    + "your round-start hand size are discarded at random.",
+                "Elinde kalan bonus kartlar sonraki raunda taşınır. Raunt başındaki el "
+                    + "büyüklüğünü aşan kartlar rastgele atılır.");
+            BaseSellValue = 55;
+        }
+
+        public override string StatusText
+        {
+            get { return Loc.Pick(carried.Count + " carried", carried.Count + " taşınan"); }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            baseHandSize = ctx.Rules.HandSize;
+            for (int i = 0; i < carried.Count; i++)
+            {
+                ctx.Round.AddBonusCard(carried[i], BonusPlayOutcome.ExpireFromRound);
+            }
+            carried.Clear();
+        }
+
+        public override void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
+        {
+            carried.Clear();
+            System.Collections.Generic.IReadOnlyList<BonusSlot> bonus = ctx.Round.BonusHand;
+            for (int i = 0; i < bonus.Count; i++)
+            {
+                // Owned deck cards are already back in the piles; carrying them would clone.
+                if (!IsOwned(ctx.Session, bonus[i].Card.Id))
+                {
+                    carried.Add(bonus[i].Card);
+                }
+            }
+            int cap = baseHandSize > 0 ? baseHandSize : ctx.Rules.HandSize;
+            while (carried.Count > cap)
+            {
+                carried.RemoveAt(ctx.Rng.NextInt(0, carried.Count));
+            }
+        }
+
+        private static bool IsOwned(GameSession session, int cardId)
+        {
+            System.Collections.Generic.IReadOnlyList<BlockCard> owned = session.OwnedCards;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                if (owned[i].Id == cardId)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
 }
