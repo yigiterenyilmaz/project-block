@@ -360,7 +360,7 @@ namespace ProjectBlock.Core
         {
             // Only the block placed THIS turn qualifies - and only if it went whole in one go.
             BlockCard placed = turn.Report.Card;
-            if (placed == null || !turn.Report.CardsFullyDestroyed.Contains(placed.Id))
+            if (placed == null || !WentWholeThisTurn(turn.Report, placed.Id))
             {
                 return;
             }
@@ -377,6 +377,19 @@ namespace ProjectBlock.Core
             // must find its way back into the pile economy after being played.
             turn.Round.AddBonusCard(card, BonusPlayOutcome.ToDiscard);
             RecoveredThisRound++;
+        }
+
+        private static bool WentWholeThisTurn(TurnReport report, int cardId)
+        {
+            IReadOnlyList<int> fullyDestroyed = report.CardsFullyDestroyed;
+            for (int i = 0; i < fullyDestroyed.Count; i++)
+            {
+                if (fullyDestroyed[i] == cardId)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }
