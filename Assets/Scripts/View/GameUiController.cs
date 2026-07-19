@@ -43,6 +43,7 @@ namespace ProjectBlock.View
         private ChoicePickerView choicePicker;
         private BlockDesignerView blockDesigner;
         private int designerPowerId;
+        private CrtOverlayView crt;
 
         private enum ChoiceKind { None, BatakBet, PowerbankTarget }
         private ChoiceKind pendingChoice;
@@ -1577,6 +1578,10 @@ namespace ProjectBlock.View
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
             powerBar.Refresh(session, pendingTargetPowerId);
+            if (crt != null)
+            {
+                crt.SetVisible(session.Config.Rules.RetroMode); // CRT follows retro mode
+            }
         }
 
         /// <summary>Gathers "Enfeksiyon" infection markers from the inventory and hands them
@@ -1951,6 +1956,10 @@ namespace ProjectBlock.View
             var designerGo = new GameObject("BlockDesigner");
             designerGo.transform.SetParent(transform, false);
             blockDesigner = designerGo.AddComponent<BlockDesignerView>();
+
+            var crtGo = new GameObject("CrtOverlay");
+            crt = crtGo.AddComponent<CrtOverlayView>();
+            crt.Build(cam); // parents its own overlay to the camera
 
             var cubeGo = new GameObject("CubePicker");
             cubeGo.transform.SetParent(transform, false);

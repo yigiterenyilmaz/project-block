@@ -58,5 +58,12 @@ namespace ProjectBlock.Core
         /// loss (the hand just stays partial). The joker recycles explicitly, only when a
         /// card is played into an already-empty draw pile.</summary>
         public bool DrawOnlyAvailableNoReshuffle = false;
+
+        /// <summary>"retro": tetris placement mode. While on, a chosen block falls from the top
+        /// and the player steers/rotates it (the View drives that; the engine still resolves the
+        /// final placement the same way). It also lets ANY block rotate - not just mechanical -
+        /// and pays ScoringConfig.RetroPlacementBonus per placement. Toggled by the retro power;
+        /// persists across rounds until toggled off (it is a mode, not a per-round bend).</summary>
+        public bool RetroMode = false;
     }
 }

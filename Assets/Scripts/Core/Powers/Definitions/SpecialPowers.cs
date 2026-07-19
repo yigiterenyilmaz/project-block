@@ -521,4 +521,48 @@ namespace ProjectBlock.Core
             return false;
         }
     }
+
+    /// <summary>"Retro" - a toggle, not a spend. Using it flips tetris placement mode on or off
+    /// (RoundRules.RetroMode); it never consumes its charge and never needs to recharge, so it
+    /// can be switched any turn. While on, blocks fall from the top and ANY block can rotate,
+    /// and every placement pays ScoringConfig.RetroPlacementBonus. The falling/steering is the
+    /// View's job; the engine reads the one flag. Using it again turns it back off.</summary>
+    public sealed class RetroPower : Power
+    {
+        private bool on;
+
+        public RetroPower()
+            : base("retro", "Retro")
+        {
+            SetDescription(
+                "Toggle tetris mode: blocks fall from the top and can be rotated, and each "
+                    + "placement scores a bonus. Use again to switch back. Never runs out.",
+                "Tetris modunu aç/kapat: bloklar yukarıdan düşer ve döndürülebilir, her koyuş "
+                    + "bonus puan verir. Kapatmak için tekrar kullan. Tükenmez.");
+            BaseSellValue = 50;
+        }
+
+        public override string StatusText
+        {
+            get { return on ? Loc.Pick("ON", "AÇIK") : Loc.Pick("off", "kapalı"); }
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            on = !on;
+            ctx.Rules.RetroMode = on;
+            KeepChargeAfterUse = true; // a toggle: never spends, never needs recharging
+            return true;
+        }
+
+        public override void OnRemoved(SessionContext ctx)
+        {
+            // Selling/removing the toggle must never leave the game stuck in tetris mode.
+            if (on)
+            {
+                ctx.Rules.RetroMode = false;
+                on = false;
+            }
+        }
+    }
 }
