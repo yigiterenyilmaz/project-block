@@ -91,6 +91,8 @@ everything here is unreleased and balance numbers are still placeholders.
   the numbers read bigger without changing balance.
 
 ### Fixed
+- **Big hands wrap** — a hand larger than 8 cards (e.g. **İmitasyon**, whose hand mirrors the
+  discard) now wraps into extra rows stacked upward instead of running off the screen.
 - **Retro bit-crush** — the bit-crush now actually grits the sound effects: the filter moved onto
   the **AudioListener** (the camera) so it processes the whole mix. On an AudioSource-only object
   `OnAudioFilterRead` was not reliably called, so SFX played clean.

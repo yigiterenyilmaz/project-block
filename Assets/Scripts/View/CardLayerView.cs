@@ -367,10 +367,26 @@ namespace ProjectBlock.View
             return null;
         }
 
+        /// <summary>Most cards in one hand row before wrapping. Beyond this ("İmitasyon" grows
+        /// the hand well past the normal 5-7) extra rows stack upward so nothing runs off-screen.</summary>
+        private const int HandMaxPerRow = 8;
+        private const float HandRowPitch = 1.55f;
+
         private static Vector2 SlotPosition(int slot, int totalCount)
         {
-            float startX = HandCenter.x - (totalCount - 1) * HandSpacing * 0.5f;
-            return new Vector2(startX + slot * HandSpacing, HandCenter.y);
+            if (totalCount <= HandMaxPerRow)
+            {
+                float startX = HandCenter.x - (totalCount - 1) * HandSpacing * 0.5f;
+                return new Vector2(startX + slot * HandSpacing, HandCenter.y);
+            }
+            // Wrap into rows of HandMaxPerRow; row 0 stays on the base hand line and further rows
+            // stack UPWARD. Each row is centered on however many cards it actually holds.
+            int row = slot / HandMaxPerRow;
+            int col = slot % HandMaxPerRow;
+            int lastRow = (totalCount - 1) / HandMaxPerRow;
+            int countInRow = row < lastRow ? HandMaxPerRow : totalCount - row * HandMaxPerRow;
+            float rowStartX = HandCenter.x - (countInRow - 1) * HandSpacing * 0.5f;
+            return new Vector2(rowStartX + col * HandSpacing, HandCenter.y + row * HandRowPitch);
         }
 
         private void BuildPilesIfNeeded()
