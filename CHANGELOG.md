@@ -7,6 +7,9 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **Joker/power hover details** — hovering a held joker or power panel in the bar now pops a
+  tooltip with its name, live description and status (works during a round and in the market).
+  Dynamic text is surfaced live, so Halüsinasyon shows its current form.
 - **Market reroll** — a **REROLL** button under the offers refreshes every offer (blocks,
   jokers and powers) at once for an escalating cost (`RerollBaseCost + RerollCostStep × rerolls
   this visit`, ×10 scale). The price resets on the next market visit. Rerolls draw from their own

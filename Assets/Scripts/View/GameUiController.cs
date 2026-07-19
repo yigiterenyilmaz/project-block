@@ -1808,6 +1808,27 @@ namespace ProjectBlock.View
                 if (card != null) ShowCardTooltip(card, world); else HideTooltip();
                 return;
             }
+            // Hovering a held joker/power panel shows its live details (name + description +
+            // status). Checked before the market/round branches so it works in either phase the
+            // bars are visible; Halüsinasyon's dynamic Description is surfaced automatically.
+            if (session.Phase == GamePhase.Round || session.Phase == GamePhase.Market)
+            {
+                Vector2 barScreen = mouse.position.ReadValue();
+                int ji = jokerBar.JokerIndexAt(barScreen);
+                if (ji >= 0 && ji < session.Jokers.Count)
+                {
+                    cardLayer.SetHoveredCard(-1);
+                    ShowHeldJokerTooltip(session.Jokers.Jokers[ji], world);
+                    return;
+                }
+                int pi = powerBar.PowerIndexAt(barScreen);
+                if (pi >= 0 && pi < session.Powers.Count)
+                {
+                    cardLayer.SetHoveredCard(-1);
+                    ShowHeldPowerTooltip(session.Powers.Powers[pi], world);
+                    return;
+                }
+            }
             if (session.Phase == GamePhase.Market)
             {
                 cardLayer.SetHoveredCard(-1);
@@ -1885,6 +1906,34 @@ namespace ProjectBlock.View
             string body = ViewUtil.WrapText(power.Description, 34)
                 + Loc.Pick("\n\nCost ", "\n\nFiyat ") + price;
             RenderTooltip("power:" + power.DefId, power.DisplayName, body, nearWorld);
+        }
+
+        /// <summary>Tooltip for a held joker in the bar: name, live description, and status.</summary>
+        private void ShowHeldJokerTooltip(Joker joker, Vector2 nearWorld)
+        {
+            string title = joker.DisplayName;
+            string body = ViewUtil.WrapText(joker.Description, 34);
+            if (!string.IsNullOrEmpty(joker.StatusText))
+            {
+                body += "\n\n" + joker.StatusText;
+            }
+            // The key carries a text hash so a live-changing description/status (Halüsinasyon's
+            // current form, a charge flipping) rebuilds the panel instead of showing stale text.
+            RenderTooltip("heldjoker:" + joker.InstanceId + "#" + (title + body).GetHashCode(),
+                title, body, nearWorld);
+        }
+
+        /// <summary>Tooltip for a held power in the bar: name, live description, and status.</summary>
+        private void ShowHeldPowerTooltip(Power power, Vector2 nearWorld)
+        {
+            string title = power.DisplayName;
+            string body = ViewUtil.WrapText(power.Description, 34);
+            if (!string.IsNullOrEmpty(power.StatusText))
+            {
+                body += "\n\n" + power.StatusText;
+            }
+            RenderTooltip("heldpower:" + power.InstanceId + "#" + (title + body).GetHashCode(),
+                title, body, nearWorld);
         }
 
         /// <summary>Rebuilds the tooltip panel only when the hovered target changes; always
