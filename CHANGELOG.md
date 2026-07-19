@@ -18,13 +18,19 @@ everything here is unreleased and balance numbers are still placeholders.
   score bonus per placement while on, and rotation for *any* block (not just mechanical). Still
   to come: blocks actually falling from the top (steerable falling-piece placement).
 - **In-game Rarity Grader** — press **F2** in Play mode to browse every joker/power, read its
-  live description, and grade it Common / Rare / Legendary. Saves to
-  `Tools/RarityGrader/rarities.json`. (Grades don't yet affect prices or shop odds.)
+  live description, and grade it Common / Rare / Legendary (mouse-wheel or arrow keys to scroll).
+  Saves to `Tools/RarityGrader/rarities.json`.
+- **Rarity-driven shop** — those grades now matter: rarer jokers/powers **cost more**
+  (×1 / ×2 / ×3 for common / rare / legendary) and **appear less often** in the market
+  (draw weights ~100 / 35 / 8). One legendary joker held at a time, as before. Numbers are
+  placeholders in `MarketConfig`; grades live in `RarityTable` (baked from the grader).
 
 ### Changed
 - **Batak** — moved from a joker to a **power**. The bet picker now opens from the power bar;
   placing a bet spends the power's charge, and any clean sweep recharges it so you can bet again.
   Payout/deadline rules are unchanged.
+- **Void cubes** ("Kara delik" traps) now **survive sweeps** — indestructible and sweep-exempt
+  like obsidian, so they persist on the board; still consumed when a cube lands on them.
 - **Dezenformasyon** (legendary) — the two deck halves now swap roles **every turn** instead of
   every round; the split is kept (never poured back together).
 - **Scoring / economy rework** — overtime pays an escalating win bonus while regular actions pay
