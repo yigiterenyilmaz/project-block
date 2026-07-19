@@ -25,9 +25,13 @@ namespace ProjectBlock.Core
         /// "Oryantasyon"). The core never reads it - the draw order is unchanged either way.</summary>
         public bool RevealTopDrawCard = false;
 
-        /// <summary>Pure UI flag: how many cards of the discard pile are shown face-up
-        /// ("Fraksiyon"). 0 means only the usual top card.</summary>
+        /// <summary>Pure UI flag: how many cards of the discard pile the player may inspect
+        /// ("Fraksiyon"). 0 means only the usual top card, and no inspection.</summary>
         public int RevealedDiscardCount = 0;
+
+        /// <summary>Pure UI flag: hide the discard pile's top card and block inspection
+        /// ("Fraksiyon" after a swap, until the next reshuffle).</summary>
+        public bool HideDiscardTop = false;
 
         /// <summary>Pure UI flag: how many cards of the DRAW pile are shown face-up
         /// ("Büyüteç"). Insider uses RevealTopDrawCard for the single-card case.</summary>

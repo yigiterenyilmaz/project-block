@@ -845,6 +845,14 @@ namespace ProjectBlock.View
                         deckOverlay.Show(session.OwnedCards);
                         return;
                     }
+                    // "Fraksiyon": clicking the discard pile inspects its revealed half.
+                    if (cardLayer.IsDiscardPileAt(world)
+                        && round.Rules.RevealedDiscardCount > 0
+                        && !round.Rules.HideDiscardTop)
+                    {
+                        deckOverlay.Show(RevealedDiscardCards(round));
+                        return;
+                    }
                     CardVisual hit = cardLayer.CardAt(world);
                     if (hit != null)
                     {
@@ -1038,6 +1046,20 @@ namespace ProjectBlock.View
             }
             cam.transform.position = camBasePosition;
             shakeRoutine = null;
+        }
+
+        /// <summary>The top revealed cards of the discard pile ("Fraksiyon" inspect),
+        /// newest first.</summary>
+        private static List<BlockCard> RevealedDiscardCards(RoundEngine round)
+        {
+            var list = new List<BlockCard>();
+            IReadOnlyList<BlockCard> pile = round.Deck.DiscardPile;
+            int n = Mathf.Min(round.Rules.RevealedDiscardCount, pile.Count);
+            for (int i = 0; i < n; i++)
+            {
+                list.Add(pile[pile.Count - 1 - i]);
+            }
+            return list;
         }
 
         private static BlockCard CardOfSlot(RoundEngine round, int slot)

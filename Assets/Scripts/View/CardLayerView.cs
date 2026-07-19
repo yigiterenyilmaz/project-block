@@ -277,6 +277,13 @@ namespace ProjectBlock.View
                 && Mathf.Abs(world.y - DrawPilePos.y) <= CardVisual.BodyHeight * 0.5f + 0.09f;
         }
 
+        /// <summary>True if a world point is on the discard pile ("Fraksiyon" inspect).</summary>
+        public bool IsDiscardPileAt(Vector2 world)
+        {
+            return Mathf.Abs(world.x - DiscardPilePos.x) <= CardVisual.BodyWidth * 0.5f + 0.09f
+                && Mathf.Abs(world.y - DiscardPilePos.y) <= CardVisual.BodyHeight * 0.5f + 0.09f;
+        }
+
         private int hoveredCardId = -1;
 
         /// <summary>Marks the card under the mouse (-1 = none): it grows slightly.
@@ -464,7 +471,10 @@ namespace ProjectBlock.View
         private void UpdateDiscardTop(RoundEngine round)
         {
             IReadOnlyList<BlockCard> discardPile = round.Deck.DiscardPile;
-            BlockCard top = discardPile.Count > 0 ? discardPile[discardPile.Count - 1] : null;
+            // "Fraksiyon" hides the discard top after a swap (until the next reshuffle).
+            BlockCard top = !round.Rules.HideDiscardTop && discardPile.Count > 0
+                ? discardPile[discardPile.Count - 1]
+                : null;
             int topId = top != null ? top.Id : -1;
             if (topId == discardTopId)
             {

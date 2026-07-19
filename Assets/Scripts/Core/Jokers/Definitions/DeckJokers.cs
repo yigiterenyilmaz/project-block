@@ -225,11 +225,12 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "At round start and whenever the draw pile empties, the piles shuffle and "
-                    + "split in two; half the discard is revealed. You may swap the piles "
-                    + "once until the next split.",
-                "Raunt başında ve deste bitince desteler karılıp ikiye bölünür, "
-                    + "ıskartanın yarısı görünür olur. Sonraki bölünmeye kadar desteleri "
-                    + "bir kez takas edebilirsin.");
+                    + "split in two; you may then inspect half the discard by clicking it. "
+                    + "You may swap the piles once until the next split - after a swap the "
+                    + "discard is hidden again.",
+                "Raunt başında ve deste bitince desteler karılıp ikiye bölünür; sonra "
+                    + "ıskartaya tıklayarak yarısını inceleyebilirsin. Sonraki bölünmeye kadar "
+                    + "desteleri bir kez takas edebilirsin - takastan sonra ıskarta yine gizlenir.");
             ChargesPerRound = 0; // charges are per RESHUFFLE here, not per round
             BaseSellValue = 65;
             IsLegendary = true;
@@ -256,6 +257,7 @@ namespace ProjectBlock.Core
         public override void OnRemoved(SessionContext ctx)
         {
             ctx.Rules.RevealedDiscardCount = 0;
+            ctx.Rules.HideDiscardTop = false;
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -285,7 +287,10 @@ namespace ProjectBlock.Core
             }
             SwapAvailable = false;
             ctx.Round.Deck.SwapPiles();
-            ctx.Rules.RevealedDiscardCount = ctx.Round.Deck.DiscardCount / 2;
+            // After a swap the discard is hidden: no inspection and no visible top card,
+            // until the next reshuffle (Split) reveals it again.
+            ctx.Rules.RevealedDiscardCount = 0;
+            ctx.Rules.HideDiscardTop = true;
             return true;
         }
 
@@ -293,6 +298,7 @@ namespace ProjectBlock.Core
         {
             round.Deck.MergeAndSplitHalves();
             rules.RevealedDiscardCount = round.Deck.DiscardCount / 2;
+            rules.HideDiscardTop = false;
             SwapAvailable = true;
         }
     }
