@@ -504,6 +504,13 @@ namespace ProjectBlock.Core
         /// <summary>Detects all full rows and columns, explodes their destructible cubes.</summary>
         public LineExplosionResult ResolveFullLines()
         {
+            return ResolveFullLines(false);
+        }
+
+        /// <summary>As above; when <paramref name="rowsOnly"/> is true, vertical (column) clears are
+        /// skipped - the retro/tetris rule, where only full rows explode.</summary>
+        public LineExplosionResult ResolveFullLines(bool rowsOnly)
+        {
             var fullRows = new List<int>();
             for (int y = 0; y < Height; y++)
             {
@@ -524,7 +531,7 @@ namespace ProjectBlock.Core
                 if (full) fullRows.Add(y);
             }
             var fullColumns = new List<int>();
-            for (int x = 0; x < Width; x++)
+            for (int x = 0; !rowsOnly && x < Width; x++)
             {
                 bool full = false;
                 for (int y = 0; y < Height; y++)

@@ -2106,6 +2106,9 @@ namespace ProjectBlock.View
                         "temizlik gelmeden çekme destesi bitti");
                 case LossReason.BetFailed:
                     return Loc.Pick("the bet was lost (Batak)", "bahis tutmadı (Batak)");
+                case LossReason.RetroTopOut:
+                    return Loc.Pick("topped out - no room to drop from above",
+                        "tepeye ulaştın - yukarıdan blok düşecek yer yok");
                 default:
                     return Loc.Pick("unknown", "bilinmiyor");
             }

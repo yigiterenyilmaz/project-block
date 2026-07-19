@@ -234,7 +234,7 @@ namespace ProjectBlock.Core
         /// like a normal explosion and offers a sweep check. Safe to call between turns.</summary>
         internal void ResolveFullLinesOutsideTurn()
         {
-            LineExplosionResult lines = Board.ResolveFullLines();
+            LineExplosionResult lines = Board.ResolveFullLines(Rules.RetroMode);
             if (lines.LineCount == 0)
             {
                 return;
@@ -729,13 +729,13 @@ namespace ProjectBlock.Core
             boardCleanBeforeExplosion = Board.IsCleanForSweep();
             ResyncSnapshot();
             CaptureTurnStartCardCounts();
-            LineExplosionResult explosion = Board.ResolveFullLines();
+            LineExplosionResult explosion = Board.ResolveFullLines(Rules.RetroMode);
             if (explosion.LineCount == 0)
             {
                 Board.SettleWaterAndReact(waterFrames); // nothing exploded in place -> water falls
                 ResyncSnapshot(); // water moved, nothing died - re-baseline the destruction diff
                 boardCleanBeforeExplosion = Board.IsCleanForSweep();
-                explosion = Board.ResolveFullLines();
+                explosion = Board.ResolveFullLines(Rules.RetroMode);
             }
             // Frames appended after this point are post-explosion falls; the UI plays the
             // boom between the two batches.
@@ -895,11 +895,11 @@ namespace ProjectBlock.Core
                 EnterOvertime();
             }
 
-            // Retro dead-zone rule: filling the whole GAME area (below the dead zone) is a loss.
+            // Retro top-out: a block reached the top row, so nothing can drop from above (Tetris).
             // Sampled here so it obeys the same "advance offer outranks the loss" ordering below.
-            if (Loss == null && Rules.DeadZoneRows > 0 && IsGameAreaFull())
+            if (Loss == null && Rules.DeadZoneRows > 0 && IsToppedOut())
             {
-                Loss = LossReason.GameAreaFilled;
+                Loss = LossReason.RetroTopOut;
             }
 
             // 10./11. status update - see file header for why the offer outranks the loss.
@@ -1251,7 +1251,7 @@ namespace ProjectBlock.Core
             {
                 Board.SettleAll();
                 ResyncSnapshot(); // gravity moved cubes; re-base so LogDestruction is explosion-only
-                LineExplosionResult cascade = Board.ResolveFullLines();
+                LineExplosionResult cascade = Board.ResolveFullLines(Rules.RetroMode);
                 if (cascade.LineCount == 0)
                 {
                     break;
@@ -1292,27 +1292,24 @@ namespace ProjectBlock.Core
             }
         }
 
-        /// <summary>True if every playable cell of the GAME area (the rows below the dead zone) is
-        /// filled - the retro loss condition. False when there is no dead zone.</summary>
-        private bool IsGameAreaFull()
+        /// <summary>Retro top-out: any cube reached the very top row, so a new piece can no longer
+        /// drop in from above (even if lower rows still have gaps) - the Tetris loss. False when
+        /// there is no dead zone (i.e. not in retro).</summary>
+        private bool IsToppedOut()
         {
             if (Rules.DeadZoneRows <= 0)
             {
                 return false;
             }
-            int floor = DeadZoneFloor;
-            for (int y = Board.MinY; y < floor; y++)
+            int topY = Board.MinY + Board.Height - 1;
+            for (int x = Board.MinX; x <= Board.MinX + Board.Width - 1; x++)
             {
-                for (int x = Board.MinX; x <= Board.MinX + Board.Width - 1; x++)
+                if (Board.GetCube(new GridPos(x, topY)).HasValue)
                 {
-                    var p = new GridPos(x, y);
-                    if (Board.IsInside(p) && !Board.GetCube(p).HasValue)
-                    {
-                        return false;
-                    }
+                    return true;
                 }
             }
-            return true;
+            return false;
         }
 
         /// <summary>Clears every destructible cube WITHOUT scoring or triggering a sweep

@@ -43,9 +43,9 @@ namespace ProjectBlock.Core
         /// before a clean sweep re-shuffled it.</summary>
         DrawPileEmptyAfterThreshold = 2,
 
-        /// <summary>Retro dead-zone rule: the GAME area (every row below the dead zone) filled
-        /// up completely, so there is nowhere left to build.</summary>
-        GameAreaFilled = 4
+        /// <summary>Retro top-out: a block reached the very top row, so there is no room to drop
+        /// the next piece from above (even if lower rows still have gaps) - like Tetris.</summary>
+        RetroTopOut = 4
     }
 
     /// <summary>One cube that was removed from the board during a turn, with the value it
