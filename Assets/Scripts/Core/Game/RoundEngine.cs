@@ -1300,6 +1300,7 @@ namespace ProjectBlock.Core
             BlockCard card = Deck.DrawTop();
             if (card != null)
             {
+                NoteCardDrawn();
                 return card;
             }
             if (currentReport != null)
@@ -1318,9 +1319,25 @@ namespace ProjectBlock.Core
             if (Deck.DiscardCount > 0)
             {
                 Deck.ShuffleDiscardIntoDraw();
-                return Deck.DrawTop();
+                BlockCard recycled = Deck.DrawTop();
+                if (recycled != null)
+                {
+                    NoteCardDrawn();
+                }
+                return recycled;
             }
             return null;
+        }
+
+        /// <summary>"Büyüteç": the reveal is a CONSUMABLE peek at the top of the draw pile, so
+        /// each card actually drawn uncovers one fewer (2 -> 1 -> 0). No-op when nothing is
+        /// revealed, so the base game (RevealedDrawCount always 0) is left byte-identical.</summary>
+        private void NoteCardDrawn()
+        {
+            if (Rules.RevealedDrawCount > 0)
+            {
+                Rules.RevealedDrawCount--;
+            }
         }
 
         /// <summary>

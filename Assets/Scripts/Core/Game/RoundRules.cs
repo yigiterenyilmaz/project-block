@@ -34,7 +34,8 @@ namespace ProjectBlock.Core
         public bool HideDiscardTop = false;
 
         /// <summary>Pure UI flag: how many cards of the DRAW pile are shown face-up
-        /// ("Büyüteç"). Insider uses RevealTopDrawCard for the single-card case.</summary>
+        /// ("Büyüteç"). It is CONSUMED as cards are drawn - RoundEngine.NoteCardDrawn decrements
+        /// it once per drawn card down to 0. Insider uses RevealTopDrawCard for the single case.</summary>
         public int RevealedDrawCount = 0;
 
         /// <summary>"Oryantasyon": a card that would go to the discard is buried at a random

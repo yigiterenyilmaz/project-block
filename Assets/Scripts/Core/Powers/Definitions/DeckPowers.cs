@@ -82,8 +82,9 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Büyüteç" - the top two cards of the draw pile turn face-up. Pure
-    /// information: the draw order itself is untouched.</summary>
+    /// <summary>"Büyüteç" - the top two cards of the draw pile turn face-up. Pure information
+    /// (the draw order itself is untouched) and CONSUMABLE: every card drawn uncovers one fewer
+    /// (2 -> 1 -> 0), decremented centrally in RoundEngine.NoteCardDrawn.</summary>
     public sealed class BuyutecPower : Power
     {
         public int RevealCount = 2;
@@ -92,8 +93,10 @@ namespace ProjectBlock.Core
             : base("buyutec", "Büyüteç")
         {
             SetDescription(
-                "Reveals the top two cards of the draw pile.",
-                "Çekme destesinin en üstteki iki kartını açığa çıkarır.");
+                "Reveals the top two cards of the draw pile. As you draw, one fewer stays "
+                    + "revealed (2, then 1, then none).",
+                "Çekme destesinin en üstteki iki kartını açığa çıkarır. Kart çektikçe biri daha "
+                    + "az görünür (2, sonra 1, sonra hiç).");
             BaseSellValue = 30;
         }
 

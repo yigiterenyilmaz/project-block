@@ -36,6 +36,9 @@ everything here is unreleased and balance numbers are still placeholders.
   placeholders in `MarketConfig`; grades live in `RarityTable` (baked from the grader).
 
 ### Changed
+- **Büyüteç** (power) — the reveal is now **consumable**: it uncovers the top two draw cards,
+  and every card you draw leaves one fewer revealed (2 → 1 → 0) instead of showing the top two
+  for the rest of the round.
 - **Batak** — moved from a joker to a **power**. The bet picker now opens from the power bar;
   placing a bet spends the power's charge, and any clean sweep recharges it so you can bet again.
   Payout/deadline rules are unchanged.
