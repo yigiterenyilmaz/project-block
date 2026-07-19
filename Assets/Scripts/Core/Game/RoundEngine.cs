@@ -696,6 +696,11 @@ namespace ProjectBlock.Core
                 dynamiteBlocks[card.Id] = state;
             }
             breakdown.BasePlacement = scorer.ScorePlacement(report.PlacedCells.Count);
+            if (Rules.RetroMode)
+            {
+                // retro pays a flat bonus for every placement (ScoringConfig.RetroPlacementBonus)
+                breakdown.BasePlacement += scorer.RetroPlacementBonus;
+            }
             var waterFrames = new List<IReadOnlyList<WaterMove>>();
 
             cardPlacedSize[card.Id] = report.PlacedCells.Count;

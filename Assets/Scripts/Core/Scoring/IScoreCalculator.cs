@@ -33,6 +33,10 @@ namespace ProjectBlock.Core
         /// <summary>Global economy multiplier (ScoringConfig.ScoreScale). Applied by the engine
         /// to banked score and threshold checks, and by GameSession to prices and sells.</summary>
         int ScoreScale { get; }
+
+        /// <summary>Flat bonus added to a placement's score while retro (tetris) mode is on
+        /// (ScoringConfig.RetroPlacementBonus). The engine adds it in ResolvePlacement.</summary>
+        int RetroPlacementBonus { get; }
     }
 
     /// <summary>Base-game scoring driven entirely by ScoringConfig.</summary>
@@ -90,6 +94,11 @@ namespace ProjectBlock.Core
         public int ScoreScale
         {
             get { return config.ScoreScale; }
+        }
+
+        public int RetroPlacementBonus
+        {
+            get { return config.RetroPlacementBonus; }
         }
     }
 }

@@ -22,6 +22,11 @@ namespace ProjectBlock.Core
         /// joker re-grants points for placement, so this stays the baseline.</summary>
         public int PointsPerCubePlaced = 0;
 
+        /// <summary>"retro" tetris mode: flat bonus added to a placement's score for every block
+        /// placed while RoundRules.RetroMode is on - the reward for steering a falling piece.
+        /// Logical (small); the global ScoreScale lifts it like every other score.</summary>
+        public int RetroPlacementBonus = 3;
+
         /// <summary>Base score per exploded full row/column.</summary>
         public int PointsPerLine = 10;
 

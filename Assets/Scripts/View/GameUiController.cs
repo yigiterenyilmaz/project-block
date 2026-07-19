@@ -1317,6 +1317,13 @@ namespace ProjectBlock.View
                             foxPickSlot = rightHit.SlotIndex;
                             deckOverlay.Show(session.OwnedCards);
                         }
+                        else if (session.Config.Rules.RetroMode)
+                        {
+                            // retro lets an ordinary block rotate too, not just mechanical ones
+                            round.RotateCard(rightHit.SlotIndex, ignoreMechanicalRequirement: true);
+                            cardLayer.ForgetCard(rightCard.Id);
+                            RefreshAll(null);
+                        }
                     }
                     return;
                 }
