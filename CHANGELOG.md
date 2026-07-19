@@ -7,6 +7,10 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **Board-power explosion FX** — whole-board powers that destroy board-dependent cells
+  (**Bardağın Boş Tarafı**, **Çerçeve**...) now play the explosion animation on the cells they
+  clear, via a between-turn destruction log the view reads. (The inflation deflate crush FX is
+  still pending — it resizes the board, so the crushed band's coordinates need special handling.)
 - **Retro audio** — while retro mode is on, a looping **CRT hum** plays and every sound is
   **bit-crushed** (sample-and-hold downsample + bit-depth reduction), toggled alongside the CRT
   overlay. Part of the in-progress Retro power.

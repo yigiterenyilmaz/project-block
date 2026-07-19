@@ -1194,12 +1194,25 @@ namespace ProjectBlock.View
             // Cells a board-targeting power will hit, captured BEFORE the destruction so the
             // blast can play on them afterwards.
             IReadOnlyList<GridPos> blastCells = power.PreviewCells(target);
+            // Whole-board powers (Bardağın boş tarafı, Çerçeve...) destroy board-dependent cells
+            // that PreviewCells cannot predict; capture what they actually destroy for the blast.
+            if (round != null)
+            {
+                round.BeginExternalCapture();
+            }
             if (!session.Powers.TryUse(power.InstanceId, target))
             {
                 Debug.Log("[project_block] " + power.DisplayName + " could not be used.");
                 boardView.ClearPreview();
                 RefreshAll(null);
                 return;
+            }
+            // Prefer the cells actually destroyed between turns (no board resize, so their coords
+            // stay valid for the FX); targeted powers keep their predicted PreviewCells blast.
+            if ((blastCells == null || blastCells.Count == 0) && round != null
+                && round.ExternalDestructionLog.Count > 0)
+            {
+                blastCells = new List<GridPos>(round.ExternalDestructionLog);
             }
             Debug.Log("[project_block] Power used: " + power.DisplayName);
             powerBar.PulsePower(power.InstanceId);

@@ -152,6 +152,11 @@ namespace ProjectBlock.Core
         private readonly List<DestroyedCube> destroyedThisTurn = new List<DestroyedCube>();
         private readonly List<int> cardsFullyDestroyedThisTurn = new List<int>();
 
+        /// <summary>Cells destroyed by BETWEEN-TURN effects (board powers like "Bardağın boş
+        /// tarafı" / "Çerçeve") since the last BeginExternalCapture. Those destructions never
+        /// reach a TurnReport, so the View reads this to play the explosion FX on them.</summary>
+        private readonly List<GridPos> externalDestructionLog = new List<GridPos>();
+
         /// <summary>Board state as it stood at the START of recent turns, newest last.
         /// "Kum saati" rewinds into this. Only a few turns are kept - the power reaches two
         /// back and nothing needs more.</summary>
@@ -1013,6 +1018,22 @@ namespace ProjectBlock.Core
         /// Scoreless by itself - the caller decides whether to award points. Feeds the
         /// central sweep pre-condition, so a joker can empty the board and TryResolveCleanSweep
         /// will accept it. EXTENSION POINT for Robot supurge, Buldozer, Enfeksiyon.</summary>
+        /// <summary>Clears the between-turn destruction log so the next power use captures only
+        /// its own destroyed cells. The View calls this right before running a power, then reads
+        /// ExternalDestructionLog to blast whatever the power destroyed (board powers destroy
+        /// board-dependent cells that PreviewCells cannot predict).</summary>
+        public void BeginExternalCapture()
+        {
+            externalDestructionLog.Clear();
+        }
+
+        /// <summary>Cells destroyed by between-turn effects since the last BeginExternalCapture
+        /// (see the field). Read by the View for the explosion FX; empty otherwise.</summary>
+        public IReadOnlyList<GridPos> ExternalDestructionLog
+        {
+            get { return externalDestructionLog; }
+        }
+
         internal IReadOnlyList<GridPos> DestroyCubes(IEnumerable<GridPos> cells, bool countsForSweep)
         {
             return DestroyCubes(cells, countsForSweep, false);
@@ -1037,6 +1058,12 @@ namespace ProjectBlock.Core
                 cubesDestroyedThisTurn += destroyed.Count;
             }
             LogDestruction();
+            // A between-turn destruction never lands in a TurnReport (LogDestruction no-ops with
+            // no currentReport), so remember the cells for the View to blast.
+            if (currentReport == null)
+            {
+                externalDestructionLog.AddRange(destroyed);
+            }
             // A between-turn destruction that emptied a non-empty board is a candidate for a
             // "Genel temizlik" sweep (only sweep-counting destructions qualify).
             if (currentReport == null && countsForSweep && destroyed.Count > 0
