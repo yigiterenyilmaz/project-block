@@ -3,7 +3,7 @@
 Handoff for continuing the joker/power/UI/retro batch. Read `CLAUDE.md` first (design +
 conventions), then this. Latest pushed commit at handoff time: **`5e6e690`**.
 
-## Progress (session 2026-07-20) — 8 of 12 done, all pushed to `balance`
+## Progress (session 2026-07-20) — all 12 items addressed, pushed to `balance`
 
 - **#1 Combo bonus** — `edec957`
 - **#2 Market reroll** — `aee725e`
@@ -15,13 +15,28 @@ conventions), then this. Latest pushed commit at handoff time: **`5e6e690`**.
 - **#6 Hileli Zar UX** — `f770695`
 - **#7 Büyüteç consumable reveal** — `fc2de05`
 - **#8 İkinci Şans hand redraw** — `43a67af`
+- **#10 Retro SFX** (CRT hum + bit-crush) — `2bb2718`
+- **#11 Falling-piece controller** — `d9db0c4` (FIRST DRAFT; fall speed / lock feel need Unity tuning)
+- **#12 (partial)** board-power blast FX for Bardağın/Çerçeve — `38f9177`
+- **#9 CRT edge-bend shader** — `e86927f` (shader + `_CrtBend` toggle shipped; needs ONE Editor
+  step to wire the Full Screen Pass feature — see `docs/crt-edge-bend.md`)
 
-**Remaining = the untestable/risky batch (need a Unity build to verify):** #9 CRT URP shader,
-#10 retro SFX (buzz + bit-crush), #11 falling-piece controller, #12 inflation crush FX. Note on
-**#12**: the crush uses `Board.DestroyCubeForced` directly (see `RoundEngine.ShiftColumnInward` /
-`ShiftRowInward`), bypassing `RoundEngine.DestroyCubes`, so crushed cubes are currently never
-logged/tallied/scored. Doing #12 per the plan means routing that through `DestroyCubes` (a
-delicate invariant change) — verify with CoreTests + playtest.
+### Still open / needs verification
+- **Everything needs a Unity compile + playtest** (no .NET SDK on this machine; changes were only
+  brace-checked). Run `Tools/CoreTests` (incl. `-- baseline`) once an SDK is available.
+- **#9**: do the one Editor wiring step in `docs/crt-edge-bend.md`. If `Blit.hlsl` include path
+  errors on this URP version, swap the one include (doc lists the alternate path).
+- **#11**: real-time feel (fall interval, lock delay, DAS) wants iteration. In retro mode the drag
+  path is bypassed, so clicking the draw/discard piles and right-click fox/rotate are not wired
+  into the falling flow yet. A power that redraws the hand mid-fall could desync `retroFallHand`.
+- **#12 inflation deflate crush FX — DEFERRED (deliberately).** Two blockers found: (1) the crush
+  uses `Board.DestroyCubeForced` directly in `RoundEngine.ShiftColumnInward`/`ShiftRowInward`
+  (bypassing `DestroyCubes`), and it runs *in-turn* (in `AfterTurnScored`, `currentReport != null`),
+  so the handoff's "external destruction / only-with-Genel-Temizlik" premise doesn't hold; (2) the
+  crushed cubes sit in the band the shrink REMOVES, and by the time the view sees the turn the board
+  has been rebuilt smaller, so the old cell→world mapping is gone — correct FX needs the pre-shrink
+  geometry. Both need a Unity build to get right. Bardağın/Çerçeve (no resize, already routed
+  through `DestroyCubes`) were the safe, geometrically-correct half and are done (`38f9177`).
 
 ---
 
