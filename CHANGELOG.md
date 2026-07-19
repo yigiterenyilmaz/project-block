@@ -34,9 +34,13 @@ everything here is unreleased and balance numbers are still placeholders.
 - **Karakter Oluşturma** (power) — opens a designer to draw a custom block (any shape + one
   element); the block is baked into your deck and shuffles in from the next round.
 - **Retro** (power, *in progress*) — a no-recharge toggle for a tetris/retro mode. Done so far:
-  the toggle + a full-screen **CRT overlay** (scanlines, vignette, green tint, flicker), a flat
-  score bonus per placement while on, and rotation for *any* block (not just mechanical). Still
-  to come: blocks actually falling from the top (steerable falling-piece placement).
+  the toggle + a full-screen **CRT overlay** (scanlines, vignette, green tint, flicker), a CRT
+  hum + bit-crushed audio, a flat score bonus per placement while on, rotation for *any* block,
+  and a **steerable falling-piece placement**: click a hand card to drop it from the top, then
+  Left/Right move, Up/X rotate, Down soft-drops and Space hard-drops with a landing ghost — on
+  lock it settles through the normal placement rules (gravity only chooses where it lands).
+  *First pass; fall speed / lock feel still want tuning in Unity.* Still to come: the CRT
+  edge-bend (barrel-distortion) shader.
 - **In-game Rarity Grader** — press **F2** in Play mode to browse every joker/power, read its
   live description, and grade it Common / Rare / Legendary (mouse-wheel or arrow keys to scroll).
   Saves to `Tools/RarityGrader/rarities.json`.

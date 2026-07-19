@@ -47,6 +47,16 @@ namespace ProjectBlock.View
         // a press on the grid; paintFill is the op decided by the first cell (empty->fill).
         private bool designerPainting;
         private bool designerPaintFill;
+
+        // Retro falling-piece controller (only while RetroMode): -1 = nothing falling. A chosen
+        // hand card falls from the top; arrows steer, up/X rotate, down soft-drops, space hard-
+        // drops. retroFallX/Y is the piece's origin in ABSOLUTE board coords.
+        private int retroFallHand = -1;
+        private int retroFallX;
+        private int retroFallY;
+        private float retroFallTimer;
+        private const float RetroFallInterval = 0.55f;
+        private const float RetroSoftDropInterval = 0.06f;
         private CrtOverlayView crt;
 
         private enum ChoiceKind { None, BatakBet, PowerbankTarget }
@@ -176,6 +186,7 @@ namespace ProjectBlock.View
         private void StartRoundPresentation()
         {
             comboStreak = 0;
+            retroFallHand = -1; // no piece is mid-fall across a round boundary
             // Keep the CRT in sync at every round start - crucially, a restart (R) or a deck
             // change builds a fresh session with retro OFF, so this turns the overlay back off.
             if (crt != null)
@@ -555,6 +566,10 @@ namespace ProjectBlock.View
                         else if (TryUsePowerFromBar(mouse))
                         {
                             // clicking a power in the left bar uses it (max one per turn)
+                        }
+                        else if (session.Config.Rules.RetroMode)
+                        {
+                            HandleRetroFalling(round, kb, mouse);
                         }
                         else
                         {
@@ -1497,45 +1512,7 @@ namespace ProjectBlock.View
                     TurnReport report = slot < round.Hand.Count
                         ? round.PlayFromHand(slot, origin)
                         : round.PlayFromBonus(slot - round.Hand.Count, origin);
-                    if (verboseTurnLogs)
-                    {
-                        LogTurn(report);
-                    }
-                    sfx.Place();
-                    if (report.PlayedCardExpired)
-                    {
-                        sfx.Vanish();
-                    }
-                    if (report.DiscardWasReshuffled)
-                    {
-                        sfx.Shuffle();
-                    }
-                    RefreshAll(report);
-                    IReadOnlyList<IReadOnlyList<WaterMove>> frames = report.WaterFallFrames;
-                    if (frames.Count == 0)
-                    {
-                        PlayExplosionFeedback(round, report);
-                    }
-                    else
-                    {
-                        // Water falls first, THEN the boom it caused - and any post-explosion
-                        // falls play after the boom (WaterFramesBeforeExplosion splits them).
-                        int boomAt = Mathf.Clamp(report.WaterFramesBeforeExplosion, 0, frames.Count);
-                        var preFall = new List<IReadOnlyList<WaterMove>>();
-                        var postFall = new List<IReadOnlyList<WaterMove>>();
-                        for (int f = 0; f < frames.Count; f++)
-                        {
-                            (f < boomAt ? preFall : postFall).Add(frames[f]);
-                        }
-                        waterAnimating = true;
-                        boardView.PlayWaterAnimation(preFall, delegate
-                        {
-                            PlayExplosionFeedback(round, report);
-                            boardView.PlayWaterAnimation(postFall,
-                                delegate { waterAnimating = false; });
-                        });
-                    }
-                    TriggerSupurgeBlast();
+                    FinalizePlacement(round, report);
                 }
                 else
                 {
@@ -1543,6 +1520,239 @@ namespace ProjectBlock.View
                     boardView.ClearPreview();
                 }
             }
+        }
+
+        /// <summary>Retro (tetris) placement, run every frame while RetroMode is on. Click a hand
+        /// card to drop it from the top; Left/Right move the column, Up or X rotate (any block
+        /// rotates in retro), Down soft-drops, Space hard-drops, and a ghost shows the landing. On
+        /// lock the piece settles through the normal PlayFromHand path - gravity only chooses
+        /// WHERE it lands, so scoring / line clears / refill are all unchanged.</summary>
+        private void HandleRetroFalling(RoundEngine round, Keyboard kb, Mouse mouse)
+        {
+            BlockCard card = retroFallHand >= 0 && retroFallHand < round.Hand.Count
+                ? round.Hand[retroFallHand]
+                : null;
+            if (card == null)
+            {
+                retroFallHand = -1;
+                boardView.ClearPreview();
+                // Nothing falling: click a hand card to drop it into the arena.
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                {
+                    Vector2 w = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                    CardVisual hit = cardLayer.CardAt(w);
+                    if (hit != null && hit.SlotIndex >= 0 && hit.SlotIndex < round.Hand.Count)
+                    {
+                        SpawnRetroPiece(round, hit.SlotIndex);
+                    }
+                }
+                return;
+            }
+
+            if (kb != null)
+            {
+                if (kb.leftArrowKey.wasPressedThisFrame)
+                {
+                    TryStepRetro(round, card, -1);
+                }
+                if (kb.rightArrowKey.wasPressedThisFrame)
+                {
+                    TryStepRetro(round, card, +1);
+                }
+                if (kb.upArrowKey.wasPressedThisFrame || kb.xKey.wasPressedThisFrame)
+                {
+                    RotateRetro(round, card);
+                }
+                if (kb.spaceKey.wasPressedThisFrame)
+                {
+                    CommitRetroPiece(round, GravityDrop(round, card, new GridPos(retroFallX, retroFallY)));
+                    return;
+                }
+            }
+
+            float interval = kb != null && kb.downArrowKey.isPressed
+                ? RetroSoftDropInterval : RetroFallInterval;
+            retroFallTimer += Time.deltaTime;
+            if (retroFallTimer >= interval)
+            {
+                retroFallTimer = 0f;
+                if (round.CanPlaceCard(card, new GridPos(retroFallX, retroFallY - 1)))
+                {
+                    retroFallY--;
+                }
+                else
+                {
+                    CommitRetroPiece(round, new GridPos(retroFallX, retroFallY));
+                    return;
+                }
+            }
+
+            var origin = new GridPos(retroFallX, retroFallY);
+            boardView.ShowFallingPiece(round.EffectiveShape(card), origin,
+                GravityDrop(round, card, origin));
+        }
+
+        /// <summary>Drops the chosen hand card in at the top: the highest valid row of the center
+        /// column, or any column if the center is blocked. Leaves it in hand if nowhere fits.</summary>
+        private void SpawnRetroPiece(RoundEngine round, int handIndex)
+        {
+            BlockCard card = round.Hand[handIndex];
+            GameBoard b = round.Board;
+            int center = b.MinX + b.Width / 2;
+            GridPos origin;
+            if (TryTopValidRow(round, card, center, out origin)
+                || TryAnyTopValidRow(round, card, out origin))
+            {
+                retroFallHand = handIndex;
+                retroFallX = origin.X;
+                retroFallY = origin.Y;
+                retroFallTimer = 0f;
+            }
+        }
+
+        /// <summary>Highest origin row where the card fits in column x (absolute coords), if any.</summary>
+        private bool TryTopValidRow(RoundEngine round, BlockCard card, int x, out GridPos origin)
+        {
+            GameBoard b = round.Board;
+            for (int y = b.MinY + b.Height - 1; y >= b.MinY; y--)
+            {
+                var candidate = new GridPos(x, y);
+                if (round.CanPlaceCard(card, candidate))
+                {
+                    origin = candidate;
+                    return true;
+                }
+            }
+            origin = default(GridPos);
+            return false;
+        }
+
+        /// <summary>First column (left to right) that can take the piece at the top, if any.</summary>
+        private bool TryAnyTopValidRow(RoundEngine round, BlockCard card, out GridPos origin)
+        {
+            GameBoard b = round.Board;
+            for (int x = b.MinX; x <= b.MinX + b.Width - 1; x++)
+            {
+                if (TryTopValidRow(round, card, x, out origin))
+                {
+                    return true;
+                }
+            }
+            origin = default(GridPos);
+            return false;
+        }
+
+        /// <summary>Slides the origin straight down from <paramref name="from"/> to the lowest
+        /// row still reachable by continuous downward moves (respects overhangs).</summary>
+        private GridPos GravityDrop(RoundEngine round, BlockCard card, GridPos from)
+        {
+            GridPos pos = from;
+            while (round.CanPlaceCard(card, new GridPos(pos.X, pos.Y - 1)))
+            {
+                pos = new GridPos(pos.X, pos.Y - 1);
+            }
+            return pos;
+        }
+
+        /// <summary>Moves the falling piece one column left/right if it still fits there.</summary>
+        private void TryStepRetro(RoundEngine round, BlockCard card, int dir)
+        {
+            if (round.CanPlaceCard(card, new GridPos(retroFallX + dir, retroFallY)))
+            {
+                retroFallX += dir;
+            }
+        }
+
+        /// <summary>Rotates the falling piece (any block, in retro) and nudges it (a basic wall
+        /// kick) so it stays valid; if no kick fits, the rotation is undone.</summary>
+        private void RotateRetro(RoundEngine round, BlockCard card)
+        {
+            round.RotateCard(retroFallHand, true);
+            if (round.CanPlaceCard(card, new GridPos(retroFallX, retroFallY)))
+            {
+                return;
+            }
+            GridPos[] kicks =
+            {
+                new GridPos(-1, 0), new GridPos(1, 0), new GridPos(0, 1),
+                new GridPos(-2, 0), new GridPos(2, 0)
+            };
+            foreach (GridPos k in kicks)
+            {
+                if (round.CanPlaceCard(card, new GridPos(retroFallX + k.X, retroFallY + k.Y)))
+                {
+                    retroFallX += k.X;
+                    retroFallY += k.Y;
+                    return;
+                }
+            }
+            // Nowhere to fit the rotated shape - spin back to the original orientation.
+            round.RotateCard(retroFallHand, true);
+            round.RotateCard(retroFallHand, true);
+            round.RotateCard(retroFallHand, true);
+        }
+
+        /// <summary>Locks the falling piece at <paramref name="origin"/> and plays it through the
+        /// normal placement path (scoring / clears / refill unchanged).</summary>
+        private void CommitRetroPiece(RoundEngine round, GridPos origin)
+        {
+            int handIndex = retroFallHand;
+            retroFallHand = -1;
+            retroFallTimer = 0f;
+            boardView.ClearPreview();
+            if (handIndex < 0 || handIndex >= round.Hand.Count
+                || !round.CanPlaceCard(round.Hand[handIndex], origin))
+            {
+                return; // safety: the piece is not in a legal spot to settle
+            }
+            TurnReport report = round.PlayFromHand(handIndex, origin);
+            FinalizePlacement(round, report);
+        }
+
+        /// <summary>Everything the view does AFTER a card is played, shared by the drag path and
+        /// the retro falling-piece path: logging, sounds, a full refresh, then the water/explosion
+        /// feedback (water falls first, boom next, post-explosion falls last) and the sweeper.</summary>
+        private void FinalizePlacement(RoundEngine round, TurnReport report)
+        {
+            if (verboseTurnLogs)
+            {
+                LogTurn(report);
+            }
+            sfx.Place();
+            if (report.PlayedCardExpired)
+            {
+                sfx.Vanish();
+            }
+            if (report.DiscardWasReshuffled)
+            {
+                sfx.Shuffle();
+            }
+            RefreshAll(report);
+            IReadOnlyList<IReadOnlyList<WaterMove>> frames = report.WaterFallFrames;
+            if (frames.Count == 0)
+            {
+                PlayExplosionFeedback(round, report);
+            }
+            else
+            {
+                // Water falls first, THEN the boom it caused - and any post-explosion
+                // falls play after the boom (WaterFramesBeforeExplosion splits them).
+                int boomAt = Mathf.Clamp(report.WaterFramesBeforeExplosion, 0, frames.Count);
+                var preFall = new List<IReadOnlyList<WaterMove>>();
+                var postFall = new List<IReadOnlyList<WaterMove>>();
+                for (int f = 0; f < frames.Count; f++)
+                {
+                    (f < boomAt ? preFall : postFall).Add(frames[f]);
+                }
+                waterAnimating = true;
+                boardView.PlayWaterAnimation(preFall, delegate
+                {
+                    PlayExplosionFeedback(round, report);
+                    boardView.PlayWaterAnimation(postFall,
+                        delegate { waterAnimating = false; });
+                });
+            }
+            TriggerSupurgeBlast();
         }
 
         /// <summary>Explosion sound + blast feedback for one turn. Deferred until after the

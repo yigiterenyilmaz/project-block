@@ -17,6 +17,8 @@ namespace ProjectBlock.View
         private static readonly Color ValidPreviewColor = new Color(0.35f, 1f, 0.45f, 0.6f);
         private static readonly Color InvalidPreviewColor = new Color(1f, 0.35f, 0.35f, 0.6f);
         private static readonly Color ExplosionPreviewColor = new Color(1f, 0.78f, 0.25f, 0.65f);
+        private static readonly Color FallingPieceColor = new Color(0.45f, 0.85f, 1f, 0.9f);
+        private static readonly Color FallingGhostColor = new Color(0.45f, 0.85f, 1f, 0.28f);
 
         private GameBoard board;
         private SpriteRenderer[,] cellRenderers;
@@ -492,6 +494,44 @@ namespace ProjectBlock.View
                     previewRenderers[pos.X - board.MinX, pos.Y - board.MinY].color = ExplosionPreviewColor;
                     previewRenderers[pos.X - board.MinX, pos.Y - board.MinY].enabled = true;
                 }
+            }
+        }
+
+        /// <summary>Retro falling-piece render: the ghost (where the piece will land) faint,
+        /// under the live falling piece, both drawn like a placement preview. Cells still up in
+        /// the air (above the grid) render as overhang sprites via CellToWorld.</summary>
+        public void ShowFallingPiece(BlockShape shape, GridPos currentOrigin, GridPos ghostOrigin)
+        {
+            ClearPreview();
+            if (board == null || shape == null)
+            {
+                return;
+            }
+            foreach (GridPos offset in shape.Cells)
+            {
+                PaintPreviewCell(ghostOrigin + offset, FallingGhostColor);
+            }
+            foreach (GridPos offset in shape.Cells)
+            {
+                PaintPreviewCell(currentOrigin + offset, FallingPieceColor);
+            }
+        }
+
+        /// <summary>Tints one preview cell: in-grid cells use the persistent renderers; a cell
+        /// outside the grid (a piece still in the air) gets a temporary overhang sprite.</summary>
+        private void PaintPreviewCell(GridPos pos, Color color)
+        {
+            if (board.IsInside(pos))
+            {
+                int lx = pos.X - board.MinX;
+                int ly = pos.Y - board.MinY;
+                previewRenderers[lx, ly].color = color;
+                previewRenderers[lx, ly].enabled = true;
+            }
+            else
+            {
+                outsidePreviewSprites.Add(ViewUtil.MakeCell(transform, "FallingGhost",
+                    CellToWorld(pos), cellSize * 0.92f, color, 2));
             }
         }
 
