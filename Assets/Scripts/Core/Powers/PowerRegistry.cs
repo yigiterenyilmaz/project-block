@@ -66,6 +66,11 @@ namespace ProjectBlock.Core
             Register(() => new YatayEnflasyonPower());
             Register(() => new DikeyEnflasyonPower());
             Register(() => new HiperEnflasyonPower());
+            Register(() => new AsirmaPower());
+            Register(() => new YedeklemePower());
+            Register(() => new SogukFuzyonPower());
+            Register(() => new IkinciSansPower());
+            Register(() => new TotemPower());
         }
 
         /// <summary>All known powers, in design order.</summary>

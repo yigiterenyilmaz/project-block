@@ -238,6 +238,17 @@ namespace ProjectBlock.Core
             RaiseChanged();
         }
 
+        /// <summary>Recharges every power. Used by a "Genel temizlik" external sweep, which
+        /// pays the powers' economy without running the full per-turn sweep dispatch.</summary>
+        public void RechargeAll()
+        {
+            for (int i = 0; i < powers.Count; i++)
+            {
+                powers[i].Recharge();
+            }
+            RaiseChanged();
+        }
+
         /// <summary>"Powerbank" refills one power without a sweep. Returns false if every
         /// power is already charged, so the joker does not waste its own charge.</summary>
         public bool RechargeOne()

@@ -93,4 +93,86 @@ namespace ProjectBlock.Core
             turn.AddFlatScore(PointsPerEmptyDrawPile, DefId);
         }
     }
+
+    /// <summary>"Tutumluluk" - a thin deck pays. Every turn adds a flat bonus that grows the
+    /// FEWER cards the owned deck holds, dropping to nothing at ReferenceDeckSize and up.</summary>
+    public sealed class TutumlulukJoker : Joker
+    {
+        /// <summary>Deck size at (or above) which the joker pays nothing.</summary>
+        public int ReferenceDeckSize = 20;
+
+        /// <summary>Points per card the deck is under the reference size.</summary>
+        public int PointsPerCardUnder = 3;
+
+        public TutumlulukJoker()
+            : base("tutumluluk", "Tutumluluk")
+        {
+            SetDescription(
+                "The fewer cards your deck holds, the more points you score each turn.",
+                "Destendeki kart sayısı ne kadar az ise her tur o kadar fazla puan kazanırsın.");
+            BaseSellValue = 45;
+        }
+
+        public override string StatusText
+        {
+            get { return Loc.Pick("+" + BonusFor(lastDeckSize) + "/turn", "+" + BonusFor(lastDeckSize) + "/tur"); }
+        }
+
+        private int lastDeckSize = -1;
+
+        public override void ModifyScore(TurnContext turn)
+        {
+            lastDeckSize = turn.Session.OwnedCards.Count;
+            int bonus = BonusFor(lastDeckSize);
+            if (bonus > 0)
+            {
+                turn.Score.AddFlat(bonus, DefId);
+            }
+        }
+
+        private int BonusFor(int deckSize)
+        {
+            if (deckSize < 0)
+            {
+                return 0;
+            }
+            int under = ReferenceDeckSize - deckSize;
+            return under > 0 ? under * PointsPerCardUnder : 0;
+        }
+    }
+
+    /// <summary>"Genel temizlik" - board-clears caused by a joker or a power between turns
+    /// count as real clean sweeps. Normally they do not, because they happen with no placement
+    /// resolving; this flips the central RoundRules switch that lets them through.</summary>
+    public sealed class GenelTemizlikJoker : Joker
+    {
+        public GenelTemizlikJoker()
+            : base("genel_temizlik", "Genel Temizlik")
+        {
+            SetDescription(
+                "Clean sweeps triggered by jokers and powers count as sweeps too - normally a "
+                    + "joker or power that clears the last block does not count, because it "
+                    + "happens between placements.",
+                "Jokerler ve güçler tarafından tetiklenen temizlikler de temizlik sayılır - "
+                    + "normalde son bloğu temizleyen bir joker veya güç, blok koymadan önce "
+                    + "gerçekleştiği için sayılmaz.");
+            BaseSellValue = 55;
+        }
+
+        public override void OnAcquired(SessionContext ctx)
+        {
+            ctx.Rules.CountExternalSweeps = true;
+        }
+
+        public override void OnRemoved(SessionContext ctx)
+        {
+            ctx.Rules.CountExternalSweeps = false;
+        }
+
+        // RoundRules is shared and another effect may have reset it; re-assert each round.
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            ctx.Rules.CountExternalSweeps = true;
+        }
+    }
 }

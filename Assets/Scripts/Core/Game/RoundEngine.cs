@@ -318,6 +318,11 @@ namespace ProjectBlock.Core
         private int cubesDestroyedThisTurn;
         private bool pendingAdvanceOffer;
 
+        /// <summary>Set when a BETWEEN-TURN destruction (a power/joker between placements)
+        /// emptied a board that was not already empty. "Genel temizlik" turns these into real
+        /// clean sweeps; without it they are ignored, which is the base-game behaviour.</summary>
+        private bool externalClearReady;
+
         /// <summary>Fires after every resolved placement. The UI subscribes here.
         /// Jokers do NOT - they get ordered, mid-turn callbacks through ITurnHooks.</summary>
         public event Action<TurnReport> TurnResolved;
@@ -634,6 +639,7 @@ namespace ProjectBlock.Core
             sweepResolvedThisTurn = false;
             cubesDestroyedThisTurn = 0;
             pendingAdvanceOffer = false;
+            externalClearReady = false;
             destroyedThisTurn.Clear();
             cardsFullyDestroyedThisTurn.Clear();
             report.DestroyedCubes = destroyedThisTurn;
@@ -842,7 +848,26 @@ namespace ProjectBlock.Core
 
         private bool ResolveCleanSweep(bool forced)
         {
-            if (sweepResolvedThisTurn || currentReport == null)
+            if (currentReport == null)
+            {
+                // Between turns: only "Genel temizlik" makes a power/joker board-clear count.
+                // A slimmer sweep than the in-turn one - it counts, pays the bonus and
+                // recharges every power, but does not run the per-turn joker hooks.
+                if (forced || !Rules.CountExternalSweeps || !externalClearReady
+                    || !Board.IsCleanForSweep())
+                {
+                    return false;
+                }
+                externalClearReady = false;
+                CleanSweepCount++;
+                AddScoreOutsideTurn(scorer.ScoreCleanSweep());
+                if (session != null)
+                {
+                    session.Powers.RechargeAll();
+                }
+                return true;
+            }
+            if (sweepResolvedThisTurn)
             {
                 return false;
             }
@@ -903,6 +928,7 @@ namespace ProjectBlock.Core
         internal IReadOnlyList<GridPos> DestroyCubes(IEnumerable<GridPos> cells, bool countsForSweep,
             bool forced)
         {
+            bool wasClean = Board.IsCleanForSweep();
             var destroyed = new List<GridPos>();
             foreach (GridPos pos in cells)
             {
@@ -917,6 +943,13 @@ namespace ProjectBlock.Core
                 cubesDestroyedThisTurn += destroyed.Count;
             }
             LogDestruction();
+            // A between-turn destruction that emptied a non-empty board is a candidate for a
+            // "Genel temizlik" sweep (only sweep-counting destructions qualify).
+            if (currentReport == null && countsForSweep && destroyed.Count > 0
+                && !wasClean && Board.IsCleanForSweep())
+            {
+                externalClearReady = true;
+            }
             return destroyed;
         }
 
@@ -1001,6 +1034,37 @@ namespace ProjectBlock.Core
         internal BlockCard TakeCardFromPiles(int cardId)
         {
             return Deck.TakeCard(cardId);
+        }
+
+        /// <summary>"Pull the earned score to the threshold": the round's contribution to the
+        /// run-wide TotalScore is capped at the threshold and the local meter drops to it.
+        /// Used by "İkinci şans" and "Totem" in overtime, where the score is above threshold.</summary>
+        internal void CapRoundScoreAtThreshold()
+        {
+            int excess = RoundScore - Config.ScoreThreshold;
+            if (excess <= 0)
+            {
+                return;
+            }
+            RoundScore = Config.ScoreThreshold;
+            if (session != null)
+            {
+                session.AddCurrency(-excess); // remove the overtime-farmed excess from the run
+            }
+        }
+
+        /// <summary>Clears every destructible cube WITHOUT scoring or triggering a sweep
+        /// ("İkinci şans"). Indestructible cubes (obsidian/gold/Parazit host) stay.</summary>
+        internal void ClearBoardScoreless()
+        {
+            var cells = new List<GridPos>(Board.GetOccupiedCells());
+            DestroyCubes(cells, false);
+        }
+
+        /// <summary>Ends the round straight to the market ("Totem"), with no advance offer.</summary>
+        internal void ForceAdvanceToMarket()
+        {
+            SetStatus(RoundStatus.Advanced);
         }
 
         /// <summary>Ends the round with a joker-defined reason ("Batak" losing its bet).

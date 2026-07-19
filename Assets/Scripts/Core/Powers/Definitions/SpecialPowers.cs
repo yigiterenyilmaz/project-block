@@ -197,6 +197,91 @@ namespace ProjectBlock.Core
         }
     }
 
+    /// <summary>"İkinci şans" - overtime only, once per round: clears the board (no score, no
+    /// sweep), pulls the earned score back down to the threshold, reshuffles the whole deck
+    /// into the draw pile, and lets the round continue - a fresh overtime attempt.</summary>
+    public sealed class IkinciSansPower : Power
+    {
+        private bool usedThisRound;
+
+        public IkinciSansPower()
+            : base("ikinci_sans", "İkinci Şans")
+        {
+            SetDescription(
+                "Overtime only, once per round: clears the board (no score, no sweep), pulls "
+                    + "your score back to the threshold, reshuffles the deck into the draw pile "
+                    + "and plays on.",
+                "Sadece uzatmada, raunt başına bir kez: oyun alanını temizler (puan yok, "
+                    + "temizlik sayılmaz), puanını eşiğe çeker, desteyi karıp çekme destesine "
+                    + "koyar ve oyun devam eder.");
+            BaseSellValue = 60;
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            usedThisRound = false;
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return usedThisRound
+                    ? Loc.Pick("used", "kullanıldı")
+                    : Loc.Pick("overtime only", "sadece uzatma");
+            }
+        }
+
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return ctx.Overtime && !usedThisRound;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            RoundEngine round = ctx.Round;
+            round.ClearBoardScoreless();
+            round.CapRoundScoreAtThreshold();
+            round.Deck.DumpDrawPileIntoDiscard();
+            round.Deck.ShuffleDiscardIntoDraw();
+            usedThisRound = true;
+            return true;
+        }
+    }
+
+    /// <summary>"Totem" - overtime only: pulls the earned score down to the threshold, sends
+    /// the run to the market, and is consumed.</summary>
+    public sealed class TotemPower : Power
+    {
+        public TotemPower()
+            : base("totem", "Totem")
+        {
+            SetDescription(
+                "Overtime only: pulls your score to the threshold, sends you to the market, "
+                    + "and is destroyed.",
+                "Sadece uzatmada: puanını eşiğe çeker, seni market fazına geçirir ve yok olur.");
+            BaseSellValue = 70;
+        }
+
+        public override string StatusText
+        {
+            get { return Loc.Pick("overtime only", "sadece uzatma"); }
+        }
+
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return ctx.Overtime;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            ctx.Round.CapRoundScoreAtThreshold();
+            ctx.Round.ForceAdvanceToMarket();
+            ctx.Session.Powers.Remove(this); // self-destruct
+            return true;
+        }
+    }
+
     /// <summary>
     /// "Tılsım" - blows up the ghost cubes hanging off the edge of the board and turns the
     /// space they occupied into real play area for the rest of the RUN... except the design

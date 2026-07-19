@@ -42,6 +42,11 @@ namespace ProjectBlock.Core
         /// also means the deck effectively never runs out.</summary>
         public bool PlayedCardsReturnToDrawPile = false;
 
+        /// <summary>"Genel temizlik": a board-clear triggered by a joker or power BETWEEN
+        /// turns counts as a real clean sweep (normally those are ignored because they happen
+        /// with no placement resolving). Off in the base game.</summary>
+        public bool CountExternalSweeps = false;
+
         /// <summary>"İmitasyon": a hand refill draws only what the draw pile actually holds -
         /// it never auto-recycles the discard, and running the pile dry mid-refill is NOT a
         /// loss (the hand just stays partial). The joker recycles explicitly, only when a

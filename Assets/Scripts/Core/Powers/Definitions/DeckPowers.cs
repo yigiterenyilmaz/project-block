@@ -217,4 +217,124 @@ namespace ProjectBlock.Core
             return true;
         }
     }
+
+    /// <summary>Shared helper for the powers that drop throwaway copies of pile cards into the
+    /// bonus hand (Aşırma, Yedekleme, Soğuk füzyon). Copies get fresh ids so the board can
+    /// tell their cubes apart from the original's.</summary>
+    internal static class BonusCopyHelper
+    {
+        public static void AddCopies(RoundContext ctx, BlockCard source, int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                BlockCard copy = ctx.Session.CreateCard(source.Shape, source.Elements);
+                ctx.Round.AddBonusCard(copy, BonusPlayOutcome.ExpireFromRound);
+            }
+        }
+
+        public static BlockCard RandomFrom(RoundContext ctx, IReadOnlyList<BlockCard> pile)
+        {
+            return pile.Count == 0 ? null : pile[ctx.Rng.NextInt(0, pile.Count)];
+        }
+    }
+
+    /// <summary>"Aşırma" - drops 2 copies of a random DRAW-pile card into the bonus hand.</summary>
+    public sealed class AsirmaPower : Power
+    {
+        public int CopyCount = 2;
+
+        public AsirmaPower()
+            : base("asirma", "Aşırma")
+        {
+            SetDescription(
+                "Adds 2 copies of a random card from the draw pile to your bonus hand.",
+                "Çekme destesinden rastgele bir kartın 2 kopyasını bonus eline ekler.");
+            BaseSellValue = 40;
+        }
+
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return ctx.Round.Deck.DrawCount > 0;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            BlockCard source = BonusCopyHelper.RandomFrom(ctx, ctx.Round.Deck.DrawPile);
+            if (source == null)
+            {
+                return false;
+            }
+            BonusCopyHelper.AddCopies(ctx, source, CopyCount);
+            return true;
+        }
+    }
+
+    /// <summary>"Yedekleme" - drops 2 copies of a random DISCARD card into the bonus hand.</summary>
+    public sealed class YedeklemePower : Power
+    {
+        public int CopyCount = 2;
+
+        public YedeklemePower()
+            : base("yedekleme", "Yedekleme")
+        {
+            SetDescription(
+                "Adds 2 copies of a random card from the discard pile to your bonus hand.",
+                "Iskartadan rastgele bir kartın 2 kopyasını bonus eline ekler.");
+            BaseSellValue = 40;
+        }
+
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return ctx.Round.Deck.DiscardCount > 0;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            BlockCard source = BonusCopyHelper.RandomFrom(ctx, ctx.Round.Deck.DiscardPile);
+            if (source == null)
+            {
+                return false;
+            }
+            BonusCopyHelper.AddCopies(ctx, source, CopyCount);
+            return true;
+        }
+    }
+
+    /// <summary>"Soğuk füzyon" - copies one DISCARD card and one DRAW card into the bonus
+    /// hand (whichever piles have a card; needs at least one).</summary>
+    public sealed class SogukFuzyonPower : Power
+    {
+        public SogukFuzyonPower()
+            : base("soguk_fuzyon", "Soğuk Füzyon")
+        {
+            SetDescription(
+                "Copies one card from the discard and one from the draw pile into your bonus hand.",
+                "Iskartadan bir kartın ve çekme elinden bir kartın kopyasını bonus ele koyar.");
+            BaseSellValue = 45;
+        }
+
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return ctx.Round.Deck.DrawCount > 0 || ctx.Round.Deck.DiscardCount > 0;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            BlockCard fromDiscard = BonusCopyHelper.RandomFrom(ctx, ctx.Round.Deck.DiscardPile);
+            BlockCard fromDraw = BonusCopyHelper.RandomFrom(ctx, ctx.Round.Deck.DrawPile);
+            if (fromDiscard == null && fromDraw == null)
+            {
+                return false;
+            }
+            if (fromDiscard != null)
+            {
+                BonusCopyHelper.AddCopies(ctx, fromDiscard, 1);
+            }
+            if (fromDraw != null)
+            {
+                BonusCopyHelper.AddCopies(ctx, fromDraw, 1);
+            }
+            return true;
+        }
+    }
 }

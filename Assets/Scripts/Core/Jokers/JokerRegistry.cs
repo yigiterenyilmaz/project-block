@@ -89,6 +89,8 @@ namespace ProjectBlock.Core
             Register(() => new FraksiyonJoker());
             Register(() => new ParazitJoker());
             Register(() => new PowerbankJoker());
+            Register(() => new TutumlulukJoker());
+            Register(() => new GenelTemizlikJoker());
         }
 
         /// <summary>All known jokers, in design order.</summary>
