@@ -68,6 +68,14 @@ namespace ProjectBlock.View
         private readonly List<int> hileliSelection = new List<int>();
         private int hileliTarget;
         private int hileliPowerId;
+
+        // "Parazit": market-phase attach flow (joker -> owned card -> cube).
+        private enum ParazitStep { None, PickJoker, PickCard, PickCube }
+        private ParazitStep parazitStep;
+        private int parazitInstanceId;
+        private int parazitTargetJoker;
+        private int parazitCardId;
+        private CubePickerView cubePicker;
         private bool sellCardsMode;
         private int lastSeedUsed;
 
@@ -113,8 +121,13 @@ namespace ProjectBlock.View
             grantPicker.Hide();
             deckSelect.Hide();
             deckOverlay.Hide();
+            choicePicker.Hide();
+            cubePicker.Hide();
+            ClearChoice();
+            parazitStep = ParazitStep.None;
             foxPickSlot = -1;
             sellCardsMode = false;
+            hileliPickMode = false;
             HideTooltip();
             if (session != null && session.Phase == GamePhase.Market)
             {
@@ -135,6 +148,8 @@ namespace ProjectBlock.View
             sellCardsMode = false;
             hileliPickMode = false;
             hileliSelection.Clear();
+            parazitStep = ParazitStep.None;
+            cubePicker.Hide();
             waterAnimating = false;
             supurgeAnimating = false;
             pendingTargetJokerId = null;
@@ -186,6 +201,17 @@ namespace ProjectBlock.View
             if (kb != null && kb.lKey.wasPressedThisFrame)
             {
                 ToggleLanguage();
+                return;
+            }
+            // Parazit attach flow owns input while active (a multi-step market action).
+            if (parazitStep != ParazitStep.None)
+            {
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                {
+                    CancelParazit();
+                    return;
+                }
+                HandleParazitFlow(mouse);
                 return;
             }
             if (deckSelect.IsOpen)
@@ -569,8 +595,117 @@ namespace ProjectBlock.View
             UpdateHud();
         }
 
+        /// <summary>In the market, clicking an unbound Parazit starts the attach flow instead
+        /// of selling it. Returns true if it handled the click.</summary>
+        private bool TryStartParazitAttach(Mouse mouse)
+        {
+            int index = jokerBar.JokerIndexAt(mouse.position.ReadValue());
+            if (index < 0 || index >= session.Jokers.Count)
+            {
+                return false;
+            }
+            var parazit = session.Jokers.Jokers[index] as ParazitJoker;
+            if (parazit == null || parazit.HasBinding)
+            {
+                return false;
+            }
+            parazitStep = ParazitStep.PickJoker;
+            parazitInstanceId = parazit.InstanceId;
+            messageText.text = Loc.Pick(
+                "Parazit: click the joker to attach   [Esc] cancel",
+                "Parazit: takılacak jokere tıkla   [Esc] iptal");
+            return true;
+        }
+
+        /// <summary>Drives the three picks of a Parazit attach (joker -> owned card -> cube).</summary>
+        private void HandleParazitFlow(Mouse mouse)
+        {
+            if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
+            {
+                return;
+            }
+            Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+            switch (parazitStep)
+            {
+                case ParazitStep.PickJoker:
+                {
+                    int ji = jokerBar.JokerIndexAt(mouse.position.ReadValue());
+                    if (ji < 0 || ji >= session.Jokers.Count)
+                    {
+                        return;
+                    }
+                    Joker chosen = session.Jokers.Jokers[ji];
+                    if (chosen.InstanceId == parazitInstanceId || chosen.Attachment.HasValue)
+                    {
+                        return; // Parazit cannot ride itself or an already-bound joker
+                    }
+                    parazitTargetJoker = chosen.InstanceId;
+                    parazitStep = ParazitStep.PickCard;
+                    deckOverlay.Show(session.OwnedCards);
+                    messageText.text = Loc.Pick(
+                        "Parazit: pick a deck card   [Esc] cancel",
+                        "Parazit: desteden bir kart seç   [Esc] iptal");
+                    break;
+                }
+                case ParazitStep.PickCard:
+                {
+                    BlockCard card = deckOverlay.CardAt(world);
+                    if (card == null)
+                    {
+                        return;
+                    }
+                    parazitCardId = card.Id;
+                    deckOverlay.Hide();
+                    parazitStep = ParazitStep.PickCube;
+                    cubePicker.Show(card.Shape, Loc.Pick(
+                        "Parazit: pick the host cube   [Esc] cancel",
+                        "Parazit: konak küpü seç   [Esc] iptal"));
+                    break;
+                }
+                case ParazitStep.PickCube:
+                {
+                    int cellIndex = cubePicker.CellAt(world);
+                    if (cellIndex < 0)
+                    {
+                        return;
+                    }
+                    bool ok = session.TryAttachJokerToCard(parazitTargetJoker, parazitCardId, cellIndex);
+                    Debug.Log("[project_block] Parazit attach " + (ok ? "succeeded" : "failed"));
+                    if (ok)
+                    {
+                        sfx.Buy();
+                    }
+                    cubePicker.Hide();
+                    parazitStep = ParazitStep.None;
+                    marketView.Show(session);
+                    jokerBar.Refresh(session, null);
+                    UpdateHud();
+                    break;
+                }
+            }
+        }
+
+        private void CancelParazit()
+        {
+            parazitStep = ParazitStep.None;
+            parazitInstanceId = 0;
+            parazitTargetJoker = 0;
+            parazitCardId = 0;
+            cubePicker.Hide();
+            deckOverlay.Hide();
+            if (session != null && session.Phase == GamePhase.Market)
+            {
+                marketView.Show(session);
+            }
+            UpdateHud();
+        }
+
         private void HandleMarketClick(Mouse mouse)
         {
+            if (TryStartParazitAttach(mouse))
+            {
+                return;
+            }
             if (TrySellJokerFromBar(mouse))
             {
                 return;
@@ -1734,6 +1869,10 @@ namespace ProjectBlock.View
             var choiceGo = new GameObject("ChoicePicker");
             choiceGo.transform.SetParent(transform, false);
             choicePicker = choiceGo.AddComponent<ChoicePickerView>();
+
+            var cubeGo = new GameObject("CubePicker");
+            cubeGo.transform.SetParent(transform, false);
+            cubePicker = cubeGo.AddComponent<CubePickerView>();
 
             tooltipRoot = new GameObject("Tooltip");
             tooltipRoot.transform.SetParent(transform, false);
