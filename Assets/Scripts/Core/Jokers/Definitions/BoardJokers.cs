@@ -29,13 +29,19 @@ namespace ProjectBlock.Core
         public BuldozerJoker()
             : base("buldozer", "Buldozer")
         {
-            Description = "Her 4 turda bir oyun alanını siler. Puan vermez, temizlik sayılmaz.";
+            SetDescription(
+                "Wipes the board every 4 turns. Pays no points and never counts as a clean sweep.",
+                "Her 4 turda bir oyun alanını siler. Puan vermez, temizlik sayılmaz.");
             BaseSellValue = 45;
         }
 
         public override string StatusText
         {
-            get { return (TurnsPerWipe - TurnsSinceWipe) + " tur kaldı"; }
+            get
+            {
+                int left = TurnsPerWipe - TurnsSinceWipe;
+                return Loc.Pick(left + " turns left", left + " tur kaldı");
+            }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -72,14 +78,22 @@ namespace ProjectBlock.Core
         public RobotSupurgeJoker()
             : base("robot_supurge", "Robot Süpürge")
         {
-            Description = "Her turdan sonra rastgele küp siler. Temizliği kendisi tetiklerse "
-                + "kapasitesi artar ve kısa süre dinlenir.";
+            SetDescription(
+                "Deletes random cubes after every turn. Triggering the sweep itself grows "
+                    + "its capacity and sends it on a short rest.",
+                "Her turdan sonra rastgele küp siler. Temizliği kendisi tetiklerse "
+                    + "kapasitesi artar ve kısa süre dinlenir.");
             BaseSellValue = 55;
         }
 
         public override string StatusText
         {
-            get { return Cooldown > 0 ? "dinleniyor " + Cooldown : Capacity + " küp/tur"; }
+            get
+            {
+                return Cooldown > 0
+                    ? Loc.Pick("resting " + Cooldown, "dinleniyor " + Cooldown)
+                    : Loc.Pick(Capacity + " cubes/turn", Capacity + " küp/tur");
+            }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -134,8 +148,11 @@ namespace ProjectBlock.Core
         public KayitDefteriJoker()
             : base("kayit_defteri", "Kayıt Defteri")
         {
-            Description = "Patlatılan küpleri sayar; sayı alan büyüklüğüne ulaşınca temizlik "
-                + "tetikler. Bu joker dururken alanı boşaltmak temizlik sayılmaz.";
+            SetDescription(
+                "Counts exploded cubes; reaching the board's size triggers a clean sweep. "
+                    + "While it is held, emptying the board does not count as one.",
+                "Patlatılan küpleri sayar; sayı alan büyüklüğüne ulaşınca temizlik "
+                    + "tetikler. Bu joker dururken alanı boşaltmak temizlik sayılmaz.");
             BaseSellValue = 60;
         }
 
@@ -229,8 +246,11 @@ namespace ProjectBlock.Core
         public KentselDonusumJoker()
             : base("kentsel_donusum", "Kentsel Dönüşüm")
         {
-            Description = "Tamamladığın her raunt sonunda oyun alanına kalıcı olarak "
-                + "bir blokluk ekstra yer açılır.";
+            SetDescription(
+                "After every completed round the board permanently gains an extra "
+                    + "block of space.",
+                "Tamamladığın her raunt sonunda oyun alanına kalıcı olarak "
+                    + "bir blokluk ekstra yer açılır.");
             BaseSellValue = 70;
         }
 
@@ -256,7 +276,7 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return "+" + ExtraCellCount + " kare"; }
+            get { return Loc.Pick("+" + ExtraCellCount + " cells", "+" + ExtraCellCount + " kare"); }
         }
 
         public override void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
@@ -316,13 +336,15 @@ namespace ProjectBlock.Core
         public KaziCalismasiJoker()
             : base("kazi_calismasi", "Kazı Çalışması")
         {
-            Description = "Bir blok tek seferde tümüyle patlarsa bonus eline iade edilir.";
+            SetDescription(
+                "A block destroyed whole in one go is returned to your bonus hand.",
+                "Bir blok tek seferde tümüyle patlarsa bonus eline iade edilir.");
             BaseSellValue = 50;
         }
 
         public override string StatusText
         {
-            get { return RecoveredThisRound + " iade"; }
+            get { return Loc.Pick(RecoveredThisRound + " returned", RecoveredThisRound + " iade"); }
         }
 
         public override void OnRoundStarted(RoundContext ctx)

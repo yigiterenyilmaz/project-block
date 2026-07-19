@@ -47,7 +47,12 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return IsInflated ? TurnsLeft + " tur şişkin" : "hazır"; }
+            get
+            {
+                return IsInflated
+                    ? Loc.Pick(TurnsLeft + " turns inflated", TurnsLeft + " tur şişkin")
+                    : Loc.Pick("ready", "hazır");
+            }
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -95,8 +100,11 @@ namespace ProjectBlock.Core
         public YatayEnflasyonPower()
             : base("yatay_enflasyon", "Yatay Enflasyon", 1, 0)
         {
-            Description = "Oyun alanının genişliğini sağdan ve soldan birer artırır. "
-                + "3 tur sürer, bitince bloklar içeri ittirilir.";
+            SetDescription(
+                "Widens the board by one column on each side. Lasts 3 turns; "
+                    + "when it ends, blocks are pushed back inward.",
+                "Oyun alanının genişliğini sağdan ve soldan birer artırır. "
+                    + "3 tur sürer, bitince bloklar içeri ittirilir.");
             BaseSellValue = 55;
         }
     }
@@ -107,8 +115,11 @@ namespace ProjectBlock.Core
         public DikeyEnflasyonPower()
             : base("dikey_enflasyon", "Dikey Enflasyon", 0, 1)
         {
-            Description = "Oyun alanının yüksekliğini alttan ve üstten birer artırır. "
-                + "3 tur sürer, bitince bloklar içeri ittirilir.";
+            SetDescription(
+                "Raises the board by one row at the top and bottom. Lasts 3 turns; "
+                    + "when it ends, blocks are pushed back inward.",
+                "Oyun alanının yüksekliğini alttan ve üstten birer artırır. "
+                    + "3 tur sürer, bitince bloklar içeri ittirilir.");
             BaseSellValue = 55;
         }
     }
@@ -119,8 +130,11 @@ namespace ProjectBlock.Core
         public HiperEnflasyonPower()
             : base("hiper_enflasyon", "Hiper Enflasyon", 1, 1)
         {
-            Description = "Oyun alanını her yönden birer artırır. 3 tur sürer, "
-                + "bitince bloklar içeri ittirilir.";
+            SetDescription(
+                "Grows the board by one cell in every direction. Lasts 3 turns; "
+                    + "when it ends, blocks are pushed back inward.",
+                "Oyun alanını her yönden birer artırır. 3 tur sürer, "
+                    + "bitince bloklar içeri ittirilir.");
             BaseSellValue = 70;
         }
     }

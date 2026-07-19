@@ -53,7 +53,8 @@ namespace ProjectBlock.View
                     Description = definition.Description
                 });
             }
-            Show(PickerMode.Jokers, "GRANT A JOKER (debug)", list, JokerTileColor);
+            Show(PickerMode.Jokers,
+                Loc.Pick("GRANT A JOKER (debug)", "JOKER SEÇ (debug)"), list, JokerTileColor);
         }
 
         public void ShowPowers()
@@ -68,7 +69,8 @@ namespace ProjectBlock.View
                     Description = definition.Description
                 });
             }
-            Show(PickerMode.Powers, "GRANT A POWER (debug)", list, PowerTileColor);
+            Show(PickerMode.Powers,
+                Loc.Pick("GRANT A POWER (debug)", "GÜÇ SEÇ (debug)"), list, PowerTileColor);
         }
 
         private void Show(PickerMode mode, string title, List<Entry> newEntries, Color tileColor)
@@ -85,7 +87,8 @@ namespace ProjectBlock.View
             ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(30f, 14f),
                 new Color(0f, 0f, 0f, 0.82f), 40);
             ViewUtil.MakeText3D(transform, "Title", new Vector2(0f, startY + 1.0f),
-                title + "  -  hover for rules, click to grant, Esc closes",
+                title + Loc.Pick("  -  hover for rules, click to grant, Esc closes",
+                    "  -  kurallar için üstüne gel, vermek için tıkla, Esc kapatır"),
                 48, 0.06f, Color.white, 41, TextAnchor.MiddleCenter);
 
             for (int i = 0; i < entries.Count; i++)

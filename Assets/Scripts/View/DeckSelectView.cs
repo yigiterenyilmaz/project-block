@@ -32,8 +32,8 @@ namespace ProjectBlock.View
                 new Color(0f, 0f, 0f, 0.82f), 40);
             ViewUtil.MakeText3D(transform, "Title",
                 new Vector2(0f, decks.Count * PanelSpacing * 0.5f + 0.8f),
-                "CHOOSE DECK (starts a new run)", 48, 0.07f, Color.white, 41,
-                TextAnchor.MiddleCenter);
+                Loc.Pick("CHOOSE DECK (starts a new run)", "DESTE SEÇ (yeni oyun başlatır)"),
+                48, 0.07f, Color.white, 41, TextAnchor.MiddleCenter);
             float startY = (decks.Count - 1) * PanelSpacing * 0.5f;
             for (int i = 0; i < decks.Count; i++)
             {
@@ -46,7 +46,8 @@ namespace ProjectBlock.View
                     isCurrent ? CurrentPanelColor : PanelColor, 41);
                 ViewUtil.MakeText3D(transform, "Name_" + i,
                     center + new Vector2(-PanelWidth * 0.5f + 0.4f, 0f),
-                    deck.Name + "  (" + deck.Size + " cards)", 52, 0.07f,
+                    deck.Name + Loc.Pick("  (" + deck.Size + " cards)", "  (" + deck.Size + " kart)"),
+                    52, 0.07f,
                     isCurrent ? CurrentNameColor : Color.white, 43, TextAnchor.MiddleLeft);
                 // deterministic previews so the row always shows the same samples
                 var previewRng = new SeededRandom(1000 + i);

@@ -77,10 +77,35 @@ namespace ProjectBlock.View
 
         private void Start()
         {
+            // language before any text is built; persisted across sessions
+            Loc.Language = PlayerPrefs.GetString("language", "en") == "tr"
+                ? GameLanguage.Turkish
+                : GameLanguage.English;
             cam = Camera.main;
             camBasePosition = cam.transform.position;
             BuildViews();
             NewGame();
+        }
+
+        /// <summary>Flips EN/TR, persists the choice, and re-texts every open view.</summary>
+        private void ToggleLanguage()
+        {
+            Loc.Language = Loc.Language == GameLanguage.Turkish
+                ? GameLanguage.English
+                : GameLanguage.Turkish;
+            PlayerPrefs.SetString("language", Loc.Language == GameLanguage.Turkish ? "tr" : "en");
+            // modals cache their labels; closing them is simpler than re-texting them
+            grantPicker.Hide();
+            deckSelect.Hide();
+            deckOverlay.Hide();
+            foxPickSlot = -1;
+            sellCardsMode = false;
+            HideTooltip();
+            if (session != null && session.Phase == GamePhase.Market)
+            {
+                marketView.Show(session);
+            }
+            RefreshAll(null);
         }
 
         public void NewGame()
@@ -135,6 +160,11 @@ namespace ProjectBlock.View
             {
                 deckOverlay.Hide();
                 NewGame();
+                return;
+            }
+            if (kb != null && kb.lKey.wasPressedThisFrame)
+            {
+                ToggleLanguage();
                 return;
             }
             if (deckSelect.IsOpen)
@@ -206,7 +236,8 @@ namespace ProjectBlock.View
                             }
                             else
                             {
-                                FloatingTextFx.Spawn(transform, sellWorld, "worthless",
+                                FloatingTextFx.Spawn(transform, sellWorld,
+                                    Loc.Pick("worthless", "değersiz"),
                                     new Color(0.6f, 0.6f, 0.6f), 50, 0.045f);
                             }
                             deckOverlay.Show(session.OwnedCards, c => session.Config.Market.SellValue(c));
@@ -922,17 +953,18 @@ namespace ProjectBlock.View
             if (report.DynamiteTriggered)
             {
                 FloatingTextFx.Spawn(transform, new Vector2(0f, 3.4f),
-                    "DYNAMITE!", new Color(0.95f, 0.3f, 0.2f), 72, 0.09f);
+                    Loc.Pick("DYNAMITE!", "DİNAMİT!"), new Color(0.95f, 0.3f, 0.2f), 72, 0.09f);
             }
             if (comboStreak >= 2)
             {
                 FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
-                    "COMBO x" + comboStreak + "!", new Color(1f, 0.6f, 0.2f), 64, 0.08f);
+                    Loc.Pick("COMBO x", "KOMBO x") + comboStreak + "!",
+                    new Color(1f, 0.6f, 0.2f), 64, 0.08f);
             }
             if (report.CleanSweep)
             {
                 FloatingTextFx.Spawn(transform, new Vector2(0f, 1.4f),
-                    "CLEAN SWEEP!", new Color(1f, 0.85f, 0.3f), 80, 0.1f);
+                    Loc.Pick("CLEAN SWEEP!", "TEMİZLİK!"), new Color(1f, 0.85f, 0.3f), 80, 0.1f);
             }
         }
 
@@ -1025,64 +1057,76 @@ namespace ProjectBlock.View
             RoundEngine round = session.CurrentRound;
             var sb = new StringBuilder();
             sb.Append("Seed ").Append(lastSeedUsed)
-                .Append("   Deck: ").Append(currentDeck.Name).Append('\n');
-            sb.Append("Round ").Append(session.RoundNumber).Append("   Turn ").Append(round.TurnNumber).Append('\n');
-            sb.Append("Score ").Append(round.RoundScore).Append(" / ").Append(round.Config.ScoreThreshold);
+                .Append(Loc.Pick("   Deck: ", "   Deste: ")).Append(currentDeck.Name).Append('\n');
+            sb.Append(Loc.Pick("Round ", "Raunt ")).Append(session.RoundNumber)
+                .Append(Loc.Pick("   Turn ", "   Tur ")).Append(round.TurnNumber).Append('\n');
+            sb.Append(Loc.Pick("Score ", "Puan ")).Append(round.RoundScore)
+                .Append(" / ").Append(round.Config.ScoreThreshold);
             if (round.ThresholdPassed)
             {
-                sb.Append("  [threshold passed]");
+                sb.Append(Loc.Pick("  [threshold passed]", "  [eşik geçildi]"));
             }
             sb.Append('\n');
-            sb.Append("Total score ").Append(session.TotalScore).Append('\n');
-            sb.Append("Draw ").Append(round.Deck.DrawCount)
-                .Append("   Discard ").Append(round.Deck.DiscardCount)
-                .Append("   Removed ").Append(round.Deck.RemovedCount).Append('\n');
-            sb.Append("Jokers ").Append(session.Jokers.Count);
+            sb.Append(Loc.Pick("Total score ", "Toplam puan ")).Append(session.TotalScore).Append('\n');
+            sb.Append(Loc.Pick("Draw ", "Çekme ")).Append(round.Deck.DrawCount)
+                .Append(Loc.Pick("   Discard ", "   Iskarta ")).Append(round.Deck.DiscardCount)
+                .Append(Loc.Pick("   Removed ", "   Çıkan ")).Append(round.Deck.RemovedCount).Append('\n');
+            sb.Append(Loc.Pick("Jokers ", "Joker ")).Append(session.Jokers.Count);
             if (session.Jokers.Count > 0)
             {
-                sb.Append("   (1-9 activate)");
+                sb.Append(Loc.Pick("   (1-9 activate)", "   (1-9 kullan)"));
             }
-            sb.Append("   Powers ").Append(session.Powers.Count);
+            sb.Append(Loc.Pick("   Powers ", "   Güç ")).Append(session.Powers.Count);
             if (session.Powers.Count > 0)
             {
-                sb.Append("   (click to use, one per turn)");
+                sb.Append(Loc.Pick("   (click to use, one per turn)", "   (tıkla, tur başına bir)"));
             }
             sb.Append('\n');
-            sb.Append("Drag to place.  Click draw pile: deck.  Right-click: rotate GEARS / reshape FOX\n");
-            sb.Append("Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run\n");
-            sb.Append("Debug - J: pick joker   P: pick power   K: sell last joker");
+            sb.Append(Loc.Pick(
+                "Drag to place.  Click draw pile: deck.  Right-click: rotate GEARS / reshape FOX\n",
+                "Sürükleyip yerleştir.  Çekme destesi: kartların.  Sağ tık: ÇARK döndür / TİLKİ şekillendir\n"));
+            sb.Append(Loc.Pick(
+                "Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run   L: türkçe\n",
+                "Debug - S: eli yenile   B: bonus kart   D: deste seç   R: yeni oyun   L: english\n"));
+            sb.Append(Loc.Pick(
+                "Debug - J: pick joker   P: pick power   K: sell last joker",
+                "Debug - J: joker seç   P: güç seç   K: son jokeri sat"));
             infoText.text = sb.ToString();
 
             if (pendingTargetJokerId.HasValue)
             {
                 Joker targeting = session.Jokers.Find(pendingTargetJokerId.Value);
                 string what = targeting != null && targeting.Targeting == ActivationTargeting.BoardCell
-                    ? "oyun alanından bir küp seç"
-                    : "elinden bir blok seç";
+                    ? Loc.Pick("pick a cube on the board", "oyun alanından bir küp seç")
+                    : Loc.Pick("pick a block from your hand", "elinden bir blok seç");
                 messageText.text = (targeting != null ? targeting.DisplayName : "Joker")
-                    + ": " + what + "\n[Esc] vazgeç";
+                    + ": " + what + Loc.Pick("\n[Esc] cancel", "\n[Esc] vazgeç");
                 return;
             }
             if (pendingTargetPowerId.HasValue)
             {
                 Power targeting = session.Powers.Find(pendingTargetPowerId.Value);
                 string what = pendingOltaMark
-                    ? "işaretlenecek kartı elinden seç (bedava, tur başına bir)"
+                    ? Loc.Pick("pick the hand card to mark (free, once per round)",
+                        "işaretlenecek kartı elinden seç (bedava, raunt başına bir)")
                     : targeting != null && targeting.Targeting == ActivationTargeting.BoardCell
-                        ? "oyun alanından bir hücre seç"
-                        : "elinden bir blok seç";
-                messageText.text = (targeting != null ? targeting.DisplayName : "Güç")
-                    + ": " + what + "\n[Esc] vazgeç";
+                        ? Loc.Pick("pick a cell on the board", "oyun alanından bir hücre seç")
+                        : Loc.Pick("pick a block from your hand", "elinden bir blok seç");
+                messageText.text = (targeting != null ? targeting.DisplayName : Loc.Pick("Power", "Güç"))
+                    + ": " + what + Loc.Pick("\n[Esc] cancel", "\n[Esc] vazgeç");
                 return;
             }
 
             switch (session.Phase)
             {
                 case GamePhase.GameOver:
-                    messageText.text = "GAME OVER - " + DescribeLoss(round.Loss) + "\n[R] new run";
+                    messageText.text = Loc.Pick("GAME OVER - ", "OYUN BİTTİ - ") + DescribeLoss(round.Loss)
+                        + Loc.Pick("\n[R] new run", "\n[R] yeni oyun");
                     break;
                 case GamePhase.Market:
-                    messageText.text = "Click a card to add it to your deck (price below it)\n[N] start round "
+                    messageText.text = Loc.Pick(
+                            "Click a card to add it to your deck (price below it)\n[N] start round ",
+                            "Desteye katmak için karta tıkla (fiyatı altında)\n[N] raunt başlat: ")
                         + (session.RoundNumber + 1);
                     break;
                 default:
@@ -1090,9 +1134,15 @@ namespace ProjectBlock.View
                     {
                         int continueCost = round.NextContinueCost;
                         int drawAfter = round.PredictDrawCountAfterContinue();
-                        string warning = drawAfter < 0 ? "  DECK OUT!" : string.Empty;
-                        messageText.text = "Threshold reached!\n[A] advance to market    [C] continue: removes "
-                            + continueCost + " cards, draw pile " + round.Deck.DrawCount
+                        string warning = drawAfter < 0
+                            ? Loc.Pick("  DECK OUT!", "  DESTE BİTER!")
+                            : string.Empty;
+                        messageText.text = Loc.Pick(
+                                "Threshold reached!\n[A] advance to market    [C] continue: removes ",
+                                "Eşik geçildi!\n[A] markete ilerle    [C] devam et: ")
+                            + continueCost
+                            + Loc.Pick(" cards, draw pile ", " kart gider, çekme destesi ")
+                            + round.Deck.DrawCount
                             + " -> " + Mathf.Max(drawAfter, 0) + warning;
                     }
                     else
@@ -1107,10 +1157,19 @@ namespace ProjectBlock.View
         {
             switch (loss)
             {
-                case LossReason.NoPlayableMove: return "no held block fits the board";
-                case LossReason.HandCannotBeRefilled: return "the deck ran out (hand could not be refilled)";
-                case LossReason.DrawPileEmptyAfterThreshold: return "draw pile emptied before a clean sweep";
-                default: return "unknown";
+                case LossReason.NoPlayableMove:
+                    return Loc.Pick("no held block fits the board",
+                        "eldeki hiçbir blok alana sığmıyor");
+                case LossReason.HandCannotBeRefilled:
+                    return Loc.Pick("the deck ran out (hand could not be refilled)",
+                        "deste tükendi (el doldurulamadı)");
+                case LossReason.DrawPileEmptyAfterThreshold:
+                    return Loc.Pick("draw pile emptied before a clean sweep",
+                        "temizlik gelmeden çekme destesi bitti");
+                case LossReason.BetFailed:
+                    return Loc.Pick("the bet was lost (Batak)", "bahis tutmadı (Batak)");
+                default:
+                    return Loc.Pick("unknown", "bilinmiyor");
             }
         }
 
@@ -1212,7 +1271,9 @@ namespace ProjectBlock.View
                 HideTooltip();
                 return;
             }
-            string title = "BLOCK - " + card.Shape.Size + (card.Shape.Size == 1 ? " cube" : " cubes")
+            string title = Loc.Pick(
+                "BLOCK - " + card.Shape.Size + (card.Shape.Size == 1 ? " cube" : " cubes"),
+                "BLOK - " + card.Shape.Size + " küp")
                 + "  (" + card.Shape.Width + "x" + card.Shape.Height + ")";
             var body = new StringBuilder();
             for (int i = 0; i < card.Elements.Count; i++)
@@ -1227,13 +1288,15 @@ namespace ProjectBlock.View
 
         private void ShowJokerTooltip(JokerDefinition joker, int price, Vector2 nearWorld)
         {
-            string body = ViewUtil.WrapText(joker.Description, 34) + "\n\nCost " + price;
+            string body = ViewUtil.WrapText(joker.Description, 34)
+                + Loc.Pick("\n\nCost ", "\n\nFiyat ") + price;
             RenderTooltip("joker:" + joker.DefId, joker.DisplayName, body, nearWorld);
         }
 
         private void ShowPowerTooltip(PowerDefinition power, int price, Vector2 nearWorld)
         {
-            string body = ViewUtil.WrapText(power.Description, 34) + "\n\nCost " + price;
+            string body = ViewUtil.WrapText(power.Description, 34)
+                + Loc.Pick("\n\nCost ", "\n\nFiyat ") + price;
             RenderTooltip("power:" + power.DefId, power.DisplayName, body, nearWorld);
         }
 

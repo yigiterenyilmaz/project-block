@@ -15,15 +15,21 @@ namespace ProjectBlock.Core
     {
         public string DefId { get; }
         public string DisplayName { get; }
-        public string Description { get; }
 
+        /// <summary>Read LIVE off a sample instance, so it follows the Loc language.</summary>
+        public string Description
+        {
+            get { return sample.Description; }
+        }
+
+        private readonly Joker sample;
         private readonly Func<Joker> factory;
 
-        public JokerDefinition(string defId, string displayName, string description, Func<Joker> factory)
+        public JokerDefinition(Joker sample, Func<Joker> factory)
         {
-            DefId = defId;
-            DisplayName = displayName;
-            Description = description;
+            DefId = sample.DefId;
+            DisplayName = sample.DisplayName;
+            this.sample = sample;
             this.factory = factory;
         }
 
@@ -101,7 +107,7 @@ namespace ProjectBlock.Core
         private static void Register(Func<Joker> factory)
         {
             Joker sample = factory();
-            var definition = new JokerDefinition(sample.DefId, sample.DisplayName, sample.Description, factory);
+            var definition = new JokerDefinition(sample, factory);
             if (byId.ContainsKey(definition.DefId))
             {
                 throw new InvalidOperationException("Duplicate joker DefId: " + definition.DefId);

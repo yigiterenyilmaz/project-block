@@ -23,8 +23,11 @@ namespace ProjectBlock.Core
         public SeriTetikJoker()
             : base("seri_tetik", "Seri Tetik")
         {
-            Description = "El boyutu +2, ama her tur sonunda kullanılmayan kartlar ıskartaya "
-                + "gidip yenileri gelir. Uzatmada çalışmaz.";
+            SetDescription(
+                "Hand size +2, but at the end of every turn the unused cards are discarded "
+                    + "and replaced. Disabled in overtime.",
+                "El boyutu +2, ama her tur sonunda kullanılmayan kartlar ıskartaya "
+                    + "gidip yenileri gelir. Uzatmada çalışmaz.");
             BaseSellValue = 55;
         }
 
@@ -35,7 +38,12 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return applied ? "el +" + ExtraHandSize : "kapalı"; }
+            get
+            {
+                return applied
+                    ? Loc.Pick("hand +" + ExtraHandSize, "el +" + ExtraHandSize)
+                    : Loc.Pick("off", "kapalı");
+            }
         }
 
         public override void OnAcquired(SessionContext ctx)
@@ -126,8 +134,11 @@ namespace ProjectBlock.Core
         public BatakJoker()
             : base("batak", "Batak")
         {
-            Description = "İstersen 'şu kadar turda temizlerim' diye bahse girersin. "
-                + "Tutturamazsan raunt biter, tutturursan aradaki puanı katlayarak alırsın.";
+            SetDescription(
+                "Bet that you will sweep the board within a chosen number of turns. "
+                    + "Miss it and the round ends; make it and the payout multiplies.",
+                "İstersen 'şu kadar turda temizlerim' diye bahse girersin. "
+                    + "Tutturamazsan raunt biter, tutturursan aradaki puanı katlayarak alırsın.");
             BaseSellValue = 65;
         }
 
@@ -152,7 +163,13 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return HasActiveBet ? "bahis " + (BetTurns - TurnsElapsed) + " tur" : "bahis yok"; }
+            get
+            {
+                return HasActiveBet
+                    ? Loc.Pick("bet: " + (BetTurns - TurnsElapsed) + " turns",
+                        "bahis " + (BetTurns - TurnsElapsed) + " tur")
+                    : Loc.Pick("no bet", "bahis yok");
+            }
         }
 
         public override void OnRoundStarted(RoundContext ctx)

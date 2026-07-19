@@ -26,13 +26,20 @@ namespace ProjectBlock.Core
         public DamlayaJoker()
             : base("damlaya", "Damlaya Damlaya Göl Olur")
         {
-            Description = "Marketten bir şey almazsan sonraki raunt her tur puan bonusu alırsın.";
+            SetDescription(
+                "Buy nothing at the market and the next round pays a score bonus every turn.",
+                "Marketten bir şey almazsan sonraki raunt her tur puan bonusu alırsın.");
             BaseSellValue = 45;
         }
 
         public override string StatusText
         {
-            get { return ActiveBonus > 0 ? "+" + ActiveBonus + "/tur" : "biriktir " + SavedStreak; }
+            get
+            {
+                return ActiveBonus > 0
+                    ? Loc.Pick("+" + ActiveBonus + "/turn", "+" + ActiveBonus + "/tur")
+                    : Loc.Pick("saving " + SavedStreak, "biriktir " + SavedStreak);
+            }
         }
 
         public override void OnMarketLeft(SessionContext ctx, bool anythingPurchased)
@@ -62,14 +69,16 @@ namespace ProjectBlock.Core
         public PowerbankJoker()
             : base("powerbank", "Powerbank")
         {
-            Description = "Raunt başına 1 kez, harcanmış bir gücü temizlik beklemeden doldurur.";
+            SetDescription(
+                "Once per round, recharges a spent power without waiting for a clean sweep.",
+                "Raunt başına 1 kez, harcanmış bir gücü temizlik beklemeden doldurur.");
             ChargesPerRound = 1;
             BaseSellValue = 55;
         }
 
         public override string StatusText
         {
-            get { return ChargesLeft > 0 ? "hazır" : "kullanıldı"; }
+            get { return ChargesLeft > 0 ? Loc.Pick("ready", "hazır") : Loc.Pick("used", "kullanıldı"); }
         }
 
         public override bool CanActivate(RoundContext ctx)
@@ -110,14 +119,17 @@ namespace ProjectBlock.Core
         public IhaleJoker()
             : base("ihale", "İhale")
         {
-            Description = "Her raunt başında rastgele bir jokere ek satış fiyatı biçer. "
-                + "O joker satılana kadar yeni ihale açılmaz.";
+            SetDescription(
+                "At every round start it puts a premium on a random joker's sell price. "
+                    + "No new auction opens until that joker is sold.",
+                "Her raunt başında rastgele bir jokere ek satış fiyatı biçer. "
+                    + "O joker satılana kadar yeni ihale açılmaz.");
             BaseSellValue = 40;
         }
 
         public override string StatusText
         {
-            get { return auctionedName ?? "ihale yok"; }
+            get { return auctionedName ?? Loc.Pick("no auction", "ihale yok"); }
         }
 
         private string auctionedName;
@@ -167,14 +179,17 @@ namespace ProjectBlock.Core
         public KaraDelikJoker()
             : base("kara_delik", "Kara Delik")
         {
-            Description = "Her temizlikte ıskartana 1x1 boşluk bloğu ekler. Boşluk bloğu "
-                + "dolu hücreye konabilir ve üstüne geleni yutar.";
+            SetDescription(
+                "Every clean sweep adds a 1x1 void block to your discard. A void block "
+                    + "can be placed on a filled cell and swallows whatever lands on it.",
+                "Her temizlikte ıskartana 1x1 boşluk bloğu ekler. Boşluk bloğu "
+                    + "dolu hücreye konabilir ve üstüne geleni yutar.");
             BaseSellValue = 70;
         }
 
         public override string StatusText
         {
-            get { return GrantedThisRound + " boşluk"; }
+            get { return Loc.Pick(GrantedThisRound + " voids", GrantedThisRound + " boşluk"); }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -262,8 +277,11 @@ namespace ProjectBlock.Core
         public EnfeksiyonJoker()
             : base("enfeksiyon", "Enfeksiyon")
         {
-            Description = "Seçtiğin küpte enfeksiyon başlatır. Her tur çevresine yayılır ve "
-                + "yeterince beklemiş küpleri patlatır.";
+            SetDescription(
+                "Starts an infection on a chosen cube. It spreads every turn and pops "
+                    + "cubes that have incubated long enough.",
+                "Seçtiğin küpte enfeksiyon başlatır. Her tur çevresine yayılır ve "
+                    + "yeterince beklemiş küpleri patlatır.");
             ChargesPerRound = 1;
             BaseSellValue = 60;
         }
@@ -276,7 +294,12 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return infected.Count > 0 ? infected.Count + " enfekte" : "hazır"; }
+            get
+            {
+                return infected.Count > 0
+                    ? Loc.Pick(infected.Count + " infected", infected.Count + " enfekte")
+                    : Loc.Pick("ready", "hazır");
+            }
         }
 
         public override void OnRoundStarted(RoundContext ctx)

@@ -73,8 +73,23 @@ namespace ProjectBlock.Core
         /// <summary>Human-readable name for the UI (Turkish).</summary>
         public string DisplayName { get; }
 
-        /// <summary>One-line rules text for the UI (Turkish). Set by the subclass.</summary>
-        public string Description { get; protected set; } = string.Empty;
+        /// <summary>One-line rules text for the UI in the ACTIVE language (see Loc).
+        /// Subclasses set both languages via SetDescription; reading is always live, so a
+        /// language switch takes effect on the next UI refresh.</summary>
+        public string Description
+        {
+            get { return Loc.Pick(descriptionEn, descriptionTr); }
+        }
+
+        private string descriptionEn = string.Empty;
+        private string descriptionTr = string.Empty;
+
+        /// <summary>Sets the rules text in both languages.</summary>
+        protected void SetDescription(string english, string turkish)
+        {
+            descriptionEn = english;
+            descriptionTr = turkish;
+        }
 
         /// <summary>Short live state for the UI ("seri 3", "x4"), or null if the joker has
         /// nothing to show. Charges and sell value are rendered generically, not here.</summary>

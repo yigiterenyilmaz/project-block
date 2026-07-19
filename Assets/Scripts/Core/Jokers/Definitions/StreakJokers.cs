@@ -45,7 +45,11 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return Streak >= MinStreak ? "seri " + Streak + " *" : "seri " + Streak; }
+            get
+            {
+                string star = Streak >= MinStreak ? " *" : string.Empty;
+                return Loc.Pick("streak " + Streak + star, "seri " + Streak + star);
+            }
         }
 
         /// <summary>True if placing <paramref name="current"/> after <paramref name="previous"/>
@@ -86,7 +90,9 @@ namespace ProjectBlock.Core
         public CigJoker()
             : base("cig", "Çığ")
         {
-            Description = "Her tur bir öncekinden BÜYÜK blok koyarsan puan bonusu; seri uzadıkça büyür.";
+            SetDescription(
+                "Score bonus for placing a BIGGER block than last turn; grows as the streak lasts.",
+                "Her tur bir öncekinden BÜYÜK blok koyarsan puan bonusu; seri uzadıkça büyür.");
             BaseSellValue = 40;
         }
 
@@ -102,7 +108,9 @@ namespace ProjectBlock.Core
         public DondurmaJoker()
             : base("dondurma", "Dondurma")
         {
-            Description = "Her tur bir öncekinden KÜÇÜK blok koyarsan puan bonusu; seri uzadıkça büyür.";
+            SetDescription(
+                "Score bonus for placing a SMALLER block than last turn; grows as the streak lasts.",
+                "Her tur bir öncekinden KÜÇÜK blok koyarsan puan bonusu; seri uzadıkça büyür.");
             BaseSellValue = 40;
         }
 
@@ -118,7 +126,9 @@ namespace ProjectBlock.Core
         public SiyamJoker()
             : base("siyam", "Siyam")
         {
-            Description = "Her tur bir öncekiyle AYNI şekli koyarsan puan bonusu; seri uzadıkça büyür.";
+            SetDescription(
+                "Score bonus for placing the SAME shape as last turn; grows as the streak lasts.",
+                "Her tur bir öncekiyle AYNI şekli koyarsan puan bonusu; seri uzadıkça büyür.");
             BaseSellValue = 45;
             MinStreak = 2;          // no natural ceiling, so it pays from the first repeat
             PointsPerStreakStep = 25;

@@ -41,8 +41,11 @@ namespace ProjectBlock.Core
         public ParazitJoker()
             : base("parazit", "Parazit")
         {
-            Description = "Markette bir jokeri destendeki bir bloğun küpüne takarsın. "
-                + "O joker slot işgal etmez ama küp kırılırsa yok olur.";
+            SetDescription(
+                "In the market, attach a joker to a cube of a block in your deck. That "
+                    + "joker takes no slot but is destroyed if the cube breaks.",
+                "Markette bir jokeri destendeki bir bloğun küpüne takarsın. "
+                    + "O joker slot işgal etmez ama küp kırılırsa yok olur.");
             BaseSellValue = 70;
         }
 
@@ -53,7 +56,12 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return HasBinding ? "blok #" + HostCardId + "'e bağlı" : "boşta"; }
+            get
+            {
+                return HasBinding
+                    ? Loc.Pick("bound to block #" + HostCardId, "blok #" + HostCardId + "'e bağlı")
+                    : Loc.Pick("idle", "boşta");
+            }
         }
 
         /// <summary>Binds a joker to one cube of one owned card. Market-phase action; the

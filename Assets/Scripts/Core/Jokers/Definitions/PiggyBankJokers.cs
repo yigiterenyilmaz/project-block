@@ -25,7 +25,9 @@ namespace ProjectBlock.Core
         public DomuzKumbarasiJoker()
             : base("domuz_kumbarasi", "Domuz Kumbarası")
         {
-            Description = "Tamamladığın her raunt sonunda satış değeri artar.";
+            SetDescription(
+                "Its sell value grows after every round you complete.",
+                "Tamamladığın her raunt sonunda satış değeri artar.");
             BaseSellValue = 20;
         }
 
@@ -46,7 +48,9 @@ namespace ProjectBlock.Core
         public CimriKumbaraJoker()
             : base("cimri_kumbara", "Cimri Kumbara")
         {
-            Description = "Elde tutulduğu her turda satış değeri biraz artar.";
+            SetDescription(
+                "Its sell value grows a little for every turn you hold it.",
+                "Elde tutulduğu her turda satış değeri biraz artar.");
             BaseSellValue = 15;
         }
 
@@ -66,7 +70,9 @@ namespace ProjectBlock.Core
         public AltinKumbaraJoker()
             : base("altin_kumbara", "Altın Kumbara")
         {
-            Description = "Her tur, her temizlik ve tamamladığın her raunt satış değerini artırır.";
+            SetDescription(
+                "Every turn, every clean sweep and every completed round grows its sell value.",
+                "Her tur, her temizlik ve tamamladığın her raunt satış değerini artırır.");
             BaseSellValue = 30;
         }
 

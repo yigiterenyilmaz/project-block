@@ -28,13 +28,15 @@ namespace ProjectBlock.Core
         public BereketJoker()
             : base("bereket", "Bereket")
         {
-            Description = "Aynı turda satır ve sütun birlikte patlarsa kazandığın puan kalıcı olarak artar.";
+            SetDescription(
+                "Whenever a row and a column explode in the same turn, your score gains grow permanently.",
+                "Aynı turda satır ve sütun birlikte patlarsa kazandığın puan kalıcı olarak artar.");
             BaseSellValue = 50;
         }
 
         public override string StatusText
         {
-            get { return "+" + (Stacks * PointsPerStack) + "/tur"; }
+            get { return Loc.Pick("+" + (Stacks * PointsPerStack) + "/turn", "+" + (Stacks * PointsPerStack) + "/tur"); }
         }
 
         public override void ModifyScore(TurnContext turn)
@@ -63,13 +65,15 @@ namespace ProjectBlock.Core
         public HarcamaBonusuJoker()
             : base("harcama_bonusu", "Harcama Bonusu")
         {
-            Description = "Çekme destesi her tükendiğinde puan kazanırsın.";
+            SetDescription(
+                "You gain points every time the draw pile runs out.",
+                "Çekme destesi her tükendiğinde puan kazanırsın.");
             BaseSellValue = 40;
         }
 
         public override string StatusText
         {
-            get { return TriggeredThisRound + " kez"; }
+            get { return Loc.Pick(TriggeredThisRound + " times", TriggeredThisRound + " kez"); }
         }
 
         public override void OnRoundStarted(RoundContext ctx)

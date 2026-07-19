@@ -184,16 +184,17 @@ namespace ProjectBlock.View
                 {
                     line.Append("   ");
                 }
-                line.Append("hak ").Append(joker.ChargesLeft).Append('/').Append(joker.ChargesPerRound);
+                line.Append(Loc.Pick("uses ", "hak "))
+                    .Append(joker.ChargesLeft).Append('/').Append(joker.ChargesPerRound);
             }
             if (line.Length > 0)
             {
                 line.Append('\n');
             }
-            line.Append("satış ").Append(joker.SellValue);
+            line.Append(Loc.Pick("sell ", "satış ")).Append(joker.SellValue);
             if (joker.DisabledInOvertime)
             {
-                line.Append("   (uzatmada kapalı)");
+                line.Append(Loc.Pick("   (off in overtime)", "   (uzatmada kapalı)"));
             }
             panel.Body.text = line.ToString();
         }

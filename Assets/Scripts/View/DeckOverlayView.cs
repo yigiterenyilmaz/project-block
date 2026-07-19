@@ -42,7 +42,8 @@ namespace ProjectBlock.View
             if (sellValue != null)
             {
                 ViewUtil.MakeText3D(transform, "SellTitle", new Vector2(0f, 4.4f),
-                    "SELL CARDS  -  click a card to sell it", 90, 0.03f,
+                    Loc.Pick("SELL CARDS  -  click a card to sell it",
+                        "KART SAT  -  satmak için karta tıkla"), 90, 0.03f,
                     new Color(1f, 0.92f, 0.45f), 42, TextAnchor.MiddleCenter);
             }
 
@@ -65,7 +66,9 @@ namespace ProjectBlock.View
                     int value = sellValue(sorted[i]);
                     ViewUtil.MakeText3D(transform, "SellPrice_" + i,
                         position + new Vector2(0f, -CardVisual.BodyHeight * CardScale * 0.5f - 0.16f),
-                        value > 0 ? "sell " + value : "worthless", 90, 0.017f,
+                        value > 0
+                            ? Loc.Pick("sell " + value, "satış " + value)
+                            : Loc.Pick("worthless", "değersiz"), 90, 0.017f,
                         value > 0 ? new Color(1f, 0.92f, 0.45f) : new Color(0.6f, 0.6f, 0.6f),
                         42, TextAnchor.MiddleCenter);
                 }

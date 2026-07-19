@@ -20,8 +20,11 @@ namespace ProjectBlock.Core
         public RenovasyonJoker()
             : base("renovasyon", "Renovasyon")
         {
-            Description = "Raunt başına 2 kez tüm elini ıskartaya atıp yeni el çekersin. "
-                + "Tur harcamaz, uzatmada çalışmaz.";
+            SetDescription(
+                "Twice per round, discard your whole hand and draw a fresh one. "
+                    + "Costs no turn; disabled in overtime.",
+                "Raunt başına 2 kez tüm elini ıskartaya atıp yeni el çekersin. "
+                    + "Tur harcamaz, uzatmada çalışmaz.");
             ChargesPerRound = 2;
             BaseSellValue = 30;
         }
@@ -55,7 +58,9 @@ namespace ProjectBlock.Core
         public IadeJoker()
             : base("iade", "İade")
         {
-            Description = "Raunt başına 2 kez elindeki tek bir bloğu iade edip yenisini çekersin. Tur harcamaz.";
+            SetDescription(
+                "Twice per round, return a single held block and draw a replacement. Costs no turn.",
+                "Raunt başına 2 kez elindeki tek bir bloğu iade edip yenisini çekersin. Tur harcamaz.");
             ChargesPerRound = 2;
             BaseSellValue = 30;
         }
@@ -100,7 +105,9 @@ namespace ProjectBlock.Core
         public InsiderJoker()
             : base("insider", "Insider")
         {
-            Description = "Çekme destesinin en üstündeki kartı görürsün.";
+            SetDescription(
+                "You see the top card of the draw pile.",
+                "Çekme destesinin en üstündeki kartı görürsün.");
             BaseSellValue = 35;
         }
 

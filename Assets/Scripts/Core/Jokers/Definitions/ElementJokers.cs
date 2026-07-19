@@ -30,13 +30,15 @@ namespace ProjectBlock.Core
         public MidasJoker()
             : base("midas", "Midas")
         {
-            Description = "Altın bloğu elinde tutmak da bonusu için yeterlidir (bonus el dahil).";
+            SetDescription(
+                "Holding a gold block in hand (bonus hand included) is enough for its bonus.",
+                "Altın bloğu elinde tutmak da bonusu için yeterlidir (bonus el dahil).");
             BaseSellValue = 60;
         }
 
         public override string StatusText
         {
-            get { return GoldCubesHeld + " altın küp"; }
+            get { return Loc.Pick(GoldCubesHeld + " gold cubes", GoldCubesHeld + " altın küp"); }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -80,7 +82,9 @@ namespace ProjectBlock.Core
         public ElmasKazmaJoker()
             : base("elmas_kazma", "Elmas Kazma")
         {
-            Description = "Temizlik yapınca obsidyenler de patlar ve puan verir.";
+            SetDescription(
+                "A clean sweep also shatters obsidian, which pays points.",
+                "Temizlik yapınca obsidyenler de patlar ve puan verir.");
             BaseSellValue = 55;
         }
 
@@ -111,7 +115,9 @@ namespace ProjectBlock.Core
         public TutusturJoker()
             : base("tutustur", "Tutuştur")
         {
-            Description = "Bir ateş bloğu patlayınca alandaki TÜM ateş blokları patlar.";
+            SetDescription(
+                "When one fire block explodes, ALL fire blocks on the board explode.",
+                "Bir ateş bloğu patlayınca alandaki TÜM ateş blokları patlar.");
             BaseSellValue = 60;
         }
 
@@ -205,7 +211,9 @@ namespace ProjectBlock.Core
         public YanginJoker()
             : base("yangin", "Yangın", CubeKind.Fire)
         {
-            Description = "Raunt başına 1 kez: ateş bloklarının etrafındaki bloklar da ateş olur.";
+            SetDescription(
+                "Once per round: the blocks around fire blocks turn to fire too.",
+                "Raunt başına 1 kez: ateş bloklarının etrafındaki bloklar da ateş olur.");
             BaseSellValue = 50;
         }
     }
@@ -216,7 +224,9 @@ namespace ProjectBlock.Core
         public TaskinJoker()
             : base("taskin", "Taşkın", CubeKind.Water)
         {
-            Description = "Raunt başına 1 kez: su bloklarının etrafındaki bloklar da su olur.";
+            SetDescription(
+                "Once per round: the blocks around water blocks turn to water too.",
+                "Raunt başına 1 kez: su bloklarının etrafındaki bloklar da su olur.");
             BaseSellValue = 50;
         }
     }
@@ -233,14 +243,17 @@ namespace ProjectBlock.Core
         public BuzlukJoker()
             : base("buzluk", "Buzluk")
         {
-            Description = "Duvara değen su blokları donar. Buz temizliği engellemez ve "
-                + "patlayınca ek puan verir.";
+            SetDescription(
+                "Water blocks touching a wall freeze. Ice never blocks a clean sweep "
+                    + "and pays extra when exploded.",
+                "Duvara değen su blokları donar. Buz temizliği engellemez ve "
+                    + "patlayınca ek puan verir.");
             BaseSellValue = 60;
         }
 
         public override string StatusText
         {
-            get { return FrozenThisRound + " buz"; }
+            get { return Loc.Pick(FrozenThisRound + " ice", FrozenThisRound + " buz"); }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -300,7 +313,9 @@ namespace ProjectBlock.Core
         public SimyaJoker()
             : base("simya", "Simya")
         {
-            Description = "Marketteki elementli bloklar aynı anda 2 elemente sahip gelir.";
+            SetDescription(
+                "Elemental blocks in the market arrive with 2 elements at once.",
+                "Marketteki elementli bloklar aynı anda 2 elemente sahip gelir.");
             BaseSellValue = 65;
         }
 

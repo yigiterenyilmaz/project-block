@@ -16,15 +16,21 @@ namespace ProjectBlock.Core
     {
         public string DefId { get; }
         public string DisplayName { get; }
-        public string Description { get; }
 
+        /// <summary>Read LIVE off a sample instance, so it follows the Loc language.</summary>
+        public string Description
+        {
+            get { return sample.Description; }
+        }
+
+        private readonly Power sample;
         private readonly Func<Power> factory;
 
-        public PowerDefinition(string defId, string displayName, string description, Func<Power> factory)
+        public PowerDefinition(Power sample, Func<Power> factory)
         {
-            DefId = defId;
-            DisplayName = displayName;
-            Description = description;
+            DefId = sample.DefId;
+            DisplayName = sample.DisplayName;
+            this.sample = sample;
             this.factory = factory;
         }
 
@@ -84,8 +90,7 @@ namespace ProjectBlock.Core
         private static void Register(Func<Power> factory)
         {
             Power sample = factory();
-            var definition = new PowerDefinition(sample.DefId, sample.DisplayName,
-                sample.Description, factory);
+            var definition = new PowerDefinition(sample, factory);
             if (byId.ContainsKey(definition.DefId))
             {
                 throw new InvalidOperationException("Duplicate power DefId: " + definition.DefId);

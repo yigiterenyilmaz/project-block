@@ -79,37 +79,52 @@ namespace ProjectBlock.View
         {
             switch (element)
             {
+                case BlockElement.Fire: return Loc.Pick("FIRE", "ATEŞ");
+                case BlockElement.Water: return Loc.Pick("WATER", "SU");
+                case BlockElement.Obsidian: return Loc.Pick("OBSIDIAN", "OBSİDYEN");
+                case BlockElement.Gold: return Loc.Pick("GOLD", "ALTIN");
+                case BlockElement.Transparent: return Loc.Pick("GLASS", "CAM");
+                case BlockElement.Ghost: return Loc.Pick("GHOST", "HAYALET");
                 case BlockElement.Dynamite: return "TNT";
-                case BlockElement.Mechanical: return "GEARS";
-                case BlockElement.Transparent: return "GLASS";
+                case BlockElement.Mechanical: return Loc.Pick("GEARS", "ÇARK");
+                case BlockElement.Fox: return Loc.Pick("FOX", "TİLKİ");
                 default: return element.ToString().ToUpperInvariant();
             }
         }
 
-        /// <summary>One-line rules text of a block type, for hover tooltips (English for now;
-        /// mirrors the enum docs in BlockElement.cs).</summary>
+        /// <summary>One-line rules text of a block type, for hover tooltips
+        /// (mirrors the enum docs in BlockElement.cs).</summary>
         public static string ElementDescription(BlockElement element)
         {
             switch (element)
             {
                 case BlockElement.Fire:
-                    return "When one cube explodes, the whole block goes with it.";
+                    return Loc.Pick("When one cube explodes, the whole block goes with it.",
+                        "Bir küpü patlayınca bloğun tamamı onunla birlikte patlar.");
                 case BlockElement.Water:
-                    return "Falls and spreads each turn; turns touching fire to obsidian.";
+                    return Loc.Pick("Falls and spreads each turn; turns touching fire to obsidian.",
+                        "Her tur düşer ve yayılır; değdiği ateşi obsidyene çevirir.");
                 case BlockElement.Obsidian:
-                    return "Indestructible, but ignored by the clean-sweep check.";
+                    return Loc.Pick("Indestructible, but ignored by the clean-sweep check.",
+                        "Yok edilemez, ama temizlik kontrolü onu saymaz.");
                 case BlockElement.Gold:
-                    return "Indestructible and sweep-exempt; pays a bonus every turn on the board.";
+                    return Loc.Pick("Indestructible and sweep-exempt; pays a bonus every turn on the board.",
+                        "Yok edilemez ve temizliği bozmaz; alanda durduğu her tur bonus öder.");
                 case BlockElement.Transparent:
-                    return "A block can be placed on top of it; the new cube replaces it.";
+                    return Loc.Pick("A block can be placed on top of it; the new cube replaces it.",
+                        "Üstüne blok konabilir; yeni küp onun yerini alır.");
                 case BlockElement.Ghost:
-                    return "Can be placed partly off the board (at least one cube on).";
+                    return Loc.Pick("Can be placed partly off the board (at least one cube on).",
+                        "Kısmen alan dışına konabilir (en az bir küp içeride).");
                 case BlockElement.Dynamite:
-                    return "If the whole block explodes the turn it lands, the board is cleared.";
+                    return Loc.Pick("If the whole block explodes the turn it lands, the board is cleared.",
+                        "Blok tek seferde tümüyle patlarsa tüm alan temizlenir.");
                 case BlockElement.Mechanical:
-                    return "Right-click it in hand to rotate 90 degrees.";
+                    return Loc.Pick("Right-click it in hand to rotate 90 degrees.",
+                        "Eldeyken sağ tık ile 90 derece döner.");
                 case BlockElement.Fox:
-                    return "Right-click it in hand to reshape into any shape in your deck.";
+                    return Loc.Pick("Right-click it in hand to reshape into any shape in your deck.",
+                        "Eldeyken sağ tık ile destendeki herhangi bir şekle bürünür.");
                 default:
                     return string.Empty;
             }

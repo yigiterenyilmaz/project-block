@@ -20,13 +20,15 @@ namespace ProjectBlock.Core
         public KumSaatiPower()
             : base("kum_saati", "Kum Saati")
         {
-            Description = "Oyun alanını 2 tur geriye sarar. El, deste ve ıskarta olduğu gibi kalır.";
+            SetDescription(
+                "Rewinds the board 2 turns. The hand, the piles and the score stay put.",
+                "Oyun alanını 2 tur geriye sarar. El, deste ve ıskarta olduğu gibi kalır.");
             BaseSellValue = 60;
         }
 
         public override string StatusText
         {
-            get { return TurnsBack + " tur geri"; }
+            get { return Loc.Pick(TurnsBack + " turns back", TurnsBack + " tur geri"); }
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -69,8 +71,11 @@ namespace ProjectBlock.Core
         public OltaPower()
             : base("olta", "Olta")
         {
-            Description = "Raunt başına bir kart işaretlersin; kullandığında o kartı desteden "
-                + "veya ıskartadan bonus eline çekersin.";
+            SetDescription(
+                "Mark one held card per round; on use, reels it back from the draw or "
+                    + "discard pile into your bonus hand.",
+                "Raunt başına bir kart işaretlersin; kullandığında o kartı desteden "
+                    + "veya ıskartadan bonus eline çekersin.");
             BaseSellValue = 55;
         }
 
@@ -80,9 +85,11 @@ namespace ProjectBlock.Core
             {
                 if (StuckUntilSweep)
                 {
-                    return "takıldı";
+                    return Loc.Pick("stuck", "takıldı");
                 }
-                return MarkedCardId.HasValue ? "işaretli" : "boşta";
+                return MarkedCardId.HasValue
+                    ? Loc.Pick("marked", "işaretli")
+                    : Loc.Pick("idle", "boşta");
             }
         }
 
@@ -199,8 +206,11 @@ namespace ProjectBlock.Core
         public TilsimPower()
             : base("tilsim", "Tılsım")
         {
-            Description = "Hayalet blokları patlatır ve harita dışında kapladıkları yeri "
-                + "oyun alanına katar. Raunt bitince sıfırlanır.";
+            SetDescription(
+                "Blows up ghost blocks and turns the space they covered outside the map "
+                    + "into play area. Resets when the round ends.",
+                "Hayalet blokları patlatır ve harita dışında kapladıkları yeri "
+                    + "oyun alanına katar. Raunt bitince sıfırlanır.");
             BaseSellValue = 65;
         }
 
@@ -212,7 +222,12 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return convertedCells.Count > 0 ? "+" + convertedCells.Count + " kare" : "hazır"; }
+            get
+            {
+                return convertedCells.Count > 0
+                    ? Loc.Pick("+" + convertedCells.Count + " cells", "+" + convertedCells.Count + " kare")
+                    : Loc.Pick("ready", "hazır");
+            }
         }
 
         /// <summary>Confirmed: the conversion lasts for the round only.</summary>

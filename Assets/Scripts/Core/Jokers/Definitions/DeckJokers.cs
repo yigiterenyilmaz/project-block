@@ -24,8 +24,11 @@ namespace ProjectBlock.Core
         public OryantasyonJoker()
             : base("oryantasyon", "Oryantasyon")
         {
-            Description = "Kartlar ıskartaya değil, çekme destesinin rastgele bir yerine "
-                + "girer. Destenin en üstteki kartı hep görünür.";
+            SetDescription(
+                "Played cards are buried at a random depth of the draw pile instead of "
+                    + "being discarded. The pile's top card is always visible.",
+                "Kartlar ıskartaya değil, çekme destesinin rastgele bir yerine "
+                    + "girer. Destenin en üstteki kartı hep görünür.");
             BaseSellValue = 55;
         }
 
@@ -69,14 +72,22 @@ namespace ProjectBlock.Core
         public DezenformasyonJoker()
             : base("dezenformasyon", "Dezenformasyon")
         {
-            Description = "Her tur deste ikiye bölünüp karılır ve çekme/ıskarta rolleri yer "
-                + "değiştirir. El boyutu +1.";
+            SetDescription(
+                "Every turn the draw and discard piles swap roles, then everything merges, "
+                    + "shuffles and splits in two. Hand size +1.",
+                "Her tur deste ikiye bölünüp karılır ve çekme/ıskarta rolleri yer "
+                    + "değiştirir. El boyutu +1.");
             BaseSellValue = 60;
         }
 
         public override string StatusText
         {
-            get { return (TurnsSeen % 2 == 0 ? "normal" : "ters") + " yön"; }
+            get
+            {
+                bool normal = TurnsSeen % 2 == 0;
+                return Loc.Pick(normal ? "normal flow" : "reversed flow",
+                    (normal ? "normal" : "ters") + " yön");
+            }
         }
 
         public override void OnAcquired(SessionContext ctx)
@@ -139,14 +150,22 @@ namespace ProjectBlock.Core
         public ImitasyonJoker()
             : base("imitasyon", "İmitasyon")
         {
-            Description = "El boyutun ıskartadaki kart sayısına eşit olur (en az 1). Tur "
-                + "sonunda elde kalanlar da ıskartaya gider.";
+            SetDescription(
+                "Your hand size equals the discard pile's card count (min 1). Cards left "
+                    + "in hand at end of turn are discarded too.",
+                "El boyutun ıskartadaki kart sayısına eşit olur (en az 1). Tur "
+                    + "sonunda elde kalanlar da ıskartaya gider.");
             BaseSellValue = 60;
         }
 
         public override string StatusText
         {
-            get { return originalHandSize >= 0 ? "el = ıskarta" : "kapalı"; }
+            get
+            {
+                return originalHandSize >= 0
+                    ? Loc.Pick("hand = discard", "el = ıskarta")
+                    : Loc.Pick("off", "kapalı");
+            }
         }
 
         public override void OnAcquired(SessionContext ctx)
@@ -201,9 +220,13 @@ namespace ProjectBlock.Core
         public FraksiyonJoker()
             : base("fraksiyon", "Fraksiyon")
         {
-            Description = "Raunt başında ve deste bitince desteler karılıp ikiye bölünür, "
-                + "ıskartanın yarısı görünür olur. Sonraki bölünmeye kadar desteleri "
-                + "bir kez takas edebilirsin.";
+            SetDescription(
+                "At round start and whenever the draw pile empties, the piles shuffle and "
+                    + "split in two; half the discard is revealed. You may swap the piles "
+                    + "once until the next split.",
+                "Raunt başında ve deste bitince desteler karılıp ikiye bölünür, "
+                    + "ıskartanın yarısı görünür olur. Sonraki bölünmeye kadar desteleri "
+                    + "bir kez takas edebilirsin.");
             ChargesPerRound = 0; // charges are per RESHUFFLE here, not per round
             BaseSellValue = 65;
         }
@@ -213,7 +236,12 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return SwapAvailable ? "takas hazır" : "takas yok"; }
+            get
+            {
+                return SwapAvailable
+                    ? Loc.Pick("swap ready", "takas hazır")
+                    : Loc.Pick("no swap", "takas yok");
+            }
         }
 
         public override ActivationTargeting Targeting

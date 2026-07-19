@@ -17,7 +17,9 @@ namespace ProjectBlock.Core
         public CimbizPower()
             : base("cimbiz", "Cımbız")
         {
-            Description = "Elindeki seçtiğin bloğu çevirir (mekanik blok olması gerekmez).";
+            SetDescription(
+                "Rotates a held block of your choice (it does not need to be mechanical).",
+                "Elindeki seçtiğin bloğu çevirir (mekanik blok olması gerekmez).");
             BaseSellValue = 35;
         }
 
@@ -48,7 +50,9 @@ namespace ProjectBlock.Core
         public KlonPower()
             : base("klon", "Klon")
         {
-            Description = "Elindeki seçtiğin kartın 2 kopyasını bonus eline ekler.";
+            SetDescription(
+                "Adds 2 copies of a held card of your choice to your bonus hand.",
+                "Elindeki seçtiğin kartın 2 kopyasını bonus eline ekler.");
             BaseSellValue = 45;
         }
 
@@ -87,7 +91,9 @@ namespace ProjectBlock.Core
         public BuyutecPower()
             : base("buyutec", "Büyüteç")
         {
-            Description = "Çekme destesinin en üstteki iki kartını açığa çıkarır.";
+            SetDescription(
+                "Reveals the top two cards of the draw pile.",
+                "Çekme destesinin en üstteki iki kartını açığa çıkarır.");
             BaseSellValue = 30;
         }
 
@@ -120,8 +126,11 @@ namespace ProjectBlock.Core
         public TransferPower()
             : base("transfer", "Transfer")
         {
-            Description = "Iskartadaki son kart ile çekme destesinin üstündeki kart yer "
-                + "değiştirir; verdiğin kartı görürsün.";
+            SetDescription(
+                "Swaps the last discarded card with the top of the draw pile; "
+                    + "you see what you gave away.",
+                "Iskartadaki son kart ile çekme destesinin üstündeki kart yer "
+                    + "değiştirir; verdiğin kartı görürsün.");
             BaseSellValue = 35;
         }
 
@@ -143,7 +152,9 @@ namespace ProjectBlock.Core
         public HologramPower()
             : base("hologram", "Hologram")
         {
-            Description = "Bonus elindeki bir kartı ıskartaya çıkarıp desteye katar.";
+            SetDescription(
+                "Moves a bonus-hand card into the discard, folding it back into the piles.",
+                "Bonus elindeki bir kartı ıskartaya çıkarıp desteye katar.");
             BaseSellValue = 30;
         }
 
@@ -187,7 +198,9 @@ namespace ProjectBlock.Core
         public HizliCekimSarjoruPower()
             : base("hizli_cekim_sarjoru", "Hızlı Çekim Şarjörü")
         {
-            Description = "Çekme destesini anında bitirir ve ıskartanın karılmasını sağlar.";
+            SetDescription(
+                "Instantly empties the draw pile and forces the discard to reshuffle in.",
+                "Çekme destesini anında bitirir ve ıskartanın karılmasını sağlar.");
             BaseSellValue = 45;
         }
 

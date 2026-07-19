@@ -92,8 +92,10 @@ namespace ProjectBlock.View
             ViewUtil.MakeText3D(transform, "Title", new Vector2(Center.x, titleY), "MARKET",
                 60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, titleY - 0.42f),
-                "click a joker or a power to sell it  -  click the deck pile to sell cards", 90, 0.013f,
-                SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                Loc.Pick(
+                    "click a joker or a power to sell it  -  click the deck pile to sell cards",
+                    "satmak için jokere veya güce tıkla  -  kart satmak için desteye tıkla"),
+                90, 0.013f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             for (int r = 0; r < rowOffers.Count; r++)
             {
@@ -119,7 +121,8 @@ namespace ProjectBlock.View
                 if (offer.Sold)
                 {
                     offerVisuals.Add(null);
-                    ViewUtil.MakeText3D(transform, "Sold_" + i, slotCenter, "SOLD",
+                    ViewUtil.MakeText3D(transform, "Sold_" + i, slotCenter,
+                        Loc.Pick("SOLD", "SATILDI"),
                         60, 0.07f, SoldColor, 38, TextAnchor.MiddleCenter);
                     continue;
                 }
@@ -154,9 +157,9 @@ namespace ProjectBlock.View
         {
             switch (kind)
             {
-                case MarketOfferKind.Joker: return "JOKERS";
-                case MarketOfferKind.Power: return "POWERS";
-                default: return "BLOCKS";
+                case MarketOfferKind.Joker: return Loc.Pick("JOKERS", "JOKERLER");
+                case MarketOfferKind.Power: return Loc.Pick("POWERS", "GÜÇLER");
+                default: return Loc.Pick("BLOCKS", "BLOKLAR");
             }
         }
 

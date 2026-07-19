@@ -21,7 +21,9 @@ namespace ProjectBlock.Core
         public CaprazlamaPower()
             : base("caprazlama", "Çaprazlama")
         {
-            Description = "Seçtiğin merkezden + şeklinde bir alandaki blokları patlatır.";
+            SetDescription(
+                "Blows up the blocks in a plus-shaped area around a chosen centre.",
+                "Seçtiğin merkezden + şeklinde bir alandaki blokları patlatır.");
             BaseSellValue = 35;
         }
 
@@ -58,7 +60,9 @@ namespace ProjectBlock.Core
         public CercevePower()
             : base("cerceve", "Çerçeve")
         {
-            Description = "Oyun alanının en dış katmanındaki blokları temizler.";
+            SetDescription(
+                "Clears the blocks on the outermost ring of the board.",
+                "Oyun alanının en dış katmanındaki blokları temizler.");
             BaseSellValue = 40;
         }
 
@@ -97,8 +101,11 @@ namespace ProjectBlock.Core
         public BardaginBosTarafiPower()
             : base("bardagin_bos_tarafi", "Bardağın Boş Tarafı")
         {
-            Description = "Oyun alanındaki dolu ve boş kareler yer değiştirir. "
-                + "Yeni küpler elementsizdir.";
+            SetDescription(
+                "Filled and empty cells on the board swap places. "
+                    + "The new cubes carry no element.",
+                "Oyun alanındaki dolu ve boş kareler yer değiştirir. "
+                    + "Yeni küpler elementsizdir.");
             BaseSellValue = 45;
         }
 
@@ -157,8 +164,11 @@ namespace ProjectBlock.Core
         public EkoPower()
             : base("eko", "Eko")
         {
-            Description = "İlk kullanımda sonraki patlamayı hafızaya alır, ikinci kullanımda "
-                + "o patlamayı aynı karelerde tekrar eder. Hafıza her raunt sıfırlanır.";
+            SetDescription(
+                "The first use memorises the next explosion; the second replays it on the "
+                    + "same squares. Memory resets every round.",
+                "İlk kullanımda sonraki patlamayı hafızaya alır, ikinci kullanımda "
+                    + "o patlamayı aynı karelerde tekrar eder. Hafıza her raunt sıfırlanır.");
             BaseSellValue = 50;
         }
 
@@ -173,9 +183,9 @@ namespace ProjectBlock.Core
             {
                 if (HasMemory)
                 {
-                    return memory.Count + " kare hazır";
+                    return Loc.Pick(memory.Count + " squares ready", memory.Count + " kare hazır");
                 }
-                return listening ? "dinliyor" : "boş";
+                return listening ? Loc.Pick("listening", "dinliyor") : Loc.Pick("empty", "boş");
             }
         }
 
@@ -231,7 +241,10 @@ namespace ProjectBlock.Core
         public MayinPower()
             : base("mayin", "Mayın")
         {
-            Description = "Seçtiğin küpü patlatır. Boş kareye koyarsan üstüne küp geldiğinde patlar.";
+            SetDescription(
+                "Pops a chosen cube. Dropped on an empty cell it arms a mine that "
+                    + "detonates the cube that lands on it.",
+                "Seçtiğin küpü patlatır. Boş kareye koyarsan üstüne küp geldiğinde patlar.");
             BaseSellValue = 40;
         }
 
