@@ -150,12 +150,13 @@ namespace ProjectBlock.Core
             : base("genel_temizlik", "Genel Temizlik")
         {
             SetDescription(
-                "Clean sweeps triggered by jokers and powers count as sweeps too - normally a "
-                    + "joker or power that clears the last block does not count, because it "
-                    + "happens between placements.",
-                "Jokerler ve güçler tarafından tetiklenen temizlikler de temizlik sayılır - "
-                    + "normalde son bloğu temizleyen bir joker veya güç, blok koymadan önce "
-                    + "gerçekleştiği için sayılmaz.");
+                "Clean sweeps triggered by jokers and powers count as real sweeps - they pay "
+                    + "the sweep bonus and recharge your powers, just like emptying the board on "
+                    + "a placement. Normally such a between-placements clear does not count.",
+                "Jokerler ve güçler tarafından tetiklenen temizlikler de gerçek temizlik sayılır "
+                    + "- tıpkı blok koyarak tahtayı boşaltmak gibi temizlik bonusunu verir ve "
+                    + "güçlerini şarj eder. Normalde blok koymalar arasındaki böyle bir temizlik "
+                    + "sayılmaz.");
             BaseSellValue = 55;
         }
 

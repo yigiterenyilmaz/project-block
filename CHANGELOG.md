@@ -36,6 +36,9 @@ everything here is unreleased and balance numbers are still placeholders.
   placeholders in `MarketConfig`; grades live in `RarityTable` (baked from the grader).
 
 ### Changed
+- **Genel Temizlik** (joker) — description clarified: joker/power-triggered ("external") sweeps
+  already pay the sweep bonus **and recharge your powers**, exactly like emptying the board on a
+  placement; the text now says so.
 - **İkinci Şans** (power) — now also **deals a fresh hand** when used: on top of clearing the
   board and reshuffling the deck, the current hand is recycled into the draw pile and a new hand
   is dealt, for a cleaner overtime restart.
