@@ -62,6 +62,12 @@ namespace ProjectBlock.View
         private bool waterAnimating;
         private bool supurgeAnimating;
         private readonly List<GridPos> supurgeBuffer = new List<GridPos>();
+
+        // "Hileli zar": market-phase pick of the next round's opening hand.
+        private bool hileliPickMode;
+        private readonly List<int> hileliSelection = new List<int>();
+        private int hileliTarget;
+        private int hileliPowerId;
         private bool sellCardsMode;
         private int lastSeedUsed;
 
@@ -127,7 +133,10 @@ namespace ProjectBlock.View
             draggedCard = null;
             foxPickSlot = -1;
             sellCardsMode = false;
+            hileliPickMode = false;
+            hileliSelection.Clear();
             waterAnimating = false;
+            supurgeAnimating = false;
             pendingTargetJokerId = null;
             pendingTargetPowerId = null;
             grantPicker.Hide();
@@ -208,7 +217,25 @@ namespace ProjectBlock.View
                 {
                     foxPickSlot = -1;
                     sellCardsMode = false;
+                    hileliPickMode = false;
                     deckOverlay.Hide();
+                    return;
+                }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame && hileliPickMode)
+                {
+                    Vector2 pickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                    BlockCard card = deckOverlay.CardAt(pickWorld);
+                    if (card != null && !hileliSelection.Contains(card.Id))
+                    {
+                        hileliSelection.Add(card.Id);
+                        FloatingTextFx.Spawn(transform, pickWorld,
+                            hileliSelection.Count + "/" + hileliTarget,
+                            new Color(0.55f, 0.92f, 0.95f), 55, 0.05f);
+                        if (hileliSelection.Count >= hileliTarget)
+                        {
+                            ConfirmHileliZar();
+                        }
+                    }
                     return;
                 }
                 if (mouse != null && mouse.leftButton.wasPressedThisFrame)
@@ -505,9 +532,50 @@ namespace ProjectBlock.View
             return true;
         }
 
+        /// <summary>In the market, clicking a charged "Hileli zar" power opens the opening-hand
+        /// picker instead of selling it. Returns true if it handled the click.</summary>
+        private bool TryHileliZarFromBar(Mouse mouse)
+        {
+            int index = powerBar.PowerIndexAt(mouse.position.ReadValue());
+            if (index < 0 || index >= session.Powers.Count)
+            {
+                return false;
+            }
+            Power power = session.Powers.Powers[index];
+            if (power.DefId != "hileli_zar" || !power.Charged)
+            {
+                return false;
+            }
+            hileliPickMode = true;
+            hileliSelection.Clear();
+            hileliTarget = Mathf.Max(1, session.Config.Rules.HandSize);
+            hileliPowerId = power.InstanceId;
+            deckOverlay.Show(session.OwnedCards);
+            messageText.text = Loc.Pick(
+                "Hileli Zar: pick " + hileliTarget + " cards for next round's opening hand",
+                "Hileli Zar: sonraki elin için " + hileliTarget + " kart seç");
+            return true;
+        }
+
+        private void ConfirmHileliZar()
+        {
+            session.SetPendingOpeningHand(hileliSelection);
+            session.Powers.Spend(hileliPowerId);
+            hileliPickMode = false;
+            deckOverlay.Hide();
+            powerBar.Refresh(session, null);
+            sfx.Buy();
+            Debug.Log("[project_block] Hileli Zar opening hand set: " + hileliSelection.Count + " cards");
+            UpdateHud();
+        }
+
         private void HandleMarketClick(Mouse mouse)
         {
             if (TrySellJokerFromBar(mouse))
+            {
+                return;
+            }
+            if (TryHileliZarFromBar(mouse))
             {
                 return;
             }

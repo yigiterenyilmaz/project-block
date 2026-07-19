@@ -73,6 +73,25 @@ namespace ProjectBlock.Core
         /// "Damlaya damlaya" reads it when the market is left.</summary>
         private bool purchasedThisMarket;
 
+        /// <summary>Owned card ids "Hileli zar" guaranteed onto the top of the next round's
+        /// draw pile, or null. Consumed once when that round's engine is built.</summary>
+        private List<int> pendingOpeningHand;
+
+        /// <summary>"Hileli zar": guarantee these owned cards into the next round's opening
+        /// hand (they are moved to the top of the fresh draw pile). Market-phase only.</summary>
+        public void SetPendingOpeningHand(IEnumerable<int> cardIds)
+        {
+            pendingOpeningHand = cardIds != null ? new List<int>(cardIds) : null;
+        }
+
+        /// <summary>Takes and clears the preset opening hand (the round engine calls this once).</summary>
+        internal IReadOnlyList<int> TakePendingOpeningHand()
+        {
+            List<int> preset = pendingOpeningHand;
+            pendingOpeningHand = null;
+            return preset;
+        }
+
         public event Action<GamePhase> PhaseChanged;
 
         public GameSession(GameConfig config)

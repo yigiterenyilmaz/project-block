@@ -120,6 +120,27 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>Moves the listed cards to the TOP of the draw pile so they are drawn first
+        /// ("Hileli zar" presetting the opening hand). The first id ends up on the very top.
+        /// Ids not in the draw pile are skipped.</summary>
+        public void MoveToTop(IReadOnlyList<int> cardIds)
+        {
+            for (int i = cardIds.Count - 1; i >= 0; i--)
+            {
+                int id = cardIds[i];
+                for (int j = 0; j < drawPile.Count; j++)
+                {
+                    if (drawPile[j].Id == id)
+                    {
+                        BlockCard card = drawPile[j];
+                        drawPile.RemoveAt(j);
+                        drawPile.Add(card);
+                        break;
+                    }
+                }
+            }
+        }
+
         /// <summary>Moves the bottom half of the draw pile into the discard WITHOUT mixing
         /// the piles or reshuffling ("Dezenformasyon" round-start split). The draw pile keeps
         /// the larger half when the count is odd, so the two piles differ by at most one.</summary>

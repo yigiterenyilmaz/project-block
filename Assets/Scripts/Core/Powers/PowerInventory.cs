@@ -249,6 +249,21 @@ namespace ProjectBlock.Core
             RaiseChanged();
         }
 
+        /// <summary>Spends a specific power's charge by instance id ("Hileli zar", which is
+        /// driven from the market UI rather than the in-round use path). False if unknown or
+        /// already spent.</summary>
+        public bool Spend(int instanceId)
+        {
+            Power power = Find(instanceId);
+            if (power == null || !power.Charged)
+            {
+                return false;
+            }
+            power.Spend();
+            RaiseChanged();
+            return true;
+        }
+
         /// <summary>Recharges a specific power by instance id ("Powerbank" with a chosen
         /// target). Returns false if it is unknown or already charged.</summary>
         public bool Recharge(int instanceId)

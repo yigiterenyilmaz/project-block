@@ -72,6 +72,7 @@ namespace ProjectBlock.Core
             Register(() => new IkinciSansPower());
             Register(() => new TotemPower());
             Register(() => new BukulmePower());
+            Register(() => new HileliZarPower());
         }
 
         /// <summary>All known powers, in design order.</summary>

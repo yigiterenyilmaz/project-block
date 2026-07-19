@@ -350,6 +350,15 @@ namespace ProjectBlock.Core
             this.hooks = hooks ?? NoTurnHooks.Instance;
             Board = new GameBoard(config.BoardWidth, config.BoardHeight, config.ExtraPlayableCells);
             Deck = new RoundDeck(ownedCards, rng);
+            // "Hileli zar": pull the preset cards to the top so they are the opening hand.
+            if (session != null)
+            {
+                IReadOnlyList<int> preset = session.TakePendingOpeningHand();
+                if (preset != null)
+                {
+                    Deck.MoveToTop(preset);
+                }
+            }
             Hand = new Hand();
             Status = RoundStatus.InProgress;
             RefillHand();

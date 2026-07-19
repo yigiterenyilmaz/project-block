@@ -238,6 +238,32 @@ namespace ProjectBlock.Core
         }
     }
 
+    /// <summary>"Hileli zar" - MARKET-PHASE power: choose which owned cards make up the next
+    /// round's opening hand. Driven entirely by the market UI (it guarantees those cards onto
+    /// the top of the next fresh draw pile), so the in-round use path refuses it.</summary>
+    public sealed class HileliZarPower : Power
+    {
+        public HileliZarPower()
+            : base("hileli_zar", "Hileli Zar")
+        {
+            SetDescription(
+                "In the market, choose the cards that make up your next round's opening hand.",
+                "Market fazında sonraki rauntun başlangıç elini seçebilmeni sağlar.");
+            BaseSellValue = 55;
+        }
+
+        // Used from the market, not the in-round power path, so it never runs here.
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return false;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            return false;
+        }
+    }
+
     /// <summary>"Aşırma" - drops 2 copies of a random DRAW-pile card into the bonus hand.</summary>
     public sealed class AsirmaPower : Power
     {
