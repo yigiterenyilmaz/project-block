@@ -245,6 +245,11 @@ namespace ProjectBlock.View
                     previewRenderers[x, y] = ViewUtil.MakeCell(
                         transform, "Preview_" + x + "_" + y, pos, cellSize * 0.92f, ValidPreviewColor, 2);
                     previewRenderers[x, y].enabled = false;
+                    // Holes in an irregular board (Kentsel Dönüşüm / Tılsım) are not play
+                    // area: hide their cell so they read as a gap, not an empty cell you can
+                    // place in. The background shows through.
+                    cellRenderers[x, y].enabled =
+                        board.IsInside(new GridPos(board.MinX + x, board.MinY + y));
                 }
             }
             Refresh();
@@ -261,7 +266,16 @@ namespace ProjectBlock.View
             {
                 for (int y = 0; y < board.Height; y++)
                 {
-                    Cube? cube = board.GetCube(new GridPos(board.MinX + x, board.MinY + y));
+                    var gp = new GridPos(board.MinX + x, board.MinY + y);
+                    if (!board.IsInside(gp))
+                    {
+                        // hole: stays a hidden gap, never a cube (ghost traces draw separately)
+                        kindCache[x, y] = null;
+                        cellRenderers[x, y].enabled = false;
+                        continue;
+                    }
+                    cellRenderers[x, y].enabled = true;
+                    Cube? cube = board.GetCube(gp);
                     Color color = cube.HasValue
                         ? ViewUtil.CubeDisplayColor(cube.Value)
                         : EmptyColor;
