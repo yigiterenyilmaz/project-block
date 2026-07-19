@@ -7,6 +7,11 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **Market reroll** — a **REROLL** button under the offers refreshes every offer (blocks,
+  jokers and powers) at once for an escalating cost (`RerollBaseCost + RerollCostStep × rerolls
+  this visit`, ×10 scale). The price resets on the next market visit. Rerolls draw from their own
+  deterministic rng so they vary per reroll and never disturb the deck/play stream; the initial
+  stock is byte-identical to before.
 - **Combo bonus** ("kombo") — clearing a line on consecutive turns stacks a growing point
   bonus (the n-th clearing turn in a row pays `n × ComboBonusPerStep`); a turn that clears no
   line resets the streak. It runs through the normal score pipeline (jokers scale it) and, like

@@ -85,6 +85,12 @@ namespace ProjectBlock.Core
         /// placeholder; sell is always below buy.</summary>
         public double CardSellFraction = 0.5;
 
+        /// <summary>Market reroll cost = RerollBaseCost + RerollCostStep * rerolls-done-this-visit
+        /// (before the global ScoreScale). One reroll refreshes EVERY offer at once; the price
+        /// escalates within a visit and resets on the next. Balance placeholders.</summary>
+        public int RerollBaseCost = 5;
+        public int RerollCostStep = 5;
+
         /// <summary>The market price of a block card: base + per-cube + per-element.</summary>
         public int BuyPrice(BlockCard card)
         {

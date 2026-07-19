@@ -38,9 +38,18 @@ namespace ProjectBlock.View
         private static readonly Color PowerBodyColor = new Color(0.12f, 0.30f, 0.34f);
         private static readonly Color PowerTagColor = new Color(0.55f, 0.92f, 0.95f);
         private static readonly Color LegendaryTagColor = new Color(1f, 0.78f, 0.30f);
+        private static readonly Color RerollButtonColor = new Color(0.20f, 0.24f, 0.34f);
+        private static readonly Color RerollButtonDisabledColor = new Color(0.14f, 0.14f, 0.16f);
+
+        /// <summary>Extra backdrop height reserved at the bottom for the reroll button.</summary>
+        private const float RerollExtra = 1.4f;
 
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
+
+        private Vector2 rerollButtonCenter;
+        private Vector2 rerollButtonHalf;
+        private bool rerollButtonShown;
 
         /// <summary>(Re)builds the market display as stacked section ROWS - BLOCKS, JOKERS,
         /// POWERS - each row horizontally centered with its header above it and the prices
@@ -86,9 +95,11 @@ namespace ProjectBlock.View
             }
             float topRowY = Center.y + (rowOffers.Count - 1) * RowPitch * 0.5f;
 
-            ViewUtil.MakeRect(transform, "Backdrop", Center,
+            // The backdrop grows downward by RerollExtra so the reroll button has room under
+            // the last offer row while the title stays where it was at the top.
+            ViewUtil.MakeRect(transform, "Backdrop", new Vector2(Center.x, Center.y - RerollExtra * 0.5f),
                 new Vector2(Mathf.Max(maxSpan + CardVisual.BodyWidth + 1.4f, 6f),
-                    rowOffers.Count * RowPitch + 2.2f), BackdropColor, 33);
+                    rowOffers.Count * RowPitch + 2.2f + RerollExtra), BackdropColor, 33);
             float titleY = topRowY + HeaderOffset + 0.95f;
             ViewUtil.MakeText3D(transform, "Title", new Vector2(Center.x, titleY), "MARKET",
                 60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
@@ -157,6 +168,21 @@ namespace ProjectBlock.View
                     60, 0.07f, affordable ? AffordablePriceColor : TooExpensiveColor,
                     38, TextAnchor.MiddleCenter);
             }
+
+            // Reroll button, centered under the lowest offer row: one click refreshes every
+            // offer for an escalating cost (GameSession.RerollMarket / NextRerollCost).
+            float bottomRowY = topRowY - (rowOffers.Count - 1) * RowPitch;
+            rerollButtonCenter = new Vector2(Center.x, bottomRowY - PriceOffset - 0.85f);
+            rerollButtonHalf = new Vector2(1.5f, 0.36f);
+            rerollButtonShown = true;
+            long rerollCost = session.NextRerollCost;
+            bool canReroll = session.TotalScore >= rerollCost;
+            ViewUtil.MakeRect(transform, "RerollButton", rerollButtonCenter,
+                rerollButtonHalf * 2f, canReroll ? RerollButtonColor : RerollButtonDisabledColor, 34);
+            ViewUtil.MakeText3D(transform, "RerollLabel", rerollButtonCenter,
+                Loc.Pick("REROLL  ", "YENİLE  ") + rerollCost,
+                60, 0.05f, canReroll ? AffordablePriceColor : TooExpensiveColor,
+                38, TextAnchor.MiddleCenter);
         }
 
         private static string SectionLabel(MarketOfferKind kind)
@@ -192,10 +218,19 @@ namespace ProjectBlock.View
         {
             offerVisuals.Clear();
             offerCenters.Clear();
+            rerollButtonShown = false;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Destroy(transform.GetChild(i).gameObject);
             }
+        }
+
+        /// <summary>True if the world point is on the reroll button.</summary>
+        public bool RerollButtonAt(Vector2 world)
+        {
+            return rerollButtonShown
+                && Mathf.Abs(world.x - rerollButtonCenter.x) <= rerollButtonHalf.x
+                && Mathf.Abs(world.y - rerollButtonCenter.y) <= rerollButtonHalf.y;
         }
 
         /// <summary>Offer index under a world point, or -1.</summary>

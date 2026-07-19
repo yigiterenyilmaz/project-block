@@ -73,6 +73,10 @@ namespace ProjectBlock.Core
         /// "Damlaya damlaya" reads it when the market is left.</summary>
         private bool purchasedThisMarket;
 
+        /// <summary>Rerolls done in the current market visit. Raises the next reroll's cost and
+        /// varies the reroll rng. Reset to 0 on every market entry (and on leaving).</summary>
+        private int rerollCount;
+
         /// <summary>Owned card ids "Hileli zar" guaranteed onto the top of the next round's
         /// draw pile, or null. Consumed once when that round's engine is built.</summary>
         private List<int> pendingOpeningHand;
@@ -182,6 +186,38 @@ namespace ProjectBlock.Core
             TotalScore -= offer.Price;
             offer.Sold = true;
             purchasedThisMarket = true;
+            return true;
+        }
+
+        /// <summary>Cost of the NEXT market reroll, in the scaled run economy. Escalates with
+        /// each reroll this visit and resets when the market is re-entered.</summary>
+        public long NextRerollCost
+        {
+            get
+            {
+                MarketConfig market = Config.Market;
+                return (long)(market.RerollBaseCost + market.RerollCostStep * rerollCount)
+                    * Config.Scoring.ScoreScale;
+            }
+        }
+
+        /// <summary>Refreshes EVERY market offer (blocks, jokers, powers) at once for an
+        /// escalating cost, spending TotalScore like a purchase. Returns false when not in the
+        /// market or the current reroll cost is unaffordable - the market is untouched then.</summary>
+        public bool RerollMarket()
+        {
+            if (Phase != GamePhase.Market)
+            {
+                throw new InvalidOperationException("Not in the market phase.");
+            }
+            long cost = NextRerollCost;
+            if (TotalScore < cost)
+            {
+                return false;
+            }
+            TotalScore -= cost;
+            rerollCount++;
+            RestockMarket(rerollCount);
             return true;
         }
 
@@ -304,6 +340,7 @@ namespace ProjectBlock.Core
                 throw new InvalidOperationException("Not in the market phase.");
             }
             Jokers.DispatchMarketLeft(purchasedThisMarket);
+            rerollCount = 0;
             RoundNumber++;
             StartRound();
         }
@@ -410,6 +447,7 @@ namespace ProjectBlock.Core
             if (status == RoundStatus.Advanced)
             {
                 Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Advanced);
+                rerollCount = 0; // a fresh reroll price each market visit
                 RestockMarket();
                 purchasedThisMarket = false;
                 SetPhase(GamePhase.Market);
@@ -422,21 +460,30 @@ namespace ProjectBlock.Core
             }
         }
 
-        private void RestockMarket()
+        /// <summary>(Re)builds the market stock. <paramref name="reroll"/> is 0 for the initial
+        /// stock on market entry and the reroll counter (1, 2, ...) for a paid reroll. At 0 the
+        /// block/joker/power draws are byte-identical to the base game (the block loop consumes
+        /// the main rng, the joker/power seeds carry no reroll term); a reroll instead draws from
+        /// dedicated deterministic rngs so it varies per reroll AND never disturbs the main rng
+        /// stream that shuffles decks and drives play.</summary>
+        private void RestockMarket(int reroll = 0)
         {
             MarketConfig market = Config.Market;
             var newOffers = new List<MarketOffer>();
+            IRandomSource blockRng = reroll == 0
+                ? rng
+                : new SeededRandom(unchecked(resolvedSeed * 374761393 + RoundNumber * 66037 + reroll * 21179));
             for (int i = 0; i < market.BlockOfferCount; i++)
             {
                 bool giveElement = market.ElementPool.Count > 0
-                    && rng.NextDouble() < market.ElementChance;
+                    && blockRng.NextDouble() < market.ElementChance;
                 // An elemental block never comes as a single cube - most element behaviours
                 // (fire chains, "whole block explodes", per-cube bonuses) need more than one.
-                BlockShape shape = NextBlockShape(giveElement ? market.MinElementalBlockSize : 1);
+                BlockShape shape = NextBlockShape(blockRng, giveElement ? market.MinElementalBlockSize : 1);
                 List<BlockElement> elements = giveElement
                     ? new List<BlockElement>
                     {
-                        market.ElementPool[rng.NextInt(0, market.ElementPool.Count)]
+                        market.ElementPool[blockRng.NextInt(0, market.ElementPool.Count)]
                     }
                     : null;
                 var card = new BlockCard(nextCardId++, shape, elements);
@@ -445,20 +492,20 @@ namespace ProjectBlock.Core
                 // lifted into the scaled economy so prices track the bigger score numbers
                 newOffers.Add(new MarketOffer(card, market.BuyPrice(card) * Config.Scoring.ScoreScale));
             }
-            AddJokerOffers(market, newOffers);
-            AddPowerOffers(market, newOffers);
+            AddJokerOffers(market, newOffers, reroll);
+            AddPowerOffers(market, newOffers, reroll);
             Market.SetOffers(newOffers);
         }
 
         /// <summary>Rolls a block shape of at least <paramref name="minSize"/> cubes, re-rolling
         /// a few times if the generator hands back something smaller. Capped so a generator that
         /// only makes tiny shapes cannot loop forever - it just returns its best effort.</summary>
-        private BlockShape NextBlockShape(int minSize)
+        private BlockShape NextBlockShape(IRandomSource r, int minSize)
         {
-            BlockShape shape = Config.Deck.ShapeGenerator.NextShape(rng);
+            BlockShape shape = Config.Deck.ShapeGenerator.NextShape(r);
             for (int attempt = 0; attempt < 24 && shape.Size < minSize; attempt++)
             {
-                shape = Config.Deck.ShapeGenerator.NextShape(rng);
+                shape = Config.Deck.ShapeGenerator.NextShape(r);
             }
             return shape;
         }
@@ -466,14 +513,17 @@ namespace ProjectBlock.Core
         /// <summary>Appends this visit's joker offers. Uses a SEPARATE rng derived from the
         /// run seed and round number, so joker stocking is deterministic yet never disturbs
         /// the main rng stream that drives deck shuffles and block play.</summary>
-        private void AddJokerOffers(MarketConfig market, List<MarketOffer> newOffers)
+        private void AddJokerOffers(MarketConfig market, List<MarketOffer> newOffers, int reroll)
         {
             IReadOnlyList<JokerDefinition> catalogue = JokerRegistry.All;
             if (market.JokerOfferCount <= 0 || catalogue.Count == 0)
             {
                 return;
             }
-            var jokerRng = new SeededRandom(unchecked(resolvedSeed * 486187739 + RoundNumber));
+            // reroll * K is an additive salt that is 0 on the initial stock, so reroll 0 keeps
+            // the exact base-game seed while each paid reroll shifts to a fresh shop.
+            var jokerRng = new SeededRandom(
+                unchecked(resolvedSeed * 486187739 + RoundNumber + reroll * 40503));
             // Never offer a joker the player already owns. Distinct picks within this visit:
             // shuffle the remaining pool and take the first N.
             var owned = new HashSet<string>();
@@ -539,14 +589,16 @@ namespace ProjectBlock.Core
         /// <summary>Appends this visit's power offers, mirroring AddJokerOffers: a separate
         /// deterministic rng (its own mixing constant, so joker stocking is untouched) and
         /// never a power the player already holds.</summary>
-        private void AddPowerOffers(MarketConfig market, List<MarketOffer> newOffers)
+        private void AddPowerOffers(MarketConfig market, List<MarketOffer> newOffers, int reroll)
         {
             IReadOnlyList<PowerDefinition> catalogue = PowerRegistry.All;
             if (market.PowerOfferCount <= 0 || catalogue.Count == 0)
             {
                 return;
             }
-            var powerRng = new SeededRandom(unchecked(resolvedSeed * 1000000007 + RoundNumber));
+            // Additive reroll salt, 0 on the initial stock (see AddJokerOffers).
+            var powerRng = new SeededRandom(
+                unchecked(resolvedSeed * 1000000007 + RoundNumber + reroll * 92821));
             var owned = new HashSet<string>();
             foreach (Power held in Powers.Powers)
             {
