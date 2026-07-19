@@ -42,7 +42,9 @@ everything here is unreleased and balance numbers are still placeholders.
   *First pass; fall speed / lock feel still want tuning in Unity.* Retro also adds a **dead zone**:
   an overflow area grown on top of the game area (separated by a **red line**) where clears score
   nothing — you can't turn retro off while it holds cubes, and filling the game area below is a
-  loss. A fullscreen **CRT edge-bend**
+  loss. Blocks also **fall by gravity** in retro (like water, but every cube): after a clear, the
+  stack drops to fill the gap, and a fall that completes a new line cascades. A fullscreen
+  **CRT edge-bend**
   (barrel-distortion) shader now ships too — the whole screen bows at the edges in retro mode —
   driven by the `_CrtBend` global; it needs one Editor step to wire (see `docs/crt-edge-bend.md`).
 - **In-game Rarity Grader** — press **F2** in Play mode to browse every joker/power, read its

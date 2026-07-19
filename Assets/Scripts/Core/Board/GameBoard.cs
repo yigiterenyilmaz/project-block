@@ -456,6 +456,40 @@ namespace ProjectBlock.Core
             return anyChange;
         }
 
+        /// <summary>Retro gravity: EVERY cube drops straight down until it rests on the floor, a
+        /// hole, or another cube - one cell per pass (like water, but for all cube kinds). No
+        /// fall-frame recording; the retro settle is instant. Returns true if anything moved.</summary>
+        public bool SettleAll()
+        {
+            bool anyChange = false;
+            bool moved = true;
+            int guard = Height + 2;
+            while (moved && guard-- > 0)
+            {
+                moved = false;
+                for (int y = 1; y < Height; y++)
+                {
+                    for (int x = 0; x < Width; x++)
+                    {
+                        if (!cells[x, y].HasValue)
+                        {
+                            continue;
+                        }
+                        // Blocked by a hole (non-playable) or an occupied cell below.
+                        if (!playable[x, y - 1] || cells[x, y - 1].HasValue)
+                        {
+                            continue;
+                        }
+                        cells[x, y - 1] = cells[x, y];
+                        cells[x, y] = null;
+                        moved = true;
+                        anyChange = true;
+                    }
+                }
+            }
+            return anyChange;
+        }
+
         private bool IsWaterAt(int x, int y)
         {
             if (x < 0 || x >= Width || y < 0 || y >= Height)

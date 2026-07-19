@@ -791,37 +791,19 @@ namespace ProjectBlock.Core
             LogDestruction();
             if (explosion.LineCount > 0)
             {
-                int scoredLines = explosion.LineCount;
-                int scoredCubes = cubesExploded;
-                if (Rules.DeadZoneRows > 0)
-                {
-                    // Retro dead zone: rows/cubes in the top overflow zone earn nothing, so drop
-                    // them from the scored totals (a line clear up there is survival, not points).
-                    int deadRows = 0;
-                    for (int i = 0; i < explosion.Rows.Count; i++)
-                    {
-                        if (IsDeadRow(explosion.Rows[i]))
-                        {
-                            deadRows++;
-                        }
-                    }
-                    int deadCubes = 0;
-                    for (int i = 0; i < explosion.ExplodedCells.Count; i++)
-                    {
-                        if (IsDeadRow(explosion.ExplodedCells[i].Y))
-                        {
-                            deadCubes++;
-                        }
-                    }
-                    scoredLines = System.Math.Max(0, explosion.LineCount - deadRows);
-                    scoredCubes = System.Math.Max(0, cubesExploded - deadCubes);
-                }
-                breakdown.BaseLines = scorer.ScoreLineExplosion(scoredLines, scoredCubes);
+                breakdown.BaseLines = ScoreLineExplosionScored(explosion, cubesExploded);
                 Board.SettleWaterAndReact(waterFrames); // explosions pull the floor out from water
                 ResyncSnapshot();
             }
             report.WaterFallFrames = waterFrames;
             hooks.AfterLineExplosion(currentTurn);
+
+            // Retro gravity: every cube falls into the empty space below it (like water, but for
+            // all blocks), and any line the fall completes explodes - a bounded cascade.
+            if (Rules.RetroMode)
+            {
+                ResolveRetroGravity();
+            }
 
             // COMBO ("kombo"): consecutive line-clearing turns stack a growing bonus. A turn
             // that explodes >=1 row/column continues the streak (1,2,3...) and pays
@@ -1225,6 +1207,64 @@ namespace ProjectBlock.Core
         private bool IsDeadRow(int y)
         {
             return y >= DeadZoneFloor;
+        }
+
+        /// <summary>Score for a line explosion, with the retro dead zone excluded: rows and cubes
+        /// in the top overflow zone earn nothing (a clear up there is survival, not points). Plain
+        /// scoring when there is no dead zone.</summary>
+        private int ScoreLineExplosionScored(LineExplosionResult explosion, int cubesExploded)
+        {
+            int scoredLines = explosion.LineCount;
+            int scoredCubes = cubesExploded;
+            if (Rules.DeadZoneRows > 0)
+            {
+                int deadRows = 0;
+                for (int i = 0; i < explosion.Rows.Count; i++)
+                {
+                    if (IsDeadRow(explosion.Rows[i]))
+                    {
+                        deadRows++;
+                    }
+                }
+                int deadCubes = 0;
+                for (int i = 0; i < explosion.ExplodedCells.Count; i++)
+                {
+                    if (IsDeadRow(explosion.ExplodedCells[i].Y))
+                    {
+                        deadCubes++;
+                    }
+                }
+                scoredLines = System.Math.Max(0, explosion.LineCount - deadRows);
+                scoredCubes = System.Math.Max(0, cubesExploded - deadCubes);
+            }
+            return scorer.ScoreLineExplosion(scoredLines, scoredCubes);
+        }
+
+        /// <summary>Retro gravity, run after a placement resolves: every cube falls into the empty
+        /// space below it, and any row/column the fall completes explodes and drops more - a bounded
+        /// cascade. Explosions score (dead-zone aware) and are logged; the caller's clean-sweep step
+        /// then sees the settled board. Only called in retro mode.</summary>
+        private void ResolveRetroGravity()
+        {
+            int guard = Board.Height + 4;
+            while (guard-- > 0)
+            {
+                Board.SettleAll();
+                ResyncSnapshot(); // gravity moved cubes; re-base so LogDestruction is explosion-only
+                LineExplosionResult cascade = Board.ResolveFullLines();
+                if (cascade.LineCount == 0)
+                {
+                    break;
+                }
+                int cubes = cascade.ExplodedCells.Count;
+                if (currentReport != null)
+                {
+                    currentReport.CubesExploded += cubes;
+                }
+                cubesDestroyedThisTurn += cubes;
+                LogDestruction();
+                breakdown.BaseLines += ScoreLineExplosionScored(cascade, cubes);
+            }
         }
 
         /// <summary>True if any cube sits in the retro dead zone. The retro toggle reads this - it
