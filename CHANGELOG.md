@@ -38,6 +38,11 @@ everything here is unreleased and balance numbers are still placeholders.
   the numbers read bigger without changing balance.
 
 ### Fixed
+- **Retro CRT** — the overlay now turns off on restart (**R**) and on a deck change (a fresh
+  game starts with retro off).
+- **Totem** — the market is now shown when Totem ends overtime and advances the run mid-use
+  (previously it advanced but the market stayed hidden).
+- **Rarity grader (F2)** — the mouse wheel now scrolls the joker/power list.
 - **İmitasyon** — skips the engine's standard refill so the mirror grows 1‑2‑4‑8 instead of
   inflating.
 - **Inflation deflate** — cubes are pushed inward using absolute coords so the shifted board

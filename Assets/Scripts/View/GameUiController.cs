@@ -172,6 +172,12 @@ namespace ProjectBlock.View
         private void StartRoundPresentation()
         {
             comboStreak = 0;
+            // Keep the CRT in sync at every round start - crucially, a restart (R) or a deck
+            // change builds a fresh session with retro OFF, so this turns the overlay back off.
+            if (crt != null)
+            {
+                crt.SetVisible(session.Config.Rules.RetroMode);
+            }
             RoundEngine round = session.CurrentRound;
             if (boardView.Board != round.Board)
             {
@@ -1130,6 +1136,12 @@ namespace ProjectBlock.View
             // Powers can rewrite the board (inflations replace it wholesale, Kum saati
             // rewinds it) and the piles - a full resync covers every one of them.
             RefreshAll(null);
+            if (session.Phase == GamePhase.Market)
+            {
+                // "Totem" ends overtime and advances straight to the market mid-use; mirror the
+                // normal advance flow (RefreshAll + Show) so the market actually appears.
+                marketView.Show(session);
+            }
             PlayPowerBlast(blastCells);
         }
 
