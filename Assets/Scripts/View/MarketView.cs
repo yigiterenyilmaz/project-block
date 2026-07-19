@@ -15,7 +15,15 @@ namespace ProjectBlock.View
     public sealed class MarketView : MonoBehaviour
     {
         private const float OfferSpacing = 2.2f;
-        private static readonly Vector2 Center = new Vector2(0f, 1.0f);
+
+        /// <summary>Vertical distance between two section rows.</summary>
+        private const float RowPitch = 2.8f;
+
+        /// <summary>Section header above a row's tiles / price label below them.</summary>
+        private const float HeaderOffset = 1.15f;
+        private const float PriceOffset = 1.2f;
+
+        private static readonly Vector2 Center = new Vector2(0f, -0.2f);
 
         private static readonly Color BackdropColor = new Color(0.05f, 0.06f, 0.08f, 0.93f);
         private static readonly Color FrameColor = new Color(0.16f, 0.17f, 0.21f);
@@ -33,56 +41,73 @@ namespace ProjectBlock.View
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
 
-        /// <summary>(Re)builds the market display: a BLOCKS, a JOKERS and a POWERS section,
-        /// each centered under its own header, separated by a gap. Offers arrive already
-        /// grouped by kind (blocks, then jokers, then powers - RestockMarket's order).</summary>
+        /// <summary>(Re)builds the market display as stacked section ROWS - BLOCKS, JOKERS,
+        /// POWERS - each row horizontally centered with its header above it and the prices
+        /// below. Rows keep the screen narrow no matter how many offers are stocked.</summary>
         public void Show(GameSession session)
         {
             Hide();
             IReadOnlyList<MarketOffer> offers = session.Market.Offers;
             int count = offers.Count;
 
-            // One one-slot gap wherever the offer kind changes. Center the whole run.
-            int sectionCount = 0;
+            // One row per offer kind that has offers, in kind order. Rows collect offer
+            // INDICES so offerCenters stays index-aligned with the offers list (OfferAt
+            // and the buy fx rely on that).
+            var rowKinds = new List<MarketOfferKind>();
+            var rowOffers = new List<List<int>>();
+            foreach (MarketOfferKind kind in new[]
+                { MarketOfferKind.Block, MarketOfferKind.Joker, MarketOfferKind.Power })
+            {
+                var row = new List<int>();
+                for (int i = 0; i < count; i++)
+                {
+                    if (offers[i].Kind == kind)
+                    {
+                        row.Add(i);
+                    }
+                }
+                if (row.Count > 0)
+                {
+                    rowKinds.Add(kind);
+                    rowOffers.Add(row);
+                }
+            }
+
             for (int i = 0; i < count; i++)
             {
-                if (i == 0 || offers[i].Kind != offers[i - 1].Kind) sectionCount++;
+                offerCenters.Add(Vector2.zero);
             }
-            float sectionGap = Mathf.Max(sectionCount - 1, 0) * OfferSpacing;
-            float span = (count - 1) * OfferSpacing + sectionGap;
-            float startX = Center.x - span * 0.5f;
-            float tileY = Center.y - 0.05f;
+
+            float maxSpan = 0f;
+            for (int r = 0; r < rowOffers.Count; r++)
+            {
+                maxSpan = Mathf.Max(maxSpan, (rowOffers[r].Count - 1) * OfferSpacing);
+            }
+            float topRowY = Center.y + (rowOffers.Count - 1) * RowPitch * 0.5f;
 
             ViewUtil.MakeRect(transform, "Backdrop", Center,
-                new Vector2(Mathf.Max(span + CardVisual.BodyWidth + 1.2f, 3f), 4.4f), BackdropColor, 33);
-            ViewUtil.MakeText3D(transform, "Title", Center + new Vector2(0f, 2.0f), "MARKET",
+                new Vector2(Mathf.Max(maxSpan + CardVisual.BodyWidth + 1.4f, 6f),
+                    rowOffers.Count * RowPitch + 2.2f), BackdropColor, 33);
+            float titleY = topRowY + HeaderOffset + 0.95f;
+            ViewUtil.MakeText3D(transform, "Title", new Vector2(Center.x, titleY), "MARKET",
                 60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, "SellHint", Center + new Vector2(0f, 1.62f),
+            ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, titleY - 0.42f),
                 "click a joker or a power to sell it  -  click the deck pile to sell cards", 90, 0.013f,
                 SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
-            float cursor = startX;
-            // Per-kind extents (indexed by MarketOfferKind) center each section header.
-            var minX = new float[] { float.MaxValue, float.MaxValue, float.MaxValue };
-            var maxX = new float[] { float.MinValue, float.MinValue, float.MinValue };
-            for (int i = 0; i < count; i++)
+            for (int r = 0; r < rowOffers.Count; r++)
             {
-                if (i > 0 && offers[i].Kind != offers[i - 1].Kind)
+                float rowY = topRowY - r * RowPitch;
+                List<int> row = rowOffers[r];
+                ViewUtil.MakeText3D(transform, SectionLabel(rowKinds[r]) + "Header",
+                    new Vector2(Center.x, rowY + HeaderOffset), SectionLabel(rowKinds[r]),
+                    90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                float startX = Center.x - (row.Count - 1) * OfferSpacing * 0.5f;
+                for (int c = 0; c < row.Count; c++)
                 {
-                    cursor += OfferSpacing;
+                    offerCenters[row[c]] = new Vector2(startX + c * OfferSpacing, rowY);
                 }
-                var slotCenter = new Vector2(cursor, tileY);
-                offerCenters.Add(slotCenter);
-                cursor += OfferSpacing;
-                int kind = (int)offers[i].Kind;
-                minX[kind] = Mathf.Min(minX[kind], slotCenter.x);
-                maxX[kind] = Mathf.Max(maxX[kind], slotCenter.x);
             }
-
-            float headerY = tileY + 1.28f;
-            AddSectionHeader("BlocksHeader", "BLOCKS", (int)MarketOfferKind.Block, minX, maxX, headerY);
-            AddSectionHeader("JokersHeader", "JOKERS", (int)MarketOfferKind.Joker, minX, maxX, headerY);
-            AddSectionHeader("PowersHeader", "POWERS", (int)MarketOfferKind.Power, minX, maxX, headerY);
 
             for (int i = 0; i < count; i++)
             {
@@ -119,23 +144,20 @@ namespace ProjectBlock.View
                 }
                 bool affordable = session.TotalScore >= offer.Price;
                 ViewUtil.MakeText3D(transform, "Price_" + i,
-                    slotCenter + new Vector2(0f, -1.35f), offer.Price.ToString(),
+                    slotCenter + new Vector2(0f, -PriceOffset), offer.Price.ToString(),
                     60, 0.07f, affordable ? AffordablePriceColor : TooExpensiveColor,
                     38, TextAnchor.MiddleCenter);
             }
         }
 
-        /// <summary>Header centered over its section, skipped when the section is empty.</summary>
-        private void AddSectionHeader(string name, string label, int kind,
-            float[] minX, float[] maxX, float y)
+        private static string SectionLabel(MarketOfferKind kind)
         {
-            if (minX[kind] > maxX[kind])
+            switch (kind)
             {
-                return;
+                case MarketOfferKind.Joker: return "JOKERS";
+                case MarketOfferKind.Power: return "POWERS";
+                default: return "BLOCKS";
             }
-            ViewUtil.MakeText3D(transform, name,
-                new Vector2((minX[kind] + maxX[kind]) * 0.5f, y), label,
-                90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
         }
 
         /// <summary>Draws a joker or power offer: a tinted body with a kind tag, the name
