@@ -97,22 +97,38 @@ namespace ProjectBlock.View
                         bottomLeft + new Vector2(cell.X * mini, cell.Y * mini),
                         mini * 0.9f, miniColor, order + 1), order + 1);
                 }
-                if (card.Elements.Count > 0)
+                // The top band names the card's TYPE: its element(s), and/or "custom" for a
+                // player-designed block ("Karakter oluşturma"). Plain market/deck blocks get none.
+                if (card.Elements.Count > 0 || card.IsCustom)
                 {
-                    var labels = new List<string>();
+                    var elementLabels = new List<string>();
                     foreach (BlockElement element in card.Elements)
                     {
-                        labels.Add(ViewUtil.ElementLabel(element));
+                        elementLabels.Add(ViewUtil.ElementLabel(element));
+                    }
+                    string bandText;
+                    if (card.IsCustom)
+                    {
+                        bandText = Loc.Pick("custom", "özel");
+                        if (elementLabels.Count > 0)
+                        {
+                            bandText += " " + string.Join("+", elementLabels);
+                        }
+                    }
+                    else
+                    {
+                        bandText = string.Join("+", elementLabels);
                     }
                     // A dark band behind plain text - outlines ghost on TextMesh, this doesn't.
                     var bandCenter = new Vector2(0f, BodyHeight * 0.5f - 0.15f);
                     Track(ViewUtil.MakeRect(transform, "ElementBand", bandCenter,
                         new Vector2(BodyWidth - 0.1f, 0.22f), new Color(0.1f, 0.11f, 0.14f, 0.92f),
                         order + 2), order + 2);
-                    Color labelColor = Color.Lerp(ViewUtil.ElementColor(card.Elements[0]),
-                        Color.white, 0.4f); // dark elements (obsidian) must read on the band
+                    Color labelColor = card.Elements.Count > 0
+                        ? Color.Lerp(ViewUtil.ElementColor(card.Elements[0]), Color.white, 0.4f)
+                        : new Color(0.85f, 0.80f, 1f); // custom-only: a bright neutral tag
                     TrackText(ViewUtil.MakeText3D(transform, "ElementLabel", bandCenter,
-                        string.Join("+", labels), 90, 0.016f, labelColor, order + 3,
+                        bandText, 90, 0.016f, labelColor, order + 3,
                         TextAnchor.MiddleCenter), order + 3);
                 }
             }

@@ -389,7 +389,7 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            ownedCards.Add(new BlockCard(nextCardId++, shape, elements));
+            ownedCards.Add(new BlockCard(nextCardId++, shape, elements, true)); // tagged "custom"
             power.Spend();
             round.NotePowerUsed();
             return true;

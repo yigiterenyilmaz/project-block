@@ -26,15 +26,26 @@ namespace ProjectBlock.Core
             get { return elements; }
         }
 
+        /// <summary>True for a player-designed block ("Karakter oluşturma"). Purely an identity
+        /// marker so the UI can tag it "custom"; it does not change any rule.</summary>
+        public bool IsCustom { get; }
+
         public BlockCard(int id, BlockShape shape)
-            : this(id, shape, null)
+            : this(id, shape, null, false)
         {
         }
 
         public BlockCard(int id, BlockShape shape, IEnumerable<BlockElement> cardElements)
+            : this(id, shape, cardElements, false)
+        {
+        }
+
+        public BlockCard(int id, BlockShape shape, IEnumerable<BlockElement> cardElements,
+            bool isCustom)
         {
             Id = id;
             Shape = shape;
+            IsCustom = isCustom;
             elements = cardElements == null
                 ? NoElements
                 : new List<BlockElement>(cardElements).ToArray();
