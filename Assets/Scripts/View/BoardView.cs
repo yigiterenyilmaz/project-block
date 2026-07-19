@@ -120,6 +120,19 @@ namespace ProjectBlock.View
                             transparent.a = 0.65f + 0.2f * Mathf.Sin(time * 2f + x);
                             cell.color = transparent;
                             break;
+                        case CubeKind.Mine:
+                            // armed trap: urgent red blink
+                            cell.color = Color.Lerp(baseColor, new Color(1f, 0.25f, 0.2f),
+                                0.3f + 0.3f * Mathf.Sin(time * 5f));
+                            break;
+                        case CubeKind.Ice:
+                            cell.color = Color.Lerp(baseColor, Color.white,
+                                0.15f + 0.15f * Mathf.Sin(time * 1.6f + x * 0.7f + y));
+                            break;
+                        case CubeKind.Void:
+                            cell.color = Color.Lerp(baseColor, Color.black,
+                                0.3f + 0.3f * Mathf.Sin(time * 1.2f));
+                            break;
                     }
                 }
             }

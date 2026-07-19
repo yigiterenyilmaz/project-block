@@ -162,6 +162,25 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>"Olta"'s free marking action. Routed through the inventory because the
+        /// UI cannot build a RoundContext itself. Deliberately NOT a "use": marking spends
+        /// no charge and does not take the turn's power slot (see OltaPower.TryMark).</summary>
+        public bool TryMarkOlta(int instanceId, int handIndex)
+        {
+            var olta = Find(instanceId) as OltaPower;
+            RoundEngine round = session.CurrentRound;
+            if (olta == null || round == null)
+            {
+                return false;
+            }
+            bool marked = olta.TryMark(RoundCtx(round), handIndex);
+            if (marked)
+            {
+                RaiseChanged();
+            }
+            return marked;
+        }
+
         // -------------------------------------------------------------- lifecycle
 
         /// <summary>Runs before a round's board exists, so a power can reshape it.</summary>

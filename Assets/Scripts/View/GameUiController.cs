@@ -71,6 +71,10 @@ namespace ProjectBlock.View
         /// <summary>Set while a used power waits for the player to pick a target.</summary>
         private int? pendingTargetPowerId;
 
+        /// <summary>True while the pending power target is Olta's FREE mark pick (a setup
+        /// action, not a use - see OltaPower.TryMark). Cleared with pendingTargetPowerId.</summary>
+        private bool pendingOltaMark;
+
         private void Start()
         {
             cam = Camera.main;
@@ -557,6 +561,7 @@ namespace ProjectBlock.View
         {
             pendingTargetJokerId = null;
             pendingTargetPowerId = null;
+            pendingOltaMark = false;
             UpdateHud();
             jokerBar.Refresh(session, null);
             powerBar.Refresh(session, null);
@@ -608,6 +613,19 @@ namespace ProjectBlock.View
         /// The power twin of BeginActivation.</summary>
         private void BeginPowerActivation(Power power)
         {
+            // Olta with no mark: clicking it starts the FREE mark pick (per-round setup,
+            // not a use), so the rod is usable at all from the UI.
+            var olta = power as OltaPower;
+            if (olta != null && !olta.MarkedCardId.HasValue
+                && session.CurrentRound != null
+                && session.CurrentRound.Status == RoundStatus.InProgress)
+            {
+                pendingTargetPowerId = power.InstanceId;
+                pendingOltaMark = true;
+                UpdateHud();
+                powerBar.Refresh(session, pendingTargetPowerId);
+                return;
+            }
             if (!session.Powers.CanBeginUse(power.InstanceId))
             {
                 Debug.Log("[project_block] " + power.DisplayName + " cannot be used right now.");
@@ -626,6 +644,16 @@ namespace ProjectBlock.View
         private void RunPowerActivation(Power power, ActivationTarget target)
         {
             pendingTargetPowerId = null;
+            pendingOltaMark = false;
+            // A hand-targeted power may change how the card DISPLAYS (Cımbız rotates it),
+            // and card visuals are cached by id - drop the visual so Sync rebuilds it.
+            RoundEngine round = session.CurrentRound;
+            int targetCardId = -1;
+            if (target.HandIndex.HasValue && round != null
+                && target.HandIndex.Value >= 0 && target.HandIndex.Value < round.Hand.Count)
+            {
+                targetCardId = round.Hand[target.HandIndex.Value].Id;
+            }
             if (!session.Powers.TryUse(power.InstanceId, target))
             {
                 Debug.Log("[project_block] " + power.DisplayName + " could not be used.");
@@ -634,6 +662,10 @@ namespace ProjectBlock.View
             }
             Debug.Log("[project_block] Power used: " + power.DisplayName);
             powerBar.PulsePower(power.InstanceId);
+            if (targetCardId >= 0)
+            {
+                cardLayer.ForgetCard(targetCardId);
+            }
             // Powers can rewrite the board (inflations replace it wholesale, Kum saati
             // rewinds it) and the piles - a full resync covers every one of them.
             RefreshAll(null);
@@ -658,6 +690,22 @@ namespace ProjectBlock.View
                     if (power == null)
                     {
                         CancelTargeting();
+                        return;
+                    }
+                    if (pendingOltaMark)
+                    {
+                        CardVisual markHit = cardLayer.CardAt(world);
+                        int powerId = power.InstanceId;
+                        CancelTargeting();
+                        if (markHit != null && markHit.SlotIndex >= 0
+                            && markHit.SlotIndex < round.Hand.Count
+                            && session.Powers.TryMarkOlta(powerId, markHit.SlotIndex))
+                        {
+                            Debug.Log("[project_block] Olta marked "
+                                + round.Hand[markHit.SlotIndex] + ".");
+                            powerBar.PulsePower(powerId);
+                            powerBar.Refresh(session, null); // shows the new mark state
+                        }
                         return;
                     }
                     if (power.Targeting == ActivationTargeting.BoardCell)
@@ -1018,9 +1066,11 @@ namespace ProjectBlock.View
             if (pendingTargetPowerId.HasValue)
             {
                 Power targeting = session.Powers.Find(pendingTargetPowerId.Value);
-                string what = targeting != null && targeting.Targeting == ActivationTargeting.BoardCell
-                    ? "oyun alanından bir hücre seç"
-                    : "elinden bir blok seç";
+                string what = pendingOltaMark
+                    ? "işaretlenecek kartı elinden seç (bedava, tur başına bir)"
+                    : targeting != null && targeting.Targeting == ActivationTargeting.BoardCell
+                        ? "oyun alanından bir hücre seç"
+                        : "elinden bir blok seç";
                 messageText.text = (targeting != null ? targeting.DisplayName : "Güç")
                     + ": " + what + "\n[Esc] vazgeç";
                 return;

@@ -407,6 +407,56 @@ namespace ProjectBlock.View
             RebuildStack(discardStackRoot, round.Deck.DiscardPile);
             UpdateDiscardTop(round);
             UpdateDrawTop(round);
+            UpdateRevealFans(round);
+        }
+
+        // ---- reveal fans: extra face-up cards next to a pile (rule-driven info) ----
+        // "Büyüteç" reveals the top RevealedDrawCount draw cards; "Fraksiyon" reveals half
+        // the discard. The pile-top visuals above only ever show ONE card, so cards beyond
+        // the top fan out beside the pile, small, capped so they never reach the hand.
+
+        private const int MaxRevealFan = 2;
+        private const float RevealFanStep = 0.95f;
+        private const float RevealFanScale = 0.6f;
+
+        private readonly List<CardVisual> revealFanVisuals = new List<CardVisual>();
+
+        private void UpdateRevealFans(RoundEngine round)
+        {
+            for (int i = revealFanVisuals.Count - 1; i >= 0; i--)
+            {
+                if (revealFanVisuals[i] != null)
+                {
+                    Destroy(revealFanVisuals[i].gameObject);
+                }
+            }
+            revealFanVisuals.Clear();
+            int drawReveal = round.Rules.RevealedDrawCount;
+            if (round.Rules.RevealTopDrawCard)
+            {
+                drawReveal = Mathf.Max(drawReveal, 1);
+            }
+            // the pile top card is already shown by UpdateDrawTop/UpdateDiscardTop;
+            // the fans only add the cards BELOW it (draw fans inward = leftward,
+            // discard inward = rightward, both toward the free gap beside the hand)
+            BuildRevealFan(drawPileRoot, round.Deck.DrawPile, drawReveal, -1f);
+            BuildRevealFan(discardPileRoot, round.Deck.DiscardPile,
+                round.Rules.RevealedDiscardCount, +1f);
+        }
+
+        private void BuildRevealFan(Transform pileRoot, IReadOnlyList<BlockCard> pile,
+            int revealCount, float direction)
+        {
+            int extras = Mathf.Min(Mathf.Min(revealCount, pile.Count) - 1, MaxRevealFan);
+            for (int k = 1; k <= extras; k++)
+            {
+                BlockCard card = pile[pile.Count - 1 - k];
+                CardVisual visual = CardVisual.Create(pileRoot, "Reveal_" + k, card,
+                    true, false, new Vector2(direction * RevealFanStep * k, 0f),
+                    DiscardTopOrder);
+                visual.transform.localScale = new Vector3(RevealFanScale, RevealFanScale, 1f);
+                revealFanVisuals.Add(visual);
+            }
         }
 
         private void UpdateDiscardTop(RoundEngine round)
@@ -433,12 +483,14 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>"Insider": shows the top of the DRAW pile face-up. Gated on the rule
-        /// flag, because the draw pile is face-down by default and its order must not leak.</summary>
+        /// <summary>Shows the top of the DRAW pile face-up when a rule reveals it -
+        /// "Insider"/"Oryantasyon" (RevealTopDrawCard) or "Büyüteç" (RevealedDrawCount).
+        /// Gated, because the draw pile is face-down by default and must not leak.</summary>
         private void UpdateDrawTop(RoundEngine round)
         {
             IReadOnlyList<BlockCard> drawPile = round.Deck.DrawPile;
-            BlockCard top = round.Rules.RevealTopDrawCard && drawPile.Count > 0
+            bool revealed = round.Rules.RevealTopDrawCard || round.Rules.RevealedDrawCount > 0;
+            BlockCard top = revealed && drawPile.Count > 0
                 ? drawPile[drawPile.Count - 1]
                 : null;
             int topId = top != null ? top.Id : -1;

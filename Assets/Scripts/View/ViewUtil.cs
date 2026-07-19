@@ -67,6 +67,9 @@ namespace ProjectBlock.View
                 case CubeKind.Gold: return ElementColor(BlockElement.Gold);
                 case CubeKind.Transparent: return ElementColor(BlockElement.Transparent);
                 case CubeKind.Dynamite: return ElementColor(BlockElement.Dynamite);
+                case CubeKind.Ice: return new Color(0.62f, 0.86f, 0.95f);
+                case CubeKind.Void: return new Color(0.10f, 0.07f, 0.16f);
+                case CubeKind.Mine: return new Color(0.42f, 0.12f, 0.12f);
                 default: return ColorForCard(cube.SourceCardId);
             }
         }
