@@ -3,13 +3,13 @@
 // player input into calls on the core engine.
 // CONTROLS: drag a card from the hand onto the board to place it,
 //           A = advance / C = continue on an offer, N = leave market, R = new run,
-//           D = deck select, J = grant the next joker, K = sell the last joker,
-//           1-9 = activate that joker (one that needs a target then waits for a click,
-//           Esc cancels). Click a power in the left bar to use it (same targeting flow);
-//           in the market, clicking a joker or power panel sells it.
+//           D = deck select, J = pick any joker to grant, P = pick any power to grant,
+//           K = sell the last joker, 1-9 = activate that joker (one that needs a target
+//           then waits for a click, Esc cancels). Click a power in the left bar to use it
+//           (same targeting flow); in the market, clicking a joker or power panel sells it.
 // NOTE FOR AGENTS: this is placeholder presentation. Extend gameplay in
-// ProjectBlock.Core; only wiring/visuals belong here. The J/K joker keys stand in until
-// jokers can be bought in the market - delete them then.
+// ProjectBlock.Core; only wiring/visuals belong here. The J/P/K debug keys grant/sell
+// outside the market's rules on purpose - they are testing tools, not gameplay.
 
 using System.Collections;
 using System.Collections.Generic;
@@ -39,6 +39,7 @@ namespace ProjectBlock.View
         private MarketView marketView;
         private JokerBarView jokerBar;
         private PowerBarView powerBar;
+        private GrantPickerView grantPicker;
         private DeckDefinition currentDeck = DeckLibrary.Classic;
         private SoundFx sfx;
         private FlameStreakView flameStreak;
@@ -70,9 +71,6 @@ namespace ProjectBlock.View
         /// <summary>Set while a used power waits for the player to pick a target.</summary>
         private int? pendingTargetPowerId;
 
-        /// <summary>Debug grant order: walks the registry so every joker is reachable.</summary>
-        private int nextGrantIndex;
-
         private void Start()
         {
             cam = Camera.main;
@@ -94,7 +92,7 @@ namespace ProjectBlock.View
             waterAnimating = false;
             pendingTargetJokerId = null;
             pendingTargetPowerId = null;
-            nextGrantIndex = 0;
+            grantPicker.Hide();
             marketView.Hide();
             HideTooltip();
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
@@ -215,6 +213,40 @@ namespace ProjectBlock.View
                     }
                     sellCardsMode = false;
                     deckOverlay.Hide();
+                }
+                return;
+            }
+            if (grantPicker.IsOpen)
+            {
+                // modal: click a tile to grant that joker/power, anything else closes
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                {
+                    grantPicker.Hide();
+                    return;
+                }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                {
+                    Vector2 pickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                    int index = grantPicker.EntryAt(pickWorld);
+                    bool powersMode = grantPicker.Mode == GrantPickerView.PickerMode.Powers;
+                    grantPicker.Hide();
+                    HideTooltip();
+                    if (index >= 0)
+                    {
+                        if (powersMode)
+                        {
+                            Power granted = session.Powers.Add(PowerRegistry.All[index].Create());
+                            Debug.Log("[project_block] Power granted: " + granted.DisplayName
+                                + " - " + granted.Description);
+                        }
+                        else
+                        {
+                            Joker granted = session.Jokers.Add(JokerRegistry.All[index].Create());
+                            Debug.Log("[project_block] Joker granted: " + granted.DisplayName
+                                + " - " + granted.Description);
+                        }
+                        RefreshAll(null);
+                    }
                 }
                 return;
             }
@@ -463,15 +495,14 @@ namespace ProjectBlock.View
                 CancelTargeting();
                 return true;
             }
-            if (kb.jKey.wasPressedThisFrame)
+            if (kb.jKey.wasPressedThisFrame && draggedCard == null)
             {
-                IReadOnlyList<JokerDefinition> all = JokerRegistry.All;
-                JokerDefinition definition = all[nextGrantIndex % all.Count];
-                nextGrantIndex++;
-                Joker granted = session.Jokers.Add(definition.Create());
-                Debug.Log("[project_block] Joker granted: " + granted.DisplayName
-                    + " - " + granted.Description);
-                RefreshAll(null);
+                grantPicker.ShowJokers();
+                return true;
+            }
+            if (kb.pKey.wasPressedThisFrame && draggedCard == null)
+            {
+                grantPicker.ShowPowers();
                 return true;
             }
             if (kb.kKey.wasPressedThisFrame && session.Jokers.Count > 0)
@@ -971,7 +1002,7 @@ namespace ProjectBlock.View
             sb.Append('\n');
             sb.Append("Drag to place.  Click draw pile: deck.  Right-click: rotate GEARS / reshape FOX\n");
             sb.Append("Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run\n");
-            sb.Append("Debug - J: grant joker   K: sell last joker");
+            sb.Append("Debug - J: pick joker   P: pick power   K: sell last joker");
             infoText.text = sb.ToString();
 
             if (pendingTargetJokerId.HasValue)
@@ -1058,6 +1089,22 @@ namespace ProjectBlock.View
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
 
+            if (grantPicker.IsOpen)
+            {
+                cardLayer.SetHoveredCard(-1);
+                string defId, name, description;
+                if (grantPicker.TryGetEntry(grantPicker.EntryAt(world),
+                    out defId, out name, out description))
+                {
+                    RenderTooltip("pick:" + defId, name,
+                        ViewUtil.WrapText(description, 34), world);
+                }
+                else
+                {
+                    HideTooltip();
+                }
+                return;
+            }
             if (deckOverlay.IsOpen)
             {
                 cardLayer.SetHoveredCard(-1);
@@ -1234,6 +1281,10 @@ namespace ProjectBlock.View
             var powerGo = new GameObject("PowerBarView");
             powerGo.transform.SetParent(transform, false);
             powerBar = powerGo.AddComponent<PowerBarView>();
+
+            var pickerGo = new GameObject("GrantPicker");
+            pickerGo.transform.SetParent(transform, false);
+            grantPicker = pickerGo.AddComponent<GrantPickerView>();
 
             tooltipRoot = new GameObject("Tooltip");
             tooltipRoot.transform.SetParent(transform, false);
