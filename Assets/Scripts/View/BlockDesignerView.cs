@@ -34,15 +34,17 @@ namespace ProjectBlock.View
         private static readonly Color Faint = new Color(0.62f, 0.67f, 0.74f);
 
         // Element options: index 0 is "no element", the rest mirror the implemented block types.
+        // Ghost and Mechanical are intentionally excluded - a hang-off-the-board / rotating block
+        // makes no sense as a hand-designed piece.
         private static readonly BlockElement[] Elements =
         {
             BlockElement.Fire, BlockElement.Water, BlockElement.Obsidian, BlockElement.Gold,
-            BlockElement.Transparent, BlockElement.Ghost, BlockElement.Dynamite,
-            BlockElement.Mechanical, BlockElement.Fox
+            BlockElement.Transparent, BlockElement.Dynamite, BlockElement.Fox
         };
 
         private readonly bool[,] filled = new bool[GridSize, GridSize];
         private int selected; // 0 = none, 1..Elements.Length = Elements[selected-1]
+        private string warning = ""; // shown when Confirm is rejected (e.g. a disconnected shape)
 
         private readonly List<Vector2> cellCenters = new List<Vector2>();
         private readonly List<Vector2> swatchCenters = new List<Vector2>();
@@ -61,6 +63,7 @@ namespace ProjectBlock.View
                 }
             }
             selected = 0;
+            warning = "";
             Rebuild();
         }
 
@@ -75,22 +78,104 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Toggles the grid cell under a world point. Returns true if one was hit.</summary>
-        public bool ToggleCellAt(Vector2 world)
+        /// <summary>The grid cell index (x + y*GridSize) under a world point, or -1.</summary>
+        public int CellIndexAt(Vector2 world)
         {
             for (int i = 0; i < cellCenters.Count; i++)
             {
                 if (Within(world, cellCenters[i], CellSize * 0.5f, CellSize * 0.5f))
                 {
-                    int x = i % GridSize;
-                    int y = i / GridSize;
-                    filled[x, y] = !filled[x, y];
-                    Rebuild();
-                    return true;
+                    return i;
                 }
             }
-            return false;
+            return -1;
         }
+
+        /// <summary>Whether the given cell (from CellIndexAt) is currently filled.</summary>
+        public bool IsCellFilled(int cellIndex)
+        {
+            if (cellIndex < 0)
+            {
+                return false;
+            }
+            return filled[cellIndex % GridSize, cellIndex / GridSize];
+        }
+
+        /// <summary>Paints or erases a cell (from CellIndexAt). Rebuilds only when the value
+        /// actually changes, so a drag stroke lingering on one cell does not thrash the modal.
+        /// A change also clears any standing Confirm warning.</summary>
+        public void SetCell(int cellIndex, bool fill)
+        {
+            if (cellIndex < 0)
+            {
+                return;
+            }
+            int x = cellIndex % GridSize;
+            int y = cellIndex / GridSize;
+            if (filled[x, y] == fill)
+            {
+                return;
+            }
+            filled[x, y] = fill;
+            warning = "";
+            Rebuild();
+        }
+
+        /// <summary>True if the filled cells form exactly ONE 4-connected group (a real block).
+        /// Empty draws are not connected. Used to reject scattered shapes on Confirm.</summary>
+        public bool IsSingleConnectedPiece()
+        {
+            int total = CountFilled();
+            if (total == 0)
+            {
+                return false;
+            }
+            // Flood fill from the first filled cell; every filled cell must be reachable.
+            var visited = new bool[GridSize, GridSize];
+            var stack = new Stack<GridPos>();
+            for (int x = 0; x < GridSize && stack.Count == 0; x++)
+            {
+                for (int y = 0; y < GridSize && stack.Count == 0; y++)
+                {
+                    if (filled[x, y])
+                    {
+                        stack.Push(new GridPos(x, y));
+                        visited[x, y] = true;
+                    }
+                }
+            }
+            int reached = 0;
+            while (stack.Count > 0)
+            {
+                GridPos p = stack.Pop();
+                reached++;
+                foreach (GridPos d in Neighbors)
+                {
+                    int nx = p.X + d.X;
+                    int ny = p.Y + d.Y;
+                    if (nx >= 0 && nx < GridSize && ny >= 0 && ny < GridSize
+                        && filled[nx, ny] && !visited[nx, ny])
+                    {
+                        visited[nx, ny] = true;
+                        stack.Push(new GridPos(nx, ny));
+                    }
+                }
+            }
+            return reached == total;
+        }
+
+        /// <summary>Shows a warning line under the help text (Confirm rejected). Cleared on the
+        /// next cell edit.</summary>
+        public void SetWarning(string message)
+        {
+            warning = message ?? "";
+            Rebuild();
+        }
+
+        private static readonly GridPos[] Neighbors =
+        {
+            new GridPos(1, 0), new GridPos(-1, 0), new GridPos(0, 1), new GridPos(0, -1)
+        };
 
         /// <summary>Element option index under a world point (0 = none), or -1.</summary>
         public int ElementAt(Vector2 world)
@@ -169,9 +254,20 @@ namespace ProjectBlock.View
                     "KARAKTER OLUŞTURMA - blok tasarla"), 48, 0.05f, Color.white, 52,
                 TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "Help", new Vector2(0f, 4.0f),
-                Loc.Pick("click cells to draw a shape, pick an element, then Confirm",
-                    "kareleri tıklayıp şekil çiz, element seç, sonra Onayla"), 44, 0.03f,
-                Faint, 52, TextAnchor.MiddleCenter);
+                Loc.Pick("drag over cells to draw one connected shape, pick an element, then Confirm",
+                    "kareleri sürükleyerek tek parça bir şekil çiz, element seç, sonra Onayla"), 44,
+                0.03f, Faint, 52, TextAnchor.MiddleCenter);
+            if (warning.Length > 0)
+            {
+                ViewUtil.MakeText3D(transform, "Warn", new Vector2(0f, 3.5f), warning, 48, 0.032f,
+                    new Color(1f, 0.5f, 0.42f), 52, TextAnchor.MiddleCenter);
+            }
+
+            // Filled cells take the chosen element's colour so the preview matches the board;
+            // a plain (no-element) block keeps the neutral fill.
+            Color fillColor = SelectedElement.HasValue
+                ? ViewUtil.ElementColor(SelectedElement.Value)
+                : FilledColor;
 
             // grid: row 0 drawn at the top
             for (int r = 0; r < GridSize; r++)
@@ -182,11 +278,11 @@ namespace ProjectBlock.View
                         GridCenter.y + ((GridSize - 1) * 0.5f - r) * CellPitch);
                     int x = c;
                     int y = GridSize - 1 - r; // grid-space y up, matches ShapeCells indexing
-                    // cellCenters is indexed x + y*GridSize to match ToggleCellAt's math
+                    // cellCenters is indexed x + y*GridSize to match CellIndexAt's math
                     RegisterCell(x, y, center);
                     ViewUtil.MakeRect(transform, "Cell_" + c + "_" + r, center,
                         new Vector2(CellSize, CellSize),
-                        filled[x, y] ? FilledColor : EmptyColor, 51);
+                        filled[x, y] ? fillColor : EmptyColor, 51);
                 }
             }
 

@@ -43,6 +43,10 @@ namespace ProjectBlock.View
         private ChoicePickerView choicePicker;
         private BlockDesignerView blockDesigner;
         private int designerPowerId;
+        // Drag-paint stroke in the block designer: painting=true while the button is held after
+        // a press on the grid; paintFill is the op decided by the first cell (empty->fill).
+        private bool designerPainting;
+        private bool designerPaintFill;
         private CrtOverlayView crt;
 
         private enum ChoiceKind { None, BatakBet, PowerbankTarget }
@@ -362,15 +366,20 @@ namespace ProjectBlock.View
             }
             if (blockDesigner.IsOpen)
             {
-                // modal: draw cells / pick an element / Confirm or Cancel; Esc cancels
+                // modal: drag to paint cells / pick an element / Confirm or Cancel; Esc cancels
                 if (kb != null && kb.escapeKey.wasPressedThisFrame)
                 {
+                    designerPainting = false;
                     blockDesigner.Hide();
                     return;
                 }
-                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                if (mouse == null)
                 {
-                    Vector2 dw = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                    return;
+                }
+                Vector2 dw = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                if (mouse.leftButton.wasPressedThisFrame)
+                {
                     int btn = blockDesigner.ButtonAt(dw);
                     if (btn == 1)
                     {
@@ -388,7 +397,31 @@ namespace ProjectBlock.View
                         blockDesigner.SelectElement(el);
                         return;
                     }
-                    blockDesigner.ToggleCellAt(dw);
+                    // Grid press: start a paint stroke. The first cell decides the op - press an
+                    // empty cell to paint, a filled one to erase - and the drag applies it on.
+                    int cell = blockDesigner.CellIndexAt(dw);
+                    if (cell >= 0)
+                    {
+                        designerPaintFill = !blockDesigner.IsCellFilled(cell);
+                        designerPainting = true;
+                        blockDesigner.SetCell(cell, designerPaintFill);
+                    }
+                    return;
+                }
+                if (designerPainting)
+                {
+                    if (mouse.leftButton.isPressed)
+                    {
+                        int cell = blockDesigner.CellIndexAt(dw);
+                        if (cell >= 0)
+                        {
+                            blockDesigner.SetCell(cell, designerPaintFill);
+                        }
+                    }
+                    else
+                    {
+                        designerPainting = false;
+                    }
                 }
                 return;
             }
@@ -1004,6 +1037,15 @@ namespace ProjectBlock.View
             if (cells.Count == 0)
             {
                 return; // nothing drawn yet - leave the designer open
+            }
+            // A block must be one connected piece; reject scattered cells and keep the designer
+            // open with a warning rather than baking a disjoint "block".
+            if (!blockDesigner.IsSingleConnectedPiece())
+            {
+                blockDesigner.SetWarning(Loc.Pick(
+                    "the shape must be one connected piece",
+                    "şekil tek parça bağlı olmalı"));
+                return;
             }
             BlockShape shape = BlockShape.FromCells(cells);
             BlockElement? element = blockDesigner.SelectedElement;

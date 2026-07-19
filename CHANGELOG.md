@@ -39,6 +39,10 @@ everything here is unreleased and balance numbers are still placeholders.
   placeholders in `MarketConfig`; grades live in `RarityTable` (baked from the grader).
 
 ### Changed
+- **Karakter Oluşturma** (block designer) — nicer to draw with: **click-and-drag to paint** (the
+  first cell decides paint vs. erase), filled cells now show the **selected element's colour**,
+  and Confirm **rejects shapes that aren't one connected piece** (with a warning) instead of
+  baking a scattered block. Ghost and gear (Mechanical) are dropped from the element palette.
 - **Hileli Zar** (power) — the opening-hand picker is now deliberate: click to select/deselect
   cards (chosen cards are highlighted), and commit with a **CONFIRM** button that only lights up
   once exactly the right number is picked, instead of auto-confirming on the last click.
