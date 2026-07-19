@@ -270,15 +270,31 @@ namespace ProjectBlock.View
                     {
                         if (powersMode)
                         {
-                            Power granted = session.Powers.Add(PowerRegistry.All[index].Create());
-                            Debug.Log("[project_block] Power granted: " + granted.DisplayName
-                                + " - " + granted.Description);
+                            PowerDefinition def = PowerRegistry.All[index];
+                            if (session.CanAcquirePower(def))
+                            {
+                                Power granted = session.Powers.Add(def.Create());
+                                Debug.Log("[project_block] Power granted: " + granted.DisplayName);
+                            }
+                            else
+                            {
+                                Debug.Log("[project_block] Cannot grant " + def.DisplayName
+                                    + " (already owned or no slot).");
+                            }
                         }
                         else
                         {
-                            Joker granted = session.Jokers.Add(JokerRegistry.All[index].Create());
-                            Debug.Log("[project_block] Joker granted: " + granted.DisplayName
-                                + " - " + granted.Description);
+                            JokerDefinition def = JokerRegistry.All[index];
+                            if (session.CanAcquireJoker(def))
+                            {
+                                Joker granted = session.Jokers.Add(def.Create());
+                                Debug.Log("[project_block] Joker granted: " + granted.DisplayName);
+                            }
+                            else
+                            {
+                                Debug.Log("[project_block] Cannot grant " + def.DisplayName
+                                    + " (duplicate, no slot, or a legendary is already held).");
+                            }
                         }
                         RefreshAll(null);
                     }

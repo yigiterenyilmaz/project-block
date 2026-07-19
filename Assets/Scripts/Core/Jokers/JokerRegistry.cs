@@ -16,6 +16,12 @@ namespace ProjectBlock.Core
         public string DefId { get; }
         public string DisplayName { get; }
 
+        /// <summary>Whether this joker kind is legendary (at most one held at a time).</summary>
+        public bool IsLegendary
+        {
+            get { return sample.IsLegendary; }
+        }
+
         /// <summary>Read LIVE off a sample instance, so it follows the Loc language.</summary>
         public string Description
         {

@@ -142,7 +142,7 @@ namespace ProjectBlock.Core
             }
             if (offer.Kind == MarketOfferKind.Joker)
             {
-                if (Jokers.IsFull || offer.Joker == null)
+                if (!CanAcquireJoker(offer.Joker))
                 {
                     return false;
                 }
@@ -150,7 +150,7 @@ namespace ProjectBlock.Core
             }
             else if (offer.Kind == MarketOfferKind.Power)
             {
-                if (Powers.IsFull || offer.Power == null)
+                if (!CanAcquirePower(offer.Power))
                 {
                     return false;
                 }
@@ -164,6 +164,63 @@ namespace ProjectBlock.Core
             offer.Sold = true;
             purchasedThisMarket = true;
             return true;
+        }
+
+        /// <summary>True if the player already owns a joker of this kind.</summary>
+        public bool OwnsJoker(string defId)
+        {
+            foreach (Joker joker in Jokers.Jokers)
+            {
+                if (joker.DefId == defId)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>True if the player already owns a power of this kind.</summary>
+        public bool OwnsPower(string defId)
+        {
+            foreach (Power power in Powers.Powers)
+            {
+                if (power.DefId == defId)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>True if any held joker is legendary (only one may be held at a time).</summary>
+        public bool HoldsLegendaryJoker()
+        {
+            foreach (Joker joker in Jokers.Jokers)
+            {
+                if (joker.IsLegendary)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Whether this joker kind can be acquired right now: a free slot, no
+        /// duplicate copy, and - for a legendary - no legendary already held.</summary>
+        public bool CanAcquireJoker(JokerDefinition definition)
+        {
+            if (definition == null || Jokers.IsFull || OwnsJoker(definition.DefId))
+            {
+                return false;
+            }
+            return !(definition.IsLegendary && HoldsLegendaryJoker());
+        }
+
+        /// <summary>Whether this power kind can be acquired right now: a free slot and no
+        /// duplicate copy.</summary>
+        public bool CanAcquirePower(PowerDefinition definition)
+        {
+            return definition != null && !Powers.IsFull && !OwnsPower(definition.DefId);
         }
 
         /// <summary>Sells an owned card back for its sell value (added to TotalScore) and
@@ -344,23 +401,44 @@ namespace ProjectBlock.Core
             {
                 owned.Add(held.DefId);
             }
+            // A legendary the player already holds one of is filtered out entirely (only one
+            // legendary may be held), alongside plain duplicates.
+            bool holdsLegendary = HoldsLegendaryJoker();
             var pool = new List<JokerDefinition>();
             foreach (JokerDefinition definition in catalogue)
             {
-                if (!owned.Contains(definition.DefId))
+                if (owned.Contains(definition.DefId))
                 {
-                    pool.Add(definition);
+                    continue;
                 }
+                if (definition.IsLegendary && holdsLegendary)
+                {
+                    continue;
+                }
+                pool.Add(definition);
             }
             if (pool.Count == 0)
             {
                 return;
             }
             jokerRng.Shuffle(pool);
+            // At most one legendary per visit, so the player is never teased with a second
+            // legendary they could not also take.
             int count = Math.Min(market.JokerOfferCount, pool.Count);
-            for (int i = 0; i < count; i++)
+            int taken = 0;
+            bool legendaryTaken = false;
+            for (int i = 0; i < pool.Count && taken < count; i++)
             {
+                if (pool[i].IsLegendary)
+                {
+                    if (legendaryTaken)
+                    {
+                        continue;
+                    }
+                    legendaryTaken = true;
+                }
                 newOffers.Add(new MarketOffer(pool[i], market.JokerPrice));
+                taken++;
             }
         }
 

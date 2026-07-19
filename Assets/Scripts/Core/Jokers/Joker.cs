@@ -102,6 +102,11 @@ namespace ProjectBlock.Core
         /// so two copies of the same joker are still distinguishable.</summary>
         public int InstanceId { get; internal set; }
 
+        /// <summary>Legendary jokers are the powerful pile-rewriters (Oryantasyon, İmitasyon,
+        /// Dezenformasyon, Fraksiyon). At most ONE legendary may be held at a time; the market
+        /// and the debug picker enforce that through GameSession. Set in the constructor.</summary>
+        public bool IsLegendary { get; protected set; }
+
         // ---------------------------------------------------------------- sell value
 
         /// <summary>Base price the market will buy this joker back for.</summary>

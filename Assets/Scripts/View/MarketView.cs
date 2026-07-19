@@ -37,6 +37,7 @@ namespace ProjectBlock.View
         private static readonly Color JokerDescColor = new Color(0.82f, 0.86f, 0.92f);
         private static readonly Color PowerBodyColor = new Color(0.12f, 0.30f, 0.34f);
         private static readonly Color PowerTagColor = new Color(0.55f, 0.92f, 0.95f);
+        private static readonly Color LegendaryTagColor = new Color(1f, 0.78f, 0.30f);
 
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
@@ -131,8 +132,9 @@ namespace ProjectBlock.View
                     // Joker/power tiles have no CardVisual; a null keeps offerVisuals
                     // index-aligned with the offers so PlayBuyFx and OfferAt stay correct.
                     offerVisuals.Add(null);
-                    BuildNamedTile(slotCenter, i, "JOKER", offer.Joker.DisplayName,
-                        offer.Joker.Description, JokerBodyColor, JokerTagColor);
+                    BuildNamedTile(slotCenter, i, offer.Joker.IsLegendary ? "LEGENDARY" : "JOKER",
+                        offer.Joker.DisplayName, offer.Joker.Description, JokerBodyColor,
+                        offer.Joker.IsLegendary ? LegendaryTagColor : JokerTagColor);
                 }
                 else if (offer.Kind == MarketOfferKind.Power)
                 {

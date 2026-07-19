@@ -30,6 +30,7 @@ namespace ProjectBlock.Core
                 "Kartlar ıskartaya değil, çekme destesinin rastgele bir yerine "
                     + "girer. Destenin en üstteki kartı hep görünür.");
             BaseSellValue = 55;
+            IsLegendary = true;
         }
 
         public override void OnAcquired(SessionContext ctx)
@@ -78,6 +79,7 @@ namespace ProjectBlock.Core
                 "Her tur deste ikiye bölünüp karılır ve çekme/ıskarta rolleri yer "
                     + "değiştirir. El boyutu +1.");
             BaseSellValue = 60;
+            IsLegendary = true;
         }
 
         public override string StatusText
@@ -156,6 +158,7 @@ namespace ProjectBlock.Core
                 "El boyutun ıskartadaki kart sayısına eşit olur (en az 1). Tur "
                     + "sonunda elde kalanlar da ıskartaya gider.");
             BaseSellValue = 60;
+            IsLegendary = true;
         }
 
         public override string StatusText
@@ -229,6 +232,7 @@ namespace ProjectBlock.Core
                     + "bir kez takas edebilirsin.");
             ChargesPerRound = 0; // charges are per RESHUFFLE here, not per round
             BaseSellValue = 65;
+            IsLegendary = true;
         }
 
         /// <summary>True while the player still holds this cycle's swap.</summary>
