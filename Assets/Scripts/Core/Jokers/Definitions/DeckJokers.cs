@@ -186,6 +186,7 @@ namespace ProjectBlock.Core
                 originalHandSize = ctx.Rules.HandSize;
             }
             ctx.Rules.DrawOnlyAvailableNoReshuffle = true;
+            ctx.Rules.SkipStandardRefill = true;
             // The next round opens with an empty discard, so the opening hand is one card.
             // This must be set BEFORE the round's engine fills its opening hand.
             ctx.Rules.HandSize = 1;
@@ -199,6 +200,7 @@ namespace ProjectBlock.Core
                 originalHandSize = -1;
             }
             ctx.Rules.DrawOnlyAvailableNoReshuffle = false;
+            ctx.Rules.SkipStandardRefill = false;
         }
 
         /// <summary>Reset the shared hand size to one BEFORE the next round is built, so its
@@ -212,6 +214,7 @@ namespace ProjectBlock.Core
         public override void OnRoundStarted(RoundContext ctx)
         {
             ctx.Rules.DrawOnlyAvailableNoReshuffle = true;
+            ctx.Rules.SkipStandardRefill = true;
             // The round starts with an empty discard, so the hand starts at the minimum.
             Resize(ctx.Rules, ctx.Round.Deck.DiscardCount);
         }

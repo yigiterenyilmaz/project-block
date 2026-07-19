@@ -47,6 +47,12 @@ namespace ProjectBlock.Core
         /// with no placement resolving). Off in the base game.</summary>
         public bool CountExternalSweeps = false;
 
+        /// <summary>"İmitasyon": skip the engine's standard end-of-placement hand refill. The
+        /// joker dumps the leftover hand and refills to the mirrored size itself in
+        /// AfterTurnScored; if the engine topped the hand up first, that extra card would just
+        /// be discarded again and inflate the mirror (the discard would grow too fast).</summary>
+        public bool SkipStandardRefill = false;
+
         /// <summary>"İmitasyon": a hand refill draws only what the draw pile actually holds -
         /// it never auto-recycles the discard, and running the pile dry mid-refill is NOT a
         /// loss (the hand just stays partial). The joker recycles explicitly, only when a

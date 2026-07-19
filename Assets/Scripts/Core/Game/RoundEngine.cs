@@ -809,8 +809,12 @@ namespace ProjectBlock.Core
             else
             {
                 DisposeCard(card);
-                // 7. refill
-                RefillHand();
+                // 7. refill - unless a joker manages the hand itself ("İmitasyon" refills in
+                // AfterTurnScored, so topping up here would just draw a card it discards).
+                if (!Rules.SkipStandardRefill)
+                {
+                    RefillHand();
+                }
             }
 
             // 8. end-of-turn effects (may still add score - see step 9)
