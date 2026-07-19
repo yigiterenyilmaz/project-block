@@ -6,8 +6,8 @@ Renderer asset, which is fragile to hand-edit) is adding the Full Screen Pass fe
 
 ## What's already in the project
 
-- `Assets/Shaders/CrtEdgeBend.shader` — `Hidden/ProjectBlock/CrtEdgeBend`. A URP fullscreen blit
-  shader that warps the image outward (barrel bulge) with a soft vignette.
+- `Assets/Shaders/CrtEdgeBend.shader` — `ProjectBlock/CrtEdgeBend`. A URP fullscreen blit shader
+  that warps the image outward (barrel bulge) with a soft vignette.
 - Game toggle — `GameUiController.SyncRetroPresentation()` sets the global float **`_CrtBend`**
   (`1` in retro mode, `0` otherwise) alongside the CRT overlay and audio. It is harmless before
   the steps below are done (nothing reads the global yet), so nothing breaks in the meantime.
@@ -19,8 +19,8 @@ darkening — so leaving the feature always-on only costs a cheap blit when retr
 ## Editor steps (do these once)
 
 1. **Make a material.** Right-click `Assets/Shaders/` → Create → Material, name it `CrtEdgeBend`.
-   In its Inspector set Shader to **`Hidden/ProjectBlock/CrtEdgeBend`** (Shader dropdown → Hidden →
-   ProjectBlock → CrtEdgeBend). Optionally tune **Barrel Amount** (~0.28) and **Vignette** (~0.5).
+   In its Inspector set Shader to **`ProjectBlock/CrtEdgeBend`** (Shader dropdown → ProjectBlock →
+   CrtEdgeBend). Optionally tune **Barrel Amount** (~0.28) and **Vignette** (~0.5).
 2. **Add the feature to the 2D renderer.** Select `Assets/Settings/Renderer2D.asset`. In the
    Inspector, **Add Renderer Feature → Full Screen Pass Renderer Feature**.
 3. **Configure the feature:**
@@ -34,7 +34,7 @@ darkening — so leaving the feature always-on only costs a cheap blit when retr
 ## Tuning / troubleshooting
 
 - **Too strong / too subtle:** adjust `Barrel Amount` on the material (0 = flat, ~0.4 = strong).
-- **No effect at all:** confirm the material's shader is `Hidden/ProjectBlock/CrtEdgeBend` and the
+- **No effect at all:** confirm the material's shader is `ProjectBlock/CrtEdgeBend` and the
   feature's Pass Material points at it; confirm you edited **Renderer2D.asset** (the one the active
   URP asset uses).
 - **Shader compile error** on this Unity version: the include path for the fullscreen `Vert` /

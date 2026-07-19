@@ -6,7 +6,7 @@
 // Shader.SetGlobalFloat from the view whenever RoundRules.RetroMode changes. The per-material
 // _BarrelAmount / _Vignette are the tunable strengths, multiplied by _CrtBend, so at bend 0 the
 // pass is an exact passthrough (no warp, no darkening) and costs only a blit.
-Shader "Hidden/ProjectBlock/CrtEdgeBend"
+Shader "ProjectBlock/CrtEdgeBend"
 {
     Properties
     {
