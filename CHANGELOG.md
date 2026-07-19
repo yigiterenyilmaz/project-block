@@ -7,6 +7,9 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **Retro audio** — while retro mode is on, a looping **CRT hum** plays and every sound is
+  **bit-crushed** (sample-and-hold downsample + bit-depth reduction), toggled alongside the CRT
+  overlay. Part of the in-progress Retro power.
 - **Joker/power hover details** — hovering a held joker or power panel in the bar now pops a
   tooltip with its name, live description and status (works during a round and in the market).
   Dynamic text is surfaced live, so Halüsinasyon shows its current form.

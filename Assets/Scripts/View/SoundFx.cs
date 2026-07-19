@@ -14,23 +14,93 @@ namespace ProjectBlock.View
         private const float MasterVolume = 0.5f;
 
         private AudioSource source;
+        private AudioSource humSource;
         private AudioClip placeClip;
         private AudioClip explodeClip;
         private AudioClip sweepClip;
         private AudioClip shuffleClip;
         private AudioClip buyClip;
         private AudioClip flameClip;
+        private AudioClip humClip;
+
+        // ---- retro ("CRT") audio: a looping hum + a bit-crush DSP on this object's sources,
+        // both toggled by SetRetro. retroActive is read on the audio thread, hence volatile.
+        private volatile bool retroActive;
+        private int crushHold;      // samples until the next fresh sample is latched (downsample)
+        private float[] crushHeld;  // last latched sample per channel
 
         private void Awake()
         {
             source = gameObject.AddComponent<AudioSource>();
             source.playOnAwake = false;
+            humSource = gameObject.AddComponent<AudioSource>();
+            humSource.playOnAwake = false;
+            humSource.loop = true;
             placeClip = BuildPlace();
             explodeClip = BuildExplode();
             sweepClip = BuildSweep();
             shuffleClip = BuildShuffle();
             buyClip = BuildBuy();
             flameClip = BuildFlame();
+            humClip = BuildHum();
+            humSource.clip = humClip;
+            humSource.volume = 0.18f;
+        }
+
+        /// <summary>Turns the retro CRT audio on/off: the mains-hum loop and the bit-crush that
+        /// downsamples + bit-reduces every sound this object plays. Called wherever the CRT
+        /// overlay is toggled (RetroMode).</summary>
+        public void SetRetro(bool on)
+        {
+            retroActive = on;
+            if (humSource == null)
+            {
+                return;
+            }
+            if (on)
+            {
+                if (!humSource.isPlaying)
+                {
+                    humSource.Play();
+                }
+            }
+            else
+            {
+                humSource.Stop();
+            }
+        }
+
+        /// <summary>Bit-crush filter on this GameObject's AudioSources (SFX + hum). Runs on the
+        /// audio thread, so it stays allocation-free except for a one-time per-channel buffer.
+        /// Pass-through when retro is off.</summary>
+        private void OnAudioFilterRead(float[] data, int channels)
+        {
+            if (!retroActive || channels <= 0)
+            {
+                return;
+            }
+            if (crushHeld == null || crushHeld.Length != channels)
+            {
+                crushHeld = new float[channels]; // only when the channel count changes (rare)
+            }
+            const int downsample = 4;   // ~44.1 kHz -> ~11 kHz sample-and-hold
+            const float levels = 32f;   // ~5-bit depth quantization
+            for (int i = 0; i + channels <= data.Length; i += channels)
+            {
+                if (crushHold <= 0)
+                {
+                    crushHold = downsample;
+                    for (int c = 0; c < channels; c++)
+                    {
+                        crushHeld[c] = Mathf.Round(data[i + c] * levels) / levels;
+                    }
+                }
+                crushHold--;
+                for (int c = 0; c < channels; c++)
+                {
+                    data[i + c] = crushHeld[c];
+                }
+            }
         }
 
         public void Place()
@@ -192,6 +262,27 @@ namespace ProjectBlock.View
             AddTone(buffer, 0, 0.09f, 880f, 880f, 0.35f, 1.5f);
             AddTone(buffer, (int)(SampleRate * 0.07f), 0.13f, 1319f, 1319f, 0.35f, 2f);
             return Finish("buy", buffer);
+        }
+
+        /// <summary>A seamless-looping CRT hum: 60 Hz mains + its 120 Hz harmonic + a thin
+        /// high-pitched "flyback" whine. All frequencies are multiples of the loop's base
+        /// frequency (2 Hz over a 0.5 s buffer) so the loop has no click.</summary>
+        private static AudioClip BuildHum()
+        {
+            float[] buffer = Buffer(0.5f); // 2 Hz base -> only even frequencies loop cleanly
+            AddSteadyTone(buffer, 60f, 0.12f);
+            AddSteadyTone(buffer, 120f, 0.06f);
+            AddSteadyTone(buffer, 9960f, 0.015f); // faint line-scan whine
+            return Finish("crtHum", buffer);
+        }
+
+        /// <summary>Adds a constant-amplitude sine over the WHOLE buffer (no decay), for loops.</summary>
+        private static void AddSteadyTone(float[] buffer, float freq, float amplitude)
+        {
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                buffer[i] += Mathf.Sin(2f * Mathf.PI * freq * i / SampleRate) * amplitude;
+            }
         }
     }
 }

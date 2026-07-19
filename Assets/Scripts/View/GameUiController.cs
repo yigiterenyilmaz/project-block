@@ -182,6 +182,10 @@ namespace ProjectBlock.View
             {
                 crt.SetVisible(session.Config.Rules.RetroMode);
             }
+            if (sfx != null)
+            {
+                sfx.SetRetro(session.Config.Rules.RetroMode); // CRT hum + bit-crush follow retro
+            }
             RoundEngine round = session.CurrentRound;
             if (boardView.Board != round.Board)
             {
@@ -1679,6 +1683,10 @@ namespace ProjectBlock.View
             if (crt != null)
             {
                 crt.SetVisible(session.Config.Rules.RetroMode); // CRT follows retro mode
+            }
+            if (sfx != null)
+            {
+                sfx.SetRetro(session.Config.Rules.RetroMode); // hum + bit-crush follow retro
             }
         }
 
