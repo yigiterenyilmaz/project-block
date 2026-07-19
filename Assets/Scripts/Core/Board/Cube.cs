@@ -21,7 +21,8 @@ namespace ProjectBlock.Core
         Dynamite = 7,
 
         /// <summary>"Kara delik" trap: placeable-over like Transparent, but the cube that
-        /// lands on it is destroyed instead, and the void is consumed.</summary>
+        /// lands on it is destroyed instead, and the void is consumed. Indestructible and
+        /// sweep-exempt, so it survives line explosions/sweeps and persists until sprung.</summary>
         Void = 9,
 
         /// <summary>"Mayın" power: an armed empty cell. Behaves like Void on contact - the
@@ -70,21 +71,28 @@ namespace ProjectBlock.Core
     /// <summary>Central per-kind rule answers. Query this, never hardcode kind behavior.</summary>
     public static class CubeRules
     {
-        /// <summary>Does this cube block a clean sweep ("temizlik")? Obsidian and gold
-        /// are the confirmed exceptions; a Parazit host cube is exempt too.</summary>
+        /// <summary>Does this cube block a clean sweep ("temizlik")? Obsidian, gold and ice
+        /// are the confirmed exceptions, and a Parazit host cube is exempt too. Void is exempt
+        /// as well: a "Kara delik" trap persists through sweeps, so a board holding nothing but
+        /// void counts as swept.</summary>
         public static bool CountsForCleanSweep(Cube cube)
         {
             return !cube.Protected
                 && cube.Kind != CubeKind.Obsidian
                 && cube.Kind != CubeKind.Gold
-                && cube.Kind != CubeKind.Ice;
+                && cube.Kind != CubeKind.Ice
+                && cube.Kind != CubeKind.Void;
         }
 
-        /// <summary>Can a LINE EXPLOSION destroy this cube? A Parazit host is destructible
-        /// here on purpose - a player-completed line is the only thing that breaks it.</summary>
+        /// <summary>Can a LINE EXPLOSION destroy this cube? Obsidian and gold never break, and
+        /// void does not either - a "Kara delik" trap is indestructible and only vanishes when a
+        /// cube lands on it (consumed on contact in GameBoard.Place). A Parazit host IS
+        /// destructible here on purpose - a player-completed line is the only thing that breaks it.</summary>
         public static bool IsDestructible(Cube cube)
         {
-            return cube.Kind != CubeKind.Obsidian && cube.Kind != CubeKind.Gold;
+            return cube.Kind != CubeKind.Obsidian
+                && cube.Kind != CubeKind.Gold
+                && cube.Kind != CubeKind.Void;
         }
 
         /// <summary>Can an EXTERNAL effect (a joker or power) destroy this cube? Same as
