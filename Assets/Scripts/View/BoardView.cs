@@ -187,6 +187,7 @@ namespace ProjectBlock.View
         }
         private float cellSize = 1f;
         private Vector2 bottomLeft;
+        private SpriteRenderer deadZoneLine; // red separator for the retro dead zone, or null
 
         /// <summary>The board currently displayed (used to detect round changes).</summary>
         public GameBoard Board
@@ -221,6 +222,7 @@ namespace ProjectBlock.View
             outsidePreviewSprites.Clear();
             infectionMarkers.Clear();
             infectionCells.Clear();
+            deadZoneLine = null; // destroyed with the other children above; redrawn by SetDeadZone
             board = newBoard;
             cellSize = Mathf.Min(maxWorldSize / board.Width, maxWorldSize / board.Height);
             bottomLeft = center - new Vector2(board.Width, board.Height) * (cellSize * 0.5f);
@@ -495,6 +497,29 @@ namespace ProjectBlock.View
                     previewRenderers[pos.X - board.MinX, pos.Y - board.MinY].enabled = true;
                 }
             }
+        }
+
+        /// <summary>Draws (or hides) the red line separating the game area from the retro dead
+        /// zone - the top <paramref name="deadZoneRows"/> rows. Recreated on demand; the controller
+        /// calls it after each refresh (the board may have been rebuilt/resized).</summary>
+        public void SetDeadZone(int deadZoneRows)
+        {
+            if (deadZoneLine != null)
+            {
+                Destroy(deadZoneLine.gameObject);
+                deadZoneLine = null;
+            }
+            if (board == null || deadZoneRows <= 0 || deadZoneRows >= board.Height)
+            {
+                return;
+            }
+            int floor = board.MinY + board.Height - deadZoneRows; // first dead row
+            Vector2 leftCell = CellToWorld(new GridPos(board.MinX, floor));
+            float y = leftCell.y - cellSize * 0.5f;               // bottom edge of the first dead row
+            float width = board.Width * cellSize;
+            float cx = leftCell.x - cellSize * 0.5f + width * 0.5f;
+            deadZoneLine = ViewUtil.MakeRect(transform, "DeadZoneLine", new Vector2(cx, y),
+                new Vector2(width, 0.14f), new Color(0.95f, 0.22f, 0.22f), 6);
         }
 
         /// <summary>Retro falling-piece render: the ghost (where the piece will land) faint,

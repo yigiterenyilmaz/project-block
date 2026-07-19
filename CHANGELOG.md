@@ -39,7 +39,10 @@ everything here is unreleased and balance numbers are still placeholders.
   and a **steerable falling-piece placement**: click a hand card to drop it from the top, then
   Left/Right move, Up/X rotate, Down soft-drops and Space hard-drops with a landing ghost — on
   lock it settles through the normal placement rules (gravity only chooses where it lands).
-  *First pass; fall speed / lock feel still want tuning in Unity.* A fullscreen **CRT edge-bend**
+  *First pass; fall speed / lock feel still want tuning in Unity.* Retro also adds a **dead zone**:
+  an overflow area grown on top of the game area (separated by a **red line**) where clears score
+  nothing — you can't turn retro off while it holds cubes, and filling the game area below is a
+  loss. A fullscreen **CRT edge-bend**
   (barrel-distortion) shader now ships too — the whole screen bows at the edges in retro mode —
   driven by the `_CrtBend` global; it needs one Editor step to wire (see `docs/crt-edge-bend.md`).
 - **In-game Rarity Grader** — press **F2** in Play mode to browse every joker/power, read its

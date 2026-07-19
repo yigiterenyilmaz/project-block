@@ -41,7 +41,11 @@ namespace ProjectBlock.Core
 
         /// <summary>Overtime rule: after the threshold was passed, the draw pile ran dry
         /// before a clean sweep re-shuffled it.</summary>
-        DrawPileEmptyAfterThreshold = 2
+        DrawPileEmptyAfterThreshold = 2,
+
+        /// <summary>Retro dead-zone rule: the GAME area (every row below the dead zone) filled
+        /// up completely, so there is nowhere left to build.</summary>
+        GameAreaFilled = 4
     }
 
     /// <summary>One cube that was removed from the board during a turn, with the value it

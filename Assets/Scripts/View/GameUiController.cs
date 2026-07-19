@@ -208,6 +208,7 @@ namespace ProjectBlock.View
             }
             flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
             boardView.Refresh();
+            boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshInfections();
             sfx.Shuffle();
@@ -1252,6 +1253,13 @@ namespace ProjectBlock.View
                 Debug.Log("[project_block] " + power.DisplayName + " could not be used.");
                 boardView.ClearPreview();
                 RefreshAll(null);
+                // Retro only refuses when turning OFF with a dirty dead zone - tell the player.
+                if (power.DefId == "retro")
+                {
+                    messageText.text = Loc.Pick(
+                        "Clear the dead zone before leaving retro mode.",
+                        "Retro modundan çıkmadan önce ölü bölgeyi temizle.");
+                }
                 return;
             }
             // Prefer the cells actually destroyed between turns (no board resize, so their coords
@@ -1928,6 +1936,7 @@ namespace ProjectBlock.View
                 boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
             }
             boardView.Refresh();
+            boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshInfections();
             cardLayer.Sync(round, report);
@@ -1944,6 +1953,10 @@ namespace ProjectBlock.View
         private void SyncRetroPresentation()
         {
             bool on = session != null && session.Config.Rules.RetroMode;
+            if (!on)
+            {
+                retroFallHand = -1; // no piece falls once retro is off (the board shrank back)
+            }
             if (crt != null)
             {
                 crt.SetVisible(on);

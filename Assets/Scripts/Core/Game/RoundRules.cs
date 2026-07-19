@@ -66,5 +66,12 @@ namespace ProjectBlock.Core
         /// and pays ScoringConfig.RetroPlacementBonus per placement. Toggled by the retro power;
         /// persists across rounds until toggled off (it is a mode, not a per-round bend).</summary>
         public bool RetroMode = false;
+
+        /// <summary>"retro" dead zone: how many rows on TOP of the board are the overflow "dead"
+        /// zone (0 when not in retro). The board is grown by this many rows when retro turns on.
+        /// Cubes destroyed in a dead row score nothing; while any dead cell is occupied the retro
+        /// toggle refuses to turn off; and filling the whole GAME area (the rows below) is a loss.
+        /// A row y is dead when y &gt;= Board.MinY + Board.Height - DeadZoneRows.</summary>
+        public int DeadZoneRows = 0;
     }
 }

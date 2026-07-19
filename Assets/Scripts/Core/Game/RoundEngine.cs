@@ -791,7 +791,32 @@ namespace ProjectBlock.Core
             LogDestruction();
             if (explosion.LineCount > 0)
             {
-                breakdown.BaseLines = scorer.ScoreLineExplosion(explosion.LineCount, cubesExploded);
+                int scoredLines = explosion.LineCount;
+                int scoredCubes = cubesExploded;
+                if (Rules.DeadZoneRows > 0)
+                {
+                    // Retro dead zone: rows/cubes in the top overflow zone earn nothing, so drop
+                    // them from the scored totals (a line clear up there is survival, not points).
+                    int deadRows = 0;
+                    for (int i = 0; i < explosion.Rows.Count; i++)
+                    {
+                        if (IsDeadRow(explosion.Rows[i]))
+                        {
+                            deadRows++;
+                        }
+                    }
+                    int deadCubes = 0;
+                    for (int i = 0; i < explosion.ExplodedCells.Count; i++)
+                    {
+                        if (IsDeadRow(explosion.ExplodedCells[i].Y))
+                        {
+                            deadCubes++;
+                        }
+                    }
+                    scoredLines = System.Math.Max(0, explosion.LineCount - deadRows);
+                    scoredCubes = System.Math.Max(0, cubesExploded - deadCubes);
+                }
+                breakdown.BaseLines = scorer.ScoreLineExplosion(scoredLines, scoredCubes);
                 Board.SettleWaterAndReact(waterFrames); // explosions pull the floor out from water
                 ResyncSnapshot();
             }
@@ -886,6 +911,13 @@ namespace ProjectBlock.Core
                 Deck.ShuffleDiscardIntoDraw();
                 pendingAdvanceOffer = true;
                 EnterOvertime();
+            }
+
+            // Retro dead-zone rule: filling the whole GAME area (below the dead zone) is a loss.
+            // Sampled here so it obeys the same "advance offer outranks the loss" ordering below.
+            if (Loss == null && Rules.DeadZoneRows > 0 && IsGameAreaFull())
+            {
+                Loss = LossReason.GameAreaFilled;
             }
 
             // 10./11. status update - see file header for why the offer outranks the loss.
@@ -1176,6 +1208,71 @@ namespace ProjectBlock.Core
                 // excess is already in scaled units (RoundScore is scaled), so no extra scale.
                 session.AddCurrency(-excess); // remove the overtime-farmed excess from the run
             }
+        }
+
+        /// <summary>Lowest y that is part of the retro dead zone (the top DeadZoneRows rows), or
+        /// int.MaxValue when there is no dead zone. Rows at or above this are the overflow zone.</summary>
+        private int DeadZoneFloor
+        {
+            get
+            {
+                return Rules.DeadZoneRows > 0
+                    ? Board.MinY + Board.Height - Rules.DeadZoneRows
+                    : int.MaxValue;
+            }
+        }
+
+        private bool IsDeadRow(int y)
+        {
+            return y >= DeadZoneFloor;
+        }
+
+        /// <summary>True if any cube sits in the retro dead zone. The retro toggle reads this - it
+        /// refuses to turn off while the dead zone still holds cubes.</summary>
+        public bool DeadZoneOccupied
+        {
+            get
+            {
+                if (Rules.DeadZoneRows <= 0)
+                {
+                    return false;
+                }
+                int top = Board.MinY + Board.Height - 1;
+                for (int y = DeadZoneFloor; y <= top; y++)
+                {
+                    for (int x = Board.MinX; x <= Board.MinX + Board.Width - 1; x++)
+                    {
+                        if (Board.GetCube(new GridPos(x, y)).HasValue)
+                        {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+        }
+
+        /// <summary>True if every playable cell of the GAME area (the rows below the dead zone) is
+        /// filled - the retro loss condition. False when there is no dead zone.</summary>
+        private bool IsGameAreaFull()
+        {
+            if (Rules.DeadZoneRows <= 0)
+            {
+                return false;
+            }
+            int floor = DeadZoneFloor;
+            for (int y = Board.MinY; y < floor; y++)
+            {
+                for (int x = Board.MinX; x <= Board.MinX + Board.Width - 1; x++)
+                {
+                    var p = new GridPos(x, y);
+                    if (Board.IsInside(p) && !Board.GetCube(p).HasValue)
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
         }
 
         /// <summary>Clears every destructible cube WITHOUT scoring or triggering a sweep

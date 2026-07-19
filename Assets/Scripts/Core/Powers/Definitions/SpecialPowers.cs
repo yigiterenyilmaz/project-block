@@ -534,6 +534,9 @@ namespace ProjectBlock.Core
     /// View's job; the engine reads the one flag. Using it again turns it back off.</summary>
     public sealed class RetroPower : Power
     {
+        /// <summary>Rows grown on TOP of the game area as the retro overflow "dead zone".</summary>
+        public const int DeadZoneHeight = 4;
+
         private bool on;
 
         public RetroPower()
@@ -554,10 +557,50 @@ namespace ProjectBlock.Core
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
         {
-            on = !on;
+            RoundEngine round = ctx.Round;
+            if (on)
+            {
+                // Turning OFF is refused while the dead zone still holds cubes (clear it first),
+                // and otherwise shrinks the overflow rows back off the top of the board.
+                if (round != null && round.DeadZoneOccupied)
+                {
+                    return false; // no spend, no toggle - retro stays on
+                }
+                if (round != null && ctx.Rules.DeadZoneRows > 0)
+                {
+                    round.ReshapeBoard(0, 0, 0, -ctx.Rules.DeadZoneRows);
+                }
+                ctx.Rules.DeadZoneRows = 0;
+                on = false;
+            }
+            else
+            {
+                // Turning ON grows an empty dead zone on top of the game area.
+                if (round != null && round.ReshapeBoard(0, 0, 0, DeadZoneHeight))
+                {
+                    ctx.Rules.DeadZoneRows = DeadZoneHeight;
+                }
+                on = true;
+            }
             ctx.Rules.RetroMode = on;
             KeepChargeAfterUse = true; // a toggle: never spends, never needs recharging
             return true;
+        }
+
+        /// <summary>Each round is built fresh, so bake the dead zone into the round's board size
+        /// here (BEFORE the board exists) when retro is on - taller than normal by DeadZoneHeight,
+        /// with those top rows marked dead. Runs early enough that the View never sees a mismatched
+        /// board. DeadZoneRows is reset to match, so it always tracks the CURRENT board.</summary>
+        public override RoundConfig FilterRoundConfig(SessionContext ctx, RoundConfig config)
+        {
+            if (!on)
+            {
+                ctx.Rules.DeadZoneRows = 0;
+                return config;
+            }
+            ctx.Rules.DeadZoneRows = DeadZoneHeight;
+            return new RoundConfig(config.RoundNumber, config.BoardWidth,
+                config.BoardHeight + DeadZoneHeight, config.ScoreThreshold, config.ExtraPlayableCells);
         }
 
         public override void OnRemoved(SessionContext ctx)
@@ -566,6 +609,7 @@ namespace ProjectBlock.Core
             if (on)
             {
                 ctx.Rules.RetroMode = false;
+                ctx.Rules.DeadZoneRows = 0;
                 on = false;
             }
         }
