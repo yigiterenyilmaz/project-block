@@ -59,28 +59,32 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>"Dezenformasyon" - once the round's opening hand is dealt, the draw pile is
-    /// split into two equal, individually-kept halves: one stays the draw pile, the other
-    /// becomes the discard. The piles are never poured together; each round re-splits from a
-    /// fresh shuffle, and which half you draw from alternates every round. Hand size +1.</summary>
+    /// split into two equal, individually-kept halves: one is the draw pile, the other the
+    /// discard. The two halves are never poured together. Each turn their ROLES swap: the pile
+    /// you drew from this turn becomes the one you discard into next turn, and vice versa - so
+    /// played cards always land in the CURRENT discard and draws come from the CURRENT draw
+    /// pile, even as those roles flip every turn. Hand size +1.</summary>
     public sealed class DezenformasyonJoker : Joker
     {
         public int ExtraHandSize = 1;
 
         private bool applied;
 
-        /// <summary>Rounds this joker has set up; the parity alternates the draw/discard roles.</summary>
-        public int RoundsSeen { get; private set; }
+        /// <summary>Turns played with this joker; the parity is the current draw/discard flow.</summary>
+        public int TurnsSeen { get; private set; }
 
         public DezenformasyonJoker()
             : base("dezenformasyon", "Dezenformasyon")
         {
             SetDescription(
                 "After the opening hand is dealt, the draw pile is split into two equal piles "
-                    + "- one draw, one discard - shuffled on their own and never mixed. The "
-                    + "roles alternate each round. Hand size +1.",
-                "Açılış eli dağıtıldıktan sonra çekme destesi iki eşit desteye bölünür - biri "
-                    + "çekme biri ıskarta - ayrı ayrı karılır, asla karışmazlar. Roller her "
-                    + "raunt değişir. El boyutu +1.");
+                    + "- one draw, one discard - kept separate and never mixed. Each turn the "
+                    + "two roles swap: you still discard into the current discard and draw from "
+                    + "the current draw pile, but which pile is which flips every turn. Hand +1.",
+                "Açılış eli dağıtıldıktan sonra çekme destesi iki eşit, ayrı desteye bölünür - "
+                    + "biri çekme biri ıskarta - asla karışmazlar. Her tur roller yer değiştirir: "
+                    + "yine mevcut ıskartaya atar, mevcut çekme destesinden çekersin, ama hangi "
+                    + "destenin hangisi olduğu her tur değişir. El +1.");
             BaseSellValue = 60;
             IsLegendary = true;
         }
@@ -89,7 +93,7 @@ namespace ProjectBlock.Core
         {
             get
             {
-                bool normal = RoundsSeen % 2 == 1; // first round (RoundsSeen==1) is "normal"
+                bool normal = TurnsSeen % 2 == 0;
                 return Loc.Pick(normal ? "normal flow" : "reversed flow",
                     (normal ? "normal" : "ters") + " yön");
             }
@@ -108,15 +112,17 @@ namespace ProjectBlock.Core
         public override void OnRoundStarted(RoundContext ctx)
         {
             Apply(ctx.Rules);
+            TurnsSeen = 0;
             // The engine has already dealt the opening hand; split what remains into halves.
             ctx.Round.Deck.SplitDrawIntoDiscard();
-            // Alternate which half is the draw pile each round (cosmetic on a fresh shuffle,
-            // but it is the "roles swap every round" the design calls for).
-            if (RoundsSeen % 2 == 1)
-            {
-                ctx.Round.Deck.SwapPiles();
-            }
-            RoundsSeen++;
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            // Roles swap for next turn: this turn's discard becomes next turn's draw pile and
+            // vice versa. Just the swap - the two halves are never poured together or shuffled.
+            turn.Round.Deck.SwapPiles();
+            TurnsSeen++;
         }
 
         private void Apply(RoundRules rules)

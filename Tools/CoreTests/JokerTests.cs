@@ -1116,7 +1116,8 @@ public static class JokerTests
         int total = round.Deck.DrawCount + round.Deck.DiscardCount + round.Hand.Count;
         Check(total == totalBefore, "no card was lost or duplicated",
             total + " vs " + totalBefore);
-        Check(joker.RoundsSeen == 1, "the round counter drives the swap", "seen " + joker.RoundsSeen);
+        Check(joker.TurnsSeen == 0, "the round-start split leaves the turn counter fresh",
+            "seen " + joker.TurnsSeen);
 
         session.Jokers.Remove(joker);
         Check(session.Config.Rules.HandSize == baseHand, "removal gives the hand size back");
