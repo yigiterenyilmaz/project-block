@@ -1493,10 +1493,12 @@ namespace ProjectBlock.View
                 FloatingTextFx.Spawn(transform, new Vector2(0f, 3.4f),
                     Loc.Pick("DYNAMITE!", "DİNAMİT!"), new Color(0.95f, 0.3f, 0.2f), 72, 0.09f);
             }
-            if (comboStreak >= 2)
+            // The popup shows the SCORING combo (consecutive line-clearing turns), which is
+            // what actually pays out - not the destruction-only comboStreak that drives shake.
+            if (report.ComboCount >= 2)
             {
                 FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
-                    Loc.Pick("COMBO x", "KOMBO x") + comboStreak + "!",
+                    Loc.Pick("COMBO x", "KOMBO x") + report.ComboCount + "!",
                     new Color(1f, 0.6f, 0.2f), 64, 0.08f);
             }
             if (report.CleanSweep)

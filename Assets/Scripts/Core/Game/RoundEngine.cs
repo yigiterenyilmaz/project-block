@@ -139,6 +139,12 @@ namespace ProjectBlock.Core
         /// can be told apart from "its last surviving cube went" ("Kazı çalışması").</summary>
         private readonly Dictionary<int, int> cardPlacedSize = new Dictionary<int, int>();
 
+        /// <summary>Consecutive line-clearing turns this round (the "kombo" streak). Each turn
+        /// that explodes >=1 line increments it and pays comboCount*ComboBonusPerStep; a turn
+        /// that clears nothing resets it to 0. Lives for the round - a fresh RoundEngine per
+        /// round starts it at 0 - and RedrawHand never touches it (it resolves no turn).</summary>
+        private int comboCount;
+
         // ---- destruction tracking: the board is diffed against a snapshot, so every
         // source (lines, fire chains, dynamite, joker effects) is captured the same way ----
         private readonly Dictionary<GridPos, Cube> boardSnapshot = new Dictionary<GridPos, Cube>();
@@ -786,6 +792,22 @@ namespace ProjectBlock.Core
             }
             report.WaterFallFrames = waterFrames;
             hooks.AfterLineExplosion(currentTurn);
+
+            // COMBO ("kombo"): consecutive line-clearing turns stack a growing bonus. A turn
+            // that explodes >=1 row/column continues the streak (1,2,3...) and pays
+            // comboCount*step; a turn that clears no line resets it. RedrawHand never reaches
+            // here, so a redraw does not break the streak. BaseCombo is a regular base field,
+            // so overtime trickles it like the rest of the regular score.
+            if (report.ExplodedRows.Count + report.ExplodedColumns.Count > 0)
+            {
+                comboCount++;
+                breakdown.BaseCombo = scorer.ScoreCombo(comboCount);
+            }
+            else
+            {
+                comboCount = 0;
+            }
+            report.ComboCount = comboCount;
 
             // 3. clean sweep (single central event - see the file header)
             TryResolveCleanSweep();

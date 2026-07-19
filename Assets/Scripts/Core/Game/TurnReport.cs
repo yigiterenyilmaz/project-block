@@ -75,6 +75,11 @@ namespace ProjectBlock.Core
         /// <summary>True if this turn emptied the board ("temizlik").</summary>
         public bool CleanSweep { get; internal set; }
 
+        /// <summary>The "kombo" streak after this turn: how many consecutive turns (including
+        /// this one) have cleared >=1 line. 0 on a turn that cleared no line. Drives the UI
+        /// combo popup and the BaseCombo score.</summary>
+        public int ComboCount { get; internal set; }
+
         /// <summary>Every cube removed this turn, from any source (lines, fire chains,
         /// dynamite, joker effects), with the value it held. Grows as the turn resolves.</summary>
         public IReadOnlyList<DestroyedCube> DestroyedCubes { get; internal set; }

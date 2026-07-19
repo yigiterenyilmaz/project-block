@@ -30,6 +30,12 @@ namespace ProjectBlock.Core
         /// <summary>Base score per exploded full row/column.</summary>
         public int PointsPerLine = 10;
 
+        /// <summary>"kombo": the bonus added on the n-th consecutive line-clearing turn is
+        /// n * ComboBonusPerStep, so a streak pays a growing amount (5, 10, 15...). A turn that
+        /// clears no line resets the streak to 0. Logical (small); the global ScoreScale lifts
+        /// it. It is a regular base field, so overtime trickles it like placement/lines.</summary>
+        public int ComboBonusPerStep = 5;
+
         /// <summary>Score per cube destroyed by a line explosion.</summary>
         public int PointsPerCubeExploded = 1;
 

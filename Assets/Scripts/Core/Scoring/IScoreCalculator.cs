@@ -19,6 +19,10 @@ namespace ProjectBlock.Core
         /// <summary>Bonus for emptying the board ("temizlik").</summary>
         int ScoreCleanSweep();
 
+        /// <summary>Bonus for the <paramref name="comboCount"/>-th consecutive line-clearing
+        /// turn (the "kombo" streak). Count is 1-based; count &lt; 1 pays 0.</summary>
+        int ScoreCombo(int comboCount);
+
         /// <summary>Per-turn bonus for gold cubes sitting on the board.</summary>
         int ScoreGoldBonus(int goldCubesOnBoard);
 
@@ -68,6 +72,15 @@ namespace ProjectBlock.Core
         public int ScoreCleanSweep()
         {
             return config.CleanSweepBonus;
+        }
+
+        public int ScoreCombo(int comboCount)
+        {
+            if (comboCount < 1)
+            {
+                return 0;
+            }
+            return comboCount * config.ComboBonusPerStep;
         }
 
         public int ScoreGoldBonus(int goldCubesOnBoard)

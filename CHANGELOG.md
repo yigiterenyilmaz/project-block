@@ -7,6 +7,11 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **Combo bonus** ("kombo") — clearing a line on consecutive turns stacks a growing point
+  bonus (the n-th clearing turn in a row pays `n × ComboBonusPerStep`); a turn that clears no
+  line resets the streak. It runs through the normal score pipeline (jokers scale it) and, like
+  the rest of the regular base, trickles in overtime. The on-board "COMBO x" popup now reflects
+  this real scoring streak instead of the destruction-only shake counter.
 - **Kolay Para** (joker) — placing a block scores points, one bonus per cube. Fills the
   reserved "placement scores nothing on its own" slot from the scoring rework.
 - **Halüsinasyon** (power) — shows up as a random *simple* power and, each time it is used,
