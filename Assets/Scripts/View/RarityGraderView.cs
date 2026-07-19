@@ -131,6 +131,14 @@ namespace ProjectBlock.View
                 ClearSelected();
                 return;
             }
+            // Mouse wheel scrolls the list (moves the selection, which scrolls the window).
+            Mouse wheelMouse = Mouse.current;
+            if (wheelMouse != null)
+            {
+                float wheel = wheelMouse.scroll.ReadValue().y;
+                if (wheel > 0.5f) { Move(-3); return; }   // wheel up -> toward the top
+                if (wheel < -0.5f) { Move(3); return; }   // wheel down -> further down
+            }
             HandleMouse();
         }
 
