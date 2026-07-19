@@ -55,7 +55,9 @@ everything here is unreleased and balance numbers are still placeholders.
   first cell decides paint vs. erase), filled cells now show the **selected element's colour**,
   and Confirm **rejects shapes that aren't one connected piece** (with a warning) instead of
   baking a scattered block. Ghost and gear (Mechanical) are dropped from the element palette.
-  Designed blocks are now tagged **"custom"** on the card (alongside any element).
+  Designed blocks are now tagged just **"custom"** on the card. The element palette drops TNT and
+  Fox (as well as the earlier Ghost/gear) — none make sense for a hand-drawn block — and a block
+  is capped at **5 cubes**.
 - **Hileli Zar** (power) — the opening-hand picker is now deliberate: click to select/deselect
   cards (chosen cards are highlighted), and commit with a **CONFIRM** button that only lights up
   once exactly the right number is picked, instead of auto-confirming on the last click.

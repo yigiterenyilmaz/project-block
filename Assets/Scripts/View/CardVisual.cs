@@ -106,19 +106,11 @@ namespace ProjectBlock.View
                     {
                         elementLabels.Add(ViewUtil.ElementLabel(element));
                     }
-                    string bandText;
-                    if (card.IsCustom)
-                    {
-                        bandText = Loc.Pick("custom", "özel");
-                        if (elementLabels.Count > 0)
-                        {
-                            bandText += " " + string.Join("+", elementLabels);
-                        }
-                    }
-                    else
-                    {
-                        bandText = string.Join("+", elementLabels);
-                    }
+                    // A custom (player-designed) block is always tagged just "custom", even when
+                    // it carries an element - its element still colours the cubes and drives play.
+                    string bandText = card.IsCustom
+                        ? Loc.Pick("custom", "özel")
+                        : string.Join("+", elementLabels);
                     // A dark band behind plain text - outlines ghost on TextMesh, this doesn't.
                     var bandCenter = new Vector2(0f, BodyHeight * 0.5f - 0.15f);
                     Track(ViewUtil.MakeRect(transform, "ElementBand", bandCenter,

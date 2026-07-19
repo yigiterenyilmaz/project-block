@@ -34,13 +34,18 @@ namespace ProjectBlock.View
         private static readonly Color Faint = new Color(0.62f, 0.67f, 0.74f);
 
         // Element options: index 0 is "no element", the rest mirror the implemented block types.
-        // Ghost and Mechanical are intentionally excluded - a hang-off-the-board / rotating block
-        // makes no sense as a hand-designed piece.
+        // Ghost, Mechanical, Dynamite (TNT) and Fox are intentionally excluded - a hang-off, a
+        // rotating gear, a whole-block-detonation, or a shape-shifter make no sense for a piece
+        // the player draws by hand.
         private static readonly BlockElement[] Elements =
         {
             BlockElement.Fire, BlockElement.Water, BlockElement.Obsidian, BlockElement.Gold,
-            BlockElement.Transparent, BlockElement.Dynamite, BlockElement.Fox
+            BlockElement.Transparent
         };
+
+        /// <summary>Most cubes a designed block may have. Balance placeholder - keeps custom
+        /// blocks in the same size range as normal ones.</summary>
+        private const int MaxCubes = 5;
 
         private readonly bool[,] filled = new bool[GridSize, GridSize];
         private int selected; // 0 = none, 1..Elements.Length = Elements[selected-1]
@@ -114,6 +119,12 @@ namespace ProjectBlock.View
             int y = cellIndex / GridSize;
             if (filled[x, y] == fill)
             {
+                return;
+            }
+            if (fill && CountFilled() >= MaxCubes)
+            {
+                warning = Loc.Pick("max " + MaxCubes + " cubes", "en fazla " + MaxCubes + " küp");
+                Rebuild();
                 return;
             }
             filled[x, y] = fill;
