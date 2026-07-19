@@ -41,6 +41,8 @@ namespace ProjectBlock.View
         private PowerBarView powerBar;
         private GrantPickerView grantPicker;
         private ChoicePickerView choicePicker;
+        private BlockDesignerView blockDesigner;
+        private int designerPowerId;
 
         private enum ChoiceKind { None, BatakBet, PowerbankTarget }
         private ChoiceKind pendingChoice;
@@ -122,6 +124,7 @@ namespace ProjectBlock.View
             deckSelect.Hide();
             deckOverlay.Hide();
             choicePicker.Hide();
+            blockDesigner.Hide();
             cubePicker.Hide();
             ClearChoice();
             parazitStep = ParazitStep.None;
@@ -156,6 +159,7 @@ namespace ProjectBlock.View
             pendingTargetPowerId = null;
             grantPicker.Hide();
             choicePicker.Hide();
+            blockDesigner.Hide();
             ClearChoice();
             marketView.Hide();
             HideTooltip();
@@ -336,6 +340,38 @@ namespace ProjectBlock.View
                         ResolveChoice(idx);
                     }
                     ClearChoice();
+                }
+                return;
+            }
+            if (blockDesigner.IsOpen)
+            {
+                // modal: draw cells / pick an element / Confirm or Cancel; Esc cancels
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                {
+                    blockDesigner.Hide();
+                    return;
+                }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                {
+                    Vector2 dw = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                    int btn = blockDesigner.ButtonAt(dw);
+                    if (btn == 1)
+                    {
+                        ConfirmBlockDesigner();
+                        return;
+                    }
+                    if (btn == 0)
+                    {
+                        blockDesigner.Hide();
+                        return;
+                    }
+                    int el = blockDesigner.ElementAt(dw);
+                    if (el >= 0)
+                    {
+                        blockDesigner.SelectElement(el);
+                        return;
+                    }
+                    blockDesigner.ToggleCellAt(dw);
                 }
                 return;
             }
@@ -929,6 +965,33 @@ namespace ProjectBlock.View
             pendingChoiceValues.Clear();
         }
 
+        /// <summary>The block designer's Confirm: bake the drawn shape + element into the deck
+        /// and spend the "Karakter oluşturma" charge (all rules in GameSession). An empty shape
+        /// keeps the designer open.</summary>
+        private void ConfirmBlockDesigner()
+        {
+            IReadOnlyList<GridPos> cells = blockDesigner.ShapeCells();
+            if (cells.Count == 0)
+            {
+                return; // nothing drawn yet - leave the designer open
+            }
+            BlockShape shape = BlockShape.FromCells(cells);
+            BlockElement? element = blockDesigner.SelectedElement;
+            IEnumerable<BlockElement> elements = element.HasValue
+                ? new[] { element.Value }
+                : null;
+            bool made = session.CreateDesignedBlock(designerPowerId, shape, elements);
+            blockDesigner.Hide();
+            if (made)
+            {
+                powerBar.PulsePower(designerPowerId);
+                Debug.Log("[project_block] Karakter oluşturma: baked a " + cells.Count
+                    + "-cube block into the deck.");
+            }
+            powerBar.Refresh(session, null);
+            RefreshAll(null);
+        }
+
         private void CancelTargeting()
         {
             pendingTargetJokerId = null;
@@ -997,6 +1060,19 @@ namespace ProjectBlock.View
                 pendingOltaMark = true;
                 UpdateHud();
                 powerBar.Refresh(session, pendingTargetPowerId);
+                return;
+            }
+            // "Karakter oluşturma" opens the block designer instead of running through TryUse;
+            // the designer's Confirm bakes the block and spends the charge (CreateDesignedBlock).
+            if (power is KarakterOlusturmaPower)
+            {
+                if (!session.Powers.CanBeginUse(power.InstanceId))
+                {
+                    Debug.Log("[project_block] " + power.DisplayName + " cannot be used right now.");
+                    return;
+                }
+                designerPowerId = power.InstanceId;
+                blockDesigner.Show();
                 return;
             }
             if (!session.Powers.CanBeginUse(power.InstanceId))
@@ -1871,6 +1947,10 @@ namespace ProjectBlock.View
             var choiceGo = new GameObject("ChoicePicker");
             choiceGo.transform.SetParent(transform, false);
             choicePicker = choiceGo.AddComponent<ChoicePickerView>();
+
+            var designerGo = new GameObject("BlockDesigner");
+            designerGo.transform.SetParent(transform, false);
+            blockDesigner = designerGo.AddComponent<BlockDesignerView>();
 
             var cubeGo = new GameObject("CubePicker");
             cubeGo.transform.SetParent(transform, false);

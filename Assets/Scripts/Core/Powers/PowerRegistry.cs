@@ -74,6 +74,7 @@ namespace ProjectBlock.Core
             Register(() => new BukulmePower());
             Register(() => new HileliZarPower());
             Register(() => new HalusinasyonPower());
+            Register(() => new KarakterOlusturmaPower());
         }
 
         /// <summary>All known powers, in design order.</summary>

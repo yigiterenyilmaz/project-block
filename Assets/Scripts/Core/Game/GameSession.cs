@@ -336,6 +336,28 @@ namespace ProjectBlock.Core
             return new BlockCard(nextCardId++, shape, elements);
         }
 
+        /// <summary>"Karakter oluşturma": bakes a player-designed block (any shape, any
+        /// element) into the owned deck and spends the driving power. The power rules are
+        /// enforced HERE so the View stays rules-free: the power must be charged, a round must
+        /// be running, and this turn's single power slot still free. The new card joins the
+        /// shuffle from the next round, exactly like a bought block. Returns false and changes
+        /// nothing if any of that fails.</summary>
+        public bool CreateDesignedBlock(int powerInstanceId, BlockShape shape,
+            IEnumerable<BlockElement> elements)
+        {
+            Power power = Powers.Find(powerInstanceId);
+            RoundEngine round = CurrentRound;
+            if (power == null || !power.Charged || shape == null || round == null
+                || round.Status != RoundStatus.InProgress || round.PowersUsedThisTurn > 0)
+            {
+                return false;
+            }
+            ownedCards.Add(new BlockCard(nextCardId++, shape, elements));
+            power.Spend();
+            round.NotePowerUsed();
+            return true;
+        }
+
         private void StartRound()
         {
             RoundConfig roundConfig = Config.Progression.GetRound(RoundNumber);

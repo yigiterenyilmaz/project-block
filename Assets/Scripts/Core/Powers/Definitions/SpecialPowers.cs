@@ -488,4 +488,37 @@ namespace ProjectBlock.Core
             current = picked;
         }
     }
+
+    /// <summary>"Karakter oluşturma" - a maker's power. Using it opens a designer (in the UI)
+    /// where the player draws any shape and picks an element; the custom block is baked into
+    /// the owned deck and shuffles in from the next round. The whole effect - and spending the
+    /// charge - is done in one place, GameSession.CreateDesignedBlock, once the designer is
+    /// confirmed. This class is therefore just a marker: it never runs through the normal use
+    /// path (Run returns false), it only tells the UI "open the designer".</summary>
+    public sealed class KarakterOlusturmaPower : Power
+    {
+        public KarakterOlusturmaPower()
+            : base("karakter_olusturma", "Karakter Oluşturma")
+        {
+            SetDescription(
+                "Design a custom block - any shape, any element - and bake it into your deck. "
+                    + "It shuffles in from the next round.",
+                "İstediğin şekil ve elementte özel bir blok tasarla ve destene ekle. Sonraki "
+                    + "raunttan itibaren desteye karışır.");
+            BaseSellValue = 55;
+        }
+
+        /// <summary>Usable whenever the standard rules allow (the UI opens the designer then);
+        /// the actual make + charge-spend happens in GameSession.CreateDesignedBlock.</summary>
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return true;
+        }
+
+        /// <summary>Never taken through TryUse - the designer flow spends the charge itself.</summary>
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            return false;
+        }
+    }
 }
