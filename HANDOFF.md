@@ -3,6 +3,26 @@
 Handoff for continuing the joker/power/UI/retro batch. Read `CLAUDE.md` first (design +
 conventions), then this. Latest pushed commit at handoff time: **`5e6e690`**.
 
+## Progress (session 2026-07-20) — 8 of 12 done, all pushed to `balance`
+
+- **#1 Combo bonus** — `edec957`
+- **#2 Market reroll** — `aee725e`
+- **#3 Designer fixes (a–e)** — `7a70bfe` (drag-paint, element colours, connected-shape check,
+  no ghost/gear) + `fa3d155` (custom card tag)
+- **#4 Genel Temizlik** — `fad9c44` (description only; the mechanic already recharged powers on
+  external sweeps via `RechargeAll`)
+- **#5 Hover details** — `3ece746`
+- **#6 Hileli Zar UX** — `f770695`
+- **#7 Büyüteç consumable reveal** — `fc2de05`
+- **#8 İkinci Şans hand redraw** — `43a67af`
+
+**Remaining = the untestable/risky batch (need a Unity build to verify):** #9 CRT URP shader,
+#10 retro SFX (buzz + bit-crush), #11 falling-piece controller, #12 inflation crush FX. Note on
+**#12**: the crush uses `Board.DestroyCubeForced` directly (see `RoundEngine.ShiftColumnInward` /
+`ShiftRowInward`), bypassing `RoundEngine.DestroyCubes`, so crushed cubes are currently never
+logged/tallied/scored. Doing #12 per the plan means routing that through `DestroyCubes` (a
+delicate invariant change) — verify with CoreTests + playtest.
+
 ---
 
 ## How to work in this repo (important)
