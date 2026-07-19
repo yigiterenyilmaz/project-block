@@ -63,6 +63,7 @@ namespace ProjectBlock.View
             if (!animatingWater)
             {
                 AnimateElementCubes(); // would fight the fall animation's cell painting
+                AnimateInfections();   // green pulse, applied on top of the base/element color
             }
             ambientTimer += Time.deltaTime;
             while (ambientTimer >= 0.12f)
@@ -217,6 +218,7 @@ namespace ProjectBlock.View
             ghostSprites.Clear();
             outsidePreviewSprites.Clear();
             infectionMarkers.Clear();
+            infectionCells.Clear();
             board = newBoard;
             cellSize = Mathf.Min(maxWorldSize / board.Width, maxWorldSize / board.Height);
             bottomLeft = center - new Vector2(board.Width, board.Height) * (cellSize * 0.5f);
@@ -306,9 +308,20 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Draws the "Enfeksiyon" markers: a pulsing red overlay whose intensity
-        /// grows with the buildup, plus a row of pips (filled = turns elapsed) so the 3-turn
-        /// countdown to detonation is visible. Rebuilt each refresh.</summary>
+        private struct InfectionMark
+        {
+            public int Lx;
+            public int Ly;
+            public int Turns;
+            public int Threshold;
+        }
+
+        private readonly List<InfectionMark> infectionCells = new List<InfectionMark>();
+        private static readonly Color InfectionGreen = new Color(0.2f, 0.95f, 0.35f);
+
+        /// <summary>Draws the "Enfeksiyon" markers: the infected block pulses GREEN (like a
+        /// mine but green, animated in Update), and a row of pips (filled = turns elapsed)
+        /// shows the 3-turn countdown to detonation. Rebuilt each refresh.</summary>
         public void ShowInfections(IReadOnlyList<InfectedCell> cells)
         {
             ClearInfections();
@@ -323,35 +336,61 @@ namespace ProjectBlock.View
                 {
                     continue;
                 }
+                int lx = inf.Cell.X - board.MinX;
+                int ly = inf.Cell.Y - board.MinY;
+                infectionCells.Add(new InfectionMark
+                {
+                    Lx = lx, Ly = ly, Turns = inf.Turns, Threshold = inf.Threshold
+                });
+
+                // Static buildup pips just below the cell (filled green = turns elapsed).
                 Vector2 center = CellToWorld(inf.Cell);
-                var root = new GameObject("Infection");
+                var root = new GameObject("InfectionPips");
                 root.transform.SetParent(transform, false);
                 root.transform.localPosition = new Vector3(center.x, center.y, 0f);
                 infectionMarkers.Add(root);
 
-                float progress = inf.Threshold > 0
-                    ? Mathf.Clamp01(inf.Turns / (float)inf.Threshold)
-                    : 1f;
-                var overlay = new Color(0.9f, 0.15f, 0.15f, 0.22f + 0.4f * progress);
-                ViewUtil.MakeCell(root.transform, "Tint", Vector2.zero, cellSize * 0.9f, overlay, 2);
-
-                // buildup pips along the bottom edge of the cell
                 int pips = Mathf.Max(inf.Threshold, 1);
-                float pip = cellSize * 0.16f;
+                float pip = cellSize * 0.17f;
                 float startX = -(pips - 1) * pip * 0.9f;
                 for (int p = 0; p < pips; p++)
                 {
                     Color pipColor = p < inf.Turns
-                        ? new Color(1f, 0.35f, 0.2f)
-                        : new Color(0.3f, 0.3f, 0.32f);
+                        ? new Color(0.35f, 1f, 0.4f)
+                        : new Color(0.22f, 0.3f, 0.24f);
                     ViewUtil.MakeCell(root.transform, "Pip",
-                        new Vector2(startX + p * pip * 1.8f, -cellSize * 0.32f), pip, pipColor, 3);
+                        new Vector2(startX + p * pip * 1.8f, -cellSize * 0.34f), pip, pipColor, 3);
                 }
+            }
+        }
+
+        /// <summary>Pulses each infected cell green, brighter the closer it is to detonating -
+        /// the infection twin of the mine cube's red blink. Runs every frame.</summary>
+        private void AnimateInfections()
+        {
+            if (infectionCells.Count == 0 || cellRenderers == null)
+            {
+                return;
+            }
+            float time = Time.time;
+            for (int i = 0; i < infectionCells.Count; i++)
+            {
+                InfectionMark m = infectionCells[i];
+                if (m.Lx < 0 || m.Lx >= board.Width || m.Ly < 0 || m.Ly >= board.Height)
+                {
+                    continue;
+                }
+                float progress = m.Threshold > 0 ? Mathf.Clamp01(m.Turns / (float)m.Threshold) : 1f;
+                float blend = Mathf.Clamp01(
+                    0.2f + 0.4f * progress + 0.25f * Mathf.Sin(time * 5f + m.Lx + m.Ly));
+                cellRenderers[m.Lx, m.Ly].color = Color.Lerp(baseColorCache[m.Lx, m.Ly],
+                    InfectionGreen, blend);
             }
         }
 
         public void ClearInfections()
         {
+            infectionCells.Clear();
             for (int i = infectionMarkers.Count - 1; i >= 0; i--)
             {
                 if (infectionMarkers[i] != null)
