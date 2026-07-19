@@ -36,6 +36,9 @@ everything here is unreleased and balance numbers are still placeholders.
   placeholders in `MarketConfig`; grades live in `RarityTable` (baked from the grader).
 
 ### Changed
+- **İkinci Şans** (power) — now also **deals a fresh hand** when used: on top of clearing the
+  board and reshuffling the deck, the current hand is recycled into the draw pile and a new hand
+  is dealt, for a cleaner overtime restart.
 - **Büyüteç** (power) — the reveal is now **consumable**: it uncovers the top two draw cards,
   and every card you draw leaves one fewer revealed (2 → 1 → 0) instead of showing the top two
   for the rest of the round.

@@ -199,7 +199,8 @@ namespace ProjectBlock.Core
 
     /// <summary>"İkinci şans" - overtime only, once per round: clears the board (no score, no
     /// sweep), pulls the earned score back down to the threshold, reshuffles the whole deck
-    /// into the draw pile, and lets the round continue - a fresh overtime attempt.</summary>
+    /// (including the hand) into the draw pile and deals a fresh hand, and lets the round
+    /// continue - a fresh overtime attempt.</summary>
     public sealed class IkinciSansPower : Power
     {
         private bool usedThisRound;
@@ -209,11 +210,11 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Overtime only, once per round: clears the board (no score, no sweep), pulls "
-                    + "your score back to the threshold, reshuffles the deck into the draw pile "
-                    + "and plays on.",
+                    + "your score back to the threshold, reshuffles the deck into the draw pile, "
+                    + "deals a fresh hand and plays on.",
                 "Sadece uzatmada, raunt başına bir kez: oyun alanını temizler (puan yok, "
                     + "temizlik sayılmaz), puanını eşiğe çeker, desteyi karıp çekme destesine "
-                    + "koyar ve oyun devam eder.");
+                    + "koyar, yeni bir el dağıtır ve oyun devam eder.");
             BaseSellValue = 60;
         }
 
@@ -243,7 +244,11 @@ namespace ProjectBlock.Core
             round.ClearBoardScoreless();
             round.CapRoundScoreAtThreshold();
             round.Deck.DumpDrawPileIntoDiscard();
-            round.Deck.ShuffleDiscardIntoDraw();
+            // RedrawHand discards the current hand and shuffles the whole discard (now holding
+            // the dumped draw pile AND the hand) back into the draw pile, then deals a fresh
+            // hand - a clean overtime restart. This intentional recycle is fine: the power is
+            // overtime-only and once per round (unlike the free-recycle gating on İade).
+            round.RedrawHand();
             usedThisRound = true;
             return true;
         }
