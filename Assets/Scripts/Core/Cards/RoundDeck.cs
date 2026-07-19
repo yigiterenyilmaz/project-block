@@ -120,6 +120,20 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>Moves the bottom half of the draw pile into the discard WITHOUT mixing
+        /// the piles or reshuffling ("Dezenformasyon" round-start split). The draw pile keeps
+        /// the larger half when the count is odd, so the two piles differ by at most one.</summary>
+        public void SplitDrawIntoDiscard()
+        {
+            int keep = drawPile.Count - drawPile.Count / 2;
+            while (drawPile.Count > keep)
+            {
+                int last = drawPile.Count - 1;
+                discardPile.Add(drawPile[last]);
+                drawPile.RemoveAt(last);
+            }
+        }
+
         private readonly List<BlockCard> swapBuffer = new List<BlockCard>();
 
         /// <summary>"Transfer": the most recently discarded card and the top of the draw

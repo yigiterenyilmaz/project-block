@@ -1148,6 +1148,10 @@ namespace ProjectBlock.Core
                 Loss = LossReason.DrawPileEmptyAfterThreshold;
                 return null;
             }
+            if (Rules.DrawOnlyAvailableNoReshuffle)
+            {
+                return null; // "İmitasyon": never auto-recycles the discard on a draw
+            }
             if (Deck.DiscardCount > 0)
             {
                 Deck.ShuffleDiscardIntoDraw();
@@ -1168,7 +1172,9 @@ namespace ProjectBlock.Core
                 BlockCard card = DrawWithRules();
                 if (card == null)
                 {
-                    if (Loss == null)
+                    // "İmitasyon": a hand that cannot be topped up is fine, not a loss - it
+                    // just holds fewer cards until the next draw source appears.
+                    if (Loss == null && !Rules.DrawOnlyAvailableNoReshuffle)
                     {
                         Loss = LossReason.HandCannotBeRefilled;
                     }

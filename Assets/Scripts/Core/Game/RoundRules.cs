@@ -41,5 +41,11 @@ namespace ProjectBlock.Core
         /// depth in the DRAW pile instead. The discard therefore stays nearly empty, which
         /// also means the deck effectively never runs out.</summary>
         public bool PlayedCardsReturnToDrawPile = false;
+
+        /// <summary>"İmitasyon": a hand refill draws only what the draw pile actually holds -
+        /// it never auto-recycles the discard, and running the pile dry mid-refill is NOT a
+        /// loss (the hand just stays partial). The joker recycles explicitly, only when a
+        /// card is played into an already-empty draw pile.</summary>
+        public bool DrawOnlyAvailableNoReshuffle = false;
     }
 }

@@ -58,26 +58,29 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Dezenformasyon" - every turn the whole deck is poured together, shuffled and
-    /// dealt back out as two halves, and the roles of the piles swap: the pile you drew from
-    /// last turn is the one you discard into this turn. Hand size +1.</summary>
+    /// <summary>"Dezenformasyon" - once the round's opening hand is dealt, the draw pile is
+    /// split into two equal, individually-kept halves: one stays the draw pile, the other
+    /// becomes the discard. The piles are never poured together; each round re-splits from a
+    /// fresh shuffle, and which half you draw from alternates every round. Hand size +1.</summary>
     public sealed class DezenformasyonJoker : Joker
     {
         public int ExtraHandSize = 1;
 
         private bool applied;
 
-        /// <summary>Turns played with this joker; the parity is what swaps the piles.</summary>
-        public int TurnsSeen { get; private set; }
+        /// <summary>Rounds this joker has set up; the parity alternates the draw/discard roles.</summary>
+        public int RoundsSeen { get; private set; }
 
         public DezenformasyonJoker()
             : base("dezenformasyon", "Dezenformasyon")
         {
             SetDescription(
-                "Every turn the draw and discard piles swap roles, then everything merges, "
-                    + "shuffles and splits in two. Hand size +1.",
-                "Her tur deste ikiye bölünüp karılır ve çekme/ıskarta rolleri yer "
-                    + "değiştirir. El boyutu +1.");
+                "After the opening hand is dealt, the draw pile is split into two equal piles "
+                    + "- one draw, one discard - shuffled on their own and never mixed. The "
+                    + "roles alternate each round. Hand size +1.",
+                "Açılış eli dağıtıldıktan sonra çekme destesi iki eşit desteye bölünür - biri "
+                    + "çekme biri ıskarta - ayrı ayrı karılır, asla karışmazlar. Roller her "
+                    + "raunt değişir. El boyutu +1.");
             BaseSellValue = 60;
             IsLegendary = true;
         }
@@ -86,7 +89,7 @@ namespace ProjectBlock.Core
         {
             get
             {
-                bool normal = TurnsSeen % 2 == 0;
+                bool normal = RoundsSeen % 2 == 1; // first round (RoundsSeen==1) is "normal"
                 return Loc.Pick(normal ? "normal flow" : "reversed flow",
                     (normal ? "normal" : "ters") + " yön");
             }
@@ -104,17 +107,16 @@ namespace ProjectBlock.Core
 
         public override void OnRoundStarted(RoundContext ctx)
         {
-            TurnsSeen = 0;
             Apply(ctx.Rules);
-        }
-
-        public override void AfterTurnScored(TurnContext turn)
-        {
-            TurnsSeen++;
-            // Swap first (this turn's discard becomes next turn's draw pile), then pour both
-            // together and re-deal the halves, which is the "her turun sonunda karılır" part.
-            turn.Round.Deck.SwapPiles();
-            turn.Round.Deck.MergeAndSplitHalves();
+            // The engine has already dealt the opening hand; split what remains into halves.
+            ctx.Round.Deck.SplitDrawIntoDiscard();
+            // Alternate which half is the draw pile each round (cosmetic on a fresh shuffle,
+            // but it is the "roles swap every round" the design calls for).
+            if (RoundsSeen % 2 == 1)
+            {
+                ctx.Round.Deck.SwapPiles();
+            }
+            RoundsSeen++;
         }
 
         private void Apply(RoundRules rules)
@@ -139,13 +141,15 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>"İmitasyon" - the hand mirrors the discard: as many cards as the discard
-    /// holds, at least one. Whatever is left in hand at end of turn is thrown onto the
-    /// discard, which is what makes the hand grow.</summary>
+    /// holds, at least one. Whatever is left in hand at end of turn is thrown onto the discard,
+    /// which is what makes the hand grow. The refill only ever draws what the draw pile
+    /// actually holds - it never auto-recycles the discard and a short pile is never a loss;
+    /// the discard is reshuffled in ONLY when a card is played into an already-empty draw pile.</summary>
     public sealed class ImitasyonJoker : Joker
     {
-        /// <summary>Safety cap. Without it the hand can demand more cards than exist and
-        /// the round is lost to "hand cannot be refilled" through no fault of the player.</summary>
-        public int MaxHandSize = 8;
+        /// <summary>Upper bound on the mirrored hand size. High by default (the "draw only
+        /// what exists" rule already keeps the actual hand small); mostly a UI/sanity guard.</summary>
+        public int MaxHandSize = 100;
 
         private int originalHandSize = -1;
 
@@ -153,10 +157,14 @@ namespace ProjectBlock.Core
             : base("imitasyon", "İmitasyon")
         {
             SetDescription(
-                "Your hand size equals the discard pile's card count (min 1). Cards left "
-                    + "in hand at end of turn are discarded too.",
-                "El boyutun ıskartadaki kart sayısına eşit olur (en az 1). Tur "
-                    + "sonunda elde kalanlar da ıskartaya gider.");
+                "Your hand size equals the discard pile's card count (min 1); leftover hand "
+                    + "cards are discarded each turn. Refills draw only what the draw pile "
+                    + "holds - it never reshuffles to fill up, and the discard is recycled only "
+                    + "when you play into an empty draw pile.",
+                "El boyutun ıskartadaki kart sayısına eşittir (en az 1); tur sonunda elde "
+                    + "kalanlar ıskartaya gider. El sadece çekme destesinde olanı çeker - "
+                    + "dolmak için karmaz; ıskarta yalnızca boş desteye kart oynadığında geri "
+                    + "karılır.");
             BaseSellValue = 60;
             IsLegendary = true;
         }
@@ -177,6 +185,10 @@ namespace ProjectBlock.Core
             {
                 originalHandSize = ctx.Rules.HandSize;
             }
+            ctx.Rules.DrawOnlyAvailableNoReshuffle = true;
+            // The next round opens with an empty discard, so the opening hand is one card.
+            // This must be set BEFORE the round's engine fills its opening hand.
+            ctx.Rules.HandSize = 1;
         }
 
         public override void OnRemoved(SessionContext ctx)
@@ -186,10 +198,20 @@ namespace ProjectBlock.Core
                 ctx.Rules.HandSize = originalHandSize;
                 originalHandSize = -1;
             }
+            ctx.Rules.DrawOnlyAvailableNoReshuffle = false;
+        }
+
+        /// <summary>Reset the shared hand size to one BEFORE the next round is built, so its
+        /// engine deals a one-card opening hand rather than a giant one left over from this
+        /// round's mirror.</summary>
+        public override void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
+        {
+            ctx.Rules.HandSize = 1;
         }
 
         public override void OnRoundStarted(RoundContext ctx)
         {
+            ctx.Rules.DrawOnlyAvailableNoReshuffle = true;
             // The round starts with an empty discard, so the hand starts at the minimum.
             Resize(ctx.Rules, ctx.Round.Deck.DiscardCount);
         }
@@ -197,9 +219,14 @@ namespace ProjectBlock.Core
         public override void AfterTurnScored(TurnContext turn)
         {
             RoundEngine round = turn.Round;
-            // Order matters: dumping the hand is what fills the discard, and the discard is
-            // what the new hand size is read from. Dump first, then size, then refill.
+            // Dump the leftover hand onto the discard (this is what grows the mirror).
             round.DiscardWholeHand();
+            // The ONLY reshuffle: a card was just played and the draw pile is now empty.
+            if (round.Deck.DrawCount == 0)
+            {
+                round.Deck.ShuffleDiscardIntoDraw();
+            }
+            // Size to the discard, then refill from whatever the draw pile actually holds.
             Resize(turn.Rules, round.Deck.DiscardCount);
             round.RefillHandToSize();
         }

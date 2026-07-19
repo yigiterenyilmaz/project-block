@@ -1092,7 +1092,7 @@ public static class JokerTests
 
     private static void Dezenformasyon_SplitsAndSwapsThePilesEachTurn()
     {
-        Section("dezenformasyon / piles split and swap");
+        Section("dezenformasyon / deck split into two piles at round start");
         var session = NewSession(223, 8, 1000000, 30, 1);
         int baseHand = session.Config.Rules.HandSize;
         var joker = (DezenformasyonJoker)session.Jokers.Add(new DezenformasyonJoker());
@@ -1101,21 +1101,22 @@ public static class JokerTests
 
         RoundEngine round = session.CurrentRound;
         int totalBefore = round.Deck.DrawCount + round.Deck.DiscardCount + round.Hand.Count;
-        PlayTurns(session, 1);
+        // Re-run the round-start setup with the joker present (round 1 was built before it
+        // existed); this performs the split.
+        session.Jokers.DispatchRoundStarted(round);
 
         Check(round.Deck.DiscardCount > 0, "the deck was split, so the discard holds cards",
             "discard " + round.Deck.DiscardCount);
         Check(round.Deck.DrawCount > 0, "and the draw pile holds cards",
             "draw " + round.Deck.DrawCount);
-        int halves = round.Deck.DrawCount + round.Deck.DiscardCount;
         Check(Math.Abs(round.Deck.DrawCount - round.Deck.DiscardCount) <= 1,
             "the two piles are halves of each other",
             round.Deck.DrawCount + " vs " + round.Deck.DiscardCount);
-        // The played CARD lands in a pile (only its cubes go to the board), so shuffling
-        // the deck around must conserve every card.
-        Check(halves + round.Hand.Count == totalBefore, "no card was lost or duplicated",
-            (halves + round.Hand.Count) + " vs " + totalBefore);
-        Check(joker.TurnsSeen == 1, "the turn counter drives the swap", "seen " + joker.TurnsSeen);
+        // The split only moves cards between piles: every card must still be accounted for.
+        int total = round.Deck.DrawCount + round.Deck.DiscardCount + round.Hand.Count;
+        Check(total == totalBefore, "no card was lost or duplicated",
+            total + " vs " + totalBefore);
+        Check(joker.RoundsSeen == 1, "the round counter drives the swap", "seen " + joker.RoundsSeen);
 
         session.Jokers.Remove(joker);
         Check(session.Config.Rules.HandSize == baseHand, "removal gives the hand size back");
