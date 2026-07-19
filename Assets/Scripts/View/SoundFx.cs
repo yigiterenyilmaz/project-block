@@ -64,6 +64,12 @@ namespace ProjectBlock.View
             PlayWithPitch(buyClip, 1f, 1f);
         }
 
+        /// <summary>A light high "poof" when a played bonus card expires into nothing.</summary>
+        public void Vanish()
+        {
+            PlayWithPitch(buyClip, 1.5f, 1.7f, 0.7f);
+        }
+
         /// <summary>Fire whoosh when the arena flames grow (clean sweeps). Slightly
         /// boosted so it reads under the sweep chime without booming.</summary>
         public void Flame()

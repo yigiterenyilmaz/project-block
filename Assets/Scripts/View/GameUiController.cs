@@ -1176,6 +1176,10 @@ namespace ProjectBlock.View
                         LogTurn(report);
                     }
                     sfx.Place();
+                    if (report.PlayedCardExpired)
+                    {
+                        sfx.Vanish();
+                    }
                     if (report.DiscardWasReshuffled)
                     {
                         sfx.Shuffle();

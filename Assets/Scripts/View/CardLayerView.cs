@@ -170,6 +170,23 @@ namespace ProjectBlock.View
             root.localScale = Vector3.one;
         }
 
+        /// <summary>Shrinks and fades a card visual to nothing (an expiring bonus card).</summary>
+        private IEnumerator VanishAndDestroy(CardVisual visual)
+        {
+            const float duration = 0.25f;
+            Vector3 baseScale = visual.transform.localScale;
+            float time = 0f;
+            while (time < duration)
+            {
+                time += Time.deltaTime;
+                float k = 1f - Mathf.Clamp01(time / duration);
+                visual.transform.localScale = baseScale * k;
+                visual.SetAlpha(k);
+                yield return null;
+            }
+            Destroy(visual.gameObject);
+        }
+
         private void SyncInternal(RoundEngine round, TurnReport report, bool animate)
         {
             BuildPilesIfNeeded();
@@ -210,12 +227,20 @@ namespace ProjectBlock.View
                 {
                     visual.SlotIndex = -1;
                     visual.SetSortingBoost(8);
-                    // "Oryantasyon" buries played cards into the DRAW pile, not the discard,
-                    // so the card must fly to whichever pile actually received it.
-                    Vector2 playedTarget = round.Rules.PlayedCardsReturnToDrawPile
-                        ? DrawPilePos
-                        : DiscardPilePos;
-                    visual.FlyToAndDestroy(playedTarget, DiscardDuration);
+                    if (report.PlayedCardExpired)
+                    {
+                        // An expiring bonus card joins no pile - it vanishes on the spot.
+                        StartCoroutine(VanishAndDestroy(visual));
+                    }
+                    else
+                    {
+                        // "Oryantasyon" buries played cards into the DRAW pile, not the
+                        // discard, so the card flies to whichever pile actually received it.
+                        Vector2 playedTarget = round.Rules.PlayedCardsReturnToDrawPile
+                            ? DrawPilePos
+                            : DiscardPilePos;
+                        visual.FlyToAndDestroy(playedTarget, DiscardDuration);
+                    }
                 }
                 else
                 {

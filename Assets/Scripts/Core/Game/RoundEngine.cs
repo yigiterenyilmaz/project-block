@@ -779,7 +779,9 @@ namespace ProjectBlock.Core
                 }
                 else
                 {
+                    // Expires from the round: it joins no pile, so the UI vanishes it.
                     Deck.RemoveFromRound(card);
+                    report.PlayedCardExpired = true;
                 }
                 // Burn: the next available card is flipped face-up into the discard.
                 // "Next available" follows the normal draw rules (confirmed design):

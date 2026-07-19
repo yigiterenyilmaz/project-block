@@ -115,6 +115,10 @@ namespace ProjectBlock.Core
         /// <summary>Bonus-hand plays only: draw pile card flipped face-up into the discard.</summary>
         public BlockCard BurnedCard { get; internal set; }
 
+        /// <summary>True when the played card was a bonus-hand card that EXPIRED from the round
+        /// (it did not join any pile). The UI vanishes it rather than flying it to the discard.</summary>
+        public bool PlayedCardExpired { get; internal set; }
+
         /// <summary>True the one time the round score first reached the threshold.</summary>
         public bool ThresholdJustPassed { get; internal set; }
 
