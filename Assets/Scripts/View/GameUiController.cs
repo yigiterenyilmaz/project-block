@@ -363,6 +363,12 @@ namespace ProjectBlock.View
                     Vector2 barWorld = cam.ViewportToWorldPoint(new Vector3(0.9f, 0.92f, -cam.transform.position.z));
                     marketView.PlayJokerBuyFx(offerIndex, barWorld);
                 }
+                else if (offer.Kind == MarketOfferKind.Power)
+                {
+                    // fly toward the power bar (left side, above the discard pile)
+                    marketView.PlayPowerBuyFx(offerIndex,
+                        CardLayerView.DiscardPilePos + new Vector2(0f, 2.4f));
+                }
                 else
                 {
                     marketView.PlayBuyFx(offerIndex);
@@ -927,6 +933,10 @@ namespace ProjectBlock.View
                 {
                     ShowJokerTooltip(offer.Joker, offer.Price, world);
                 }
+                else if (offer.Kind == MarketOfferKind.Power)
+                {
+                    ShowPowerTooltip(offer.Power, offer.Price, world);
+                }
                 else
                 {
                     ShowCardTooltip(offer.Card, world);
@@ -972,6 +982,12 @@ namespace ProjectBlock.View
         {
             string body = ViewUtil.WrapText(joker.Description, 34) + "\n\nCost " + price;
             RenderTooltip("joker:" + joker.DefId, joker.DisplayName, body, nearWorld);
+        }
+
+        private void ShowPowerTooltip(PowerDefinition power, int price, Vector2 nearWorld)
+        {
+            string body = ViewUtil.WrapText(power.Description, 34) + "\n\nCost " + price;
+            RenderTooltip("power:" + power.DefId, power.DisplayName, body, nearWorld);
         }
 
         /// <summary>Rebuilds the tooltip panel only when the hovered target changes; always

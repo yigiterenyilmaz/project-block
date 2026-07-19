@@ -122,8 +122,8 @@ namespace ProjectBlock.Core
 
         /// <summary>
         /// Buys a market offer with TotalScore. A block joins the owned deck (it shuffles in
-        /// from the next round on); a joker joins the inventory. Returns false when the offer
-        /// is already sold, unaffordable, or (for jokers) there is no free joker slot.
+        /// from the next round on); a joker or a power joins its inventory. Returns false
+        /// when the offer is already sold, unaffordable, or there is no free slot.
         /// </summary>
         public bool TryBuyOffer(int offerIndex)
         {
@@ -147,6 +147,14 @@ namespace ProjectBlock.Core
                     return false;
                 }
                 Jokers.Add(offer.Joker.Create());
+            }
+            else if (offer.Kind == MarketOfferKind.Power)
+            {
+                if (Powers.IsFull || offer.Power == null)
+                {
+                    return false;
+                }
+                Powers.Add(offer.Power.Create()); // arrives charged (Power constructor)
             }
             else
             {
@@ -314,6 +322,7 @@ namespace ProjectBlock.Core
                 newOffers.Add(new MarketOffer(card, market.BuyPrice(card)));
             }
             AddJokerOffers(market, newOffers);
+            AddPowerOffers(market, newOffers);
             Market.SetOffers(newOffers);
         }
 
@@ -352,6 +361,42 @@ namespace ProjectBlock.Core
             for (int i = 0; i < count; i++)
             {
                 newOffers.Add(new MarketOffer(pool[i], market.JokerPrice));
+            }
+        }
+
+        /// <summary>Appends this visit's power offers, mirroring AddJokerOffers: a separate
+        /// deterministic rng (its own mixing constant, so joker stocking is untouched) and
+        /// never a power the player already holds.</summary>
+        private void AddPowerOffers(MarketConfig market, List<MarketOffer> newOffers)
+        {
+            IReadOnlyList<PowerDefinition> catalogue = PowerRegistry.All;
+            if (market.PowerOfferCount <= 0 || catalogue.Count == 0)
+            {
+                return;
+            }
+            var powerRng = new SeededRandom(unchecked(resolvedSeed * 1000000007 + RoundNumber));
+            var owned = new HashSet<string>();
+            foreach (Power held in Powers.Powers)
+            {
+                owned.Add(held.DefId);
+            }
+            var pool = new List<PowerDefinition>();
+            foreach (PowerDefinition definition in catalogue)
+            {
+                if (!owned.Contains(definition.DefId))
+                {
+                    pool.Add(definition);
+                }
+            }
+            if (pool.Count == 0)
+            {
+                return;
+            }
+            powerRng.Shuffle(pool);
+            int count = Math.Min(market.PowerOfferCount, pool.Count);
+            for (int i = 0; i < count; i++)
+            {
+                newOffers.Add(new MarketOffer(pool[i], market.PowerPrice));
             }
         }
 

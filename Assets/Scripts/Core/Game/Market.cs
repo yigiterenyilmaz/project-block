@@ -1,12 +1,11 @@
 // PURPOSE: The between-rounds market ("market"). Confirmed design: jokers, powers and
 // block cards can be bought, held jokers/powers can be sold, and the currency is the
 // run-wide TotalScore (same points the player scores with).
-// SCOPE: block-card offers and joker offers. Buying a block permanently adds the card to
-// the owned deck (it joins the shuffle from the next round on); buying a joker adds it to
-// the inventory. GameSession owns the money, deck and inventory, so purchases go through
-// GameSession.TryBuyOffer.
+// SCOPE: block-card, joker and power offers. Buying a block permanently adds the card to
+// the owned deck (it joins the shuffle from the next round on); buying a joker or a power
+// adds it to its inventory. GameSession owns the money, deck and inventories, so purchases
+// go through GameSession.TryBuyOffer.
 // EXTENSION POINTS:
-//  - Power offers: add a MarketOfferKind member and branch in GameSession.TryBuyOffer.
 //  - Selling, rerolls, per-round pricing events ("ihale", "Damlaya damlaya"): market
 //    state lives here, rules in GameSession/MarketConfig.
 // Prices in MarketConfig are BALANCE PLACEHOLDERS, not confirmed design.
@@ -35,6 +34,12 @@ namespace ProjectBlock.Core
 
         /// <summary>Flat price of a joker offer. Balance placeholder.</summary>
         public int JokerPrice = 40;
+
+        /// <summary>Power offers shown per market visit (drawn from PowerRegistry).</summary>
+        public int PowerOfferCount = 2;
+
+        /// <summary>Flat price of a power offer. Balance placeholder.</summary>
+        public int PowerPrice = 50;
 
         /// <summary>Fraction of a card's buy price returned when it is sold. Balance
         /// placeholder; sell is always below buy.</summary>
@@ -79,20 +84,25 @@ namespace ProjectBlock.Core
     public enum MarketOfferKind
     {
         Block = 0,
-        Joker = 1
+        Joker = 1,
+        Power = 2
     }
 
-    /// <summary>One purchasable item in the market. A block offer carries a Card; a joker
-    /// offer carries a Joker definition. Exactly one payload is set, per Kind.</summary>
+    /// <summary>One purchasable item in the market. A block offer carries a Card, a joker
+    /// offer a Joker definition, a power offer a Power definition. Exactly one payload is
+    /// set, per Kind.</summary>
     public sealed class MarketOffer
     {
         public MarketOfferKind Kind { get; }
 
-        /// <summary>The block on sale, or null for a joker offer.</summary>
+        /// <summary>The block on sale, or null for a joker/power offer.</summary>
         public BlockCard Card { get; }
 
-        /// <summary>The joker on sale, or null for a block offer.</summary>
+        /// <summary>The joker on sale, or null for any other offer kind.</summary>
         public JokerDefinition Joker { get; }
+
+        /// <summary>The power on sale, or null for any other offer kind.</summary>
+        public PowerDefinition Power { get; }
 
         public int Price { get; }
         public bool Sold { get; internal set; }
@@ -111,12 +121,25 @@ namespace ProjectBlock.Core
             Price = price;
         }
 
+        internal MarketOffer(PowerDefinition power, int price)
+        {
+            Kind = MarketOfferKind.Power;
+            Power = power;
+            Price = price;
+        }
+
         /// <summary>Short label for logs, independent of the offer kind.</summary>
         public override string ToString()
         {
-            return Kind == MarketOfferKind.Joker
-                ? "Joker " + (Joker != null ? Joker.DisplayName : "?")
-                : "Block " + Card;
+            switch (Kind)
+            {
+                case MarketOfferKind.Joker:
+                    return "Joker " + (Joker != null ? Joker.DisplayName : "?");
+                case MarketOfferKind.Power:
+                    return "Power " + (Power != null ? Power.DisplayName : "?");
+                default:
+                    return "Block " + Card;
+            }
         }
     }
 

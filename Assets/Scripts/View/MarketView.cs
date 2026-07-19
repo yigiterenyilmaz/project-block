@@ -1,8 +1,9 @@
-// PURPOSE: The between-rounds market screen: block-card and joker offers with prices,
-// click to buy. Rebuilt from scratch on every change (cheap at this scale). Purchases go
-// through GameSession.TryBuyOffer - this view never touches money, the deck or jokers.
-// Sorting orders: backdrop 33, frames 34, offer cards/joker tiles 36/37, price labels 38
-// (under the deck overlay at 40+).
+// PURPOSE: The between-rounds market screen: block-card, joker and power offers with
+// prices, click to buy. Rebuilt from scratch on every change (cheap at this scale).
+// Purchases go through GameSession.TryBuyOffer - this view never touches money, the deck
+// or the inventories.
+// Sorting orders: backdrop 33, frames 34, offer cards/joker/power tiles 36/37, price
+// labels 38 (under the deck overlay at 40+).
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -26,28 +27,28 @@ namespace ProjectBlock.View
         private static readonly Color JokerTagColor = new Color(0.82f, 0.68f, 1f);
         private static readonly Color JokerNameColor = new Color(1f, 0.93f, 0.72f);
         private static readonly Color JokerDescColor = new Color(0.82f, 0.86f, 0.92f);
+        private static readonly Color PowerBodyColor = new Color(0.12f, 0.30f, 0.34f);
+        private static readonly Color PowerTagColor = new Color(0.55f, 0.92f, 0.95f);
 
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
 
-        /// <summary>(Re)builds the market display: a BLOCKS section and a JOKERS section,
-        /// each centered under its own header, separated by a gap.</summary>
+        /// <summary>(Re)builds the market display: a BLOCKS, a JOKERS and a POWERS section,
+        /// each centered under its own header, separated by a gap. Offers arrive already
+        /// grouped by kind (blocks, then jokers, then powers - RestockMarket's order).</summary>
         public void Show(GameSession session)
         {
             Hide();
             IReadOnlyList<MarketOffer> offers = session.Market.Offers;
             int count = offers.Count;
 
-            int blockCount = 0;
-            int jokerCount = 0;
+            // One one-slot gap wherever the offer kind changes. Center the whole run.
+            int sectionCount = 0;
             for (int i = 0; i < count; i++)
             {
-                if (offers[i].Kind == MarketOfferKind.Joker) jokerCount++; else blockCount++;
+                if (i == 0 || offers[i].Kind != offers[i - 1].Kind) sectionCount++;
             }
-
-            // Blocks fill the first slots, then a one-slot gap, then jokers (offers are
-            // already ordered blocks-then-jokers). Center the whole run under the title.
-            float sectionGap = (blockCount > 0 && jokerCount > 0) ? OfferSpacing : 0f;
+            float sectionGap = Mathf.Max(sectionCount - 1, 0) * OfferSpacing;
             float span = (count - 1) * OfferSpacing + sectionGap;
             float startX = Center.x - span * 0.5f;
             float tileY = Center.y - 0.05f;
@@ -61,45 +62,27 @@ namespace ProjectBlock.View
                 SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             float cursor = startX;
-            bool gapInserted = false;
-            float blockMinX = float.MaxValue, blockMaxX = float.MinValue;
-            float jokerMinX = float.MaxValue, jokerMaxX = float.MinValue;
+            // Per-kind extents (indexed by MarketOfferKind) center each section header.
+            var minX = new float[] { float.MaxValue, float.MaxValue, float.MaxValue };
+            var maxX = new float[] { float.MinValue, float.MinValue, float.MinValue };
             for (int i = 0; i < count; i++)
             {
-                bool isJoker = offers[i].Kind == MarketOfferKind.Joker;
-                if (isJoker && sectionGap > 0f && !gapInserted)
+                if (i > 0 && offers[i].Kind != offers[i - 1].Kind)
                 {
-                    cursor += sectionGap;
-                    gapInserted = true;
+                    cursor += OfferSpacing;
                 }
                 var slotCenter = new Vector2(cursor, tileY);
                 offerCenters.Add(slotCenter);
                 cursor += OfferSpacing;
-                if (isJoker)
-                {
-                    jokerMinX = Mathf.Min(jokerMinX, slotCenter.x);
-                    jokerMaxX = Mathf.Max(jokerMaxX, slotCenter.x);
-                }
-                else
-                {
-                    blockMinX = Mathf.Min(blockMinX, slotCenter.x);
-                    blockMaxX = Mathf.Max(blockMaxX, slotCenter.x);
-                }
+                int kind = (int)offers[i].Kind;
+                minX[kind] = Mathf.Min(minX[kind], slotCenter.x);
+                maxX[kind] = Mathf.Max(maxX[kind], slotCenter.x);
             }
 
             float headerY = tileY + 1.28f;
-            if (blockCount > 0)
-            {
-                ViewUtil.MakeText3D(transform, "BlocksHeader",
-                    new Vector2((blockMinX + blockMaxX) * 0.5f, headerY), "BLOCKS",
-                    90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
-            }
-            if (jokerCount > 0)
-            {
-                ViewUtil.MakeText3D(transform, "JokersHeader",
-                    new Vector2((jokerMinX + jokerMaxX) * 0.5f, headerY), "JOKERS",
-                    90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
-            }
+            AddSectionHeader("BlocksHeader", "BLOCKS", (int)MarketOfferKind.Block, minX, maxX, headerY);
+            AddSectionHeader("JokersHeader", "JOKERS", (int)MarketOfferKind.Joker, minX, maxX, headerY);
+            AddSectionHeader("PowersHeader", "POWERS", (int)MarketOfferKind.Power, minX, maxX, headerY);
 
             for (int i = 0; i < count; i++)
             {
@@ -117,10 +100,17 @@ namespace ProjectBlock.View
                 }
                 if (offer.Kind == MarketOfferKind.Joker)
                 {
-                    // Joker tiles have no CardVisual; a null keeps offerVisuals index-aligned
-                    // with the offers so PlayBuyFx and OfferAt stay correct.
+                    // Joker/power tiles have no CardVisual; a null keeps offerVisuals
+                    // index-aligned with the offers so PlayBuyFx and OfferAt stay correct.
                     offerVisuals.Add(null);
-                    BuildJokerTile(slotCenter, i, offer.Joker);
+                    BuildNamedTile(slotCenter, i, "JOKER", offer.Joker.DisplayName,
+                        offer.Joker.Description, JokerBodyColor, JokerTagColor);
+                }
+                else if (offer.Kind == MarketOfferKind.Power)
+                {
+                    offerVisuals.Add(null);
+                    BuildNamedTile(slotCenter, i, "POWER", offer.Power.DisplayName,
+                        offer.Power.Description, PowerBodyColor, PowerTagColor);
                 }
                 else
                 {
@@ -135,20 +125,34 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Draws a joker offer: a tinted body with its name and wrapped description
-        /// (there is no BlockCard to render, so this stands in for the offer card).</summary>
-        private void BuildJokerTile(Vector2 center, int index, JokerDefinition joker)
+        /// <summary>Header centered over its section, skipped when the section is empty.</summary>
+        private void AddSectionHeader(string name, string label, int kind,
+            float[] minX, float[] maxX, float y)
         {
-            ViewUtil.MakeRect(transform, "JokerBody_" + index, center,
-                new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight), JokerBodyColor, 36);
-            ViewUtil.MakeText3D(transform, "JokerTag_" + index,
-                center + new Vector2(0f, CardVisual.BodyHeight * 0.5f - 0.17f), "JOKER",
-                90, 0.015f, JokerTagColor, 37, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, "JokerName_" + index,
-                center + new Vector2(0f, 0.5f), ViewUtil.WrapText(joker.DisplayName, 13),
+            if (minX[kind] > maxX[kind])
+            {
+                return;
+            }
+            ViewUtil.MakeText3D(transform, name,
+                new Vector2((minX[kind] + maxX[kind]) * 0.5f, y), label,
+                90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+        }
+
+        /// <summary>Draws a joker or power offer: a tinted body with a kind tag, the name
+        /// and a wrapped description (there is no BlockCard to render for these).</summary>
+        private void BuildNamedTile(Vector2 center, int index, string tag, string displayName,
+            string description, Color bodyColor, Color tagColor)
+        {
+            ViewUtil.MakeRect(transform, tag + "Body_" + index, center,
+                new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight), bodyColor, 36);
+            ViewUtil.MakeText3D(transform, tag + "Tag_" + index,
+                center + new Vector2(0f, CardVisual.BodyHeight * 0.5f - 0.17f), tag,
+                90, 0.015f, tagColor, 37, TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, tag + "Name_" + index,
+                center + new Vector2(0f, 0.5f), ViewUtil.WrapText(displayName, 13),
                 90, 0.022f, JokerNameColor, 37, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, "JokerDesc_" + index,
-                center + new Vector2(0f, 0.12f), ViewUtil.WrapText(joker.Description, 16),
+            ViewUtil.MakeText3D(transform, tag + "Desc_" + index,
+                center + new Vector2(0f, 0.12f), ViewUtil.WrapText(description, 16),
                 90, 0.012f, JokerDescColor, 37, TextAnchor.UpperCenter);
         }
 
@@ -196,17 +200,29 @@ namespace ProjectBlock.View
         /// the fx object is parented outside this view so the rebuild leaves it alone.</summary>
         public void PlayJokerBuyFx(int offerIndex, Vector2 target)
         {
+            PlayTileBuyFx(offerIndex, target, "JOKER", JokerBodyColor, JokerTagColor);
+        }
+
+        /// <summary>The power twin of PlayJokerBuyFx (target: the power bar).</summary>
+        public void PlayPowerBuyFx(int offerIndex, Vector2 target)
+        {
+            PlayTileBuyFx(offerIndex, target, "POWER", PowerBodyColor, PowerTagColor);
+        }
+
+        private void PlayTileBuyFx(int offerIndex, Vector2 target, string tag,
+            Color bodyColor, Color tagColor)
+        {
             if (offerIndex < 0 || offerIndex >= offerCenters.Count)
             {
                 return;
             }
-            var root = new GameObject("JokerBuyFx");
+            var root = new GameObject(tag + "BuyFx");
             root.transform.SetParent(transform.parent, false);
             root.transform.localPosition = offerCenters[offerIndex];
             ViewUtil.MakeRect(root.transform, "Body", Vector2.zero,
-                new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight), JokerBodyColor, 39);
-            ViewUtil.MakeText3D(root.transform, "Tag", Vector2.zero, "JOKER",
-                90, 0.016f, JokerTagColor, 39, TextAnchor.MiddleCenter);
+                new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight), bodyColor, 39);
+            ViewUtil.MakeText3D(root.transform, "Tag", Vector2.zero, tag,
+                90, 0.016f, tagColor, 39, TextAnchor.MiddleCenter);
             StartCoroutine(FlyShrinkAndDestroy(root.transform, target, 0.4f));
         }
 
