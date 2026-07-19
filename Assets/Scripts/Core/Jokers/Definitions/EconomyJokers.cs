@@ -106,6 +106,22 @@ namespace ProjectBlock.Core
             }
             return ctx.Session.Powers.RechargeOne();
         }
+
+        /// <summary>Recharges a SPECIFIC spent power (the UI lets the player choose which).
+        /// Spends the joker's own charge only if the target power actually recharges.</summary>
+        public bool RechargeChosen(RoundContext ctx, int powerInstanceId)
+        {
+            if (!CanActivate(ctx))
+            {
+                return false;
+            }
+            Power target = ctx.Session.Powers.Find(powerInstanceId);
+            if (target == null || target.Charged || !TrySpendCharge())
+            {
+                return false;
+            }
+            return ctx.Session.Powers.Recharge(powerInstanceId);
+        }
     }
 
     /// <summary>"ihale" - every round it puts an extra price on one random joker (itself

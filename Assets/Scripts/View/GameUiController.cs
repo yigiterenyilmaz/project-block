@@ -40,6 +40,12 @@ namespace ProjectBlock.View
         private JokerBarView jokerBar;
         private PowerBarView powerBar;
         private GrantPickerView grantPicker;
+        private ChoicePickerView choicePicker;
+
+        private enum ChoiceKind { None, BatakBet, PowerbankTarget }
+        private ChoiceKind pendingChoice;
+        private int pendingChoiceJokerId;
+        private readonly List<int> pendingChoiceValues = new List<int>();
         private DeckDefinition currentDeck = DeckLibrary.Classic;
         private SoundFx sfx;
         private FlameStreakView flameStreak;
@@ -125,6 +131,8 @@ namespace ProjectBlock.View
             pendingTargetJokerId = null;
             pendingTargetPowerId = null;
             grantPicker.Hide();
+            choicePicker.Hide();
+            ClearChoice();
             marketView.Hide();
             HideTooltip();
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
@@ -252,6 +260,28 @@ namespace ProjectBlock.View
                     }
                     sellCardsMode = false;
                     deckOverlay.Hide();
+                }
+                return;
+            }
+            if (choicePicker.IsOpen)
+            {
+                // modal: click a row to choose, Esc cancels
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                {
+                    choicePicker.Hide();
+                    ClearChoice();
+                    return;
+                }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                {
+                    Vector2 pickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                    int idx = choicePicker.OptionAt(pickWorld);
+                    choicePicker.Hide();
+                    if (idx >= 0)
+                    {
+                        ResolveChoice(idx);
+                    }
+                    ClearChoice();
                 }
                 return;
             }
@@ -598,6 +628,19 @@ namespace ProjectBlock.View
                 Debug.Log("[project_block] " + joker.DisplayName + " cannot be used right now.");
                 return;
             }
+            // Two jokers ask the player for a value first, via a modal picker.
+            var batak = joker as BatakJoker;
+            if (batak != null && !batak.HasActiveBet)
+            {
+                OpenBatakPicker(batak);
+                return;
+            }
+            var powerbank = joker as PowerbankJoker;
+            if (powerbank != null)
+            {
+                OpenPowerbankPicker(powerbank);
+                return;
+            }
             if (joker.Targeting != ActivationTargeting.None)
             {
                 pendingTargetJokerId = joker.InstanceId;
@@ -606,6 +649,80 @@ namespace ProjectBlock.View
                 return;
             }
             RunActivation(joker, ActivationTarget.None);
+        }
+
+        private void OpenBatakPicker(BatakJoker batak)
+        {
+            pendingChoice = ChoiceKind.BatakBet;
+            pendingChoiceJokerId = batak.InstanceId;
+            pendingChoiceValues.Clear();
+            var labels = new List<string>();
+            for (int turns = 1; turns <= 8; turns++)
+            {
+                pendingChoiceValues.Add(turns);
+                labels.Add(Loc.Pick(turns + (turns == 1 ? " turn" : " turns"), turns + " tur"));
+            }
+            choicePicker.Show(Loc.Pick("Batak: bet how many turns to sweep?",
+                "Batak: kaç turda temizlersin?"), labels);
+        }
+
+        private void OpenPowerbankPicker(PowerbankJoker powerbank)
+        {
+            pendingChoice = ChoiceKind.PowerbankTarget;
+            pendingChoiceJokerId = powerbank.InstanceId;
+            pendingChoiceValues.Clear();
+            var labels = new List<string>();
+            IReadOnlyList<Power> powers = session.Powers.Powers;
+            for (int i = 0; i < powers.Count; i++)
+            {
+                if (!powers[i].Charged)
+                {
+                    pendingChoiceValues.Add(powers[i].InstanceId);
+                    labels.Add(powers[i].DisplayName);
+                }
+            }
+            if (labels.Count == 0)
+            {
+                ClearChoice();
+                return; // nothing spent to refill
+            }
+            choicePicker.Show(Loc.Pick("Powerbank: recharge which power?",
+                "Powerbank: hangi gücü doldur?"), labels);
+        }
+
+        private void ResolveChoice(int index)
+        {
+            if (index < 0 || index >= pendingChoiceValues.Count)
+            {
+                return;
+            }
+            var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
+            if (pendingChoice == ChoiceKind.BatakBet)
+            {
+                var batak = session.Jokers.Find(pendingChoiceJokerId) as BatakJoker;
+                if (batak != null && batak.PlaceBet(ctx, pendingChoiceValues[index]))
+                {
+                    Debug.Log("[project_block] Batak bet " + pendingChoiceValues[index] + " turns.");
+                    jokerBar.PulseJoker(pendingChoiceJokerId);
+                }
+            }
+            else if (pendingChoice == ChoiceKind.PowerbankTarget)
+            {
+                var powerbank = session.Jokers.Find(pendingChoiceJokerId) as PowerbankJoker;
+                if (powerbank != null && powerbank.RechargeChosen(ctx, pendingChoiceValues[index]))
+                {
+                    Debug.Log("[project_block] Powerbank recharged power #" + pendingChoiceValues[index]);
+                    jokerBar.PulseJoker(pendingChoiceJokerId);
+                }
+            }
+            RefreshAll(null);
+        }
+
+        private void ClearChoice()
+        {
+            pendingChoice = ChoiceKind.None;
+            pendingChoiceJokerId = 0;
+            pendingChoiceValues.Clear();
         }
 
         private void CancelTargeting()
@@ -1541,6 +1658,10 @@ namespace ProjectBlock.View
             var pickerGo = new GameObject("GrantPicker");
             pickerGo.transform.SetParent(transform, false);
             grantPicker = pickerGo.AddComponent<GrantPickerView>();
+
+            var choiceGo = new GameObject("ChoicePicker");
+            choiceGo.transform.SetParent(transform, false);
+            choicePicker = choiceGo.AddComponent<ChoicePickerView>();
 
             tooltipRoot = new GameObject("Tooltip");
             tooltipRoot.transform.SetParent(transform, false);
