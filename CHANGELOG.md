@@ -82,6 +82,9 @@ everything here is unreleased and balance numbers are still placeholders.
   the numbers read bigger without changing balance.
 
 ### Fixed
+- **Retro bit-crush** — the bit-crush now actually grits the sound effects: the filter moved onto
+  the **AudioListener** (the camera) so it processes the whole mix. On an AudioSource-only object
+  `OnAudioFilterRead` was not reliably called, so SFX played clean.
 - **Retro CRT** — the overlay now turns off on restart (**R**) and on a deck change (a fresh
   game starts with retro off).
 - **Totem** — the market is now shown when Totem ends overtime and advances the run mid-use

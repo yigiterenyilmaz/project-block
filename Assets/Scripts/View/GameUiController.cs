@@ -58,6 +58,7 @@ namespace ProjectBlock.View
         private const float RetroFallInterval = 0.55f;
         private const float RetroSoftDropInterval = 0.06f;
         private CrtOverlayView crt;
+        private BitCrushFilter bitCrush;
         // Global the CrtEdgeBend fullscreen shader reads (0 = off, 1 = on). Driven by RetroMode;
         // harmless if the Full Screen Pass feature/material is not wired yet (see docs/crt-edge-bend.md).
         private static readonly int CrtBendId = Shader.PropertyToID("_CrtBend");
@@ -126,6 +127,9 @@ namespace ProjectBlock.View
                 : GameLanguage.English;
             cam = Camera.main;
             camBasePosition = cam.transform.position;
+            // The bit-crush must sit on the AudioListener (the camera) to process the whole mix;
+            // a filter on the SoundFx object's sources is not reliably called.
+            bitCrush = cam.gameObject.AddComponent<BitCrushFilter>();
             BuildViews();
             NewGame();
         }
@@ -1914,7 +1918,11 @@ namespace ProjectBlock.View
             }
             if (sfx != null)
             {
-                sfx.SetRetro(on);
+                sfx.SetRetro(on); // the CRT hum loop
+            }
+            if (bitCrush != null)
+            {
+                bitCrush.Active = on; // grit the whole mix
             }
             Shader.SetGlobalFloat(CrtBendId, on ? 1f : 0f);
         }

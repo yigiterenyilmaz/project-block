@@ -23,11 +23,8 @@ namespace ProjectBlock.View
         private AudioClip flameClip;
         private AudioClip humClip;
 
-        // ---- retro ("CRT") audio: a looping hum + a bit-crush DSP on this object's sources,
-        // both toggled by SetRetro. retroActive is read on the audio thread, hence volatile.
-        private volatile bool retroActive;
-        private int crushHold;      // samples until the next fresh sample is latched (downsample)
-        private float[] crushHeld;  // last latched sample per channel
+        // ---- retro ("CRT") audio: a looping mains hum, toggled by SetRetro. The bit-crush that
+        // grits this hum (and every other sound) lives on the AudioListener, see BitCrushFilter.
 
         private void Awake()
         {
@@ -47,12 +44,10 @@ namespace ProjectBlock.View
             humSource.volume = 0.18f;
         }
 
-        /// <summary>Turns the retro CRT audio on/off: the mains-hum loop and the bit-crush that
-        /// downsamples + bit-reduces every sound this object plays. Called wherever the CRT
-        /// overlay is toggled (RetroMode).</summary>
+        /// <summary>Turns the retro CRT hum loop on/off. The accompanying bit-crush is a separate
+        /// filter on the AudioListener (BitCrushFilter). Called wherever the CRT is toggled.</summary>
         public void SetRetro(bool on)
         {
-            retroActive = on;
             if (humSource == null)
             {
                 return;
@@ -67,39 +62,6 @@ namespace ProjectBlock.View
             else
             {
                 humSource.Stop();
-            }
-        }
-
-        /// <summary>Bit-crush filter on this GameObject's AudioSources (SFX + hum). Runs on the
-        /// audio thread, so it stays allocation-free except for a one-time per-channel buffer.
-        /// Pass-through when retro is off.</summary>
-        private void OnAudioFilterRead(float[] data, int channels)
-        {
-            if (!retroActive || channels <= 0)
-            {
-                return;
-            }
-            if (crushHeld == null || crushHeld.Length != channels)
-            {
-                crushHeld = new float[channels]; // only when the channel count changes (rare)
-            }
-            const int downsample = 4;   // ~44.1 kHz -> ~11 kHz sample-and-hold
-            const float levels = 32f;   // ~5-bit depth quantization
-            for (int i = 0; i + channels <= data.Length; i += channels)
-            {
-                if (crushHold <= 0)
-                {
-                    crushHold = downsample;
-                    for (int c = 0; c < channels; c++)
-                    {
-                        crushHeld[c] = Mathf.Round(data[i + c] * levels) / levels;
-                    }
-                }
-                crushHold--;
-                for (int c = 0; c < channels; c++)
-                {
-                    data[i + c] = crushHeld[c];
-                }
             }
         }
 
