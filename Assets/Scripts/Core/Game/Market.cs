@@ -47,6 +47,40 @@ namespace ProjectBlock.Core
         /// <summary>Flat price of a power offer. Balance placeholder.</summary>
         public int PowerPrice = 50;
 
+        /// <summary>Rarity price multipliers: a rare/legendary joker or power costs this many
+        /// times its base price (before the global ScoreScale). Balance placeholders.</summary>
+        public int CommonPriceMultiplier = 1;
+        public int RarePriceMultiplier = 2;
+        public int LegendaryPriceMultiplier = 3;
+
+        /// <summary>Relative shop-appearance weights per rarity: commoner items are far likelier
+        /// to be offered, legendaries seldom. Balance placeholders.</summary>
+        public int CommonWeight = 100;
+        public int RareWeight = 35;
+        public int LegendaryWeight = 8;
+
+        /// <summary>Price multiplier for a rarity tier.</summary>
+        public int PriceMultiplier(Rarity rarity)
+        {
+            switch (rarity)
+            {
+                case Rarity.Rare: return RarePriceMultiplier;
+                case Rarity.Legendary: return LegendaryPriceMultiplier;
+                default: return CommonPriceMultiplier;
+            }
+        }
+
+        /// <summary>Shop-appearance weight for a rarity tier.</summary>
+        public int Weight(Rarity rarity)
+        {
+            switch (rarity)
+            {
+                case Rarity.Rare: return RareWeight;
+                case Rarity.Legendary: return LegendaryWeight;
+                default: return CommonWeight;
+            }
+        }
+
         /// <summary>Fraction of a card's buy price returned when it is sold. Balance
         /// placeholder; sell is always below buy.</summary>
         public double CardSellFraction = 0.5;

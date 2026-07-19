@@ -22,6 +22,13 @@ namespace ProjectBlock.Core
             get { return sample.IsLegendary; }
         }
 
+        /// <summary>Graded rarity (from the rarity grader, via RarityTable). Drives market
+        /// price and shop appearance odds; keyed by DefId.</summary>
+        public Rarity Rarity
+        {
+            get { return RarityTable.For(DefId); }
+        }
+
         /// <summary>Read LIVE off a sample instance, so it follows the Loc language.</summary>
         public string Description
         {

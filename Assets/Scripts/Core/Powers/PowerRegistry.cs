@@ -23,6 +23,13 @@ namespace ProjectBlock.Core
             get { return sample.Description; }
         }
 
+        /// <summary>Graded rarity (from the rarity grader, via RarityTable). Drives market
+        /// price and shop appearance odds; keyed by DefId.</summary>
+        public Rarity Rarity
+        {
+            get { return RarityTable.For(DefId); }
+        }
+
         private readonly Power sample;
         private readonly Func<Power> factory;
 

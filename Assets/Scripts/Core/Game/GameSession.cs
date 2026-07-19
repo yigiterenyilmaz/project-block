@@ -501,15 +501,27 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            jokerRng.Shuffle(pool);
+            // Weighted by rarity (A-Res weighted shuffle): each item's key is u^(1/weight), so
+            // commoner items rise to the top and legendaries seldom appear. Deterministic on
+            // jokerRng, so the same seed + round always stocks the same shop.
+            var keyed = new List<KeyValuePair<double, JokerDefinition>>(pool.Count);
+            for (int i = 0; i < pool.Count; i++)
+            {
+                int w = market.Weight(pool[i].Rarity);
+                double u = jokerRng.NextDouble();
+                keyed.Add(new KeyValuePair<double, JokerDefinition>(
+                    w <= 0 ? 0.0 : Math.Pow(u, 1.0 / w), pool[i]));
+            }
+            keyed.Sort((a, b) => b.Key.CompareTo(a.Key)); // highest key first
             // At most one legendary per visit, so the player is never teased with a second
             // legendary they could not also take.
-            int count = Math.Min(market.JokerOfferCount, pool.Count);
+            int count = Math.Min(market.JokerOfferCount, keyed.Count);
             int taken = 0;
             bool legendaryTaken = false;
-            for (int i = 0; i < pool.Count && taken < count; i++)
+            for (int i = 0; i < keyed.Count && taken < count; i++)
             {
-                if (pool[i].IsLegendary)
+                JokerDefinition def = keyed[i].Value;
+                if (def.IsLegendary)
                 {
                     if (legendaryTaken)
                     {
@@ -517,7 +529,9 @@ namespace ProjectBlock.Core
                     }
                     legendaryTaken = true;
                 }
-                newOffers.Add(new MarketOffer(pool[i], market.JokerPrice * Config.Scoring.ScoreScale));
+                int price = market.JokerPrice * market.PriceMultiplier(def.Rarity)
+                    * Config.Scoring.ScoreScale;
+                newOffers.Add(new MarketOffer(def, price));
                 taken++;
             }
         }
@@ -550,11 +564,23 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            powerRng.Shuffle(pool);
-            int count = Math.Min(market.PowerOfferCount, pool.Count);
+            // Rarity-weighted, same A-Res method as the joker offers (see AddJokerOffers).
+            var keyed = new List<KeyValuePair<double, PowerDefinition>>(pool.Count);
+            for (int i = 0; i < pool.Count; i++)
+            {
+                int w = market.Weight(pool[i].Rarity);
+                double u = powerRng.NextDouble();
+                keyed.Add(new KeyValuePair<double, PowerDefinition>(
+                    w <= 0 ? 0.0 : Math.Pow(u, 1.0 / w), pool[i]));
+            }
+            keyed.Sort((a, b) => b.Key.CompareTo(a.Key));
+            int count = Math.Min(market.PowerOfferCount, keyed.Count);
             for (int i = 0; i < count; i++)
             {
-                newOffers.Add(new MarketOffer(pool[i], market.PowerPrice * Config.Scoring.ScoreScale));
+                PowerDefinition def = keyed[i].Value;
+                int price = market.PowerPrice * market.PriceMultiplier(def.Rarity)
+                    * Config.Scoring.ScoreScale;
+                newOffers.Add(new MarketOffer(def, price));
             }
         }
 
