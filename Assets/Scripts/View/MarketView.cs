@@ -132,15 +132,19 @@ namespace ProjectBlock.View
                     // Joker/power tiles have no CardVisual; a null keeps offerVisuals
                     // index-aligned with the offers so PlayBuyFx and OfferAt stay correct.
                     offerVisuals.Add(null);
-                    BuildNamedTile(slotCenter, i, offer.Joker.IsLegendary ? "LEGENDARY" : "JOKER",
+                    string jokerTag = offer.Joker.IsLegendary
+                        ? Loc.Pick("LEGENDARY", "EFSANEVİ")
+                        : Loc.Pick("JOKER", "JOKER");
+                    BuildNamedTile(slotCenter, i, "Joker", jokerTag,
                         offer.Joker.DisplayName, offer.Joker.Description, JokerBodyColor,
                         offer.Joker.IsLegendary ? LegendaryTagColor : JokerTagColor);
                 }
                 else if (offer.Kind == MarketOfferKind.Power)
                 {
                     offerVisuals.Add(null);
-                    BuildNamedTile(slotCenter, i, "POWER", offer.Power.DisplayName,
-                        offer.Power.Description, PowerBodyColor, PowerTagColor);
+                    BuildNamedTile(slotCenter, i, "Power", Loc.Pick("POWER", "GÜÇ"),
+                        offer.Power.DisplayName, offer.Power.Description, PowerBodyColor,
+                        PowerTagColor);
                 }
                 else
                 {
@@ -165,20 +169,21 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Draws a joker or power offer: a tinted body with a kind tag, the name
-        /// and a wrapped description (there is no BlockCard to render for these).</summary>
-        private void BuildNamedTile(Vector2 center, int index, string tag, string displayName,
-            string description, Color bodyColor, Color tagColor)
+        /// <summary>Draws a joker or power offer: a tinted body with a kind tag, the name and
+        /// a wrapped description. <paramref name="key"/> is a stable ASCII prefix for the
+        /// GameObject names; <paramref name="label"/> is the localized tag shown to the player.</summary>
+        private void BuildNamedTile(Vector2 center, int index, string key, string label,
+            string displayName, string description, Color bodyColor, Color tagColor)
         {
-            ViewUtil.MakeRect(transform, tag + "Body_" + index, center,
+            ViewUtil.MakeRect(transform, key + "Body_" + index, center,
                 new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight), bodyColor, 36);
-            ViewUtil.MakeText3D(transform, tag + "Tag_" + index,
-                center + new Vector2(0f, CardVisual.BodyHeight * 0.5f - 0.17f), tag,
+            ViewUtil.MakeText3D(transform, key + "Tag_" + index,
+                center + new Vector2(0f, CardVisual.BodyHeight * 0.5f - 0.17f), label,
                 90, 0.015f, tagColor, 37, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, tag + "Name_" + index,
+            ViewUtil.MakeText3D(transform, key + "Name_" + index,
                 center + new Vector2(0f, 0.5f), ViewUtil.WrapText(displayName, 13),
                 90, 0.022f, JokerNameColor, 37, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, tag + "Desc_" + index,
+            ViewUtil.MakeText3D(transform, key + "Desc_" + index,
                 center + new Vector2(0f, 0.12f), ViewUtil.WrapText(description, 16),
                 90, 0.012f, JokerDescColor, 37, TextAnchor.UpperCenter);
         }
@@ -227,13 +232,13 @@ namespace ProjectBlock.View
         /// the fx object is parented outside this view so the rebuild leaves it alone.</summary>
         public void PlayJokerBuyFx(int offerIndex, Vector2 target)
         {
-            PlayTileBuyFx(offerIndex, target, "JOKER", JokerBodyColor, JokerTagColor);
+            PlayTileBuyFx(offerIndex, target, Loc.Pick("JOKER", "JOKER"), JokerBodyColor, JokerTagColor);
         }
 
         /// <summary>The power twin of PlayJokerBuyFx (target: the power bar).</summary>
         public void PlayPowerBuyFx(int offerIndex, Vector2 target)
         {
-            PlayTileBuyFx(offerIndex, target, "POWER", PowerBodyColor, PowerTagColor);
+            PlayTileBuyFx(offerIndex, target, Loc.Pick("POWER", "GÜÇ"), PowerBodyColor, PowerTagColor);
         }
 
         private void PlayTileBuyFx(int offerIndex, Vector2 target, string tag,
