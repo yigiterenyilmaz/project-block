@@ -175,4 +175,38 @@ namespace ProjectBlock.Core
             ctx.Rules.CountExternalSweeps = true;
         }
     }
+
+    /// <summary>"Kolay para" - placing blocks pays. Base placement scores nothing on its own
+    /// (ScoringConfig.PointsPerCubePlaced is 0, held for exactly this), so this joker is what
+    /// turns cubes placed into points: every cube of the block you play this turn adds a flat
+    /// bonus, which the multiplier stage still lifts. The small per-cube number is logical -
+    /// the global ScoreScale multiplies it up like every other score.</summary>
+    public sealed class KolayParaJoker : Joker
+    {
+        /// <summary>Points per cube placed this turn.</summary>
+        public int PointsPerCube = 2;
+
+        public KolayParaJoker()
+            : base("kolay_para", "Kolay Para")
+        {
+            SetDescription(
+                "Placing a block scores points - one bonus for every cube you place.",
+                "Blok koymak puan kazandırır - koyduğun her küp için bonus.");
+            BaseSellValue = 40;
+        }
+
+        public override string StatusText
+        {
+            get { return Loc.Pick("+" + PointsPerCube + "/cube", "+" + PointsPerCube + "/küp"); }
+        }
+
+        public override void ModifyScore(TurnContext turn)
+        {
+            int cubes = turn.Report.PlacedCells != null ? turn.Report.PlacedCells.Count : 0;
+            if (cubes > 0)
+            {
+                turn.Score.AddFlat(cubes * PointsPerCube, DefId);
+            }
+        }
+    }
 }

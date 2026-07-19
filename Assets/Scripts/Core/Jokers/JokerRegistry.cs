@@ -92,6 +92,7 @@ namespace ProjectBlock.Core
             Register(() => new TutumlulukJoker());
             Register(() => new GenelTemizlikJoker());
             Register(() => new HafizaJoker());
+            Register(() => new KolayParaJoker());
         }
 
         /// <summary>All known jokers, in design order.</summary>
