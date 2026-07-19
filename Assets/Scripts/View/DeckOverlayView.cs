@@ -24,6 +24,12 @@ namespace ProjectBlock.View
         private readonly List<BlockCard> entryCards = new List<BlockCard>();
         private readonly List<CardVisual> entryVisuals = new List<CardVisual>();
 
+        // "Hileli Zar" opening-hand picker: a CONFIRM button, enabled only at the exact count.
+        private Vector2 confirmButtonCenter;
+        private Vector2 confirmButtonHalf;
+        private bool confirmButtonShown;
+        private bool confirmEnabled;
+
         /// <summary>Shows the overlay with the given cards (normally the whole owned deck).</summary>
         public void Show(IReadOnlyList<BlockCard> cards)
         {
@@ -79,6 +85,72 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Shows the owned deck as the "Hileli Zar" opening-hand PICKER: each selected
+        /// card gets a highlight box, a header names the task, and a CONFIRM button (enabled only
+        /// at exactly <paramref name="target"/> picks) commits. Rebuilt on every toggle - cheap
+        /// at deck size. The controller toggles <paramref name="selectedIds"/> and re-calls this.</summary>
+        public void ShowPicker(IReadOnlyList<BlockCard> cards, ICollection<int> selectedIds,
+            int target, string header)
+        {
+            Hide();
+            IsOpen = true;
+
+            ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(30f, 14f),
+                new Color(0f, 0f, 0f, 0.78f), 40);
+            ViewUtil.MakeText3D(transform, "PickTitle", new Vector2(0f, 4.4f), header, 90, 0.026f,
+                new Color(0.55f, 0.92f, 0.95f), 42, TextAnchor.MiddleCenter);
+
+            var sorted = new List<BlockCard>(cards);
+            sorted.Sort(CompareCards);
+            int rows = (sorted.Count + Columns - 1) / Columns;
+            float startY = (rows - 1) * SpacingY * 0.5f + 0.3f;
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                int row = i / Columns;
+                int column = i % Columns;
+                int columnsInRow = Mathf.Min(Columns, sorted.Count - row * Columns);
+                float startX = -(columnsInRow - 1) * SpacingX * 0.5f;
+                var position = new Vector2(startX + column * SpacingX, startY - row * SpacingY);
+                if (selectedIds.Contains(sorted[i].Id))
+                {
+                    // A bright box just larger than the card, drawn over the dim (40) and under
+                    // the card (41), so it reads as a glowing border around the selected card.
+                    ViewUtil.MakeRect(transform, "PickHi_" + i, position,
+                        new Vector2(CardVisual.BodyWidth * CardScale + 0.24f,
+                            CardVisual.BodyHeight * CardScale + 0.24f),
+                        new Color(0.30f, 0.85f, 0.98f), 40);
+                }
+                CardVisual visual = CardVisual.Create(transform, "Overlay_" + sorted[i].Id,
+                    sorted[i], true, false, position, 41);
+                visual.transform.localScale = new Vector3(CardScale, CardScale, 1f);
+                entryCenters.Add(position);
+                entryShapes.Add(sorted[i].Shape);
+                entryCards.Add(sorted[i]);
+                entryVisuals.Add(visual);
+            }
+
+            confirmEnabled = selectedIds.Count == target;
+            float bottomY = startY - (rows - 1) * SpacingY;
+            confirmButtonCenter = new Vector2(0f, bottomY - SpacingY * 0.65f - 0.5f);
+            confirmButtonHalf = new Vector2(1.7f, 0.42f);
+            confirmButtonShown = true;
+            ViewUtil.MakeRect(transform, "PickConfirm", confirmButtonCenter, confirmButtonHalf * 2f,
+                confirmEnabled ? new Color(0.18f, 0.42f, 0.24f) : new Color(0.16f, 0.16f, 0.18f), 42);
+            ViewUtil.MakeText3D(transform, "PickConfirmLabel", confirmButtonCenter,
+                Loc.Pick("CONFIRM  ", "ONAYLA  ") + selectedIds.Count + "/" + target,
+                90, 0.02f, confirmEnabled ? new Color(0.8f, 1f, 0.85f) : new Color(0.6f, 0.6f, 0.62f),
+                43, TextAnchor.MiddleCenter);
+        }
+
+        /// <summary>True if the world point is on the picker's CONFIRM button AND it is enabled
+        /// (exactly the target number of cards is selected).</summary>
+        public bool PickerConfirmAt(Vector2 world)
+        {
+            return confirmButtonShown && confirmEnabled
+                && Mathf.Abs(world.x - confirmButtonCenter.x) <= confirmButtonHalf.x
+                && Mathf.Abs(world.y - confirmButtonCenter.y) <= confirmButtonHalf.y;
+        }
+
         /// <summary>Sold-card feedback: detaches that card's visual and flies it off toward
         /// the discard pile. Call BEFORE Show() rebuilds the overlay.</summary>
         public void PlaySellFx(BlockCard card)
@@ -128,6 +200,7 @@ namespace ProjectBlock.View
         public void Hide()
         {
             IsOpen = false;
+            confirmButtonShown = false;
             entryCenters.Clear();
             entryShapes.Clear();
             entryCards.Clear();

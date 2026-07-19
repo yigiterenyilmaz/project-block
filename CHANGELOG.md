@@ -39,6 +39,9 @@ everything here is unreleased and balance numbers are still placeholders.
   placeholders in `MarketConfig`; grades live in `RarityTable` (baked from the grader).
 
 ### Changed
+- **Hileli Zar** (power) — the opening-hand picker is now deliberate: click to select/deselect
+  cards (chosen cards are highlighted), and commit with a **CONFIRM** button that only lights up
+  once exactly the right number is picked, instead of auto-confirming on the last click.
 - **Genel Temizlik** (joker) — description clarified: joker/power-triggered ("external") sweeps
   already pay the sweep bonus **and recharge your powers**, exactly like emptying the board on a
   placement; the text now says so.

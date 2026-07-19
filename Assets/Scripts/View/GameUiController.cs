@@ -261,16 +261,26 @@ namespace ProjectBlock.View
                 if (mouse != null && mouse.leftButton.wasPressedThisFrame && hileliPickMode)
                 {
                     Vector2 pickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
-                    BlockCard card = deckOverlay.CardAt(pickWorld);
-                    if (card != null && !hileliSelection.Contains(card.Id))
+                    // The CONFIRM button (only live at exactly the target count) commits.
+                    if (deckOverlay.PickerConfirmAt(pickWorld))
                     {
-                        hileliSelection.Add(card.Id);
-                        FloatingTextFx.Spawn(transform, pickWorld,
-                            hileliSelection.Count + "/" + hileliTarget,
-                            new Color(0.55f, 0.92f, 0.95f), 55, 0.05f);
-                        if (hileliSelection.Count >= hileliTarget)
+                        ConfirmHileliZar();
+                        return;
+                    }
+                    // Otherwise a card click TOGGLES it: deselect if picked, else select while
+                    // there is still room. The overlay is rebuilt so highlights + counter update.
+                    BlockCard card = deckOverlay.CardAt(pickWorld);
+                    if (card != null)
+                    {
+                        if (hileliSelection.Contains(card.Id))
                         {
-                            ConfirmHileliZar();
+                            hileliSelection.Remove(card.Id);
+                            ShowHileliPicker();
+                        }
+                        else if (hileliSelection.Count < hileliTarget)
+                        {
+                            hileliSelection.Add(card.Id);
+                            ShowHileliPicker();
                         }
                     }
                     return;
@@ -620,11 +630,20 @@ namespace ProjectBlock.View
             hileliSelection.Clear();
             hileliTarget = Mathf.Max(1, session.Config.Rules.HandSize);
             hileliPowerId = power.InstanceId;
-            deckOverlay.Show(session.OwnedCards);
+            ShowHileliPicker();
             messageText.text = Loc.Pick(
                 "Hileli Zar: pick " + hileliTarget + " cards for next round's opening hand",
                 "Hileli Zar: sonraki elin için " + hileliTarget + " kart seç");
             return true;
+        }
+
+        /// <summary>(Re)draws the Hileli Zar picker overlay with the current selection so the
+        /// highlights and the CONFIRM counter stay in sync as cards are toggled.</summary>
+        private void ShowHileliPicker()
+        {
+            deckOverlay.ShowPicker(session.OwnedCards, hileliSelection, hileliTarget,
+                Loc.Pick("Hileli Zar: pick " + hileliTarget + " cards, then CONFIRM",
+                    "Hileli Zar: " + hileliTarget + " kart seç, sonra ONAYLA"));
         }
 
         private void ConfirmHileliZar()
