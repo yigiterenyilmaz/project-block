@@ -71,7 +71,6 @@ namespace ProjectBlock.Core
             Register(() => new RobotSupurgeJoker());
             Register(() => new KayitDefteriJoker());
             Register(() => new KentselDonusumJoker());
-            Register(() => new BatakJoker());
             Register(() => new MidasJoker());
             Register(() => new ElmasKazmaJoker());
             Register(() => new TutusturJoker());

@@ -565,4 +565,154 @@ namespace ProjectBlock.Core
             }
         }
     }
+
+    /// <summary>"Batak" - a betting power (was a joker; moved here 2026-07-19). Using it opens a
+    /// picker in the UI to bet that the next clean sweep comes within a chosen number of turns;
+    /// placing the bet spends the charge. Miss the deadline and the round is lost; make it and
+    /// the score earned since the bet is paid again, scaled by how bold the call was. Any clean
+    /// sweep resolves the bet AND recharges the power (the standard power economy), so you can
+    /// bet again. The bet number comes from the UI, so Run is never taken through TryUse -
+    /// GameSession.PlaceBatakBet places the bet and spends the charge.
+    ///
+    /// PAYOUT CURVE: a bet of N turns is worth MaxMultiplier * (1 - (N-1)/(ZeroAtTurns-1)); "1
+    /// turn" pays the most, a bet at/beyond ZeroAtTurns pays nothing, and clearing EARLY pays
+    /// pro rata (bet 7, cleared in 3 -> 3/7 of the 7-turn reward).</summary>
+    public sealed class BatakPower : Power
+    {
+        /// <summary>Multiplier for the boldest possible call (1 turn).</summary>
+        public double MaxMultiplier = 3.0;
+
+        /// <summary>Bets this long or longer are worth nothing.</summary>
+        public int ZeroAtTurns = 100;
+
+        /// <summary>Turns bet on, or 0 when no bet is running.</summary>
+        public int BetTurns { get; private set; }
+
+        /// <summary>Turns already spent against the active bet.</summary>
+        public int TurnsElapsed { get; private set; }
+
+        private int scoreAtBet;
+
+        public BatakPower()
+            : base("batak", "Batak")
+        {
+            SetDescription(
+                "Bet that you will sweep the board within a chosen number of turns. Miss it and "
+                    + "the round ends; make it and the payout multiplies.",
+                "İstersen 'şu kadar turda temizlerim' diye bahse girersin. Tutturamazsan raunt "
+                    + "biter, tutturursan aradaki puanı katlayarak alırsın.");
+            BaseSellValue = 65;
+        }
+
+        public bool HasActiveBet
+        {
+            get { return BetTurns > 0; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return HasActiveBet
+                    ? Loc.Pick("bet: " + (BetTurns - TurnsElapsed) + " turns",
+                        "bahis " + (BetTurns - TurnsElapsed) + " tur")
+                    : Loc.Pick("no bet", "bahis yok");
+            }
+        }
+
+        /// <summary>Usable (to open the picker) only when no bet is already running and a round
+        /// is in progress; the spent charge also blocks re-betting until a sweep/new round.</summary>
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return !HasActiveBet && ctx.Round.Status == RoundStatus.InProgress;
+        }
+
+        /// <summary>Never taken through TryUse - the bet picker calls PlaceBet + spends the
+        /// charge via GameSession.PlaceBatakBet, because it needs a number.</summary>
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            return false;
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            ClearBet();
+        }
+
+        public override void OnRemoved(SessionContext ctx)
+        {
+            ClearBet();
+        }
+
+        /// <summary>Places a bet. Legal only while a round runs and no bet is open.</summary>
+        public bool PlaceBet(RoundContext ctx, int turns)
+        {
+            if (HasActiveBet || turns < 1 || ctx.Round.Status != RoundStatus.InProgress)
+            {
+                return false;
+            }
+            BetTurns = turns;
+            TurnsElapsed = 0;
+            scoreAtBet = ctx.Round.RoundScore;
+            return true;
+        }
+
+        /// <summary>Reward for clearing in <paramref name="usedTurns"/> against a bet of
+        /// <paramref name="betTurns"/>, applied to the score gained in between.</summary>
+        public int PayoutFor(int betTurns, int usedTurns, int scoreGained)
+        {
+            if (betTurns <= 0 || scoreGained <= 0)
+            {
+                return 0;
+            }
+            double boldness = ZeroAtTurns > 1
+                ? 1.0 - (betTurns - 1) / (double)(ZeroAtTurns - 1)
+                : 1.0;
+            if (boldness <= 0.0)
+            {
+                return 0;
+            }
+            double earliness = usedTurns / (double)betTurns;
+            return (int)System.Math.Floor(scoreGained * MaxMultiplier * boldness * earliness);
+        }
+
+        public override void AfterCleanSweep(TurnContext turn)
+        {
+            if (!HasActiveBet)
+            {
+                return;
+            }
+            int usedTurns = TurnsElapsed + 1; // this turn closes the window
+            int gained = turn.Round.RoundScore + turn.Score.Total - scoreAtBet;
+            int payout = PayoutFor(BetTurns, usedTurns, gained);
+            ClearBet();
+            if (payout > 0)
+            {
+                turn.AddFlatScore(payout, DefId);
+            }
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            if (!HasActiveBet)
+            {
+                return;
+            }
+            TurnsElapsed++;
+            if (TurnsElapsed < BetTurns)
+            {
+                return;
+            }
+            ClearBet();
+            // A pending advance offer still wins, exactly like every other same-turn loss.
+            turn.Round.DeclareLoss(LossReason.BetFailed);
+        }
+
+        private void ClearBet()
+        {
+            BetTurns = 0;
+            TurnsElapsed = 0;
+            scoreAtBet = 0;
+        }
+    }
 }

@@ -358,6 +358,28 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>"Batak": places the player's bet through the power, spending its charge and
+        /// this turn's power slot. Rules enforced here so the View stays rules-free - the power
+        /// must be a charged BatakPower, a round must be running with the power slot free, and
+        /// the bet number must be legal. Returns false and changes nothing otherwise.</summary>
+        public bool PlaceBatakBet(int powerInstanceId, int turns)
+        {
+            var batak = Powers.Find(powerInstanceId) as BatakPower;
+            RoundEngine round = CurrentRound;
+            if (batak == null || !batak.Charged || round == null
+                || round.Status != RoundStatus.InProgress || round.PowersUsedThisTurn > 0)
+            {
+                return false;
+            }
+            if (!batak.PlaceBet(new RoundContext(this, rng, round), turns))
+            {
+                return false;
+            }
+            batak.Spend();
+            round.NotePowerUsed();
+            return true;
+        }
+
         private void StartRound()
         {
             RoundConfig roundConfig = Config.Progression.GetRound(RoundNumber);

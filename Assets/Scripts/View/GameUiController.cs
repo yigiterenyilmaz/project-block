@@ -869,13 +869,8 @@ namespace ProjectBlock.View
                 Debug.Log("[project_block] " + joker.DisplayName + " cannot be used right now.");
                 return;
             }
-            // Two jokers ask the player for a value first, via a modal picker.
-            var batak = joker as BatakJoker;
-            if (batak != null && !batak.HasActiveBet)
-            {
-                OpenBatakPicker(batak);
-                return;
-            }
+            // One joker asks the player for a value first, via a modal picker (Batak is now a
+            // power - its picker is opened from BeginPowerActivation instead).
             var powerbank = joker as PowerbankJoker;
             if (powerbank != null)
             {
@@ -892,10 +887,10 @@ namespace ProjectBlock.View
             RunActivation(joker, ActivationTarget.None);
         }
 
-        private void OpenBatakPicker(BatakJoker batak)
+        private void OpenBatakPicker(BatakPower batak)
         {
             pendingChoice = ChoiceKind.BatakBet;
-            pendingChoiceJokerId = batak.InstanceId;
+            pendingChoiceJokerId = batak.InstanceId; // holds the POWER instance id for Batak bets
             pendingChoiceValues.Clear();
             var labels = new List<string>();
             for (int turns = 1; turns <= 8; turns++)
@@ -940,11 +935,10 @@ namespace ProjectBlock.View
             var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
             if (pendingChoice == ChoiceKind.BatakBet)
             {
-                var batak = session.Jokers.Find(pendingChoiceJokerId) as BatakJoker;
-                if (batak != null && batak.PlaceBet(ctx, pendingChoiceValues[index]))
+                if (session.PlaceBatakBet(pendingChoiceJokerId, pendingChoiceValues[index]))
                 {
                     Debug.Log("[project_block] Batak bet " + pendingChoiceValues[index] + " turns.");
-                    jokerBar.PulseJoker(pendingChoiceJokerId);
+                    powerBar.PulsePower(pendingChoiceJokerId);
                 }
             }
             else if (pendingChoice == ChoiceKind.PowerbankTarget)
@@ -1074,6 +1068,18 @@ namespace ProjectBlock.View
                 }
                 designerPowerId = power.InstanceId;
                 blockDesigner.Show();
+                return;
+            }
+            // "Batak" opens the bet picker; GameSession.PlaceBatakBet places it + spends the charge.
+            var batak = power as BatakPower;
+            if (batak != null && !batak.HasActiveBet)
+            {
+                if (!session.Powers.CanBeginUse(power.InstanceId))
+                {
+                    Debug.Log("[project_block] " + power.DisplayName + " cannot be used right now.");
+                    return;
+                }
+                OpenBatakPicker(batak);
                 return;
             }
             if (!session.Powers.CanBeginUse(power.InstanceId))

@@ -896,26 +896,26 @@ public static class JokerTests
     private static void Batak_PayoutCurveAndDeadline()
     {
         Section("batak / payout curve and deadline");
-        var joker = new BatakJoker();
-        joker.MaxMultiplier = 3.0;
-        joker.ZeroAtTurns = 100;
+        var power = new BatakPower();
+        power.MaxMultiplier = 3.0;
+        power.ZeroAtTurns = 100;
 
-        int bold = joker.PayoutFor(1, 1, 100);
-        int timid = joker.PayoutFor(50, 50, 100);
-        int hopeless = joker.PayoutFor(100, 100, 100);
+        int bold = power.PayoutFor(1, 1, 100);
+        int timid = power.PayoutFor(50, 50, 100);
+        int hopeless = power.PayoutFor(100, 100, 100);
         Check(bold == 300, "a 1-turn call pays the full multiplier", "got " + bold);
         Check(hopeless == 0, "a 100-turn call pays nothing", "got " + hopeless);
         Check(timid > 0 && timid < bold, "the curve falls off in between", "got " + timid);
 
         // Confirmed rule: bet 7, clear in 3 -> 3/7 of the 7-turn reward.
-        int full7 = joker.PayoutFor(7, 7, 100);
-        int early3 = joker.PayoutFor(7, 3, 100);
+        int full7 = power.PayoutFor(7, 7, 100);
+        int early3 = power.PayoutFor(7, 3, 100);
         Check(early3 == (int)Math.Floor(full7 * 3.0 / 7.0) || Math.Abs(early3 - full7 * 3 / 7) <= 1,
             "clearing early pays pro rata", early3 + " vs " + (full7 * 3 / 7));
 
         // A missed deadline loses the round.
         var session = NewSession(67, 8, 1000000, 40, 1);
-        var live = (BatakJoker)session.Jokers.Add(new BatakJoker());
+        var live = (BatakPower)session.Powers.Add(new BatakPower());
         var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
         Check(live.PlaceBet(ctx, 2), "bet placed");
         Check(live.HasActiveBet, "bet is running");
