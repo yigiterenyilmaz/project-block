@@ -51,6 +51,9 @@ everything here is unreleased and balance numbers are still placeholders.
   placeholders in `MarketConfig`; grades live in `RarityTable` (baked from the grader).
 
 ### Changed
+- **Batak** (power) — the bet is now a **two-digit locker** (00–99) instead of a 1–8 list: spin
+  each dial with the mouse wheel or its +/- buttons, then **Bet**. Higher bets are safer but pay
+  less (a bet past the payout cutoff earns nothing), as before.
 - **Karakter Oluşturma** (block designer) — nicer to draw with: **click-and-drag to paint** (the
   first cell decides paint vs. erase), filled cells now show the **selected element's colour**,
   and Confirm **rejects shapes that aren't one connected piece** (with a warning) instead of

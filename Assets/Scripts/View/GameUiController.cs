@@ -41,6 +41,8 @@ namespace ProjectBlock.View
         private PowerBarView powerBar;
         private GrantPickerView grantPicker;
         private ChoicePickerView choicePicker;
+        private BatakBetView batakBet;
+        private int batakBetPowerId; // the BatakPower instance whose bet the locker is setting
         private BlockDesignerView blockDesigner;
         private int designerPowerId;
         // Drag-paint stroke in the block designer: painting=true while the button is held after
@@ -63,7 +65,7 @@ namespace ProjectBlock.View
         // harmless if the Full Screen Pass feature/material is not wired yet (see docs/crt-edge-bend.md).
         private static readonly int CrtBendId = Shader.PropertyToID("_CrtBend");
 
-        private enum ChoiceKind { None, BatakBet, PowerbankTarget }
+        private enum ChoiceKind { None, PowerbankTarget }
         private ChoiceKind pendingChoice;
         private int pendingChoiceJokerId;
         private readonly List<int> pendingChoiceValues = new List<int>();
@@ -146,6 +148,7 @@ namespace ProjectBlock.View
             deckSelect.Hide();
             deckOverlay.Hide();
             choicePicker.Hide();
+            batakBet.Hide();
             blockDesigner.Hide();
             cubePicker.Hide();
             ClearChoice();
@@ -181,6 +184,7 @@ namespace ProjectBlock.View
             pendingTargetPowerId = null;
             grantPicker.Hide();
             choicePicker.Hide();
+            batakBet.Hide();
             blockDesigner.Hide();
             ClearChoice();
             marketView.Hide();
@@ -354,6 +358,50 @@ namespace ProjectBlock.View
                     }
                     sellCardsMode = false;
                     deckOverlay.Hide();
+                }
+                return;
+            }
+            if (batakBet.IsOpen)
+            {
+                // modal locker: +/- buttons or the wheel spin a dial, Bet confirms, Esc/Cancel closes
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                {
+                    batakBet.Hide();
+                    return;
+                }
+                Vector2 bw = mouse != null
+                    ? (Vector2)cam.ScreenToWorldPoint(mouse.position.ReadValue()) : Vector2.zero;
+                if (mouse != null)
+                {
+                    float scroll = mouse.scroll.ReadValue().y;
+                    if (Mathf.Abs(scroll) > 0.01f)
+                    {
+                        int col = batakBet.DialColumnAt(bw);
+                        if (col >= 0)
+                        {
+                            batakBet.Bump(col, scroll > 0f ? +1 : -1);
+                            return;
+                        }
+                    }
+                }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                {
+                    int plus = batakBet.PlusAt(bw);
+                    if (plus >= 0) { batakBet.Bump(plus, +1); return; }
+                    int minus = batakBet.MinusAt(bw);
+                    if (minus >= 0) { batakBet.Bump(minus, -1); return; }
+                    if (batakBet.CancelAt(bw)) { batakBet.Hide(); return; }
+                    if (batakBet.ConfirmAt(bw))
+                    {
+                        int bet = batakBet.Value;
+                        batakBet.Hide();
+                        if (session.PlaceBatakBet(batakBetPowerId, bet))
+                        {
+                            Debug.Log("[project_block] Batak bet " + bet + " turns.");
+                            powerBar.PulsePower(batakBetPowerId);
+                            RefreshAll(null);
+                        }
+                    }
                 }
                 return;
             }
@@ -976,17 +1024,9 @@ namespace ProjectBlock.View
 
         private void OpenBatakPicker(BatakPower batak)
         {
-            pendingChoice = ChoiceKind.BatakBet;
-            pendingChoiceJokerId = batak.InstanceId; // holds the POWER instance id for Batak bets
-            pendingChoiceValues.Clear();
-            var labels = new List<string>();
-            for (int turns = 1; turns <= 8; turns++)
-            {
-                pendingChoiceValues.Add(turns);
-                labels.Add(Loc.Pick(turns + (turns == 1 ? " turn" : " turns"), turns + " tur"));
-            }
-            choicePicker.Show(Loc.Pick("Batak: bet how many turns to sweep?",
-                "Batak: kaç turda temizlersin?"), labels);
+            batakBetPowerId = batak.InstanceId;
+            batakBet.Show(Loc.Pick("Batak: bet how many turns to sweep?",
+                "Batak: kaç turda temizlersin?"));
         }
 
         private void OpenPowerbankPicker(PowerbankJoker powerbank)
@@ -1020,15 +1060,7 @@ namespace ProjectBlock.View
                 return;
             }
             var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
-            if (pendingChoice == ChoiceKind.BatakBet)
-            {
-                if (session.PlaceBatakBet(pendingChoiceJokerId, pendingChoiceValues[index]))
-                {
-                    Debug.Log("[project_block] Batak bet " + pendingChoiceValues[index] + " turns.");
-                    powerBar.PulsePower(pendingChoiceJokerId);
-                }
-            }
-            else if (pendingChoice == ChoiceKind.PowerbankTarget)
+            if (pendingChoice == ChoiceKind.PowerbankTarget)
             {
                 var powerbank = session.Jokers.Find(pendingChoiceJokerId) as PowerbankJoker;
                 if (powerbank != null && powerbank.RechargeChosen(ctx, pendingChoiceValues[index]))
@@ -2344,6 +2376,10 @@ namespace ProjectBlock.View
             var choiceGo = new GameObject("ChoicePicker");
             choiceGo.transform.SetParent(transform, false);
             choicePicker = choiceGo.AddComponent<ChoicePickerView>();
+
+            var batakGo = new GameObject("BatakBet");
+            batakGo.transform.SetParent(transform, false);
+            batakBet = batakGo.AddComponent<BatakBetView>();
 
             var designerGo = new GameObject("BlockDesigner");
             designerGo.transform.SetParent(transform, false);
