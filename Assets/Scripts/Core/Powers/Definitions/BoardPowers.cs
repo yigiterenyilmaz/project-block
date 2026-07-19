@@ -165,9 +165,9 @@ namespace ProjectBlock.Core
             : base("eko", "Eko")
         {
             SetDescription(
-                "The first use memorises the next explosion; the second replays it on the "
-                    + "same squares. Memory resets every round.",
-                "İlk kullanımda sonraki patlamayı hafızaya alır, ikinci kullanımda "
+                "The first use (free) memorises the next explosion; using it again replays "
+                    + "it on the same squares. Memory resets every round.",
+                "İlk kullanım (bedava) sonraki patlamayı hafızaya alır, tekrar kullandığında "
                     + "o patlamayı aynı karelerde tekrar eder. Hafıza her raunt sıfırlanır.");
             BaseSellValue = 50;
         }
@@ -200,6 +200,7 @@ namespace ProjectBlock.Core
             if (!HasMemory)
             {
                 listening = true; // arm: the next explosion gets recorded
+                KeepChargeAfterUse = true; // memorising is free; only the replay costs a charge
                 return true;
             }
             IReadOnlyList<GridPos> echoed = ctx.Round.DestroyCubes(memory, true);

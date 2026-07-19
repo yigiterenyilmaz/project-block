@@ -290,10 +290,14 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>World center of a cell.</summary>
+        /// <summary>World center of a cell. Coords are taken RELATIVE to the board origin
+        /// (MinX/MinY), which inflation can push negative - so the grid stays centered on the
+        /// arena no matter where the origin sits.</summary>
         public Vector2 CellToWorld(GridPos cell)
         {
-            return bottomLeft + new Vector2((cell.X + 0.5f) * cellSize, (cell.Y + 0.5f) * cellSize);
+            return bottomLeft + new Vector2(
+                (cell.X - board.MinX + 0.5f) * cellSize,
+                (cell.Y - board.MinY + 0.5f) * cellSize);
         }
 
         /// <summary>Maps a world point to a board cell; false when outside the grid.</summary>
@@ -332,8 +336,11 @@ namespace ProjectBlock.View
                 GridPos pos = origin + offset;
                 if (board.IsInside(pos))
                 {
-                    previewRenderers[pos.X, pos.Y].color = color;
-                    previewRenderers[pos.X, pos.Y].enabled = true;
+                    // absolute cell -> local array index (origin can be negative after inflation)
+                    int lx = pos.X - board.MinX;
+                    int ly = pos.Y - board.MinY;
+                    previewRenderers[lx, ly].color = color;
+                    previewRenderers[lx, ly].enabled = true;
                 }
                 else
                 {
@@ -349,8 +356,10 @@ namespace ProjectBlock.View
             LineExplosionResult predicted = board.PredictExplosions(shape, origin);
             foreach (GridPos pos in predicted.ExplodedCells)
             {
-                previewRenderers[pos.X, pos.Y].color = ExplosionPreviewColor;
-                previewRenderers[pos.X, pos.Y].enabled = true;
+                int lx = pos.X - board.MinX;
+                int ly = pos.Y - board.MinY;
+                previewRenderers[lx, ly].color = ExplosionPreviewColor;
+                previewRenderers[lx, ly].enabled = true;
             }
         }
 
@@ -466,7 +475,8 @@ namespace ProjectBlock.View
         {
             if (board != null && board.IsInside(pos))
             {
-                cellRenderers[pos.X, pos.Y].color = color;
+                // absolute cell -> local array index (origin can be negative after inflation)
+                cellRenderers[pos.X - board.MinX, pos.Y - board.MinY].color = color;
             }
         }
     }

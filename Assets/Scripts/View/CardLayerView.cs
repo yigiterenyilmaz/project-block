@@ -210,7 +210,12 @@ namespace ProjectBlock.View
                 {
                     visual.SlotIndex = -1;
                     visual.SetSortingBoost(8);
-                    visual.FlyToAndDestroy(DiscardPilePos, DiscardDuration);
+                    // "Oryantasyon" buries played cards into the DRAW pile, not the discard,
+                    // so the card must fly to whichever pile actually received it.
+                    Vector2 playedTarget = round.Rules.PlayedCardsReturnToDrawPile
+                        ? DrawPilePos
+                        : DiscardPilePos;
+                    visual.FlyToAndDestroy(playedTarget, DiscardDuration);
                 }
                 else
                 {
@@ -410,14 +415,15 @@ namespace ProjectBlock.View
             UpdateRevealFans(round);
         }
 
-        // ---- reveal fans: extra face-up cards next to a pile (rule-driven info) ----
-        // "Büyüteç" reveals the top RevealedDrawCount draw cards; "Fraksiyon" reveals half
-        // the discard. The pile-top visuals above only ever show ONE card, so cards beyond
-        // the top fan out beside the pile, small, capped so they never reach the hand.
+        // ---- reveal peeks: the top few cards of a pile shown face-up (rule-driven info) ----
+        // "Büyüteç" reveals exactly the top RevealedDrawCount DRAW cards and nothing deeper;
+        // the rest of the pile stays face-down. The pile-top visual already shows ONE card, so
+        // the remaining (N-1) cards stack UPWARD above the pile as a small, obvious peek - never
+        // sideways into the play area, which read like the whole deck had opened up.
+        // "Fraksiyon" (discard reveal) is handled by the deck-overlay inspect, not here.
 
-        private const int MaxRevealFan = 2;
-        private const float RevealFanStep = 0.95f;
-        private const float RevealFanScale = 0.6f;
+        private const int MaxRevealPeek = 4; // safety cap; Büyüteç only ever asks for 2
+        private const float RevealPeekScale = 0.6f;
 
         private readonly List<CardVisual> revealFanVisuals = new List<CardVisual>();
 
@@ -436,25 +442,21 @@ namespace ProjectBlock.View
             {
                 drawReveal = Mathf.Max(drawReveal, 1);
             }
-            // the pile top card is already shown by UpdateDrawTop/UpdateDiscardTop;
-            // the fans only add the cards BELOW it (draw fans inward = leftward,
-            // discard inward = rightward, both toward the free gap beside the hand)
-            BuildRevealFan(drawPileRoot, round.Deck.DrawPile, drawReveal, -1f);
-            BuildRevealFan(discardPileRoot, round.Deck.DiscardPile,
-                round.Rules.RevealedDiscardCount, +1f);
+            BuildDrawPeek(round.Deck.DrawPile, drawReveal);
         }
 
-        private void BuildRevealFan(Transform pileRoot, IReadOnlyList<BlockCard> pile,
-            int revealCount, float direction)
+        /// <summary>Shows exactly the top <paramref name="revealCount"/> draw cards. The top
+        /// one is the pile-top visual; each further card stacks upward above the pile.</summary>
+        private void BuildDrawPeek(IReadOnlyList<BlockCard> pile, int revealCount)
         {
-            int extras = Mathf.Min(Mathf.Min(revealCount, pile.Count) - 1, MaxRevealFan);
+            int extras = Mathf.Clamp(Mathf.Min(revealCount, pile.Count) - 1, 0, MaxRevealPeek);
+            float step = CardVisual.BodyHeight * RevealPeekScale + 0.12f;
             for (int k = 1; k <= extras; k++)
             {
                 BlockCard card = pile[pile.Count - 1 - k];
-                CardVisual visual = CardVisual.Create(pileRoot, "Reveal_" + k, card,
-                    true, false, new Vector2(direction * RevealFanStep * k, 0f),
-                    DiscardTopOrder);
-                visual.transform.localScale = new Vector3(RevealFanScale, RevealFanScale, 1f);
+                CardVisual visual = CardVisual.Create(drawPileRoot, "DrawPeek_" + k, card,
+                    true, false, new Vector2(0f, 0.7f + step * k), DiscardTopOrder + k);
+                visual.transform.localScale = new Vector3(RevealPeekScale, RevealPeekScale, 1f);
                 revealFanVisuals.Add(visual);
             }
         }

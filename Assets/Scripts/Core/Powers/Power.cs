@@ -77,6 +77,12 @@ namespace ProjectBlock.Core
             Charged = false;
         }
 
+        /// <summary>A power may set this true INSIDE Run to signal the use should not spend its
+        /// charge - the power did something, but this use was "free" and it stays charged.
+        /// Reset before every Run by PowerInventory. Used by Eko's arming (memorising is free,
+        /// only the replay costs the charge) and Olta pulling a card out of the draw pile.</summary>
+        internal bool KeepChargeAfterUse { get; set; }
+
         /// <summary>What Run needs in its ActivationTarget.</summary>
         public virtual ActivationTargeting Targeting
         {

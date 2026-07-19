@@ -151,11 +151,16 @@ namespace ProjectBlock.Core
             }
             Power power = Find(instanceId);
             RoundEngine round = session.CurrentRound;
+            power.KeepChargeAfterUse = false;
             if (!power.Run(RoundCtx(round), target))
             {
                 return false;
             }
-            power.Spend();
+            // A "free" use (Eko arming, Olta draw-pile pull) did something but keeps its charge.
+            if (!power.KeepChargeAfterUse)
+            {
+                power.Spend();
+            }
             round.NotePowerUsed();
             session.Jokers.DispatchPowerUsed(round, power.DefId);
             RaiseChanged();
