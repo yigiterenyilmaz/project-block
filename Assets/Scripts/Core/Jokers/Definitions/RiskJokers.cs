@@ -56,22 +56,31 @@ namespace ProjectBlock.Core
             Revert(ctx.Rules);
         }
 
-        /// <summary>Re-asserted every round: the threshold pass reverts the bonus mid-round,
-        /// and the next round has to start from the boosted size again.</summary>
+        /// <summary>Safety re-assert (a no-op when already applied). The real re-arm happens
+        /// in OnRoundEnded, because the engine fills the opening hand in its constructor -
+        /// before this runs - so the bonus has to be back on the shared rules by then.</summary>
         public override void OnRoundStarted(RoundContext ctx)
         {
             Apply(ctx.Rules);
         }
 
+        /// <summary>Overtime reverts the bonus mid-round; this puts it back for the NEXT
+        /// round, before that round's engine is built and deals its first hand.</summary>
+        public override void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
+        {
+            Apply(ctx.Rules);
+        }
+
+        /// <summary>Overtime turns off the hand-size bonus centrally. This fires exactly at
+        /// the threshold crossing (before the joker's own hooks go silent), so the +2 never
+        /// leaks into overtime.</summary>
+        public override void OnOvertimeStarted(RoundContext ctx)
+        {
+            Revert(ctx.Rules);
+        }
+
         public override void AfterTurnScored(TurnContext turn)
         {
-            // CONFIRMED: the joker switches off the moment the threshold falls, and the turn
-            // that passed it does NOT churn - otherwise the player loses a hand they earned.
-            if (turn.Report.ThresholdJustPassed)
-            {
-                Revert(turn.Rules);
-                return;
-            }
             // A bonus-hand play never touched the hand, so there is nothing to churn.
             if (turn.Report.PlayedFromBonusHand)
             {

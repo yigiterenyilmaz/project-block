@@ -24,6 +24,9 @@ namespace ProjectBlock.Core
         /// <summary>Points per gold CUBE held, per turn. Mirrors the board-side gold bonus.</summary>
         public int PointsPerGoldCubeHeld = 2;
 
+        /// <summary>Added to the on-board per-cube gold bonus while Midas is owned.</summary>
+        public int GoldBonusBoost = 1;
+
         /// <summary>Gold cubes counted in hand last turn, for the UI.</summary>
         public int GoldCubesHeld { get; private set; }
 
@@ -31,9 +34,22 @@ namespace ProjectBlock.Core
             : base("midas", "Midas")
         {
             SetDescription(
-                "Holding a gold block in hand (bonus hand included) is enough for its bonus.",
-                "Altın bloğu elinde tutmak da bonusu için yeterlidir (bonus el dahil).");
+                "Holding a gold block in hand (bonus hand included) also earns its bonus, "
+                    + "and every gold cube on the board is worth more.",
+                "Altın bloğu elinde tutmak da bonusu için yeterlidir (bonus el dahil), "
+                    + "ayrıca tahtadaki her altın küp daha çok puan verir.");
             BaseSellValue = 60;
+        }
+
+        /// <summary>Permanently raises the board-side gold bonus (a live ScoringConfig buff).</summary>
+        public override void OnAcquired(SessionContext ctx)
+        {
+            ctx.Scoring.GoldPointsPerCubePerTurn += GoldBonusBoost;
+        }
+
+        public override void OnRemoved(SessionContext ctx)
+        {
+            ctx.Scoring.GoldPointsPerCubePerTurn -= GoldBonusBoost;
         }
 
         public override string StatusText

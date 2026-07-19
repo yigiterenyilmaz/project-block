@@ -230,6 +230,20 @@ namespace ProjectBlock.Core
             RaiseChanged();
         }
 
+        /// <summary>Overtime began. Deliberately NOT gated on DisabledInOvertime: this is the
+        /// transition, the last moment an overtime-disabled joker gets to react (Seri Tetik
+        /// takes its hand-size bonus back here).</summary>
+        public void DispatchOvertimeStarted(RoundEngine round)
+        {
+            RoundContext ctx = RoundCtx(round);
+            Snapshot();
+            for (int i = 0; i < dispatchBuffer.Count; i++)
+            {
+                dispatchBuffer[i].OnOvertimeStarted(ctx);
+            }
+            RaiseChanged();
+        }
+
         public void DispatchRoundEnded(RoundEngine round, RoundOutcome outcome)
         {
             RoundContext ctx = RoundCtx(round);

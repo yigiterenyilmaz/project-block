@@ -204,6 +204,14 @@ namespace ProjectBlock.Core
         {
         }
 
+        /// <summary>Overtime just began (the round score crossed the threshold). Fires ONCE,
+        /// for every joker INCLUDING overtime-disabled ones, because it is the transition
+        /// itself - the moment a joker like Seri Tetik must undo a permanent rule change
+        /// before its hooks go silent. Never fires again until the next round.</summary>
+        public virtual void OnOvertimeStarted(RoundContext ctx)
+        {
+        }
+
         /// <summary>The round ended, either way. Check the outcome before paying out.</summary>
         public virtual void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
         {

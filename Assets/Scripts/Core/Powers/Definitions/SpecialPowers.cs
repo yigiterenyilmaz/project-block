@@ -72,10 +72,12 @@ namespace ProjectBlock.Core
             : base("olta", "Olta")
         {
             SetDescription(
-                "Mark one held card per round; on use, reels it back from the draw or "
-                    + "discard pile into your bonus hand.",
-                "Raunt başına bir kart işaretlersin; kullandığında o kartı desteden "
-                    + "veya ıskartadan bonus eline çekersin.");
+                "Mark one held card per round; reel it back into your bonus hand. Pulling it "
+                    + "from the draw pile is free (the rod stays ready); pulling it from the "
+                    + "discard locks the rod until the next clean sweep.",
+                "Raunt başına bir kart işaretlersin; kartı bonus eline çekersin. Çekme "
+                    + "destesinden çekmek bedavadır (olta hazır kalır); ıskartadan çekersen "
+                    + "olta bir sonraki temizliğe kadar kilitlenir.");
             BaseSellValue = 55;
         }
 
@@ -128,11 +130,12 @@ namespace ProjectBlock.Core
             int cardId = MarkedCardId.Value;
             RoundEngine round = ctx.Round;
 
-            // Already in hand: the cast is simply wasted, per the design.
+            // Already in hand: nothing to reel in, so the cast is free (charge kept).
             for (int i = 0; i < round.Hand.Count; i++)
             {
                 if (round.Hand[i].Id == cardId)
                 {
+                    KeepChargeAfterUse = true;
                     return true;
                 }
             }
@@ -141,7 +144,8 @@ namespace ProjectBlock.Core
             BlockCard card = round.TakeCardFromPiles(cardId);
             if (card == null)
             {
-                return true; // on the board or out of the round - nothing to reel in
+                KeepChargeAfterUse = true; // on the board / out of the round: nothing happened
+                return true;
             }
             // ToDiscard: a fished card rejoins the pile economy instead of expiring.
             round.AddBonusCard(card, BonusPlayOutcome.ToDiscard);
@@ -149,7 +153,15 @@ namespace ProjectBlock.Core
             fishedOnTurn = round.TurnNumber;
             if (fromDiscard)
             {
+                // Recovering a spent card is the costly pull: the rod stays stuck (and the
+                // charge is spent) until the next clean sweep.
                 StuckUntilSweep = true;
+            }
+            else
+            {
+                // Pulling a card that was still in the draw pile is free - Olta keeps its
+                // charge and is ready to use again.
+                KeepChargeAfterUse = true;
             }
             return true;
         }

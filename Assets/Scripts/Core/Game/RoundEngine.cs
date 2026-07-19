@@ -102,6 +102,11 @@ namespace ProjectBlock.Core
         {
             public int FullSize;
             public int RemainingAtTurnStart;
+
+            /// <summary>Turn the block was placed. TNT only clears the board if the whole
+            /// block explodes on this same turn (confirmed rule) - a block that survives to a
+            /// later turn and then goes whole no longer detonates.</summary>
+            public int PlacementTurn;
         }
 
         /// <summary>Dynamite blocks on the board (confirmed rule: they trigger on ANY
@@ -192,16 +197,24 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            LineExplosionResult squeezed = Board.ResolveFullLines();
-            if (squeezed.LineCount > 0)
-            {
-                cubesDestroyedThisTurn += squeezed.ExplodedCells.Count;
-                LogDestruction();
-                AddScoreOutsideTurn(
-                    scorer.ScoreLineExplosion(squeezed.LineCount, squeezed.ExplodedCells.Count));
-                TryResolveCleanSweep();
-            }
+            ResolveFullLinesOutsideTurn();
             return true;
+        }
+
+        /// <summary>Resolves any full lines created OUTSIDE a placement - a power that reshaped
+        /// or filled the board ("Bardağın boş tarafı", inflation deflate). Scores and logs them
+        /// like a normal explosion and offers a sweep check. Safe to call between turns.</summary>
+        internal void ResolveFullLinesOutsideTurn()
+        {
+            LineExplosionResult lines = Board.ResolveFullLines();
+            if (lines.LineCount == 0)
+            {
+                return;
+            }
+            cubesDestroyedThisTurn += lines.ExplodedCells.Count;
+            LogDestruction();
+            AddScoreOutsideTurn(scorer.ScoreLineExplosion(lines.LineCount, lines.ExplodedCells.Count));
+            TryResolveCleanSweep();
         }
 
         /// <summary>Moves cubes out of the bands that are about to disappear.</summary>
@@ -473,6 +486,9 @@ namespace ProjectBlock.Core
             Deck.RemoveRandomFromDraw(continueCost);
             ContinueCount++;
             RefillHand();
+            // Continuing an overtime restarts the board-rewind history too, so "Kum saati"
+            // cannot reach back past the continue.
+            boardHistory.Clear();
             if (Loss != null)
             {
                 SetStatus(RoundStatus.Lost);
@@ -621,6 +637,7 @@ namespace ProjectBlock.Core
                 var state = new DynamiteState();
                 state.FullSize = report.PlacedCells.Count;
                 state.RemainingAtTurnStart = report.PlacedCells.Count;
+                state.PlacementTurn = TurnNumber;
                 dynamiteBlocks[card.Id] = state;
             }
             breakdown.BasePlacement = scorer.ScorePlacement(report.PlacedCells.Count);
@@ -669,7 +686,10 @@ namespace ProjectBlock.Core
                     if (remaining == 0)
                     {
                         dynamiteBlocks.Remove(id);
-                        if (state.RemainingAtTurnStart == state.FullSize)
+                        // Only the block placed THIS turn detonates the board (confirmed):
+                        // a still-whole block that lingers to a later turn just explodes.
+                        if (state.RemainingAtTurnStart == state.FullSize
+                            && state.PlacementTurn == TurnNumber)
                         {
                             boom = true;
                         }
@@ -768,6 +788,7 @@ namespace ProjectBlock.Core
                 report.ThresholdJustPassed = true;
                 Deck.ShuffleDiscardIntoDraw();
                 pendingAdvanceOffer = true;
+                EnterOvertime();
             }
 
             // 10./11. status update - see file header for why the offer outranks the loss.
@@ -939,7 +960,21 @@ namespace ProjectBlock.Core
             {
                 ThresholdPassed = true;
                 Deck.ShuffleDiscardIntoDraw();
+                EnterOvertime();
                 SetStatus(RoundStatus.AwaitingAdvanceDecision);
+            }
+        }
+
+        /// <summary>The one place overtime "begins". Wipes the board-rewind history so "Kum
+        /// saati" cannot reach back across the threshold, and lets jokers react to the
+        /// transition (Seri Tetik takes its hand bonus back). Also invoked when the player
+        /// continues an overtime, so the history restarts each continue.</summary>
+        private void EnterOvertime()
+        {
+            boardHistory.Clear();
+            if (session != null)
+            {
+                session.Jokers.DispatchOvertimeStarted(this);
             }
         }
 

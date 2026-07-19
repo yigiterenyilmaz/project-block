@@ -102,11 +102,18 @@ namespace ProjectBlock.Core
             : base("bardagin_bos_tarafi", "Bardağın Boş Tarafı")
         {
             SetDescription(
-                "Filled and empty cells on the board swap places. "
-                    + "The new cubes carry no element.",
-                "Oyun alanındaki dolu ve boş kareler yer değiştirir. "
-                    + "Yeni küpler elementsizdir.");
+                "Filled and empty cells on the board swap places (new cubes carry no element). "
+                    + "Any row or column the new cubes complete explodes.",
+                "Oyun alanındaki dolu ve boş kareler yer değiştirir (yeni küpler elementsizdir). "
+                    + "Yeni küplerin tamamladığı satır veya sütun patlar.");
             BaseSellValue = 45;
+        }
+
+        /// <summary>Refused on an empty board: there would be nothing to invert away, and the
+        /// fill would just bury the player. It only makes sense with cubes on the board.</summary>
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            return ctx.Round.Board.OccupiedCount > 0;
         }
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
@@ -136,6 +143,9 @@ namespace ProjectBlock.Core
             {
                 board.SetCubeAt(pos, new Cube(CubeKind.Normal, InvertedCubeCardId));
             }
+            // The freshly filled cubes can complete rows/columns; those explode and score
+            // like any other line, and an emptied board still offers a sweep check.
+            ctx.Round.ResolveFullLinesOutsideTurn();
             ctx.Round.TryResolveCleanSweep();
             return true;
         }

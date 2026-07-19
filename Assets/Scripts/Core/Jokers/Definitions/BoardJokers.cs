@@ -325,9 +325,9 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Kazı çalışması" - a block that explodes whole, in one go, comes back to the
-    /// bonus hand. The engine tells us which cards went at once; a block that had already
-    /// lost cubes earlier does not qualify.</summary>
+    /// <summary>"Kazı çalışması" - the block you place, if it explodes whole in one go on the
+    /// very turn you place it, comes back to the bonus hand. A block that survives to a later
+    /// turn, or that had already lost cubes, does not qualify.</summary>
     public sealed class KaziCalismasiJoker : Joker
     {
         /// <summary>Blocks recovered this round, for the UI.</summary>
@@ -337,8 +337,9 @@ namespace ProjectBlock.Core
             : base("kazi_calismasi", "Kazı Çalışması")
         {
             SetDescription(
-                "A block destroyed whole in one go is returned to your bonus hand.",
-                "Bir blok tek seferde tümüyle patlarsa bonus eline iade edilir.");
+                "A block that explodes whole in one go on the turn you place it is returned "
+                    + "to your bonus hand.",
+                "Koyduğun turda tek seferde tümüyle patlayan blok bonus eline iade edilir.");
             BaseSellValue = 50;
         }
 
@@ -357,24 +358,25 @@ namespace ProjectBlock.Core
 
         public override void AfterTurnScored(TurnContext turn)
         {
-            IReadOnlyList<int> fullyDestroyed = turn.Report.CardsFullyDestroyed;
-            for (int i = 0; i < fullyDestroyed.Count; i++)
+            // Only the block placed THIS turn qualifies - and only if it went whole in one go.
+            BlockCard placed = turn.Report.Card;
+            if (placed == null || !turn.Report.CardsFullyDestroyed.Contains(placed.Id))
             {
-                int cardId = fullyDestroyed[i];
-                if (!recovered.Add(cardId))
-                {
-                    continue;
-                }
-                BlockCard card = turn.Round.TakeCardFromPiles(cardId);
-                if (card == null)
-                {
-                    continue; // already out of the round (removed zone) - nothing to give back
-                }
-                // ToDiscard, not ExpireFromRound: this is a normal deck card on loan, it
-                // must find its way back into the pile economy after being played.
-                turn.Round.AddBonusCard(card, BonusPlayOutcome.ToDiscard);
-                RecoveredThisRound++;
+                return;
             }
+            if (!recovered.Add(placed.Id))
+            {
+                return;
+            }
+            BlockCard card = turn.Round.TakeCardFromPiles(placed.Id);
+            if (card == null)
+            {
+                return; // already out of the round (removed zone) - nothing to give back
+            }
+            // ToDiscard, not ExpireFromRound: this is a normal deck card on loan, it
+            // must find its way back into the pile economy after being played.
+            turn.Round.AddBonusCard(card, BonusPlayOutcome.ToDiscard);
+            RecoveredThisRound++;
         }
     }
 }
