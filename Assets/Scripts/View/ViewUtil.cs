@@ -56,8 +56,18 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Board color of a cube: element kinds get their signature color,
-        /// plain cubes keep their card's color.</summary>
+        /// plain cubes keep their card's color. A Parazit host cube is tinted toward magenta
+        /// so the player can see which cube carries the passenger.</summary>
         public static Color CubeDisplayColor(Cube cube)
+        {
+            if (cube.Protected)
+            {
+                return Color.Lerp(CubeBaseColor(cube), new Color(0.85f, 0.2f, 0.85f), 0.55f);
+            }
+            return CubeBaseColor(cube);
+        }
+
+        private static Color CubeBaseColor(Cube cube)
         {
             switch (cube.Kind)
             {

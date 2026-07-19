@@ -43,10 +43,27 @@ namespace ProjectBlock.Core
         /// fire chains, dynamite, piggy banks, "Kazı çalışması" joker...).</summary>
         public readonly int SourceCardId;
 
+        /// <summary>"Parazit" host cube: sweep-exempt and immune to joker/power destruction.
+        /// It still breaks with a player line explosion, which is the only thing that can
+        /// take out the parasite's passenger. Preserved by struct copies (snapshots, resize).</summary>
+        public readonly bool Protected;
+
         public Cube(CubeKind kind, int sourceCardId)
+            : this(kind, sourceCardId, false)
+        {
+        }
+
+        public Cube(CubeKind kind, int sourceCardId, bool isProtected)
         {
             Kind = kind;
             SourceCardId = sourceCardId;
+            Protected = isProtected;
+        }
+
+        /// <summary>A copy of this cube marked as a Parazit host.</summary>
+        public Cube AsProtected()
+        {
+            return new Cube(Kind, SourceCardId, true);
         }
     }
 
@@ -54,18 +71,27 @@ namespace ProjectBlock.Core
     public static class CubeRules
     {
         /// <summary>Does this cube block a clean sweep ("temizlik")? Obsidian and gold
-        /// are the confirmed exceptions.</summary>
+        /// are the confirmed exceptions; a Parazit host cube is exempt too.</summary>
         public static bool CountsForCleanSweep(Cube cube)
         {
-            return cube.Kind != CubeKind.Obsidian
+            return !cube.Protected
+                && cube.Kind != CubeKind.Obsidian
                 && cube.Kind != CubeKind.Gold
                 && cube.Kind != CubeKind.Ice;
         }
 
-        /// <summary>Can an explosion destroy this cube?</summary>
+        /// <summary>Can a LINE EXPLOSION destroy this cube? A Parazit host is destructible
+        /// here on purpose - a player-completed line is the only thing that breaks it.</summary>
         public static bool IsDestructible(Cube cube)
         {
             return cube.Kind != CubeKind.Obsidian && cube.Kind != CubeKind.Gold;
+        }
+
+        /// <summary>Can an EXTERNAL effect (a joker or power) destroy this cube? Same as
+        /// IsDestructible, except a Parazit host cube resists all of them.</summary>
+        public static bool IsExternallyDestructible(Cube cube)
+        {
+            return !cube.Protected && IsDestructible(cube);
         }
 
         /// <summary>The cube kind a card's cubes take when placed (first board-state

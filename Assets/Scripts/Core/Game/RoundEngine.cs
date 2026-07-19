@@ -248,7 +248,12 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
-                Board.DestroyCubeForced(from);
+                // A protected (Parazit) cube refuses the forced pickup, so relocating it
+                // would duplicate it - leave it in place instead.
+                if (!Board.DestroyCubeForced(from))
+                {
+                    continue;
+                }
                 for (int scan = x + step; scan >= 0 && scan < Board.Width; scan += step)
                 {
                     var to = new GridPos(scan, y);
@@ -271,7 +276,12 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
-                Board.DestroyCubeForced(from);
+                // A protected (Parazit) cube refuses the forced pickup, so relocating it
+                // would duplicate it - leave it in place instead.
+                if (!Board.DestroyCubeForced(from))
+                {
+                    continue;
+                }
                 for (int scan = y + step; scan >= 0 && scan < Board.Height; scan += step)
                 {
                     var to = new GridPos(x, scan);

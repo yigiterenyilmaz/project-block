@@ -579,7 +579,7 @@ namespace ProjectBlock.Core
                 for (int y = 0; y < Height; y++)
                 {
                     Cube? cube = cells[x, y];
-                    if (cube.HasValue && CubeRules.IsDestructible(cube.Value))
+                    if (cube.HasValue && CubeRules.IsExternallyDestructible(cube.Value))
                     {
                         cells[x, y] = null;
                         OccupiedCount--;
@@ -601,7 +601,7 @@ namespace ProjectBlock.Core
                 return false;
             }
             Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
-            if (!cube.HasValue || !CubeRules.IsDestructible(cube.Value))
+            if (!cube.HasValue || !CubeRules.IsExternallyDestructible(cube.Value))
             {
                 return false;
             }
@@ -611,15 +611,39 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Destroys a cube even if its kind is normally indestructible. Only for
-        /// effects that explicitly break that rule ("elmas kazma" cracking obsidian).</summary>
+        /// effects that explicitly break that rule ("elmas kazma" cracking obsidian). A
+        /// Parazit host cube still resists - only a player line explosion takes it out.</summary>
         public bool DestroyCubeForced(GridPos pos)
         {
-            if (!IsInside(pos) || !cells[pos.X - MinX, pos.Y - MinY].HasValue)
+            if (!IsInside(pos))
+            {
+                return false;
+            }
+            Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
+            if (!cube.HasValue || cube.Value.Protected)
             {
                 return false;
             }
             cells[pos.X - MinX, pos.Y - MinY] = null;
             OccupiedCount--;
+            return true;
+        }
+
+        /// <summary>Marks the cube at a cell as a Parazit host (sweep-exempt, immune to
+        /// external destruction). Returns false if the cell is empty. The caller is expected
+        /// to have confirmed it is the right cube.</summary>
+        public bool SetCubeProtected(GridPos pos)
+        {
+            if (!IsInside(pos))
+            {
+                return false;
+            }
+            Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
+            if (!cube.HasValue)
+            {
+                return false;
+            }
+            cells[pos.X - MinX, pos.Y - MinY] = cube.Value.AsProtected();
             return true;
         }
 

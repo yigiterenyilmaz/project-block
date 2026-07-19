@@ -42,10 +42,12 @@ namespace ProjectBlock.Core
             : base("parazit", "Parazit")
         {
             SetDescription(
-                "In the market, attach a joker to a cube of a block in your deck. That "
-                    + "joker takes no slot but is destroyed if the cube breaks.",
-                "Markette bir jokeri destendeki bir bloğun küpüne takarsın. "
-                    + "O joker slot işgal etmez ama küp kırılırsa yok olur.");
+                "In the market, attach a joker to a cube of a block in your deck. That joker "
+                    + "takes no slot. Its host cube is sweep-exempt and unbreakable by other "
+                    + "jokers and powers - only a line you complete destroys it (and the joker).",
+                "Markette bir jokeri destendeki bir bloğun küpüne takarsın. O joker slot "
+                    + "işgal etmez. Konak küp temizliğe girmez ve başka joker/güçlerle kırılmaz "
+                    + "- sadece senin tamamladığın bir satır onu (ve jokeri) yok eder.");
             BaseSellValue = 70;
         }
 
@@ -145,6 +147,14 @@ namespace ProjectBlock.Core
                 }
                 KillPassenger(turn.Session);
                 return;
+            }
+            // Host cube survived this turn: (re)assert its protection so external jokers and
+            // powers cannot break it and it stays out of the clean-sweep check. Only the cube
+            // that actually belongs to the host card is protected.
+            Cube? here = turn.Round.Board.GetCube(hostPos.Value);
+            if (here.HasValue && here.Value.SourceCardId == HostCardId)
+            {
+                turn.Round.Board.SetCubeProtected(hostPos.Value);
             }
         }
 
