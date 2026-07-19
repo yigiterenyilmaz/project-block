@@ -260,28 +260,56 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Enfeksiyon" - the player infects one cube; the infection creeps outward every
-    /// turn and detonates a cube once it has been infected long enough. Activated with a
-    /// board target, once per round.</summary>
+    /// <summary>One infected cell exposed for the UI: where it is and how far its buildup
+    /// has progressed toward detonation.</summary>
+    public readonly struct InfectedCell
+    {
+        public readonly GridPos Cell;
+        public readonly int Turns;
+        public readonly int Threshold;
+
+        public InfectedCell(GridPos cell, int turns, int threshold)
+        {
+            Cell = cell;
+            Turns = turns;
+            Threshold = threshold;
+        }
+    }
+
+    /// <summary>
+    /// "Enfeksiyon" - the player infects ONE cell. It does not spread on its own; it watches
+    /// whatever block sits on it, and once that same block has held the cell for 3 turns the
+    /// whole block detonates. Only the FIRST detonation spreads the infection, once, into a
+    /// 3x3 plus around the cell - that is the most it ever grows. Activated once per round.
+    /// </summary>
     public sealed class EnfeksiyonJoker : Joker
     {
-        /// <summary>Turns an infected cube survives before it blows.</summary>
+        /// <summary>Turns the SAME block must hold an infected cell before it detonates.</summary>
         public int TurnsToDetonate = 3;
 
-        /// <summary>Points per cube the infection takes.</summary>
+        /// <summary>Points per cube the detonation takes.</summary>
         public int PointsPerInfectedCube = 6;
 
-        /// <summary>Cell -> turns infected so far.</summary>
-        private readonly Dictionary<GridPos, int> infected = new Dictionary<GridPos, int>();
+        private sealed class Infection
+        {
+            public int CardId = -1; // block currently building up on this cell, or -1
+            public int Turns;
+        }
+
+        private readonly Dictionary<GridPos, Infection> infected = new Dictionary<GridPos, Infection>();
+        private readonly List<InfectedCell> markerCache = new List<InfectedCell>();
+        private bool hasSpread;
 
         public EnfeksiyonJoker()
             : base("enfeksiyon", "Enfeksiyon")
         {
             SetDescription(
-                "Starts an infection on a chosen cube. It spreads every turn and pops "
-                    + "cubes that have incubated long enough.",
-                "Seçtiğin küpte enfeksiyon başlatır. Her tur çevresine yayılır ve "
-                    + "yeterince beklemiş küpleri patlatır.");
+                "Infect one cube. When the same block has sat on it for 3 turns the whole "
+                    + "block detonates. The first detonation spreads the infection once into "
+                    + "a 3x3 plus - and no further.",
+                "Bir küpü enfekte edersin. Aynı blok o karede 3 tur durursa blok tümüyle "
+                    + "patlar. İlk patlama enfeksiyonu bir kez 3x3 artı şeklinde yayar - "
+                    + "daha fazla değil.");
             ChargesPerRound = 1;
             BaseSellValue = 60;
         }
@@ -302,9 +330,24 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>Current infection markers, for the board view (buildup visualisation).</summary>
+        public IReadOnlyList<InfectedCell> InfectedCells
+        {
+            get
+            {
+                markerCache.Clear();
+                foreach (KeyValuePair<GridPos, Infection> entry in infected)
+                {
+                    markerCache.Add(new InfectedCell(entry.Key, entry.Value.Turns, TurnsToDetonate));
+                }
+                return markerCache;
+            }
+        }
+
         public override void OnRoundStarted(RoundContext ctx)
         {
             infected.Clear();
+            hasSpread = false;
         }
 
         public override bool CanActivate(RoundContext ctx)
@@ -319,11 +362,12 @@ namespace ProjectBlock.Core
                 return false;
             }
             GridPos cell = target.Cell.Value;
-            if (!ctx.Round.Board.GetCube(cell).HasValue || !TrySpendCharge())
+            Cube? cube = ctx.Round.Board.GetCube(cell);
+            if (!cube.HasValue || !TrySpendCharge())
             {
                 return false;
             }
-            infected[cell] = 0;
+            infected[cell] = new Infection { CardId = cube.Value.SourceCardId, Turns = 0 };
             return true;
         }
 
@@ -335,60 +379,108 @@ namespace ProjectBlock.Core
             }
             GameBoard board = turn.Round.Board;
 
-            // Drop cells whose cube is already gone, and age the rest.
-            var stale = new List<GridPos>();
+            // Age each cell against the block sitting on it: same block -> tick up; a different
+            // block (or an empty cell) restarts the count. Collect the cells that ripened.
             var ripe = new List<GridPos>();
-            var keys = new List<GridPos>(infected.Keys);
-            foreach (GridPos cell in keys)
+            foreach (GridPos cell in new List<GridPos>(infected.Keys))
             {
-                if (!board.GetCube(cell).HasValue)
+                Infection inf = infected[cell];
+                Cube? cube = board.GetCube(cell);
+                if (!cube.HasValue)
                 {
-                    stale.Add(cell);
+                    inf.CardId = -1;
+                    inf.Turns = 0;
                     continue;
                 }
-                int age = infected[cell] + 1;
-                infected[cell] = age;
-                if (age >= TurnsToDetonate)
+                if (cube.Value.SourceCardId == inf.CardId)
+                {
+                    inf.Turns++;
+                }
+                else
+                {
+                    inf.CardId = cube.Value.SourceCardId;
+                    inf.Turns = 1; // the block is on the cell as of this turn
+                }
+                if (inf.Turns >= TurnsToDetonate)
                 {
                     ripe.Add(cell);
                 }
             }
-            foreach (GridPos cell in stale)
-            {
-                infected.Remove(cell);
-            }
 
-            // Spread one ring from the cells still standing, before the ripe ones blow.
-            var newlyInfected = new List<GridPos>();
-            foreach (GridPos cell in new List<GridPos>(infected.Keys))
+            bool spreadNow = false;
+            GridPos spreadCentre = default;
+            foreach (GridPos cell in ripe)
             {
-                foreach (GridPos neighbour in board.Neighbours(cell))
+                Infection inf = infected[cell];
+                int cardId = inf.CardId;
+                inf.CardId = -1;
+                inf.Turns = 0;
+                if (cardId < 0)
                 {
-                    if (!infected.ContainsKey(neighbour) && board.GetCube(neighbour).HasValue
-                        && !newlyInfected.Contains(neighbour))
-                    {
-                        newlyInfected.Add(neighbour);
-                    }
+                    continue;
                 }
-            }
-
-            if (ripe.Count > 0)
-            {
-                IReadOnlyList<GridPos> blown = turn.Round.DestroyCubes(ripe, true);
-                foreach (GridPos cell in ripe)
+                List<GridPos> blockCells = CellsOfCard(board, cardId);
+                if (blockCells.Count == 0)
                 {
-                    infected.Remove(cell);
+                    continue; // block already gone this turn (overlapping infection)
                 }
+                IReadOnlyList<GridPos> blown = turn.Round.DestroyCubes(blockCells, true);
                 if (blown.Count > 0)
                 {
                     turn.AddFlatScore(blown.Count * PointsPerInfectedCube, DefId);
                     turn.Round.TryResolveCleanSweep();
+                    if (!hasSpread)
+                    {
+                        spreadNow = true;
+                        spreadCentre = cell;
+                    }
                 }
             }
-            foreach (GridPos cell in newlyInfected)
+
+            if (spreadNow)
             {
-                infected[cell] = 0;
+                hasSpread = true;
+                SpreadPlus(board, spreadCentre);
             }
+        }
+
+        /// <summary>The one-time spread: the centre and its four orthogonal neighbours become
+        /// infected too (a 3x3 plus). Cells already infected keep their progress.</summary>
+        private void SpreadPlus(GameBoard board, GridPos centre)
+        {
+            AddInfection(board, centre);
+            AddInfection(board, new GridPos(centre.X + 1, centre.Y));
+            AddInfection(board, new GridPos(centre.X - 1, centre.Y));
+            AddInfection(board, new GridPos(centre.X, centre.Y + 1));
+            AddInfection(board, new GridPos(centre.X, centre.Y - 1));
+        }
+
+        private void AddInfection(GameBoard board, GridPos cell)
+        {
+            if (!board.IsInside(cell) || infected.ContainsKey(cell))
+            {
+                return;
+            }
+            Cube? cube = board.GetCube(cell);
+            infected[cell] = new Infection
+            {
+                CardId = cube.HasValue ? cube.Value.SourceCardId : -1,
+                Turns = 0
+            };
+        }
+
+        private static List<GridPos> CellsOfCard(GameBoard board, int cardId)
+        {
+            var cells = new List<GridPos>();
+            foreach (GridPos cell in board.GetOccupiedCells())
+            {
+                Cube? cube = board.GetCube(cell);
+                if (cube.HasValue && cube.Value.SourceCardId == cardId)
+                {
+                    cells.Add(cell);
+                }
+            }
+            return cells;
         }
     }
 }

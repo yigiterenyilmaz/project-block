@@ -45,6 +45,7 @@ namespace ProjectBlock.View
         private FlameStreakView flameStreak;
         private BlastFxView blastFx;
         private int comboStreak;
+        private readonly List<InfectedCell> infectionBuffer = new List<InfectedCell>();
         private Text infoText;
         private Text messageText;
         private Camera cam;
@@ -140,6 +141,7 @@ namespace ProjectBlock.View
             flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
             boardView.Refresh();
             boardView.ClearPreview();
+            RefreshInfections();
             sfx.Shuffle();
             cardLayer.AnimateRoundStart(round);
             UpdateHud();
@@ -1061,11 +1063,29 @@ namespace ProjectBlock.View
             }
             boardView.Refresh();
             boardView.ClearPreview();
+            RefreshInfections();
             cardLayer.Sync(round, report);
             flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
             powerBar.Refresh(session, pendingTargetPowerId);
+        }
+
+        /// <summary>Gathers "Enfeksiyon" infection markers from the inventory and hands them
+        /// to the board view to draw (buildup pips + tint).</summary>
+        private void RefreshInfections()
+        {
+            infectionBuffer.Clear();
+            IReadOnlyList<Joker> jokers = session.Jokers.Jokers;
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                var enf = jokers[i] as EnfeksiyonJoker;
+                if (enf != null)
+                {
+                    infectionBuffer.AddRange(enf.InfectedCells);
+                }
+            }
+            boardView.ShowInfections(infectionBuffer);
         }
 
         private void UpdateHud()

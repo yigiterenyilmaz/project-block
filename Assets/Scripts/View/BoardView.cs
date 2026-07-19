@@ -25,6 +25,7 @@ namespace ProjectBlock.View
         private Color[,] baseColorCache;
         private readonly List<SpriteRenderer> ghostSprites = new List<SpriteRenderer>();
         private readonly List<SpriteRenderer> outsidePreviewSprites = new List<SpriteRenderer>();
+        private readonly List<GameObject> infectionMarkers = new List<GameObject>();
         private ParticleSystem ambient;
         private float ambientTimer;
         private bool animatingWater;
@@ -215,6 +216,7 @@ namespace ProjectBlock.View
             }
             ghostSprites.Clear();
             outsidePreviewSprites.Clear();
+            infectionMarkers.Clear();
             board = newBoard;
             cellSize = Mathf.Min(maxWorldSize / board.Width, maxWorldSize / board.Height);
             bottomLeft = center - new Vector2(board.Width, board.Height) * (cellSize * 0.5f);
@@ -288,6 +290,62 @@ namespace ProjectBlock.View
                     CellToWorld(entry.Key), cellSize * 0.86f,
                     new Color(0.8f, 0.8f, 0.95f, 0.35f), 1));
             }
+        }
+
+        /// <summary>Draws the "Enfeksiyon" markers: a pulsing red overlay whose intensity
+        /// grows with the buildup, plus a row of pips (filled = turns elapsed) so the 3-turn
+        /// countdown to detonation is visible. Rebuilt each refresh.</summary>
+        public void ShowInfections(IReadOnlyList<InfectedCell> cells)
+        {
+            ClearInfections();
+            if (board == null || cells == null)
+            {
+                return;
+            }
+            for (int i = 0; i < cells.Count; i++)
+            {
+                InfectedCell inf = cells[i];
+                if (!board.IsInside(inf.Cell))
+                {
+                    continue;
+                }
+                Vector2 center = CellToWorld(inf.Cell);
+                var root = new GameObject("Infection");
+                root.transform.SetParent(transform, false);
+                root.transform.localPosition = new Vector3(center.x, center.y, 0f);
+                infectionMarkers.Add(root);
+
+                float progress = inf.Threshold > 0
+                    ? Mathf.Clamp01(inf.Turns / (float)inf.Threshold)
+                    : 1f;
+                var overlay = new Color(0.9f, 0.15f, 0.15f, 0.22f + 0.4f * progress);
+                ViewUtil.MakeCell(root.transform, "Tint", Vector2.zero, cellSize * 0.9f, overlay, 2);
+
+                // buildup pips along the bottom edge of the cell
+                int pips = Mathf.Max(inf.Threshold, 1);
+                float pip = cellSize * 0.16f;
+                float startX = -(pips - 1) * pip * 0.9f;
+                for (int p = 0; p < pips; p++)
+                {
+                    Color pipColor = p < inf.Turns
+                        ? new Color(1f, 0.35f, 0.2f)
+                        : new Color(0.3f, 0.3f, 0.32f);
+                    ViewUtil.MakeCell(root.transform, "Pip",
+                        new Vector2(startX + p * pip * 1.8f, -cellSize * 0.32f), pip, pipColor, 3);
+                }
+            }
+        }
+
+        public void ClearInfections()
+        {
+            for (int i = infectionMarkers.Count - 1; i >= 0; i--)
+            {
+                if (infectionMarkers[i] != null)
+                {
+                    Destroy(infectionMarkers[i]);
+                }
+            }
+            infectionMarkers.Clear();
         }
 
         /// <summary>World center of a cell. Coords are taken RELATIVE to the board origin
