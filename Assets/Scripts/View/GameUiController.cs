@@ -58,6 +58,9 @@ namespace ProjectBlock.View
         private const float RetroFallInterval = 0.55f;
         private const float RetroSoftDropInterval = 0.06f;
         private CrtOverlayView crt;
+        // Global the CrtEdgeBend fullscreen shader reads (0 = off, 1 = on). Driven by RetroMode;
+        // harmless if the Full Screen Pass feature/material is not wired yet (see docs/crt-edge-bend.md).
+        private static readonly int CrtBendId = Shader.PropertyToID("_CrtBend");
 
         private enum ChoiceKind { None, BatakBet, PowerbankTarget }
         private ChoiceKind pendingChoice;
@@ -189,14 +192,7 @@ namespace ProjectBlock.View
             retroFallHand = -1; // no piece is mid-fall across a round boundary
             // Keep the CRT in sync at every round start - crucially, a restart (R) or a deck
             // change builds a fresh session with retro OFF, so this turns the overlay back off.
-            if (crt != null)
-            {
-                crt.SetVisible(session.Config.Rules.RetroMode);
-            }
-            if (sfx != null)
-            {
-                sfx.SetRetro(session.Config.Rules.RetroMode); // CRT hum + bit-crush follow retro
-            }
+            SyncRetroPresentation();
             RoundEngine round = session.CurrentRound;
             if (boardView.Board != round.Board)
             {
@@ -1903,14 +1899,24 @@ namespace ProjectBlock.View
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
             powerBar.Refresh(session, pendingTargetPowerId);
+            SyncRetroPresentation();
+        }
+
+        /// <summary>Keeps every retro-mode presentation layer in sync with RoundRules.RetroMode:
+        /// the CRT overlay, the CRT hum + bit-crush audio, and the fullscreen edge-bend shader
+        /// global. Called at round start and on every full refresh.</summary>
+        private void SyncRetroPresentation()
+        {
+            bool on = session != null && session.Config.Rules.RetroMode;
             if (crt != null)
             {
-                crt.SetVisible(session.Config.Rules.RetroMode); // CRT follows retro mode
+                crt.SetVisible(on);
             }
             if (sfx != null)
             {
-                sfx.SetRetro(session.Config.Rules.RetroMode); // hum + bit-crush follow retro
+                sfx.SetRetro(on);
             }
+            Shader.SetGlobalFloat(CrtBendId, on ? 1f : 0f);
         }
 
         /// <summary>Gathers "Enfeksiyon" infection markers from the inventory and hands them
