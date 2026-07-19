@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "tiers": [
+    "common",
+    "rare",
+    "legendary"
+  ],
+  "gradedAt": "2026-07-19T00:00:00.000Z",
+  "assignments": {
+    "oryantasyon": "legendary",
+    "dezenformasyon": "legendary",
+    "imitasyon": "legendary",
+    "fraksiyon": "legendary"
+  }
+}
