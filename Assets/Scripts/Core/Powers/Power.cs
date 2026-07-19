@@ -100,6 +100,15 @@ namespace ProjectBlock.Core
         /// the inventory only marks the power spent when this returns true.</summary>
         public abstract bool Run(RoundContext ctx, ActivationTarget target);
 
+        /// <summary>Board cells this power WOULD affect for a given aim, so the UI can preview
+        /// the blast while the player is targeting. Empty by default; a board-targeting power
+        /// (Çaprazlama) overrides it. Cells outside the board are ignored by the view.</summary>
+        public virtual System.Collections.Generic.IReadOnlyList<GridPos> PreviewCells(
+            ActivationTarget target)
+        {
+            return System.Array.Empty<GridPos>();
+        }
+
         /// <summary>Bought or granted.</summary>
         public virtual void OnAcquired(SessionContext ctx)
         {

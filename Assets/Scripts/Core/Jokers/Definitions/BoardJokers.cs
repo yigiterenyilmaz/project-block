@@ -75,6 +75,15 @@ namespace ProjectBlock.Core
         /// <summary>Turns left before it can eat again.</summary>
         public int Cooldown { get; private set; }
 
+        /// <summary>Cells the sweeper ate on the most recent turn, for the UI's delayed blast.
+        /// Reused list; the view copies what it needs.</summary>
+        private readonly List<GridPos> lastSwept = new List<GridPos>();
+
+        public IReadOnlyList<GridPos> LastSweptCells
+        {
+            get { return lastSwept; }
+        }
+
         public RobotSupurgeJoker()
             : base("robot_supurge", "Robot Süpürge")
         {
@@ -104,6 +113,7 @@ namespace ProjectBlock.Core
 
         public override void AfterTurnScored(TurnContext turn)
         {
+            lastSwept.Clear();
             if (Cooldown > 0)
             {
                 Cooldown--;
@@ -122,6 +132,7 @@ namespace ProjectBlock.Core
                 targets.Add(occupied[index]);
                 occupied.RemoveAt(index);
             }
+            lastSwept.AddRange(targets);
             turn.Round.DestroyCubes(targets, true);
 
             // The sweeper may have taken the last cube - ask the engine, never guess.

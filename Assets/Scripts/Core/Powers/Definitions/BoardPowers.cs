@@ -39,7 +39,18 @@ namespace ProjectBlock.Core
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
         {
-            GridPos centre = target.Cell.Value;
+            ctx.Round.DestroyCubes(PlusCells(target.Cell.Value), true);
+            ctx.Round.TryResolveCleanSweep();
+            return true;
+        }
+
+        public override IReadOnlyList<GridPos> PreviewCells(ActivationTarget target)
+        {
+            return target.Cell.HasValue ? PlusCells(target.Cell.Value) : System.Array.Empty<GridPos>();
+        }
+
+        private List<GridPos> PlusCells(GridPos centre)
+        {
             var cells = new List<GridPos> { centre };
             for (int step = 1; step <= ArmLength; step++)
             {
@@ -48,9 +59,7 @@ namespace ProjectBlock.Core
                 cells.Add(new GridPos(centre.X, centre.Y + step));
                 cells.Add(new GridPos(centre.X, centre.Y - step));
             }
-            ctx.Round.DestroyCubes(cells, true);
-            ctx.Round.TryResolveCleanSweep();
-            return true;
+            return cells;
         }
     }
 

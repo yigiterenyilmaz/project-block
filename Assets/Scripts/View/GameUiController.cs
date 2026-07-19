@@ -54,6 +54,8 @@ namespace ProjectBlock.View
         private CardVisual draggedCard;
         private int foxPickSlot = -1;
         private bool waterAnimating;
+        private bool supurgeAnimating;
+        private readonly List<GridPos> supurgeBuffer = new List<GridPos>();
         private bool sellCardsMode;
         private int lastSeedUsed;
 
@@ -151,9 +153,9 @@ namespace ProjectBlock.View
 
         private void Update()
         {
-            if (session == null || waterAnimating)
+            if (session == null || waterAnimating || supurgeAnimating)
             {
-                return; // input is locked while the water fall animation plays
+                return; // input is locked while a board animation plays
             }
             Keyboard kb = Keyboard.current;
             Mouse mouse = Mouse.current;
@@ -611,6 +613,7 @@ namespace ProjectBlock.View
             pendingTargetJokerId = null;
             pendingTargetPowerId = null;
             pendingOltaMark = false;
+            boardView.ClearPreview();
             UpdateHud();
             jokerBar.Refresh(session, null);
             powerBar.Refresh(session, null);
@@ -703,9 +706,13 @@ namespace ProjectBlock.View
             {
                 targetCardId = round.Hand[target.HandIndex.Value].Id;
             }
+            // Cells a board-targeting power will hit, captured BEFORE the destruction so the
+            // blast can play on them afterwards.
+            IReadOnlyList<GridPos> blastCells = power.PreviewCells(target);
             if (!session.Powers.TryUse(power.InstanceId, target))
             {
                 Debug.Log("[project_block] " + power.DisplayName + " could not be used.");
+                boardView.ClearPreview();
                 RefreshAll(null);
                 return;
             }
@@ -715,9 +722,71 @@ namespace ProjectBlock.View
             {
                 cardLayer.ForgetCard(targetCardId);
             }
+            boardView.ClearPreview();
             // Powers can rewrite the board (inflations replace it wholesale, Kum saati
             // rewinds it) and the piles - a full resync covers every one of them.
             RefreshAll(null);
+            PlayPowerBlast(blastCells);
+        }
+
+        /// <summary>"Robot süpürge": a short beat after the player places a block, the sweeper
+        /// eats a cube with a shake + blast. Input is locked until it goes off, so nothing can
+        /// be placed until the sweep resolves.</summary>
+        private void TriggerSupurgeBlast()
+        {
+            supurgeBuffer.Clear();
+            IReadOnlyList<Joker> jokers = session.Jokers.Jokers;
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                var rs = jokers[i] as RobotSupurgeJoker;
+                if (rs != null)
+                {
+                    supurgeBuffer.AddRange(rs.LastSweptCells);
+                }
+            }
+            if (supurgeBuffer.Count == 0)
+            {
+                return;
+            }
+            StartCoroutine(SupurgeBlastRoutine(new List<GridPos>(supurgeBuffer)));
+        }
+
+        private IEnumerator SupurgeBlastRoutine(List<GridPos> cells)
+        {
+            supurgeAnimating = true;
+            yield return new WaitForSeconds(0.28f);
+            var color = new Color(0.7f, 0.85f, 1f);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                blastFx.EmitAt(boardView.CellToWorld(cells[i]), color, 6);
+            }
+            sfx.Explode();
+            ShakeCamera(0.14f, 0.22f);
+            supurgeAnimating = false;
+        }
+
+        /// <summary>Blast particles + shake + sound on the cells a board power just hit.</summary>
+        private void PlayPowerBlast(IReadOnlyList<GridPos> cells)
+        {
+            if (cells == null || cells.Count == 0)
+            {
+                return;
+            }
+            var blastColor = new Color(1f, 0.72f, 0.35f);
+            bool any = false;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (session.CurrentRound != null && session.CurrentRound.Board.IsInside(cells[i]))
+                {
+                    blastFx.EmitAt(boardView.CellToWorld(cells[i]), blastColor, 5);
+                    any = true;
+                }
+            }
+            if (any)
+            {
+                sfx.Explode();
+                ShakeCamera(0.12f, 0.2f);
+            }
         }
 
         private void HandleDrag(RoundEngine round, Mouse mouse)
@@ -733,6 +802,21 @@ namespace ProjectBlock.View
             // slots too (Hologram), so the full slot range is passed through.
             if (pendingTargetPowerId.HasValue)
             {
+                Power aiming = session.Powers.Find(pendingTargetPowerId.Value);
+                // Live blast preview while aiming a board-targeting power (Çaprazlama).
+                if (aiming != null && !pendingOltaMark
+                    && aiming.Targeting == ActivationTargeting.BoardCell)
+                {
+                    GridPos hoverCell;
+                    if (boardView.TryWorldToCell(world, out hoverCell))
+                    {
+                        boardView.ShowPowerPreview(aiming.PreviewCells(ActivationTarget.Board(hoverCell)));
+                    }
+                    else
+                    {
+                        boardView.ClearPreview();
+                    }
+                }
                 if (mouse.leftButton.wasPressedThisFrame)
                 {
                     Power power = session.Powers.Find(pendingTargetPowerId.Value);
@@ -936,6 +1020,7 @@ namespace ProjectBlock.View
                                 delegate { waterAnimating = false; });
                         });
                     }
+                    TriggerSupurgeBlast();
                 }
                 else
                 {

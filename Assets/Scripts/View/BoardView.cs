@@ -435,6 +435,27 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Tints the given board cells with the explosion color, so a board-targeting
+        /// power (Çaprazlama) can preview its blast while being aimed. Cells outside the board
+        /// are skipped.</summary>
+        public void ShowPowerPreview(IReadOnlyList<GridPos> cells)
+        {
+            ClearPreview();
+            if (board == null || cells == null)
+            {
+                return;
+            }
+            for (int i = 0; i < cells.Count; i++)
+            {
+                GridPos pos = cells[i];
+                if (board.IsInside(pos))
+                {
+                    previewRenderers[pos.X - board.MinX, pos.Y - board.MinY].color = ExplosionPreviewColor;
+                    previewRenderers[pos.X - board.MinX, pos.Y - board.MinY].enabled = true;
+                }
+            }
+        }
+
         public void ClearPreview()
         {
             if (previewRenderers == null)
