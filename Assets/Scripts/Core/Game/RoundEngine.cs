@@ -217,30 +217,38 @@ namespace ProjectBlock.Core
             TryResolveCleanSweep();
         }
 
-        /// <summary>Moves cubes out of the bands that are about to disappear.</summary>
+        /// <summary>Moves cubes out of the bands that are about to disappear. Works in ABSOLUTE
+        /// coordinates: inflation pushed the board's origin (MinX/MinY) into negative space, so
+        /// the doomed bands are the OUTER columns/rows relative to that origin, not to (0,0).</summary>
         private void PushInward(int left, int right, int bottom, int top)
         {
+            int maxX = Board.MinX + Board.Width - 1;
+            int maxY = Board.MinY + Board.Height - 1;
             for (int band = 0; band < left; band++)
             {
-                ShiftColumnInward(band, +1, left);
+                ShiftColumnInward(Board.MinX + band, +1);
             }
             for (int band = 0; band < right; band++)
             {
-                ShiftColumnInward(Board.Width - 1 - band, -1, right);
+                ShiftColumnInward(maxX - band, -1);
             }
             for (int band = 0; band < bottom; band++)
             {
-                ShiftRowInward(band, +1, bottom);
+                ShiftRowInward(Board.MinY + band, +1);
             }
             for (int band = 0; band < top; band++)
             {
-                ShiftRowInward(Board.Height - 1 - band, -1, top);
+                ShiftRowInward(maxY - band, -1);
             }
         }
 
-        private void ShiftColumnInward(int x, int step, int bandWidth)
+        private void ShiftColumnInward(int x, int step)
         {
-            for (int y = 0; y < Board.Height; y++)
+            int minY = Board.MinY;
+            int maxY = Board.MinY + Board.Height - 1;
+            int minX = Board.MinX;
+            int maxX = Board.MinX + Board.Width - 1;
+            for (int y = minY; y <= maxY; y++)
             {
                 var from = new GridPos(x, y);
                 Cube? cube = Board.GetCube(from);
@@ -254,7 +262,7 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
-                for (int scan = x + step; scan >= 0 && scan < Board.Width; scan += step)
+                for (int scan = x + step; scan >= minX && scan <= maxX; scan += step)
                 {
                     var to = new GridPos(scan, y);
                     if (Board.IsInside(to) && !Board.GetCube(to).HasValue)
@@ -266,9 +274,13 @@ namespace ProjectBlock.Core
             }
         }
 
-        private void ShiftRowInward(int y, int step, int bandHeight)
+        private void ShiftRowInward(int y, int step)
         {
-            for (int x = 0; x < Board.Width; x++)
+            int minX = Board.MinX;
+            int maxX = Board.MinX + Board.Width - 1;
+            int minY = Board.MinY;
+            int maxY = Board.MinY + Board.Height - 1;
+            for (int x = minX; x <= maxX; x++)
             {
                 var from = new GridPos(x, y);
                 Cube? cube = Board.GetCube(from);
@@ -282,7 +294,7 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
-                for (int scan = y + step; scan >= 0 && scan < Board.Height; scan += step)
+                for (int scan = y + step; scan >= minY && scan <= maxY; scan += step)
                 {
                     var to = new GridPos(x, scan);
                     if (Board.IsInside(to) && !Board.GetCube(to).HasValue)
