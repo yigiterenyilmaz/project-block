@@ -17,10 +17,22 @@ namespace ProjectBlock.Core
         /// </summary>
         internal bool TryResolveCleanSweep()
         {
-            return ResolveCleanSweep(false);
+            return ResolveCleanSweep(false, true);
         }
 
-        private bool ResolveCleanSweep(bool forced)
+        /// <summary>The player's own placement line-clear sweep. Unlike a joker/power sweep it
+        /// always "counts" - it pays the sweep bonus and recharges powers regardless of
+        /// "Genel temizlik". Called only from ResolvePlacement step 3.</summary>
+        internal bool ResolvePlacementSweep()
+        {
+            return ResolveCleanSweep(false, false);
+        }
+
+        /// <param name="external">True for a sweep triggered by a joker or power rather than by
+        /// the player's placement. An external sweep still clears the board and plays the sweep
+        /// FX, but pays no bonus and recharges no power unless "Genel temizlik" is held. Kayıt
+        /// defteri passes false: its counter is the player's sweep once the natural one is off.</param>
+        private bool ResolveCleanSweep(bool forced, bool external)
         {
             if (currentReport == null)
             {
@@ -62,15 +74,24 @@ namespace ProjectBlock.Core
             CleanSweepCount++;
             currentReport.CleanSweep = true;
 
-            int sweepBonus = scorer.ScoreCleanSweep();
-            if (scoreFinalized)
+            // Does this sweep "count"? The player's placement clear and Kayıt defteri's counter
+            // always do (external == false); a joker/power-triggered sweep only counts while
+            // "Genel temizlik" is held. An uncounted sweep still clears the board and plays the
+            // sweep FX - it just pays no bonus, no overtime win bonus, and recharges no power.
+            bool counts = !external || Rules.CountExternalSweeps;
+
+            if (counts)
             {
-                // A sweep triggered by an end-of-turn effect still belongs to this turn.
-                AddLateTurnScore(sweepBonus, "base.sweep");
-            }
-            else
-            {
-                breakdown.BaseSweep += sweepBonus;
+                int sweepBonus = scorer.ScoreCleanSweep();
+                if (scoreFinalized)
+                {
+                    // A sweep triggered by an end-of-turn effect still belongs to this turn.
+                    AddLateTurnScore(sweepBonus, "base.sweep");
+                }
+                else
+                {
+                    breakdown.BaseSweep += sweepBonus;
+                }
             }
 
             if (ThresholdPassed)
@@ -82,8 +103,11 @@ namespace ProjectBlock.Core
                 // Winning this overtime pays an escalating bonus scaled to the threshold
                 // (ContinueCount is the 1-based overtime level). It goes through the score
                 // pipeline - BaseOvertimeBonus before finalization, a late add after - so joker
-                // multipliers raise it just like any other score ("point upgrades" apply).
-                int winBonus = scorer.ScoreOvertimeWinBonus(Config.ScoreThreshold, ContinueCount);
+                // multipliers raise it just like any other score ("point upgrades" apply). An
+                // uncounted external sweep pays none of it.
+                int winBonus = counts
+                    ? scorer.ScoreOvertimeWinBonus(Config.ScoreThreshold, ContinueCount)
+                    : 0;
                 if (winBonus > 0)
                 {
                     if (scoreFinalized)
@@ -101,8 +125,10 @@ namespace ProjectBlock.Core
             hooks.AfterCleanSweep(currentTurn);
             if (session != null)
             {
-                // The sweep is the powers' economy: it puts every charge back.
-                session.Powers.DispatchCleanSweep(currentTurn);
+                // The sweep is the powers' economy: a counting sweep puts every charge back.
+                // An uncounted (external, no "Genel temizlik") sweep still runs the per-power
+                // hooks (Olta, Batak) but grants no recharge.
+                session.Powers.DispatchCleanSweep(currentTurn, counts);
             }
             return true;
         }

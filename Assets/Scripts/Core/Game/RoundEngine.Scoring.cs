@@ -252,7 +252,9 @@ namespace ProjectBlock.Core
         /// ("Kayıt defteri" hitting its cube count). Still at most one sweep per turn.</summary>
         internal bool ForceCleanSweep()
         {
-            return ResolveCleanSweep(true);
+            // Kayıt defteri's counter sweep. external:false - once it has suppressed the natural
+            // sweep, the counter IS the player's sweep, so it counts (pays bonus + recharges).
+            return ResolveCleanSweep(true, false);
         }
     }
 }

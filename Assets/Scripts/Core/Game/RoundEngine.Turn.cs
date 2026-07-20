@@ -174,8 +174,10 @@ namespace ProjectBlock.Core
             }
             report.ComboCount = comboCount;
 
-            // 3. clean sweep (single central event - see the file header)
-            TryResolveCleanSweep();
+            // 3. clean sweep (single central event - see the file header). This is the player's
+            // OWN placement clear, so it always counts (pays bonus + recharges) - unlike the
+            // joker/power-triggered sweeps, which route through TryResolveCleanSweep.
+            ResolvePlacementSweep();
 
             // 4. element upkeep: gold pays while it sits on the board
             int goldCubes = Board.CountCubesOfKind(CubeKind.Gold);

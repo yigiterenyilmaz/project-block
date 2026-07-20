@@ -70,8 +70,10 @@ namespace ProjectBlock.View
                 sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
                 sfx.Flame();
             }
-            else if (report.CubesExploded > 0)
+            else if (report.CubesExploded > 0 || report.ExtraExplodedCells.Count > 0)
             {
+                // ExtraExplodedCells covers a late board-reshape clear (inflation deflate)
+                // that the placement's own CubesExploded count never saw.
                 sfx.Explode();
             }
             HandleBlastFeedback(round, report);
@@ -80,7 +82,7 @@ namespace ProjectBlock.View
         /// <summary>Particles, shake, combo popups and the sweep celebration for one turn.</summary>
         private void HandleBlastFeedback(RoundEngine round, TurnReport report)
         {
-            if (report.CubesExploded == 0)
+            if (report.CubesExploded == 0 && report.ExtraExplodedCells.Count == 0)
             {
                 comboStreak = 0;
                 return;
@@ -127,6 +129,13 @@ namespace ProjectBlock.View
                 {
                     blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), blastColor, 4);
                 }
+            }
+            // Late board-reshape clears (inflation deflate, board powers) blast their exact
+            // absolute cells - ExplodedRows/Columns never covered them. The board has already
+            // been rebuilt to its new size by RefreshAll, so CellToWorld maps these correctly.
+            foreach (GridPos cell in report.ExtraExplodedCells)
+            {
+                blastFx.EmitAt(boardView.CellToWorld(cell), blastColor, 4);
             }
             if (report.CleanSweep)
             {

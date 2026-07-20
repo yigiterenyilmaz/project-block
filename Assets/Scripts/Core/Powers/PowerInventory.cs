@@ -216,13 +216,18 @@ namespace ProjectBlock.Core
             RaiseChanged();
         }
 
-        /// <summary>The clean sweep is the powers' economy: it puts every charge back.</summary>
-        public void DispatchCleanSweep(TurnContext turn)
+        /// <summary>The clean sweep is the powers' economy: a counting sweep puts every charge
+        /// back. An uncounted sweep (a joker/power clear without "Genel temizlik") still runs
+        /// every power's AfterCleanSweep hook but grants no recharge.</summary>
+        public void DispatchCleanSweep(TurnContext turn, bool recharge)
         {
             Snapshot();
             for (int i = 0; i < dispatchBuffer.Count; i++)
             {
-                dispatchBuffer[i].Recharge();
+                if (recharge)
+                {
+                    dispatchBuffer[i].Recharge();
+                }
                 dispatchBuffer[i].AfterCleanSweep(turn);
             }
             RaiseChanged();

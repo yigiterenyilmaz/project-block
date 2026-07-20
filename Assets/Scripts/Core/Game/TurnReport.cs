@@ -20,6 +20,23 @@ namespace ProjectBlock.Core
         public IReadOnlyList<int> ExplodedColumns { get; internal set; }
         public int CubesExploded { get; internal set; }
 
+        private readonly List<GridPos> extraExplodedCells = new List<GridPos>();
+
+        /// <summary>Absolute cells destroyed by a board-reshape line clear that ran AFTER the
+        /// placement's own explosion was already recorded - an inflation deflate squeeze or a
+        /// board power ("Bardağın boş tarafı"). ExplodedRows/Columns/CubesExploded miss these,
+        /// so the View blasts these cells (with the explosion sound) to make the late clear
+        /// visible. Empty on an ordinary turn.</summary>
+        public IReadOnlyList<GridPos> ExtraExplodedCells
+        {
+            get { return extraExplodedCells; }
+        }
+
+        internal void AddExtraExplodedCells(IReadOnlyList<GridPos> cells)
+        {
+            extraExplodedCells.AddRange(cells);
+        }
+
         /// <summary>True if this turn emptied the board ("temizlik").</summary>
         public bool CleanSweep { get; internal set; }
 

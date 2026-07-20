@@ -206,7 +206,20 @@ namespace ProjectBlock.Core
             }
             cubesDestroyedThisTurn += lines.ExplodedCells.Count;
             LogDestruction();
-            AddScoreOutsideTurn(scorer.ScoreLineExplosion(lines.LineCount, lines.ExplodedCells.Count));
+            // Make the late clear visible: a reshape squeeze (inflation deflate) or a board
+            // power lands after the placement's own explosion was already drawn, so the View
+            // needs the cells to blast + play the boom (see TurnReport.ExtraExplodedCells).
+            if (currentReport != null)
+            {
+                currentReport.AddExtraExplodedCells(lines.ExplodedCells);
+            }
+            // This is an EXTERNAL (non-placement) clear, so it only scores while "Genel temizlik"
+            // is held - the same rule the sweep bonus follows. Without it the board still clears
+            // and the FX still play, but no points are gained.
+            if (Rules.CountExternalSweeps)
+            {
+                AddScoreOutsideTurn(scorer.ScoreLineExplosion(lines.LineCount, lines.ExplodedCells.Count));
+            }
             TryResolveCleanSweep();
         }
 
