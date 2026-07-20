@@ -1,62 +1,9 @@
-// PURPOSE: Base type of every joker. All hooks are virtual no-ops, so a joker file only
-// contains the moments it actually cares about. JokerInventory calls the hooks in
-// inventory order (left to right = acquisition order) - that order is the ONE canonical
-// ordering rule of the game, see ScoreBreakdown for how it applies to score.
-//
-// CONFIRMED RULES BAKED IN HERE:
-//  - Overtime ("uzatma") disabling is CENTRAL: a joker sets DisabledInOvertime and the
-//    inventory skips all of its hooks once the threshold is passed. Never write an
-//    "if (overtime) return;" inside a joker.
-//  - Sell value works before the market exists: BaseSellValue + AccruedValue +
-//    AuctionPremium. The kumbara jokers grow AccruedValue from their own hooks.
-//  - Per-round charges (Renovasyon, Iade, later Taskin/Yangin/Powerbank) reset centrally
-//    at round start; a joker just declares ChargesPerRound and calls TrySpendCharge.
-//
-// EXTENSION POINT: market and power hooks are declared but never dispatched yet - they
-// go live untouched when MarketStub and the power system land.
+// PURPOSE: The joker base type. All hooks are virtual no-ops; a concrete joker
+// overrides only what it needs. JokerInventory is the only thing that calls the
+// hooks. Subclass, override, and register in JokerRegistry to add one.
 
 namespace ProjectBlock.Core
 {
-    /// <summary>How a round ended, for OnRoundEnded.</summary>
-    public enum RoundOutcome
-    {
-        /// <summary>Player took the advance offer; the run continues in the market.</summary>
-        Advanced = 0,
-
-        /// <summary>Round lost; the run is over.</summary>
-        Lost = 1
-    }
-
-    /// <summary>What an activated joker needs to be pointed at before it can run. The UI
-    /// reads this to decide whether to ask for a target first.</summary>
-    public enum ActivationTargeting
-    {
-        /// <summary>Fires immediately (Renovasyon).</summary>
-        None = 0,
-
-        /// <summary>Needs a card in hand (İade).</summary>
-        HandCard = 1,
-
-        /// <summary>Needs a board cell (future: Enfeksiyon).</summary>
-        BoardCell = 2
-    }
-
-    /// <summary>Where an attached joker lives (Parazit). Reserved: nothing sets it yet.</summary>
-    public readonly struct CubeAttachment
-    {
-        /// <summary>Id of the BlockCard the joker rides on.</summary>
-        public readonly int CardId;
-
-        /// <summary>Index into that card's BlockShape.Cells - the host cube.</summary>
-        public readonly int CellIndex;
-
-        public CubeAttachment(int cardId, int cellIndex)
-        {
-            CardId = cardId;
-            CellIndex = cellIndex;
-        }
-    }
-
     /// <summary>A joker the player owns. Subclass and override only the hooks you need.</summary>
     public abstract class Joker
     {

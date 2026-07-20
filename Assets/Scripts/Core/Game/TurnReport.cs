@@ -1,68 +1,12 @@
-// PURPOSE: Everything that happened during one resolved turn, in order, so the UI can
-// animate it and future jokers can react to it. RoundEngine fills this; nothing else
-// writes to it. If you add a mechanic that does something new in a turn, add a field
-// here instead of making the UI re-derive state.
+// PURPOSE: The full record of ONE resolved placement - what was placed, what
+// exploded/was destroyed, the score breakdown, and the round status afterwards.
+// A post-fact notification for the View; jokers get their own mid-turn hooks.
 
 using System;
 using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>Lifecycle state of a round.</summary>
-    public enum RoundStatus
-    {
-        /// <summary>Player can place blocks.</summary>
-        InProgress = 0,
-
-        /// <summary>Threshold passed or overtime clean sweep: player must choose
-        /// advance-to-market or continue via RoundEngine.DecideAdvance.</summary>
-        AwaitingAdvanceDecision = 1,
-
-        /// <summary>Round finished successfully; session moves to the market.</summary>
-        Advanced = 2,
-
-        /// <summary>Round lost; the run is over (see RoundEngine.Loss).</summary>
-        Lost = 3
-    }
-
-    /// <summary>Why a round was lost.</summary>
-    public enum LossReason
-    {
-        /// <summary>No held block (hand or bonus hand) fits anywhere on the board.</summary>
-        NoPlayableMove = 0,
-
-        /// <summary>Confirmed rule: before the threshold, the hand could not be refilled to
-        /// full size because both draw and discard piles were empty.</summary>
-        HandCannotBeRefilled = 1,
-
-        /// <summary>"Batak": the player bet on clearing the board within N turns and the
-        /// deadline passed without a clean sweep.</summary>
-        BetFailed = 3,
-
-        /// <summary>Overtime rule: after the threshold was passed, the draw pile ran dry
-        /// before a clean sweep re-shuffled it.</summary>
-        DrawPileEmptyAfterThreshold = 2,
-
-        /// <summary>Retro top-out: a block reached the very top row, so there is no room to drop
-        /// the next piece from above (even if lower rows still have gaps) - like Tetris.</summary>
-        RetroTopOut = 4
-    }
-
-    /// <summary>One cube that was removed from the board during a turn, with the value it
-    /// held. Jokers need the KIND (was it fire? ice?) and the SOURCE CARD, both of which
-    /// are gone from the board by the time a hook runs.</summary>
-    public readonly struct DestroyedCube
-    {
-        public readonly GridPos Pos;
-        public readonly Cube Cube;
-
-        public DestroyedCube(GridPos pos, Cube cube)
-        {
-            Pos = pos;
-            Cube = cube;
-        }
-    }
-
     /// <summary>Immutable-after-resolution record of one turn.</summary>
     public sealed class TurnReport
     {

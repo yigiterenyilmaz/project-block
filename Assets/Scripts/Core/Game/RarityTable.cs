@@ -1,20 +1,11 @@
-// PURPOSE: Baked common/rare/legendary rarity of every joker and power, GENERATED
-// from Tools/RarityGrader/rarities.json (graded in-game with the F2 grader).
-// Regenerate this file when the grades change; drives shop price + appearance odds.
-// Rarity is keyed by the stable DefId, so it survives display-name changes.
+// PURPOSE: Baked DefId -> Rarity of every joker and power, GENERATED from
+// Tools/RarityGrader/rarities.json. Regenerate when grades change. Unknown ids
+// are Common. Keyed by stable DefId, so it survives display-name changes.
 
 using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>How rare a joker/power is. Higher = rarer.</summary>
-    public enum Rarity
-    {
-        Common = 0,
-        Rare = 1,
-        Legendary = 2
-    }
-
     /// <summary>DefId -> rarity, baked from the rarity grader. Unknown ids are Common.</summary>
     public static class RarityTable
     {

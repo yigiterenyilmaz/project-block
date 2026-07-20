@@ -1,36 +1,13 @@
-// PURPOSE: The whole run: owned card collection, joker inventory, round sequence, market
-// phase, and the two score meanings (confirmed design):
-//   - RoundEngine.RoundScore : resets every round, compared against the threshold
-//   - TotalScore             : accumulates across the run, spent in the market later
-// Every round starts with the FULL owned deck reshuffled into a fresh draw pile
-// (confirmed). The session survives rounds; RoundEngine instances do not.
-//
-// JOKER WIRING (all of it lives in StartRound / OnRoundStatusChanged):
-//   1. jokers may rewrite the round setup BEFORE the board exists (FilterRoundConfig)
-//   2. the inventory is handed to the engine as ITurnHooks - not as event subscribers,
-//      because in-turn hooks must run mid-resolution and may change the turn
-//   3. charges reset + OnRoundStarted after the engine exists
-//   4. OnRoundEnded when the round resolves either way
-// EXTENSION POINT: the power inventory belongs here too, wired the same way.
+// PURPOSE: The whole run: owned card collection, joker/power inventories, round
+// sequence, market phase, and the two score meanings (per-round RoundScore vs the
+// run-wide TotalScore that doubles as market currency). Survives every round; each
+// RoundEngine does not. See StartRound / OnRoundStatusChanged for the joker wiring.
 
 using System;
 using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>Top-level phase of the run.</summary>
-    public enum GamePhase
-    {
-        /// <summary>A round is being played (see CurrentRound.Status for detail).</summary>
-        Round = 0,
-
-        /// <summary>Between rounds; leave via LeaveMarket().</summary>
-        Market = 1,
-
-        /// <summary>The run is over (see CurrentRound.Loss).</summary>
-        GameOver = 2
-    }
-
     /// <summary>One full run of the game.</summary>
     public sealed class GameSession
     {

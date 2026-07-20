@@ -1,68 +1,11 @@
-// PURPOSE: Deck archetypes - the design plan's "different deck types". A deck is a
-// named recipe: either a FIXED list of shapes (static decks - the same composition
-// every run, confirmed 2026-07-18) or a generator-sampled random deck (Chaos).
-// The ShapeGenerator is always present: market offers draw shapes from it.
-// EXTENSION POINT: unlockable decks are new DeckDefinition entries in DeckLibrary.
+// PURPOSE: The built-in deck archetypes and shared shape sets. Static catalogue;
+// GameConfig.Deck defaults to one of these.
 
 using System;
 using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>A named starting-deck recipe.</summary>
-    public sealed class DeckDefinition
-    {
-        public string Name { get; }
-
-        /// <summary>Cards in the starting deck. Must be at least the hand size.</summary>
-        public int Size { get; }
-
-        /// <summary>Shape source for market offers (and for the deck itself when random).</summary>
-        public IShapeGenerator ShapeGenerator { get; }
-
-        /// <summary>Exact starting-deck composition; null = random deck sampled from
-        /// ShapeGenerator. Static decks are identical every run (order still shuffles).</summary>
-        public IReadOnlyList<BlockShape> FixedShapes { get; }
-
-        /// <summary>Random deck: Size cards sampled from the generator each run.</summary>
-        public DeckDefinition(string name, int size, IShapeGenerator shapeGenerator)
-        {
-            Name = name;
-            Size = size;
-            ShapeGenerator = shapeGenerator;
-        }
-
-        /// <summary>Static deck: exactly these shapes, every run.</summary>
-        public DeckDefinition(string name, IReadOnlyList<BlockShape> fixedShapes,
-            IShapeGenerator marketShapeGenerator)
-        {
-            Name = name;
-            FixedShapes = fixedShapes;
-            Size = fixedShapes.Count;
-            ShapeGenerator = marketShapeGenerator;
-        }
-    }
-
-    /// <summary>Picks uniformly from a fixed pool of shapes (used by curated decks).</summary>
-    public sealed class ShapePoolGenerator : IShapeGenerator
-    {
-        private readonly BlockShape[] pool;
-
-        public ShapePoolGenerator(IEnumerable<BlockShape> shapes)
-        {
-            pool = new List<BlockShape>(shapes).ToArray();
-            if (pool.Length == 0)
-            {
-                throw new ArgumentException("Shape pool cannot be empty.");
-            }
-        }
-
-        public BlockShape NextShape(IRandomSource rng)
-        {
-            return pool[rng.NextInt(0, pool.Length)];
-        }
-    }
-
     /// <summary>The built-in decks.</summary>
     public static class DeckLibrary
     {
