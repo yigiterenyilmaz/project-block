@@ -88,27 +88,15 @@ namespace ProjectBlock.Core
             drawPile.Insert(rng.NextInt(0, drawPile.Count + 1), card);
         }
 
-        /// <summary>Moves a card that is currently in the discard onto the TOP of the draw pile
-        /// ("Dezenformasyon" uses this right before its end-of-turn SwapPiles: the just-played
-        /// card was discarded during the turn, so moving it to the draw makes the swap land it
-        /// back in the discard instead of handing it straight to next turn's draw). No-op if the
-        /// card is not in the discard. Returns true if it moved. Consumes no rng (deterministic).</summary>
-        public bool MoveDiscardedCardToDrawTop(BlockCard card)
+        /// <summary>Shuffles each pile WITHIN ITSELF - the draw pile and the discard pile are
+        /// reordered separately and never poured together ("Dezenformasyon" does this at the end
+        /// of every turn, so neither pile's order is predictable and a card you discarded is
+        /// somewhere inside its pile rather than on top). Not a discard->draw reshuffle, so it
+        /// does not bump ShuffleCount.</summary>
+        public void ShufflePilesSeparately()
         {
-            if (card == null)
-            {
-                return false;
-            }
-            for (int i = discardPile.Count - 1; i >= 0; i--)
-            {
-                if (discardPile[i].Id == card.Id)
-                {
-                    discardPile.RemoveAt(i);
-                    drawPile.Add(card); // top of draw -> after the swap, top of the discard
-                    return true;
-                }
-            }
-            return false;
+            rng.Shuffle(drawPile);
+            rng.Shuffle(discardPile);
         }
 
         /// <summary>Swaps the two piles wholesale: what you drew from becomes what you

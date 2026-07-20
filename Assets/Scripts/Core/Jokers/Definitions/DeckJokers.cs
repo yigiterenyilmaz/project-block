@@ -78,15 +78,13 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "After the opening hand is dealt, the draw pile is split into two equal piles "
-                    + "- one draw, one discard - kept separate and never mixed. Each turn the "
-                    + "two roles swap: you still discard into the current discard and draw from "
-                    + "the current draw pile, but which pile is which flips every turn. The card "
-                    + "you play always stays in the discard - it never comes straight back. Hand +1.",
-                "Açılış eli dağıtıldıktan sonra çekme destesi iki eşit, ayrı desteye bölünür - "
-                    + "biri çekme biri ıskarta - asla karışmazlar. Her tur roller yer değiştirir: "
-                    + "yine mevcut ıskartaya atar, mevcut çekme destesinden çekersin, ama hangi "
-                    + "destenin hangisi olduğu her tur değişir. Oynadığın kart hep ıskartada kalır, "
-                    + "sıradaki turda geri gelmez. El +1.");
+                    + "kept separate and never merged. Each turn the two roles swap - you draw "
+                    + "from one and discard into the other, and which is which flips every turn - "
+                    + "and at the end of every turn each pile is shuffled within itself. Hand +1.",
+                "Açılış eli dağıtıldıktan sonra çekme destesi iki eşit desteye bölünür, asla "
+                    + "birbirine karışmazlar. Her tur roller yer değiştirir - birinden çeker, "
+                    + "diğerine atarsın, hangisinin hangisi olduğu her tur değişir - ve her tur "
+                    + "sonunda her deste kendi içinde karılır. El +1.");
             BaseSellValue = 60;
             IsLegendary = true;
         }
@@ -121,17 +119,12 @@ namespace ProjectBlock.Core
 
         public override void AfterTurnScored(TurnContext turn)
         {
-            // Keep the card just played OUT of next turn's draw. It was discarded during this
-            // turn (after the refill already drew from the draw pile), so moving it onto the draw
-            // pile now means the swap below carries it into the discard - where it stays instead
-            // of being handed straight back next turn. Bonus cards that expired never hit a pile.
-            if (!turn.Report.PlayedCardExpired)
-            {
-                turn.Round.Deck.MoveDiscardedCardToDrawTop(turn.Report.Card);
-            }
-            // Roles swap for next turn: this turn's discard becomes next turn's draw pile and
-            // vice versa. Just the swap - the two halves are never poured together or shuffled.
+            // Roles toggle for next turn: this turn's discard becomes next turn's draw pile and
+            // vice versa. Then each pile is shuffled within ITSELF (the two are never merged), so
+            // neither pile's order is predictable - the card you discarded this turn is somewhere
+            // inside its pile, not handed straight back on top.
             turn.Round.Deck.SwapPiles();
+            turn.Round.Deck.ShufflePilesSeparately();
             TurnsSeen++;
         }
 
