@@ -402,10 +402,12 @@ namespace ProjectBlock.Core
             : base("halusinasyon", "Halüsinasyon")
         {
             SetDescription(
-                "Appears as a random power. Using it never spends it - it instantly refills and "
-                    + "morphs into a different random power. Never becomes a legendary power.",
-                "Rastgele bir güç olarak görünür. Kullanmak onu tüketmez - anında dolar ve başka "
-                    + "bir rastgele güce dönüşür. Asla efsanevi bir güce dönüşmez.");
+                "Appears as a random power. USE it to run that power, or RIGHT-CLICK to skip to a "
+                    + "different random one. Either way it spends its charge and refills next round. "
+                    + "Never becomes a legendary power.",
+                "Rastgele bir güç olarak görünür. KULLANINCA o gücü çalıştırır, SAĞ TIKLAYINCA başka "
+                    + "bir rastgele güce atlar. Her iki durumda da şarjını harcar ve gelecek raunt "
+                    + "dolar. Asla efsanevi bir güce dönüşmez.");
             BaseSellValue = 55;
         }
 
@@ -467,10 +469,18 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            // The whole point: the use is "free" - it keeps its charge and becomes something new.
-            KeepChargeAfterUse = true;
+            // Using it runs the shown power and spends the charge like any power (it refills next
+            // round). It still morphs into a new random power for the next time it comes up.
             Reroll(ctx.Rng);
             return true;
+        }
+
+        /// <summary>The "skip" action: morph into a different random power WITHOUT running the
+        /// current one. The caller (PowerInventory.TrySkip) spends the charge, so skipping costs
+        /// the round's use exactly like using it does - both refill next round.</summary>
+        public void SkipToNextPower(IRandomSource rng)
+        {
+            Reroll(rng);
         }
 
         private void Reroll(IRandomSource rng)

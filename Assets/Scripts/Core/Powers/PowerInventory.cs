@@ -167,6 +167,25 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>"Halüsinasyon"'s skip: morph its current roll into a new random power without
+        /// running anything, and spend the charge so it costs the round's use (refills next round).
+        /// Allowed whenever it is charged and a round is running; it takes no board target and does
+        /// not consume the turn's power slot (nothing is played), so another power can still be used.</summary>
+        public bool TrySkip(int instanceId)
+        {
+            var halusinasyon = Find(instanceId) as HalusinasyonPower;
+            RoundEngine round = session.CurrentRound;
+            if (halusinasyon == null || round == null || !halusinasyon.Charged
+                || round.Status != RoundStatus.InProgress)
+            {
+                return false;
+            }
+            halusinasyon.SkipToNextPower(rng);
+            halusinasyon.Spend();
+            RaiseChanged();
+            return true;
+        }
+
         /// <summary>"Olta"'s free marking action. Routed through the inventory because the
         /// UI cannot build a RoundContext itself. Deliberately NOT a "use": marking spends
         /// no charge and does not take the turn's power slot (see OltaPower.TryMark).</summary>

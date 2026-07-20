@@ -613,6 +613,10 @@ namespace ProjectBlock.View
                         {
                             // clicking a power in the left bar uses it (max one per turn)
                         }
+                        else if (TrySkipHalusinasyonFromBar(mouse))
+                        {
+                            // right-clicking Halüsinasyon skips its roll (morph + spend, refills next round)
+                        }
                         else if (session.Config.Rules.RetroMode)
                         {
                             HandleRetroFalling(round, kb, mouse);

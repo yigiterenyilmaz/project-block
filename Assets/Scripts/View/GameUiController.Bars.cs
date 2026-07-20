@@ -49,6 +49,33 @@ namespace ProjectBlock.View
             return true;
         }
 
+        /// <summary>Right-clicking a charged "Halüsinasyon" power skips its current roll: it
+        /// morphs to a new random power and spends the charge (refills next round), running
+        /// nothing. Right-click is otherwise free over the power bar during a round.</summary>
+        private bool TrySkipHalusinasyonFromBar(Mouse mouse)
+        {
+            if (mouse == null || !mouse.rightButton.wasPressedThisFrame
+                || pendingTargetJokerId.HasValue || pendingTargetPowerId.HasValue)
+            {
+                return false;
+            }
+            int index = powerBar.PowerIndexAt(mouse.position.ReadValue());
+            if (index < 0 || index >= session.Powers.Count)
+            {
+                return false;
+            }
+            Power power = session.Powers.Powers[index];
+            if (power.DefId != "halusinasyon" || !session.Powers.TrySkip(power.InstanceId))
+            {
+                return false;
+            }
+            sfx.Shuffle(); // a small "rolled again" cue
+            powerBar.PulsePower(power.InstanceId);
+            powerBar.Refresh(session, null);
+            UpdateHud();
+            return true;
+        }
+
         /// <summary>In the market, clicking a joker panel sells it for its SellValue.</summary>
         private bool TrySellJokerFromBar(Mouse mouse)
         {
