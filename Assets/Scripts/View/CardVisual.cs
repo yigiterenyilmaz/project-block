@@ -88,14 +88,28 @@ namespace ProjectBlock.View
                 Color miniColor = card.Elements.Count > 0
                     ? ViewUtil.ElementColor(card.Elements[0])
                     : ViewUtil.ColorForCard(card.Id);
+                // A per-cube designed block colours each cube by ITS element. Its per-cube array
+                // is aligned to card.Shape.Cells, so only index into it when we draw that shape
+                // (not a fox/mechanical displayShape); a plain cube keeps the neutral card colour.
+                bool perCube = card.HasPerCubeElements && displayShape == null;
                 float mini = Mathf.Min(1.0f / Mathf.Max(shape.Width, shape.Height), 0.28f);
                 Vector2 bottomLeft = new Vector2(-shape.Width * mini * 0.5f + mini * 0.5f,
                     -shape.Height * mini * 0.5f + mini * 0.5f);
-                foreach (GridPos cell in shape.Cells)
+                IReadOnlyList<GridPos> miniCells = shape.Cells;
+                for (int i = 0; i < miniCells.Count; i++)
                 {
+                    GridPos cell = miniCells[i];
+                    Color cubeColor = miniColor;
+                    if (perCube)
+                    {
+                        BlockElement? e = card.CellElement(i);
+                        cubeColor = e.HasValue
+                            ? ViewUtil.ElementColor(e.Value)
+                            : ViewUtil.ColorForCard(card.Id);
+                    }
                     Track(ViewUtil.MakeCell(transform, "Mini",
                         bottomLeft + new Vector2(cell.X * mini, cell.Y * mini),
-                        mini * 0.9f, miniColor, order + 1), order + 1);
+                        mini * 0.9f, cubeColor, order + 1), order + 1);
                 }
                 // The top band names the card's TYPE: its element(s), and/or "custom" for a
                 // player-designed block ("Karakter oluşturma"). Plain market/deck blocks get none.

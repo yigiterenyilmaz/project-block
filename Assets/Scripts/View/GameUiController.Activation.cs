@@ -117,12 +117,10 @@ namespace ProjectBlock.View
                     "şekil tek parça bağlı olmalı"));
                 return;
             }
-            BlockShape shape = BlockShape.FromCells(cells);
-            BlockElement? element = blockDesigner.SelectedElement;
-            IEnumerable<BlockElement> elements = element.HasValue
-                ? new[] { element.Value }
-                : null;
-            bool made = session.CreateDesignedBlock(designerPowerId, shape, elements);
+            // Each drawn cube may carry its own element (or none); Core builds the shape and
+            // aligns the per-cube elements to it (see GameSession.CreateDesignedBlock).
+            IReadOnlyList<BlockElement?> cellElements = blockDesigner.CellElements();
+            bool made = session.CreateDesignedBlock(designerPowerId, cells, cellElements);
             blockDesigner.Hide();
             if (made)
             {

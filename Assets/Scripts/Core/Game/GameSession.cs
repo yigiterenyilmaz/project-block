@@ -350,23 +350,50 @@ namespace ProjectBlock.Core
             return new BlockCard(nextCardId++, shape, elements);
         }
 
-        /// <summary>"Karakter oluşturma": bakes a player-designed block (any shape, any
-        /// element) into the owned deck and spends the driving power. The power rules are
-        /// enforced HERE so the View stays rules-free: the power must be charged, a round must
-        /// be running, and this turn's single power slot still free. The new card joins the
-        /// shuffle from the next round, exactly like a bought block. Returns false and changes
-        /// nothing if any of that fails.</summary>
-        public bool CreateDesignedBlock(int powerInstanceId, BlockShape shape,
-            IEnumerable<BlockElement> elements)
+        /// <summary>"Karakter oluşturma": bakes a player-designed block into the owned deck and
+        /// spends the driving power. Each drawn cube may carry its OWN element (or none), so the
+        /// block can mix types. <paramref name="drawnCells"/> are the raw cells the player drew and
+        /// <paramref name="cellElements"/> is the element chosen for each (index-parallel, a null
+        /// entry = a plain cube). The rules are enforced HERE so the View stays rules-free: the
+        /// power must be charged, a round must be running, and this turn's single power slot still
+        /// free. The new card joins the shuffle from the next round, exactly like a bought block.
+        /// Returns false and changes nothing if any of that fails.</summary>
+        public bool CreateDesignedBlock(int powerInstanceId, IReadOnlyList<GridPos> drawnCells,
+            IReadOnlyList<BlockElement?> cellElements)
         {
             Power power = Powers.Find(powerInstanceId);
             RoundEngine round = CurrentRound;
-            if (power == null || !power.Charged || shape == null || round == null
-                || round.Status != RoundStatus.InProgress || round.PowersUsedThisTurn > 0)
+            if (power == null || !power.Charged || drawnCells == null || drawnCells.Count == 0
+                || round == null || round.Status != RoundStatus.InProgress
+                || round.PowersUsedThisTurn > 0)
             {
                 return false;
             }
-            ownedCards.Add(new BlockCard(nextCardId++, shape, elements, true)); // tagged "custom"
+            BlockShape shape = BlockShape.FromCells(drawnCells);
+            // FromCells normalizes (subtract min) AND sorts, so the shape's cell order is not the
+            // draw order - map each drawn cell's element to the shape's cells by COORDINATE.
+            int minX = int.MaxValue;
+            int minY = int.MaxValue;
+            for (int i = 0; i < drawnCells.Count; i++)
+            {
+                if (drawnCells[i].X < minX) minX = drawnCells[i].X;
+                if (drawnCells[i].Y < minY) minY = drawnCells[i].Y;
+            }
+            var byNormalized = new Dictionary<GridPos, BlockElement?>();
+            for (int i = 0; i < drawnCells.Count; i++)
+            {
+                var normalized = new GridPos(drawnCells[i].X - minX, drawnCells[i].Y - minY);
+                byNormalized[normalized] = cellElements != null && i < cellElements.Count
+                    ? cellElements[i]
+                    : null;
+            }
+            var perCube = new BlockElement?[shape.Cells.Count];
+            for (int i = 0; i < shape.Cells.Count; i++)
+            {
+                BlockElement? e;
+                perCube[i] = byNormalized.TryGetValue(shape.Cells[i], out e) ? e : null;
+            }
+            ownedCards.Add(BlockCard.Designed(nextCardId++, shape, perCube)); // tagged "custom"
             power.Spend();
             round.NotePowerUsed();
             return true;

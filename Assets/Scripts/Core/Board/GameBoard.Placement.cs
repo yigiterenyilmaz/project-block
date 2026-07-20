@@ -85,9 +85,17 @@ namespace ProjectBlock.Core
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
             }
             var placed = new List<GridPos>(shape.Size);
-            CubeKind kind = CubeRules.KindForCard(card);
-            foreach (GridPos offset in shape.Cells)
+            CubeKind cardKind = CubeRules.KindForCard(card);
+            // A per-cube designed block stamps each cube from its own element. The per-cube array
+            // is aligned to card.Shape.Cells, and a designed block is never rotated/reshaped, so
+            // the shape being placed matches it cell-for-cell; fall back to the one card-wide kind
+            // if the counts ever diverge (a transformed shape).
+            IReadOnlyList<GridPos> shapeCells = shape.Cells;
+            bool perCube = card.HasPerCubeElements && shapeCells.Count == card.Shape.Cells.Count;
+            for (int ci = 0; ci < shapeCells.Count; ci++)
             {
+                GridPos offset = shapeCells[ci];
+                CubeKind kind = perCube ? CubeRules.KindForElement(card.CellElement(ci)) : cardKind;
                 GridPos pos = origin + offset;
                 if (IsInside(pos))
                 {

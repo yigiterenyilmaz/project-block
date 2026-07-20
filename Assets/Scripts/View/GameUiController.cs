@@ -455,23 +455,38 @@ namespace ProjectBlock.View
                     int el = blockDesigner.ElementAt(dw);
                     if (el >= 0)
                     {
-                        blockDesigner.SelectElement(el);
+                        blockDesigner.SelectElement(el); // pick the active element brush
                         return;
                     }
-                    // Grid press: start a paint stroke. The first cell decides the op - press an
-                    // empty cell to paint, a filled one to erase - and the drag applies it on.
+                    // Left press on the grid: paint the active brush onto cells (fills empty cells
+                    // and recolours filled ones); the drag keeps painting.
                     int cell = blockDesigner.CellIndexAt(dw);
                     if (cell >= 0)
                     {
-                        designerPaintFill = !blockDesigner.IsCellFilled(cell);
+                        designerPaintFill = true;
                         designerPainting = true;
-                        blockDesigner.SetCell(cell, designerPaintFill);
+                        blockDesigner.SetCell(cell, true);
+                    }
+                    return;
+                }
+                if (mouse.rightButton.wasPressedThisFrame)
+                {
+                    // Right press/drag erases cells from the shape.
+                    int cell = blockDesigner.CellIndexAt(dw);
+                    if (cell >= 0)
+                    {
+                        designerPaintFill = false;
+                        designerPainting = true;
+                        blockDesigner.SetCell(cell, false);
                     }
                     return;
                 }
                 if (designerPainting)
                 {
-                    if (mouse.leftButton.isPressed)
+                    bool held = designerPaintFill
+                        ? mouse.leftButton.isPressed
+                        : mouse.rightButton.isPressed;
+                    if (held)
                     {
                         int cell = blockDesigner.CellIndexAt(dw);
                         if (cell >= 0)

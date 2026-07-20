@@ -115,5 +115,27 @@ namespace ProjectBlock.Core
             if (card.Has(BlockElement.Void)) return CubeKind.Void;
             return CubeKind.Normal;
         }
+
+        /// <summary>The cube kind a SINGLE element maps to - used for per-cube designed blocks
+        /// ("Karakter oluşturma"), where each cube may carry a different element. null (a plain
+        /// cube) and placement-trait elements (Ghost/Mechanical/Fox) both give a Normal cube.</summary>
+        public static CubeKind KindForElement(BlockElement? element)
+        {
+            if (!element.HasValue)
+            {
+                return CubeKind.Normal;
+            }
+            switch (element.Value)
+            {
+                case BlockElement.Fire: return CubeKind.Fire;
+                case BlockElement.Water: return CubeKind.Water;
+                case BlockElement.Obsidian: return CubeKind.Obsidian;
+                case BlockElement.Gold: return CubeKind.Gold;
+                case BlockElement.Transparent: return CubeKind.Transparent;
+                case BlockElement.Dynamite: return CubeKind.Dynamite;
+                case BlockElement.Void: return CubeKind.Void;
+                default: return CubeKind.Normal;
+            }
+        }
     }
 }

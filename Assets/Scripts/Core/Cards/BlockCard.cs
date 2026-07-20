@@ -20,10 +20,36 @@ namespace ProjectBlock.Core
 
         private readonly BlockElement[] elements;
 
-        /// <summary>The card's block types; empty for a plain block.</summary>
+        /// <summary>Per-cube elements for a player-designed block, aligned index-for-index to
+        /// Shape.Cells (a null entry is a plain cube). null when the card is NOT per-cube - then
+        /// the whole block shares one element set (Elements), the normal market/deck case.</summary>
+        private readonly BlockElement?[] cellElements;
+
+        /// <summary>The card's block types; empty for a plain block. For a per-cube designed
+        /// block this is the DISTINCT set of its cube elements, so pricing / Has() / the card
+        /// badge keep working; the actual per-cube layout lives in CellElement.</summary>
         public IReadOnlyList<BlockElement> Elements
         {
             get { return elements; }
+        }
+
+        /// <summary>True when each cube may carry its own element (a "Karakter oluşturma" design).
+        /// Placement then stamps each cube from CellElement instead of one card-wide kind.</summary>
+        public bool HasPerCubeElements
+        {
+            get { return cellElements != null; }
+        }
+
+        /// <summary>The element of the cube at Shape.Cells[cellIndex], or null for a plain cube
+        /// (also null when the card is not per-cube). Placement and the UI read this to give each
+        /// cube its own kind/colour.</summary>
+        public BlockElement? CellElement(int cellIndex)
+        {
+            if (cellElements == null || cellIndex < 0 || cellIndex >= cellElements.Length)
+            {
+                return null;
+            }
+            return cellElements[cellIndex];
         }
 
         /// <summary>True for a player-designed block ("Karakter oluşturma"). Purely an identity
@@ -49,6 +75,41 @@ namespace ProjectBlock.Core
             elements = cardElements == null
                 ? NoElements
                 : new List<BlockElement>(cardElements).ToArray();
+            cellElements = null;
+        }
+
+        private BlockCard(int id, BlockShape shape, BlockElement[] distinctElements,
+            BlockElement?[] perCube, bool isCustom)
+        {
+            Id = id;
+            Shape = shape;
+            IsCustom = isCustom;
+            elements = distinctElements;
+            cellElements = perCube;
+        }
+
+        /// <summary>Builds a per-cube designed block ("Karakter oluşturma"): perCubeElements is
+        /// aligned to shape.Cells (index i is cube i; a null entry is a plain cube). The block-wide
+        /// Elements list is set to the DISTINCT non-null elements so pricing / Has() / the "custom"
+        /// badge keep working, while each cube keeps its own element for placement and the UI.</summary>
+        public static BlockCard Designed(int id, BlockShape shape,
+            IReadOnlyList<BlockElement?> perCubeElements)
+        {
+            var perCube = new BlockElement?[shape.Cells.Count];
+            var distinct = new List<BlockElement>();
+            for (int i = 0; i < perCube.Length; i++)
+            {
+                BlockElement? e = perCubeElements != null && i < perCubeElements.Count
+                    ? perCubeElements[i]
+                    : null;
+                perCube[i] = e;
+                if (e.HasValue && !distinct.Contains(e.Value))
+                {
+                    distinct.Add(e.Value);
+                }
+            }
+            return new BlockCard(id, shape,
+                distinct.Count == 0 ? NoElements : distinct.ToArray(), perCube, true);
         }
 
         public bool Has(BlockElement element)

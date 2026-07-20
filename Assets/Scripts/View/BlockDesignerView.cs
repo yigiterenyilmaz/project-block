@@ -1,8 +1,9 @@
-// PURPOSE: The modal block-designer for the "Karakter oluşturma" power. The player toggles
-// cells on a small grid to draw any shape and picks one element (or none), then confirms.
-// Like the other pickers under View/, this is a dumb renderer with hit-testing: the
-// controller (GameUiController) owns the input and reads the result back through ShapeCells /
-// SelectedElement, then calls GameSession.CreateDesignedBlock. No game rules live here.
+// PURPOSE: The modal block-designer for the "Karakter oluşturma" power. The player picks an
+// element as a BRUSH and paints cubes on a small grid - each cube can carry its own element
+// (or none), so a block may mix types. Like the other pickers under View/, this is a dumb
+// renderer with hit-testing: the controller (GameUiController) owns the input and reads the
+// result back through ShapeCells / CellElements, then calls GameSession.CreateDesignedBlock.
+// No game rules live here.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -48,7 +49,10 @@ namespace ProjectBlock.View
         private const int MaxCubes = 5;
 
         private readonly bool[,] filled = new bool[GridSize, GridSize];
-        private int selected; // 0 = none, 1..Elements.Length = Elements[selected-1]
+        // The element brush stamped on each filled cell: 0 = plain (no element),
+        // 1..Elements.Length = Elements[brush-1]. Only meaningful where filled is true.
+        private readonly int[,] cellBrush = new int[GridSize, GridSize];
+        private int selected; // the ACTIVE brush: 0 = plain, 1..Elements.Length = Elements[selected-1]
         private string warning = ""; // shown when Confirm is rejected (e.g. a disconnected shape)
 
         private readonly List<Vector2> cellCenters = new List<Vector2>();
@@ -65,6 +69,7 @@ namespace ProjectBlock.View
                 for (int y = 0; y < GridSize; y++)
                 {
                     filled[x, y] = false;
+                    cellBrush[x, y] = 0;
                 }
             }
             selected = 0;
@@ -106,9 +111,10 @@ namespace ProjectBlock.View
             return filled[cellIndex % GridSize, cellIndex / GridSize];
         }
 
-        /// <summary>Paints or erases a cell (from CellIndexAt). Rebuilds only when the value
-        /// actually changes, so a drag stroke lingering on one cell does not thrash the modal.
-        /// A change also clears any standing Confirm warning.</summary>
+        /// <summary>fill=true paints the ACTIVE brush onto a cell: fills it if empty, or recolours
+        /// it in place if already filled. fill=false erases it from the shape. Rebuilds only on an
+        /// actual change, so a drag lingering on one cell does not thrash the modal, and a change
+        /// clears any standing Confirm warning.</summary>
         public void SetCell(int cellIndex, bool fill)
         {
             if (cellIndex < 0)
@@ -117,17 +123,36 @@ namespace ProjectBlock.View
             }
             int x = cellIndex % GridSize;
             int y = cellIndex / GridSize;
-            if (filled[x, y] == fill)
+            if (!fill)
             {
+                if (!filled[x, y])
+                {
+                    return;
+                }
+                filled[x, y] = false;
+                warning = "";
+                Rebuild();
                 return;
             }
-            if (fill && CountFilled() >= MaxCubes)
+            if (filled[x, y])
+            {
+                if (cellBrush[x, y] == selected)
+                {
+                    return; // already this brush - nothing to do
+                }
+                cellBrush[x, y] = selected; // recolour in place, no cube-count change
+                warning = "";
+                Rebuild();
+                return;
+            }
+            if (CountFilled() >= MaxCubes)
             {
                 warning = Loc.Pick("max " + MaxCubes + " cubes", "en fazla " + MaxCubes + " küp");
                 Rebuild();
                 return;
             }
-            filled[x, y] = fill;
+            filled[x, y] = true;
+            cellBrush[x, y] = selected;
             warning = "";
             Rebuild();
         }
@@ -243,10 +268,23 @@ namespace ProjectBlock.View
             return cells;
         }
 
-        /// <summary>The chosen element, or null for a plain block.</summary>
-        public BlockElement? SelectedElement
+        /// <summary>The element chosen for each drawn cell, index-parallel to ShapeCells()
+        /// (a null entry is a plain cube). Same iteration order as ShapeCells so the two align.</summary>
+        public IReadOnlyList<BlockElement?> CellElements()
         {
-            get { return selected == 0 ? (BlockElement?)null : Elements[selected - 1]; }
+            var list = new List<BlockElement?>();
+            for (int x = 0; x < GridSize; x++)
+            {
+                for (int y = 0; y < GridSize; y++)
+                {
+                    if (filled[x, y])
+                    {
+                        int brush = cellBrush[x, y];
+                        list.Add(brush == 0 ? (BlockElement?)null : Elements[brush - 1]);
+                    }
+                }
+            }
+            return list;
         }
 
         private void Rebuild()
@@ -265,22 +303,17 @@ namespace ProjectBlock.View
                     "KARAKTER OLUŞTURMA - blok tasarla"), 48, 0.05f, Color.white, 52,
                 TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "Help", new Vector2(0f, 4.0f),
-                Loc.Pick("drag over cells to draw one connected shape, pick an element, then Confirm",
-                    "kareleri sürükleyerek tek parça bir şekil çiz, element seç, sonra Onayla"), 44,
-                0.03f, Faint, 52, TextAnchor.MiddleCenter);
+                Loc.Pick("pick an element as your brush, left-drag to paint cubes (right-drag erases), then Confirm",
+                    "fırça olarak bir element seç, sol-sürükle küp boya (sağ-sürükle siler), sonra Onayla"), 40,
+                0.028f, Faint, 52, TextAnchor.MiddleCenter);
             if (warning.Length > 0)
             {
                 ViewUtil.MakeText3D(transform, "Warn", new Vector2(0f, 3.5f), warning, 48, 0.032f,
                     new Color(1f, 0.5f, 0.42f), 52, TextAnchor.MiddleCenter);
             }
 
-            // Filled cells take the chosen element's colour so the preview matches the board;
-            // a plain (no-element) block keeps the neutral fill.
-            Color fillColor = SelectedElement.HasValue
-                ? ViewUtil.ElementColor(SelectedElement.Value)
-                : FilledColor;
-
-            // grid: row 0 drawn at the top
+            // grid: row 0 drawn at the top. Each filled cell shows ITS OWN brush colour so a
+            // mixed-element block previews cube-by-cube; a plain cube keeps the neutral fill.
             for (int r = 0; r < GridSize; r++)
             {
                 for (int c = 0; c < GridSize; c++)
@@ -291,9 +324,14 @@ namespace ProjectBlock.View
                     int y = GridSize - 1 - r; // grid-space y up, matches ShapeCells indexing
                     // cellCenters is indexed x + y*GridSize to match CellIndexAt's math
                     RegisterCell(x, y, center);
+                    Color cellColor = EmptyColor;
+                    if (filled[x, y])
+                    {
+                        int brush = cellBrush[x, y];
+                        cellColor = brush == 0 ? FilledColor : ViewUtil.ElementColor(Elements[brush - 1]);
+                    }
                     ViewUtil.MakeRect(transform, "Cell_" + c + "_" + r, center,
-                        new Vector2(CellSize, CellSize),
-                        filled[x, y] ? fillColor : EmptyColor, 51);
+                        new Vector2(CellSize, CellSize), cellColor, 51);
                 }
             }
 
