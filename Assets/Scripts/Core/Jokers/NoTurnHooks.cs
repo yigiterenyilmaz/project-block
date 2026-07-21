@@ -28,5 +28,10 @@ namespace ProjectBlock.Core
         public void AfterTurnScored(TurnContext turn)
         {
         }
+
+        public bool TryRescueFromDeadEnd(RoundContext ctx)
+        {
+            return false;
+        }
     }
 }

@@ -14,5 +14,10 @@ namespace ProjectBlock.Core
         void ModifyScore(TurnContext turn);
 
         void AfterTurnScored(TurnContext turn);
+
+        /// <summary>The board filled up and nothing fits. Jokers get one chance to open a gap
+        /// ("Deprem"). Return true if something acted - the engine then re-checks for a move
+        /// instead of ending the round.</summary>
+        bool TryRescueFromDeadEnd(RoundContext ctx);
     }
 }

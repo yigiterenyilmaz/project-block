@@ -355,6 +355,27 @@ namespace ProjectBlock.Core
             RaiseChanged();
         }
 
+        /// <summary>Gives every joker one chance to open a gap when the board has filled up.
+        /// Stops at the first one that acts - the engine re-checks for a legal move after
+        /// each rescue, so a second joker only fires if the first did not save the round.</summary>
+        public bool TryRescueFromDeadEnd(RoundContext ctx)
+        {
+            Snapshot();
+            for (int i = 0; i < dispatchBuffer.Count; i++)
+            {
+                if (IsGated(dispatchBuffer[i], ctx.Round))
+                {
+                    continue;
+                }
+                if (dispatchBuffer[i].TryRescueFromDeadEnd(ctx))
+                {
+                    RaiseChanged();
+                    return true;
+                }
+            }
+            return false;
+        }
+
         // ---------------------------------------------------------------------- internals
 
         /// <summary>The central overtime gate - see the file header.</summary>

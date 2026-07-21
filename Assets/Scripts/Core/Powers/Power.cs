@@ -89,6 +89,15 @@ namespace ProjectBlock.Core
             get { return ActivationTargeting.None; }
         }
 
+        /// <summary>True for a power that is only usable at the moment the board has filled
+        /// up and nothing fits ("Kentsel Dönüşüm"). The engine pauses the round in
+        /// AwaitingRescue when the player holds one of these; normal powers cannot be used
+        /// there, and these cannot be used anywhere else.</summary>
+        public virtual bool IsDeadEndRescue
+        {
+            get { return false; }
+        }
+
         /// <summary>Extra conditions beyond "charged and a round is running". Override to
         /// refuse when the power would do nothing (no ghost cubes, empty bonus hand...).</summary>
         public virtual bool CanRun(RoundContext ctx, ActivationTarget target)

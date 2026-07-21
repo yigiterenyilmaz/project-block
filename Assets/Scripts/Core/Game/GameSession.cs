@@ -309,6 +309,16 @@ namespace ProjectBlock.Core
             return parazit.TryBind(new SessionContext(this, rng), target, card, cellIndex);
         }
 
+        /// <summary>Turns down the dead-end rescue offer and takes the loss. The UI's
+        /// "give up" path while the round is paused in AwaitingRescue.</summary>
+        public void DeclineDeadEndRescue()
+        {
+            if (CurrentRound != null)
+            {
+                CurrentRound.DebugDeclineRescue();
+            }
+        }
+
         /// <summary>Leaves the market and starts the next round.</summary>
         public void LeaveMarket()
         {

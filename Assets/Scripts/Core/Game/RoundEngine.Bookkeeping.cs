@@ -204,8 +204,63 @@ namespace ProjectBlock.Core
                     return;
                 }
             }
+            // DEAD END. Before the round ends, effects that can open a gap get their turn:
+            // first jokers, automatically ("Deprem"); then, if the player holds a rescue
+            // power ("Kentsel Dönüşüm"), the round PAUSES in AwaitingRescue so they can use
+            // it. Loss is set either way, so declining the offer simply confirms it.
             Loss = LossReason.NoPlayableMove;
+
+            if (session != null && hooks.TryRescueFromDeadEnd(new RoundContext(session, rng, this)))
+            {
+                Loss = null;
+                CheckForNoPlayableMove(); // the rescue may not have been enough
+                return;
+            }
+
+            if (session != null && session.Powers.HasUsableDeadEndRescue())
+            {
+                SetStatus(RoundStatus.AwaitingRescue);
+                return;
+            }
+
             SetStatus(RoundStatus.Lost);
+        }
+
+        /// <summary>Runs the dead-end check from outside a placement. Tests and the UI use it;
+        /// the engine itself reaches CheckForNoPlayableMove through the normal turn flow.</summary>
+        internal void DebugCheckForDeadEnd()
+        {
+            CheckForNoPlayableMove();
+        }
+
+        /// <summary>Test/UI entry point for declining the rescue offer.</summary>
+        internal void DebugDeclineRescue()
+        {
+            DeclineRescue();
+        }
+
+        /// <summary>Declines the rescue offer and takes the loss (the UI's "give up" path).</summary>
+        internal void DeclineRescue()
+        {
+            if (Status != RoundStatus.AwaitingRescue)
+            {
+                return;
+            }
+            SetStatus(RoundStatus.Lost);
+        }
+
+        /// <summary>A rescue power opened a gap: clear the pending loss and re-check. If the
+        /// board still has no room the normal dead-end path runs again, which may offer
+        /// another rescue or finally end the round.</summary>
+        internal void ResumeAfterRescue()
+        {
+            if (Status != RoundStatus.AwaitingRescue)
+            {
+                return;
+            }
+            Loss = null;
+            SetStatus(RoundStatus.InProgress);
+            CheckForNoPlayableMove();
         }
 
         /// <summary>No-move check that accounts for the card's options: mechanical

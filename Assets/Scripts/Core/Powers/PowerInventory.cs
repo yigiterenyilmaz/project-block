@@ -134,11 +134,42 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            if (round.Status != RoundStatus.InProgress || round.PowersUsedThisTurn > 0)
+            // A rescue power ONLY works in the dead-end pause; every other power only works
+            // during normal play. The "one power per turn" budget does not apply to a rescue:
+            // the player may already have spent their power this turn before getting stuck.
+            if (power.IsDeadEndRescue)
+            {
+                if (round.Status != RoundStatus.AwaitingRescue)
+                {
+                    return false;
+                }
+            }
+            else if (round.Status != RoundStatus.InProgress || round.PowersUsedThisTurn > 0)
             {
                 return false;
             }
             return power.CanRun(RoundCtx(round), target);
+        }
+
+        /// <summary>True if the player holds a charged rescue power that could open a gap.
+        /// The engine asks this before ending a round, to decide whether to pause instead.
+        /// Checked WITHOUT a target, so a power that needs one must accept a bare check.</summary>
+        public bool HasUsableDeadEndRescue()
+        {
+            RoundEngine round = session.CurrentRound;
+            if (round == null)
+            {
+                return false;
+            }
+            for (int i = 0; i < powers.Count; i++)
+            {
+                if (powers[i].IsDeadEndRescue && powers[i].Charged
+                    && powers[i].CanRun(RoundCtx(round), ActivationTarget.None))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>Runs a power. The charge is only spent if the power reports success, and
@@ -161,7 +192,16 @@ namespace ProjectBlock.Core
             {
                 power.Spend();
             }
-            round.NotePowerUsed();
+            if (power.IsDeadEndRescue)
+            {
+                // The rescue opened a gap; hand the round back to normal play, which
+                // re-checks for a legal move and may end up right back here.
+                round.ResumeAfterRescue();
+            }
+            else
+            {
+                round.NotePowerUsed();
+            }
             session.Jokers.DispatchPowerUsed(round, power.DefId);
             RaiseChanged();
             return true;

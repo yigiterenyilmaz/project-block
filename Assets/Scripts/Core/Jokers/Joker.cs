@@ -169,8 +169,8 @@ namespace ProjectBlock.Core
         {
         }
 
-        /// <summary>Last chance to change a round's setup before its board is built.
-        /// Reserved for "Kentsel Donusum" (permanent extra board space).</summary>
+        /// <summary>Last chance to change a round's setup before its board is built -
+        /// a joker may hand the round extra playable cells here.</summary>
         public virtual RoundConfig FilterRoundConfig(SessionContext ctx, RoundConfig config)
         {
             return config;
@@ -225,6 +225,14 @@ namespace ProjectBlock.Core
         /// threshold has NOT been checked yet - score added here still counts toward it.</summary>
         public virtual void AfterTurnScored(TurnContext turn)
         {
+        }
+
+        /// <summary>The board filled up and nothing in hand fits - the round is about to be
+        /// lost. A joker with a way to open a gap ("Deprem") acts here and returns true; the
+        /// engine then re-checks for a legal move. Return false to let the loss stand.</summary>
+        public virtual bool TryRescueFromDeadEnd(RoundContext ctx)
+        {
+            return false;
         }
 
         public override string ToString()
