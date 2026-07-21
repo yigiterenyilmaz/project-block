@@ -71,6 +71,8 @@ public static class JokerTests
         BoardOrigin_CoordinatesSurviveGrowingLeftAndDown();
         Board_SwapLinesMovesWholeRows();
         Deprem_CollapsesAQuarterInsteadOfLosing();
+        KentselDonusum_SwapsLinesToEscapeADeadEnd();
+        Rescue_DeclineEndsTheRound();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -1775,6 +1777,70 @@ public static class JokerTests
             }
         }
         return cells;
+    }
+
+    private static void KentselDonusum_SwapsLinesToEscapeADeadEnd()
+    {
+        Section("kentsel dönüşüm / swaps two lines to escape");
+        var session = NewSession(433, 4, 1000000, 40, 3);
+        var power = (KentselDonusumPower)session.Powers.Add(new KentselDonusumPower());
+        RoundEngine round = session.CurrentRound;
+
+        Check(power.IsDeadEndRescue, "it is marked as a rescue power");
+        Check(!session.Powers.CanUse(power.InstanceId, ActivationTarget.None),
+            "it cannot be used during normal play");
+
+        // Leave row 0 empty and fill the rest: a 3-bar fits only on the empty row.
+        foreach (GridPos cell in AllPlayableCells(round.Board))
+        {
+            if (cell.Y != 0 && !round.Board.GetCube(cell).HasValue)
+            {
+                round.Board.SetCubeAt(cell, new Cube(CubeKind.Normal, 9000));
+            }
+        }
+        // Now block row 0 too, so the board is a dead end.
+        foreach (GridPos cell in AllPlayableCells(round.Board))
+        {
+            if (cell.Y == 0 && cell.X < 2)
+            {
+                round.Board.SetCubeAt(cell, new Cube(CubeKind.Normal, 9001));
+            }
+        }
+        round.DebugCheckForDeadEnd();
+
+        Check(round.Status == RoundStatus.AwaitingRescue,
+            "the round paused instead of ending", "status " + round.Status);
+        Check(session.Powers.CanUse(power.InstanceId, ActivationTarget.None),
+            "the rescue is offered here");
+
+        int occupiedBefore = round.Board.OccupiedCount;
+        bool used = session.Powers.TryUse(power.InstanceId,
+            ActivationTarget.LineSwap(LineAxis.Row, 0, 1));
+        Check(used, "the swap ran");
+        Check(round.Board.OccupiedCount == occupiedBefore,
+            "a swap moves cubes, it never destroys them",
+            round.Board.OccupiedCount + " vs " + occupiedBefore);
+        Check(!power.Charged, "the charge was spent");
+        Check(round.Status != RoundStatus.AwaitingRescue, "the pause is over",
+            "status " + round.Status);
+    }
+
+    private static void Rescue_DeclineEndsTheRound()
+    {
+        Section("rescue / declining takes the loss");
+        var session = NewSession(439, 4, 1000000, 40, 3);
+        session.Powers.Add(new KentselDonusumPower());
+        RoundEngine round = session.CurrentRound;
+
+        FillBoardSolid(round, session);
+        round.DebugCheckForDeadEnd();
+        Check(round.Status == RoundStatus.AwaitingRescue, "paused for the rescue offer");
+        Check(round.Loss == LossReason.NoPlayableMove,
+            "the loss is already pending behind the offer");
+
+        round.DebugDeclineRescue();
+        Check(round.Status == RoundStatus.Lost, "declining confirms the loss",
+            "status " + round.Status);
     }
 
     private static void Powerbank_RechargesASpentPower()

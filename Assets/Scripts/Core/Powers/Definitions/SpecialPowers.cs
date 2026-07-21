@@ -774,4 +774,70 @@ namespace ProjectBlock.Core
             scoreAtBet = 0;
         }
     }
+
+    /// <summary>
+    /// "Kentsel Dönüşüm" - the rescue power. It only comes out at the moment the board has
+    /// filled up and nothing in hand fits: the player swaps two whole rows, or two whole
+    /// columns, hoping the rearrangement opens a gap their block can use.
+    ///
+    /// It is deliberately a REARRANGEMENT, not a demolition - no cube is destroyed, so it
+    /// scores nothing and can never hand out a clean sweep. Whether it saves the round is up
+    /// to the player reading the board correctly; a swap that does not help still spends the
+    /// charge and the round ends.
+    ///
+    /// The engine drives the flow: RoundEngine pauses in AwaitingRescue when this is held,
+    /// and PowerInventory calls ResumeAfterRescue once the swap is done.
+    /// </summary>
+    public sealed class KentselDonusumPower : Power
+    {
+        public KentselDonusumPower()
+            : base("kentsel_donusum", "Kentsel Dönüşüm")
+        {
+            SetDescription(
+                "When the board fills up and nothing fits, swap two rows or two columns to "
+                    + "open a gap and play on. Destroys nothing, scores nothing.",
+                "Oyun alanı dolup koyacak yer kalmazsa iki satırın ya da iki sütunun yerini "
+                    + "değiştirip oyuna devam edersin. Hiçbir küpü yok etmez, puan vermez.");
+            BaseSellValue = 70;
+        }
+
+        /// <summary>Usable only in the dead-end pause - see the class docs.</summary>
+        public override bool IsDeadEndRescue
+        {
+            get { return true; }
+        }
+
+        public override ActivationTargeting Targeting
+        {
+            get { return ActivationTargeting.LineSwap; }
+        }
+
+        public override string StatusText
+        {
+            get { return Loc.Pick("when stuck", "tıkanınca"); }
+        }
+
+        /// <summary>Without a pick this reports whether a swap COULD help, which is what the
+        /// engine asks before pausing the round; with a pick it validates that pick.</summary>
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            if (!target.Axis.HasValue)
+            {
+                // A board with fewer than two lines on either axis has nothing to exchange.
+                return ctx.Round.Board.Width >= 2 || ctx.Round.Board.Height >= 2;
+            }
+            return target.LineA.HasValue && target.LineB.HasValue
+                && target.LineA.Value != target.LineB.Value;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            if (!target.Axis.HasValue || !target.LineA.HasValue || !target.LineB.HasValue)
+            {
+                return false;
+            }
+            return ctx.Round.Board.SwapLines(target.Axis.Value, target.LineA.Value,
+                target.LineB.Value);
+        }
+    }
 }

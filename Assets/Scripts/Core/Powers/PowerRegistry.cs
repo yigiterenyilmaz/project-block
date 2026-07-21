@@ -43,6 +43,7 @@ namespace ProjectBlock.Core
             Register(() => new KarakterOlusturmaPower());
             Register(() => new RetroPower());
             Register(() => new BatakPower());
+            Register(() => new KentselDonusumPower());
         }
 
         /// <summary>All known powers, in design order.</summary>

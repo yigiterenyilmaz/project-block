@@ -74,6 +74,7 @@ namespace ProjectBlock.Core
             { "totem", Rarity.Common },
             { "bukulme", Rarity.Rare },
             { "hileli_zar", Rarity.Common },
+            { "kentsel_donusum", Rarity.Rare },
             { "halusinasyon", Rarity.Legendary },
             { "karakter_olusturma", Rarity.Legendary },
             { "retro", Rarity.Legendary },
