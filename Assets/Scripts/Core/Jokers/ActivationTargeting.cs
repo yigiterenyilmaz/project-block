@@ -13,7 +13,12 @@ namespace ProjectBlock.Core
         /// <summary>Needs a card in hand (İade).</summary>
         HandCard = 1,
 
-        /// <summary>Needs a board cell (future: Enfeksiyon).</summary>
-        BoardCell = 2
+        /// <summary>Needs a board cell (Enfeksiyon).</summary>
+        BoardCell = 2,
+
+        /// <summary>Needs TWO whole lines - two rows or two columns - to exchange
+        /// ("Kentsel Dönüşüm"). The UI puts arrows beside every row and above every column
+        /// and waits for two picks on the same axis.</summary>
+        LineSwap = 3
     }
 }
