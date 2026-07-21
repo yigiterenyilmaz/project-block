@@ -34,11 +34,12 @@ namespace ProjectBlock.View
             {
                 cardLayer.SetHoveredCard(-1);
                 string defId, name, description;
+                Rarity rarity;
                 if (grantPicker.TryGetEntry(grantPicker.EntryAt(world),
-                    out defId, out name, out description))
+                    out defId, out name, out description, out rarity))
                 {
                     RenderTooltip("pick:" + defId, name,
-                        ViewUtil.WrapText(description, 34), world);
+                        TierLine(rarity) + ViewUtil.WrapText(description, 34), world, rarity);
                 }
                 else
                 {
@@ -139,25 +140,34 @@ namespace ProjectBlock.View
             RenderTooltip("card:" + card.Id, title, body.ToString(), nearWorld);
         }
 
+        /// <summary>The tier headline a joker/power tooltip opens with - empty for common, so
+        /// only the tiers worth calling out take up a line.</summary>
+        private static string TierLine(Rarity rarity)
+        {
+            string tier = RarityPalette.Label(rarity);
+            return tier == null ? string.Empty : tier + "\n";
+        }
+
         private void ShowJokerTooltip(JokerDefinition joker, int price, Vector2 nearWorld)
         {
-            string body = ViewUtil.WrapText(joker.Description, 34)
+            string body = TierLine(joker.Rarity) + ViewUtil.WrapText(joker.Description, 34)
                 + Loc.Pick("\n\nCost ", "\n\nFiyat ") + price;
-            RenderTooltip("joker:" + joker.DefId, joker.DisplayName, body, nearWorld);
+            RenderTooltip("joker:" + joker.DefId, joker.DisplayName, body, nearWorld, joker.Rarity);
         }
 
         private void ShowPowerTooltip(PowerDefinition power, int price, Vector2 nearWorld)
         {
-            string body = ViewUtil.WrapText(power.Description, 34)
+            string body = TierLine(power.Rarity) + ViewUtil.WrapText(power.Description, 34)
                 + Loc.Pick("\n\nCost ", "\n\nFiyat ") + price;
-            RenderTooltip("power:" + power.DefId, power.DisplayName, body, nearWorld);
+            RenderTooltip("power:" + power.DefId, power.DisplayName, body, nearWorld, power.Rarity);
         }
 
         /// <summary>Tooltip for a held joker in the bar: name, live description, and status.</summary>
         private void ShowHeldJokerTooltip(Joker joker, Vector2 nearWorld)
         {
             string title = joker.DisplayName;
-            string body = ViewUtil.WrapText(joker.Description, 34);
+            Rarity rarity = RarityPalette.Of(joker);
+            string body = TierLine(rarity) + ViewUtil.WrapText(joker.Description, 34);
             if (!string.IsNullOrEmpty(joker.StatusText))
             {
                 body += "\n\n" + joker.StatusText;
@@ -165,25 +175,27 @@ namespace ProjectBlock.View
             // The key carries a text hash so a live-changing description/status (Halüsinasyon's
             // current form, a charge flipping) rebuilds the panel instead of showing stale text.
             RenderTooltip("heldjoker:" + joker.InstanceId + "#" + (title + body).GetHashCode(),
-                title, body, nearWorld);
+                title, body, nearWorld, rarity);
         }
 
         /// <summary>Tooltip for a held power in the bar: name, live description, and status.</summary>
         private void ShowHeldPowerTooltip(Power power, Vector2 nearWorld)
         {
             string title = power.DisplayName;
-            string body = ViewUtil.WrapText(power.Description, 34);
+            Rarity rarity = RarityPalette.Of(power);
+            string body = TierLine(rarity) + ViewUtil.WrapText(power.Description, 34);
             if (!string.IsNullOrEmpty(power.StatusText))
             {
                 body += "\n\n" + power.StatusText;
             }
             RenderTooltip("heldpower:" + power.InstanceId + "#" + (title + body).GetHashCode(),
-                title, body, nearWorld);
+                title, body, nearWorld, rarity);
         }
 
         /// <summary>Rebuilds the tooltip panel only when the hovered target changes; always
         /// repositions it next to the cursor, clamped inside the camera view.</summary>
-        private void RenderTooltip(string key, string title, string body, Vector2 nearWorld)
+        private void RenderTooltip(string key, string title, string body, Vector2 nearWorld,
+            Rarity rarity = Rarity.Common)
         {
             tooltipRoot.SetActive(true);
             if (key != tooltipKey)
@@ -210,7 +222,8 @@ namespace ProjectBlock.View
                 // High fontSize + small characterSize keeps TextMesh crisp; the dark panel
                 // gives contrast so no outline is needed here.
                 ViewUtil.MakeText3D(tooltipRoot.transform, "TipTitle",
-                    new Vector2(margin, -margin), title, 90, 0.017f, TooltipTitleColor, 51,
+                    new Vector2(margin, -margin), title, 90, 0.017f,
+                    rarity == Rarity.Common ? TooltipTitleColor : RarityPalette.Accent(rarity), 51,
                     TextAnchor.UpperLeft);
                 ViewUtil.MakeText3D(tooltipRoot.transform, "TipBody",
                     new Vector2(margin, -margin - titleHeight), body, 90, 0.014f, TooltipBodyColor,

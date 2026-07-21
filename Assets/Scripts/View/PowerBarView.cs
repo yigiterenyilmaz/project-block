@@ -3,7 +3,8 @@
 // live status. Reads PowerInventory, never changes it (GameUiController owns input).
 // NOTE FOR AGENTS: placeholder presentation like everything else under View/. The panel
 // stays generic on purpose - it renders Power.StatusText/Charged/BaseSellValue rather
-// than knowing any specific power, so new powers show up here for free.
+// than knowing any specific power, so new powers show up here for free. The only per-power
+// styling is the rarity strip/name colour, and that comes from RarityPalette.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -34,6 +35,7 @@ namespace ProjectBlock.View
         {
             public GameObject Root;
             public Image Background;
+            public Image RarityStrip;
             public Text Title;
             public Text Body;
             public int InstanceId = -1;
@@ -171,7 +173,13 @@ namespace ProjectBlock.View
             panel.Background.color = targeting ? TargetingColor
                 : !power.Charged ? SpentColor
                 : ready ? ReadyColor : PanelColor;
-            panel.Title.color = power.Charged ? NameColor : SpentTextColor;
+            // Spent still greys the whole panel out; rarity only tints the charged state and
+            // the edge strip, which stays lit so the tier is readable on a spent power too.
+            Rarity rarity = RarityPalette.Of(power);
+            Color accent = RarityPalette.Accent(rarity);
+            panel.RarityStrip.color = accent;
+            panel.Title.color = !power.Charged ? SpentTextColor
+                : rarity == Rarity.Common ? NameColor : accent;
             panel.Body.color = power.Charged ? BodyColor : SpentTextColor;
 
             panel.Title.text = power.DisplayName;
@@ -205,12 +213,36 @@ namespace ProjectBlock.View
             background.color = PanelColor;
             background.raycastTarget = false;
 
+            Image strip = MakeRarityStrip(rect);
             Text title = MakeLabel(rect, "Title", new Vector2(10f, -8f), 20, NameColor,
                 FontStyle.Bold, PanelWidth - 20f, 24f);
             Text body = MakeLabel(rect, "Body", new Vector2(10f, -34f), 17, BodyColor,
                 FontStyle.Normal, PanelWidth - 20f, 44f);
 
-            return new Panel { Root = go, Background = background, Title = title, Body = body };
+            return new Panel
+            {
+                Root = go,
+                Background = background,
+                RarityStrip = strip,
+                Title = title,
+                Body = body
+            };
+        }
+
+        /// <summary>Full-height colour bar on the panel's left edge, recoloured per rarity.</summary>
+        private static Image MakeRarityStrip(RectTransform parent)
+        {
+            var go = new GameObject("Rarity");
+            go.transform.SetParent(parent, false);
+            var image = go.AddComponent<Image>();
+            image.raycastTarget = false;
+            RectTransform rect = go.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(5f, 0f);
+            return image;
         }
 
         private static Text MakeLabel(Transform parent, string name, Vector2 offset, int fontSize,

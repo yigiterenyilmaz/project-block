@@ -1,7 +1,8 @@
 // PURPOSE: Debug screen (J / P keys) for granting ANY joker or power from its registry,
 // replacing the old "next joker in registry order" cycling. Clicking a tile grants it;
 // clicking elsewhere or Esc closes without changes. Hovering a tile shows its rules text
-// (the tooltip lives in GameUiController, fed through TryGetEntry).
+// (the tooltip lives in GameUiController, fed through TryGetEntry). Tiles are tinted and
+// striped by rarity through RarityPalette, same as the market and the joker/power bars.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -33,6 +34,7 @@ namespace ProjectBlock.View
             public string DefId;
             public string Name;
             public string Description;
+            public Rarity Rarity;
         }
 
         private readonly List<Vector2> tileCenters = new List<Vector2>();
@@ -50,7 +52,8 @@ namespace ProjectBlock.View
                 {
                     DefId = definition.DefId,
                     Name = definition.DisplayName,
-                    Description = definition.Description
+                    Description = definition.Description,
+                    Rarity = definition.Rarity
                 });
             }
             Show(PickerMode.Jokers,
@@ -66,7 +69,8 @@ namespace ProjectBlock.View
                 {
                     DefId = definition.DefId,
                     Name = definition.DisplayName,
-                    Description = definition.Description
+                    Description = definition.Description,
+                    Rarity = definition.Rarity
                 });
             }
             Show(PickerMode.Powers,
@@ -96,10 +100,18 @@ namespace ProjectBlock.View
                 var center = new Vector2(startX + (i % Columns) * TileSpacingX,
                     startY - (i / Columns) * TileSpacingY);
                 tileCenters.Add(center);
+                Rarity rarity = entries[i].Rarity;
                 ViewUtil.MakeRect(transform, "Tile_" + i, center,
-                    new Vector2(TileWidth, TileHeight), tileColor, 41);
+                    new Vector2(TileWidth, TileHeight),
+                    RarityPalette.Tint(tileColor, rarity), 41);
+                // A tier strip down the tile's left edge, so the list scans by rarity even
+                // though the tinted bodies stay close to the kind colour.
+                ViewUtil.MakeRect(transform, "Tier_" + i,
+                    center + new Vector2(-TileWidth * 0.5f + 0.06f, 0f),
+                    new Vector2(0.12f, TileHeight), RarityPalette.Accent(rarity), 42);
                 ViewUtil.MakeText3D(transform, "Name_" + i, center, entries[i].Name,
-                    90, 0.014f, NameColor, 42, TextAnchor.MiddleCenter);
+                    90, 0.014f, rarity == Rarity.Common ? NameColor : RarityPalette.Accent(rarity),
+                    42, TextAnchor.MiddleCenter);
             }
         }
 
@@ -131,18 +143,20 @@ namespace ProjectBlock.View
 
         /// <summary>Entry data for the hover tooltip. False when the index is invalid.</summary>
         public bool TryGetEntry(int index, out string defId, out string displayName,
-            out string description)
+            out string description, out Rarity rarity)
         {
             if (index < 0 || index >= entries.Count)
             {
                 defId = null;
                 displayName = null;
                 description = null;
+                rarity = Rarity.Common;
                 return false;
             }
             defId = entries[index].DefId;
             displayName = entries[index].Name;
             description = entries[index].Description;
+            rarity = entries[index].Rarity;
             return true;
         }
     }

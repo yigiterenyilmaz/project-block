@@ -3,7 +3,8 @@
 // changes it (GameUiController owns input).
 // NOTE FOR AGENTS: placeholder presentation like everything else under View/. The panel
 // stays generic on purpose - it renders Joker.StatusText/ChargesLeft/SellValue rather than
-// knowing any specific joker, so new jokers show up here for free.
+// knowing any specific joker, so new jokers show up here for free. The only per-joker
+// styling is the rarity strip/name colour, and that comes from RarityPalette.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -32,6 +33,7 @@ namespace ProjectBlock.View
         {
             public GameObject Root;
             public Image Background;
+            public Image RarityStrip;
             public Text Title;
             public Text Body;
             public int InstanceId = -1;
@@ -169,6 +171,12 @@ namespace ProjectBlock.View
                 && targetingInstanceId.Value == joker.InstanceId;
             panel.Background.color = targeting ? TargetingColor : (ready ? ReadyColor : PanelColor);
 
+            // The background still belongs to the activation state (ready/targeting), so rarity
+            // rides on the edge strip and the name colour instead of fighting it for the panel.
+            Rarity rarity = RarityPalette.Of(joker);
+            panel.RarityStrip.color = RarityPalette.Accent(rarity);
+            panel.Title.color = rarity == Rarity.Common ? NameColor : RarityPalette.Accent(rarity);
+
             string hotkey = index < 9 ? "[" + (index + 1) + "] " : "    ";
             panel.Title.text = hotkey + joker.DisplayName;
 
@@ -215,12 +223,36 @@ namespace ProjectBlock.View
             background.color = PanelColor;
             background.raycastTarget = false;
 
+            Image strip = MakeRarityStrip(rect);
             Text title = MakeLabel(rect, "Title", new Vector2(10f, -8f), 20, NameColor,
                 FontStyle.Bold, PanelWidth - 20f, 24f);
             Text body = MakeLabel(rect, "Body", new Vector2(10f, -34f), 17, BodyColor,
                 FontStyle.Normal, PanelWidth - 20f, 52f);
 
-            return new Panel { Root = go, Background = background, Title = title, Body = body };
+            return new Panel
+            {
+                Root = go,
+                Background = background,
+                RarityStrip = strip,
+                Title = title,
+                Body = body
+            };
+        }
+
+        /// <summary>Full-height colour bar on the panel's left edge, recoloured per rarity.</summary>
+        private static Image MakeRarityStrip(RectTransform parent)
+        {
+            var go = new GameObject("Rarity");
+            go.transform.SetParent(parent, false);
+            var image = go.AddComponent<Image>();
+            image.raycastTarget = false;
+            RectTransform rect = go.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(5f, 0f);
+            return image;
         }
 
         private static Text MakeLabel(Transform parent, string name, Vector2 offset, int fontSize,

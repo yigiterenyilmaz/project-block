@@ -1,7 +1,8 @@
 // PURPOSE: The between-rounds market screen: block-card, joker and power offers with
 // prices, click to buy. Rebuilt from scratch on every change (cheap at this scale).
 // Purchases go through GameSession.TryBuyOffer - this view never touches money, the deck
-// or the inventories.
+// or the inventories. Joker/power offers are framed, tinted and tagged by their graded
+// Rarity through RarityPalette (the same colours the bars and the debug pickers use).
 // Sorting orders: backdrop 33, frames 34, offer cards/joker/power tiles 36/37, price
 // labels 38 (under the deck overlay at 40+).
 
@@ -37,7 +38,6 @@ namespace ProjectBlock.View
         private static readonly Color JokerDescColor = new Color(0.82f, 0.86f, 0.92f);
         private static readonly Color PowerBodyColor = new Color(0.12f, 0.30f, 0.34f);
         private static readonly Color PowerTagColor = new Color(0.55f, 0.92f, 0.95f);
-        private static readonly Color LegendaryTagColor = new Color(1f, 0.78f, 0.30f);
         private static readonly Color RerollButtonColor = new Color(0.20f, 0.24f, 0.34f);
         private static readonly Color RerollButtonDisabledColor = new Color(0.14f, 0.14f, 0.16f);
 
@@ -46,6 +46,10 @@ namespace ProjectBlock.View
 
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
+
+        /// <summary>Index-aligned with the offers, so the buy fx can fly away in the same
+        /// rarity colour the tile had (Common for block offers).</summary>
+        private readonly List<Rarity> offerRarities = new List<Rarity>();
 
         private Vector2 rerollButtonCenter;
         private Vector2 rerollButtonHalf;
@@ -126,10 +130,16 @@ namespace ProjectBlock.View
             for (int i = 0; i < count; i++)
             {
                 Vector2 slotCenter = offerCenters[i];
+                MarketOffer offer = offers[i];
+                // The frame is the rarity's loudest signal: a rare/legendary tile is ringed in
+                // its tier colour, a common one keeps the neutral frame.
+                Rarity rarity = offer.Kind == MarketOfferKind.Joker ? offer.Joker.Rarity
+                    : offer.Kind == MarketOfferKind.Power ? offer.Power.Rarity
+                    : Rarity.Common;
+                offerRarities.Add(rarity);
                 ViewUtil.MakeRect(transform, "Frame_" + i, slotCenter,
                     new Vector2(CardVisual.BodyWidth + 0.18f, CardVisual.BodyHeight + 0.18f),
-                    FrameColor, 34);
-                MarketOffer offer = offers[i];
+                    RarityPalette.Frame(FrameColor, rarity), 34);
                 if (offer.Sold)
                 {
                     offerVisuals.Add(null);
@@ -143,19 +153,18 @@ namespace ProjectBlock.View
                     // Joker/power tiles have no CardVisual; a null keeps offerVisuals
                     // index-aligned with the offers so PlayBuyFx and OfferAt stay correct.
                     offerVisuals.Add(null);
-                    string jokerTag = offer.Joker.IsLegendary
-                        ? Loc.Pick("LEGENDARY", "EFSANEVİ")
-                        : Loc.Pick("JOKER", "JOKER");
-                    BuildNamedTile(slotCenter, i, "Joker", jokerTag,
-                        offer.Joker.DisplayName, offer.Joker.Description, JokerBodyColor,
-                        offer.Joker.IsLegendary ? LegendaryTagColor : JokerTagColor);
+                    BuildNamedTile(slotCenter, i, "Joker", TierTag(Loc.Pick("JOKER", "JOKER"), rarity),
+                        offer.Joker.DisplayName, offer.Joker.Description,
+                        RarityPalette.Tint(JokerBodyColor, rarity),
+                        rarity == Rarity.Common ? JokerTagColor : RarityPalette.Accent(rarity));
                 }
                 else if (offer.Kind == MarketOfferKind.Power)
                 {
                     offerVisuals.Add(null);
-                    BuildNamedTile(slotCenter, i, "Power", Loc.Pick("POWER", "GÜÇ"),
-                        offer.Power.DisplayName, offer.Power.Description, PowerBodyColor,
-                        PowerTagColor);
+                    BuildNamedTile(slotCenter, i, "Power", TierTag(Loc.Pick("POWER", "GÜÇ"), rarity),
+                        offer.Power.DisplayName, offer.Power.Description,
+                        RarityPalette.Tint(PowerBodyColor, rarity),
+                        rarity == Rarity.Common ? PowerTagColor : RarityPalette.Accent(rarity));
                 }
                 else
                 {
@@ -183,6 +192,15 @@ namespace ProjectBlock.View
                 Loc.Pick("REROLL  ", "YENİLE  ") + rerollCost,
                 60, 0.05f, canReroll ? AffordablePriceColor : TooExpensiveColor,
                 38, TextAnchor.MiddleCenter);
+        }
+
+        /// <summary>The tag printed at the top of a tile: the tier word replaces the kind word
+        /// for rare/legendary (the row header already says which kind it is, and one short word
+        /// is all that fits across the tile).</summary>
+        private static string TierTag(string kindLabel, Rarity rarity)
+        {
+            string tier = RarityPalette.Label(rarity);
+            return tier ?? kindLabel;
         }
 
         private static string SectionLabel(MarketOfferKind kind)
@@ -218,6 +236,7 @@ namespace ProjectBlock.View
         {
             offerVisuals.Clear();
             offerCenters.Clear();
+            offerRarities.Clear();
             rerollButtonShown = false;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
@@ -282,6 +301,14 @@ namespace ProjectBlock.View
             if (offerIndex < 0 || offerIndex >= offerCenters.Count)
             {
                 return;
+            }
+            // Fly away wearing the tile's colours, rarity included.
+            Rarity rarity = offerIndex < offerRarities.Count ? offerRarities[offerIndex] : Rarity.Common;
+            bodyColor = RarityPalette.Tint(bodyColor, rarity);
+            if (rarity != Rarity.Common)
+            {
+                tagColor = RarityPalette.Accent(rarity);
+                tag = RarityPalette.Label(rarity);
             }
             var root = new GameObject(tag + "BuyFx");
             root.transform.SetParent(transform.parent, false);
