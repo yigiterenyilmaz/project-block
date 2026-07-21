@@ -219,6 +219,7 @@ namespace ProjectBlock.View
             jokerBar.Refresh(session, pendingTargetJokerId);
             powerBar.Refresh(session, pendingTargetPowerId);
             SyncRetroPresentation();
+            SyncRescueState();
         }
 
         /// <summary>Keeps every retro-mode presentation layer in sync with RoundRules.RetroMode:
@@ -326,6 +327,16 @@ namespace ProjectBlock.View
                         : Loc.Pick("pick a block from your hand", "elinden bir blok seç");
                 messageText.text = (targeting != null ? targeting.DisplayName : Loc.Pick("Power", "Güç"))
                     + ": " + what + Loc.Pick("\n[Esc] cancel", "\n[Esc] vazgeç");
+                return;
+            }
+
+            // The dead-end pause: the board is full and only the rescue power can save it.
+            if (round.Status == RoundStatus.AwaitingRescue)
+            {
+                messageText.text = Loc.Pick(
+                    "No room left! Pick two rows or two columns to swap.\n[Esc] give up",
+                    "Yer kalmadı! Yerini değiştirmek için iki satır ya da iki sütun seç."
+                        + "\n[Esc] pes et");
                 return;
             }
 

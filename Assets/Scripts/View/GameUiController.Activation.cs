@@ -363,5 +363,99 @@ namespace ProjectBlock.View
                 ShakeCamera(0.12f, 0.2f);
             }
         }
+
+        // ------------------------------------------------------- dead-end rescue flow
+
+        /// <summary>Called after every action: if the round has paused on a dead end, put the
+        /// row/column arrows up; if a quake just brought the board down, shake the screen.</summary>
+        private void SyncRescueState()
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null)
+            {
+                return;
+            }
+            PlayPendingQuake(round);
+
+            bool paused = round.Status == RoundStatus.AwaitingRescue;
+            if (paused && !lineSwapPicker.IsOpen)
+            {
+                lineSwapPicker.Show(boardView, OnRescueLinesPicked);
+            }
+            else if (!paused && lineSwapPicker.IsOpen)
+            {
+                lineSwapPicker.Hide();
+            }
+        }
+
+        /// <summary>"Deprem": the quake counter moving means a collapse just happened, so the
+        /// screen shakes and the fallen cubes blast - once per collapse.</summary>
+        private void PlayPendingQuake(RoundEngine round)
+        {
+            IReadOnlyList<Joker> jokers = session.Jokers.Jokers;
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                var deprem = jokers[i] as DepremJoker;
+                if (deprem == null)
+                {
+                    continue;
+                }
+                int seen;
+                seenQuakes.TryGetValue(deprem.InstanceId, out seen);
+                if (deprem.CollapseCount <= seen)
+                {
+                    continue;
+                }
+                seenQuakes[deprem.InstanceId] = deprem.CollapseCount;
+
+                var dust = new Color(0.72f, 0.62f, 0.5f);
+                IReadOnlyList<GridPos> fallen = deprem.LastCollapsedCells;
+                for (int c = 0; c < fallen.Count; c++)
+                {
+                    blastFx.EmitAt(boardView.CellToWorld(fallen[c]), dust, 7);
+                }
+                sfx.Explode();
+                ShakeCamera(0.3f, 0.55f); // the big one - this is an earthquake
+            }
+        }
+
+        /// <summary>Routes clicks to the arrows while the rescue picker is up. Escape gives up
+        /// and takes the loss, which is the only other way out of the pause.</summary>
+        private void HandleRescuePick(Mouse mouse, Keyboard kb)
+        {
+            if (kb != null && kb.escapeKey.wasPressedThisFrame)
+            {
+                lineSwapPicker.Hide();
+                session.DeclineDeadEndRescue();
+                RefreshAll(null);
+                return;
+            }
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+            {
+                Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                lineSwapPicker.HandleClick(world);
+            }
+        }
+
+        /// <summary>The player picked two lines: hand them to the rescue power.</summary>
+        private void OnRescueLinesPicked(LineAxis axis, int first, int second)
+        {
+            IReadOnlyList<Power> powers = session.Powers.Powers;
+            for (int i = 0; i < powers.Count; i++)
+            {
+                if (!powers[i].IsDeadEndRescue)
+                {
+                    continue;
+                }
+                ActivationTarget target = ActivationTarget.LineSwap(axis, first, second);
+                if (session.Powers.TryUse(powers[i].InstanceId, target))
+                {
+                    sfx.Shuffle();
+                    ShakeCamera(0.16f, 0.3f);
+                    break;
+                }
+            }
+            RefreshAll(null);
+        }
     }
 }

@@ -48,6 +48,10 @@ namespace ProjectBlock.View
             blastGo.transform.SetParent(transform, false);
             blastFx = blastGo.AddComponent<BlastFxView>();
 
+            var lineSwapGo = new GameObject("LineSwapPicker");
+            lineSwapGo.transform.SetParent(transform, false);
+            lineSwapPicker = lineSwapGo.AddComponent<LineSwapPickerView>();
+
             var jokerGo = new GameObject("JokerBarView");
             jokerGo.transform.SetParent(transform, false);
             jokerBar = jokerGo.AddComponent<JokerBarView>();
