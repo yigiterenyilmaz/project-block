@@ -1440,16 +1440,30 @@ public static class JokerTests
         Check(!r2.Board.GetCube(new GridPos(4, 4)).HasValue, "the far rim corner too");
         Check(r2.Board.GetCube(new GridPos(2, 2)).HasValue, "the middle survived");
 
+        // A diagonal is the clean case: inverting it leaves every row and column one cube
+        // short, so nothing explodes and the swap itself can be checked.
         var s3 = NewSession(319, 4, 1000000, 40, 1);
         var invert = (BardaginBosTarafiPower)s3.Powers.Add(new BardaginBosTarafiPower());
         RoundEngine r3 = s3.CurrentRound;
-        PaintBoard(r3, s3, CubeKind.Normal, new GridPos(0, 0));
+        PaintBoard(r3, s3, CubeKind.Normal, new GridPos(0, 0), new GridPos(1, 1),
+            new GridPos(2, 2), new GridPos(3, 3));
         int filledBefore = r3.Board.OccupiedCount;
         int cells = r3.Board.Width * r3.Board.Height;
         s3.Powers.TryUse(invert.InstanceId, ActivationTarget.None);
         Check(r3.Board.OccupiedCount == cells - filledBefore, "filled and empty swapped",
             r3.Board.OccupiedCount + " vs " + (cells - filledBefore));
-        Check(!r3.Board.GetCube(new GridPos(0, 0)).HasValue, "the old cube is gone");
+        Check(!r3.Board.GetCube(new GridPos(0, 0)).HasValue, "an old cube is gone");
+        Check(r3.Board.GetCube(new GridPos(0, 1)).HasValue, "an old gap now holds a cube");
+
+        // And the confirmed follow-up rule: lines the new cubes complete explode. A single
+        // cube on a 4x4 board inverts into 15, which completes three rows and three columns.
+        var s3b = NewSession(321, 4, 1000000, 40, 1);
+        var invert2 = (BardaginBosTarafiPower)s3b.Powers.Add(new BardaginBosTarafiPower());
+        RoundEngine r3b = s3b.CurrentRound;
+        PaintBoard(r3b, s3b, CubeKind.Normal, new GridPos(0, 0));
+        s3b.Powers.TryUse(invert2.InstanceId, ActivationTarget.None);
+        Check(r3b.Board.OccupiedCount == 0, "the lines the new cubes completed exploded",
+            "occupied " + r3b.Board.OccupiedCount);
 
         var s4 = NewSession(323, 5, 1000000, 40, 1);
         var mayin = (MayinPower)s4.Powers.Add(new MayinPower());
@@ -1570,17 +1584,23 @@ public static class JokerTests
         int occupiedTwoAgo = round.Board.OccupiedCount;
         int handAfter = round.Hand.Count;
         int discardAfter = round.Deck.DiscardCount;
-        int scoreAfter = round.RoundScore;
 
         PlayTurns(session, 2);
         Check(round.Board.OccupiedCount > occupiedTwoAgo, "the board filled up further",
             round.Board.OccupiedCount + " vs " + occupiedTwoAgo);
 
+        int scoreBeforeRewind = round.RoundScore;
+        int discardBeforeRewind = round.Deck.DiscardCount;
         Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.None), "rewind ran");
         Check(round.Board.OccupiedCount == occupiedTwoAgo, "the board is back where it was",
             round.Board.OccupiedCount + " vs " + occupiedTwoAgo);
-        Check(round.Deck.DiscardCount > discardAfter, "the discard did NOT rewind");
-        Check(round.RoundScore > scoreAfter, "the score did NOT rewind");
+        // The point of the power: ONLY the board moves. Compared against the moment just
+        // before the rewind, so it does not depend on how placements happen to score.
+        Check(round.Deck.DiscardCount == discardBeforeRewind, "the discard did NOT rewind",
+            round.Deck.DiscardCount + " vs " + discardBeforeRewind);
+        Check(round.RoundScore == scoreBeforeRewind, "the score did NOT rewind",
+            round.RoundScore + " vs " + scoreBeforeRewind);
+        Check(round.Deck.DiscardCount > discardAfter, "the discard kept growing meanwhile");
         Check(round.Hand.Count == handAfter, "the hand is untouched");
     }
 
