@@ -69,6 +69,7 @@ public static class JokerTests
         Tilsim_TurnsGhostGroundIntoBoard();
         Inflation_GrowsThenSqueezesBack();
         BoardOrigin_CoordinatesSurviveGrowingLeftAndDown();
+        Board_SwapLinesMovesWholeRows();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -1679,6 +1680,32 @@ public static class JokerTests
             round.Board.MinX + "," + round.Board.MinY);
         Check(round.Board.GetCube(new GridPos(3, 2)).HasValue,
             "and the cube is STILL at 3,2 after a full round trip");
+    }
+
+    private static void Board_SwapLinesMovesWholeRows()
+    {
+        Section("board / SwapLines");
+        var session = NewSession(443, 4, 1000000, 40, 1);
+        GameBoard board = session.CurrentRound.Board;
+
+        board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Fire, 77));
+        board.SetCubeAt(new GridPos(3, 2), new Cube(CubeKind.Gold, 88));
+        int occupied = board.OccupiedCount;
+
+        Check(board.SwapLines(LineAxis.Row, 0, 2), "rows swapped");
+        Check(board.GetCube(new GridPos(1, 2)).Value.Kind == CubeKind.Fire,
+            "the fire cube moved up to row 2");
+        Check(board.GetCube(new GridPos(3, 0)).Value.Kind == CubeKind.Gold,
+            "and the gold cube came down to row 0");
+        Check(board.OccupiedCount == occupied, "nothing was created or lost",
+            board.OccupiedCount + " vs " + occupied);
+
+        Check(!board.SwapLines(LineAxis.Row, 1, 1), "swapping a line with itself is refused");
+        Check(!board.SwapLines(LineAxis.Column, 0, 99), "an out-of-bounds line is refused");
+
+        Check(board.SwapLines(LineAxis.Column, 1, 3), "columns swapped");
+        Check(board.GetCube(new GridPos(3, 2)).Value.Kind == CubeKind.Fire,
+            "the fire cube followed its column");
     }
 
     private static void Powerbank_RechargesASpentPower()

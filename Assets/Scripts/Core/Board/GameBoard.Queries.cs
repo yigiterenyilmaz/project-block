@@ -44,6 +44,27 @@ namespace ProjectBlock.Core
             cells[pos.X - MinX, pos.Y - MinY] = cube;
         }
 
+        /// <summary>Writes a cell directly, empty (null) included, keeping OccupiedCount
+        /// honest. Internal: only whole-board rearrangements use it ("Kentsel Dönüşüm"
+        /// swapping two lines), where cubes move rather than appear or die.</summary>
+        private void SetCellRaw(GridPos pos, Cube? cube)
+        {
+            if (!IsInside(pos))
+            {
+                return;
+            }
+            bool had = cells[pos.X - MinX, pos.Y - MinY].HasValue;
+            cells[pos.X - MinX, pos.Y - MinY] = cube;
+            if (had && !cube.HasValue)
+            {
+                OccupiedCount--;
+            }
+            else if (!had && cube.HasValue)
+            {
+                OccupiedCount++;
+            }
+        }
+
         /// <summary>Retypes an existing cube, keeping its source card ("Taskin" turning
         /// neighbours to water, "Yangin" to fire, "Buzluk" freezing water into ice).</summary>
         public bool SetCubeKind(GridPos pos, CubeKind kind)
@@ -392,6 +413,65 @@ namespace ProjectBlock.Core
                 if (y > 0) sb.Append('\n');
             }
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Exchanges the contents of two whole rows, or two whole columns ("Kentsel Dönüşüm").
+        /// Coordinates are board coordinates, so they respect MinX/MinY.
+        ///
+        /// On an irregular board a cell is only swapped when BOTH ends are real play area -
+        /// a cube can never be pushed into a hole. Cells where only one end is playable are
+        /// left exactly as they are.
+        /// </summary>
+        public bool SwapLines(LineAxis axis, int lineA, int lineB)
+        {
+            if (lineA == lineB)
+            {
+                return false;
+            }
+            if (axis == LineAxis.Row)
+            {
+                if (!IsRowInBounds(lineA) || !IsRowInBounds(lineB))
+                {
+                    return false;
+                }
+                for (int x = MinX; x < MinX + Width; x++)
+                {
+                    SwapCells(new GridPos(x, lineA), new GridPos(x, lineB));
+                }
+                return true;
+            }
+            if (!IsColumnInBounds(lineA) || !IsColumnInBounds(lineB))
+            {
+                return false;
+            }
+            for (int y = MinY; y < MinY + Height; y++)
+            {
+                SwapCells(new GridPos(lineA, y), new GridPos(lineB, y));
+            }
+            return true;
+        }
+
+        private bool IsRowInBounds(int y)
+        {
+            return y >= MinY && y < MinY + Height;
+        }
+
+        private bool IsColumnInBounds(int x)
+        {
+            return x >= MinX && x < MinX + Width;
+        }
+
+        private void SwapCells(GridPos a, GridPos b)
+        {
+            if (!IsInside(a) || !IsInside(b))
+            {
+                return; // never move a cube into a hole
+            }
+            Cube? ca = GetCube(a);
+            Cube? cb = GetCube(b);
+            SetCellRaw(a, cb);
+            SetCellRaw(b, ca);
         }
     }
 }
