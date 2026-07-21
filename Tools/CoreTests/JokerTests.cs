@@ -42,7 +42,6 @@ public static class JokerTests
         Buldozer_WipesOnScheduleWithoutScoreOrSweep();
         RobotSupurge_EatsCubesAndGrowsOnSweep();
         KayitDefteri_ReplacesTheSweepWithItsCounter();
-        KentselDonusum_GrowsTheBoardPermanently();
         KaziCalismasi_ReturnsAFullyExplodedBlock();
         SeriTetik_BoostsHandAndChurnsUntilThreshold();
         Batak_PayoutCurveAndDeadline();
@@ -773,75 +772,6 @@ public static class JokerTests
 
         session.Jokers.Remove(joker);
         Check(!round.SuppressNaturalSweep, "removing it restores the normal sweep rule");
-    }
-
-    private static void KentselDonusum_GrowsTheBoardPermanently()
-    {
-        Section("kentsel donusum / board growth");
-        var joker = new KentselDonusumJoker();
-        joker.MaxPatches = 3;
-        var config = new RoundConfig(1, 6, 6, 100);
-        var session = NewSession(53, 6, 40, 24, 1);
-        var ctx = new SessionContext(session, session.Rng);
-        var roundCtx = new RoundContext(session, session.Rng, session.CurrentRound);
-
-        Check(joker.FilterRoundConfig(ctx, config).ExtraPlayableCells.Count == 0,
-            "no extra space before a round is finished");
-
-        joker.OnRoundEnded(roundCtx, RoundOutcome.Advanced);
-        RoundConfig grown = joker.FilterRoundConfig(ctx, config);
-        Check(grown.ExtraPlayableCells.Count == joker.ExtraCellCount,
-            "one finished round opens one block's worth of cells",
-            "cells " + grown.ExtraPlayableCells.Count);
-        Check(grown.ExtraPlayableCells.Count >= 1 && grown.ExtraPlayableCells.Count <= 5,
-            "a block is 1-5 cells, not a whole row and column",
-            "cells " + grown.ExtraPlayableCells.Count);
-        Check(grown.BoardWidth == 6 && grown.BoardHeight == 6,
-            "the base rectangle itself is untouched");
-
-        // The patches must sit OUTSIDE the base rectangle, so they really are extra space.
-        bool allOutside = true;
-        foreach (GridPos cell in grown.ExtraPlayableCells)
-        {
-            if (cell.X < config.BoardWidth && cell.Y < config.BoardHeight)
-            {
-                allOutside = false;
-            }
-        }
-        Check(allOutside, "every added cell is outside the base rectangle");
-
-        joker.OnRoundEnded(roundCtx, RoundOutcome.Lost);
-        Check(joker.FilterRoundConfig(ctx, config).ExtraPlayableCells.Count
-                == grown.ExtraPlayableCells.Count,
-            "a lost round adds nothing");
-
-        for (int i = 0; i < 10; i++)
-        {
-            joker.OnRoundEnded(roundCtx, RoundOutcome.Advanced);
-        }
-        Check(joker.PatchCount == joker.MaxPatches, "the patch count is capped",
-            "patches " + joker.PatchCount);
-
-        // And the board really becomes irregular: the cells exist and are playable.
-        RoundConfig big = joker.FilterRoundConfig(ctx, config);
-        var board = new GameBoard(big.BoardWidth, big.BoardHeight, big.ExtraPlayableCells);
-        Check(board.PlayableCellCount == 36 + big.ExtraPlayableCells.Count,
-            "the board gained exactly the extra cells",
-            board.PlayableCellCount + " vs " + (36 + big.ExtraPlayableCells.Count));
-        Check(board.Width > 6 || board.Height > 6, "the bounding box grew to cover them");
-        Check(board.IsInside(big.ExtraPlayableCells[0]), "an added cell is playable");
-        bool anyHole = false;
-        for (int x = 0; x < board.Width; x++)
-        {
-            for (int y = 0; y < board.Height; y++)
-            {
-                if (!board.IsInside(new GridPos(x, y)))
-                {
-                    anyHole = true;
-                }
-            }
-        }
-        Check(anyHole, "the board is genuinely irregular - the bounding box has holes");
     }
 
     private static void KaziCalismasi_ReturnsAFullyExplodedBlock()

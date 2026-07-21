@@ -28,7 +28,6 @@ namespace ProjectBlock.Core
             { "buldozer", Rarity.Common },
             { "robot_supurge", Rarity.Rare },
             { "kayit_defteri", Rarity.Common },
-            { "kentsel_donusum", Rarity.Common },
             { "midas", Rarity.Common },
             { "elmas_kazma", Rarity.Common },
             { "tutustur", Rarity.Common },
