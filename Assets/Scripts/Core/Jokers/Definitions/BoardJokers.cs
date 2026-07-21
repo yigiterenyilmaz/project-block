@@ -301,4 +301,109 @@ namespace ProjectBlock.Core
             return false;
         }
     }
+
+    /// <summary>
+    /// "Deprem" - when the board fills up and nothing in hand fits, the ground shakes and a
+    /// quarter of the cubes come down, opening room to carry on. Once per round.
+    ///
+    /// It is a RESCUE, not a reward: the collapse pays no points and never counts as a clean
+    /// sweep, the same rule Buldozer follows. If the quarter that falls still leaves no legal
+    /// move, the round is lost - there is no second tremor.
+    ///
+    /// Only destructible cubes are candidates: obsidian and gold do not care about
+    /// earthquakes, and shaking them would waste the rescue on cubes that cannot move.
+    /// </summary>
+    public sealed class DepremJoker : Joker
+    {
+        /// <summary>Share of the destructible cubes that comes down. Balance placeholder.</summary>
+        public double CollapseFraction = 0.25;
+
+        private bool usedThisRound;
+
+        /// <summary>Cells the quake brought down, for the UI's shake-and-blast. Reused list.</summary>
+        private readonly List<GridPos> lastCollapsed = new List<GridPos>();
+
+        public IReadOnlyList<GridPos> LastCollapsedCells
+        {
+            get { return lastCollapsed; }
+        }
+
+        /// <summary>Quakes this run. The UI watches it change to fire the shake exactly once
+        /// per collapse, without Core having to know a view exists.</summary>
+        public int CollapseCount { get; private set; }
+
+        public DepremJoker()
+            : base("deprem", "Deprem")
+        {
+            SetDescription(
+                "Once per round, if the board fills up and nothing fits, an earthquake brings "
+                    + "down a quarter of the cubes so you can play on. Pays no points.",
+                "Raunt başına bir kez: oyun alanı dolup koyacak yer kalmazsa deprem olur ve "
+                    + "küplerin dörtte biri yıkılır, oyuna devam edersin. Puan vermez.");
+            BaseSellValue = 65;
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return usedThisRound
+                    ? Loc.Pick("used", "kullanıldı")
+                    : Loc.Pick("ready", "hazır");
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            usedThisRound = false;
+            lastCollapsed.Clear();
+        }
+
+        public override bool TryRescueFromDeadEnd(RoundContext ctx)
+        {
+            if (usedThisRound)
+            {
+                return false;
+            }
+            List<GridPos> candidates = DestructibleCells(ctx.Round.Board);
+            if (candidates.Count == 0)
+            {
+                return false; // nothing an earthquake could bring down
+            }
+
+            int count = (int)System.Math.Ceiling(candidates.Count * CollapseFraction);
+            if (count < 1)
+            {
+                count = 1;
+            }
+            lastCollapsed.Clear();
+            for (int i = 0; i < count && candidates.Count > 0; i++)
+            {
+                int index = ctx.Rng.NextInt(0, candidates.Count);
+                lastCollapsed.Add(candidates[index]);
+                candidates.RemoveAt(index);
+            }
+
+            usedThisRound = true;
+            CollapseCount++;
+            // countsForSweep: false - a quake is explicitly not a temizlik, exactly like a
+            // Buldozer wipe, so it can neither score nor hand out a sweep.
+            ctx.Round.DestroyCubes(lastCollapsed, false);
+            return true;
+        }
+
+        private static List<GridPos> DestructibleCells(GameBoard board)
+        {
+            var found = new List<GridPos>();
+            foreach (GridPos cell in board.GetOccupiedCells())
+            {
+                Cube? cube = board.GetCube(cell);
+                if (cube.HasValue && CubeRules.IsExternallyDestructible(cube.Value))
+                {
+                    found.Add(cell);
+                }
+            }
+            return found;
+        }
+    }
 }

@@ -31,6 +31,7 @@ namespace ProjectBlock.Core
             Register(() => new BuldozerJoker());
             Register(() => new RobotSupurgeJoker());
             Register(() => new KayitDefteriJoker());
+            Register(() => new DepremJoker());
             Register(() => new MidasJoker());
             Register(() => new ElmasKazmaJoker());
             Register(() => new TutusturJoker());

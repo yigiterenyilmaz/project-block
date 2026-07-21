@@ -27,6 +27,7 @@ namespace ProjectBlock.Core
             { "kazi_calismasi", Rarity.Rare },
             { "buldozer", Rarity.Common },
             { "robot_supurge", Rarity.Rare },
+            { "deprem", Rarity.Rare },
             { "kayit_defteri", Rarity.Common },
             { "midas", Rarity.Common },
             { "elmas_kazma", Rarity.Common },

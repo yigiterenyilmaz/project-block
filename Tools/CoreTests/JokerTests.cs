@@ -70,6 +70,7 @@ public static class JokerTests
         Inflation_GrowsThenSqueezesBack();
         BoardOrigin_CoordinatesSurviveGrowingLeftAndDown();
         Board_SwapLinesMovesWholeRows();
+        Deprem_CollapsesAQuarterInsteadOfLosing();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -1706,6 +1707,74 @@ public static class JokerTests
         Check(board.SwapLines(LineAxis.Column, 1, 3), "columns swapped");
         Check(board.GetCube(new GridPos(3, 2)).Value.Kind == CubeKind.Fire,
             "the fire cube followed its column");
+    }
+
+    private static void Deprem_CollapsesAQuarterInsteadOfLosing()
+    {
+        Section("deprem / rescues a dead end once per round");
+        // 1-cube blocks: any single freed cell is enough to play on, so the test measures
+        // the rescue itself rather than whether four random holes happen to line up.
+        var session = NewSession(431, 4, 1000000, 40, 1);
+        var joker = (DepremJoker)session.Jokers.Add(new DepremJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        RoundEngine round = session.CurrentRound;
+
+        FillBoardSolid(round, session);
+        int before = round.Board.OccupiedCount;
+        Check(before == 16, "the board is solid", "occupied " + before);
+
+        int scoreBefore = round.RoundScore;
+        int sweeps = round.CleanSweepCount;
+
+        // Force the dead-end check the way the engine does after a placement.
+        round.DebugCheckForDeadEnd();
+
+        Check(round.Status == RoundStatus.InProgress, "the round was rescued, not lost",
+            "status " + round.Status);
+        Check(round.Loss == null, "no loss is pending");
+        int expected = before - (int)Math.Ceiling(before * joker.CollapseFraction);
+        Check(round.Board.OccupiedCount == expected, "a quarter of the cubes came down",
+            round.Board.OccupiedCount + " vs " + expected);
+        Check(round.RoundScore == scoreBefore, "the quake paid nothing",
+            round.RoundScore + " vs " + scoreBefore);
+        Check(round.CleanSweepCount == sweeps, "and never counted as a clean sweep");
+        Check(joker.LastCollapsedCells.Count > 0, "the collapsed cells are reported for the UI");
+
+        // Once per round: a second dead end in the same round is fatal.
+        FillBoardSolid(round, session);
+        round.DebugCheckForDeadEnd();
+        Check(round.Status == RoundStatus.Lost, "the second dead end ends the round",
+            "status " + round.Status);
+        Check(round.Loss == LossReason.NoPlayableMove, "for the right reason");
+    }
+
+    /// <summary>Fills a board solid so the next no-move check hits a dead end.</summary>
+    private static void FillBoardSolid(RoundEngine round, GameSession session)
+    {
+        foreach (GridPos cell in AllPlayableCells(round.Board))
+        {
+            if (!round.Board.GetCube(cell).HasValue)
+            {
+                round.Board.SetCubeAt(cell, new Cube(CubeKind.Normal, 9000));
+            }
+        }
+    }
+
+    private static List<GridPos> AllPlayableCells(GameBoard board)
+    {
+        var cells = new List<GridPos>();
+        for (int y = board.MinY; y < board.MinY + board.Height; y++)
+        {
+            for (int x = board.MinX; x < board.MinX + board.Width; x++)
+            {
+                var pos = new GridPos(x, y);
+                if (board.IsInside(pos))
+                {
+                    cells.Add(pos);
+                }
+            }
+        }
+        return cells;
     }
 
     private static void Powerbank_RechargesASpentPower()
