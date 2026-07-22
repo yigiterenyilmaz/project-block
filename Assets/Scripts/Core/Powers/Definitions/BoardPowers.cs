@@ -1,4 +1,5 @@
-// PURPOSE: Powers that act on the board: Çaprazlama, Çerçeve, Bardağın boş tarafı, Mayın.
+// PURPOSE: Powers that act on the board: Çaprazlama, Çerçeve, Bardağın boş tarafı, Mayın,
+// eko, Buldozer.
 // Every one of them destroys or rewrites cubes through RoundEngine, never through GameBoard
 // directly, so the destruction log, the countable tally and the clean-sweep pre-condition
 // all stay correct - the same rule the board jokers follow.
@@ -297,5 +298,103 @@ namespace ProjectBlock.Core
         /// <summary>Source card id for armed mines - negative, so nothing mistakes a mine for
         /// part of a real block.</summary>
         public const int MineCardId = -2;
+    }
+
+    /// <summary>
+    /// "Buldozer" - flattens a two-wide band: either two neighbouring rows or two
+    /// neighbouring columns, picked at random. The player aims nothing; the machine decides.
+    ///
+    /// It CRUSHES EVERYTHING in the band, obsidian and gold included - a bulldozer does not
+    /// care what a cube is made of, and it is the only way besides "elmas kazma" to shift
+    /// obsidian at all.
+    ///
+    /// In exchange it is completely inert as far as the score economy is concerned: no
+    /// points, nothing added to the "Kayıt defteri" ledger, and it can never trigger a clean
+    /// sweep - not even by emptying the board. It buys space and nothing else.
+    /// </summary>
+    public sealed class BuldozerPower : Power
+    {
+        /// <summary>How many neighbouring lines go at once.</summary>
+        public int BandWidth = 2;
+
+        /// <summary>Cells flattened by the most recent use, for the UI's blast.</summary>
+        private readonly List<GridPos> lastFlattened = new List<GridPos>();
+
+        public IReadOnlyList<GridPos> LastFlattenedCells
+        {
+            get { return lastFlattened; }
+        }
+
+        public BuldozerPower()
+            : base("buldozer", "Buldozer")
+        {
+            SetDescription(
+                "Flattens two neighbouring rows or columns, chosen at random. Crushes even "
+                    + "obsidian and gold. Pays no points and never counts as a clean sweep.",
+                "Rastgele seçilen ardışık 2 satırı ya da 2 sütunu siler. Obsidyeni ve altını "
+                    + "bile ezer. Puan vermez, temizlik sayılmaz.");
+            BaseSellValue = 50;
+        }
+
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            GameBoard board = ctx.Round.Board;
+            // Needs room for a band on at least one axis, and something to flatten.
+            return board.OccupiedCount > 0
+                && (board.Height >= BandWidth || board.Width >= BandWidth);
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            GameBoard board = ctx.Round.Board;
+            bool rowsFit = board.Height >= BandWidth;
+            bool colsFit = board.Width >= BandWidth;
+            if (!rowsFit && !colsFit)
+            {
+                return false;
+            }
+            // Random axis - unless only one of them has room for the band.
+            bool useRows = rowsFit && (!colsFit || ctx.Rng.NextInt(0, 2) == 0);
+
+            lastFlattened.Clear();
+            if (useRows)
+            {
+                int first = board.MinY + ctx.Rng.NextInt(0, board.Height - BandWidth + 1);
+                for (int y = first; y < first + BandWidth; y++)
+                {
+                    for (int x = board.MinX; x < board.MinX + board.Width; x++)
+                    {
+                        AddIfOccupied(board, new GridPos(x, y));
+                    }
+                }
+            }
+            else
+            {
+                int first = board.MinX + ctx.Rng.NextInt(0, board.Width - BandWidth + 1);
+                for (int x = first; x < first + BandWidth; x++)
+                {
+                    for (int y = board.MinY; y < board.MinY + board.Height; y++)
+                    {
+                        AddIfOccupied(board, new GridPos(x, y));
+                    }
+                }
+            }
+            if (lastFlattened.Count == 0)
+            {
+                return false; // the band was empty - do not waste the charge
+            }
+            // forced: crushes indestructible cubes too. countsForSweep: false - the wipe is
+            // inert, so it feeds no counter and TryResolveCleanSweep is deliberately NOT called.
+            ctx.Round.DestroyCubes(lastFlattened, false, true);
+            return true;
+        }
+
+        private void AddIfOccupied(GameBoard board, GridPos pos)
+        {
+            if (board.IsInside(pos) && board.GetCube(pos).HasValue)
+            {
+                lastFlattened.Add(pos);
+            }
+        }
     }
 }

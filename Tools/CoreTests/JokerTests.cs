@@ -72,6 +72,8 @@ public static class JokerTests
         Deprem_CollapsesAQuarterInsteadOfLosing();
         KentselDonusum_SwapsLinesToEscapeADeadEnd();
         Rescue_DeclineEndsTheRound();
+        BuldozerPower_FlattensATwoWideBandAndCountsForNothing();
+        BuldozerPower_CrushesIndestructibleCubes();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -1814,6 +1816,72 @@ public static class JokerTests
         round.DebugDeclineRescue();
         Check(round.Status == RoundStatus.Lost, "declining confirms the loss",
             "status " + round.Status);
+    }
+
+    private static void BuldozerPower_FlattensATwoWideBandAndCountsForNothing()
+    {
+        Section("buldozer power / flattens a two-wide band");
+        var session = NewSession(457, 6, 1000000, 40, 1);
+        var power = (BuldozerPower)session.Powers.Add(new BuldozerPower());
+        RoundEngine round = session.CurrentRound;
+
+        Check(!session.Powers.CanUse(power.InstanceId, ActivationTarget.None),
+            "refused on an empty board");
+
+        FillBoardSolid(round, session);
+        int before = round.Board.OccupiedCount;
+        int scoreBefore = round.RoundScore;
+        int sweeps = round.CleanSweepCount;
+
+        Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.None), "the dozer ran");
+
+        // A 6x6 solid board: a two-wide band is 12 cubes whichever axis it picked.
+        Check(round.Board.OccupiedCount == before - 12, "exactly two lines went",
+            round.Board.OccupiedCount + " vs " + (before - 12));
+        Check(power.LastFlattenedCells.Count == 12, "the flattened cells are reported",
+            "count " + power.LastFlattenedCells.Count);
+
+        // The band must be two NEIGHBOURING lines, not two random ones.
+        var xs = new HashSet<int>();
+        var ys = new HashSet<int>();
+        foreach (GridPos cell in power.LastFlattenedCells)
+        {
+            xs.Add(cell.X);
+            ys.Add(cell.Y);
+        }
+        bool rowBand = ys.Count == 2 && xs.Count == round.Board.Width;
+        bool colBand = xs.Count == 2 && ys.Count == round.Board.Height;
+        Check(rowBand || colBand, "it took a full band, not scattered cells",
+            "xs " + xs.Count + " ys " + ys.Count);
+        var band = new List<int>(rowBand ? ys : xs);
+        band.Sort();
+        Check(band[1] - band[0] == 1, "the two lines are neighbours",
+            band[0] + " and " + band[1]);
+
+        // Inert by design: no score, no sweep.
+        Check(round.RoundScore == scoreBefore, "it paid nothing",
+            round.RoundScore + " vs " + scoreBefore);
+        Check(round.CleanSweepCount == sweeps, "and never counted as a clean sweep");
+    }
+
+    private static void BuldozerPower_CrushesIndestructibleCubes()
+    {
+        Section("buldozer power / crushes obsidian and gold");
+        var session = NewSession(461, 4, 1000000, 40, 1);
+        var power = (BuldozerPower)session.Powers.Add(new BuldozerPower());
+        RoundEngine round = session.CurrentRound;
+
+        // A 4x4 board solid with obsidian: nothing else in the game could shift these.
+        FillBoardSolid(round, session);
+        foreach (GridPos cell in AllPlayableCells(round.Board))
+        {
+            round.Board.SetCubeAt(cell, new Cube(CubeKind.Obsidian, 9100));
+        }
+        int before = round.Board.OccupiedCount;
+
+        Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.None), "the dozer ran");
+        Check(round.Board.OccupiedCount == before - 8, "it crushed the obsidian band too",
+            round.Board.OccupiedCount + " vs " + (before - 8));
     }
 
     private static void Powerbank_RechargesASpentPower()
