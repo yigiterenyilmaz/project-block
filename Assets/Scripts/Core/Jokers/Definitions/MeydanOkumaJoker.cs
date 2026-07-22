@@ -25,7 +25,7 @@ namespace ProjectBlock.Core
         /// <summary>Bonus for clearing the FIRST mark. Halves on every miss.</summary>
         public int BaseBonus = 150;
 
-        /// <summary>Floor for the deadline, in turns: max(3, empty cell count).</summary>
+        /// <summary>Floor for the deadline, in turns: max(3, empty cells in the marked line).</summary>
         public int MinDeadline = 3;
 
         private const int MaxAttempts = 3;
@@ -152,8 +152,8 @@ namespace ProjectBlock.Core
             LayMark(turn);
         }
 
-        /// <summary>Marks a random row or column that has playable cells, and refreshes the
-        /// deadline from the CURRENT empty-cell count - so a fuller board gives less time.</summary>
+        /// <summary>Marks a random row or column that has playable cells, and sets the deadline
+        /// from the empty cells of THAT line - a line already nearly full gives less time.</summary>
         private void LayMark(TurnContext turn)
         {
             GameBoard board = turn.Round.Board;
@@ -186,11 +186,40 @@ namespace ProjectBlock.Core
             hasMark = true;
             attemptsMade++;
 
-            int empty = board.PlayableCellCount - board.OccupiedCount;
+            // The deadline counts the empty cells of the MARKED LINE only, not the whole
+            // board: you must fill exactly the gaps in that row/column to clear it.
+            int empty = EmptyCellsInLine(board, markIsRow, markedLine);
             turnsLeft = empty > MinDeadline ? empty : MinDeadline;
         }
 
-        private bool MarkedLineExploded(TurnReport report)
+        /// <summary>Empty PLAYABLE cells on one line - the gaps the player must still fill.</summary>
+        private static int EmptyCellsInLine(GameBoard board, bool isRow, int line)
+        {
+            int empty = 0;
+            if (isRow)
+            {
+                for (int x = 0; x < board.Width; x++)
+                {
+                    var pos = new GridPos(x + board.MinX, line + board.MinY);
+                    if (board.IsInside(pos) && !board.GetCube(pos).HasValue)
+                    {
+                        empty++;
+                    }
+                }
+                return empty;
+            }
+            for (int y = 0; y < board.Height; y++)
+            {
+                var pos = new GridPos(line + board.MinX, y + board.MinY);
+                if (board.IsInside(pos) && !board.GetCube(pos).HasValue)
+                {
+                    empty++;
+                }
+            }
+            return empty;
+        }
+
+                private bool MarkedLineExploded(TurnReport report)
         {
             IReadOnlyList<int> exploded = markIsRow ? report.ExplodedRows : report.ExplodedColumns;
             for (int i = 0; i < exploded.Count; i++)

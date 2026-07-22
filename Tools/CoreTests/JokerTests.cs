@@ -2224,8 +2224,9 @@ public static class JokerTests
     private static void MeydanOkuma_MarksThenPaysOnClear()
     {
         Section("meydan okuma / marks a line and pays on the clear");
-        // 3x3 board, 3-cube bars: rows fill and clear every turn.
-        var session = NewSession(541, 3, 1000000, 40, 3);
+        // 6x6 board: big enough that a whole-board deadline would be ~30, while a line-based
+        // one is at most the board width - which is what proves the fix.
+        var session = NewSession(541, 6, 1000000, 40, 3);
         var joker = (MeydanOkumaJoker)session.Jokers.Add(new MeydanOkumaJoker());
         joker.ArmAfterTurns = 1; // arm early so the test is short
         joker.BaseBonus = 200;
@@ -2247,6 +2248,8 @@ public static class JokerTests
         Check(joker.HasActiveMark, "a line was marked", "no mark");
         Check(joker.TurnsLeft >= 3, "the deadline is at least the floor",
             "turns " + joker.TurnsLeft);
+        Check(joker.TurnsLeft <= round.Board.Width, "and no larger than the marked LINE, "
+            + "not the whole board", "turns " + joker.TurnsLeft);
         Check(joker.CurrentBonus == 200, "the first attempt is worth the full bonus",
             "bonus " + joker.CurrentBonus);
     }
