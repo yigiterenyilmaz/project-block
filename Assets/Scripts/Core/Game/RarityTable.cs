@@ -28,6 +28,7 @@ namespace ProjectBlock.Core
             { "robot_supurge", Rarity.Rare },
             { "deprem", Rarity.Rare },
             { "hazine", Rarity.Rare },
+            { "meydan_okuma", Rarity.Common },
             { "kayit_defteri", Rarity.Common },
             { "midas", Rarity.Common },
             { "elmas_kazma", Rarity.Common },

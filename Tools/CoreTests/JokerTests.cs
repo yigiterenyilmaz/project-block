@@ -83,6 +83,8 @@ public static class JokerTests
         Hazine_BuriesTwoMarksAndPaysOutOnce();
         Hazine_DynamiteAppliesAPenalty();
         Hazine_HittingBothCancelsOut();
+        MeydanOkuma_MarksThenPaysOnClear();
+        MeydanOkuma_HalvesAndGivesUpAfterThreeMisses();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -2217,6 +2219,75 @@ public static class JokerTests
             anyFrozenAfter |= round.IsFrozen(round.Hand[i].Id);
         }
         Check(anyFrozenAfter == anyFrozenBefore, "nothing was frozen either");
+    }
+
+    private static void MeydanOkuma_MarksThenPaysOnClear()
+    {
+        Section("meydan okuma / marks a line and pays on the clear");
+        // 3x3 board, 3-cube bars: rows fill and clear every turn.
+        var session = NewSession(541, 3, 1000000, 40, 3);
+        var joker = (MeydanOkumaJoker)session.Jokers.Add(new MeydanOkumaJoker());
+        joker.ArmAfterTurns = 1; // arm early so the test is short
+        joker.BaseBonus = 200;
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        RoundEngine round = session.CurrentRound;
+
+        Check(!joker.HasActiveMark, "no mark before it is armed");
+
+        // One turn to arm it. After a placement resolves, a mark should be laid (unless the
+        // very turn it arms also clears something - so drive until it holds a mark).
+        int guard = 0;
+        while (!joker.HasActiveMark && guard++ < 6 && round.Status == RoundStatus.InProgress)
+        {
+            if (PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        Check(joker.HasActiveMark, "a line was marked", "no mark");
+        Check(joker.TurnsLeft >= 3, "the deadline is at least the floor",
+            "turns " + joker.TurnsLeft);
+        Check(joker.CurrentBonus == 200, "the first attempt is worth the full bonus",
+            "bonus " + joker.CurrentBonus);
+    }
+
+    private static void MeydanOkuma_HalvesAndGivesUpAfterThreeMisses()
+    {
+        Section("meydan okuma / halves the bonus and stops after three misses");
+        var joker = new MeydanOkumaJoker();
+        joker.ArmAfterTurns = 0;
+        joker.BaseBonus = 200;
+        joker.MinDeadline = 1; // tiny deadline so every attempt misses in one tick
+
+        // A nearly-full board keeps the deadline at the floor: max(3, empty) is small only
+        // when few cells are empty, so filling the board is what makes each attempt miss fast.
+        var session = NewSession(547, 3, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.Add(joker);
+        session.Jokers.DispatchRoundStarted(round);
+        FillBoardSolid(round, session); // empty = 0 -> deadline = max(1, 0) = 1
+
+        var seenBonuses = new List<int>();
+        for (int i = 0; i < 12 && !joker.IsResolved; i++)
+        {
+            var report = new TurnReport();
+            report.Card = new BlockCard(1, Bar(1));
+            report.Score = new ScoreBreakdown();
+            report.ExplodedRows = new List<int>();     // never the marked line
+            report.ExplodedColumns = new List<int>();
+            var turn = new TurnContext(session, session.Rng, round, report, report.Score);
+            joker.AfterTurnScored(turn);
+            if (joker.HasActiveMark && !seenBonuses.Contains(joker.CurrentBonus))
+            {
+                seenBonuses.Add(joker.CurrentBonus);
+            }
+        }
+
+        Check(seenBonuses.Contains(200), "the first attempt was worth the full bonus");
+        Check(seenBonuses.Contains(100), "the second attempt halved it");
+        Check(seenBonuses.Contains(50), "the third halved it again",
+            "seen " + string.Join(",", seenBonuses));
+        Check(joker.IsResolved, "after three misses it gives up for the round");
     }
 
     private static void Powerbank_RechargesASpentPower()
