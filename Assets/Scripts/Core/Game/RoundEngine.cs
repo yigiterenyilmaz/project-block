@@ -341,6 +341,10 @@ namespace ProjectBlock.Core
         /// clean sweeps; without it they are ignored, which is the base-game behaviour.</summary>
         private bool externalClearReady;
 
+        /// <summary>Set when a NEGATIVE block already sampled the sweep pre-condition, so the
+        /// normal explosion path does not re-sample it on a board the erasure just changed.</summary>
+        private bool cleanSampleLocked;
+
         /// <summary>Fires after every resolved placement. The UI subscribes here.
         /// Jokers do NOT - they get ordered, mid-turn callbacks through ITurnHooks.</summary>
         public event Action<TurnReport> TurnResolved;

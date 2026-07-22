@@ -114,7 +114,8 @@ namespace ProjectBlock.Core
             BlockElement.Ghost,
             BlockElement.Dynamite,
             BlockElement.Mechanical,
-            BlockElement.Fox
+            BlockElement.Fox,
+            BlockElement.Negative
         };
     }
 }

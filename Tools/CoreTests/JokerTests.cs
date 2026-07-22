@@ -74,6 +74,9 @@ public static class JokerTests
         Rescue_DeclineEndsTheRound();
         BuldozerPower_FlattensATwoWideBandAndCountsForNothing();
         BuldozerPower_CrushesIndestructibleCubes();
+        NegativeBlock_ErasesWhatItCoversAndLeavesNothing();
+        NegativeBlock_RefusedByIndestructibleCubes();
+        NegativeBlock_CanSweepAndEscapeADeadEnd();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -1882,6 +1885,87 @@ public static class JokerTests
         Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.None), "the dozer ran");
         Check(round.Board.OccupiedCount == before - 8, "it crushed the obsidian band too",
             round.Board.OccupiedCount + " vs " + (before - 8));
+    }
+
+    private static void NegativeBlock_ErasesWhatItCoversAndLeavesNothing()
+    {
+        Section("negative block / erases and leaves nothing");
+        var session = NewSession(463, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+
+        // Three cubes in a row for the negative bar to land on.
+        PaintBoard(round, session, CubeKind.Normal,
+            new GridPos(1, 1), new GridPos(2, 1), new GridPos(3, 1));
+        int before = round.Board.OccupiedCount;
+        int scoreBefore = round.RoundScore;
+
+        BlockCard negative = session.CreateCard(Bar(3), new[] { BlockElement.Negative });
+        round.AddBonusCard(negative, BonusPlayOutcome.ExpireFromRound);
+
+        // The whole point: it may be placed ON occupied cells, which nothing else can do.
+        Check(round.CanPlaceCard(negative, new GridPos(1, 1)),
+            "it can be placed on top of existing cubes");
+
+        TurnReport report = round.PlayFromBonus(0, new GridPos(1, 1));
+
+        Check(round.Board.OccupiedCount == before - 3, "the three cubes were erased",
+            round.Board.OccupiedCount + " vs " + (before - 3));
+        Check(!round.Board.GetCube(new GridPos(1, 1)).HasValue, "and the cell is EMPTY");
+        Check(report.PlacedCells.Count == 0, "nothing was placed - the block went too",
+            "placed " + report.PlacedCells.Count);
+        Check(report.DestroyedCubes.Count == 3, "the erasure is in the destruction log",
+            "logged " + report.DestroyedCubes.Count);
+        Check(round.RoundScore > scoreBefore, "it paid the per-cube explosion score",
+            round.RoundScore + " vs " + scoreBefore);
+    }
+
+    private static void NegativeBlock_RefusedByIndestructibleCubes()
+    {
+        Section("negative block / obsidian and gold refuse it");
+        var session = NewSession(467, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+
+        PaintBoard(round, session, CubeKind.Obsidian, new GridPos(2, 2));
+        PaintBoard(round, session, CubeKind.Gold, new GridPos(3, 3));
+        PaintBoard(round, session, CubeKind.Normal, new GridPos(0, 0));
+
+        BlockCard negative = session.CreateCard(Bar(1), new[] { BlockElement.Negative });
+
+        Check(!round.CanPlaceCard(negative, new GridPos(2, 2)), "obsidian refuses it");
+        Check(!round.CanPlaceCard(negative, new GridPos(3, 3)), "gold refuses it");
+        Check(round.CanPlaceCard(negative, new GridPos(0, 0)), "a normal cube accepts it");
+        Check(round.CanPlaceCard(negative, new GridPos(4, 4)), "empty space accepts it too");
+    }
+
+    private static void NegativeBlock_CanSweepAndEscapeADeadEnd()
+    {
+        Section("negative block / sweeps and rescues");
+        // A board holding exactly one cube: erasing it empties the board, which must count
+        // as a clean sweep - the erasure is this turn's destruction.
+        var session = NewSession(479, 4, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        PaintBoard(round, session, CubeKind.Normal, new GridPos(1, 1));
+
+        BlockCard negative = session.CreateCard(Bar(1), new[] { BlockElement.Negative });
+        round.AddBonusCard(negative, BonusPlayOutcome.ExpireFromRound);
+        int sweepsBefore = round.CleanSweepCount;
+
+        TurnReport report = round.PlayFromBonus(0, new GridPos(1, 1));
+        Check(round.Board.OccupiedCount == 0, "the board is empty",
+            "occupied " + round.Board.OccupiedCount);
+        Check(report.CleanSweep && round.CleanSweepCount == sweepsBefore + 1,
+            "emptying the board with it counts as a clean sweep",
+            "sweep " + report.CleanSweep);
+
+        // And on a solid board it is still playable when nothing else is - it lands on cubes.
+        var s2 = NewSession(487, 4, 1000000, 40, 3);
+        RoundEngine r2 = s2.CurrentRound;
+        FillBoardSolid(r2, s2);
+        BlockCard neg2 = s2.CreateCard(Bar(2), new[] { BlockElement.Negative });
+        Check(r2.Board.AnyPlacementExists(Bar(2), false, true),
+            "a full board still has room for a negative block");
+        Check(!r2.Board.AnyPlacementExists(Bar(2), false, false),
+            "while a normal block has nowhere to go");
     }
 
     private static void Powerbank_RechargesASpentPower()

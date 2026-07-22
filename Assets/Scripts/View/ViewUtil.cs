@@ -48,6 +48,7 @@ namespace ProjectBlock.View
                 case BlockElement.Gold: return new Color(1f, 0.8f, 0.25f);
                 case BlockElement.Transparent: return new Color(0.75f, 0.85f, 0.9f);
                 case BlockElement.Ghost: return new Color(0.78f, 0.78f, 0.95f);
+                case BlockElement.Negative: return new Color(0.16f, 0.16f, 0.2f);
                 case BlockElement.Dynamite: return new Color(0.88f, 0.2f, 0.15f);
                 case BlockElement.Mechanical: return new Color(0.6f, 0.65f, 0.7f);
                 case BlockElement.Fox: return new Color(0.85f, 0.5f, 0.2f);
@@ -95,6 +96,7 @@ namespace ProjectBlock.View
                 case BlockElement.Gold: return Loc.Pick("GOLD", "ALTIN");
                 case BlockElement.Transparent: return Loc.Pick("GLASS", "CAM");
                 case BlockElement.Ghost: return Loc.Pick("GHOST", "HAYALET");
+                case BlockElement.Negative: return Loc.Pick("NEGATIVE", "NEGATİF");
                 case BlockElement.Dynamite: return "TNT";
                 case BlockElement.Mechanical: return Loc.Pick("GEARS", "ÇARK");
                 case BlockElement.Fox: return Loc.Pick("FOX", "TİLKİ");
@@ -126,6 +128,12 @@ namespace ProjectBlock.View
                 case BlockElement.Ghost:
                     return Loc.Pick("Can be placed partly off the board (at least one cube on).",
                         "Kısmen alan dışına konabilir (en az bir küp içeride).");
+                case BlockElement.Negative:
+                    return Loc.Pick(
+                        "Place it ON existing blocks to erase them. It leaves nothing behind - "
+                            + "the cells end up empty. Obsidian and gold refuse it.",
+                        "Mevcut blokların ÜSTÜNE konur ve onları siler. Geriye hiçbir şey "
+                            + "bırakmaz, kareler boşalır. Obsidyen ve altın kabul etmez.");
                 case BlockElement.Dynamite:
                     return Loc.Pick("If the whole block explodes the turn it lands, the board is cleared.",
                         "Blok tek seferde tümüyle patlarsa tüm alan temizlenir.");

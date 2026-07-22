@@ -268,8 +268,9 @@ namespace ProjectBlock.Core
         private bool CanPlayCardAnywhere(BlockCard card)
         {
             bool ghost = card.Has(BlockElement.Ghost);
+            bool negative = card.Has(BlockElement.Negative);
             BlockShape shape = EffectiveShape(card);
-            if (Board.AnyPlacementExists(shape, ghost))
+            if (Board.AnyPlacementExists(shape, ghost, negative))
             {
                 return true;
             }
@@ -279,7 +280,7 @@ namespace ProjectBlock.Core
                 for (int i = 0; i < 3; i++)
                 {
                     rotated = rotated.RotatedClockwise();
-                    if (Board.AnyPlacementExists(rotated, ghost))
+                    if (Board.AnyPlacementExists(rotated, ghost, negative))
                     {
                         return true;
                     }
@@ -289,7 +290,7 @@ namespace ProjectBlock.Core
             {
                 foreach (BlockShape deckShape in AllRoundShapes())
                 {
-                    if (Board.AnyPlacementExists(deckShape, ghost))
+                    if (Board.AnyPlacementExists(deckShape, ghost, negative))
                     {
                         return true;
                     }

@@ -14,6 +14,16 @@ namespace ProjectBlock.Core
         /// replaced, confirmed 2026-07-18).</summary>
         public bool CanPlace(BlockShape shape, GridPos origin)
         {
+            return CanPlace(shape, origin, false, false);
+        }
+
+        /// <summary>Placement check with the negative-block rule (see Blocks).</summary>
+        public bool CanPlace(BlockShape shape, GridPos origin, bool allowOutside, bool negative)
+        {
+            if (allowOutside)
+            {
+                return CanPlaceAllowingOutside(shape, origin, negative);
+            }
             foreach (GridPos offset in shape.Cells)
             {
                 GridPos pos = origin + offset;
@@ -21,9 +31,7 @@ namespace ProjectBlock.Core
                 {
                     return false;
                 }
-                Cube? occupant = cells[pos.X - MinX, pos.Y - MinY];
-                if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent && occupant.Value.Kind != CubeKind.Void
-                    && occupant.Value.Kind != CubeKind.Mine)
+                if (Blocks(cells[pos.X - MinX, pos.Y - MinY], negative))
                 {
                     return false;
                 }
@@ -31,23 +39,41 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>Does the cube already in a cell refuse an arriving block?
+        /// Transparent is replaced, and the two traps (Void, Mine) consume what lands on
+        /// them, so all three accept a placement. A NEGATIVE block is the anti-block: it may
+        /// land on anything it can erase, and is refused only by cubes nothing can break.</summary>
+        private static bool Blocks(Cube? occupant, bool negative)
+        {
+            if (!occupant.HasValue)
+            {
+                return false;
+            }
+            if (negative)
+            {
+                return !CubeRules.IsDestructible(occupant.Value);
+            }
+            return occupant.Value.Kind != CubeKind.Transparent
+                && occupant.Value.Kind != CubeKind.Void
+                && occupant.Value.Kind != CubeKind.Mine;
+        }
+
         /// <summary>Ghost placement check: cubes may hang outside the grid (onto free
         /// outside space), but at least one cube must land inside.</summary>
         public bool CanPlace(BlockShape shape, GridPos origin, bool allowOutside)
         {
-            if (!allowOutside)
-            {
-                return CanPlace(shape, origin);
-            }
+            return CanPlace(shape, origin, allowOutside, false);
+        }
+
+        private bool CanPlaceAllowingOutside(BlockShape shape, GridPos origin, bool negative)
+        {
             int insideCount = 0;
             foreach (GridPos offset in shape.Cells)
             {
                 GridPos pos = origin + offset;
                 if (IsInside(pos))
                 {
-                    Cube? occupant = cells[pos.X - MinX, pos.Y - MinY];
-                    if (occupant.HasValue && occupant.Value.Kind != CubeKind.Transparent && occupant.Value.Kind != CubeKind.Void
-                    && occupant.Value.Kind != CubeKind.Mine)
+                    if (Blocks(cells[pos.X - MinX, pos.Y - MinY], negative))
                     {
                         return false;
                     }

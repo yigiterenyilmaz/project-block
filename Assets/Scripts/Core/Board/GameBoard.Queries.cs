@@ -349,15 +349,21 @@ namespace ProjectBlock.Core
         /// <summary>Legal-origin check with optional ghost overhang.</summary>
         public bool AnyPlacementExists(BlockShape shape, bool allowOutside)
         {
-            if (!allowOutside)
+            return AnyPlacementExists(shape, allowOutside, false);
+        }
+
+        /// <summary>Is there anywhere this shape could go? The negative flag matters here as
+        /// much as in CanPlace: a negative block lands on occupied cells, so a board that is
+        /// a dead end for every other card may still have room for it.</summary>
+        public bool AnyPlacementExists(BlockShape shape, bool allowOutside, bool negative)
+        {
+            int fromX = allowOutside ? 1 - shape.Width : 0;
+            int fromY = allowOutside ? 1 - shape.Height : 0;
+            for (int x = fromX; x < Width; x++)
             {
-                return AnyPlacementExists(shape);
-            }
-            for (int x = 1 - shape.Width; x < Width; x++)
-            {
-                for (int y = 1 - shape.Height; y < Height; y++)
+                for (int y = fromY; y < Height; y++)
                 {
-                    if (CanPlace(shape, new GridPos(x + MinX, y + MinY), true))
+                    if (CanPlace(shape, new GridPos(x + MinX, y + MinY), allowOutside, negative))
                     {
                         return true;
                     }

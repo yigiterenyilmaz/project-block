@@ -19,7 +19,8 @@ namespace ProjectBlock.Core
         /// may hang off the board). UI and play methods both use this.</summary>
         public bool CanPlaceCard(BlockCard card, GridPos origin)
         {
-            return Board.CanPlace(EffectiveShape(card), origin, card.Has(BlockElement.Ghost));
+            return Board.CanPlace(EffectiveShape(card), origin, card.Has(BlockElement.Ghost),
+                card.Has(BlockElement.Negative));
         }
 
         /// <summary>The shape this card currently places: fox reshapes replace the base

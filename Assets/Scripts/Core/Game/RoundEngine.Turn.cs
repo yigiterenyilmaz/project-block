@@ -41,14 +41,21 @@ namespace ProjectBlock.Core
             cubesDestroyedThisTurn = 0;
             pendingAdvanceOffer = false;
             externalClearReady = false;
+            cleanSampleLocked = false;
             destroyedThisTurn.Clear();
             cardsFullyDestroyedThisTurn.Clear();
             report.DestroyedCubes = destroyedThisTurn;
             report.CardsFullyDestroyed = cardsFullyDestroyedThisTurn;
 
-            // 1. place + score
-            report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
-                card.Has(BlockElement.Ghost));
+            // 1. place + score. A NEGATIVE block places nothing - it erases what it covers
+            // and goes with it - so it is resolved after the placement score below, which
+            // would otherwise overwrite what the erasure earns.
+            bool negative = card.Has(BlockElement.Negative);
+            if (!negative)
+            {
+                report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
+                    card.Has(BlockElement.Ghost));
+            }
             if (card.Has(BlockElement.Dynamite))
             {
                 var state = new DynamiteState();
@@ -62,6 +69,10 @@ namespace ProjectBlock.Core
             {
                 // retro pays a flat bonus for every placement (ScoringConfig.RetroPlacementBonus)
                 breakdown.BasePlacement += scorer.RetroPlacementBonus;
+            }
+            if (negative)
+            {
+                ResolveNegativePlacement(card, origin, report, breakdown);
             }
             var waterFrames = new List<IReadOnlyList<WaterMove>>();
 
@@ -77,15 +88,21 @@ namespace ProjectBlock.Core
             // changes the clean check), but a fire->obsidian douse can, hence the resample.
             // The destruction snapshot baselines here, before the first explosion attempt,
             // and is resynced after every settle - moved water must not read as destroyed.
-            boardCleanBeforeExplosion = Board.IsCleanForSweep();
-            ResyncSnapshot();
-            CaptureTurnStartCardCounts();
+            if (!cleanSampleLocked)
+            {
+                boardCleanBeforeExplosion = Board.IsCleanForSweep();
+                ResyncSnapshot();
+                CaptureTurnStartCardCounts();
+            }
             LineExplosionResult explosion = Board.ResolveFullLines(Rules.RetroMode);
             if (explosion.LineCount == 0)
             {
                 Board.SettleWaterAndReact(waterFrames); // nothing exploded in place -> water falls
                 ResyncSnapshot(); // water moved, nothing died - re-baseline the destruction diff
-                boardCleanBeforeExplosion = Board.IsCleanForSweep();
+                if (!cleanSampleLocked)
+                {
+                    boardCleanBeforeExplosion = Board.IsCleanForSweep();
+                }
                 explosion = Board.ResolveFullLines(Rules.RetroMode);
             }
             // Frames appended after this point are post-explosion falls; the UI plays the
@@ -283,6 +300,54 @@ namespace ProjectBlock.Core
                 TurnResolved(report);
             }
             return report;
+        }
+
+        /// <summary>
+        /// Resolves a NEGATIVE block: it erases the cubes under its shape and leaves nothing
+        /// behind - both the block and what it deleted are gone, so the cells end up empty.
+        ///
+        /// The erased cubes go through DestroyCubes like any other destruction, which is what
+        /// keeps the destruction log, the "Kayıt defteri" tally and the clean-sweep
+        /// pre-condition correct. They pay the normal per-cube explosion score.
+        ///
+        /// Indestructible cubes cannot be here at all: CanPlace refuses to let a negative
+        /// block land on obsidian or gold in the first place.
+        /// </summary>
+        private void ResolveNegativePlacement(BlockCard card, GridPos origin, TurnReport report,
+            ScoreBreakdown score)
+        {
+            // Sample the sweep pre-condition BEFORE erasing: for a normal card the placement
+            // is what makes the board "not clean", but here the erasure IS the placement, so
+            // the sample has to happen first or a board this block empties could never sweep.
+            // The lock stops the normal explosion path from re-sampling it afterwards.
+            boardCleanBeforeExplosion = Board.IsCleanForSweep();
+            ResyncSnapshot();
+            CaptureTurnStartCardCounts();
+            cleanSampleLocked = true;
+
+            BlockShape shape = EffectiveShape(card);
+            var targets = new List<GridPos>();
+            foreach (GridPos offset in shape.Cells)
+            {
+                GridPos pos = origin + offset;
+                if (Board.IsInside(pos) && Board.GetCube(pos).HasValue)
+                {
+                    targets.Add(pos);
+                }
+            }
+            if (targets.Count == 0)
+            {
+                return; // dropped on empty space: legal, but there was nothing to erase
+            }
+            IReadOnlyList<GridPos> erased = DestroyCubes(targets, true);
+            if (erased.Count == 0)
+            {
+                return;
+            }
+            // Scored as an explosion of its own: no lines were completed, so the line count
+            // is zero and only the per-cube value applies.
+            score.BasePlacement += scorer.ScoreLineExplosion(0, erased.Count);
+            report.AddExtraExplodedCells(erased);
         }
     }
 }

@@ -44,7 +44,13 @@ namespace ProjectBlock.Core
         /// <summary>"Kara delik" joker only: a 1x1 trap. Blocks may be placed on top of it,
         /// but the cube that lands there is destroyed on contact and the void goes with it.
         /// Round-scoped - these cards never join the owned deck.</summary>
-        Void = 10
+        Void = 10,
+
+        /// <summary>The anti-block: it may be placed ON TOP of existing cubes and ERASES
+        /// them. Nothing is left behind - the negative block goes with what it deleted, so
+        /// the cells end up empty. Indestructible cubes (obsidian, gold) refuse it, which is
+        /// what stops it from being a universal solvent.</summary>
+        Negative = 11
 
         // Mirror ("ayna") and PiggyBank ("kumbara") were cut from the design 2026-07-18.
     }
