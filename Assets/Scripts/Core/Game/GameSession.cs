@@ -50,6 +50,37 @@ namespace ProjectBlock.Core
         /// "Damlaya damlaya" reads it when the market is left.</summary>
         private bool purchasedThisMarket;
 
+        /// <summary>Fraction knocked off every price in the NEXT market visit, 0 = none.
+        /// Granted by an effect during a round ("Hazine" treasure) and consumed when that
+        /// market is left, so a discount is never carried into a second visit.</summary>
+        public double PendingMarketDiscount { get; private set; }
+
+        /// <summary>Adds a discount for the next market visit. Several sources stack up to a
+        /// sane ceiling rather than making things free.</summary>
+        public void AddMarketDiscount(double fraction)
+        {
+            if (fraction <= 0.0)
+            {
+                return;
+            }
+            PendingMarketDiscount += fraction;
+            if (PendingMarketDiscount > 0.75)
+            {
+                PendingMarketDiscount = 0.75;
+            }
+        }
+
+        /// <summary>Applies the pending discount to a price, never below 1.</summary>
+        private int Discounted(int price)
+        {
+            if (PendingMarketDiscount <= 0.0)
+            {
+                return price;
+            }
+            int cut = (int)System.Math.Round(price * (1.0 - PendingMarketDiscount));
+            return cut < 1 ? 1 : cut;
+        }
+
         /// <summary>Rerolls done in the current market visit. Raises the next reroll's cost and
         /// varies the reroll rng. Reset to 0 on every market entry (and on leaving).</summary>
         private int rerollCount;
@@ -327,6 +358,7 @@ namespace ProjectBlock.Core
                 throw new InvalidOperationException("Not in the market phase.");
             }
             Jokers.DispatchMarketLeft(purchasedThisMarket);
+            PendingMarketDiscount = 0.0; // spent on this visit, never carried to the next
             rerollCount = 0;
             RoundNumber++;
             StartRound();
@@ -504,7 +536,8 @@ namespace ProjectBlock.Core
                 card = Jokers.FilterMarketOffer(card); // "Simya" adds a second element here
                 // priced AFTER the filter so a joker-added element is surcharged too, and
                 // lifted into the scaled economy so prices track the bigger score numbers
-                newOffers.Add(new MarketOffer(card, market.BuyPrice(card) * Config.Scoring.ScoreScale));
+                newOffers.Add(new MarketOffer(card,
+                    Discounted(market.BuyPrice(card) * Config.Scoring.ScoreScale)));
             }
             AddJokerOffers(market, newOffers, reroll);
             AddPowerOffers(market, newOffers, reroll);
@@ -595,7 +628,7 @@ namespace ProjectBlock.Core
                 }
                 int price = market.JokerPrice * market.PriceMultiplier(def.Rarity)
                     * Config.Scoring.ScoreScale;
-                newOffers.Add(new MarketOffer(def, price));
+                newOffers.Add(new MarketOffer(def, Discounted(price)));
                 taken++;
             }
         }
@@ -646,7 +679,7 @@ namespace ProjectBlock.Core
                 PowerDefinition def = keyed[i].Value;
                 int price = market.PowerPrice * market.PriceMultiplier(def.Rarity)
                     * Config.Scoring.ScoreScale;
-                newOffers.Add(new MarketOffer(def, price));
+                newOffers.Add(new MarketOffer(def, Discounted(price)));
             }
         }
 

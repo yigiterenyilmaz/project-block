@@ -79,6 +79,7 @@ public static class JokerTests
         NegativeBlock_CanSweepAndEscapeADeadEnd();
         FrozenCard_CannotBePlayedAndThaws();
         FrozenCard_CountsAsNoPlayableMove();
+        MarketDiscount_CutsPricesForOneVisit();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -2038,6 +2039,46 @@ public static class JokerTests
         Check(round.Status == RoundStatus.Lost || round.Status == RoundStatus.AwaitingRescue,
             "a fully frozen hand is treated as no playable move",
             "status " + round.Status);
+    }
+
+    private static void MarketDiscount_CutsPricesForOneVisit()
+    {
+        Section("market discount / one visit only");
+        var session = NewSession(503, 3, 10, 6, 3);
+
+        Check(session.PendingMarketDiscount == 0.0, "no discount to begin with");
+        session.AddMarketDiscount(0.3);
+        Check(session.PendingMarketDiscount == 0.3, "the discount is pending",
+            "" + session.PendingMarketDiscount);
+
+        // Discounts stack but never make things free.
+        session.AddMarketDiscount(0.9);
+        Check(session.PendingMarketDiscount <= 0.75, "stacking is capped",
+            "" + session.PendingMarketDiscount);
+
+        // Reach the market so offers are priced with it, then confirm it is consumed.
+        int guard = 0;
+        while (session.Phase == GamePhase.Round && guard++ < 40)
+        {
+            if (session.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                session.CurrentRound.DecideAdvance(true);
+                break;
+            }
+            if (PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        if (session.Phase != GamePhase.Market)
+        {
+            Check(false, "could not reach the market", "phase " + session.Phase);
+            return;
+        }
+        Check(session.PendingMarketDiscount > 0.0, "it survived into the market");
+        session.LeaveMarket();
+        Check(session.PendingMarketDiscount == 0.0, "and is spent when the market is left",
+            "" + session.PendingMarketDiscount);
     }
 
     private static void Powerbank_RechargesASpentPower()
