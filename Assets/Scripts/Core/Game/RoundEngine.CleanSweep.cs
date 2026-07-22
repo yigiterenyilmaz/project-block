@@ -136,7 +136,7 @@ namespace ProjectBlock.Core
         /// <summary>Destroys cubes outside the normal line explosion (joker/power effects).
         /// Scoreless by itself - the caller decides whether to award points. Feeds the
         /// central sweep pre-condition, so a joker can empty the board and TryResolveCleanSweep
-        /// will accept it. EXTENSION POINT for Robot supurge, Buldozer, Enfeksiyon.</summary>
+        /// will accept it. EXTENSION POINT for Robot supurge, Deprem, Enfeksiyon.</summary>
         /// <summary>Clears the between-turn destruction log so the next power use captures only
         /// its own destroyed cells. The View calls this right before running a power, then reads
         /// ExternalDestructionLog to blast whatever the power destroyed (board powers destroy

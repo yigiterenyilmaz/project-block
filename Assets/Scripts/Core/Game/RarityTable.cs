@@ -25,7 +25,6 @@ namespace ProjectBlock.Core
             { "altin_kumbara", Rarity.Rare },
             { "seri_tetik", Rarity.Rare },
             { "kazi_calismasi", Rarity.Rare },
-            { "buldozer", Rarity.Common },
             { "robot_supurge", Rarity.Rare },
             { "deprem", Rarity.Rare },
             { "kayit_defteri", Rarity.Common },

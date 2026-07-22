@@ -204,7 +204,7 @@ namespace ProjectBlock.Core
         // ------------------------------------------------------------------ in-turn
 
         /// <summary>After full lines exploded, before the clean-sweep check. Extra cubes may
-        /// still be destroyed here (Tutustur, Enfeksiyon, Buldozer, Kayit defteri).</summary>
+        /// still be destroyed here (Tutustur, Enfeksiyon, Kayit defteri).</summary>
         public virtual void AfterLineExplosion(TurnContext turn)
         {
         }

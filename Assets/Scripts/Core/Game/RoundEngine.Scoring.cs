@@ -81,8 +81,8 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Cubes destroyed this turn by sources that COUNT (line explosions, fire
-        /// chains, dynamite, joker effects that opted in). Buldozer's scoreless wipe is
-        /// excluded, which is what keeps it from feeding "Kayıt defteri".</summary>
+        /// chains, dynamite, joker effects that opted in). A scoreless wipe that opted OUT
+        /// (Deprem's collapse) is excluded, which is what keeps it from feeding "Kayıt defteri".</summary>
         internal int CubesDestroyedThisTurn
         {
             get { return cubesDestroyedThisTurn; }

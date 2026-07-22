@@ -303,7 +303,7 @@ namespace ProjectBlock.Core
 
         /// <summary>Destroys ONE cube outside a line explosion, if the cell holds a
         /// destructible one. Returns false for empty cells and indestructible cubes.
-        /// EXTENSION POINT: joker/power effects (Robot supurge, Buldozer, Enfeksiyon,
+        /// EXTENSION POINT: joker/power effects (Robot supurge, Deprem, Enfeksiyon,
         /// Kara delik's void cube) go through here so cube-kind rules stay in one place.</summary>
         public bool DestroyCube(GridPos pos)
         {

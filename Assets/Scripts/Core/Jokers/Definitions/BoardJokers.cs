@@ -1,5 +1,5 @@
-// PURPOSE: Jokers that reshape the board itself: Buldozer, Robot süpürge, Kayıt defteri,
-// Kazı çalışması. They are the first jokers that DESTROY cubes, so they
+// PURPOSE: Jokers that reshape the board itself: Robot süpürge, Kayıt defteri,
+// Kazı çalışması, Deprem. They are the first jokers that DESTROY cubes, so they
 // all obey the same two engine rules:
 //   - destruction goes through RoundEngine.DestroyCubes, which logs what died (kind +
 //     source card) and feeds the sweep pre-condition;
@@ -8,8 +8,8 @@
 // EXPLOSION ACCOUNTING (confirmed table, see docs/jokers-plan.md):
 //   line explosion       -> scores, counts for Kayıt defteri, can trigger a sweep
 //   Robot süpürge        -> no score,  counts,                 can trigger a sweep
-//   Buldozer             -> no score,  does NOT count,          can NEVER trigger a sweep
-// Buldozer is deliberately inert: a free board wipe that also fed the counter would hand
+//   Deprem               -> no score,  does NOT count,          can NEVER trigger a sweep
+// Deprem is deliberately inert: a free board wipe that also fed the counter would hand
 // out sweeps for nothing.
 //
 // All numbers are BALANCE PLACEHOLDERS.
@@ -18,50 +18,6 @@ using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>"Buldozer" - every N turns it wipes the board. No points, no sweep.</summary>
-    public sealed class BuldozerJoker : Joker
-    {
-        public int TurnsPerWipe = 4;
-
-        /// <summary>Turns since the last wipe, for the UI.</summary>
-        public int TurnsSinceWipe { get; private set; }
-
-        public BuldozerJoker()
-            : base("buldozer", "Buldozer")
-        {
-            SetDescription(
-                "Wipes the board every 4 turns. Pays no points and never counts as a clean sweep.",
-                "Her 4 turda bir oyun alanını siler. Puan vermez, temizlik sayılmaz.");
-            BaseSellValue = 45;
-        }
-
-        public override string StatusText
-        {
-            get
-            {
-                int left = TurnsPerWipe - TurnsSinceWipe;
-                return Loc.Pick(left + " turns left", left + " tur kaldı");
-            }
-        }
-
-        public override void OnRoundStarted(RoundContext ctx)
-        {
-            TurnsSinceWipe = 0;
-        }
-
-        public override void AfterTurnScored(TurnContext turn)
-        {
-            TurnsSinceWipe++;
-            if (TurnsSinceWipe < TurnsPerWipe)
-            {
-                return;
-            }
-            TurnsSinceWipe = 0;
-            // countsForSweep: false - a Buldozer wipe is explicitly not a temizlik.
-            turn.Round.DestroyCubes(turn.Round.Board.GetOccupiedCells(), false);
-        }
-    }
-
     /// <summary>"Robot süpürge" - eats random cubes after every turn. If it takes the last
     /// one and that triggers a sweep, it gets hungrier for the rest of the round and then
     /// needs a couple of turns to recharge.</summary>
@@ -211,7 +167,7 @@ namespace ProjectBlock.Core
 
         /// <summary>Counts the cubes the engine has destroyed but the ledger has not seen
         /// yet, so a turn with several destruction sources is counted exactly once. Reads
-        /// the engine's COUNTABLE tally, which excludes Buldozer's scoreless wipe.</summary>
+        /// the engine's COUNTABLE tally, which excludes a wipe that opted out (Deprem).</summary>
         private void Count(TurnContext turn)
         {
             if (seenTurnNumber != turn.Report.TurnNumber)
@@ -307,8 +263,8 @@ namespace ProjectBlock.Core
     /// quarter of the cubes come down, opening room to carry on. Once per round.
     ///
     /// It is a RESCUE, not a reward: the collapse pays no points and never counts as a clean
-    /// sweep, the same rule Buldozer follows. If the quarter that falls still leaves no legal
-    /// move, the round is lost - there is no second tremor.
+    /// sweep - a rescue must never make getting stuck profitable. If the quarter that falls
+    /// still leaves no legal move, the round is lost - there is no second tremor.
     ///
     /// Only destructible cubes are candidates: obsidian and gold do not care about
     /// earthquakes, and shaking them would waste the rescue on cubes that cannot move.
@@ -386,8 +342,8 @@ namespace ProjectBlock.Core
 
             usedThisRound = true;
             CollapseCount++;
-            // countsForSweep: false - a quake is explicitly not a temizlik, exactly like a
-            // Buldozer wipe, so it can neither score nor hand out a sweep.
+            // countsForSweep: false - a quake is explicitly not a temizlik, so it can
+            // neither score nor hand out a sweep.
             ctx.Round.DestroyCubes(lastCollapsed, false);
             return true;
         }

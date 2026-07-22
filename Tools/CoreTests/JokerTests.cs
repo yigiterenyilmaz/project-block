@@ -39,7 +39,6 @@ public static class JokerTests
         HarcamaBonusu_PaysWhenDrawPileEmpties();
         FullRun_WithEveryJoker_IsDeterministic();
         CleanSweep_FiresOnceAndOnlyOnRealSweep();
-        Buldozer_WipesOnScheduleWithoutScoreOrSweep();
         RobotSupurge_EatsCubesAndGrowsOnSweep();
         KayitDefteri_ReplacesTheSweepWithItsCounter();
         KaziCalismasi_ReturnsAFullyExplodedBlock();
@@ -701,32 +700,6 @@ public static class JokerTests
             }
             round.Board.SetCubeKind(cell, kind);
         }
-    }
-
-    private static void Buldozer_WipesOnScheduleWithoutScoreOrSweep()
-    {
-        Section("buldozer / scheduled wipe");
-        var session = NewSession(41, 8, 1000000, 40, 1);
-        var joker = (BuldozerJoker)session.Jokers.Add(new BuldozerJoker());
-        joker.TurnsPerWipe = 4;
-
-        int sweeps = 0;
-        session.CurrentRound.TurnResolved += r =>
-        {
-            if (r.CleanSweep)
-            {
-                sweeps++;
-            }
-        };
-
-        PlayTurns(session, 3);
-        Check(session.CurrentRound.Board.OccupiedCount > 0, "board still has cubes after 3 turns",
-            "occupied " + session.CurrentRound.Board.OccupiedCount);
-        PlayTurns(session, 1);
-        Check(session.CurrentRound.Board.OccupiedCount == 0, "the 4th turn wiped the board",
-            "occupied " + session.CurrentRound.Board.OccupiedCount);
-        Check(sweeps == 0, "a Buldozer wipe is never a clean sweep", "sweeps " + sweeps);
-        Check(session.CurrentRound.CleanSweepCount == 0, "engine counter agrees");
     }
 
     private static void RobotSupurge_EatsCubesAndGrowsOnSweep()
