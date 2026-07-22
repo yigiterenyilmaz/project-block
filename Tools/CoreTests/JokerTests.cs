@@ -77,6 +77,8 @@ public static class JokerTests
         NegativeBlock_ErasesWhatItCoversAndLeavesNothing();
         NegativeBlock_RefusedByIndestructibleCubes();
         NegativeBlock_CanSweepAndEscapeADeadEnd();
+        FrozenCard_CannotBePlayedAndThaws();
+        FrozenCard_CountsAsNoPlayableMove();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -1966,6 +1968,76 @@ public static class JokerTests
             "a full board still has room for a negative block");
         Check(!r2.Board.AnyPlacementExists(Bar(2), false, false),
             "while a normal block has nowhere to go");
+    }
+
+    private static void FrozenCard_CannotBePlayedAndThaws()
+    {
+        Section("frozen card / cannot be played until it thaws");
+        var session = NewSession(491, 8, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+
+        BlockCard target = round.Hand[0];
+        Check(!round.IsFrozen(target.Id), "cards start unfrozen");
+        Check(round.FreezeHandCard(target.Id, 3), "freezing a held card works");
+        Check(round.IsFrozen(target.Id), "it is frozen now");
+        Check(round.FreezeTurnsLeft(target.Id) == 3, "for three turns",
+            "left " + round.FreezeTurnsLeft(target.Id));
+        Check(!round.FreezeHandCard(target.Id, 3), "re-freezing the same card is refused");
+        Check(!round.FreezeHandCard(999999, 3), "a card that is not in hand cannot be frozen");
+
+        // Playing it must be refused outright.
+        var origins = round.GetValidOrigins(target.Shape);
+        bool threw = false;
+        try
+        {
+            round.PlayFromHand(0, origins[0]);
+        }
+        catch (InvalidOperationException)
+        {
+            threw = true;
+        }
+        Check(threw, "playing a frozen card throws");
+
+        // Three resolved turns thaw it. Play OTHER cards to advance.
+        for (int i = 0; i < 3; i++)
+        {
+            int playIndex = -1;
+            for (int h = 0; h < round.Hand.Count; h++)
+            {
+                if (round.Hand[h].Id != target.Id)
+                {
+                    playIndex = h;
+                    break;
+                }
+            }
+            if (playIndex < 0)
+            {
+                break;
+            }
+            var o = round.GetValidOrigins(round.Hand[playIndex].Shape);
+            round.PlayFromHand(playIndex, o[0]);
+        }
+        Check(!round.IsFrozen(target.Id), "it thawed after three turns",
+            "left " + round.FreezeTurnsLeft(target.Id));
+    }
+
+    private static void FrozenCard_CountsAsNoPlayableMove()
+    {
+        Section("frozen card / a frozen hand is a dead end");
+        // One card in hand, board irrelevant: freezing it leaves nothing playable.
+        var session = NewSession(499, 8, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            round.FreezeHandCard(round.Hand[i].Id, 3);
+        }
+        Check(round.Status == RoundStatus.InProgress, "still running before the check");
+
+        round.DebugCheckForDeadEnd();
+        Check(round.Status == RoundStatus.Lost || round.Status == RoundStatus.AwaitingRescue,
+            "a fully frozen hand is treated as no playable move",
+            "status " + round.Status);
     }
 
     private static void Powerbank_RechargesASpentPower()

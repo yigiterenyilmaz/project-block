@@ -250,6 +250,8 @@ namespace ProjectBlock.Core
                 }
             }
 
+            TickFreezes(); // a frozen card thaws after the agreed number of resolved turns
+
             // 8. end-of-turn effects (may still add score - see step 9)
             hooks.AfterTurnScored(currentTurn);
             if (session != null)

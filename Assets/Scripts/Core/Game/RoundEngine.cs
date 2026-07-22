@@ -341,6 +341,65 @@ namespace ProjectBlock.Core
         /// clean sweeps; without it they are ignored, which is the base-game behaviour.</summary>
         private bool externalClearReady;
 
+        /// <summary>Cards frozen in hand -> turns of freeze left. A frozen card cannot be
+        /// played and does NOT count as a playable move, so freezing the wrong card can
+        /// genuinely end a round ("Hazine" dynamite penalty). Cleared at round start.</summary>
+        private readonly Dictionary<int, int> frozenCards = new Dictionary<int, int>();
+
+        /// <summary>Turns of freeze left on a held card, or 0 when it is free to play.</summary>
+        public int FreezeTurnsLeft(int cardId)
+        {
+            int turns;
+            return frozenCards.TryGetValue(cardId, out turns) ? turns : 0;
+        }
+
+        public bool IsFrozen(int cardId)
+        {
+            return FreezeTurnsLeft(cardId) > 0;
+        }
+
+        /// <summary>Freezes a held card for a number of turns. Returns false if the card is
+        /// not in hand or is already frozen.</summary>
+        internal bool FreezeHandCard(int cardId, int turns)
+        {
+            if (turns < 1 || IsFrozen(cardId))
+            {
+                return false;
+            }
+            for (int i = 0; i < Hand.Count; i++)
+            {
+                if (Hand[i].Id == cardId)
+                {
+                    frozenCards[cardId] = turns;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Counts one turn off every freeze; expired entries are dropped. Called once
+        /// per resolved placement, at the end of the turn.</summary>
+        private void TickFreezes()
+        {
+            if (frozenCards.Count == 0)
+            {
+                return;
+            }
+            var ids = new List<int>(frozenCards.Keys);
+            foreach (int id in ids)
+            {
+                int left = frozenCards[id] - 1;
+                if (left <= 0)
+                {
+                    frozenCards.Remove(id);
+                }
+                else
+                {
+                    frozenCards[id] = left;
+                }
+            }
+        }
+
         /// <summary>Set when a NEGATIVE block already sampled the sweep pre-condition, so the
         /// normal explosion path does not re-sample it on a board the erasure just changed.</summary>
         private bool cleanSampleLocked;

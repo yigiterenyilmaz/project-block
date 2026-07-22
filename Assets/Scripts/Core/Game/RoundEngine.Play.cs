@@ -96,6 +96,10 @@ namespace ProjectBlock.Core
                 throw new ArgumentOutOfRangeException("handIndex");
             }
             BlockCard card = Hand[handIndex];
+            if (IsFrozen(card.Id))
+            {
+                throw new InvalidOperationException("Card " + card.Id + " is frozen.");
+            }
             if (!CanPlaceCard(card, origin))
             {
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");

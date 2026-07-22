@@ -267,6 +267,10 @@ namespace ProjectBlock.Core
         /// blocks may rotate into a fit, fox blocks may reshape into any deck shape.</summary>
         private bool CanPlayCardAnywhere(BlockCard card)
         {
+            if (IsFrozen(card.Id))
+            {
+                return false; // frozen cards cannot be played, so they are not a way out
+            }
             bool ghost = card.Has(BlockElement.Ghost);
             bool negative = card.Has(BlockElement.Negative);
             BlockShape shape = EffectiveShape(card);
