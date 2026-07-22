@@ -172,6 +172,13 @@ namespace ProjectBlock.View
                     CardVisual hit = cardLayer.CardAt(world);
                     if (hit != null)
                     {
+                        // A frozen card cannot leave the hand - refuse the pick-up rather
+                        // than letting the drop throw (Hazine dynamite penalty).
+                        BlockCard picked = CardOfSlot(round, hit.SlotIndex);
+                        if (picked != null && round.IsFrozen(picked.Id))
+                        {
+                            return;
+                        }
                         draggedCard = hit;
                         draggedCard.SetSortingBoost(10);
                         draggedCard.SetAlpha(0.55f);

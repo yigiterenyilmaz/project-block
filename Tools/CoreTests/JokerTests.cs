@@ -80,6 +80,9 @@ public static class JokerTests
         FrozenCard_CannotBePlayedAndThaws();
         FrozenCard_CountsAsNoPlayableMove();
         MarketDiscount_CutsPricesForOneVisit();
+        Hazine_BuriesTwoMarksAndPaysOutOnce();
+        Hazine_DynamiteAppliesAPenalty();
+        Hazine_HittingBothCancelsOut();
         Powerbank_RechargesASpentPower();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -211,6 +214,12 @@ public static class JokerTests
             GridPos origin = new GridPos(0, 0);
             for (int i = 0; i < round.Hand.Count && handIndex < 0; i++)
             {
+                // A frozen card cannot be played - the greedy player has to skip it, exactly
+                // as the UI must.
+                if (round.IsFrozen(round.Hand[i].Id))
+                {
+                    continue;
+                }
                 var origins = round.GetValidOrigins(round.Hand[i].Shape);
                 if (origins.Count > 0)
                 {
@@ -2079,6 +2088,135 @@ public static class JokerTests
         session.LeaveMarket();
         Check(session.PendingMarketDiscount == 0.0, "and is spent when the market is left",
             "" + session.PendingMarketDiscount);
+    }
+
+    /// <summary>Drives a Hazine hit by exploding exactly the cell a mark sits on.</summary>
+    private static TurnReport BlowUpCell(GameSession session, GridPos cell)
+    {
+        RoundEngine round = session.CurrentRound;
+        if (!round.Board.GetCube(cell).HasValue)
+        {
+            PaintBoard(round, session, CubeKind.Normal, cell);
+        }
+        // A negative 1x1 lands on the cube and erases it - a clean way to destroy one
+        // specific cell through the normal turn flow.
+        BlockCard eraser = session.CreateCard(Bar(1), new[] { BlockElement.Negative });
+        round.AddBonusCard(eraser, BonusPlayOutcome.ExpireFromRound);
+        return round.PlayFromBonus(round.BonusHand.Count - 1, cell);
+    }
+
+    private static void Hazine_BuriesTwoMarksAndPaysOutOnce()
+    {
+        Section("hazine / buries two marks");
+        var session = NewSession(509, 6, 1000000, 40, 1);
+        var joker = (HazineJoker)session.Jokers.Add(new HazineJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+
+        Check(joker.TreasureCell.HasValue && joker.DynamiteCell.HasValue,
+            "both marks are buried at round start");
+        Check(!joker.TreasureCell.Value.Equals(joker.DynamiteCell.Value),
+            "on two different cells");
+
+        GridPos treasure = joker.TreasureCell.Value;
+        BlowUpCell(session, treasure);
+
+        Check(!joker.TreasureCell.HasValue, "the treasure was found");
+        Check(!joker.DynamiteCell.HasValue,
+            "and finding it removed the dynamite - the confirmed rule");
+        Check(!string.IsNullOrEmpty(joker.LastOutcome), "an outcome was reported for the UI",
+            "outcome null");
+    }
+
+    private static void Hazine_DynamiteAppliesAPenalty()
+    {
+        Section("hazine / dynamite penalises");
+        var session = NewSession(521, 6, 1000000, 40, 1);
+        var joker = (HazineJoker)session.Jokers.Add(new HazineJoker());
+        session.Powers.Add(new BuyutecPower()); // gives the "drain a power" penalty something to bite
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        RoundEngine round = session.CurrentRound;
+
+        GridPos dynamite = joker.DynamiteCell.Value;
+        var handBefore = new List<int>();
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            handBefore.Add(round.Hand[i].Id);
+        }
+        bool powerChargedBefore = session.Powers.Powers[0].Charged;
+
+        BlowUpCell(session, dynamite);
+
+        Check(!joker.DynamiteCell.HasValue, "the dynamite went off");
+        Check(!joker.TreasureCell.HasValue, "and took the treasure with it");
+
+        // One of the three penalties must have landed: a drained power, a frozen card, or a
+        // discarded hand.
+        bool powerDrained = powerChargedBefore && !session.Powers.Powers[0].Charged;
+        bool anyFrozen = false;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.IsFrozen(round.Hand[i].Id))
+            {
+                anyFrozen = true;
+            }
+        }
+        bool handReplaced = true;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (handBefore.Contains(round.Hand[i].Id))
+            {
+                handReplaced = false;
+            }
+        }
+        Check(powerDrained || anyFrozen || handReplaced, "a penalty landed",
+            "drained " + powerDrained + " frozen " + anyFrozen + " replaced " + handReplaced);
+        Check(!string.IsNullOrEmpty(joker.LastOutcome), "and was reported",
+            "outcome " + joker.LastOutcome);
+    }
+
+    private static void Hazine_HittingBothCancelsOut()
+    {
+        Section("hazine / hitting both cancels out");
+        var session = NewSession(523, 6, 1000000, 40, 1);
+        var joker = (HazineJoker)session.Jokers.Add(new HazineJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        RoundEngine round = session.CurrentRound;
+
+        GridPos treasure = joker.TreasureCell.Value;
+        GridPos dynamite = joker.DynamiteCell.Value;
+        int handBefore = round.Hand.Count;
+        bool anyFrozenBefore = false;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            anyFrozenBefore |= round.IsFrozen(round.Hand[i].Id);
+        }
+
+        // ONE turn whose destruction log covers BOTH marks. Driving that through a real
+        // placement would need the two random cells to be adjacent, so the turn is built
+        // directly - the rule under test is what the joker does with such a log.
+        var score = new ScoreBreakdown();
+        TurnContext turn = FakeTurnWithRound(session, score);
+        turn.Report.DestroyedCubes = new List<DestroyedCube>
+        {
+            new DestroyedCube(treasure, new Cube(CubeKind.Normal, 900)),
+            new DestroyedCube(dynamite, new Cube(CubeKind.Normal, 901))
+        };
+        joker.AfterTurnScored(turn);
+
+        Check(!joker.TreasureCell.HasValue && !joker.DynamiteCell.HasValue,
+            "both marks are gone");
+        Check(!string.IsNullOrEmpty(joker.LastOutcome),
+            "the cancellation was reported", "outcome " + joker.LastOutcome);
+        Check(score.FlatBonus == 0 && score.LateFlat == 0, "no reward was paid",
+            "flat " + score.FlatBonus + " late " + score.LateFlat);
+        Check(round.Hand.Count == handBefore, "and no penalty wrecked the hand",
+            round.Hand.Count + " vs " + handBefore);
+        bool anyFrozenAfter = false;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            anyFrozenAfter |= round.IsFrozen(round.Hand[i].Id);
+        }
+        Check(anyFrozenAfter == anyFrozenBefore, "nothing was frozen either");
     }
 
     private static void Powerbank_RechargesASpentPower()

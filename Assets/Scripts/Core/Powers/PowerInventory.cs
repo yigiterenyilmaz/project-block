@@ -342,6 +342,20 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>Drains a charged power WITHOUT running it - the charge is simply gone and
+        /// the power waits for its normal recharge ("Hazine" dynamite penalty). Returns false
+        /// if it was already spent.</summary>
+        public bool BurnCharge(Power power)
+        {
+            if (power == null || !power.Charged)
+            {
+                return false;
+            }
+            power.Spend();
+            RaiseChanged();
+            return true;
+        }
+
         /// <summary>"Powerbank" refills one power without a sweep. Returns false if every
         /// power is already charged, so the joker does not waste its own charge.</summary>
         public bool RechargeOne()
