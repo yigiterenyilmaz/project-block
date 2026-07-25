@@ -11,7 +11,35 @@ namespace ProjectBlock.View
     public sealed class SoundFx : MonoBehaviour
     {
         private const int SampleRate = 44100;
-        private const float MasterVolume = 0.5f;
+
+        /// <summary>Loudest the game ever plays, at a master volume of 1. Kept well under 1 so
+        /// several overlapping effects cannot clip.</summary>
+        private const float FullVolume = 0.5f;
+
+        /// <summary>Player-set master volume, 0..1 (settings menu, persisted). Applied live to
+        /// every effect and to the retro hum, so changing it is audible immediately.</summary>
+        public float MasterVolume
+        {
+            get { return masterVolume; }
+            set
+            {
+                masterVolume = Mathf.Clamp01(value);
+                ApplyHumVolume();
+            }
+        }
+
+        private float masterVolume = 1f;
+
+        /// <summary>Hum loudness at full master volume. The hum sits under the effects.</summary>
+        private const float HumVolume = 0.18f;
+
+        private void ApplyHumVolume()
+        {
+            if (humSource != null)
+            {
+                humSource.volume = HumVolume * masterVolume;
+            }
+        }
 
         private AudioSource source;
         private AudioSource humSource;
@@ -41,7 +69,7 @@ namespace ProjectBlock.View
             flameClip = BuildFlame();
             humClip = BuildHum();
             humSource.clip = humClip;
-            humSource.volume = 0.18f;
+            ApplyHumVolume();
         }
 
         /// <summary>Turns the retro CRT hum loop on/off. The accompanying bit-crush is a separate
@@ -117,7 +145,7 @@ namespace ProjectBlock.View
         private void PlayWithPitch(AudioClip clip, float minPitch, float maxPitch, float volumeScale)
         {
             source.pitch = Random.Range(minPitch, maxPitch);
-            source.PlayOneShot(clip, Mathf.Clamp01(MasterVolume * volumeScale));
+            source.PlayOneShot(clip, Mathf.Clamp01(FullVolume * masterVolume * volumeScale));
         }
 
         // ---- synthesis helpers ----

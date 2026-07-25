@@ -125,16 +125,16 @@ namespace ProjectBlock.View
 
         private void Start()
         {
-            // language before any text is built; persisted across sessions
-            Loc.Language = PlayerPrefs.GetString("language", "en") == "tr"
-                ? GameLanguage.Turkish
-                : GameLanguage.English;
+            // Preferences before any text is built, so the first labels come out in the right
+            // language. The volume needs SoundFx, so it is pushed in after BuildViews.
+            LoadSettings();
             cam = Camera.main;
             camBasePosition = cam.transform.position;
             // The bit-crush must sit on the AudioListener (the camera) to process the whole mix;
             // a filter on the SoundFx object's sources is not reliably called.
             bitCrush = cam.gameObject.AddComponent<BitCrushFilter>();
             BuildViews();
+            sfx.MasterVolume = masterVolume;
             // The game now boots to the title menu; a run starts from there (see .Menus).
             GoToTitle();
         }
@@ -145,7 +145,7 @@ namespace ProjectBlock.View
             Loc.Language = Loc.Language == GameLanguage.Turkish
                 ? GameLanguage.English
                 : GameLanguage.Turkish;
-            PlayerPrefs.SetString("language", Loc.Language == GameLanguage.Turkish ? "tr" : "en");
+            SaveSettings(); // language lives with the rest of the preferences
             // modals cache their labels; closing them is simpler than re-texting them
             grantPicker.Hide();
             deckSelect.Hide();

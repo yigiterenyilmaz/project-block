@@ -33,17 +33,23 @@ namespace ProjectBlock.View
             /// <summary>A run is on screen but suspended behind the pause menu. The run's own
             /// state is untouched - nothing is ticking, because the game only advances on
             /// input and the menu layer is eating all of it.</summary>
-            Paused
+            Paused,
+
+            /// <summary>Player preferences. Reachable from the title AND from a paused run, so
+            /// it remembers which one to go back to (settingsReturnTo).</summary>
+            Settings
         }
 
         // Entry order per menu. Named so the dispatches below never index by a bare number.
         private const int TitlePlay = 0;
         private const int TitleContinue = 1;
-        private const int TitleQuit = 2;
+        private const int TitleSettings = 2;
+        private const int TitleQuit = 3;
 
         private const int PauseResume = 0;
         private const int PauseRestart = 1;
-        private const int PauseAbandon = 2;
+        private const int PauseSettings = 2;
+        private const int PauseAbandon = 3;
 
         private AppScreen screen = AppScreen.Title;
         private MenuScreenView menu;
@@ -73,6 +79,9 @@ namespace ProjectBlock.View
                 case AppScreen.Paused:
                     ShowPauseMenu();
                     break;
+                case AppScreen.Settings:
+                    ShowSettingsMenu();
+                    break;
                 default:
                     ShowTitleMenu();
                     break;
@@ -88,6 +97,7 @@ namespace ProjectBlock.View
                 // entry is shown disabled meanwhile so the feature is discoverable.
                 MenuEntry.Locked(Loc.Pick("CONTINUE", "DEVAM ET"),
                     Loc.Pick("no saved run", "kayıtlı oyun yok")),
+                MenuEntry.Of(Loc.Pick("SETTINGS", "AYARLAR")),
                 MenuEntry.Of(Loc.Pick("QUIT", "ÇIKIŞ"))
             };
             // The subtitle names the language you would switch TO, like the debug HUD does.
@@ -105,6 +115,11 @@ namespace ProjectBlock.View
             if (screen == AppScreen.DeckSelect)
             {
                 HandleTitleDeckSelect(kb, mouse);
+                return;
+            }
+            if (screen == AppScreen.Settings)
+            {
+                HandleSettingsInput(kb, mouse);
                 return;
             }
             // Escape closes the pause menu it opened.
@@ -172,6 +187,9 @@ namespace ProjectBlock.View
                     break;
                 case TitleContinue:
                     break; // disabled until saves exist - MenuScreenView never returns it
+                case TitleSettings:
+                    OpenSettings(AppScreen.Title);
+                    break;
                 case TitleQuit:
                     QuitGame();
                     break;
@@ -232,6 +250,7 @@ namespace ProjectBlock.View
             {
                 MenuEntry.Of(Loc.Pick("RESUME", "DEVAM ET")),
                 MenuEntry.Of(Loc.Pick("RESTART RUN", "BAŞTAN BAŞLA")),
+                MenuEntry.Of(Loc.Pick("SETTINGS", "AYARLAR")),
                 MenuEntry.Of(Loc.Pick("ABANDON RUN", "OYUNU BIRAK"))
             };
             // The run stays visible behind a translucent backdrop - the player is mid-round and
@@ -262,6 +281,9 @@ namespace ProjectBlock.View
                     break;
                 case PauseRestart:
                     RestartRun();
+                    break;
+                case PauseSettings:
+                    OpenSettings(AppScreen.Paused);
                     break;
                 case PauseAbandon:
                     AbandonRun();
