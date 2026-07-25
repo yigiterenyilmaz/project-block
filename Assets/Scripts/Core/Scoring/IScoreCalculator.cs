@@ -16,7 +16,8 @@ namespace ProjectBlock.Core
         int ScoreCleanSweep();
 
         /// <summary>Bonus for the <paramref name="comboCount"/>-th consecutive line-clearing
-        /// turn (the "kombo" streak). Count is 1-based; count &lt; 1 pays 0.</summary>
+        /// turn (the "kombo" streak). Count is 1-based, and a combo STARTS ON THE SECOND
+        /// clearing turn: anything below 2 pays 0.</summary>
         int ScoreCombo(int comboCount);
 
         /// <summary>Per-turn bonus for gold cubes sitting on the board.</summary>

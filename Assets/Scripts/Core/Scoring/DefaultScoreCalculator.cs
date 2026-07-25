@@ -36,11 +36,14 @@ namespace ProjectBlock.Core
 
         public int ScoreCombo(int comboCount)
         {
-            if (comboCount < 1)
+            // The FIRST clearing turn is not a combo - it is just a clear. The bonus starts on
+            // the second consecutive clearing turn, which is also where the "COMBO x2" popup
+            // starts, so what the player sees and what they are paid line up.
+            if (comboCount < 2)
             {
                 return 0;
             }
-            return comboCount * config.ComboBonusPerStep;
+            return (comboCount - 1) * config.ComboBonusPerStep;
         }
 
         public int ScoreGoldBonus(int goldCubesOnBoard)

@@ -15,22 +15,27 @@ namespace ProjectBlock.View
     /// <summary>Renders and hit-tests the market offers.</summary>
     public sealed class MarketView : MonoBehaviour
     {
-        private const float OfferSpacing = 2.5f;
+        private const float OfferSpacing = 3.15f;
 
-        /// <summary>Vertical distance between two section rows. Leaves room under each row's
-        /// prices for that section's own reroll button, plus air between sections.</summary>
-        private const float RowPitch = 3.9f;
+        /// <summary>Vertical distance between two section rows.</summary>
+        private const float RowPitch = 3.7f;
 
         /// <summary>Section header above a row's tiles / price label below them.</summary>
-        private const float HeaderOffset = 1.4f;
-        private const float PriceOffset = 1.35f;
+        private const float HeaderOffset = 1.62f;
+        private const float PriceOffset = 1.62f;
 
-        /// <summary>Reroll button, below the row's prices.</summary>
-        private const float RerollOffset = 0.78f;
+        /// <summary>Reroll button size and how far it sits clear of the row's widest tile.</summary>
+        private static readonly Vector2 RerollHalf = new Vector2(1.35f, 0.42f);
+        private const float RerollGap = 0.55f;
 
-        /// <summary>Backdrop height reserved at the TOP for the title, the balance and the
-        /// sell hint.</summary>
-        private const float HeaderExtra = 2.8f;
+        /// <summary>Height shared by every offer tile, so the rows line up whatever kind they
+        /// hold. Block cards are drawn at BlockTileScale to reach it.</summary>
+        private const float TileHeight = 2.45f;
+
+        /// <summary>Block offers are CardVisuals at a fixed 1.35 x 1.8; scaling the visual is
+        /// what lets them match the bigger named tiles instead of looking like postage stamps
+        /// beside them.</summary>
+        private const float BlockTileScale = 1.36f;
 
         private static readonly Vector2 Center = new Vector2(0f, -0.2f);
 
@@ -59,23 +64,20 @@ namespace ProjectBlock.View
         private static readonly Color RerollButtonColor = new Color(0.20f, 0.24f, 0.34f);
         private static readonly Color RerollButtonDisabledColor = new Color(0.14f, 0.14f, 0.16f);
 
-        /// <summary>Extra backdrop height reserved at the bottom for the last row's reroll
-        /// button and the prompt line under it.</summary>
-        private const float RerollExtra = 1.4f;
 
         /// <summary>Joker and power tiles are WIDER than a block card, because they carry text
         /// rather than a shape preview. Widening rather than shrinking the font is what lets the
         /// description be readable without losing most of itself to the ellipsis. Height stays
         /// CardVisual.BodyHeight so the row headers and price labels keep their spacing.</summary>
-        private const float NamedTileWidth = 1.75f;
+        private const float NamedTileWidth = 2.35f;
 
         /// <summary>Description lines a tile can show before running over its own bottom edge
-        /// and into the price beneath it. The body is 1.8 tall, the description starts 0.12
-        /// above centre, and a line at this size is roughly 0.135.</summary>
-        private const int MaxDescriptionLines = 7;
+        /// and into the price beneath it. The description starts 0.22 above centre of a tile
+        /// TileHeight tall, and a line at this size is roughly 0.153.</summary>
+        private const int MaxDescriptionLines = 8;
 
         /// <summary>Characters per description line at NamedTileWidth.</summary>
-        private const int DescriptionWrap = 16;
+        private const int DescriptionWrap = 18;
 
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
@@ -144,33 +146,47 @@ namespace ProjectBlock.View
                 maxSpan = Mathf.Max(maxSpan, (rowOffers[r].Count - 1) * OfferSpacing);
             }
             float topRowY = Center.y + (rowOffers.Count - 1) * RowPitch * 0.5f;
+            float bottomRowY = topRowY - (rowOffers.Count - 1) * RowPitch;
 
-            // The backdrop grows downward by RerollExtra so the reroll button has room under
-            // the last offer row while the title stays where it was at the top.
-            var panelCenter = new Vector2(Center.x, Center.y - RerollExtra * 0.5f);
-            // Widest tile kind decides the margin, or the joker/power tiles would poke out of
-            // the panel now that they are wider than a block card.
-            float widestTile = Mathf.Max(CardVisual.BodyWidth, NamedTileWidth);
-            var panelSize = new Vector2(Mathf.Max(maxSpan + widestTile + 1.8f, 6f),
-                rowOffers.Count * RowPitch + HeaderExtra + RerollExtra);
+            // ---- LAYOUT FIRST, PANEL SECOND. Every position below is derived, then the panel
+            // is sized to CONTAIN them. Padding constants used to guess at the panel's size,
+            // and the guess was wrong: the first section header landed on the sell hint.
+            float firstHeaderY = topRowY + HeaderOffset;
+            float sellHintY = firstHeaderY + 0.62f;
+            float balanceY = sellHintY + 0.46f;
+            float titleY = balanceY + 0.68f;
+            float promptY = bottomRowY - PriceOffset - 0.85f;
+
+            // Widest tile kind decides the row's reach - joker/power tiles are wider than a
+            // block card, so a block-card width would let them poke out of the panel.
+            float widestTile = Mathf.Max(CardVisual.BodyWidth * BlockTileScale, NamedTileWidth);
+            float rowReach = maxSpan * 0.5f + widestTile * 0.5f;
+            // Reroll buttons sit to the RIGHT of their section, on the row's own line.
+            float rerollX = Center.x + rowReach + RerollGap + RerollHalf.x;
+            float halfWidth = Mathf.Max(rowReach, rerollX - Center.x + RerollHalf.x) + 0.7f;
+
+            float contentTop = titleY + 0.8f;
+            float contentBottom = promptY - 0.7f;
+            var panelCenter = new Vector2(Center.x, (contentTop + contentBottom) * 0.5f);
+            var panelSize = new Vector2(halfWidth * 2f, contentTop - contentBottom);
+
             // Frame first and one sorting step further back, so all that shows of it is the
             // margin around the opaque backdrop - which is exactly the border.
             ViewUtil.MakeRect(transform, "PanelFrame", panelCenter,
                 panelSize + new Vector2(PanelBorder * 2f, PanelBorder * 2f), PanelFrameColor, 32);
             ViewUtil.MakeRect(transform, "Backdrop", panelCenter, panelSize, BackdropColor, 33);
-            float titleY = topRowY + HeaderOffset + 0.95f;
             ViewUtil.MakeText3D(transform, "Title", new Vector2(Center.x, titleY), "MARKET",
-                60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
+                60, 0.075f, Color.white, 38, TextAnchor.MiddleCenter);
             // What you have to spend. The shelf shows prices everywhere and used to leave the
             // player to work their balance out from the HUD dump.
-            ViewUtil.MakeText3D(transform, "Balance", new Vector2(Center.x, titleY - 0.52f),
+            ViewUtil.MakeText3D(transform, "Balance", new Vector2(Center.x, balanceY),
                 Loc.Pick("you have ", "paran: ") + session.TotalScore,
-                90, 0.026f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, titleY - 0.98f),
+                90, 0.028f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, sellHintY),
                 Loc.Pick(
                     "click a joker or a power to sell it  -  click the deck pile to sell cards",
                     "satmak için jokere veya güce tıkla  -  kart satmak için desteye tıkla"),
-                90, 0.018f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                90, 0.019f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             for (int r = 0; r < rowOffers.Count; r++)
             {
@@ -200,11 +216,11 @@ namespace ProjectBlock.View
                 // is wider, and a frame sized for a block card leaves it ringed top and bottom
                 // only, which reads as broken art.
                 float tileWidth = offer.Kind == MarketOfferKind.Block
-                    ? CardVisual.BodyWidth
+                    ? CardVisual.BodyWidth * BlockTileScale
                     : NamedTileWidth;
                 offerHalfWidths[i] = tileWidth * 0.5f;
                 ViewUtil.MakeRect(transform, "Frame_" + i, slotCenter,
-                    new Vector2(tileWidth + 0.18f, CardVisual.BodyHeight + 0.18f),
+                    new Vector2(tileWidth + 0.2f, TileHeight + 0.2f),
                     RarityPalette.Frame(FrameColor, rarity), 34);
                 if (offer.Sold)
                 {
@@ -234,8 +250,12 @@ namespace ProjectBlock.View
                 }
                 else
                 {
-                    offerVisuals.Add(CardVisual.Create(transform, "Offer_" + i, offer.Card,
-                        true, false, slotCenter, 36));
+                    CardVisual visual = CardVisual.Create(transform, "Offer_" + i, offer.Card,
+                        true, false, slotCenter, 36);
+                    // Blown up to the shared tile size - a card at its hand size looks tiny
+                    // next to a joker tile.
+                    visual.transform.localScale = new Vector3(BlockTileScale, BlockTileScale, 1f);
+                    offerVisuals.Add(visual);
                 }
                 bool affordable = session.TotalScore >= offer.Price;
                 ViewUtil.MakeText3D(transform, "Price_" + i,
@@ -254,23 +274,26 @@ namespace ProjectBlock.View
                 float rowY = topRowY - r * RowPitch;
                 var button = new SectionButton();
                 button.Kind = rowKinds[r];
-                button.Center = new Vector2(Center.x, rowY - PriceOffset - RerollOffset);
-                button.Half = new Vector2(1.3f, 0.3f);
+                // Beside its section rather than under it: the shelf was stacking four things
+                // deep per row while the screen had width going spare.
+                button.Center = new Vector2(rerollX, rowY);
+                button.Half = RerollHalf;
                 rerollButtons.Add(button);
+                Color inkColor = canReroll ? AffordablePriceColor : TooExpensiveColor;
                 ViewUtil.MakeRect(transform, "Reroll_" + r, button.Center, button.Half * 2f,
                     canReroll ? RerollButtonColor : RerollButtonDisabledColor, 34);
-                ViewUtil.MakeText3D(transform, "RerollLabel_" + r, button.Center,
-                    Loc.Pick("REROLL  ", "YENİLE  ") + rerollCost,
-                    90, 0.026f, canReroll ? AffordablePriceColor : TooExpensiveColor,
-                    38, TextAnchor.MiddleCenter);
+                ViewUtil.MakeRefreshIcon(transform, "RerollIcon_" + r,
+                    button.Center + new Vector2(-button.Half.x + 0.42f, 0.02f),
+                    0.19f, 0.075f, inkColor, 38);
+                ViewUtil.MakeText3D(transform, "RerollLabel_" + r,
+                    button.Center + new Vector2(0.26f, 0f), rerollCost.ToString(),
+                    90, 0.030f, inkColor, 38, TextAnchor.MiddleCenter);
             }
 
             // The buy / next-round prompt lives INSIDE the panel. It used to be HUD text at the
             // top of the screen, where the opaque panel now sits - the canvas draws over world
             // space, so the two simply printed on top of each other.
-            float bottomRowY = topRowY - (rowOffers.Count - 1) * RowPitch;
-            ViewUtil.MakeText3D(transform, "Prompt",
-                new Vector2(Center.x, bottomRowY - PriceOffset - RerollOffset - 0.75f),
+            ViewUtil.MakeText3D(transform, "Prompt", new Vector2(Center.x, promptY),
                 Loc.Pick("click a block to add it to your deck    -    [N] start round ",
                         "desteye katmak için bloğa tıkla    -    [N] raunt başlat: ")
                     + (session.RoundNumber + 1),
@@ -340,17 +363,17 @@ namespace ProjectBlock.View
             string displayName, string description, Color bodyColor, Color tagColor)
         {
             ViewUtil.MakeRect(transform, key + "Body_" + index, center,
-                new Vector2(NamedTileWidth, CardVisual.BodyHeight), bodyColor, 36);
+                new Vector2(NamedTileWidth, TileHeight), bodyColor, 36);
             ViewUtil.MakeText3D(transform, key + "Tag_" + index,
-                center + new Vector2(0f, CardVisual.BodyHeight * 0.5f - 0.17f), label,
-                90, 0.018f, tagColor, 37, TextAnchor.MiddleCenter);
+                center + new Vector2(0f, TileHeight * 0.5f - 0.22f), label,
+                90, 0.021f, tagColor, 37, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, key + "Name_" + index,
-                center + new Vector2(0f, 0.5f), ViewUtil.WrapText(displayName, 15),
-                90, 0.025f, JokerNameColor, 37, TextAnchor.MiddleCenter);
+                center + new Vector2(0f, 0.66f), ViewUtil.WrapText(displayName, 16),
+                90, 0.029f, JokerNameColor, 37, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, key + "Desc_" + index,
-                center + new Vector2(0f, 0.12f),
+                center + new Vector2(0f, 0.22f),
                 ViewUtil.WrapText(description, DescriptionWrap, MaxDescriptionLines),
-                90, 0.015f, JokerDescColor, 37, TextAnchor.UpperCenter);
+                90, 0.017f, JokerDescColor, 37, TextAnchor.UpperCenter);
         }
 
         public void Hide()
@@ -400,7 +423,7 @@ namespace ProjectBlock.View
             for (int i = 0; i < offerCenters.Count; i++)
             {
                 if (Mathf.Abs(local.x - offerCenters[i].x) <= offerHalfWidths[i]
-                    && Mathf.Abs(local.y - offerCenters[i].y) <= CardVisual.BodyHeight * 0.5f)
+                    && Mathf.Abs(local.y - offerCenters[i].y) <= TileHeight * 0.5f)
                 {
                     return i;
                 }

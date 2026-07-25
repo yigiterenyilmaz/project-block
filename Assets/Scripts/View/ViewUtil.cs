@@ -149,6 +149,41 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Greedy word wrap for the placeholder TextMesh labels (no auto-wrapping).</summary>
+        /// <summary>
+        /// A procedural "refresh" glyph: a ring of small squares with a gap on the right, and a
+        /// tapered arrowhead at the end of the sweep. Built from rects like every other sprite
+        /// in this project, so it needs no texture asset and no font that happens to carry the
+        /// arrow codepoint.
+        /// </summary>
+        public static void MakeRefreshIcon(Transform parent, string name, Vector2 center,
+            float radius, float thickness, Color color, int sortingOrder)
+        {
+            const int Segments = 12;
+            const float StartDegrees = 35f;
+            const float SweepDegrees = 290f;
+            for (int i = 0; i < Segments; i++)
+            {
+                float degrees = StartDegrees + SweepDegrees * i / (Segments - 1);
+                float radians = degrees * Mathf.Deg2Rad;
+                Vector2 at = center
+                    + new Vector2(Mathf.Cos(radians), Mathf.Sin(radians)) * radius;
+                MakeRect(parent, name + "_arc" + i, at,
+                    new Vector2(thickness, thickness), color, sortingOrder);
+            }
+            // Arrowhead at the sweep's end: three stacked bars narrowing to a point. Rects
+            // cannot rotate, so it is axis-aligned - at this size that reads fine.
+            float endRadians = (StartDegrees + SweepDegrees) * Mathf.Deg2Rad;
+            Vector2 tip = center
+                + new Vector2(Mathf.Cos(endRadians), Mathf.Sin(endRadians)) * radius;
+            for (int i = 0; i < 3; i++)
+            {
+                MakeRect(parent, name + "_head" + i,
+                    tip + new Vector2(0f, thickness * (1f - i) * 0.85f),
+                    new Vector2(thickness * (0.8f + i * 1.1f), thickness * 0.85f),
+                    color, sortingOrder);
+            }
+        }
+
         /// <summary>Word-wraps, then CLIPS to a line budget with a trailing ellipsis. Panels
         /// here are fixed-size and TextMesh happily runs straight out the bottom of one, so
         /// anything drawn inside a tile has to be clamped rather than trusted to fit.</summary>

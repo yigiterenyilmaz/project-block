@@ -1,6 +1,9 @@
 // PURPOSE: RoundEngine clean sweep - THE single central clean-sweep event (at most
 // once per turn, only when this turn's destruction emptied a non-empty board) and
 // the between-turn external destruction path feeding it.
+//
+// SCORING RULE: a sweep REPLACES this turn's line score rather than adding to it (see the
+// swallow in ResolveCleanSweep). Combo, placement and gold are untouched.
 
 using System;
 using System.Collections.Generic;
@@ -86,10 +89,19 @@ namespace ProjectBlock.Core
                 if (scoreFinalized)
                 {
                     // A sweep triggered by an end-of-turn effect still belongs to this turn.
+                    // The line score was banked several steps ago, so it stands - the swallow
+                    // rule below only applies while the turn's score is still open.
                     AddLateTurnScore(sweepBonus, "base.sweep");
                 }
                 else
                 {
+                    // THE SWEEP REPLACES THE LINE SCORE. Emptying the board pays the sweep bonus
+                    // INSTEAD of what the clear that emptied it would have paid, not on top of
+                    // it: on a small board "clear a line" and "sweep the board" are usually the
+                    // same event, and paying both made one turn worth most of a round.
+                    // Only a sweep that actually pays swallows the lines - an uncounted external
+                    // sweep (no "Genel temizlik") must not leave the turn with nothing at all.
+                    breakdown.BaseLines = 0;
                     breakdown.BaseSweep += sweepBonus;
                 }
             }
