@@ -32,6 +32,61 @@ yok** — `GameSession.LeaveMarket` round sayacını sınırsız artırıyor ve 
 bitiyor (`GamePhase.GameOver`). 15. round geçildiğinde ne olacağı (zafer ekranı, son skor,
 market açılıp açılmayacağı) tasarımcıya sorulacak.
 
+### Erozyon — roundun uzamasını engelleyen saat (2026-07-25)
+
+Çekme destesi bitip ıskarta geri karıldığında sayaç işliyor. **İlk 2 karma bedava**
+(`RoundRules.FreeDeckRecycles`); sonraki her karma oyun alanından bir parça yiyor. Stil
+round bandına bağlı — aynı tablo hem boyutu hem erozyonu veriyor (`BoardSizeBand.Erosion`):
+
+| round | alan | erozyon (`ShuffleErosion`) | ne oluyor |
+| ----- | ---- | -------------------------- | --------- |
+| 1–5   | 5x5  | `FromOutside`              | her erozyonda bir satır + bir sütun kenardan gider: 5x5 → 4x4 → 3x3 → 2x2 |
+| 6–11  | 7x7  | `FromCenter`               | ortada NxN delik: 1x1, 2x2, 3x3 … kümülatif |
+| 12–15 | 9x9  | `Both`                     | aynı erozyonda hem kenar hem orta |
+
+Verilen kararlar:
+
+1. **Kenar dönüşümlü gidiyor.** Tek adımda simetrik küçültmek imkânsız (boyut 1 azalıyor), o
+   yüzden tek numaralı erozyon üst satır + sağ sütunu, çift numaralı alt satır + sol sütunu
+   alıyor. İki adımda simetrik, yani alan oyuncunun baktığı yerde kalıyor, köşeye kaçmıyor.
+2. **Silinen hücredeki küpler yok ediliyor**, skor vermiyor, temizliğe ve Kayıt defteri'ne
+   sayılmıyor — Buldozer/Deprem'in şartları. Obsidyen, altın, hatta Parazit konağı bile
+   direnemiyor: hücrenin kendisi yok oluyor.
+3. **YENİ MERKEZİ KURAL — yenen hücre hattını öldürüyor.** `GameBoard` artık iki tür
+   oynanamaz hücre ayırıyor: *delik* (sınırlayıcı kutunun dolgusu, Tılsım/Kentsel Dönüşüm bir
+   hücre eklerken doğuyor) hatta dahil değil, atlanıyor — eskiden olduğu gibi. *Yenen* hücre
+   (`MarkDead`) ise satırını ve sütununu **kalıcı olarak öldürüyor**: doldurulamayan bir hücre
+   hattın ortasında durduğu için o hat bir daha asla patlamıyor. Bu ayrım şart, aksi halde
+   tahtaya bir hücre eklemek eklendiği satırları öldürürdü. `ResolveFullLines` ve
+   `PredictExplosions` aynı kuralı okuyor.
+4. **Tetikleyici `RoundDeck.ShuffleCount` DEĞİL.** O sayaç kuralın ve jokerlerin emrettiği
+   karmaları da sayıyor (eşik ödülü, el yenileme, Dezenformasyon her tur). "Kartlar bitti"nin
+   tek gerçek yeri `DrawWithRules` — erozyon oradan sayılıyor (`DeckRecycleCount`).
+5. **Erozyon turun sonunda, kancalardan sonra uygulanıyor** (adım 8.5): çekme döngüsünün
+   ortasında tahtayı yeniden şekillendirmek yerleşimin altındaki zemini kaydırırdı. Eşik ve
+   çıkmaz sokak kontrollerinden önce, böylece küçülmenin tamamladığı hat aynı turda patlıyor ve
+   yer bırakmayan bir erozyon roundu gerçekten bitirebiliyor.
+6. Küçülme bir hattı tamamlarsa **enflasyon deflate'iyle aynı muamele**: normal kurallarla
+   patlıyor, ama harici temizlik olduğu için yalnızca "Genel temizlik" eldeyken puan veriyor.
+
+**Uzatmada erozyon hiç işlemiyor:** eşik geçildikten sonra boş çekme destesi zaten kayıp
+(`LossReason.DrawPileEmptyAfterThreshold`), karma yok. Uzatmanın kendi saati (devam maliyeti)
+var, bu saat eşik öncesini yönetiyor.
+
+**Ölçülen tempo** (24 kartlık başlangıç destesi, hattı en çok patlatan oyuncu):
+
+| round | ilk erozyon | round bitişi |
+| ----- | ----------- | ------------ |
+| 1 (5x5)  | hiç — alan o kadar küçük ki daha ilk karmaya varmadan doluyor | tur 12 |
+| 7 (7x7)  | tur 66 | tur 82 |
+| 13 (9x9) | tur 66 | tur 74 |
+
+Yani mekanizma uzun roundları gerçekten bitiriyor (tek erozyon yetti), ama **saat deste
+boyutuna bağlı**: 2 bedava karma ≈ 2 × 22 kart ≈ 66 tur. Market'ten kart alındıkça deste
+büyüyor ve saat daha da geç ısırıyor — zorluk arttıkça gecikmesi ters yönde. Daha erken
+ısırması istenirse `FreeDeckRecycles` düşürülür ya da tetikleyici tur bazlı yapılır; ikisi de
+tek satır. Tasarımcının verdiği sayı 2 olduğu için öyle bırakıldı.
+
 **Boyuta bağlı jokerlerde/güçlerde bu ne oynatıyor** (hiçbiri hata değil, hepsi denge
 gözlemi): Kayıt defteri eşiği `Width*Height` olduğu için ilk bantta 36 değil 25 küp;
 Buldozer gücünün 2 sıralık bandı 5x5'te alanın %40'ı (9x9'da %22); Meydan Okuma'nın

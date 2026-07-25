@@ -33,6 +33,13 @@ Unity 6 (6000.3.6f1), 2D URP, **new Input System only**.
   numbered 1-15, and the board-size table (`DefaultRoundProgression.BoardSizeBands` — rounds
   1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9) is confirmed design, not a knob to tune. There is
   no victory condition wired yet; the run still only ends by losing.
+- **Board erosion is the anti-stalling clock.** Each band also names a `ShuffleErosion`: past
+  `RoundRules.FreeDeckRecycles` (2), every time the draw pile runs DRY the arena loses a piece —
+  the rim (1-5), a growing centre hole (6-11), or both (12-15). It is counted in
+  `RoundEngine.DeckRecycleCount`, NOT `RoundDeck.ShuffleCount` (that also counts reshuffles the
+  rules and jokers order), and applied once centrally at turn step 8.5. A cell eaten this way
+  (`GameBoard.MarkDead`) KILLS its row and column — unlike a plain hole in the bounding box,
+  which is merely skipped. Never conflate the two.
 - Turkish design terms → code names: el = `Hand`/turn, çekme destesi = `RoundDeck.DrawPile`,
   ıskarta = discard, oyun destesi = `GameSession.OwnedCards`, raunt = round,
   temizlik = clean sweep, bonus el = bonus hand, eşik = `RoundConfig.ScoreThreshold`,
