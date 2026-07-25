@@ -54,6 +54,45 @@ namespace ProjectBlock.Core
             get { return outsideCubes; }
         }
 
+        /// <summary>Cells a block may not be placed on right now, though they are empty and
+        /// part of the play area ("Mapus" seals one per turn). Deliberately invisible to
+        /// everything except placement: a sealed cell still counts as an empty cell of its
+        /// row/column, so a line holding one simply cannot be completed while the seal lasts.</summary>
+        private readonly List<GridPos> sealedCells = new List<GridPos>();
+
+        public IReadOnlyList<GridPos> SealedCells
+        {
+            get { return sealedCells; }
+        }
+
+        /// <summary>True if placement is currently forbidden on this cell.</summary>
+        public bool IsSealed(GridPos pos)
+        {
+            for (int i = 0; i < sealedCells.Count; i++)
+            {
+                if (sealedCells[i].X == pos.X && sealedCells[i].Y == pos.Y)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Forbids placement on a cell. Goes through RoundEngine.SealBoardCell.</summary>
+        internal void SealCell(GridPos pos)
+        {
+            if (!IsSealed(pos))
+            {
+                sealedCells.Add(pos);
+            }
+        }
+
+        /// <summary>Lifts every seal (a boss re-picks its cell each turn).</summary>
+        internal void ClearSeals()
+        {
+            sealedCells.Clear();
+        }
+
         public int Width { get; }
         public int Height { get; }
         public int OccupiedCount { get; private set; }
@@ -196,6 +235,15 @@ namespace ProjectBlock.Core
                 if (!board.IsInside(ghost.Key))
                 {
                     board.outsideCubes[ghost.Key] = ghost.Value;
+                }
+            }
+            // Seals are absolute coordinates like everything else, so they survive a resize -
+            // except any that the shrink pushed off the board entirely.
+            for (int i = 0; i < source.sealedCells.Count; i++)
+            {
+                if (board.IsInside(source.sealedCells[i]))
+                {
+                    board.sealedCells.Add(source.sealedCells[i]);
                 }
             }
             return board;

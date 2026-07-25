@@ -90,6 +90,9 @@ public static class JokerTests
         BossRounds_FlaggedEveryThirdRound();
         Boss_DrawnOncePerRunAndOnlyOnFlaggedRounds();
         Boss_UfukAndKulePayForOneAxisOnly();
+        Boss_AlikoymaSeizesACardButNeverTheLast();
+        Boss_MapusSealsOneCellPerTurn();
+        Boss_FedaMakesABonusCardCostTheHand();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
 
@@ -257,6 +260,10 @@ public static class JokerTests
     {
         for (int i = 0; i < round.Hand.Count; i++)
         {
+            if (round.IsFrozen(round.Hand[i].Id))
+            {
+                continue; // frozen cards cannot be played (see PlayTurns)
+            }
             var origins = round.GetValidOrigins(round.Hand[i].Shape);
             if (origins.Count > 0)
             {
@@ -2614,6 +2621,154 @@ public static class JokerTests
             last = round.PlayFromHand(0, new GridPos(x, 0));
         }
         return last;
+    }
+
+    private static void Boss_AlikoymaSeizesACardButNeverTheLast()
+    {
+        Section("boss / alikoyma holds a card back");
+        var session = NewSession(5160, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = new AlikoymaBoss();
+        round.SetBoss(boss);
+        boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+
+        Check(boss.SeizedCardId != 0, "it seizes a card at round start",
+            "seized " + boss.SeizedCardId);
+        Check(round.IsFrozen(boss.SeizedCardId), "the seized card is frozen");
+        int frozenNow = 0;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.IsFrozen(round.Hand[i].Id))
+            {
+                frozenNow++;
+            }
+        }
+        Check(frozenNow == 1, "exactly one card is held at a time", "frozen " + frozenNow);
+
+        // The seized card cannot be played, and the hold moves on after the turn resolves.
+        int seized = boss.SeizedCardId;
+        int seizedIndex = -1;
+        int freeIndex = -1;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.Hand[i].Id == seized) { seizedIndex = i; }
+            else if (freeIndex < 0) { freeIndex = i; }
+        }
+        bool refused = false;
+        try
+        {
+            round.PlayFromHand(seizedIndex, new GridPos(0, 0));
+        }
+        catch (InvalidOperationException)
+        {
+            refused = true;
+        }
+        Check(refused, "the held card refuses to be played");
+        round.PlayFromHand(freeIndex, new GridPos(0, 0));
+        Check(!round.IsFrozen(seized), "the old hold expired when the turn resolved");
+        Check(boss.SeizedCardId != 0 && round.IsFrozen(boss.SeizedCardId),
+            "and a fresh card is held for the next turn");
+
+        // A one-card hand is left alone, or the boss would take the last option away.
+        var solo = NewSession(5161, 6, 1000000, 40, 1);
+        solo.Config.Rules.HandSize = 1;
+        var soloBoss = new AlikoymaBoss();
+        solo.CurrentRound.SetBoss(soloBoss);
+        while (solo.CurrentRound.Hand.Count > 1)
+        {
+            solo.CurrentRound.DiscardWholeHand();
+            solo.CurrentRound.RefillHandToSize();
+        }
+        soloBoss.OnRoundStarted(new RoundContext(solo, solo.Rng, solo.CurrentRound));
+        Check(soloBoss.SeizedCardId == 0, "a single-card hand is never seized",
+            "seized " + soloBoss.SeizedCardId);
+    }
+
+    private static void Boss_MapusSealsOneCellPerTurn()
+    {
+        Section("boss / mapus seals a cell");
+        var session = NewSession(5162, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = new MapusBoss();
+        round.SetBoss(boss);
+        boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+
+        Check(boss.HasSeal, "a cell is sealed at round start");
+        GridPos sealed1 = boss.SealedCell;
+        Check(round.Board.IsSealed(sealed1), "the board knows the cell is sealed",
+            sealed1.X + "," + sealed1.Y);
+        Check(round.Board.SealedCells.Count == 1, "exactly one cell is sealed",
+            "count " + round.Board.SealedCells.Count);
+        Check(!round.Board.GetCube(sealed1).HasValue, "a sealed cell holds no cube");
+
+        // Placement refuses it, and so does every path that asks the board where a block fits.
+        Check(!round.CanPlaceCard(round.Hand[0], sealed1), "a block cannot be placed on it");
+        Check(!round.Board.CanPlace(round.Hand[0].Shape, sealed1), "CanPlace refuses it directly");
+        List<GridPos> origins = round.GetValidOrigins(round.Hand[0].Shape);
+        bool offered = false;
+        for (int i = 0; i < origins.Count; i++)
+        {
+            if (origins[i].X == sealed1.X && origins[i].Y == sealed1.Y)
+            {
+                offered = true;
+            }
+        }
+        Check(!offered, "the sealed cell is not offered as a legal origin");
+        Check(origins.Count == round.Board.PlayableCellCount - 1,
+            "every OTHER empty cell is still legal",
+            "origins " + origins.Count + " cells " + round.Board.PlayableCellCount);
+
+        // The seal moves each turn and never accumulates.
+        round.PlayFromHand(0, origins[0]);
+        Check(round.Board.SealedCells.Count == 1, "still exactly one cell after a turn",
+            "count " + round.Board.SealedCells.Count);
+        bool oldSealLifted = !round.Board.IsSealed(sealed1)
+            || (boss.HasSeal && boss.SealedCell.X == sealed1.X && boss.SealedCell.Y == sealed1.Y);
+        Check(oldSealLifted, "the previous seal is gone unless it was re-picked",
+            "old " + sealed1.X + "," + sealed1.Y + " new " + boss.SealedCell.X + "," + boss.SealedCell.Y);
+    }
+
+    private static void Boss_FedaMakesABonusCardCostTheHand()
+    {
+        Section("boss / feda sacrifices the hand");
+        var session = NewSession(5163, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(new FedaBoss());
+
+        BlockCard bonus = session.CreateCard(Bar(1), null);
+        round.AddBonusCard(bonus, BonusPlayOutcome.ToDiscard);
+        var heldBefore = new List<int>();
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            heldBefore.Add(round.Hand[i].Id);
+        }
+        int discardBefore = round.Deck.DiscardCount;
+
+        round.PlayFromBonus(0, new GridPos(0, 0));
+
+        Check(round.Hand.Count == session.Config.Rules.HandSize,
+            "a fresh hand was dealt", "hand " + round.Hand.Count);
+        bool anyKept = false;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (heldBefore.Contains(round.Hand[i].Id))
+            {
+                anyKept = true;
+            }
+        }
+        Check(!anyKept, "none of the sacrificed cards is still in hand");
+        Check(round.Deck.DiscardCount > discardBefore,
+            "the sacrificed hand went to the discard",
+            discardBefore + " -> " + round.Deck.DiscardCount);
+
+        // Without the boss a bonus play leaves the hand exactly as it was.
+        var plain = NewSession(5163, 6, 1000000, 40, 1);
+        BlockCard plainBonus = plain.CreateCard(Bar(1), null);
+        plain.CurrentRound.AddBonusCard(plainBonus, BonusPlayOutcome.ToDiscard);
+        int firstHeld = plain.CurrentRound.Hand[0].Id;
+        plain.CurrentRound.PlayFromBonus(0, new GridPos(0, 0));
+        Check(plain.CurrentRound.Hand[0].Id == firstHeld,
+            "an ordinary round keeps its hand through a bonus play");
     }
 
     private static void BossRounds_FlaggedEveryThirdRound()

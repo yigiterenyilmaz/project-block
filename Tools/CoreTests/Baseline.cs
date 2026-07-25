@@ -61,6 +61,12 @@ public static class Baseline
             GridPos origin = new GridPos(0, 0);
             for (int i = 0; i < round.Hand.Count && handIndex < 0; i++)
             {
+                // A frozen card cannot be played, so the scripted player has to skip it. A boss
+                // round ("Alıkoyma") freezes one every turn, and playing it would throw.
+                if (round.IsFrozen(round.Hand[i].Id))
+                {
+                    continue;
+                }
                 var origins = round.GetValidOrigins(round.Hand[i].Shape);
                 if (origins.Count > 0)
                 {

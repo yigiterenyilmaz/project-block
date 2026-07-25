@@ -310,6 +310,12 @@ namespace ProjectBlock.View
         private void SpawnRetroPiece(RoundEngine round, int handIndex)
         {
             BlockCard card = round.Hand[handIndex];
+            if (round.IsFrozen(card.Id))
+            {
+                // Frozen cards cannot be played at all ("Hazine", the "Alıkoyma" boss), so they
+                // must not even start falling - locking one would throw at PlayFromHand.
+                return;
+            }
             GameBoard b = round.Board;
             int center = b.MinX + b.Width / 2;
             GridPos origin;

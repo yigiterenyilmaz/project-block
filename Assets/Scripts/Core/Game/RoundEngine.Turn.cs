@@ -237,7 +237,12 @@ namespace ProjectBlock.Core
                 {
                     DisposeCard(report.BurnedCard);
                 }
-                // Bonus plays do not refill the hand - the hand was not touched.
+                // Bonus plays do not refill the hand - the hand was not touched. Unless the
+                // boss says otherwise: "Feda" makes the whole hand the price of a bonus card.
+                if (Boss != null)
+                {
+                    Boss.OnBonusCardPlayed(currentTurn);
+                }
             }
             else
             {
@@ -257,6 +262,13 @@ namespace ProjectBlock.Core
             if (session != null)
             {
                 session.Powers.DispatchAfterTurnScored(currentTurn);
+            }
+            // The boss harasses last, after the player's own end-of-turn effects have run, but
+            // still BEFORE the threshold and dead-end checks - so what it does this turn can
+            // decide the round (a sealed cell or a frozen card may be the last straw).
+            if (Boss != null)
+            {
+                Boss.AfterTurnScored(currentTurn);
             }
 
             // 9. threshold check (first pass only)

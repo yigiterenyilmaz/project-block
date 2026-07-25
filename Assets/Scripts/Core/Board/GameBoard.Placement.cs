@@ -31,7 +31,7 @@ namespace ProjectBlock.Core
                 {
                     return false;
                 }
-                if (Blocks(cells[pos.X - MinX, pos.Y - MinY], negative))
+                if (IsSealed(pos) || Blocks(cells[pos.X - MinX, pos.Y - MinY], negative))
                 {
                     return false;
                 }
@@ -73,7 +73,7 @@ namespace ProjectBlock.Core
                 GridPos pos = origin + offset;
                 if (IsInside(pos))
                 {
-                    if (Blocks(cells[pos.X - MinX, pos.Y - MinY], negative))
+                    if (IsSealed(pos) || Blocks(cells[pos.X - MinX, pos.Y - MinY], negative))
                     {
                         return false;
                     }

@@ -14,6 +14,10 @@ namespace ProjectBlock.View
     {
         private static readonly Color BackgroundColor = new Color(0.10f, 0.11f, 0.13f);
         private static readonly Color EmptyColor = new Color(0.17f, 0.18f, 0.22f);
+
+        /// <summary>An empty cell a boss has sealed off ("Mapus") - it reads as barred, not
+        /// as a cube, because nothing can be placed there but nothing occupies it either.</summary>
+        private static readonly Color SealedColor = new Color(0.42f, 0.13f, 0.16f);
         private static readonly Color ValidPreviewColor = new Color(0.35f, 1f, 0.45f, 0.6f);
         private static readonly Color InvalidPreviewColor = new Color(1f, 0.35f, 0.35f, 0.6f);
         private static readonly Color ExplosionPreviewColor = new Color(1f, 0.78f, 0.25f, 0.65f);
@@ -284,7 +288,7 @@ namespace ProjectBlock.View
                     Cube? cube = board.GetCube(gp);
                     Color color = cube.HasValue
                         ? ViewUtil.CubeDisplayColor(cube.Value)
-                        : EmptyColor;
+                        : (board.IsSealed(gp) ? SealedColor : EmptyColor);
                     cellRenderers[x, y].color = color;
                     kindCache[x, y] = cube.HasValue ? cube.Value.Kind : (CubeKind?)null;
                     baseColorCache[x, y] = color;

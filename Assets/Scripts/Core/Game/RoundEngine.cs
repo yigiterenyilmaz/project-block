@@ -81,6 +81,19 @@ namespace ProjectBlock.Core
             Boss = boss;
         }
 
+        /// <summary>Forbids placement on one empty cell ("Mapus"). Board mutations go through
+        /// the engine, so the seal and the no-playable-move check can never disagree.</summary>
+        internal void SealBoardCell(GridPos cell)
+        {
+            Board.SealCell(cell);
+        }
+
+        /// <summary>Lifts every placement seal (a boss re-picks its cell each turn).</summary>
+        internal void ClearBoardSeals()
+        {
+            Board.ClearSeals();
+        }
+
         public RoundStatus Status { get; private set; }
 
         /// <summary>Set when Status is Lost (may be set earlier if an advance offer is

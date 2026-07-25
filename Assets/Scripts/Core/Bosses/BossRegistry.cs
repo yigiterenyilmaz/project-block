@@ -13,8 +13,14 @@ namespace ProjectBlock.Core
         private static readonly Dictionary<string, BossDefinition> byId =
             new Dictionary<string, BossDefinition>();
 
+        // Registered in DESIGN order (the order the bosses were specified), which is also the
+        // order the draw pool walks - so a seed's boss sequence only shifts when content is
+        // added or reordered, never as a side effect of unrelated changes.
         static BossRegistry()
         {
+            Register(() => new AlikoymaBoss());
+            Register(() => new MapusBoss());
+            Register(() => new FedaBoss());
             Register(() => new UfukBoss());
             Register(() => new KuleBoss());
         }
