@@ -32,9 +32,18 @@ namespace ProjectBlock.View
 
         private const float PanelHalfWidth = 5.15f;
 
-        /// <summary>How far past the visible band a partly-scrolled row may show before it is
-        /// culled. Sized to the panel's padding so overspill never reaches the title.</summary>
-        private const float CullSlack = 0.3f;
+        // Sorting tiers, all distinct: the dim and the frame used to share order 40, and which
+        // of the two won was down to creation order - so on some rebuilds the dim covered the
+        // frame and the panel's border simply vanished.
+        private const int DimOrder = 39;
+        private const int FrameOrder = 40;
+        private const int PanelOrder = 41;
+        private const int CardOrder = 42;
+        private const int ScrollTrackOrder = 43;
+        private const int ScrollThumbOrder = 44;
+        private const int PriceOrder = 45;
+        private const int OccluderOrder = 46;
+        private const int ChromeOrder = 47;
 
         /// <summary>Opaque, like the market's: the sell screen used to be a 78% black wash with
         /// the whole shelf legible underneath it.</summary>
@@ -107,22 +116,37 @@ namespace ProjectBlock.View
 
             float gridBottom = GridTop - (shownRows - 1) * pitch;
             float cardHalf = CardVisual.BodyHeight * CardScale * 0.5f;
-            float contentBottom = gridBottom - cardHalf - (priced ? 0.42f : 0.2f);
-            float titleY = GridTop + cardHalf + 0.62f;
+            // How far a row's content reaches below its centre - the price label, when there
+            // is one, hangs further than the card does.
+            float reachDown = priced ? cardHalf + 0.42f : cardHalf;
             bool scrolls = totalRows > VisibleRows;
-            float hintY = contentBottom - 0.34f;
-            float panelTop = titleY + 0.55f;
-            float panelBottom = (scrolls ? hintY : contentBottom) - 0.36f;
+
+            // THE WHOLE LAYOUT IS DERIVED FROM HERE DOWN, and the order matters. A scrolling row
+            // must be able to leave the list without ever being seen to blink out, so:
+            //   cut    - where the occluder plate starts, just clear of the resting rows
+            //   cull   - where a row stops being drawn: by then it is COMPLETELY under the plate
+            //   panel  - far enough out that a row at its cull point is still inside the panel
+            // Getting that sequence wrong is exactly how a card vanishes in open space.
+            float topCut = GridTop + cardHalf + 0.1f;
+            float bottomCut = gridBottom - reachDown - 0.1f;
+            float cullTop = topCut + cardHalf;
+            float cullBottom = bottomCut - reachDown;
+            float panelTop = cullTop + cardHalf + 0.06f;
+            float panelBottom = cullBottom - reachDown - 0.06f;
+            // Title and hint live in the padding bands, drawn OVER the occluders.
+            float titleY = (topCut + panelTop) * 0.5f;
+            float hintY = (bottomCut + panelBottom) * 0.5f;
 
             // A full-screen dim so the market behind is clearly OUT of play, then an OPAQUE
             // panel on top of it - the old overlay was only the dim, so the whole shelf showed
             // through the card list and the two fought each other.
-            ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(40f, 20f), DimColor, 40);
+            ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(40f, 20f),
+                DimColor, DimOrder);
             var panelCenter = new Vector2(0f, (panelTop + panelBottom) * 0.5f);
             var panelSize = new Vector2(PanelHalfWidth * 2f, panelTop - panelBottom);
             ViewUtil.MakeRect(transform, "PanelFrame", panelCenter,
-                panelSize + new Vector2(0.22f, 0.22f), PanelFrameColor, 40);
-            ViewUtil.MakeRect(transform, "Panel", panelCenter, panelSize, PanelColor, 41);
+                panelSize + new Vector2(0.22f, 0.22f), PanelFrameColor, FrameOrder);
+            ViewUtil.MakeRect(transform, "Panel", panelCenter, panelSize, PanelColor, PanelOrder);
             panelBoundsCenter = panelCenter;
             panelBoundsHalf = panelSize * 0.5f + new Vector2(0.11f, 0.11f);
 
@@ -132,7 +156,7 @@ namespace ProjectBlock.View
                         "KART SAT  -  satmak için karta tıkla")
                     : Loc.Pick("YOUR DECK  -  " + sorted.Count + " cards",
                         "DESTEN  -  " + sorted.Count + " kart"),
-                90, 0.030f, TitleColor, 44, TextAnchor.MiddleCenter);
+                90, 0.030f, TitleColor, ChromeOrder, TextAnchor.MiddleCenter);
 
             // A fractional offset means the row above and the row below can BOTH be partly on
             // screen, so the window reaches one row past the visible band on each side and rows
@@ -141,8 +165,6 @@ namespace ProjectBlock.View
             int firstIndex = Mathf.Max(0, (Mathf.FloorToInt(scrollRows) - 1) * Columns);
             int lastIndex = Mathf.Min(sorted.Count,
                 (Mathf.CeilToInt(scrollRows) + VisibleRows + 1) * Columns);
-            float cullTop = GridTop + CullSlack;
-            float cullBottom = gridBottom - CullSlack;
             for (int i = firstIndex; i < lastIndex; i++)
             {
                 int row = i / Columns;
@@ -156,7 +178,7 @@ namespace ProjectBlock.View
                     continue;
                 }
                 CardVisual visual = CardVisual.Create(transform, "Overlay_" + sorted[i].Id,
-                    sorted[i], true, false, position, 42);
+                    sorted[i], true, false, position, CardOrder);
                 visual.transform.localScale = new Vector3(CardScale, CardScale, 1f);
                 if (priced)
                 {
@@ -167,7 +189,14 @@ namespace ProjectBlock.View
                             ? Loc.Pick("sell " + value, "satış " + value)
                             : Loc.Pick("worthless", "değersiz"), 90, 0.026f,
                         value > 0 ? TitleColor : new Color(0.72f, 0.74f, 0.78f),
-                        44, TextAnchor.MiddleCenter);
+                        PriceOrder, TextAnchor.MiddleCenter);
+                }
+                // Only a card whose CENTRE is still in the band takes clicks. One that has
+                // scrolled up under the plate is half-hidden, and selling a card you cannot see
+                // because you clicked where it used to be would be indefensible.
+                if (position.y > topCut || position.y < bottomCut)
+                {
+                    continue;
                 }
                 entryCenters.Add(position);
                 entryShapes.Add(sorted[i].Shape);
@@ -175,35 +204,74 @@ namespace ProjectBlock.View
                 entryVisuals.Add(visual);
             }
 
+            // The plates that make scrolling clean: panel-coloured, drawn ABOVE the cards and
+            // below the title/hint, so a row sliding out slides UNDER them instead of blinking
+            // out. This is the stand-in for a sprite mask, which cannot be used here because
+            // TextMesh price labels ignore masks entirely.
+            BuildOccluder("TopPlate", topCut, panelTop);
+            BuildOccluder("BottomPlate", panelBottom, bottomCut);
+
             scrollbarShown = scrolls;
             if (scrolls)
             {
                 BuildScrollbar(GridTop + cardHalf, gridBottom - cardHalf, maxScroll);
             }
+            FitToCamera(panelCenter, panelSize);
             ViewUtil.MakeText3D(transform, "CloseHint", new Vector2(0f, hintY),
                 scrolls
                     ? Loc.Pick("wheel or drag the bar to scroll    -    click outside to close",
                         "tekerlek ya da çubukla kaydır    -    kapatmak için dışarı tıkla")
                     : Loc.Pick("click outside to close", "kapatmak için dışarı tıkla"),
-                90, 0.023f, HintColor, 44, TextAnchor.MiddleCenter);
+                90, 0.023f, HintColor, ChromeOrder, TextAnchor.MiddleCenter);
         }
 
         /// <summary>True if the point is inside the overlay's panel. A click in here must NOT
         /// close the overlay - only one on the dim outside it does.</summary>
         public bool PanelContains(Vector2 world)
         {
+            Vector2 local = ToLocal(world);
             return IsOpen
-                && Mathf.Abs(world.x - panelBoundsCenter.x) <= panelBoundsHalf.x
-                && Mathf.Abs(world.y - panelBoundsCenter.y) <= panelBoundsHalf.y;
+                && Mathf.Abs(local.x - panelBoundsCenter.x) <= panelBoundsHalf.x
+                && Mathf.Abs(local.y - panelBoundsCenter.y) <= panelBoundsHalf.y;
+        }
+
+        /// <summary>World point in the overlay's own space. The panel is scaled to fill the
+        /// camera, so every hit test has to come through here.</summary>
+        private Vector2 ToLocal(Vector2 world)
+        {
+            return transform.InverseTransformPoint(new Vector3(world.x, world.y, 0f));
+        }
+
+        /// <summary>Scales the whole overlay so the panel fills the window - the same treatment
+        /// the market gets. Without it the panel is sized in raw world units and a taller list
+        /// runs off a 5-unit camera.</summary>
+        private void FitToCamera(Vector2 panelCenter, Vector2 panelSize)
+        {
+            Camera cam = Camera.main;
+            if (cam == null || !cam.orthographic || panelSize.x <= 0f || panelSize.y <= 0f)
+            {
+                return;
+            }
+            const float Margin = 0.96f;
+            const float MaxScale = 1.6f;
+            float halfHeight = cam.orthographicSize * Margin;
+            float halfWidth = halfHeight * cam.aspect;
+            float scale = Mathf.Min(MaxScale,
+                Mathf.Min(halfHeight / (panelSize.y * 0.5f), halfWidth / (panelSize.x * 0.5f)));
+            transform.localScale = new Vector3(scale, scale, 1f);
+            Vector3 camPos = cam.transform.position;
+            transform.position = new Vector3(camPos.x - panelCenter.x * scale,
+                camPos.y - panelCenter.y * scale, 0f);
         }
 
         /// <summary>True if the point is on the scrollbar (track or thumb) - the start of a drag.
         /// Generous horizontally, because the bar itself is deliberately thin.</summary>
         public bool ScrollbarAt(Vector2 world)
         {
+            Vector2 local = ToLocal(world);
             return scrollbarShown
-                && Mathf.Abs(world.x - scrollTrackCenter.x) <= scrollTrackHalf.x + 0.22f
-                && Mathf.Abs(world.y - scrollTrackCenter.y) <= scrollTrackHalf.y + 0.22f;
+                && Mathf.Abs(local.x - scrollTrackCenter.x) <= scrollTrackHalf.x + 0.22f
+                && Mathf.Abs(local.y - scrollTrackCenter.y) <= scrollTrackHalf.y + 0.22f;
         }
 
         /// <summary>Jumps the list so the thumb follows this y - the click-and-drag path. The
@@ -216,7 +284,7 @@ namespace ProjectBlock.View
             }
             float top = scrollTrackCenter.y + scrollTrackHalf.y;
             float bottom = scrollTrackCenter.y - scrollTrackHalf.y;
-            float t = Mathf.InverseLerp(top, bottom, worldY);
+            float t = Mathf.InverseLerp(top, bottom, ToLocal(new Vector2(0f, worldY)).y);
             SetScroll(t * (totalRows - VisibleRows));
         }
 
@@ -250,6 +318,18 @@ namespace ProjectBlock.View
             scrollRows = 0f;
         }
 
+        /// <summary>A panel-coloured plate over one of the padding bands, hiding the rows that
+        /// scroll into it. Invisible as a plate - it is exactly the panel's own colour.</summary>
+        private void BuildOccluder(string name, float bottom, float top)
+        {
+            if (top - bottom <= 0.01f)
+            {
+                return;
+            }
+            ViewUtil.MakeRect(transform, name, new Vector2(0f, (top + bottom) * 0.5f),
+                new Vector2(PanelHalfWidth * 2f, top - bottom), PanelColor, OccluderOrder);
+        }
+
         /// <summary>Track and thumb down the right edge, showing where in the deck you are.</summary>
         private void BuildScrollbar(float top, float bottom, float maxScroll)
         {
@@ -258,13 +338,13 @@ namespace ProjectBlock.View
             scrollTrackCenter = new Vector2(x, (top + bottom) * 0.5f);
             scrollTrackHalf = new Vector2(0.08f, height * 0.5f);
             ViewUtil.MakeRect(transform, "ScrollTrack", scrollTrackCenter,
-                new Vector2(0.16f, height), ScrollTrackColor, 43);
+                new Vector2(0.16f, height), ScrollTrackColor, ScrollTrackOrder);
             float thumbHeight = Mathf.Max(0.5f, height * VisibleRows / totalRows);
             float travel = height - thumbHeight;
             float t = maxScroll > 0f ? scrollRows / maxScroll : 0f;
             float thumbY = top - thumbHeight * 0.5f - travel * t;
             ViewUtil.MakeRect(transform, "ScrollThumb", new Vector2(x, thumbY),
-                new Vector2(0.22f, thumbHeight), ScrollThumbColor, 44);
+                new Vector2(0.22f, thumbHeight), ScrollThumbColor, ScrollThumbOrder);
         }
 
         /// <summary>Shows the owned deck as the "Hileli Zar" opening-hand PICKER: each selected
@@ -332,9 +412,10 @@ namespace ProjectBlock.View
         /// (exactly the target number of cards is selected).</summary>
         public bool PickerConfirmAt(Vector2 world)
         {
+            Vector2 local = ToLocal(world);
             return confirmButtonShown && confirmEnabled
-                && Mathf.Abs(world.x - confirmButtonCenter.x) <= confirmButtonHalf.x
-                && Mathf.Abs(world.y - confirmButtonCenter.y) <= confirmButtonHalf.y;
+                && Mathf.Abs(local.x - confirmButtonCenter.x) <= confirmButtonHalf.x
+                && Mathf.Abs(local.y - confirmButtonCenter.y) <= confirmButtonHalf.y;
         }
 
         /// <summary>Sold-card feedback: detaches that card's visual and flies it off toward
@@ -372,10 +453,11 @@ namespace ProjectBlock.View
 
         private int EntryAt(Vector2 world)
         {
+            Vector2 local = ToLocal(world);
             for (int i = 0; i < entryCenters.Count; i++)
             {
-                if (Mathf.Abs(world.x - entryCenters[i].x) <= CardVisual.BodyWidth * CardScale * 0.5f
-                    && Mathf.Abs(world.y - entryCenters[i].y) <= CardVisual.BodyHeight * CardScale * 0.5f)
+                if (Mathf.Abs(local.x - entryCenters[i].x) <= CardVisual.BodyWidth * CardScale * 0.5f
+                    && Mathf.Abs(local.y - entryCenters[i].y) <= CardVisual.BodyHeight * CardScale * 0.5f)
                 {
                     return i;
                 }
@@ -387,6 +469,11 @@ namespace ProjectBlock.View
         {
             IsOpen = false;
             confirmButtonShown = false;
+            scrollbarShown = false;
+            // Undo the fit, or the picker - which lays itself out in raw world units - would
+            // inherit whatever scale the last card list was given.
+            transform.localScale = Vector3.one;
+            transform.position = Vector3.zero;
             entryCenters.Clear();
             entryShapes.Clear();
             entryCards.Clear();

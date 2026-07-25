@@ -352,7 +352,7 @@ namespace ProjectBlock.View
                     float deckScroll = mouse.scroll.ReadValue().y;
                     if (Mathf.Abs(deckScroll) > 0.01f)
                     {
-                        deckOverlay.Scroll(-deckScroll / 240f);
+                        deckOverlay.Scroll(-deckScroll / 120f);
                         return;
                     }
                 }
