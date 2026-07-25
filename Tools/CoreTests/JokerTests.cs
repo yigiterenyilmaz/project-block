@@ -395,8 +395,11 @@ public static class JokerTests
     {
         Section("overtime / win bonus wired through a round");
         // 3x3 board, all size-3 bars: every placement completes its row, explodes, and empties
-        // the board -> a clean sweep every turn. Threshold 60 is crossed on turn 1.
-        var session = NewSession(31, 3, 60, 24, 3);
+        // the board -> a clean sweep every turn. The threshold is set below what ONE sweep pays
+        // so turn 1 crosses it: a sweep swallows the line score, so that is the sweep bonus
+        // alone (50 logical) and nothing else.
+        const int Threshold = 40;
+        var session = NewSession(31, 3, Threshold, 24, 3);
         RoundEngine round = session.CurrentRound;
         ScoringConfig sc = session.Config.Scoring;
 
@@ -409,7 +412,7 @@ public static class JokerTests
         round.DecideAdvance(false); // continue -> overtime #1
 
         TurnReport r2 = PlayOneCard(round);
-        int expect1 = (int)Math.Round(60 * sc.OvertimeWinBonusBaseFraction);
+        int expect1 = (int)Math.Round(Threshold * sc.OvertimeWinBonusBaseFraction);
         Check(r2 != null && r2.CleanSweep, "overtime turn sweeps");
         Check(r2 != null && r2.OvertimeWinBonus == expect1,
             "overtime win #1 pays the base fraction of the threshold",
@@ -421,7 +424,7 @@ public static class JokerTests
         round.DecideAdvance(false); // continue -> overtime #2
 
         TurnReport r3 = PlayOneCard(round);
-        int expect2 = (int)Math.Round(60 *
+        int expect2 = (int)Math.Round(Threshold *
             (sc.OvertimeWinBonusBaseFraction + sc.OvertimeWinBonusStepFraction));
         Check(r3 != null && r3.OvertimeWinBonus == expect2,
             "overtime win #2 is one step higher",
@@ -2976,7 +2979,10 @@ public static class JokerTests
     }
 
     /// <summary>Plays four 1x1 cards along the bottom row of a 4-wide board, which completes
-    /// that row and nothing else. Returns the clearing turn's report.</summary>
+    /// that row and nothing else. Returns the clearing turn's report.
+    ///
+    /// An anchor cube is parked off the row first, so clearing it does NOT empty the board: a
+    /// clean sweep SWALLOWS the line score, and this helper exists to measure the line score.</summary>
     private static TurnReport FillBottomRow(GameSession session, BossRound boss)
     {
         if (boss != null)
@@ -2984,6 +2990,7 @@ public static class JokerTests
             session.CurrentRound.SetBoss(boss);
         }
         RoundEngine round = session.CurrentRound;
+        round.PlayFromHand(0, new GridPos(0, 2)); // the anchor: keeps the board non-empty
         TurnReport last = null;
         for (int x = 0; x < 4; x++)
         {
@@ -3790,7 +3797,10 @@ public static class JokerTests
     private static GameSession DriveOwnedToMarket(GameSession session)
     {
         // Restore placement scoring (default is 0 now) so greedy play reaches the market.
-        session.Config.Scoring.PointsPerCubePlaced = 1;
+        // Generous on purpose: this driver only exists to GET somewhere, and a clean sweep now
+        // swallows the line score, so a thin margin here would make unrelated tests fail
+        // whenever the scoring balance moves.
+        session.Config.Scoring.PointsPerCubePlaced = 20;
         int safety = 0;
         while (!RunIsOver(session) && safety++ < 400)
         {
@@ -3839,9 +3849,10 @@ public static class JokerTests
     {
         var config = new GameConfig();
         config.RngSeed = seed;
-        // Placement scores nothing by default; greedy play on the default 6x6 rarely clears a
-        // line, so this driver needs placement points to reach the threshold and the market.
-        config.Scoring.PointsPerCubePlaced = 1;
+        // Placement scores nothing by default; greedy play rarely clears a line, so this
+        // driver needs placement points to reach the threshold and the market. Generous on
+        // purpose - see DriveOwnedToMarket.
+        config.Scoring.PointsPerCubePlaced = 20;
         var session = new GameSession(config);
         int safety = 0;
         while (!RunIsOver(session) && safety++ < 400)
