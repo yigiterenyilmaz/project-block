@@ -149,6 +149,34 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Greedy word wrap for the placeholder TextMesh labels (no auto-wrapping).</summary>
+        /// <summary>Word-wraps, then CLIPS to a line budget with a trailing ellipsis. Panels
+        /// here are fixed-size and TextMesh happily runs straight out the bottom of one, so
+        /// anything drawn inside a tile has to be clamped rather than trusted to fit.</summary>
+        public static string WrapText(string text, int maxCharsPerLine, int maxLines)
+        {
+            string wrapped = WrapText(text, maxCharsPerLine);
+            if (maxLines <= 0)
+            {
+                return wrapped;
+            }
+            string[] lines = wrapped.Split('\n');
+            if (lines.Length <= maxLines)
+            {
+                return wrapped;
+            }
+            var kept = new System.Text.StringBuilder();
+            for (int i = 0; i < maxLines; i++)
+            {
+                if (i > 0)
+                {
+                    kept.Append('\n');
+                }
+                kept.Append(lines[i]);
+            }
+            kept.Append('…');
+            return kept.ToString();
+        }
+
         public static string WrapText(string text, int maxCharsPerLine)
         {
             if (string.IsNullOrEmpty(text))

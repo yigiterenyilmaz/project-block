@@ -281,10 +281,17 @@ namespace ProjectBlock.View
                 totalText.text = string.Empty;
                 return;
             }
+            if (session.Phase != GamePhase.Round)
+            {
+                // The market panel is opaque and reaches the top of the screen, and it prints
+                // the balance itself - a HUD line here would just overprint its title.
+                totalText.text = string.Empty;
+                return;
+            }
             var sb = new StringBuilder();
             sb.Append(Loc.Pick("TOTAL ", "TOPLAM ")).Append(session.TotalScore);
             RoundEngine round = session.CurrentRound;
-            if (session.Phase == GamePhase.Round && round != null)
+            if (round != null)
             {
                 sb.Append(Loc.Pick("        round ", "        raunt "))
                     .Append(round.RoundScore).Append(" / ")
@@ -293,9 +300,37 @@ namespace ProjectBlock.View
             totalText.text = sb.ToString();
         }
 
+        /// <summary>The HUD while the market is open. The round dump does NOT belong here: it
+        /// describes a round that has already finished (turn counter, board size, the erosion
+        /// clock, "right-click to rotate") and, because the canvas draws over world space, it
+        /// printed straight across the market panel. Only the run-level facts and the debug
+        /// keys survive, and the panel itself carries the prompts.</summary>
+        private void BuildMarketHud()
+        {
+            var sb = new StringBuilder();
+            sb.Append("Seed ").Append(lastSeedUsed)
+                .Append(Loc.Pick("   Deck: ", "   Deste: ")).Append(currentDeck.Name).Append('\n');
+            sb.Append(Loc.Pick("Round ", "Raunt ")).Append(session.RoundNumber)
+                .Append(" / ").Append(session.Config.TotalRounds)
+                .Append(Loc.Pick("  done", "  bitti")).Append('\n');
+            sb.Append(Loc.Pick("Cards ", "Kart ")).Append(session.OwnedCards.Count)
+                .Append(Loc.Pick("   Jokers ", "   Joker ")).Append(session.Jokers.Count)
+                .Append(Loc.Pick("   Powers ", "   Güç ")).Append(session.Powers.Count).Append('\n');
+            sb.Append(Loc.Pick(
+                "Debug - J: pick joker   P: pick power   D: choose deck   R: new run   L: türkçe",
+                "Debug - J: joker seç   P: güç seç   D: deste seç   R: yeni oyun   L: english"));
+            infoText.text = sb.ToString();
+            messageText.text = string.Empty;
+        }
+
         private void UpdateHud()
         {
             UpdateScoreHud();
+            if (session.Phase == GamePhase.Market)
+            {
+                BuildMarketHud();
+                return;
+            }
             RoundEngine round = session.CurrentRound;
             var sb = new StringBuilder();
             sb.Append("Seed ").Append(lastSeedUsed)
@@ -425,12 +460,8 @@ namespace ProjectBlock.View
                         + session.TotalScore
                         + Loc.Pick("\n[R] new run", "\n[R] yeni oyun");
                     break;
-                case GamePhase.Market:
-                    messageText.text = Loc.Pick(
-                            "Click a card to add it to your deck (price below it)\n[N] start round ",
-                            "Desteye katmak için karta tıkla (fiyatı altında)\n[N] raunt başlat: ")
-                        + (session.RoundNumber + 1);
-                    break;
+                // GamePhase.Market never reaches here - BuildMarketHud handles it and returns,
+                // and the buy / next-round prompt is drawn inside the market panel instead.
                 default:
                     if (round.Status == RoundStatus.AwaitingAdvanceDecision)
                     {

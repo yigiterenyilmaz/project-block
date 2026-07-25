@@ -51,8 +51,14 @@ namespace ProjectBlock.View
         private static readonly Color RerollButtonColor = new Color(0.20f, 0.24f, 0.34f);
         private static readonly Color RerollButtonDisabledColor = new Color(0.14f, 0.14f, 0.16f);
 
-        /// <summary>Extra backdrop height reserved at the bottom for the reroll button.</summary>
-        private const float RerollExtra = 1.4f;
+        /// <summary>Extra backdrop height reserved at the bottom for the reroll button and the
+        /// prompt line under it.</summary>
+        private const float RerollExtra = 2.1f;
+
+        /// <summary>Description lines a tile can show before running over its own bottom edge
+        /// and into the price beneath it. The body is 1.8 tall, the description starts 0.12
+        /// above centre and a line at this size is roughly 0.11 - so eight is what fits.</summary>
+        private const int MaxDescriptionLines = 8;
 
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
@@ -212,6 +218,16 @@ namespace ProjectBlock.View
                 Loc.Pick("REROLL  ", "YENİLE  ") + rerollCost,
                 60, 0.05f, canReroll ? AffordablePriceColor : TooExpensiveColor,
                 38, TextAnchor.MiddleCenter);
+
+            // The buy / next-round prompt lives INSIDE the panel. It used to be HUD text at the
+            // top of the screen, where the opaque panel now sits - the canvas draws over world
+            // space, so the two simply printed on top of each other.
+            ViewUtil.MakeText3D(transform, "Prompt",
+                rerollButtonCenter + new Vector2(0f, -0.62f),
+                Loc.Pick("click a block to add it to your deck    -    [N] start round ",
+                        "desteye katmak için bloğa tıkla    -    [N] raunt başlat: ")
+                    + (session.RoundNumber + 1),
+                90, 0.014f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
         }
 
         /// <summary>The tag printed at the top of a tile: the tier word replaces the kind word
@@ -248,7 +264,8 @@ namespace ProjectBlock.View
                 center + new Vector2(0f, 0.5f), ViewUtil.WrapText(displayName, 13),
                 90, 0.022f, JokerNameColor, 37, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, key + "Desc_" + index,
-                center + new Vector2(0f, 0.12f), ViewUtil.WrapText(description, 16),
+                center + new Vector2(0f, 0.12f),
+                ViewUtil.WrapText(description, 16, MaxDescriptionLines),
                 90, 0.012f, JokerDescColor, 37, TextAnchor.UpperCenter);
         }
 
