@@ -138,6 +138,53 @@ namespace ProjectBlock.Core
     /// The whole thing is one flag: the inversion window in JokerInventory does the work, so
     /// this class has nothing of its own to run.
     /// </summary>
+    /// <summary>
+    /// "Taş ve sopa" - back to sticks and stones. Every joker and every power is switched off
+    /// for the round, whatever its rarity, so the player is down to the board and their own
+    /// judgement. In exchange the round asks for less: the score threshold drops.
+    ///
+    /// Like "Anarşi" this only silences HOOKS. A permanent rule a joker applied when it was
+    /// bought (Seri tetik's wider hand) stays applied - undoing and redoing those is exactly the
+    /// bug the central silencing gate exists to avoid.
+    /// </summary>
+    public sealed class TasVeSopaBoss : BossRound
+    {
+        /// <summary>What this round's threshold is, as a percentage of the normal one.</summary>
+        public int ThresholdPercent = 75;
+
+        public TasVeSopaBoss()
+            : base("tas_ve_sopa", "Taş ve Sopa")
+        {
+            SetDescription(
+                "Every joker and every power is switched off for the round - just you and the "
+                    + "board. The score threshold is lower to make up for it.",
+                "Bu raunt boyunca bütün jokerlerin ve güçlerin devre dışı - sadece sen ve oyun "
+                    + "alanı. Karşılığında puan eşiği daha düşük olur.");
+        }
+
+        public override bool DisablesJoker(Joker joker)
+        {
+            return true;
+        }
+
+        public override bool DisablesPower(Power power)
+        {
+            return true;
+        }
+
+        public override int FilterScoreThreshold(int threshold)
+        {
+            // Rounded UP, so the discount can never turn a threshold into nothing.
+            return (threshold * ThresholdPercent + 99) / 100;
+        }
+
+        public override string StatusText
+        {
+            get { return Loc.Pick("threshold -" + (100 - ThresholdPercent) + "%",
+                "eşik -" + (100 - ThresholdPercent) + "%"); }
+        }
+    }
+
     public sealed class TerslikBoss : BossRound
     {
         public TerslikBoss()

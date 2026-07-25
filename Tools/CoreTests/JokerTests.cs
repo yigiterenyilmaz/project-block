@@ -113,6 +113,10 @@ public static class JokerTests
         KrediKarti_BossRoundWithOpenDebtEndsTheRun();
         KrediKarti_ADebtFreeBossRoundIsFine();
         KrediKarti_CannotBeSoldWhileInDebt();
+        Boss_TitizlikPaysForNothingButASweep();
+        Boss_TitizlikLeavesJokerBonusesAlone();
+        Boss_CanaGelecegineMalaTakesAQuarterOfThePurse();
+        Boss_TasVeSopaSwitchesEverythingOffAndAsksForLess();
         Boss_TerslikTurnsJokerPointsIntoLosses();
         Terslik_ATurnNeverPaysLessThanNothing();
         Terslik_LeavesJokersThatGiveNoPointsAlone();
@@ -3465,6 +3469,151 @@ public static class JokerTests
             Check(!session.Jokers.CanSell(card),
                 "still short of the full amount, so still locked", "debt " + session.Debt);
         }
+    }
+
+    private static void Boss_TitizlikPaysForNothingButASweep()
+    {
+        Section("boss / titizlik pays for nothing but a clean sweep");
+        var scorer = new DefaultScoreCalculator(new ScoringConfig());
+        var boss = new TitizlikBoss();
+        Check(boss.OnlyCleanSweepsScore, "it declares that only sweeps score");
+        Check(boss.ScoreLineExplosion(scorer, new LineExplosionScore(2, 1, 12, 8, 4)) == 0,
+            "a line clear is worth nothing, whoever completed it");
+        Check(boss.ScoreCleanSweep(scorer) > scorer.ScoreCleanSweep(),
+            "and a sweep is worth a little MORE than usual",
+            scorer.ScoreCleanSweep() + " -> " + boss.ScoreCleanSweep(scorer));
+
+        // Now through a real turn: place a block and clear nothing. Ordinarily that pays for the
+        // cubes placed; under Titizlik it pays nothing at all.
+        var plain = NewSession(5190, 6, 1000000, 40, 3);
+        plain.Config.Scoring.PointsPerCubePlaced = 10;
+        TurnReport plainTurn = PlayOneCard(plain.CurrentRound);
+        Check(plainTurn.Score.Total > 0, "a plain round pays for a placement",
+            "total " + plainTurn.Score.Total);
+
+        var strict = NewSession(5190, 6, 1000000, 40, 3);
+        strict.Config.Scoring.PointsPerCubePlaced = 10;
+        strict.CurrentRound.SetBoss(new TitizlikBoss());
+        TurnReport strictTurn = PlayOneCard(strict.CurrentRound);
+        Check(strictTurn.Score.BasePlacement == 0, "under the boss the placement pays nothing",
+            "placement " + strictTurn.Score.BasePlacement);
+        Check(strictTurn.Score.BaseGold == 0 && strictTurn.Score.BaseCombo == 0,
+            "and so do gold and combo");
+        Check(strictTurn.Score.Total == 0, "so the whole turn is worth nothing",
+            "total " + strictTurn.Score.Total);
+
+        // A sweep DOES pay, and pays more than the plain rule would.
+        var sweeping = NewSession(5191, 4, 1000000, 40, 1);
+        RoundEngine round = sweeping.CurrentRound;
+        round.SetBoss(new TitizlikBoss());
+        FillBoardSolid(round, sweeping);
+        // Empty one cell so a single-cube placement completes its row AND sweeps the board.
+        var hole = new GridPos(round.Board.MinX, round.Board.MinY);
+        round.Board.DestroyCube(hole);
+        TurnReport sweepTurn = PlayOneCard(round);
+        Check(sweepTurn != null && sweepTurn.CleanSweep, "the board was swept",
+            sweepTurn == null ? "no card played" : "sweep " + sweepTurn.CleanSweep);
+        Check(sweepTurn.Score.BaseSweep > 0, "and the sweep is the one thing that paid",
+            "sweep " + sweepTurn.Score.BaseSweep);
+        Check(sweepTurn.Score.BaseLines == 0,
+            "the line that caused it still paid nothing", "lines " + sweepTurn.Score.BaseLines);
+    }
+
+    private static void Boss_TitizlikLeavesJokerBonusesAlone()
+    {
+        Section("boss / titizlik beats your board, not your build");
+        var session = NewSession(5192, 6, 1000000, 40, 3);
+        session.Config.Scoring.PointsPerCubePlaced = 10;
+        var joker = (KolayParaJoker)session.Jokers.Add(new KolayParaJoker());
+        session.CurrentRound.SetBoss(new TitizlikBoss());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+
+        TurnReport report = PlayOneCard(session.CurrentRound);
+        int fromJoker = 0;
+        foreach (ScoreContribution c in report.Score.Contributions)
+        {
+            if (c.Source == joker.DefId) { fromJoker += c.Flat; }
+        }
+        Check(report.Score.BasePlacement == 0, "the base placement is still wiped");
+        Check(fromJoker > 0, "but the joker's own bonus still lands", "joker " + fromJoker);
+        Check(report.Score.Total > 0, "so a build can still score through it",
+            "total " + report.Score.Total);
+    }
+
+    private static void Boss_CanaGelecegineMalaTakesAQuarterOfThePurse()
+    {
+        Section("boss / cana geleceğine mala charges the purse when the deck dries up");
+        var boss = new CanaGelecegineMalaBoss();
+        // A 4-card deck against a hand of 3 empties the draw pile almost immediately.
+        var session = NewSession(5193, 6, 1000000, 4, 1);
+        session.Config.Scoring.PointsPerCubePlaced = 100;
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(boss);
+
+        PlayTurns(session, 1);
+        long purse = session.TotalScore;
+        Check(purse > 0, "the player has money to lose", "score " + purse);
+
+        long before = purse;
+        int guard = 0;
+        while (boss.LostScore == 0 && guard++ < 30 && round.Status == RoundStatus.InProgress)
+        {
+            before = session.TotalScore;
+            PlayTurns(session, 1);
+        }
+        Check(boss.LostScore > 0, "the draw pile dried up and the purse paid",
+            "lost " + boss.LostScore);
+        Check(session.TotalScore < before + 100000,
+            "the score really went down rather than only up", "score " + session.TotalScore);
+
+        // The arithmetic, in isolation: a quarter, rounded up, and never more than there is.
+        var arith = NewSession(5194, 6, 1000000, 40, 1);
+        arith.AddCurrency(400 - arith.TotalScore);
+        Check(arith.TotalScore == 400, "set up a known purse", "score " + arith.TotalScore);
+        Check(arith.TakeCurrencyPercent(25) == 100, "a quarter of 400 is 100");
+        Check(arith.TotalScore == 300, "and the purse fell by exactly that",
+            "score " + arith.TotalScore);
+        arith.AddCurrency(-arith.TotalScore + 1);
+        Check(arith.TakeCurrencyPercent(25) == 1, "a quarter of 1 rounds up to 1, not down to 0");
+        Check(arith.TotalScore == 0, "leaving nothing");
+        Check(arith.TakeCurrencyPercent(25) == 0, "an empty purse cannot be charged again");
+        Check(arith.TotalScore == 0, "and never goes negative", "score " + arith.TotalScore);
+    }
+
+    private static void Boss_TasVeSopaSwitchesEverythingOffAndAsksForLess()
+    {
+        Section("boss / taş ve sopa takes the whole inventory and lowers the bar");
+        var session = NewSession(5195, 6, 200, 40, 1);
+        Joker common = session.Jokers.Add(new RenovasyonJoker());
+        Joker rare = session.Jokers.Add(new SeriTetikJoker());
+        Power power = session.Powers.Add(new CimbizPower());
+        RoundEngine round = session.CurrentRound;
+
+        int fullBar = round.ScoreThreshold;
+        Check(fullBar == round.Config.ScoreThreshold, "with no boss the bar is the config's",
+            fullBar + " vs " + round.Config.ScoreThreshold);
+        Check(!round.IsSilencedByBoss(common), "and nothing is silenced");
+
+        var boss = new TasVeSopaBoss();
+        round.SetBoss(boss);
+        Check(round.IsSilencedByBoss(common), "a common joker is switched off");
+        Check(round.IsSilencedByBoss(rare), "so is a rare one - rarity does not save you");
+        Check(round.IsSilencedByBoss(power), "and so is every power");
+        Check(!session.Jokers.CanActivate(common.InstanceId), "nothing can be activated");
+        Check(!session.Powers.CanUse(power.InstanceId, ActivationTarget.None),
+            "and no power can be used");
+        Check(common.SellValue > 0, "they all keep their sell value");
+
+        Check(round.ScoreThreshold < fullBar, "the bar really is lower",
+            fullBar + " -> " + round.ScoreThreshold);
+        Check(round.ScoreThreshold == (fullBar * boss.ThresholdPercent + 99) / 100,
+            "by exactly the boss's percentage, rounded up",
+            "" + round.ScoreThreshold);
+
+        // Rounding up means a discount can never erase a threshold outright.
+        var tiny = new TasVeSopaBoss();
+        Check(tiny.FilterScoreThreshold(1) >= 1, "a threshold of 1 does not become 0",
+            "" + tiny.FilterScoreThreshold(1));
     }
 
     private static void Boss_TerslikTurnsJokerPointsIntoLosses()

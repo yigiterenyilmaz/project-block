@@ -1,6 +1,9 @@
-// PURPOSE: The two axis bosses - "Ufuk" pays for rows only, "Kule" for columns only, each
-// sweetening its own axis. Both are pure score filters: they destroy nothing, take nothing,
-// and only rewrite what a line explosion is worth.
+// PURPOSE: The three score bosses. "Ufuk" pays for rows only, "Kule" for columns only, and
+// "Titizlik" for nothing but a clean sweep. All three are pure score filters: they destroy
+// nothing, take nothing, and only rewrite what an action is worth.
+//
+// They rewrite the BASE values only. A joker's own bonuses still land on top, exactly as they
+// do on an ordinary round - these bosses beat your board, not your build.
 //
 // The bonus multipliers are BALANCE PLACEHOLDERS (public fields, tune freely).
 
@@ -56,6 +59,46 @@ namespace ProjectBlock.Core
                 return 0; // a rows-only clear earns nothing at all
             }
             return (int)(scorer.ScoreLineExplosion(lines.Columns, lines.ColumnCubes) * ColumnBonus);
+        }
+    }
+
+    /// <summary>
+    /// "Titizlik" - nothing is good enough but a spotless board. Placing blocks, clearing lines,
+    /// the combo and the gold upkeep all pay nothing; only a CLEAN SWEEP scores, and it pays a
+    /// little more than usual to make up for it.
+    ///
+    /// It kills the line score through ScoreLineExplosion rather than leaving it to the engine's
+    /// wipe, so a clear that lands OUTSIDE a placement (an inflation deflate, a board power) is
+    /// silenced by the same rule - a line is a line, whoever completed it.
+    /// </summary>
+    public sealed class TitizlikBoss : BossRound
+    {
+        /// <summary>What a clean sweep is worth relative to normal.</summary>
+        public double SweepBonus = 1.2;
+
+        public TitizlikBoss()
+            : base("titizlik", "Titizlik")
+        {
+            SetDescription(
+                "Only a clean sweep scores - placing, clearing lines, combos and gold all pay "
+                    + "nothing. Sweeps pay a little more than usual.",
+                "Sadece temizlik puan verir - blok koymak, satır patlatmak, kombo ve altın hiçbir "
+                    + "şey ödemez. Temizlikler normalden biraz fazla puan getirir.");
+        }
+
+        public override bool OnlyCleanSweepsScore
+        {
+            get { return true; }
+        }
+
+        public override int ScoreLineExplosion(IScoreCalculator scorer, LineExplosionScore lines)
+        {
+            return 0;
+        }
+
+        public override int ScoreCleanSweep(IScoreCalculator scorer)
+        {
+            return (int)(scorer.ScoreCleanSweep() * SweepBonus);
         }
     }
 }

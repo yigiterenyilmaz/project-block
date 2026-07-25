@@ -109,4 +109,52 @@ namespace ProjectBlock.Core
             taxed += ctx.Session.TaxOwnedCards(CardsPerPowerUse, ctx.Rng);
         }
     }
+
+    /// <summary>
+    /// "Cana geleceğine mala" - better the purse than the player. Every time the draw pile runs
+    /// dry, a quarter of the run score is simply gone.
+    ///
+    /// It hangs off the same trigger as "Harcama vergisi" and as board erosion, so on this round
+    /// cycling the deck is expensive three ways over. Unlike the taxes it takes MONEY, not cards:
+    /// the deck is left alone and the run score pays instead, which bites hardest exactly when
+    /// the player was saving up for the market.
+    /// </summary>
+    public sealed class CanaGelecegineMalaBoss : BossRound
+    {
+        /// <summary>Percentage of the run score lost each time the draw pile empties.</summary>
+        public int PercentPerEmptying = 25;
+
+        private long lost;
+
+        public CanaGelecegineMalaBoss()
+            : base("cana_gelecegine_mala", "Cana Geleceğine Mala")
+        {
+            SetDescription(
+                "Every time your draw pile runs out, a quarter of your score is gone. Your deck "
+                    + "is untouched - it is the purse that pays.",
+                "Çekme desten her bittiğinde puanının çeyreği gider. Desteye dokunmaz - ödeyen "
+                    + "kasadaki para olur.");
+        }
+
+        /// <summary>Score this boss has taken so far, for the UI.</summary>
+        public long LostScore
+        {
+            get { return lost; }
+        }
+
+        public override string StatusText
+        {
+            get { return lost > 0 ? lost + Loc.Pick(" gone", " gitti") : null; }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            lost = 0;
+        }
+
+        public override void OnDrawPileEmptied(RoundContext ctx)
+        {
+            lost += ctx.Session.TakeCurrencyPercent(PercentPerEmptying);
+        }
+    }
 }
