@@ -327,6 +327,9 @@ namespace ProjectBlock.View
         private void UpdateHud()
         {
             UpdateScoreHud();
+            // The draw pile doubles as the SELL screen while shopping, which nothing on screen
+            // said. Set from the phase on every refresh, so it can never be left on in a round.
+            cardLayer.SetSellHint(session.Phase == GamePhase.Market);
             if (session.Phase == GamePhase.Market)
             {
                 BuildMarketHud();

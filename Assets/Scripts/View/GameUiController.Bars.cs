@@ -1,4 +1,4 @@
-// PURPOSE: GameUiController bar & market interactions - using/selling jokers and powers
+﻿// PURPOSE: GameUiController bar & market interactions - using/selling jokers and powers
 // from the bars, the "Hileli zar" opening-hand pick, the Parazit attach flow, market
 // clicks and joker debug-key input.
 
@@ -218,6 +218,7 @@ namespace ProjectBlock.View
                     }
                     parazitTargetJoker = chosen.InstanceId;
                     parazitStep = ParazitStep.PickCard;
+                    deckOverlay.ResetScroll();
                     deckOverlay.Show(session.OwnedCards);
                     messageText.text = Loc.Pick(
                         "Parazit: pick a deck card   [Esc] cancel",
@@ -314,7 +315,11 @@ namespace ProjectBlock.View
                 if (cardLayer.IsDrawPileAt(world))
                 {
                     sellCardsMode = true;
-                    deckOverlay.Show(session.OwnedCards, c => session.Config.Market.SellValue(c));
+                    deckOverlay.ResetScroll(); // a fresh visit starts at the top of the deck
+                    // x ScoreScale: GameSession.SellCard pays in the scaled economy, and this
+                    // screen used to quote a tenth of what the card actually fetched.
+                    deckOverlay.Show(session.OwnedCards,
+                        c => session.Config.Market.SellValue(c) * session.Config.Scoring.ScoreScale);
                 }
                 return;
             }

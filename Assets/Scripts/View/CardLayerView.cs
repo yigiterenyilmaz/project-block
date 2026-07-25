@@ -40,6 +40,9 @@ namespace ProjectBlock.View
         private Transform discardStackRoot;
         private CardVisual discardTopVisual;
         private TextMesh drawCountLabel;
+
+        /// <summary>"click: sell cards" over the draw pile, shown in the market only.</summary>
+        private TextMesh sellHintLabel;
         private int discardTopId = -1;
         private CardVisual drawTopVisual;
         private int drawTopId = -1;
@@ -409,6 +412,27 @@ namespace ProjectBlock.View
             drawCountLabel = ViewUtil.MakeText3D(drawPileRoot, "Count",
                 new Vector2(0f, CardVisual.BodyHeight * 0.5f + 0.34f), "0",
                 56, 0.07f, Color.white, 37, TextAnchor.MiddleCenter);
+            // Above the count, and only in the market: the deck pile is also the SELL screen,
+            // which nothing on screen said. Built here and toggled, so it costs nothing while
+            // a round is being played.
+            sellHintLabel = ViewUtil.MakeText3D(drawPileRoot, "SellHint",
+                new Vector2(0f, CardVisual.BodyHeight * 0.5f + 0.78f),
+                Loc.Pick("click: sell cards", "tıkla: kart sat"),
+                70, 0.032f, new Color(1f, 0.92f, 0.45f), 37, TextAnchor.MiddleCenter);
+            sellHintLabel.gameObject.SetActive(false);
+        }
+
+        /// <summary>Shows or hides the "click to sell" prompt over the draw pile. The controller
+        /// turns it on for the market phase only.</summary>
+        public void SetSellHint(bool visible)
+        {
+            if (sellHintLabel == null)
+            {
+                return;
+            }
+            // Re-texted on every toggle so a language switch mid-run is picked up.
+            sellHintLabel.text = Loc.Pick("click: sell cards", "tıkla: kart sat");
+            sellHintLabel.gameObject.SetActive(visible);
         }
 
         private Transform MakePileRoot(string name, Vector2 position)

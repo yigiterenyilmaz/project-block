@@ -1,4 +1,4 @@
-// PURPOSE: GameUiController placement input - mouse drag-to-place, and the retro
+﻿// PURPOSE: GameUiController placement input - mouse drag-to-place, and the retro
 // (tetris) falling-piece controller: spawn, steer, rotate, gravity-drop, commit.
 
 using System.Collections;
@@ -163,6 +163,7 @@ namespace ProjectBlock.View
                         else if (round.CardHasElement(rightCard, BlockElement.Fox))
                         {
                             foxPickSlot = rightHit.SlotIndex;
+                            deckOverlay.ResetScroll();
                             deckOverlay.Show(session.OwnedCards);
                         }
                         else if (session.Config.Rules.RetroMode)
@@ -179,6 +180,7 @@ namespace ProjectBlock.View
                 {
                     if (cardLayer.IsDrawPileAt(world))
                     {
+                        deckOverlay.ResetScroll();
                         deckOverlay.Show(session.OwnedCards);
                         return;
                     }
@@ -187,6 +189,7 @@ namespace ProjectBlock.View
                         && round.Rules.RevealedDiscardCount > 0
                         && !round.Rules.HideDiscardTop)
                     {
+                        deckOverlay.ResetScroll();
                         deckOverlay.Show(RevealedDiscardCards(round));
                         return;
                     }

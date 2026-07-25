@@ -339,6 +339,17 @@ namespace ProjectBlock.View
                     deckOverlay.Hide();
                     return;
                 }
+                // The wheel scrolls a deck too long to fit - the overlay re-lays itself out and
+                // remembers where it was, so selling from page 3 stays on page 3.
+                if (mouse != null)
+                {
+                    float deckScroll = mouse.scroll.ReadValue().y;
+                    if (Mathf.Abs(deckScroll) > 0.01f)
+                    {
+                        deckOverlay.Scroll(deckScroll > 0f ? -1 : +1);
+                        return;
+                    }
+                }
                 if (mouse != null && mouse.leftButton.wasPressedThisFrame && hileliPickMode)
                 {
                     Vector2 pickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
