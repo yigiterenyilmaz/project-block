@@ -1,0 +1,143 @@
+// PURPOSE: The base type of every boss round ("patron raundu"). A boss is the round's
+// ANTAGONIST: unlike a joker it is not owned, not bought and cannot be sold - it is handed
+// to one round by GameSession and dies with it.
+//
+// THE THREE CENTRAL RULES, enforced by RoundEngine / the inventories so no boss has to:
+//  1. ONE BOSS PER ROUND, and only on a round the progression flagged
+//     (RoundConfig.IsBossRound). Never two at once, so bosses never need to compose.
+//  2. ROUND-SCOPED. A boss instance belongs to one RoundEngine. It must NEVER mutate
+//     session-level state (RoundRules, ScoringConfig, OwnedCards) to express a rule bend -
+//     that state outlives the round and the bend would leak into the next one. Express
+//     bends by OVERRIDING THE QUERIES below; the engine asks them live.
+//     (The two tax bosses do touch OwnedCards, but that is their effect, not a rule bend.)
+//  3. NO RANDOMNESS OF ITS OWN. Everything random comes from the context's IRandomSource.
+//
+// Hooks are virtual no-ops; a boss overrides only what it needs. Queries are asked every
+// time the engine reaches the decision, so a boss may change its answer mid-round.
+
+namespace ProjectBlock.Core
+{
+    /// <summary>A boss round's rules. Subclass, override what you need, register in BossRegistry.</summary>
+    public abstract class BossRound
+    {
+        protected BossRound(string defId, string displayName)
+        {
+            DefId = defId;
+            DisplayName = displayName;
+        }
+
+        /// <summary>Stable content id ("ufuk"). The save/replay key - never rename it.</summary>
+        public string DefId { get; }
+
+        /// <summary>Human-readable name for the UI (Turkish).</summary>
+        public string DisplayName { get; }
+
+        /// <summary>One-line rules text in the ACTIVE language (see Loc). Read live, so a
+        /// language switch takes effect on the next UI refresh.</summary>
+        public string Description
+        {
+            get { return Loc.Pick(descriptionEn, descriptionTr); }
+        }
+
+        private string descriptionEn = string.Empty;
+        private string descriptionTr = string.Empty;
+
+        /// <summary>Sets the rules text in both languages.</summary>
+        protected void SetDescription(string english, string turkish)
+        {
+            descriptionEn = english;
+            descriptionTr = turkish;
+        }
+
+        /// <summary>Short live state for the UI ("2 kart gitti"), or null when there is
+        /// nothing to show.</summary>
+        public virtual string StatusText
+        {
+            get { return null; }
+        }
+
+        // ------------------------------------------------------------------- lifecycle
+
+        /// <summary>The round has been built and this boss is now attached to it. The one
+        /// place to pick a victim, arm a counter, or take a first bite.</summary>
+        public virtual void OnRoundStarted(RoundContext ctx)
+        {
+        }
+
+        // ------------------------------------------------- queries (asked live, every time)
+
+        /// <summary>True while every block must behave as a plain block, its element ignored
+        /// ("Vanilya"). Read by the engine and the board on every placement.</summary>
+        public virtual bool IgnoresBlockElements
+        {
+            get { return false; }
+        }
+
+        /// <summary>True while nothing may put a charge back into a power ("Tükenmişlik") -
+        /// clean sweeps and "Powerbank" alike. The round-start recharge already happened.</summary>
+        public virtual bool BlocksPowerRecharge
+        {
+            get { return false; }
+        }
+
+        /// <summary>True while this joker must be treated as silenced: every hook skipped,
+        /// exactly like the overtime gate ("Anarşi", "Oburluk"). It stays in the inventory
+        /// and keeps its sell value.</summary>
+        public virtual bool DisablesJoker(Joker joker)
+        {
+            return false;
+        }
+
+        /// <summary>As DisablesJoker, for a power: it cannot be used and its hooks are skipped.</summary>
+        public virtual bool DisablesPower(Power power)
+        {
+            return false;
+        }
+
+        /// <summary>True if a block may NOT be placed on this empty cell ("Mapus" sealing one
+        /// cell per turn). Only ever asked about cells that are empty and on the board.</summary>
+        public virtual bool BlocksPlacementOn(GridPos cell)
+        {
+            return false;
+        }
+
+        /// <summary>Rewrites what a line explosion pays ("Ufuk", "Kule"). The default is the
+        /// plain rule. See LineExplosionScore for what each count means - it arrives with the
+        /// retro dead zone already taken out, so a boss never has to know about that.</summary>
+        public virtual int ScoreLineExplosion(IScoreCalculator scorer, LineExplosionScore lines)
+        {
+            return scorer.ScoreLineExplosion(lines.Rows + lines.Columns, lines.Cubes);
+        }
+
+        // ---------------------------------------------------------------------- events
+
+        /// <summary>End of a resolved turn - after the hand refill, BEFORE the threshold and
+        /// loss checks, so score added here still counts and a cost here can still be fatal.
+        /// This is where the per-turn harassers act ("Alıkoyma", "Mapus").</summary>
+        public virtual void AfterTurnScored(TurnContext turn)
+        {
+        }
+
+        /// <summary>A bonus-hand card was just played ("Feda" makes that cost the hand).
+        /// Runs inside the turn, right after the card was disposed of.</summary>
+        public virtual void OnBonusCardPlayed(TurnContext turn)
+        {
+        }
+
+        /// <summary>The draw pile just ran dry ("Harcama vergisi" taxes the deck for it).
+        /// Raised once per emptying, whether or not the discard was recycled back in.</summary>
+        public virtual void OnDrawPileEmptied(RoundContext ctx)
+        {
+        }
+
+        /// <summary>A power was used ("Özel tüketim vergisi" taxes the deck for it).</summary>
+        public virtual void OnPowerUsed(RoundContext ctx, string powerId)
+        {
+        }
+
+        public override string ToString()
+        {
+            return DisplayName + " (" + DefId + ")";
+        }
+    }
+}

@@ -96,6 +96,23 @@ namespace ProjectBlock.Core
         /// draw pile, or null. Consumed once when that round's engine is built.</summary>
         private List<int> pendingOpeningHand;
 
+        /// <summary>Bosses already met this run. A run never repeats a boss, so this is what
+        /// the draw excludes.</summary>
+        private readonly List<string> bossesFought = new List<string>();
+
+        /// <summary>Boss kinds already met this run, in the order they were fought.</summary>
+        public IReadOnlyList<string> BossesFought
+        {
+            get { return bossesFought; }
+        }
+
+        /// <summary>The boss of the current round, or null on an ordinary round. Shortcut for
+        /// the UI - the boss itself lives on the RoundEngine.</summary>
+        public BossRound ActiveBoss
+        {
+            get { return CurrentRound != null ? CurrentRound.Boss : null; }
+        }
+
         /// <summary>"Hileli zar": guarantee these owned cards into the next round's opening
         /// hand (they are moved to the top of the fresh draw pile). Market-phase only.</summary>
         public void SetPendingOpeningHand(IEnumerable<int> cardIds)
@@ -483,6 +500,12 @@ namespace ProjectBlock.Core
             roundConfig = Jokers.FilterRoundConfig(roundConfig);
             roundConfig = Powers.FilterRoundConfig(roundConfig);
             CurrentRound = new RoundEngine(roundConfig, Config.Rules, ownedCards, rng, scorer, this, Jokers);
+            // The boss is attached before anything else runs, so it governs the round's very
+            // first turn. Ordinary rounds get null and behave exactly as they always have.
+            if (roundConfig.IsBossRound)
+            {
+                CurrentRound.SetBoss(DrawBoss());
+            }
             CurrentRound.TurnResolved += OnTurnResolved;
             CurrentRound.StatusChanged += OnRoundStatusChanged;
             SetPhase(GamePhase.Round);
@@ -495,6 +518,46 @@ namespace ProjectBlock.Core
             }
             Jokers.DispatchRoundStarted(CurrentRound);
             Powers.DispatchRoundStarted(CurrentRound);
+            // The antagonist moves last: the player's jokers and powers are set up (and the
+            // powers recharged) before the boss picks a victim or takes its first bite.
+            if (CurrentRound.Boss != null)
+            {
+                CurrentRound.Boss.OnRoundStarted(new RoundContext(this, rng, CurrentRound));
+            }
+        }
+
+        /// <summary>
+        /// Draws the boss for a flagged round: a random kind this run has not met yet, so five
+        /// boss rounds never repeat themselves. Deterministic and drawn from its OWN rng (seed +
+        /// round number), so boss selection never disturbs the main stream that shuffles decks
+        /// and drives play - an ordinary round is unaffected by bosses existing at all.
+        /// Falls back to allowing repeats only if a run somehow has more boss rounds than there
+        /// are bosses.
+        /// </summary>
+        private BossRound DrawBoss()
+        {
+            IReadOnlyList<BossDefinition> catalogue = BossRegistry.All;
+            if (catalogue.Count == 0)
+            {
+                return null; // no content yet: the round is simply flagged and plays normally
+            }
+            var pool = new List<BossDefinition>();
+            for (int i = 0; i < catalogue.Count; i++)
+            {
+                if (!bossesFought.Contains(catalogue[i].DefId))
+                {
+                    pool.Add(catalogue[i]);
+                }
+            }
+            if (pool.Count == 0)
+            {
+                pool.AddRange(catalogue);
+            }
+            var bossRng = new SeededRandom(
+                unchecked(resolvedSeed * 1566083941 + RoundNumber * 31337));
+            BossDefinition picked = pool[bossRng.NextInt(0, pool.Count)];
+            bossesFought.Add(picked.DefId);
+            return picked.Create();
         }
 
         private void OnTurnResolved(TurnReport report)

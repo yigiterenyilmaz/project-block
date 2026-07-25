@@ -274,9 +274,22 @@ namespace ProjectBlock.View
                 .Append(" / ").Append(session.Config.TotalRounds);
             if (round.Config.IsBossRound)
             {
-                sb.Append(Loc.Pick("  [BOSS]", "  [PATRON]"));
+                sb.Append(Loc.Pick("  [BOSS", "  [PATRON"));
+                if (round.Boss != null)
+                {
+                    sb.Append(": ").Append(round.Boss.DisplayName);
+                    if (round.Boss.StatusText != null)
+                    {
+                        sb.Append(" - ").Append(round.Boss.StatusText);
+                    }
+                }
+                sb.Append(']');
             }
             sb.Append(Loc.Pick("   Turn ", "   Tur ")).Append(round.TurnNumber).Append('\n');
+            if (round.Boss != null)
+            {
+                sb.Append(round.Boss.Description).Append('\n');
+            }
             // RoundScore lives in the scaled economy; lift the threshold to match for display.
             sb.Append(Loc.Pick("Score ", "Puan ")).Append(round.RoundScore)
                 .Append(" / ").Append(round.Config.ScoreThreshold * session.Config.Scoring.ScoreScale);

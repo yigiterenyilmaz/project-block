@@ -88,6 +88,8 @@ public static class JokerTests
         Powerbank_RechargesASpentPower();
         RunLength_FifteenRoundsThenRunWon();
         BossRounds_FlaggedEveryThirdRound();
+        Boss_DrawnOncePerRunAndOnlyOnFlaggedRounds();
+        Boss_UfukAndKulePayForOneAxisOnly();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
 
@@ -2433,6 +2435,185 @@ public static class JokerTests
             }
         }
         return session;
+    }
+
+    private static void Boss_DrawnOncePerRunAndOnlyOnFlaggedRounds()
+    {
+        Section("boss / drawn per flagged round, never twice in a run");
+        var config = new GameConfig();
+        config.RngSeed = 5150;
+        config.Deck = new DeckDefinition("test", 30, new SizedShapeGenerator(1));
+        config.Scoring.PointsPerCubePlaced = 1;
+        var session = new GameSession(config); // real progression -> rounds 3,6,9,12,15 are bosses
+        Check(session.CurrentRound.Boss == null, "round 1 has no boss",
+            "boss " + session.CurrentRound.Boss);
+
+        var bossRounds = new List<int>();
+        int safety = 0;
+        while (!RunIsOver(session) && safety++ < 2000)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                session.LeaveMarket();
+                if (session.CurrentRound.Boss != null)
+                {
+                    bossRounds.Add(session.RoundNumber);
+                }
+                Check(session.CurrentRound.Config.IsBossRound == (session.CurrentRound.Boss != null),
+                    "round " + session.RoundNumber + ": a boss exists exactly when flagged");
+                continue;
+            }
+            RoundEngine round = session.CurrentRound;
+            if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                round.DecideAdvance(true);
+                continue;
+            }
+            // A boss round may be unwinnable for this dumb driver; stop at the first stall.
+            if (round.Status != RoundStatus.InProgress || PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        Check(bossRounds.Count > 0, "the run met at least one boss", "met " + bossRounds.Count);
+        bool allThirds = true;
+        for (int i = 0; i < bossRounds.Count; i++)
+        {
+            if (bossRounds[i] % 3 != 0)
+            {
+                allThirds = false;
+            }
+        }
+        Check(allThirds, "every boss landed on a third round", string.Join(",", bossRounds));
+
+        // No repeats until the catalogue is exhausted. With all 11 bosses written and only five
+        // boss rounds in a run that means never; while fewer are registered the draw is allowed
+        // to wrap, which is exactly the documented fallback.
+        int distinctExpected = Math.Min(BossRegistry.All.Count, session.BossesFought.Count);
+        var firstDraws = new HashSet<string>();
+        for (int i = 0; i < distinctExpected; i++)
+        {
+            firstDraws.Add(session.BossesFought[i]);
+        }
+        Check(firstDraws.Count == distinctExpected,
+            "the first " + distinctExpected + " bosses of the run are all different",
+            string.Join(",", session.BossesFought));
+        Check(session.BossesFought.Count == bossRounds.Count,
+            "one boss drawn per boss round",
+            "drawn " + session.BossesFought.Count + " rounds " + bossRounds.Count);
+
+        // Same seed, same bosses: selection must be deterministic.
+        var replayConfig = new GameConfig();
+        replayConfig.RngSeed = 5150;
+        replayConfig.Deck = new DeckDefinition("test", 30, new SizedShapeGenerator(1));
+        var replay = new GameSession(replayConfig);
+        replay.Config.Scoring.PointsPerCubePlaced = 1;
+        int guard = 0;
+        while (replay.RoundNumber < 3 && !RunIsOver(replay) && guard++ < 200)
+        {
+            if (replay.Phase == GamePhase.Market) { replay.LeaveMarket(); continue; }
+            if (replay.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                replay.CurrentRound.DecideAdvance(true);
+                continue;
+            }
+            if (PlayTurns(replay, 1) == 0) { break; }
+        }
+        Check(replay.CurrentRound.Boss != null && session.BossesFought.Count > 0
+            && replay.CurrentRound.Boss.DefId == session.BossesFought[0],
+            "the same seed draws the same first boss",
+            "replay " + (replay.CurrentRound.Boss != null ? replay.CurrentRound.Boss.DefId : "none"));
+    }
+
+    private static void Boss_UfukAndKulePayForOneAxisOnly()
+    {
+        Section("boss / ufuk pays rows, kule pays columns");
+        // A 4x4 board, 4-cube bars: playing four of them fills the board, and the LAST one
+        // completes its own row plus all four columns at once - a mixed-axis explosion.
+        var scorer = new DefaultScoreCalculator(new ScoringConfig());
+        var ufuk = new UfukBoss();
+        var kule = new KuleBoss();
+
+        // rows only: 2 rows, no columns, 8 cubes (4 per row)
+        var rowsOnly = new LineExplosionScore(2, 0, 8, 8, 0);
+        Check(ufuk.ScoreLineExplosion(scorer, rowsOnly) > 0, "ufuk pays for a rows-only clear",
+            "" + ufuk.ScoreLineExplosion(scorer, rowsOnly));
+        Check(kule.ScoreLineExplosion(scorer, rowsOnly) == 0,
+            "kule pays nothing for a rows-only clear",
+            "" + kule.ScoreLineExplosion(scorer, rowsOnly));
+
+        // columns only
+        var colsOnly = new LineExplosionScore(0, 2, 8, 0, 8);
+        Check(kule.ScoreLineExplosion(scorer, colsOnly) > 0, "kule pays for a columns-only clear",
+            "" + kule.ScoreLineExplosion(scorer, colsOnly));
+        Check(ufuk.ScoreLineExplosion(scorer, colsOnly) == 0,
+            "ufuk pays nothing for a columns-only clear",
+            "" + ufuk.ScoreLineExplosion(scorer, colsOnly));
+
+        // Mixed clears: each boss must price its OWN axis and be blind to the other one. Two
+        // scores that differ only in the off-axis must therefore pay exactly the same.
+        var mixedA = new LineExplosionScore(1, 2, 20, 5, 9);
+        var moreRows = new LineExplosionScore(4, 2, 40, 17, 9);   // same columns, more rows
+        var moreCols = new LineExplosionScore(1, 6, 40, 5, 25);   // same rows, more columns
+        Check(kule.ScoreLineExplosion(scorer, mixedA) == kule.ScoreLineExplosion(scorer, moreRows),
+            "kule is blind to how many rows also went",
+            kule.ScoreLineExplosion(scorer, mixedA) + " vs "
+                + kule.ScoreLineExplosion(scorer, moreRows));
+        Check(ufuk.ScoreLineExplosion(scorer, mixedA) == ufuk.ScoreLineExplosion(scorer, moreCols),
+            "ufuk is blind to how many columns also went",
+            ufuk.ScoreLineExplosion(scorer, mixedA) + " vs "
+                + ufuk.ScoreLineExplosion(scorer, moreCols));
+        Check(ufuk.ScoreLineExplosion(scorer, mixedA)
+            == (int)(scorer.ScoreLineExplosion(1, 5) * ufuk.RowBonus),
+            "ufuk prices a mixed clear as its rows alone, plus the bonus",
+            "" + ufuk.ScoreLineExplosion(scorer, mixedA));
+        Check(kule.ScoreLineExplosion(scorer, mixedA)
+            == (int)(scorer.ScoreLineExplosion(2, 9) * kule.ColumnBonus),
+            "kule prices a mixed clear as its columns alone, plus the bonus",
+            "" + kule.ScoreLineExplosion(scorer, mixedA));
+
+        // The bonus really is a bonus: one row under Ufuk beats one row unmodified.
+        var oneRow = new LineExplosionScore(1, 0, 4, 4, 0);
+        Check(ufuk.ScoreLineExplosion(scorer, oneRow) > scorer.ScoreLineExplosion(1, 4),
+            "ufuk's own axis pays above the plain rate",
+            "boss " + ufuk.ScoreLineExplosion(scorer, oneRow)
+                + " plain " + scorer.ScoreLineExplosion(1, 4));
+
+        // And end to end through a real round: the same rows-only clear, with and without Kule.
+        TurnReport plainLast = FillBottomRow(NewSession(5151, 4, 1000000, 40, 1), null);
+        TurnReport kuleLast = FillBottomRow(NewSession(5151, 4, 1000000, 40, 1), new KuleBoss());
+        TurnReport ufukLast = FillBottomRow(NewSession(5151, 4, 1000000, 40, 1), new UfukBoss());
+        Check(plainLast != null && plainLast.ExplodedRows.Count == 1
+            && plainLast.ExplodedColumns.Count == 0, "filling the bottom row clears one row only",
+            plainLast == null ? "no turn" : "rows " + plainLast.ExplodedRows.Count
+                + " cols " + plainLast.ExplodedColumns.Count);
+        Check(plainLast != null && plainLast.Score.BaseLines > 0, "a plain round pays for that row",
+            plainLast == null ? "no turn" : "lines " + plainLast.Score.BaseLines);
+        Check(kuleLast != null && kuleLast.Score.BaseLines == 0,
+            "kule pays nothing for a row clear",
+            kuleLast == null ? "no turn" : "lines " + kuleLast.Score.BaseLines);
+        Check(ufukLast != null && plainLast != null
+            && ufukLast.Score.BaseLines > plainLast.Score.BaseLines,
+            "ufuk pays MORE than plain for that same row",
+            (ufukLast == null ? "no turn" : "ufuk " + ufukLast.Score.BaseLines)
+                + " plain " + (plainLast == null ? "?" : "" + plainLast.Score.BaseLines));
+    }
+
+    /// <summary>Plays four 1x1 cards along the bottom row of a 4-wide board, which completes
+    /// that row and nothing else. Returns the clearing turn's report.</summary>
+    private static TurnReport FillBottomRow(GameSession session, BossRound boss)
+    {
+        if (boss != null)
+        {
+            session.CurrentRound.SetBoss(boss);
+        }
+        RoundEngine round = session.CurrentRound;
+        TurnReport last = null;
+        for (int x = 0; x < 4; x++)
+        {
+            last = round.PlayFromHand(0, new GridPos(x, 0));
+        }
+        return last;
     }
 
     private static void BossRounds_FlaggedEveryThirdRound()

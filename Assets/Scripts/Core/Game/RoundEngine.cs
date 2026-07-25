@@ -69,6 +69,18 @@ namespace ProjectBlock.Core
                 - NextContinueCost - Rules.HandSize;
         }
 
+        /// <summary>This round's boss ("patron"), or null on an ordinary round. Round-scoped:
+        /// it dies with this engine, which is what keeps a boss's rule bends from leaking into
+        /// the next round. Assigned once by GameSession before the round's first turn.</summary>
+        public BossRound Boss { get; private set; }
+
+        /// <summary>Attaches the boss GameSession drew for this round. Called once, right
+        /// after construction and before any hook runs.</summary>
+        internal void SetBoss(BossRound boss)
+        {
+            Boss = boss;
+        }
+
         public RoundStatus Status { get; private set; }
 
         /// <summary>Set when Status is Lost (may be set earlier if an advance offer is
@@ -218,7 +230,10 @@ namespace ProjectBlock.Core
             // and the FX still play, but no points are gained.
             if (Rules.CountExternalSweeps)
             {
-                AddScoreOutsideTurn(scorer.ScoreLineExplosion(lines.LineCount, lines.ExplodedCells.Count));
+                // Priced through the boss too ("Ufuk"/"Kule" govern every line clear), but with
+                // no dead-zone adjustment - that is this path's long-standing behaviour.
+                AddScoreOutsideTurn(PriceLines(
+                    BuildLineScore(lines, lines.ExplodedCells.Count, false)));
             }
             TryResolveCleanSweep();
         }
