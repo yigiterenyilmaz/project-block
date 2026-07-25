@@ -26,6 +26,9 @@ public static class SaveTests
         BoardErosionAndSealsRoundTrip();
         CardTableSharesInstances();
         CardTableRejectsUnknownId();
+        RngRestoresToTheSamePosition();
+        RngRestoreSurvivesMixedDraws();
+        RngLogIsRunLengthEncoded();
         Console.WriteLine(failures == 0
             ? "save tests: all passed"
             : "save tests: " + failures + " FAILED");
@@ -275,6 +278,81 @@ public static class SaveTests
         Check(ReferenceEquals(pile[0], pile[2]), "the same card id yields the SAME instance");
         Check(ReferenceEquals(pile[0], loaded.Get(2)), "pile shares the table's instance");
         CheckEqual(1, pile[1].Id, "pile order preserved");
+    }
+
+    /// <summary>The heart of a mid-run save: a restored source must continue the SAME stream,
+    /// so a reloaded run shuffles and draws exactly as the original would have.</summary>
+    private static void RngRestoresToTheSamePosition()
+    {
+        var original = new SeededRandom(12345);
+        for (int i = 0; i < 500; i++)
+        {
+            original.NextInt(0, 100);
+        }
+        var w = new SaveWriter();
+        original.Save(w, "rng");
+        SeededRandom restored = SeededRandom.Load(new SaveReader(w.ToText()), "rng");
+
+        CheckEqual(original.DrawCount, restored.DrawCount, "restored draw count matches");
+        bool same = true;
+        for (int i = 0; i < 200; i++)
+        {
+            if (original.NextInt(0, 1000) != restored.NextInt(0, 1000))
+            {
+                same = false;
+                break;
+            }
+        }
+        Check(same, "a restored rng continues the identical stream");
+    }
+
+    /// <summary>Ints and doubles interleaved - the log has to keep their order, not just a count.</summary>
+    private static void RngRestoreSurvivesMixedDraws()
+    {
+        var original = new SeededRandom(-99);
+        for (int i = 0; i < 120; i++)
+        {
+            if (i % 3 == 0)
+            {
+                original.NextDouble();
+            }
+            else
+            {
+                original.NextInt(0, 7);
+            }
+        }
+        var w = new SaveWriter();
+        original.Save(w, "r");
+        SeededRandom restored = SeededRandom.Load(new SaveReader(w.ToText()), "r");
+
+        bool same = true;
+        for (int i = 0; i < 100; i++)
+        {
+            if (original.NextDouble() != restored.NextDouble()
+                || original.NextInt(0, 500) != restored.NextInt(0, 500))
+            {
+                same = false;
+                break;
+            }
+        }
+        Check(same, "a restored rng continues an interleaved int/double stream");
+    }
+
+    /// <summary>Shuffles make thousands of consecutive NextInt calls; the log must collapse
+    /// them, or a long run's save would be enormous.</summary>
+    private static void RngLogIsRunLengthEncoded()
+    {
+        var rng = new SeededRandom(1);
+        for (int i = 0; i < 5000; i++)
+        {
+            rng.NextInt(0, 10);
+        }
+        var w = new SaveWriter();
+        rng.Save(w, "rng");
+        string text = w.ToText();
+        CheckEqual(5000, rng.DrawCount, "5000 draws were counted");
+        Check(text.Length < 200, "5000 consecutive draws compress to a tiny log (got "
+            + text.Length + " chars)");
     }
 
     private static void CardTableRejectsUnknownId()
