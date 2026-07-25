@@ -184,13 +184,15 @@ namespace ProjectBlock.Core
             {
                 return 0;
             }
-            int value = joker.SellValue * session.Config.Scoring.ScoreScale;
+            // The joker prices its own sale: normally SellValue scaled, but "Yer altı
+            // kaynakları" refunds what you paid once it is spent.
+            long value = joker.SellPriceScaled(session.Config.Scoring.ScoreScale);
             if (!Remove(joker))
             {
                 return 0;
             }
             session.AddCurrency(value);
-            return value;
+            return (int)value;
         }
 
         /// <summary>"ihale" uses this to put an extra price on a joker.</summary>

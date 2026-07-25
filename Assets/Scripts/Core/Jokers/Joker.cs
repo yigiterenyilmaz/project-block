@@ -85,6 +85,18 @@ namespace ProjectBlock.Core
             get { return BaseSellValue + AccruedValue + AuctionPremium; }
         }
 
+        /// <summary>What the market charged for this joker, in the SCALED economy. 0 when it was
+        /// never bought - a starting joker, or one granted by the debug picker.</summary>
+        public long PurchasePrice { get; internal set; }
+
+        /// <summary>The price the market pays back, in the SCALED economy. Normally SellValue
+        /// lifted into that economy; a joker may name its own instead ("Yer altı kaynakları"
+        /// refunds exactly what you paid once it is spent). The ONE place a sale is priced.</summary>
+        public virtual long SellPriceScaled(int scoreScale)
+        {
+            return (long)SellValue * scoreScale;
+        }
+
         /// <summary>"Terslik" window: while it is open this joker's Accrue runs BACKWARDS, so a
         /// piggy bank leaks value instead of filling. Set by JokerInventory around joker dispatch,
         /// exactly like the score inversion, and false on every ordinary round.</summary>
@@ -117,6 +129,18 @@ namespace ProjectBlock.Core
         internal void ResetCharges()
         {
             ChargesLeft = ChargesPerRound;
+        }
+
+        /// <summary>Gives one use back, never past the round's allowance ("Şifacı" healing a
+        /// spent joker). Returns false when there was nothing to give back.</summary>
+        internal bool GrantCharge()
+        {
+            if (ChargesPerRound <= 0 || ChargesLeft >= ChargesPerRound)
+            {
+                return false;
+            }
+            ChargesLeft++;
+            return true;
         }
 
         /// <summary>Spends one charge if any is left. Returns false when empty.</summary>

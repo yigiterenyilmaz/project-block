@@ -220,7 +220,7 @@ namespace ProjectBlock.View
                 line.Append('\n');
             }
             line.Append(Loc.Pick("sell ", "satış "))
-                .Append(joker.SellValue * session.Config.Scoring.ScoreScale);
+                .Append(joker.SellPriceScaled(session.Config.Scoring.ScoreScale));
             if (inverted)
             {
                 line.Append(Loc.Pick("   (REVERSED)", "   (TERS)"));

@@ -294,7 +294,9 @@ namespace ProjectBlock.Core
                 {
                     return false;
                 }
-                Jokers.Add(offer.Joker.Create());
+                Joker bought = Jokers.Add(offer.Joker.Create());
+                // Remembered so a joker may refund it later ("Yer altı kaynakları").
+                bought.PurchasePrice = offer.Price;
             }
             else if (offer.Kind == MarketOfferKind.Power)
             {
