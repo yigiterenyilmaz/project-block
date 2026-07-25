@@ -312,6 +312,18 @@ namespace ProjectBlock.Core
         private readonly List<InfectedCell> markerCache = new List<InfectedCell>();
         private bool hasSpread;
 
+        /// <summary>Cells the detonation took on the most recent turn, for the view's blast.
+        /// The detonation happens in AfterTurnScored, so those cubes are in the destruction log
+        /// but in no exploded row or column - without this the view has no way to know they
+        /// died and the block just vanished. Mirrors RobotSupurgeJoker.LastSweptCells; the
+        /// list is reused, so the view copies what it needs.</summary>
+        private readonly List<GridPos> lastDetonated = new List<GridPos>();
+
+        public IReadOnlyList<GridPos> LastDetonatedCells
+        {
+            get { return lastDetonated; }
+        }
+
         public EnfeksiyonJoker()
             : base("enfeksiyon", "Enfeksiyon")
         {
@@ -384,6 +396,9 @@ namespace ProjectBlock.Core
 
         public override void AfterTurnScored(TurnContext turn)
         {
+            // Cleared every turn, before the early-out, so the view can never replay a blast
+            // from an earlier detonation.
+            lastDetonated.Clear();
             if (infected.Count == 0)
             {
                 return;
@@ -438,6 +453,7 @@ namespace ProjectBlock.Core
                 IReadOnlyList<GridPos> blown = turn.Round.DestroyCubes(blockCells, true);
                 if (blown.Count > 0)
                 {
+                    lastDetonated.AddRange(blown);
                     turn.AddFlatScore(blown.Count * PointsPerInfectedCube, DefId);
                     turn.Round.TryResolveCleanSweep();
                     if (!hasSpread)

@@ -16,7 +16,9 @@ namespace ProjectBlock.Core
         /// <summary>Bump whenever the save layout changes. Older files are then refused.</summary>
         // 2 (2026-07-25): BaseSellValue left Joker/Power (sell value is now derived from the
         // buy price), so every joker and power writes one field fewer.
-        public const int FormatVersion = 2;
+        // 3 (2026-07-25): Enfeksiyon gained LastDetonatedCells for its break animation, so it
+        // writes one field more.
+        public const int FormatVersion = 3;
 
         private const string VersionKey = "version";
 

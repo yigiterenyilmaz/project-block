@@ -77,6 +77,9 @@ namespace ProjectBlock.View
             new System.Collections.Generic.Dictionary<int, int>();
         private int comboStreak;
         private readonly List<InfectedCell> infectionBuffer = new List<InfectedCell>();
+
+        /// <summary>Cells an "Enfeksiyon" detonation took this turn, gathered for its blast.</summary>
+        private readonly List<GridPos> infectionBlastBuffer = new List<GridPos>();
         private Text infoText;
         private Text messageText;
 

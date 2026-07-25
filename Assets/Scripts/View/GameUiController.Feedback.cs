@@ -58,6 +58,7 @@ namespace ProjectBlock.View
                 });
             }
             TriggerSupurgeBlast();
+            TriggerInfectionBlast();
             // A resolved turn is the natural save point: the per-turn scratch state is at rest,
             // which is exactly what the save format assumes (see RoundEngine.Save).
             AutoSave();
