@@ -7,6 +7,13 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **A run is now 15 rounds** — surviving round 15 ends the run in victory (`GamePhase.RunWon`,
+  shown as "RUN COMPLETE" with the final score) instead of opening another market. `GameOver`
+  now means a loss and nothing else, so losing round 15 is still a loss. Run length lives in
+  `GameConfig.TotalRounds`, independent of the difficulty curve.
+- **Boss rounds flagged** — rounds 3, 6, 9, 12 and 15 are marked `RoundConfig.IsBossRound`
+  (`DefaultRoundProgression.BossRoundInterval`) and the HUD labels them `[BOSS]`. The flag is
+  scaffolding only: **no boss behaviour yet**, it just gives that work one thing to hang off.
 - **Board-power explosion FX** — whole-board powers that destroy board-dependent cells
   (**Bardağın Boş Tarafı**, **Çerçeve**...) now play the explosion animation on the cells they
   clear, via a between-turn destruction log the view reads. (The inflation deflate crush FX is

@@ -1,5 +1,6 @@
 // PURPOSE: The placeholder difficulty curve - board grows to a cap, threshold grows
-// geometrically. TUNABLE PLACEHOLDER, not confirmed design.
+// geometrically, and every third round is flagged as a boss round. TUNABLE PLACEHOLDER,
+// not confirmed design. Run LENGTH is not decided here: that is GameConfig.TotalRounds.
 
 using System;
 
@@ -17,6 +18,12 @@ namespace ProjectBlock.Core
         public int BaseThreshold = 60;
         public double ThresholdGrowthFactor = 1.5;
 
+        /// <summary>Every n-th round is a boss round ("patron raundu"): 3 means 3, 6, 9, 12, 15.
+        /// 0 disables them. This is the ONLY place that decides which rounds are boss rounds -
+        /// everything else reads RoundConfig.IsBossRound. The boss mechanics themselves are not
+        /// written yet; the flag exists so they have one thing to hang off.</summary>
+        public int BossRoundInterval = 3;
+
         public RoundConfig GetRound(int roundNumber)
         {
             if (roundNumber < 1)
@@ -26,7 +33,8 @@ namespace ProjectBlock.Core
             int size = Math.Min(BaseBoardSize + (roundNumber - 1) / GrowBoardEveryNRounds, MaxBoardSize);
             double rawThreshold = BaseThreshold * Math.Pow(ThresholdGrowthFactor, roundNumber - 1);
             int threshold = (int)(Math.Ceiling(rawThreshold / 5.0) * 5.0);
-            return new RoundConfig(roundNumber, size, size, threshold);
+            bool boss = BossRoundInterval > 0 && roundNumber % BossRoundInterval == 0;
+            return new RoundConfig(roundNumber, size, size, threshold, null, boss);
         }
     }
 }

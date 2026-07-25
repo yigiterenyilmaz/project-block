@@ -16,6 +16,12 @@ namespace ProjectBlock.Core
         /// Market offers also draw from this deck's shape source.</summary>
         public DeckDefinition Deck = DeckLibrary.Classic;
 
+        /// <summary>Rounds in a full run. Surviving the LAST one wins the run (GamePhase.RunWon)
+        /// instead of opening another market - see GameSession.OnRoundStatusChanged. Kept here
+        /// rather than on IRoundProgression so run LENGTH and the difficulty CURVE stay
+        /// independent: a variant run can be shorter or longer without a new progression.</summary>
+        public int TotalRounds = 15;
+
         public RoundRules Rules = new RoundRules();
         public ScoringConfig Scoring = new ScoringConfig();
         public MarketConfig Market = new MarketConfig();

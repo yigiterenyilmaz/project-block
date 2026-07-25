@@ -5,6 +5,18 @@ score thresholds, a deck of block cards, market between rounds). Jokers are in
 (first wave); powers, elemental block types and the real market come later.
 Unity 6 (6000.3.6f1), 2D URP, **new Input System only**.
 
+## Run structure
+
+A run is **15 rounds** (`GameConfig.TotalRounds`). Surviving the last one ends the run in
+`GamePhase.RunWon` — no market after it, and `GameOver` stays loss-only, so anything waiting
+for a run to finish must accept **both** terminal phases. Every third round (3, 6, 9, 12, 15)
+is flagged `RoundConfig.IsBossRound` by `DefaultRoundProgression.BossRoundInterval`; that flag
+is the single source of truth for which rounds are boss rounds, and **nothing acts on it yet**
+(boss mechanics and the 5x5/7x7/9x9 arena growth are both separate, in-progress work — leave
+the board-size fields in `DefaultRoundProgression` alone). Anything that rebuilds a
+`RoundConfig` from another one (a joker/power `FilterRoundConfig`) must carry every field
+across, `IsBossRound` included.
+
 ## Layout
 
 - `Assets/Scripts/Core/` — **all game rules.** Pure C# (`ProjectBlock.Core.asmdef`,

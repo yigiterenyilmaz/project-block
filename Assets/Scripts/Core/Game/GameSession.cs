@@ -17,6 +17,13 @@ namespace ProjectBlock.Core
         /// <summary>1-based number of the current (or just lost) round.</summary>
         public int RoundNumber { get; private set; }
 
+        /// <summary>True while the LAST round of the run is being played. Advancing out of it
+        /// wins the run (GamePhase.RunWon) instead of opening a market.</summary>
+        public bool IsFinalRound
+        {
+            get { return RoundNumber >= Config.TotalRounds; }
+        }
+
         /// <summary>Run-wide score, doubling as market currency (confirmed design).</summary>
         public long TotalScore { get; private set; }
 
@@ -357,6 +364,13 @@ namespace ProjectBlock.Core
             {
                 throw new InvalidOperationException("Not in the market phase.");
             }
+            if (IsFinalRound)
+            {
+                // Unreachable today (the final round wins instead of opening a market), but the
+                // run length is an invariant: RoundNumber must never walk past TotalRounds.
+                throw new InvalidOperationException(
+                    "The run is over - round " + RoundNumber + " of " + Config.TotalRounds + ".");
+            }
             Jokers.DispatchMarketLeft(purchasedThisMarket);
             PendingMarketDiscount = 0.0; // spent on this visit, never carried to the next
             rerollCount = 0;
@@ -492,7 +506,16 @@ namespace ProjectBlock.Core
         {
             if (status == RoundStatus.Advanced)
             {
+                // Round-end effects pay out either way - a run-winning round must still settle
+                // the kumbara jokers - so this runs BEFORE the win check.
                 Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Advanced);
+                if (IsFinalRound)
+                {
+                    // Survived the last round: the run is won and there is no market to
+                    // stock, because there is no round after this one to prepare for.
+                    SetPhase(GamePhase.RunWon);
+                    return;
+                }
                 rerollCount = 0; // a fresh reroll price each market visit
                 RestockMarket();
                 purchasedThisMarket = false;

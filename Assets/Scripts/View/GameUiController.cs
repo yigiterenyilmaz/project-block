@@ -593,7 +593,12 @@ namespace ProjectBlock.View
                         {
                             round.DecideAdvance(true);
                             RefreshAll(null);
-                            marketView.Show(session);
+                            // Advancing out of the FINAL round wins the run instead of opening a
+                            // market, so only show it when there really is one.
+                            if (session.Phase == GamePhase.Market)
+                            {
+                                marketView.Show(session);
+                            }
                         }
                         else if (kb != null && kb.cKey.wasPressedThisFrame)
                         {

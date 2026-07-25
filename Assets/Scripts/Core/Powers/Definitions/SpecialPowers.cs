@@ -373,7 +373,7 @@ namespace ProjectBlock.Core
             var cells = new List<GridPos>(config.ExtraPlayableCells);
             cells.AddRange(convertedCells);
             return new RoundConfig(config.RoundNumber, config.BoardWidth, config.BoardHeight,
-                config.ScoreThreshold, cells);
+                config.ScoreThreshold, cells, config.IsBossRound);
         }
     }
 
@@ -610,7 +610,8 @@ namespace ProjectBlock.Core
             }
             ctx.Rules.DeadZoneRows = DeadZoneHeight;
             return new RoundConfig(config.RoundNumber, config.BoardWidth,
-                config.BoardHeight + DeadZoneHeight, config.ScoreThreshold, config.ExtraPlayableCells);
+                config.BoardHeight + DeadZoneHeight, config.ScoreThreshold,
+                config.ExtraPlayableCells, config.IsBossRound);
         }
 
         public override void OnRemoved(SessionContext ctx)

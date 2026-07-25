@@ -86,6 +86,8 @@ public static class JokerTests
         MeydanOkuma_MarksThenPaysOnClear();
         MeydanOkuma_HalvesAndGivesUpAfterThreeMisses();
         Powerbank_RechargesASpentPower();
+        RunLength_FifteenRoundsThenRunWon();
+        BossRounds_FlaggedEveryThirdRound();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
 
@@ -201,6 +203,14 @@ public static class JokerTests
             cells.Add(new GridPos(i, 0));
         }
         return BlockShape.FromCells(cells);
+    }
+
+    /// <summary>True once a run has finished, either way (lost OR won). Every driver loop below
+    /// waits on this: a new terminal phase that is not listed here would leave them spinning to
+    /// their safety cap instead of stopping.</summary>
+    private static bool RunIsOver(GameSession session)
+    {
+        return session.Phase == GamePhase.GameOver || session.Phase == GamePhase.RunWon;
     }
 
     /// <summary>Plays greedily until the round leaves InProgress or the cap is hit.</summary>
@@ -1592,12 +1602,13 @@ public static class JokerTests
             "cells " + tilsim.ConvertedCellCount);
 
         // The claimed ground reaches the next board through RoundConfig.
-        var config = new RoundConfig(2, 6, 6, 100);
+        var config = new RoundConfig(2, 6, 6, 100, null, true);
         RoundConfig grown = tilsim.FilterRoundConfig(
             new SessionContext(session, session.Rng), config);
         Check(grown.ExtraPlayableCells.Count == tilsim.ConvertedCellCount,
             "the next round gets the extra cells",
             "cells " + grown.ExtraPlayableCells.Count);
+        Check(grown.IsBossRound, "the boss flag survives tilsim's round-config filter");
     }
 
     private static void Inflation_GrowsThenSqueezesBack()
@@ -2312,6 +2323,152 @@ public static class JokerTests
         Check(!session.Jokers.CanActivate(joker.InstanceId), "its own single charge is spent");
     }
 
+    private static void RunLength_FifteenRoundsThenRunWon()
+    {
+        Section("run length / 15 rounds, then RunWon");
+        GameSession session = NewSession(4242, 4, 1, 30, 1);
+        // Placement scores nothing by default, so one cube would never clear even a threshold
+        // of 1; with a point per cube every round is won on its first turn.
+        session.Config.Scoring.PointsPerCubePlaced = 1;
+        Check(session.Config.TotalRounds == 15, "a run is 15 rounds long",
+            "" + session.Config.TotalRounds);
+
+        int markets = 0;
+        int safety = 0;
+        while (!RunIsOver(session) && safety++ < 400)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                markets++;
+                session.LeaveMarket();
+                continue;
+            }
+            RoundEngine playing = session.CurrentRound;
+            if (playing.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                playing.DecideAdvance(true);
+                continue;
+            }
+            if (playing.Status != RoundStatus.InProgress || PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+
+        Check(session.Phase == GamePhase.RunWon, "surviving the last round wins the run",
+            "phase " + session.Phase);
+        Check(session.RoundNumber == 15, "the run ends on round 15",
+            "round " + session.RoundNumber);
+        Check(markets == 14, "one market between each pair of rounds, none after the last",
+            "markets " + markets);
+        Check(session.CurrentRound.Loss == null, "a won run carries no loss reason",
+            "loss " + session.CurrentRound.Loss);
+
+        // There is no market to leave once the run is won (the phase check catches this one).
+        Check(RefusesToLeaveMarket(session), "no market to leave after the run is won");
+
+        // The run length is an invariant, not just a UI convention: a session sitting in a market
+        // whose round IS the last one must refuse to start another round. That state is only
+        // reachable by shortening the run mid-flight, which is exactly why the guard exists.
+        GameSession shortened = NewSession(4245, 4, 1, 30, 1);
+        shortened.Config.Scoring.PointsPerCubePlaced = 1;
+        PlayTurns(shortened, 1);
+        if (shortened.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+        {
+            shortened.CurrentRound.DecideAdvance(true);
+        }
+        Check(shortened.Phase == GamePhase.Market, "a short run reached its first market",
+            "phase " + shortened.Phase);
+        shortened.Config.TotalRounds = shortened.RoundNumber; // pretend this was the last round
+        Check(RefusesToLeaveMarket(shortened),
+            "LeaveMarket refuses to walk past the final round");
+
+        // Losing the FINAL round is still a loss - RunWon is only for surviving it.
+        GameSession lost = DriveToFinalRound(4243);
+        Check(lost.RoundNumber == 15 && lost.Phase == GamePhase.Round,
+            "a second run reaches the final round",
+            "round " + lost.RoundNumber + " phase " + lost.Phase);
+        lost.CurrentRound.DeclareLoss(LossReason.NoPlayableMove);
+        Check(lost.Phase == GamePhase.GameOver,
+            "losing the final round is GameOver, not RunWon", "phase " + lost.Phase);
+    }
+
+    /// <summary>True when LeaveMarket refuses (throws) instead of starting another round.</summary>
+    private static bool RefusesToLeaveMarket(GameSession session)
+    {
+        try
+        {
+            session.LeaveMarket();
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>Plays the cheapest possible run (one turn per round) up to the START of the
+    /// final round, leaving it InProgress.</summary>
+    private static GameSession DriveToFinalRound(int seed)
+    {
+        GameSession session = NewSession(seed, 4, 1, 30, 1);
+        session.Config.Scoring.PointsPerCubePlaced = 1;
+        int safety = 0;
+        while (!session.IsFinalRound && !RunIsOver(session) && safety++ < 400)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                session.LeaveMarket();
+                continue;
+            }
+            RoundEngine round = session.CurrentRound;
+            if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                round.DecideAdvance(true);
+                continue;
+            }
+            if (round.Status != RoundStatus.InProgress || PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        return session;
+    }
+
+    private static void BossRounds_FlaggedEveryThirdRound()
+    {
+        Section("boss rounds / every third round is flagged");
+        var progression = new DefaultRoundProgression();
+        var flagged = new List<int>();
+        for (int n = 1; n <= 15; n++)
+        {
+            if (progression.GetRound(n).IsBossRound)
+            {
+                flagged.Add(n);
+            }
+        }
+        Check(flagged.Count == 5, "five boss rounds in a 15-round run", "count " + flagged.Count);
+        Check(flagged.Count == 5 && flagged[0] == 3 && flagged[1] == 6 && flagged[2] == 9
+            && flagged[3] == 12 && flagged[4] == 15, "they are rounds 3, 6, 9, 12 and 15",
+            string.Join(",", flagged));
+        Check(!progression.GetRound(1).IsBossRound && !progression.GetRound(2).IsBossRound,
+            "the opening rounds are ordinary");
+        progression.BossRoundInterval = 0;
+        Check(!progression.GetRound(3).IsBossRound, "interval 0 disables boss rounds");
+
+        // Anything that REBUILDS a RoundConfig must carry the flag across, or a boss round
+        // silently stops being one the moment a power filters it.
+        var session = NewSession(4244, 6, 1000000, 40, 1);
+        var retro = (RetroPower)session.Powers.Add(new RetroPower());
+        Check(session.Powers.TryUse(retro.InstanceId, ActivationTarget.None), "retro toggled on");
+        var boss = new RoundConfig(3, 6, 6, 100, null, true);
+        RoundConfig filtered = retro.FilterRoundConfig(
+            new SessionContext(session, session.Rng), boss);
+        Check(filtered.BoardHeight > boss.BoardHeight, "retro grew the board (it rebuilt the config)",
+            "height " + filtered.BoardHeight);
+        Check(filtered.IsBossRound, "the boss flag survives retro's round-config filter");
+    }
+
     private static void AllRegisteredJokers_HaveDistinctIdsAndText()
     {
         Section("registry / catalogue sanity");
@@ -2426,7 +2583,7 @@ public static class JokerTests
             subscribed.TurnResolved += auditor;
 
             int safety = 0;
-            while (session.Phase != GamePhase.GameOver && safety++ < 500 && failure == null)
+            while (!RunIsOver(session) && safety++ < 500 && failure == null)
             {
                 if (!ReferenceEquals(subscribed, session.CurrentRound))
                 {
@@ -2660,7 +2817,7 @@ public static class JokerTests
         // Restore placement scoring (default is 0 now) so greedy play reaches the market.
         session.Config.Scoring.PointsPerCubePlaced = 1;
         int safety = 0;
-        while (session.Phase != GamePhase.GameOver && safety++ < 400)
+        while (!RunIsOver(session) && safety++ < 400)
         {
             if (session.Phase == GamePhase.Market)
             {
@@ -2712,7 +2869,7 @@ public static class JokerTests
         config.Scoring.PointsPerCubePlaced = 1;
         var session = new GameSession(config);
         int safety = 0;
-        while (session.Phase != GamePhase.GameOver && safety++ < 400)
+        while (!RunIsOver(session) && safety++ < 400)
         {
             if (session.Phase == GamePhase.Market)
             {
@@ -2773,7 +2930,7 @@ public static class JokerTests
 
         var sb = new StringBuilder();
         int safety = 0;
-        while (session.Phase != GamePhase.GameOver && safety++ < 400)
+        while (!RunIsOver(session) && safety++ < 400)
         {
             if (session.Phase == GamePhase.Market)
             {
