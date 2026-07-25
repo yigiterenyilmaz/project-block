@@ -248,11 +248,22 @@ namespace ProjectBlock.Core
         {
             RoundContext ctx = RoundCtx(round);
             Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            // The piggy banks take their per-round cut here, so the "Terslik" window has to
+            // reach this far too - otherwise the boss would leak the one payout that matters
+            // most. No breakdown: the round is over, there is no turn score left to invert.
+            bool inverted = BeginInversion(round, null);
+            try
             {
-                // NOT gated on overtime: a round that ends in overtime must still pay out
-                // round-end effects, otherwise every overtime round silently loses them.
-                dispatchBuffer[i].OnRoundEnded(ctx, outcome);
+                for (int i = 0; i < dispatchBuffer.Count; i++)
+                {
+                    // NOT gated on overtime: a round that ends in overtime must still pay out
+                    // round-end effects, otherwise every overtime round silently loses them.
+                    dispatchBuffer[i].OnRoundEnded(ctx, outcome);
+                }
+            }
+            finally
+            {
+                EndInversion(inverted, null);
             }
             RaiseChanged();
         }
@@ -309,48 +320,80 @@ namespace ProjectBlock.Core
         public void AfterLineExplosion(TurnContext turn)
         {
             Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            bool inverted = BeginInversion(turn.Round, turn.Score);
+            try
             {
-                if (!IsGated(dispatchBuffer[i], turn.Round))
+                for (int i = 0; i < dispatchBuffer.Count; i++)
                 {
-                    dispatchBuffer[i].AfterLineExplosion(turn);
+                    if (!IsGated(dispatchBuffer[i], turn.Round))
+                    {
+                        dispatchBuffer[i].AfterLineExplosion(turn);
+                    }
                 }
+            }
+            finally
+            {
+                EndInversion(inverted, turn.Score);
             }
         }
 
         public void AfterCleanSweep(TurnContext turn)
         {
             Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            bool inverted = BeginInversion(turn.Round, turn.Score);
+            try
             {
-                if (!IsGated(dispatchBuffer[i], turn.Round))
+                for (int i = 0; i < dispatchBuffer.Count; i++)
                 {
-                    dispatchBuffer[i].AfterCleanSweep(turn);
+                    if (!IsGated(dispatchBuffer[i], turn.Round))
+                    {
+                        dispatchBuffer[i].AfterCleanSweep(turn);
+                    }
                 }
+            }
+            finally
+            {
+                EndInversion(inverted, turn.Score);
             }
         }
 
         public void ModifyScore(TurnContext turn)
         {
             Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            bool inverted = BeginInversion(turn.Round, turn.Score);
+            try
             {
-                if (!IsGated(dispatchBuffer[i], turn.Round))
+                for (int i = 0; i < dispatchBuffer.Count; i++)
                 {
-                    dispatchBuffer[i].ModifyScore(turn);
+                    if (!IsGated(dispatchBuffer[i], turn.Round))
+                    {
+                        dispatchBuffer[i].ModifyScore(turn);
+                    }
                 }
+            }
+            finally
+            {
+                EndInversion(inverted, turn.Score);
             }
         }
 
         public void AfterTurnScored(TurnContext turn)
         {
             Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            bool inverted = BeginInversion(turn.Round, turn.Score);
+            try
             {
-                if (!IsGated(dispatchBuffer[i], turn.Round))
+                for (int i = 0; i < dispatchBuffer.Count; i++)
                 {
-                    dispatchBuffer[i].AfterTurnScored(turn);
+                    if (!IsGated(dispatchBuffer[i], turn.Round))
+                    {
+                        dispatchBuffer[i].AfterTurnScored(turn);
+                    }
                 }
+            }
+            finally
+            {
+                EndInversion(inverted, turn.Score);
             }
             RaiseChanged();
         }
@@ -377,6 +420,50 @@ namespace ProjectBlock.Core
         }
 
         // ---------------------------------------------------------------------- internals
+
+        /// <summary>
+        /// Opens the "Terslik" window: while it is open, every point and every lira a joker hands
+        /// out turns into a loss of the same size. Returns whether it opened, to be passed to
+        /// EndInversion - always in a try/finally, so a throwing joker can never leave the game
+        /// stuck paying backwards.
+        ///
+        /// It is opened around JOKER dispatch ONLY. Powers, the base score and the engine's own
+        /// bookkeeping share the same ScoreBreakdown, and they must not be inverted with it.
+        /// The score arrives through the breakdown; the sell value through the joker itself,
+        /// because Accrue never touches the breakdown.
+        /// </summary>
+        private bool BeginInversion(RoundEngine round, ScoreBreakdown score)
+        {
+            if (round == null || !round.InvertsJokerScore)
+            {
+                return false;
+            }
+            if (score != null)
+            {
+                score.InvertContributions = true;
+            }
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                jokers[i].ValueGainInverted = true;
+            }
+            return true;
+        }
+
+        private void EndInversion(bool opened, ScoreBreakdown score)
+        {
+            if (!opened)
+            {
+                return;
+            }
+            if (score != null)
+            {
+                score.InvertContributions = false;
+            }
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                jokers[i].ValueGainInverted = false;
+            }
+        }
 
         /// <summary>The central gate - see the file header. Two reasons a joker goes quiet:
         /// overtime (its own DisabledInOvertime) and a boss round silencing it ("Anarşi",

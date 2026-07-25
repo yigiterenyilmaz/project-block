@@ -71,10 +71,25 @@ namespace ProjectBlock.Core
             get { return BaseSellValue + AccruedValue + AuctionPremium; }
         }
 
-        /// <summary>Grows SellValue. The kumbara jokers call this from their hooks.</summary>
+        /// <summary>"Terslik" window: while it is open this joker's Accrue runs BACKWARDS, so a
+        /// piggy bank leaks value instead of filling. Set by JokerInventory around joker dispatch,
+        /// exactly like the score inversion, and false on every ordinary round.</summary>
+        internal bool ValueGainInverted { get; set; }
+
+        /// <summary>Grows SellValue. The kumbara jokers call this from their hooks. Inverted by
+        /// "Terslik" into a loss of the same size - but never below nothing: a piggy bank can be
+        /// emptied, it cannot go into debt.</summary>
         protected void Accrue(int amount)
         {
+            if (ValueGainInverted)
+            {
+                amount = -amount;
+            }
             AccruedValue += amount;
+            if (AccruedValue < 0)
+            {
+                AccruedValue = 0;
+            }
         }
 
         // ------------------------------------------------------------- round charges

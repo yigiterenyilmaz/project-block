@@ -88,8 +88,14 @@ namespace ProjectBlock.Core
             }
             if (!scoreFinalized)
             {
-                breakdown.AddFlat(amount, source);
+                breakdown.AddFlat(amount, source); // the "Terslik" window flips the sign in there
                 return;
+            }
+            // After finalization RoundScore is updated alongside the breakdown, so the inversion
+            // has to happen HERE - letting AddLateFlat flip it would leave the two disagreeing.
+            if (breakdown.InvertContributions)
+            {
+                amount = -amount;
             }
             breakdown.AddLateFlat(amount, source);
             // amount is logical; Total scales LateFlat by ScoreScale, so keep RoundScore in step.

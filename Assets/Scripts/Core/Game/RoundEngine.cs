@@ -127,6 +127,15 @@ namespace ProjectBlock.Core
             get { return Boss != null && Boss.BlocksPowerRecharge; }
         }
 
+        /// <summary>True while every joker pays the player BACKWARDS ("Terslik"): the points and
+        /// the sell value it grants itself become losses of the same size. Read live by
+        /// JokerInventory, which opens the inversion window around joker dispatch only - powers,
+        /// the base score and the engine's own bookkeeping are never inverted.</summary>
+        public bool InvertsJokerScore
+        {
+            get { return Boss != null && Boss.InvertsJokerScore; }
+        }
+
         /// <summary>Forbids placement on one empty cell ("Mapus"). Board mutations go through
         /// the engine, so the seal and the no-playable-move check can never disagree.</summary>
         internal void SealBoardCell(GridPos cell)

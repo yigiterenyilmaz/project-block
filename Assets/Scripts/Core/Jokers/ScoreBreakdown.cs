@@ -69,23 +69,41 @@ namespace ProjectBlock.Core
             get { return BasePlacement + BaseLines + BaseSweep + BaseCombo + BaseGold; }
         }
 
+        /// <summary>
+        /// "Terslik" window: while it is open, everything a JOKER grants through AddFlat /
+        /// AddMultiplier is turned into its opposite - points become an equal loss, a multiplier
+        /// becomes its reciprocal. JokerInventory opens it around joker dispatch only, so powers,
+        /// the base values and the engine's own bookkeeping are never touched.
+        /// Off on every board in the game unless that boss is in play.
+        /// </summary>
+        internal bool InvertContributions { get; set; }
+
         /// <summary>Final score of the turn. Floored once, per the ordering rule above, then
         /// multiplied by the global ScoreScale. Overtime taxes only the regular base
         /// (placement/lines/sweep/combo/gold via RegularScoreFactor); the overtime win bonus and
         /// all joker contributions keep their
-        /// full weight. Late flats are scaled too so they stay in the same units as the rest.</summary>
+        /// full weight. Late flats are scaled too so they stay in the same units as the rest.
+        ///
+        /// NEVER NEGATIVE: inverted jokers ("Terslik") can eat a turn's earnings but not more -
+        /// a turn pays at worst nothing. Without a joker handing out negative points this floor
+        /// can never bite, so it leaves the base game exactly as it was.</summary>
         public int Total
         {
             get
             {
                 double regular = BaseTotal * RegularScoreFactor;
-                return (int)System.Math.Floor((regular + BaseOvertimeBonus + FlatBonus)
+                int total = (int)System.Math.Floor((regular + BaseOvertimeBonus + FlatBonus)
                     * Multiplier * ScoreScale) + LateFlat * ScoreScale;
+                return total > 0 ? total : 0;
             }
         }
 
         public void AddFlat(int amount, string source)
         {
+            if (InvertContributions)
+            {
+                amount = -amount;
+            }
             if (amount == 0)
             {
                 return;
@@ -94,9 +112,14 @@ namespace ProjectBlock.Core
             contributions.Add(new ScoreContribution(source, amount, 1.0));
         }
 
-        /// <summary>Multiplies the running multiplier - a joker can never overwrite another's.</summary>
+        /// <summary>Multiplies the running multiplier - a joker can never overwrite another's.
+        /// Inverted ("Terslik") a doubling becomes a halving, which is the honest opposite.</summary>
         public void AddMultiplier(double factor, string source)
         {
+            if (InvertContributions && factor != 0.0)
+            {
+                factor = 1.0 / factor;
+            }
             if (factor == 1.0)
             {
                 return;

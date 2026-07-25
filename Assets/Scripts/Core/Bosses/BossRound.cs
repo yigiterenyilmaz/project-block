@@ -94,6 +94,14 @@ namespace ProjectBlock.Core
             return false;
         }
 
+        /// <summary>True while every joker works AGAINST the player ("Terslik"): the points and
+        /// the sell value a joker grants itself become losses of the same size. Jokers that grant
+        /// neither are untouched and keep doing their job. Powers are never inverted.</summary>
+        public virtual bool InvertsJokerScore
+        {
+            get { return false; }
+        }
+
         /// <summary>True if a block may NOT be placed on this empty cell ("Mapus" sealing one
         /// cell per turn). Only ever asked about cells that are empty and on the board.</summary>
         public virtual bool BlocksPlacementOn(GridPos cell)
