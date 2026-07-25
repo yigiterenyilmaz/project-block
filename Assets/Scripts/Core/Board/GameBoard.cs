@@ -93,6 +93,11 @@ namespace ProjectBlock.Core
             sealedCells.Clear();
         }
 
+        /// <summary>While true every placed cube is a plain one, whatever its card's element
+        /// says ("Vanilya"). Set by RoundEngine.SetBoss and carried across a resize, so an
+        /// inflation power cannot accidentally hand the elements back mid-round.</summary>
+        internal bool IgnoreElements { get; set; }
+
         public int Width { get; }
         public int Height { get; }
         public int OccupiedCount { get; private set; }
@@ -213,6 +218,7 @@ namespace ProjectBlock.Core
             }
 
             var board = new GameBoard(newMinX, newMinY, newWidth, newHeight, mask, count);
+            board.IgnoreElements = source.IgnoreElements;
             for (int sx = 0; sx < source.Width; sx++)
             {
                 for (int sy = 0; sy < source.Height; sy++)

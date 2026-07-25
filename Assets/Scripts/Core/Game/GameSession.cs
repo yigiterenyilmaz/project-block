@@ -395,6 +395,38 @@ namespace ProjectBlock.Core
             StartRound();
         }
 
+        /// <summary>
+        /// PERMANENTLY takes cards out of the run deck - the two tax bosses ("Harcama vergisi",
+        /// "Özel tüketim vergisi"). Unlike the overtime continue cost this is not round-scoped:
+        /// the cards leave OwnedCards for good, so later rounds are poorer too. They are pulled
+        /// out of the round in progress as well, so the tax bites immediately.
+        ///
+        /// Refuses to shrink the deck below a playable size (the hand size): a deck smaller than
+        /// that loses the NEXT round during construction, which is a bug, not a difficulty.
+        /// Returns how many cards actually left.
+        /// </summary>
+        public int TaxOwnedCards(int count, IRandomSource taxRng)
+        {
+            if (count <= 0 || taxRng == null)
+            {
+                return 0;
+            }
+            int floor = Config.Rules.HandSize;
+            int taken = 0;
+            for (int i = 0; i < count && ownedCards.Count > floor; i++)
+            {
+                BlockCard card = ownedCards[taxRng.NextInt(0, ownedCards.Count)];
+                ownedCards.Remove(card);
+                if (CurrentRound != null)
+                {
+                    // Out of the piles too, so it cannot still be drawn this round.
+                    CurrentRound.TaxCardOutOfRound(card);
+                }
+                taken++;
+            }
+            return taken;
+        }
+
         /// <summary>Adds run currency (a joker sale today; market refunds later).</summary>
         public void AddCurrency(long amount)
         {

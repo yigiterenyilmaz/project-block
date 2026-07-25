@@ -133,13 +133,15 @@ namespace ProjectBlock.View
                         && rightHit.SlotIndex < round.Hand.Count)
                     {
                         BlockCard rightCard = round.Hand[rightHit.SlotIndex];
-                        if (rightCard.Has(BlockElement.Mechanical))
+                        // Asked through the round, not the card: a boss round can suppress every
+                        // element ("Vanilya"), and the engine would then refuse the rotation.
+                        if (round.CardHasElement(rightCard, BlockElement.Mechanical))
                         {
                             round.RotateCard(rightHit.SlotIndex);
                             cardLayer.ForgetCard(rightCard.Id);
                             RefreshAll(null);
                         }
-                        else if (rightCard.Has(BlockElement.Fox))
+                        else if (round.CardHasElement(rightCard, BlockElement.Fox))
                         {
                             foxPickSlot = rightHit.SlotIndex;
                             deckOverlay.Show(session.OwnedCards);
@@ -194,8 +196,9 @@ namespace ProjectBlock.View
             bool overBoard = false;
             if (shape != null)
             {
-                // ghost blocks anchor loosely so they can overhang any edge
-                overBoard = slotCard.Has(BlockElement.Ghost)
+                // ghost blocks anchor loosely so they can overhang any edge (unless a boss round
+                // has suppressed elements, in which case the engine refuses the overhang)
+                overBoard = round.CardHasElement(slotCard, BlockElement.Ghost)
                     ? boardView.TryWorldToCellLoose(world, 2, out hovered)
                     : boardView.TryWorldToCell(world, out hovered);
             }

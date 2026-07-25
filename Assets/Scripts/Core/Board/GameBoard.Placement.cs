@@ -111,13 +111,16 @@ namespace ProjectBlock.Core
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
             }
             var placed = new List<GridPos>(shape.Size);
-            CubeKind cardKind = CubeRules.KindForCard(card);
+            // "Vanilya" (boss round): the card's element is ignored, so every cube it stamps is
+            // an ordinary one - including the per-cube elements of a designed block.
+            CubeKind cardKind = IgnoreElements ? CubeKind.Normal : CubeRules.KindForCard(card);
             // A per-cube designed block stamps each cube from its own element. The per-cube array
             // is aligned to card.Shape.Cells, and a designed block is never rotated/reshaped, so
             // the shape being placed matches it cell-for-cell; fall back to the one card-wide kind
             // if the counts ever diverge (a transformed shape).
             IReadOnlyList<GridPos> shapeCells = shape.Cells;
-            bool perCube = card.HasPerCubeElements && shapeCells.Count == card.Shape.Cells.Count;
+            bool perCube = !IgnoreElements && card.HasPerCubeElements
+                && shapeCells.Count == card.Shape.Cells.Count;
             for (int ci = 0; ci < shapeCells.Count; ci++)
             {
                 GridPos offset = shapeCells[ci];

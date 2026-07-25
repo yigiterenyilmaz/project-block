@@ -1,4 +1,4 @@
-// PURPOSE: RoundEngine bookkeeping - the destruction-log diff and turn-start snapshots,
+﻿// PURPOSE: RoundEngine bookkeeping - the destruction-log diff and turn-start snapshots,
 // late score/multiplier routing, the draw-with-rules loss logic, hand refill, and the
 // no-playable-move check.
 
@@ -124,11 +124,22 @@ namespace ProjectBlock.Core
             if (card != null)
             {
                 NoteCardDrawn();
+                drawPileReportedEmpty = false;
                 return card;
             }
             if (currentReport != null)
             {
                 currentReport.DrawPileEmptiedThisTurn = true;
+            }
+            // Raised ONCE per drying-out, not once per failed draw: a refill loop against two
+            // empty piles would otherwise tax the player several times for one empty deck.
+            if (!drawPileReportedEmpty)
+            {
+                drawPileReportedEmpty = true;
+                if (Boss != null && session != null)
+                {
+                    Boss.OnDrawPileEmptied(new RoundContext(session, rng, this));
+                }
             }
             if (ThresholdPassed)
             {
@@ -271,14 +282,14 @@ namespace ProjectBlock.Core
             {
                 return false; // frozen cards cannot be played, so they are not a way out
             }
-            bool ghost = card.Has(BlockElement.Ghost);
-            bool negative = card.Has(BlockElement.Negative);
+            bool ghost = Has(card, BlockElement.Ghost);
+            bool negative = Has(card, BlockElement.Negative);
             BlockShape shape = EffectiveShape(card);
             if (Board.AnyPlacementExists(shape, ghost, negative))
             {
                 return true;
             }
-            if (card.Has(BlockElement.Mechanical))
+            if (Has(card, BlockElement.Mechanical))
             {
                 BlockShape rotated = shape;
                 for (int i = 0; i < 3; i++)
@@ -290,7 +301,7 @@ namespace ProjectBlock.Core
                     }
                 }
             }
-            if (card.Has(BlockElement.Fox))
+            if (Has(card, BlockElement.Fox))
             {
                 foreach (BlockShape deckShape in AllRoundShapes())
                 {

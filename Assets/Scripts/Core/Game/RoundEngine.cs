@@ -79,6 +79,31 @@ namespace ProjectBlock.Core
         internal void SetBoss(BossRound boss)
         {
             Boss = boss;
+            // The board stamps cubes itself, so it needs the answer too ("Vanilya"). Carried
+            // across by CreateResized, so an inflation power cannot lose it mid-round.
+            Board.IgnoreElements = ElementsIgnored;
+        }
+
+        /// <summary>True while every block must behave as a plain block ("Vanilya"): no fire,
+        /// no ghost overhang, no rotation, no dynamite - the element is simply not there.</summary>
+        public bool ElementsIgnored
+        {
+            get { return Boss != null && Boss.IgnoresBlockElements; }
+        }
+
+        /// <summary>Does this card carry that element RIGHT NOW? The one place the engine asks,
+        /// so a boss that suppresses elements suppresses ALL of them consistently - placement,
+        /// rotation, the no-move check and the cube kinds alike.</summary>
+        private bool Has(BlockCard card, BlockElement element)
+        {
+            return !ElementsIgnored && card.Has(element);
+        }
+
+        /// <summary>Public form of the above, for the UI: it must not offer a rotation or a
+        /// reshape that the engine would refuse.</summary>
+        public bool CardHasElement(BlockCard card, BlockElement element)
+        {
+            return card != null && Has(card, element);
         }
 
         /// <summary>True if this round's boss has silenced that joker ("Anarşi", "Oburluk"):
@@ -448,6 +473,11 @@ namespace ProjectBlock.Core
                 }
             }
         }
+
+        /// <summary>True once the draw pile has been reported dry and no card has been drawn
+        /// since. Keeps "the deck ran out" a single event per drying-out, however many draw
+        /// attempts hit the empty pile ("Harcama vergisi" taxes per event, not per attempt).</summary>
+        private bool drawPileReportedEmpty;
 
         /// <summary>Set when a NEGATIVE block already sampled the sweep pre-condition, so the
         /// normal explosion path does not re-sample it on a board the erasure just changed.</summary>

@@ -20,9 +20,12 @@ namespace ProjectBlock.Core
         {
             Register(() => new AlikoymaBoss());
             Register(() => new MapusBoss());
+            Register(() => new VanilyaBoss());
             Register(() => new FedaBoss());
             Register(() => new TukenmislikBoss());
             Register(() => new AnarsiBoss());
+            Register(() => new HarcamaVergisiBoss());
+            Register(() => new OzelTuketimVergisiBoss());
             Register(() => new UfukBoss());
             Register(() => new KuleBoss());
             Register(() => new OburlukBoss());

@@ -95,6 +95,23 @@ namespace ProjectBlock.Core
             return Deck.TakeCard(cardId);
         }
 
+        /// <summary>Pulls a card the run deck just lost out of this round too, so a tax bites
+        /// now instead of next round (GameSession.TaxOwnedCards). A card the player is HOLDING
+        /// is left alone: it vanishes at round end anyway, and yanking it out of the hand could
+        /// dead-end the round through no fault of the player's.</summary>
+        internal void TaxCardOutOfRound(BlockCard card)
+        {
+            if (card == null)
+            {
+                return;
+            }
+            BlockCard pulled = Deck.TakeCard(card.Id);
+            if (pulled != null)
+            {
+                Deck.RemoveFromRound(pulled);
+            }
+        }
+
         /// <summary>"Pull the earned score to the threshold": the round's contribution to the
         /// run-wide TotalScore is capped at the threshold and the local meter drops to it.
         /// Used by "İkinci şans" and "Totem" in overtime, where the score is above threshold.</summary>

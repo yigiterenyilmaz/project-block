@@ -96,6 +96,8 @@ public static class JokerTests
         Boss_AnarsiSilencesEverythingRare();
         Boss_OburlukEatsOnlyWhenSlotsAreFull();
         Boss_TukenmislikStopsEveryRefill();
+        Boss_VanilyaStripsEveryElement();
+        Boss_TaxesTakeCardsOutOfTheRunDeck();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
 
@@ -2890,6 +2892,100 @@ public static class JokerTests
             new ScoreBreakdown());
         plain.Powers.DispatchCleanSweep(plainCtx, true);
         Check(plainPower.Charged, "an ordinary round's sweep refills it");
+    }
+
+    private static void Boss_VanilyaStripsEveryElement()
+    {
+        Section("boss / vanilya ignores block elements");
+        var session = NewSession(5180, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(new VanilyaBoss());
+        Check(round.ElementsIgnored, "the round reports elements as ignored");
+
+        // A gold block places PLAIN cubes: no gold upkeep, and it is destructible again.
+        BlockCard gold = session.CreateCard(Bar(2), new[] { BlockElement.Gold });
+        round.AddBonusCard(gold, BonusPlayOutcome.ToDiscard);
+        TurnReport report = round.PlayFromBonus(0, new GridPos(0, 0));
+        Cube? placed = round.Board.GetCube(new GridPos(0, 0));
+        Check(placed.HasValue && placed.Value.Kind == CubeKind.Normal,
+            "a gold block stamps ordinary cubes",
+            placed.HasValue ? placed.Value.Kind.ToString() : "empty");
+        Check(report.GoldBonus == 0, "no gold upkeep is paid", "bonus " + report.GoldBonus);
+
+        // Mechanical rotation is refused, and the UI is told the same thing.
+        BlockCard gears = session.CreateCard(Bar(2), new[] { BlockElement.Mechanical });
+        round.AddBonusCard(gears, BonusPlayOutcome.ToDiscard);
+        Check(!round.CardHasElement(gears, BlockElement.Mechanical),
+            "the engine reports the card as plain");
+        Check(gears.Has(BlockElement.Mechanical),
+            "the card itself keeps its element (it is only ignored)");
+
+        // Ghost overhang is gone: a ghost block may no longer hang off the edge.
+        BlockCard ghost = session.CreateCard(Bar(2), new[] { BlockElement.Ghost });
+        var offEdge = new GridPos(5, 0); // a 2-wide bar at x=5 hangs over a 6-wide board
+        Check(!round.CanPlaceCard(ghost, offEdge), "a ghost block cannot overhang under vanilya");
+
+        // Sanity: the same card DOES overhang and pay gold on an ordinary round.
+        var plain = NewSession(5180, 6, 1000000, 40, 1);
+        BlockCard plainGhost = plain.CreateCard(Bar(2), new[] { BlockElement.Ghost });
+        Check(plain.CurrentRound.CanPlaceCard(plainGhost, offEdge),
+            "an ordinary round still allows the overhang");
+        BlockCard plainGold = plain.CreateCard(Bar(2), new[] { BlockElement.Gold });
+        plain.CurrentRound.AddBonusCard(plainGold, BonusPlayOutcome.ToDiscard);
+        TurnReport plainReport = plain.CurrentRound.PlayFromBonus(0, new GridPos(0, 0));
+        Check(plainReport.GoldBonus > 0, "and still pays the gold upkeep",
+            "bonus " + plainReport.GoldBonus);
+    }
+
+    private static void Boss_TaxesTakeCardsOutOfTheRunDeck()
+    {
+        Section("boss / the two deck taxes");
+        // "Harcama vergisi": emptying the draw pile costs the run deck two cards.
+        var session = NewSession(5181, 6, 1000000, 12, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = new HarcamaVergisiBoss();
+        round.SetBoss(boss);
+        int ownedBefore = session.OwnedCards.Count;
+
+        // Churn the hand until the draw pile runs dry at least once.
+        int guard = 0;
+        while (boss.TaxedCards == 0 && guard++ < 40 && round.Status == RoundStatus.InProgress)
+        {
+            round.CycleHandWithoutReshuffle();
+        }
+        Check(boss.TaxedCards > 0, "emptying the draw pile taxed the deck",
+            "taxed " + boss.TaxedCards);
+        Check(boss.TaxedCards == boss.CardsPerEmptying,
+            "exactly two cards per emptying, not one per failed draw",
+            "taxed " + boss.TaxedCards);
+        Check(session.OwnedCards.Count == ownedBefore - boss.TaxedCards,
+            "the cards left the RUN deck, not just the round",
+            ownedBefore + " -> " + session.OwnedCards.Count);
+
+        // "Özel tüketim vergisi": using a power costs a card.
+        var exSession = NewSession(5182, 6, 1000000, 20, 1);
+        var exBoss = new OzelTuketimVergisiBoss();
+        exSession.CurrentRound.SetBoss(exBoss);
+        // Büyüteç just reveals draw cards, so it always runs - the tax, not the power, is
+        // what this test is about.
+        Power power = exSession.Powers.Add(new BuyutecPower());
+        int exOwnedBefore = exSession.OwnedCards.Count;
+        Check(exSession.Powers.TryUse(power.InstanceId, ActivationTarget.None),
+            "the power ran");
+        Check(exBoss.TaxedCards == 1, "using it cost exactly one card",
+            "taxed " + exBoss.TaxedCards);
+        Check(exSession.OwnedCards.Count == exOwnedBefore - 1,
+            "and that card left the run deck",
+            exOwnedBefore + " -> " + exSession.OwnedCards.Count);
+
+        // The floor: a tax never shrinks the deck below the hand size, which would lose the
+        // NEXT round during construction.
+        var tiny = NewSession(5183, 6, 1000000, 4, 1);
+        int floor = tiny.Config.Rules.HandSize;
+        int removed = tiny.TaxOwnedCards(99, tiny.Rng);
+        Check(tiny.OwnedCards.Count == floor, "the deck stops at the hand size",
+            "left " + tiny.OwnedCards.Count + " floor " + floor);
+        Check(removed == 4 - floor, "only what could be taken was taken", "removed " + removed);
     }
 
     private static void BossRounds_FlaggedEveryThirdRound()

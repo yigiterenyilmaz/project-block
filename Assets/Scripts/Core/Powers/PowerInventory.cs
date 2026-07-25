@@ -209,6 +209,11 @@ namespace ProjectBlock.Core
                 round.NotePowerUsed();
             }
             session.Jokers.DispatchPowerUsed(round, power.DefId);
+            if (round.Boss != null)
+            {
+                // The boss sees it last ("Özel tüketim vergisi" bills the deck for the use).
+                round.Boss.OnPowerUsed(RoundCtx(round), power.DefId);
+            }
             RaiseChanged();
             return true;
         }

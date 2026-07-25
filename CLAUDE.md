@@ -11,11 +11,28 @@ A run is **15 rounds** (`GameConfig.TotalRounds`). Surviving the last one ends t
 `GamePhase.RunWon` — no market after it, and `GameOver` stays loss-only, so anything waiting
 for a run to finish must accept **both** terminal phases. Every third round (3, 6, 9, 12, 15)
 is flagged `RoundConfig.IsBossRound` by `DefaultRoundProgression.BossRoundInterval`; that flag
-is the single source of truth for which rounds are boss rounds, and **nothing acts on it yet**
-(boss mechanics and the 5x5/7x7/9x9 arena growth are both separate, in-progress work — leave
-the board-size fields in `DefaultRoundProgression` alone). Anything that rebuilds a
-`RoundConfig` from another one (a joker/power `FilterRoundConfig`) must carry every field
-across, `IsBossRound` included.
+is the single source of truth for which rounds are boss rounds. (The 5x5/7x7/9x9 arena growth is
+separate, in-progress work — leave the board-size fields in `DefaultRoundProgression` alone.)
+Anything that rebuilds a `RoundConfig` from another one (a joker/power `FilterRoundConfig`) must
+carry every field across, `IsBossRound` included.
+
+- `Assets/Scripts/Core/Bosses/` — the boss system. `BossRound.cs` is the base type, and the
+  engine is the only caller. A boss is the round's ANTAGONIST: not owned, not bought, not
+  sellable, drawn by `GameSession.DrawBoss` (own rng, no repeats per run) and attached to the
+  `RoundEngine` before its first turn. Three rules everything follows from:
+  1. **One boss per round, round-scoped.** It dies with the engine, so a boss must NEVER mutate
+     session state (`RoundRules`, `ScoringConfig`) to express a rule bend — that would leak into
+     the next round. Bends are **queries** the engine asks live (`IgnoresBlockElements`,
+     `BlocksPowerRecharge`, `DisablesJoker/Power`, `BlocksPlacementOn`, `ScoreLineExplosion`).
+     The deck taxes are the one exception: taking cards out of `OwnedCards` is their effect,
+     not a rule bend.
+  2. **Silencing is central**, like the overtime gate: `RoundEngine.IsSilencedByBoss` is checked
+     by `JokerInventory.IsGated` and `PowerInventory`, so nothing is added/removed and no
+     permanent effect gets undone and redone. Never test for a boss inside a joker or power.
+  3. **The boss moves last** — after the player's own end-of-turn effects, but BEFORE the
+     threshold and dead-end checks, so what it does can genuinely decide the round.
+  Beware: bosses make frozen cards and sealed cells routine, so any driver that plays a card
+  must skip `IsFrozen` cards and ask the board (never a raw `card.Has(...)`) where a block fits.
 
 ## Layout
 
