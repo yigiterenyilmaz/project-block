@@ -204,6 +204,14 @@ namespace ProjectBlock.Core
                 breakdown.BaseGold = report.GoldBonus;
             }
 
+            // 4.5 "Titizlik": only a clean sweep pays, so everything else the turn earned is
+            //     wiped. Here rather than at each assignment, so it is one rule in one place -
+            //     and after the sweep has had its chance to fire in step 3.
+            if (Boss != null && Boss.OnlyCleanSweepsScore)
+            {
+                breakdown.KeepOnlyCleanSweep();
+            }
+
             // 5. finalize the score. In overtime the regular base (placement/lines/sweep/gold)
             //    is taxed down to a trickle; the overtime win bonus and joker contributions are
             //    exempt. ThresholdPassed is sampled live here, so the turn that crosses the

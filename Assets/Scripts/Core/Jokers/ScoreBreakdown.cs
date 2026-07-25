@@ -140,6 +140,18 @@ namespace ProjectBlock.Core
             contributions.Add(new ScoreContribution(source, amount, 1.0));
         }
 
+        /// <summary>"Titizlik": wipes every base source EXCEPT the clean sweep. Done in one
+        /// place, just before finalization, rather than at each assignment - that way a base
+        /// source added later cannot quietly forget to obey the boss. The overtime win bonus
+        /// survives on purpose: it is paid FOR a sweep, so it is sweep money.</summary>
+        internal void KeepOnlyCleanSweep()
+        {
+            BasePlacement = 0;
+            BaseLines = 0;
+            BaseCombo = 0;
+            BaseGold = 0;
+        }
+
         internal void Reset()
         {
             contributions.Clear();

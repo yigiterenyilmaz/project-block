@@ -292,7 +292,9 @@ namespace ProjectBlock.View
             }
             // RoundScore lives in the scaled economy; lift the threshold to match for display.
             sb.Append(Loc.Pick("Score ", "Puan ")).Append(round.RoundScore)
-                .Append(" / ").Append(round.Config.ScoreThreshold * session.Config.Scoring.ScoreScale);
+                // RoundEngine.ScoreThreshold, not the config's: a boss may ask for less
+                // ("Taş ve sopa") and the bar on screen has to be the bar the rules use.
+                .Append(" / ").Append(round.ScoreThreshold * session.Config.Scoring.ScoreScale);
             if (round.ThresholdPassed)
             {
                 sb.Append(Loc.Pick("  [threshold passed]", "  [eşik geçildi]"));

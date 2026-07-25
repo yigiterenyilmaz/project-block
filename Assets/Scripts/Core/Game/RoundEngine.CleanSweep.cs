@@ -46,7 +46,7 @@ namespace ProjectBlock.Core
                 }
                 externalClearReady = false;
                 CleanSweepCount++;
-                AddScoreOutsideTurn(scorer.ScoreCleanSweep());
+                AddScoreOutsideTurn(PriceCleanSweep());
                 if (session != null)
                 {
                     session.Powers.RechargeAll();
@@ -82,7 +82,7 @@ namespace ProjectBlock.Core
 
             if (counts)
             {
-                int sweepBonus = scorer.ScoreCleanSweep();
+                int sweepBonus = PriceCleanSweep();
                 if (scoreFinalized)
                 {
                     // A sweep triggered by an end-of-turn effect still belongs to this turn.
@@ -106,7 +106,7 @@ namespace ProjectBlock.Core
                 // multipliers raise it just like any other score ("point upgrades" apply). An
                 // uncounted external sweep pays none of it.
                 int winBonus = counts
-                    ? scorer.ScoreOvertimeWinBonus(Config.ScoreThreshold, ContinueCount)
+                    ? scorer.ScoreOvertimeWinBonus(ScoreThreshold, ContinueCount)
                     : 0;
                 if (winBonus > 0)
                 {

@@ -206,6 +206,14 @@ namespace ProjectBlock.Core
             return scorer.ScoreLineExplosion(lines.Rows + lines.Columns, lines.Cubes);
         }
 
+        /// <summary>What a clean sweep pays. Same deal as PriceLines: the boss gets the final
+        /// say ("Titizlik" pays more for the one thing it leaves standing), and with no boss it
+        /// is exactly the plain rule.</summary>
+        private int PriceCleanSweep()
+        {
+            return Boss != null ? Boss.ScoreCleanSweep(scorer) : scorer.ScoreCleanSweep();
+        }
+
         private static bool Contains(IReadOnlyList<int> values, int value)
         {
             for (int i = 0; i < values.Count; i++)

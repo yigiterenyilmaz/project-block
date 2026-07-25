@@ -38,10 +38,22 @@ namespace ProjectBlock.Core
         /// it is a logical amount that the score pipeline scales on the way in.</summary>
         public int RoundScore { get; private set; }
 
-        /// <summary>Config.ScoreThreshold lifted into the same scaled units as RoundScore.</summary>
+        /// <summary>The threshold this round actually asks for, in logical points. Normally
+        /// Config.ScoreThreshold; a boss may ask for less ("Taş ve sopa"). Read live, so the UI
+        /// and the rules can never disagree about what the bar is.</summary>
+        public int ScoreThreshold
+        {
+            get
+            {
+                int threshold = Config.ScoreThreshold;
+                return Boss != null ? Boss.FilterScoreThreshold(threshold) : threshold;
+            }
+        }
+
+        /// <summary>ScoreThreshold lifted into the same scaled units as RoundScore.</summary>
         private int ScaledThreshold
         {
-            get { return Config.ScoreThreshold * scorer.ScoreScale; }
+            get { return ScoreThreshold * scorer.ScoreScale; }
         }
 
         /// <summary>True once RoundScore has reached the threshold; enables overtime rules.</summary>

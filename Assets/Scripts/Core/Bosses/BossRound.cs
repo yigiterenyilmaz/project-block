@@ -117,6 +117,29 @@ namespace ProjectBlock.Core
             return scorer.ScoreLineExplosion(lines.Rows + lines.Columns, lines.Cubes);
         }
 
+        /// <summary>Rewrites what a clean sweep pays ("Titizlik" sweetening the one thing it
+        /// leaves standing).</summary>
+        public virtual int ScoreCleanSweep(IScoreCalculator scorer)
+        {
+            return scorer.ScoreCleanSweep();
+        }
+
+        /// <summary>True while the ONLY thing that pays is a clean sweep ("Titizlik"): placing
+        /// blocks, clearing lines, the combo and the gold upkeep all pay nothing. Deliberately
+        /// about the BASE values only - a joker's own bonuses still land, exactly as they do
+        /// under "Ufuk" and "Kule", so the boss beats your board rather than your build.</summary>
+        public virtual bool OnlyCleanSweepsScore
+        {
+            get { return false; }
+        }
+
+        /// <summary>Rewrites the round's score threshold ("Taş ve sopa" asking for less because
+        /// it took your whole inventory away). Read live, in logical (unscaled) points.</summary>
+        public virtual int FilterScoreThreshold(int threshold)
+        {
+            return threshold;
+        }
+
         // ---------------------------------------------------------------------- events
 
         /// <summary>End of a resolved turn - after the hand refill, BEFORE the threshold and

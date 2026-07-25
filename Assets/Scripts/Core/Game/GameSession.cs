@@ -520,6 +520,28 @@ namespace ProjectBlock.Core
             return taken;
         }
 
+        /// <summary>
+        /// Takes a percentage of the run score away ("Cana geleceğine mala" charging the purse
+        /// every time the draw pile dries up). Rounded UP so a small purse is not immune, floored
+        /// at what there is - the run score never goes negative, and this never touches the debt:
+        /// losing money makes an open debt harder to clear, it does not grow it.
+        /// Returns what was actually taken.
+        /// </summary>
+        public long TakeCurrencyPercent(int percent)
+        {
+            if (percent <= 0 || TotalScore <= 0)
+            {
+                return 0;
+            }
+            long taken = (TotalScore * percent + 99) / 100;
+            if (taken > TotalScore)
+            {
+                taken = TotalScore;
+            }
+            TotalScore -= taken;
+            return taken;
+        }
+
         /// <summary>Adds run currency (a joker sale today; market refunds later).</summary>
         public void AddCurrency(long amount)
         {
