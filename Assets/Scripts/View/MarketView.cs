@@ -17,8 +17,9 @@ namespace ProjectBlock.View
     {
         private const float OfferSpacing = 2.2f;
 
-        /// <summary>Vertical distance between two section rows.</summary>
-        private const float RowPitch = 2.8f;
+        /// <summary>Vertical distance between two section rows. Leaves room under each row's
+        /// prices for that section's own reroll button.</summary>
+        private const float RowPitch = 3.2f;
 
         /// <summary>Section header above a row's tiles / price label below them.</summary>
         private const float HeaderOffset = 1.15f;
@@ -51,9 +52,9 @@ namespace ProjectBlock.View
         private static readonly Color RerollButtonColor = new Color(0.20f, 0.24f, 0.34f);
         private static readonly Color RerollButtonDisabledColor = new Color(0.14f, 0.14f, 0.16f);
 
-        /// <summary>Extra backdrop height reserved at the bottom for the reroll button and the
-        /// prompt line under it.</summary>
-        private const float RerollExtra = 2.1f;
+        /// <summary>Extra backdrop height reserved at the bottom for the last row's reroll
+        /// button and the prompt line under it.</summary>
+        private const float RerollExtra = 1.0f;
 
         /// <summary>Joker and power tiles are WIDER than a block card, because they carry text
         /// rather than a shape preview. Widening rather than shrinking the font is what lets the
@@ -76,9 +77,21 @@ namespace ProjectBlock.View
         /// rarity colour the tile had (Common for block offers).</summary>
         private readonly List<Rarity> offerRarities = new List<Rarity>();
 
-        private Vector2 rerollButtonCenter;
-        private Vector2 rerollButtonHalf;
-        private bool rerollButtonShown;
+        /// <summary>Half-width of each offer slot, index-aligned with the offers. Joker and
+        /// power tiles are wider than block cards, so one shared width would both mis-frame
+        /// them and mis-answer OfferAt.</summary>
+        private readonly List<float> offerHalfWidths = new List<float>();
+
+        /// <summary>One reroll button per section - refreshing the blocks must not disturb the
+        /// jokers standing next to them.</summary>
+        private struct SectionButton
+        {
+            public MarketOfferKind Kind;
+            public Vector2 Center;
+            public Vector2 Half;
+        }
+
+        private readonly List<SectionButton> rerollButtons = new List<SectionButton>();
 
         /// <summary>(Re)builds the market display as stacked section ROWS - BLOCKS, JOKERS,
         /// POWERS - each row horizontally centered with its header above it and the prices
@@ -115,6 +128,7 @@ namespace ProjectBlock.View
             for (int i = 0; i < count; i++)
             {
                 offerCenters.Add(Vector2.zero);
+                offerHalfWidths.Add(CardVisual.BodyWidth * 0.5f);
             }
 
             float maxSpan = 0f;
@@ -175,8 +189,15 @@ namespace ProjectBlock.View
                     : offer.Kind == MarketOfferKind.Power ? offer.Power.Rarity
                     : Rarity.Common;
                 offerRarities.Add(rarity);
+                // The frame must follow the TILE's width, not the block card's - a joker tile
+                // is wider, and a frame sized for a block card leaves it ringed top and bottom
+                // only, which reads as broken art.
+                float tileWidth = offer.Kind == MarketOfferKind.Block
+                    ? CardVisual.BodyWidth
+                    : NamedTileWidth;
+                offerHalfWidths[i] = tileWidth * 0.5f;
                 ViewUtil.MakeRect(transform, "Frame_" + i, slotCenter,
-                    new Vector2(CardVisual.BodyWidth + 0.18f, CardVisual.BodyHeight + 0.18f),
+                    new Vector2(tileWidth + 0.18f, CardVisual.BodyHeight + 0.18f),
                     RarityPalette.Frame(FrameColor, rarity), 34);
                 if (offer.Sold)
                 {
@@ -216,30 +237,69 @@ namespace ProjectBlock.View
                     38, TextAnchor.MiddleCenter);
             }
 
-            // Reroll button, centered under the lowest offer row: one click refreshes every
-            // offer for an escalating cost (GameSession.RerollMarket / NextRerollCost).
-            float bottomRowY = topRowY - (rowOffers.Count - 1) * RowPitch;
-            rerollButtonCenter = new Vector2(Center.x, bottomRowY - PriceOffset - 0.85f);
-            rerollButtonHalf = new Vector2(1.5f, 0.36f);
-            rerollButtonShown = true;
+            // One reroll button per section, sitting under that section's prices: refreshing
+            // the blocks must leave the jokers beside them alone (GameSession.RerollMarket).
+            // The price is shared across sections, so it escalates however you spend it.
             long rerollCost = session.NextRerollCost;
             bool canReroll = session.TotalScore >= rerollCost;
-            ViewUtil.MakeRect(transform, "RerollButton", rerollButtonCenter,
-                rerollButtonHalf * 2f, canReroll ? RerollButtonColor : RerollButtonDisabledColor, 34);
-            ViewUtil.MakeText3D(transform, "RerollLabel", rerollButtonCenter,
-                Loc.Pick("REROLL  ", "YENİLE  ") + rerollCost,
-                60, 0.05f, canReroll ? AffordablePriceColor : TooExpensiveColor,
-                38, TextAnchor.MiddleCenter);
+            for (int r = 0; r < rowOffers.Count; r++)
+            {
+                float rowY = topRowY - r * RowPitch;
+                var button = new SectionButton();
+                button.Kind = rowKinds[r];
+                button.Center = new Vector2(Center.x, rowY - PriceOffset - 0.55f);
+                button.Half = new Vector2(1.25f, 0.27f);
+                rerollButtons.Add(button);
+                ViewUtil.MakeRect(transform, "Reroll_" + r, button.Center, button.Half * 2f,
+                    canReroll ? RerollButtonColor : RerollButtonDisabledColor, 34);
+                ViewUtil.MakeText3D(transform, "RerollLabel_" + r, button.Center,
+                    Loc.Pick("REROLL  ", "YENİLE  ") + rerollCost,
+                    90, 0.026f, canReroll ? AffordablePriceColor : TooExpensiveColor,
+                    38, TextAnchor.MiddleCenter);
+            }
 
             // The buy / next-round prompt lives INSIDE the panel. It used to be HUD text at the
             // top of the screen, where the opaque panel now sits - the canvas draws over world
             // space, so the two simply printed on top of each other.
+            float bottomRowY = topRowY - (rowOffers.Count - 1) * RowPitch;
             ViewUtil.MakeText3D(transform, "Prompt",
-                rerollButtonCenter + new Vector2(0f, -0.62f),
+                new Vector2(Center.x, bottomRowY - PriceOffset - 1.15f),
                 Loc.Pick("click a block to add it to your deck    -    [N] start round ",
                         "desteye katmak için bloğa tıkla    -    [N] raunt başlat: ")
                     + (session.RoundNumber + 1),
                 90, 0.018f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+
+            FitToCamera(panelCenter, panelSize);
+        }
+
+        /// <summary>
+        /// Scales and centres the whole panel on the camera so it always fits on screen. The
+        /// shelf grows with the number of sections and with the reroll buttons under each of
+        /// them, and it had already grown taller than the viewport - the reroll button was off
+        /// the bottom edge.
+        ///
+        /// Everything drawn here is a child of this transform, so one scale covers the lot.
+        /// Hit-testing therefore has to go through world-to-local (see OfferAt).
+        /// </summary>
+        private void FitToCamera(Vector2 panelCenter, Vector2 panelSize)
+        {
+            transform.localScale = Vector3.one;
+            transform.position = Vector3.zero;
+            Camera cam = Camera.main;
+            if (cam == null || !cam.orthographic)
+            {
+                return;
+            }
+            const float Margin = 0.94f;
+            float halfHeight = cam.orthographicSize * Margin;
+            float halfWidth = halfHeight * cam.aspect;
+            float scale = Mathf.Min(1f,
+                Mathf.Min(halfHeight / (panelSize.y * 0.5f), halfWidth / (panelSize.x * 0.5f)));
+            transform.localScale = new Vector3(scale, scale, 1f);
+            // Centre the panel on the camera, so shrinking never parks it off to one side.
+            Vector3 camPos = cam.transform.position;
+            transform.position = new Vector3(camPos.x - panelCenter.x * scale,
+                camPos.y - panelCenter.y * scale, 0f);
         }
 
         /// <summary>The tag printed at the top of a tile: the tier word replaces the kind word
@@ -285,29 +345,50 @@ namespace ProjectBlock.View
         {
             offerVisuals.Clear();
             offerCenters.Clear();
+            offerHalfWidths.Clear();
             offerRarities.Clear();
-            rerollButtonShown = false;
+            rerollButtons.Clear();
+            // Undo the fit so a stale scale cannot survive into the next Show.
+            transform.localScale = Vector3.one;
+            transform.position = Vector3.zero;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Destroy(transform.GetChild(i).gameObject);
             }
         }
 
-        /// <summary>True if the world point is on the reroll button.</summary>
-        public bool RerollButtonAt(Vector2 world)
+        /// <summary>The section whose reroll button is under a world point, or null. Only that
+        /// section is refreshed - see GameSession.RerollMarket(kind).</summary>
+        public MarketOfferKind? RerollSectionAt(Vector2 world)
         {
-            return rerollButtonShown
-                && Mathf.Abs(world.x - rerollButtonCenter.x) <= rerollButtonHalf.x
-                && Mathf.Abs(world.y - rerollButtonCenter.y) <= rerollButtonHalf.y;
+            Vector2 local = ToLocal(world);
+            for (int i = 0; i < rerollButtons.Count; i++)
+            {
+                SectionButton button = rerollButtons[i];
+                if (Mathf.Abs(local.x - button.Center.x) <= button.Half.x
+                    && Mathf.Abs(local.y - button.Center.y) <= button.Half.y)
+                {
+                    return button.Kind;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>World point in the panel's own space. The panel is scaled and re-centred to
+        /// fit the screen (FitToCamera), so every hit-test has to come through here.</summary>
+        private Vector2 ToLocal(Vector2 world)
+        {
+            return transform.InverseTransformPoint(new Vector3(world.x, world.y, 0f));
         }
 
         /// <summary>Offer index under a world point, or -1.</summary>
         public int OfferAt(Vector2 world)
         {
+            Vector2 local = ToLocal(world);
             for (int i = 0; i < offerCenters.Count; i++)
             {
-                if (Mathf.Abs(world.x - offerCenters[i].x) <= CardVisual.BodyWidth * 0.5f
-                    && Mathf.Abs(world.y - offerCenters[i].y) <= CardVisual.BodyHeight * 0.5f)
+                if (Mathf.Abs(local.x - offerCenters[i].x) <= offerHalfWidths[i]
+                    && Mathf.Abs(local.y - offerCenters[i].y) <= CardVisual.BodyHeight * 0.5f)
                 {
                     return i;
                 }
@@ -361,7 +442,9 @@ namespace ProjectBlock.View
             }
             var root = new GameObject(tag + "BuyFx");
             root.transform.SetParent(transform.parent, false);
-            root.transform.localPosition = offerCenters[offerIndex];
+            // The fx lives OUTSIDE this view (so the rebuild cannot destroy it), and the view
+            // is scaled to fit - so the slot's world position has to be resolved here.
+            root.transform.position = transform.TransformPoint(offerCenters[offerIndex]);
             ViewUtil.MakeRect(root.transform, "Body", Vector2.zero,
                 new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight), bodyColor, 39);
             ViewUtil.MakeText3D(root.transform, "Tag", Vector2.zero, tag,

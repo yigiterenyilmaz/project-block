@@ -296,9 +296,10 @@ namespace ProjectBlock.View
                 return;
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
-            if (marketView.RerollButtonAt(world))
+            MarketOfferKind? rerollSection = marketView.RerollSectionAt(world);
+            if (rerollSection.HasValue)
             {
-                if (session.RerollMarket())
+                if (session.RerollMarket(rerollSection.Value))
                 {
                     sfx.Buy(); // reuse the buy "ka-ching" for the reroll
                     marketView.Show(session);
