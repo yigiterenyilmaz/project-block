@@ -47,8 +47,20 @@ dropped that way once each.
 - `Assets/Scripts/Core/Jokers/` — the joker system. `Joker.cs` is the base type (all hooks
   are virtual no-ops), `JokerInventory.cs` is the only thing that calls them, and
   `Definitions/` holds one file per group of jokers.
+- `Assets/Scripts/Core/Save/` — saving a run. `SaveGame.cs` is the only entry point
+  (`Save(session) -> string`, `Load(string, template)`); Core never touches a file, so the
+  platform layer decides where the string goes. `SaveFile.cs` is the positional key=value
+  format, `CoreSerializers.cs` the structural types + the card table, and
+  `ContentStateSerializer.cs` walks joker/power/boss fields by reflection so new content
+  saves itself. See **Saving** below.
 - `Assets/Scripts/View/` — disposable debug UI (runtime-generated sprites + HUD).
   Never put rules here.
+- `Assets/Scripts/View/Menus/` — the menu layer (title, pause, settings, how to play, run
+  summary). Unlike the rest of View this is NOT disposable: it is the real UI shell, built
+  on the HUD canvas. Every screen is `MenuScreenView` with different content — do not
+  subclass it — and every colour/metric lives in `MenuSkin` so art drops in by assigning a
+  `Sprite` where a flat `Color` sits. `GameUiController.Menus.cs` holds the `AppScreen`
+  state machine: while `screen != Playing` the menu layer owns the whole frame.
 - `Assets/Scenes/enes.unity` — the working scene (a single `GameBootstrap` object).
   **Only ever modify this scene**, never SampleScene or the URP template.
 - `Tools/CoreTests/` — console test harness (outside `Assets/`, so Unity ignores it).
@@ -65,8 +77,9 @@ dropped that way once each.
 - Numbers in `ScoringConfig` / `DefaultRoundProgression` / the joker fields are balance
   placeholders; the flow around them is confirmed design. One exception: a run is 15 rounds
   numbered 1-15, and the board-size table (`DefaultRoundProgression.BoardSizeBands` — rounds
-  1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9) is confirmed design, not a knob to tune. There is
-  no victory condition wired yet; the run still only ends by losing.
+  1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9) is confirmed design, not a knob to tune. Surviving
+  round 15 wins the run (`GamePhase.RunWon`); `GameOver` is loss-only, so anything waiting for
+  a run to finish must accept both.
 - **Board erosion is the anti-stalling clock.** Each band also names a `ShuffleErosion`: past
   `RoundRules.FreeDeckRecycles` (2), every time the draw pile runs DRY the arena loses a piece —
   the rim (1-5), a growing centre hole (6-11), or both (12-15). It is counted in
@@ -114,6 +127,27 @@ left, set aside by the designer. See `docs/jokers-plan.md`.
 - `Assets/Scripts/Core/Powers/` — the power system. `Power.cs` is the base type,
   `PowerInventory.cs` the only caller. Powers are ACTIVE: one charge, refilled by a clean
   sweep or a new round, at most one per turn, and using one never costs a turn.
+
+## Saving
+
+A run can be saved at ANY point, mid-round included, and `CONTINUE` on the title picks it up.
+Three rules the design turns on:
+
+1. **The rng is restored by REPLAY, not by state.** `System.Random` will not say where it is,
+   so `SeededRandom` records the shape of the draws taken (run-length encoded) and re-takes
+   them on load. Swapping in a state-readable PRNG would have changed every draw in the game
+   and invalidated the baseline trace — never do that.
+2. **Content state is walked by reflection** (`ContentStateSerializer`), so a new joker saves
+   correctly the day it is written. Fields are name-sorted, base class first, for a stable
+   order. Only primitives, enums, `Nullable<T>`, collections, structs, `BlockShape` and a
+   nested `Power` are supported — anything else throws by design, and the per-content
+   round-trip tests are what catch it.
+3. **A version mismatch is refused, never migrated.** Bump `SaveGame.FormatVersion` whenever
+   the written fields change; older files then stop being offered rather than half-loading.
+
+Loading must NOT re-acquire jokers/powers (`AddRestored`, not `Add`): `OnAcquired` applies
+permanent rule changes that the saved `RoundRules` already contains, so re-running it would
+compound them on every load.
 
 ## Testing
 

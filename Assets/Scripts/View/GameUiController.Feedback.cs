@@ -58,6 +58,9 @@ namespace ProjectBlock.View
                 });
             }
             TriggerSupurgeBlast();
+            // A resolved turn is the natural save point: the per-turn scratch state is at rest,
+            // which is exactly what the save format assumes (see RoundEngine.Save).
+            AutoSave();
         }
 
         /// <summary>Explosion sound + blast feedback for one turn. Deferred until after the

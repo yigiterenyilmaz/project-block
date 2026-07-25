@@ -106,13 +106,16 @@ namespace ProjectBlock.View
 
         private void ShowTitleMenu()
         {
+            // A save this build cannot read counts as no save, so CONTINUE is never offered
+            // for a file that would only fail (see SaveFileStore.HasLoadableSave).
+            MenuEntry continueEntry = SaveFileStore.HasLoadableSave()
+                ? MenuEntry.Of(Loc.Pick("CONTINUE", "DEVAM ET"))
+                : MenuEntry.Locked(Loc.Pick("CONTINUE", "DEVAM ET"),
+                    Loc.Pick("no saved run", "kayıtlı oyun yok"));
             var entries = new List<MenuEntry>
             {
                 MenuEntry.Of(Loc.Pick("PLAY", "OYNA")),
-                // EXTENSION POINT - SAVES: enabled once a run can be written to disk; the
-                // entry is shown disabled meanwhile so the feature is discoverable.
-                MenuEntry.Locked(Loc.Pick("CONTINUE", "DEVAM ET"),
-                    Loc.Pick("no saved run", "kayıtlı oyun yok")),
+                continueEntry,
                 MenuEntry.Of(Loc.Pick("HOW TO PLAY", "NASIL OYNANIR")),
                 MenuEntry.Of(Loc.Pick("SETTINGS", "AYARLAR")),
                 MenuEntry.Of(Loc.Pick("QUIT", "ÇIKIŞ"))
@@ -212,7 +215,8 @@ namespace ProjectBlock.View
                     deckSelect.Show(DeckLibrary.All, currentDeck);
                     break;
                 case TitleContinue:
-                    break; // disabled until saves exist - MenuScreenView never returns it
+                    ContinueSavedRun();
+                    break;
                 case TitleHowToPlay:
                     OpenHowToPlay(AppScreen.Title);
                     break;
@@ -269,6 +273,7 @@ namespace ProjectBlock.View
         {
             CancelDrag(); // a card held under the cursor must not stay stuck there
             HideTooltip();
+            AutoSave(); // pausing is the most likely moment before someone closes the game
             screen = AppScreen.Paused;
             ShowPauseMenu();
         }
@@ -346,6 +351,7 @@ namespace ProjectBlock.View
         {
             Debug.Log("[project_block] Run abandoned at round "
                 + (session != null ? session.RoundNumber : 0));
+            DiscardSave(); // abandoning is deliberate - CONTINUE must not offer it back
             session = null;
             GoToTitle();
         }

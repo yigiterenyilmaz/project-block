@@ -33,6 +33,10 @@ public static class SaveTests
         EveryPowerRoundTrips();
         EveryBossRoundTrips();
         ContentStateCarriesRealValues();
+        RunSaveLoadIsIdentical();
+        RestoredRunPlaysOnIdentically();
+        RestoredRunWithJokersAndPowers();
+        VersionMismatchIsRefused();
         Console.WriteLine(failures == 0
             ? "save tests: all passed"
             : "save tests: " + failures + " FAILED");
@@ -472,6 +476,199 @@ public static class SaveTests
             }
         }
         return poked;
+    }
+
+    // ------------------------------------------------------------ whole-run save/load
+
+    private static GameConfig NewConfig(int seed)
+    {
+        var config = new GameConfig();
+        config.RngSeed = seed;
+        return config;
+    }
+
+    /// <summary>Plays the same deterministic move the baseline driver plays: the first hand
+    /// card with a legal origin, at its first legal origin. Frozen cards are skipped, and the
+    /// board is asked where a block fits. Returns false when the run cannot continue.</summary>
+    private static bool PlayOneTurn(GameSession session)
+    {
+        if (session.Phase != GamePhase.Round)
+        {
+            return false;
+        }
+        RoundEngine round = session.CurrentRound;
+        if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+        {
+            round.DecideAdvance(true);
+            return true;
+        }
+        if (round.Status != RoundStatus.InProgress)
+        {
+            return false;
+        }
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.IsFrozen(round.Hand[i].Id))
+            {
+                continue;
+            }
+            var origins = round.GetValidOrigins(round.Hand[i].Shape);
+            if (origins.Count > 0)
+            {
+                round.PlayFromHand(i, origins[0]);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void PlayTurns(GameSession session, int turns)
+    {
+        for (int i = 0; i < turns; i++)
+        {
+            if (!PlayOneTurn(session))
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>A run's state summarised for comparison - if a load dropped anything, one of
+    /// these numbers moves.</summary>
+    private static string Describe(GameSession session)
+    {
+        RoundEngine round = session.CurrentRound;
+        var sb = new System.Text.StringBuilder();
+        sb.Append("phase=").Append(session.Phase)
+          .Append(" round=").Append(session.RoundNumber)
+          .Append(" total=").Append(session.TotalScore)
+          .Append(" owned=").Append(session.OwnedCards.Count)
+          .Append(" jokers=").Append(session.Jokers.Count)
+          .Append(" powers=").Append(session.Powers.Count)
+          .Append(" bosses=").Append(session.BossesFought.Count);
+        if (round != null)
+        {
+            sb.Append(" turn=").Append(round.TurnNumber)
+              .Append(" rscore=").Append(round.RoundScore)
+              .Append(" status=").Append(round.Status)
+              .Append(" hand=").Append(round.Hand.Count)
+              .Append(" draw=").Append(round.Deck.DrawCount)
+              .Append(" discard=").Append(round.Deck.DiscardCount)
+              .Append(" occupied=").Append(round.Board.OccupiedCount)
+              .Append(" dead=").Append(round.Board.DeadCellCount)
+              .Append(" board=").Append(round.Board.Width).Append('x').Append(round.Board.Height)
+              .Append(" recycles=").Append(round.DeckRecycleCount)
+              .Append(" sweeps=").Append(round.CleanSweepCount);
+        }
+        return sb.ToString();
+    }
+
+    private static void RunSaveLoadIsIdentical()
+    {
+        var session = new GameSession(NewConfig(4242));
+        PlayTurns(session, 25);
+        string text = SaveGame.Save(session);
+        GameSession loaded = SaveGame.Load(text, NewConfig(4242));
+
+        CheckEqual(Describe(session), Describe(loaded), "a loaded run matches the saved one");
+        // Saving the loaded run must reproduce the file byte for byte: anything the load
+        // dropped or invented shows up here even if the summary above missed it.
+        CheckEqual(text.Length, SaveGame.Save(loaded).Length, "re-saving gives the same size");
+        Check(text == SaveGame.Save(loaded), "re-saving a loaded run is byte-identical");
+    }
+
+    /// <summary>The real test of the restored rng: keep playing BOTH runs the same way and they
+    /// must stay in lockstep. A mis-restored random position diverges within a few turns.</summary>
+    private static void RestoredRunPlaysOnIdentically()
+    {
+        var session = new GameSession(NewConfig(99001));
+        PlayTurns(session, 30);
+        GameSession loaded = SaveGame.Load(SaveGame.Save(session), NewConfig(99001));
+
+        bool diverged = false;
+        for (int i = 0; i < 60; i++)
+        {
+            bool a = PlayOneTurn(session);
+            bool b = PlayOneTurn(loaded);
+            if (a != b || Describe(session) != Describe(loaded))
+            {
+                diverged = true;
+                Console.WriteLine("    diverged at continuation turn " + i);
+                Console.WriteLine("      original: " + Describe(session));
+                Console.WriteLine("      restored: " + Describe(loaded));
+                break;
+            }
+        }
+        Check(!diverged, "a restored run keeps playing identically for 60 more turns");
+    }
+
+    /// <summary>Same, with a loaded-up inventory: jokers and powers must come back with their
+    /// state AND without re-applying their permanent effects (a re-run OnAcquired would grow
+    /// the hand size on every load).</summary>
+    private static void RestoredRunWithJokersAndPowers()
+    {
+        var session = new GameSession(NewConfig(777));
+        foreach (JokerDefinition definition in JokerRegistry.All)
+        {
+            if (session.CanAcquireJoker(definition))
+            {
+                session.Jokers.Add(definition.Create());
+            }
+        }
+        foreach (PowerDefinition definition in PowerRegistry.All)
+        {
+            if (session.CanAcquirePower(definition))
+            {
+                session.Powers.Add(definition.Create());
+            }
+        }
+        Check(session.Jokers.Count > 0, "the test run holds jokers");
+        Check(session.Powers.Count > 0, "the test run holds powers");
+        PlayTurns(session, 20);
+
+        int handSizeBefore = session.Config.Rules.HandSize;
+        GameSession loaded = SaveGame.Load(SaveGame.Save(session), NewConfig(777));
+
+        CheckEqual(Describe(session), Describe(loaded), "a run with an inventory reloads intact");
+        CheckEqual(handSizeBefore, loaded.Config.Rules.HandSize,
+            "hand size is NOT re-granted on load");
+        CheckEqual(session.Jokers.Count, loaded.Jokers.Count, "joker count survives");
+        CheckEqual(session.Powers.Count, loaded.Powers.Count, "power count survives");
+        for (int i = 0; i < session.Jokers.Count; i++)
+        {
+            CheckEqual(session.Jokers.Jokers[i].DefId, loaded.Jokers.Jokers[i].DefId,
+                "joker " + i + " identity");
+            CheckEqual(session.Jokers.Jokers[i].InstanceId, loaded.Jokers.Jokers[i].InstanceId,
+                "joker " + i + " instance id");
+            CheckEqual(StateOf(session.Jokers.Jokers[i]), StateOf(loaded.Jokers.Jokers[i]),
+                "joker " + i + " state");
+        }
+        for (int i = 0; i < session.Powers.Count; i++)
+        {
+            CheckEqual(StateOf(session.Powers.Powers[i]), StateOf(loaded.Powers.Powers[i]),
+                "power " + i + " state");
+        }
+    }
+
+    private static void VersionMismatchIsRefused()
+    {
+        var session = new GameSession(NewConfig(5));
+        string text = SaveGame.Save(session);
+        Check(SaveGame.CanLoad(text), "a fresh save is loadable");
+        string stale = text.Replace("version=" + SaveGame.FormatVersion, "version=0");
+        Check(!SaveGame.CanLoad(stale), "a save from another version is not offered");
+        bool threw = false;
+        try
+        {
+            SaveGame.Load(stale, NewConfig(5));
+        }
+        catch (SaveFormatException)
+        {
+            threw = true;
+        }
+        Check(threw, "loading another version's save throws rather than half-loading");
+        Check(!SaveGame.CanLoad(null), "no save at all is not loadable");
+        Check(!SaveGame.CanLoad("garbage without an equals sign"), "garbage is not loadable");
     }
 
     private static void CardTableRejectsUnknownId()

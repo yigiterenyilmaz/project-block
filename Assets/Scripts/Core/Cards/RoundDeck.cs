@@ -14,7 +14,7 @@ using System.Collections.Generic;
 namespace ProjectBlock.Core
 {
     /// <summary>Draw/discard/removed piles for one round.</summary>
-    public sealed class RoundDeck
+    public sealed partial class RoundDeck
     {
         private readonly List<BlockCard> drawPile = new List<BlockCard>();
         private readonly List<BlockCard> discardPile = new List<BlockCard>();

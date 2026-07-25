@@ -216,6 +216,9 @@ namespace ProjectBlock.View
             HideTooltip();
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
             StartRoundPresentation();
+            // Overwrite any older save immediately: a new run supersedes it the moment it
+            // starts, even if the player quits before finishing a single turn.
+            AutoSave();
         }
 
         /// <summary>Board + HUD refresh with the round-start shuffle-and-deal animation.</summary>

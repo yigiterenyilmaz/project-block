@@ -95,6 +95,23 @@ namespace ProjectBlock.Core
         // ------------------------------------------------------------- acquire / remove
 
         /// <summary>Adds a joker and runs its OnAcquired. Charges start full.</summary>
+        /// <summary>Save/load only: the next instance id to hand out, so a restored run keeps
+        /// minting ids that cannot collide with the jokers it already holds.</summary>
+        internal int NextInstanceId
+        {
+            get { return nextInstanceId; }
+            set { nextInstanceId = value; }
+        }
+
+        /// <summary>Save/load only: puts a restored joker straight into the inventory.
+        /// Deliberately does NOT run OnAcquired - the permanent rule changes it makes ("Seri
+        /// tetik" granting +2 hand size) are already baked into the saved RoundRules, so
+        /// applying them again would compound them on every load.</summary>
+        internal void AddRestored(Joker joker)
+        {
+            jokers.Add(joker);
+        }
+
         public Joker Add(Joker joker)
         {
             if (joker == null)

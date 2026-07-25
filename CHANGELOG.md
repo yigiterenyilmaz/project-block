@@ -7,6 +7,25 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **Menus** — the game no longer drops you straight into a run. It boots to a **title screen**
+  (Play → deck select → run), **Escape pauses** mid-round (resume / restart / how to play /
+  settings / abandon), there is a **settings** screen (language, master volume, seed
+  random-or-pinned, turn logs — all persisted), a **how to play / controls** screen, and a real
+  **end-of-run summary** (final score, rounds survived, jokers, powers, bosses fought) instead
+  of the old one-line HUD message. Every screen is one reusable `MenuScreenView` on the existing
+  HUD canvas, mouse and keyboard drive the same selection, and all colours/metrics live in
+  `MenuSkin` so textures drop in later without touching layout code. **No debug tool was
+  removed** — every hotkey and the F2 grader work exactly as before.
+- **Save and continue** — a run can be saved at **any** point, mid-round included, and
+  **CONTINUE** on the title picks it up. It autosaves after every turn, when you pause, and on
+  quit; the save is dropped when the run ends or is abandoned. Everything travels: board (holes
+  and eroded cells kept distinct), piles, hand and bonus hand, score, status, dynamite/fox/
+  rotation/freeze memories, the rewind history Kum Saati reaches into, the erosion clock, the
+  market shelf, the boss, and every joker and power with its own internal state. The random
+  stream is restored by **replaying its draw log**, so a loaded run continues bit-for-bit
+  identically — verified by a test that plays 60 further turns in lockstep — and the `baseline`
+  regression trace is untouched. Saves from an older build are refused rather than migrated
+  (`SaveGame.FormatVersion`).
 - **Boss rounds** — every third round (3, 6, 9, 12, 15) now draws a **boss** that bends the rules
   against you for that round only. A run never fights the same boss twice, the draw is
   deterministic from the run seed, and the HUD names the boss and describes what it is doing.

@@ -9,7 +9,7 @@ using System.Collections.Generic;
 namespace ProjectBlock.Core
 {
     /// <summary>One full run of the game.</summary>
-    public sealed class GameSession
+    public sealed partial class GameSession
     {
         public GameConfig Config { get; }
         public GamePhase Phase { get; private set; }

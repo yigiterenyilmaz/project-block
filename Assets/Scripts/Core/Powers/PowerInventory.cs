@@ -61,6 +61,20 @@ namespace ProjectBlock.Core
             return null;
         }
 
+        /// <summary>Save/load only - see JokerInventory.NextInstanceId.</summary>
+        internal int NextInstanceId
+        {
+            get { return nextInstanceId; }
+            set { nextInstanceId = value; }
+        }
+
+        /// <summary>Save/load only: puts a restored power straight into the inventory, without
+        /// running OnAcquired (see JokerInventory.AddRestored).</summary>
+        internal void AddRestored(Power power)
+        {
+            powers.Add(power);
+        }
+
         public Power Add(Power power)
         {
             if (power == null)

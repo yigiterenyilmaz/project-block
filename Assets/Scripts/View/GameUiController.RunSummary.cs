@@ -41,6 +41,8 @@ namespace ProjectBlock.View
         {
             CancelDrag();
             HideTooltip();
+            // The run this save describes is finished, so CONTINUE must stop offering it.
+            DiscardSave();
             screen = AppScreen.RunOver;
             ShowRunSummary();
         }
