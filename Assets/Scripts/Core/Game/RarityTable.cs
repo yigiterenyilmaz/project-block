@@ -51,6 +51,7 @@ namespace ProjectBlock.Core
             { "genel_temizlik", Rarity.Common },
             { "hafiza", Rarity.Common },
             { "kolay_para", Rarity.Common },
+            { "kredi_karti", Rarity.Rare },
             { "cimbiz", Rarity.Common },
             { "caprazlama", Rarity.Common },
             { "eko", Rarity.Rare },

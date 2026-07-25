@@ -106,6 +106,13 @@ public static class JokerTests
         Boss_FedaMakesABonusCardCostTheHand();
         Boss_AnarsiSilencesEverythingRare();
         Boss_OburlukEatsOnlyWhenSlotsAreFull();
+        KrediKarti_BuysPastYourScoreAndRecordsTheDebt();
+        KrediKarti_RefusesCreditWithoutTheJoker();
+        KrediKarti_InterestCompoundsEveryRound();
+        KrediKarti_RepayIsManualAndMarketOnly();
+        KrediKarti_BossRoundWithOpenDebtEndsTheRun();
+        KrediKarti_ADebtFreeBossRoundIsFine();
+        KrediKarti_CannotBeSoldWhileInDebt();
         Boss_TerslikTurnsJokerPointsIntoLosses();
         Terslik_ATurnNeverPaysLessThanNothing();
         Terslik_LeavesJokersThatGiveNoPointsAlone();
@@ -3173,6 +3180,291 @@ public static class JokerTests
         // Renovasyon (common, charged) still runs, so the gate is not blanket-blocking.
         Check(session.Jokers.CanActivate(common.InstanceId),
             "the common joker is still activatable");
+    }
+
+    /// <summary>Runs a session forward until it is in the market or the run is over.</summary>
+    private static bool AdvanceToMarket(GameSession session, int maxTurns)
+    {
+        int guard = 0;
+        while (session.Phase == GamePhase.Round && guard++ < maxTurns)
+        {
+            if (session.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                session.CurrentRound.DecideAdvance(true);
+                continue;
+            }
+            if (session.CurrentRound.Status != RoundStatus.InProgress)
+            {
+                break;
+            }
+            if (PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        return session.Phase == GamePhase.Market;
+    }
+
+    /// <summary>Buys everything the run score alone covers. Leaves the player unable to afford
+    /// any remaining offer without borrowing.</summary>
+    private static void SpendEverythingAffordable(GameSession session)
+    {
+        bool bought = true;
+        while (bought)
+        {
+            bought = false;
+            for (int i = 0; i < session.Market.Offers.Count; i++)
+            {
+                MarketOffer offer = session.Market.Offers[i];
+                if (!offer.Sold && offer.Price <= session.TotalScore && session.TryBuyOffer(i))
+                {
+                    bought = true;
+                }
+            }
+        }
+    }
+
+    /// <summary>Drives a credit session into debt deterministically: spend what it has, then
+    /// keep rerolling. The reroll price escalates, so once it outruns the run score the credit
+    /// path has to book the shortfall.</summary>
+    private static void ForceDebt(GameSession session, int maxRerolls)
+    {
+        SpendEverythingAffordable(session);
+        for (int i = 0; i < maxRerolls && session.Debt == 0; i++)
+        {
+            if (!session.RerollMarket())
+            {
+                return;
+            }
+            SpendEverythingAffordable(session);
+        }
+    }
+
+    private static void KrediKarti_BuysPastYourScoreAndRecordsTheDebt()
+    {
+        Section("kredi kartı / buys past your score, the shortfall becomes debt");
+        var session = NewSession(6100, 6, 30, 40, 3);
+        Check(!session.CreditAvailable, "without the joker there is no credit");
+        session.Jokers.Add(new KrediKartiJoker());
+        Check(session.CreditAvailable, "with it there is");
+        Check(session.Debt == 0, "and nothing is owed yet");
+        Check(AdvanceToMarket(session, 400), "the run reached the market",
+            "phase " + session.Phase);
+
+        SpendEverythingAffordable(session);
+        Check(session.Debt == 0, "spending only what you have never borrows",
+            "debt " + session.Debt);
+
+        // Reroll (and spend the new stock) until the escalating price outruns the run score,
+        // so the NEXT one has to borrow. Every step so far was paid for in full.
+        int guard = 0;
+        while (session.NextRerollCost <= session.TotalScore && guard++ < 30)
+        {
+            session.RerollMarket();
+            SpendEverythingAffordable(session);
+        }
+        Check(session.Debt == 0, "everything so far was paid for outright",
+            "debt " + session.Debt);
+
+        // Now the exact arithmetic of one borrowed purchase.
+        long score = session.TotalScore;
+        long cost = session.NextRerollCost;
+        Check(cost > score, "the next reroll costs more than is left",
+            cost + " vs " + score);
+        Check(session.CanAfford(cost), "with credit it is affordable anyway");
+        Check(session.CanAfford(cost + 100000000), "in fact any price is");
+        Check(session.RerollMarket(), "and it goes through");
+        Check(session.TotalScore == 0, "the player's own points went first",
+            "score " + session.TotalScore);
+        Check(session.Debt == cost - score, "and exactly the shortfall was booked as debt",
+            "debt " + session.Debt + " expected " + (cost - score));
+    }
+
+    private static void KrediKarti_RefusesCreditWithoutTheJoker()
+    {
+        Section("kredi kartı / no joker, no credit");
+        var session = NewSession(6102, 6, 30, 40, 3);
+        Check(AdvanceToMarket(session, 400), "reached the market");
+        SpendEverythingAffordable(session);
+
+        bool boughtBroke = false;
+        for (int i = 0; i < session.Market.Offers.Count; i++)
+        {
+            if (session.Market.Offers[i].Price > session.TotalScore && session.TryBuyOffer(i))
+            {
+                boughtBroke = true;
+            }
+        }
+        Check(!boughtBroke, "an unaffordable offer is still refused");
+        Check(!session.CanAfford(session.TotalScore + 1), "and it is not even reported affordable");
+        Check(!session.RerollMarket() || session.Debt == 0,
+            "a reroll it cannot pay for is refused rather than borrowed");
+        Check(session.Debt == 0, "no debt appears out of nowhere", "debt " + session.Debt);
+    }
+
+    private static void KrediKarti_InterestCompoundsEveryRound()
+    {
+        Section("kredi kartı / the debt compounds 10% every round");
+        var session = NewSession(6103, 6, 30, 40, 3);
+        var card = (KrediKartiJoker)session.Jokers.Add(new KrediKartiJoker());
+        Check(AdvanceToMarket(session, 400), "reached the market");
+        ForceDebt(session, 12);
+        Check(session.Debt > 0, "there is a debt to charge interest on", "debt " + session.Debt);
+
+        long owed = session.Debt;
+        session.LeaveMarket();
+        Check(AdvanceToMarket(session, 400) || session.Phase == GamePhase.GameOver,
+            "played another round");
+        long expected = owed + (owed * card.InterestPercent + 99) / 100;
+        Check(session.Debt == expected, "one round of interest, rounded up",
+            owed + " -> " + session.Debt + " (expected " + expected + ")");
+        Check(session.Debt > owed, "so it really did grow");
+    }
+
+    private static void KrediKarti_RepayIsManualAndMarketOnly()
+    {
+        Section("kredi kartı / repaying is manual, and only in the market");
+        var session = NewSession(6104, 6, 30, 40, 3);
+        session.Jokers.Add(new KrediKartiJoker());
+        Check(AdvanceToMarket(session, 400), "reached the market");
+        ForceDebt(session, 12);
+        Check(session.Debt > 0, "there is a debt", "debt " + session.Debt);
+
+        // Earnings alone must NOT settle it - that is the whole decision the joker offers.
+        long owed = session.Debt;
+        session.LeaveMarket();
+        AdvanceToMarket(session, 400);
+        Check(session.Debt >= owed, "a round of earnings did not pay it off by itself",
+            owed + " -> " + session.Debt);
+        Check(session.TotalScore > 0, "the earnings went to the player instead",
+            "score " + session.TotalScore);
+
+        // Now pay, by hand.
+        long score = session.TotalScore;
+        long debt = session.Debt;
+        long paid = session.RepayDebt(debt);
+        Check(paid > 0, "paying moved money", "paid " + paid);
+        Check(session.Debt == debt - paid, "the debt fell by exactly that",
+            debt + " -> " + session.Debt);
+        Check(session.TotalScore == score - paid, "and the score fell by exactly that",
+            score + " -> " + session.TotalScore);
+        Check(session.RepayDebt(1000000) <= session.TotalScore + debt,
+            "you can never pay more than you have or owe");
+    }
+
+    private static void KrediKarti_BossRoundWithOpenDebtEndsTheRun()
+    {
+        Section("kredi kartı / a boss round that ends in debt ends the run");
+        var session = NewSession(6105, 6, 30, 40, 3);
+        session.Jokers.Add(new KrediKartiJoker());
+        // FixedProgression flags no boss rounds, so drive the deadline through the real curve.
+        var config = new GameConfig();
+        config.RngSeed = 6105;
+        config.Deck = new DeckDefinition("test", 40, new SizedShapeGenerator(1));
+        var real = new GameSession(config);
+        real.Config.Scoring.PointsPerCubePlaced = 500; // clear every threshold comfortably
+        real.Jokers.Add(new KrediKartiJoker());
+
+        int guard = 0;
+        bool sawDebt = false;
+        while (real.Phase != GamePhase.GameOver && real.Phase != GamePhase.RunWon && guard++ < 400)
+        {
+            if (real.Phase == GamePhase.Market)
+            {
+                // Borrow hard on the first market and never pay a lira back.
+                if (!sawDebt)
+                {
+                    ForceDebt(real, 40);
+                    sawDebt = real.Debt > 0;
+                }
+                real.LeaveMarket();
+                continue;
+            }
+            if (real.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                real.CurrentRound.DecideAdvance(true);
+                continue;
+            }
+            if (PlayTurns(real, 1) == 0) { break; }
+        }
+        Check(sawDebt, "the run really did take on debt", "debt " + real.Debt);
+        Check(real.Phase == GamePhase.GameOver, "and the run is over",
+            "phase " + real.Phase + " round " + real.RoundNumber);
+        Check(real.CurrentRound.Loss == LossReason.DebtNotRepaid,
+            "for the debt, not for the board",
+            "loss " + real.CurrentRound.Loss);
+        Check(real.CurrentRound.Config.IsBossRound,
+            "and it happened on a boss round", "round " + real.RoundNumber);
+        Check(real.CurrentRound.Status == RoundStatus.Advanced,
+            "the round itself was survived - the books were the problem",
+            "status " + real.CurrentRound.Status);
+    }
+
+    private static void KrediKarti_ADebtFreeBossRoundIsFine()
+    {
+        Section("kredi kartı / holding the joker without debt costs nothing");
+        var config = new GameConfig();
+        config.RngSeed = 6106;
+        config.Deck = new DeckDefinition("test", 40, new SizedShapeGenerator(1));
+        var session = new GameSession(config);
+        session.Config.Scoring.PointsPerCubePlaced = 500;
+        session.Jokers.Add(new KrediKartiJoker());
+
+        int guard = 0;
+        bool passedABoss = false;
+        while (session.Phase != GamePhase.GameOver && session.Phase != GamePhase.RunWon
+            && guard++ < 400)
+        {
+            if (session.Phase == GamePhase.Market) { session.LeaveMarket(); continue; }
+            if (session.CurrentRound.Config.IsBossRound
+                && session.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                passedABoss = true;
+            }
+            if (session.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                session.CurrentRound.DecideAdvance(true);
+                continue;
+            }
+            if (PlayTurns(session, 1) == 0) { break; }
+        }
+        Check(session.Debt == 0, "never borrowed, so nothing is owed");
+        Check(passedABoss, "a boss round was reached", "round " + session.RoundNumber);
+        Check(session.CurrentRound.Loss != LossReason.DebtNotRepaid,
+            "and the debt deadline never fired", "loss " + session.CurrentRound.Loss);
+    }
+
+    private static void KrediKarti_CannotBeSoldWhileInDebt()
+    {
+        Section("kredi kartı / it cannot be sold out from under the debt");
+        var session = NewSession(6107, 6, 30, 40, 3);
+        Joker card = session.Jokers.Add(new KrediKartiJoker());
+        Check(session.Jokers.CanSell(card), "with no debt it sells normally");
+
+        Check(AdvanceToMarket(session, 400), "reached the market");
+        ForceDebt(session, 12);
+        Check(session.Debt > 0, "there is a debt", "debt " + session.Debt);
+
+        Check(!session.Jokers.CanSell(card), "now the sale is refused");
+        long score = session.TotalScore;
+        int paidOut = session.Jokers.Sell(card);
+        Check(paidOut == 0, "selling pays nothing", "paid " + paidOut);
+        Check(session.Jokers.Find(card.InstanceId) != null, "and the joker is still there");
+        Check(session.TotalScore == score, "no money changed hands", "score " + session.TotalScore);
+        Check(session.Debt > 0, "the debt is untouched - there is no way out through the market");
+
+        // Pay it off and the lock lifts.
+        session.RepayDebtInFull();
+        if (session.Debt == 0)
+        {
+            Check(session.Jokers.CanSell(card), "once clear, it can be sold again");
+            Check(session.Jokers.Sell(card) > 0, "and the sale really goes through");
+        }
+        else
+        {
+            Check(!session.Jokers.CanSell(card),
+                "still short of the full amount, so still locked", "debt " + session.Debt);
+        }
     }
 
     private static void Boss_TerslikTurnsJokerPointsIntoLosses()
