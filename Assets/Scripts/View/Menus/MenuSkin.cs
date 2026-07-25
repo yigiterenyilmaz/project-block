@@ -62,5 +62,8 @@ namespace ProjectBlock.View
         public const int SubtitleFontSize = 24;
         public const int LabelFontSize = 30;
         public const int NoteFontSize = 19;
+
+        /// <summary>The reading screens (how to play, run summary).</summary>
+        public const int BodyFontSize = 21;
     }
 }

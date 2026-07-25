@@ -49,6 +49,10 @@ namespace ProjectBlock.View
         private const float TitleHeight = 90f;
         private const float SubtitleHeight = 34f;
 
+        // Reading-screen (ShowText) body block.
+        private const float BodyWidth = 1120f;
+        private const float BodyHeight = 620f;
+
         private sealed class Row
         {
             public GameObject Root;
@@ -134,6 +138,47 @@ namespace ProjectBlock.View
                 y -= MenuSkin.ButtonHeight + MenuSkin.ButtonGap;
             }
             Selected = FirstEnabled();
+            ApplyRowColors();
+        }
+
+        /// <summary>Draws a READING screen: a title, a left-aligned block of text, and a single
+        /// entry underneath (BACK). That entry is a normal row, so the usual click/arrow/Enter
+        /// input path drives this screen too - it is entry 0.</summary>
+        public void ShowText(string title, string body, string backLabel, Color backdropColor)
+        {
+            if (root == null)
+            {
+                return;
+            }
+            Clear();
+            IsOpen = true;
+            root.gameObject.SetActive(true);
+            root.SetAsLastSibling();
+
+            RectTransform backdrop = MakeImage(root, "Backdrop", Vector2.zero, Vector2.zero,
+                backdropColor, MenuSkin.BackdropSprite).rectTransform;
+            backdrop.anchorMin = Vector2.zero;
+            backdrop.anchorMax = Vector2.one;
+            backdrop.offsetMin = Vector2.zero;
+            backdrop.offsetMax = Vector2.zero;
+
+            float gap = MenuSkin.HeaderGap * 0.5f;
+            float y = (TitleHeight + gap + BodyHeight + gap + MenuSkin.ButtonHeight) * 0.5f;
+
+            MakeText(root, "Title", new Vector2(0f, y - TitleHeight * 0.5f),
+                new Vector2(BodyWidth, TitleHeight), title,
+                MenuSkin.TitleFontSize, MenuSkin.Title);
+            y -= TitleHeight + gap;
+
+            Text text = MakeText(root, "Body", new Vector2(0f, y - BodyHeight * 0.5f),
+                new Vector2(BodyWidth, BodyHeight), body,
+                MenuSkin.BodyFontSize, MenuSkin.Label);
+            text.alignment = TextAnchor.UpperLeft;
+            y -= BodyHeight + gap;
+
+            rows.Add(MakeRow(MenuEntry.Of(backLabel),
+                new Vector2(0f, y - MenuSkin.ButtonHeight * 0.5f)));
+            Selected = 0;
             ApplyRowColors();
         }
 

@@ -37,19 +37,25 @@ namespace ProjectBlock.View
 
             /// <summary>Player preferences. Reachable from the title AND from a paused run, so
             /// it remembers which one to go back to (settingsReturnTo).</summary>
-            Settings
+            Settings,
+
+            /// <summary>The controls / rules reading screen, reachable from the same two
+            /// places as Settings.</summary>
+            HowToPlay
         }
 
         // Entry order per menu. Named so the dispatches below never index by a bare number.
         private const int TitlePlay = 0;
         private const int TitleContinue = 1;
-        private const int TitleSettings = 2;
-        private const int TitleQuit = 3;
+        private const int TitleHowToPlay = 2;
+        private const int TitleSettings = 3;
+        private const int TitleQuit = 4;
 
         private const int PauseResume = 0;
         private const int PauseRestart = 1;
-        private const int PauseSettings = 2;
-        private const int PauseAbandon = 3;
+        private const int PauseHowToPlay = 2;
+        private const int PauseSettings = 3;
+        private const int PauseAbandon = 4;
 
         private AppScreen screen = AppScreen.Title;
         private MenuScreenView menu;
@@ -82,6 +88,9 @@ namespace ProjectBlock.View
                 case AppScreen.Settings:
                     ShowSettingsMenu();
                     break;
+                case AppScreen.HowToPlay:
+                    ShowHowToPlay();
+                    break;
                 default:
                     ShowTitleMenu();
                     break;
@@ -97,6 +106,7 @@ namespace ProjectBlock.View
                 // entry is shown disabled meanwhile so the feature is discoverable.
                 MenuEntry.Locked(Loc.Pick("CONTINUE", "DEVAM ET"),
                     Loc.Pick("no saved run", "kayıtlı oyun yok")),
+                MenuEntry.Of(Loc.Pick("HOW TO PLAY", "NASIL OYNANIR")),
                 MenuEntry.Of(Loc.Pick("SETTINGS", "AYARLAR")),
                 MenuEntry.Of(Loc.Pick("QUIT", "ÇIKIŞ"))
             };
@@ -120,6 +130,11 @@ namespace ProjectBlock.View
             if (screen == AppScreen.Settings)
             {
                 HandleSettingsInput(kb, mouse);
+                return;
+            }
+            if (screen == AppScreen.HowToPlay)
+            {
+                HandleHowToPlayInput(kb, mouse);
                 return;
             }
             // Escape closes the pause menu it opened.
@@ -187,6 +202,9 @@ namespace ProjectBlock.View
                     break;
                 case TitleContinue:
                     break; // disabled until saves exist - MenuScreenView never returns it
+                case TitleHowToPlay:
+                    OpenHowToPlay(AppScreen.Title);
+                    break;
                 case TitleSettings:
                     OpenSettings(AppScreen.Title);
                     break;
@@ -250,6 +268,7 @@ namespace ProjectBlock.View
             {
                 MenuEntry.Of(Loc.Pick("RESUME", "DEVAM ET")),
                 MenuEntry.Of(Loc.Pick("RESTART RUN", "BAŞTAN BAŞLA")),
+                MenuEntry.Of(Loc.Pick("HOW TO PLAY", "NASIL OYNANIR")),
                 MenuEntry.Of(Loc.Pick("SETTINGS", "AYARLAR")),
                 MenuEntry.Of(Loc.Pick("ABANDON RUN", "OYUNU BIRAK"))
             };
@@ -281,6 +300,9 @@ namespace ProjectBlock.View
                     break;
                 case PauseRestart:
                     RestartRun();
+                    break;
+                case PauseHowToPlay:
+                    OpenHowToPlay(AppScreen.Paused);
                     break;
                 case PauseSettings:
                     OpenSettings(AppScreen.Paused);
