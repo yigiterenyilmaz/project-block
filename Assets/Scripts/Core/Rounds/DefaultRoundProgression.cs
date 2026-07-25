@@ -1,9 +1,9 @@
 // PURPOSE: The difficulty curve - board size comes from a fixed table of round ranges, the
 // threshold grows geometrically.
 //
-// CONFIRMED DESIGN: the board-size table. Rounds 0-5 are played on 5x5, 6-11 on 7x7 and
-// 12-15 on 9x9. Round numbers are 1-BASED (there is no round 0 to play), so in practice the
-// first band covers rounds 1-5. A run that outlives the table keeps the last band's size.
+// CONFIRMED DESIGN: the board-size table. A run is 15 rounds, numbered 1-15, and the table
+// covers exactly that: rounds 1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9. A round past the table
+// keeps the last band's size, so nothing breaks if the run length ever grows.
 // TUNABLE PLACEHOLDER: the threshold numbers.
 
 using System;
@@ -16,10 +16,11 @@ namespace ProjectBlock.Core
     /// </summary>
     public sealed class DefaultRoundProgression : IRoundProgression
     {
-        /// <summary>The board-size table, in round order. Ranges are inclusive on both ends.</summary>
+        /// <summary>The board-size table, in round order. Ranges are inclusive on both ends and
+        /// together they cover the whole 15-round run.</summary>
         public BoardSizeBand[] BoardSizeBands =
         {
-            new BoardSizeBand(0, 5, 5),
+            new BoardSizeBand(1, 5, 5),
             new BoardSizeBand(6, 11, 7),
             new BoardSizeBand(12, 15, 9)
         };

@@ -2341,7 +2341,19 @@ public static class JokerTests
         Check(thirdBand, "rounds 12-15 are played on 9x9");
 
         Check(progression.BoardSizeFor(16) == 9 && progression.BoardSizeFor(40) == 9,
-            "a run past the table keeps the last band's size");
+            "a round past the table keeps the last band's size");
+        // The run is 15 rounds numbered 1-15, so the bands must tile it exactly: start at 1,
+        // end at 15, and leave no gap or overlap in between.
+        BoardSizeBand[] bands = progression.BoardSizeBands;
+        bool contiguous = bands[0].FirstRound == 1 && bands[bands.Length - 1].LastRound == 15;
+        int covered = bands[0].LastRound - bands[0].FirstRound + 1;
+        for (int i = 1; i < bands.Length; i++)
+        {
+            contiguous &= bands[i].FirstRound == bands[i - 1].LastRound + 1;
+            covered += bands[i].LastRound - bands[i].FirstRound + 1;
+        }
+        Check(contiguous && covered == 15, "the bands tile rounds 1-15 exactly",
+            "covered " + covered);
         Check(progression.GetRound(6).BoardWidth == 7 && progression.GetRound(5).BoardWidth == 5,
             "the step happens between round 5 and round 6");
         Check(progression.GetRound(12).BoardWidth == 9 && progression.GetRound(11).BoardWidth == 7,
@@ -2361,7 +2373,7 @@ public static class JokerTests
         {
             threwOnRoundZero = true;
         }
-        Check(threwOnRoundZero, "round numbers stay 1-based even though the first band starts at 0");
+        Check(threwOnRoundZero, "there is no round 0 - round numbers are 1-based");
     }
 
     private static void AllRegisteredJokers_HaveDistinctIdsAndText()

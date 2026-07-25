@@ -9,22 +9,28 @@ public alan, serbestçe ayarlanabilir.
 
 ## Güncel — oyun alanı boyutu artık sabit bir tablo (2026-07-25)
 
-Oyun alanı artık "her N roundda +1" diye büyümüyor; sabit round aralıklarında basamak
-atlıyor. Tasarımcının verdiği tablo (`DefaultRoundProgression.BoardSizeBands`, satırlar
-`BoardSizeBand` tipinde, iki uç da **dahil**):
+Bir run **15 round**, roundlar **1'den 15'e** numaralı (round 0 yok). Oyun alanı artık "her N
+roundda +1" diye büyümüyor; sabit round aralıklarında basamak atlıyor. Tasarımcının verdiği
+tablo (`DefaultRoundProgression.BoardSizeBands`, satırlar `BoardSizeBand` tipinde, iki uç da
+**dahil**):
 
-| round | oyun alanı |
-| ----- | ---------- |
-| 0–5   | 5x5        |
-| 6–11  | 7x7        |
-| 12–15 | 9x9        |
+| round | oyun alanı | kaç round |
+| ----- | ---------- | --------- |
+| 1–5   | 5x5        | 5         |
+| 6–11  | 7x7        | 6         |
+| 12–15 | 9x9        | 4         |
 
-Round numaraları kodda **1-tabanlı** — oynanacak bir round 0 yok, yani ilk bant pratikte
-1–5 roundlarını kapsıyor. Tablonun bittiği yerden sonrası (16+) son bandın boyutunda kalır,
-yani eğri sonda uçuruma düşmez.
+Bantlar 1–15'i boşluksuz ve üst üste binmeden döşüyor (5+6+4 = 15); test bunu tek tek
+doğruluyor. Tablonun ötesindeki bir round (16+) son bandın boyutunda kalır — run uzunluğu
+ileride büyürse hiçbir şey kırılmasın diye.
 
 Tablo veri: farklı bir eğri (patron roundu, varyant) yalnızca başka bir bant dizisi verir.
 `BaseBoardSize` / `MaxBoardSize` / `GrowBoardEveryNRounds` alanları kalktı.
+
+**Açık nokta:** run 15 roundluk olarak tasarlandı ama motorda hâlâ bir **bitiş/zafer koşulu
+yok** — `GameSession.LeaveMarket` round sayacını sınırsız artırıyor ve run yalnızca kaybederek
+bitiyor (`GamePhase.GameOver`). 15. round geçildiğinde ne olacağı (zafer ekranı, son skor,
+market açılıp açılmayacağı) tasarımcıya sorulacak.
 
 **Boyuta bağlı jokerlerde/güçlerde bu ne oynatıyor** (hiçbiri hata değil, hepsi denge
 gözlemi): Kayıt defteri eşiği `Width*Height` olduğu için ilk bantta 36 değil 25 küp;
