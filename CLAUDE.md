@@ -34,6 +34,11 @@ dropped that way once each.
   2. **Silencing is central**, like the overtime gate: `RoundEngine.IsSilencedByBoss` is checked
      by `JokerInventory.IsGated` and `PowerInventory`, so nothing is added/removed and no
      permanent effect gets undone and redone. Never test for a boss inside a joker or power.
+     **Inverting is central too** (`InvertsJokerScore`, "Terslik"): `JokerInventory` opens a
+     window around JOKER dispatch only, and inside it `ScoreBreakdown.AddFlat/AddMultiplier` and
+     `Joker.Accrue` run backwards. Powers, base values and the engine's own bookkeeping share
+     that breakdown and must never be caught by the window. A turn's `Total` floors at 0, so an
+     inverted joker can empty a turn but never push the round score backwards.
   3. **The boss moves last** — after the player's own end-of-turn effects, but BEFORE the
      threshold and dead-end checks, so what it does can genuinely decide the round.
   Beware: bosses make frozen cards and sealed cells routine, so any driver that plays a card

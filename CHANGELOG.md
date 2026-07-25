@@ -10,7 +10,7 @@ everything here is unreleased and balance numbers are still placeholders.
 - **Boss rounds** — every third round (3, 6, 9, 12, 15) now draws a **boss** that bends the rules
   against you for that round only. A run never fights the same boss twice, the draw is
   deterministic from the run seed, and the HUD names the boss and describes what it is doing.
-  All eleven:
+  All twelve:
   - **Alıkoyma** — seizes a random card in your hand every turn (never your last one).
   - **Mapus** — seals one random empty cell per turn: nothing can be placed there, and the row
     and column through it cannot be completed either.
@@ -25,8 +25,14 @@ everything here is unreleased and balance numbers are still placeholders.
   - **Kule** — the same, mirrored: only vertical clears score.
   - **Oburluk** — if your joker slots are full, one random joker goes silent for the round; same
     for your powers. A free slot keeps everything working.
-  Switched-off jokers/powers grey out in their bars (they keep their sell value), and a sealed
-  cell is drawn barred on the board (a cold lock, distinct from the red scar of an eroded cell).
+  - **Terslik** — your jokers turn on you: the points they would give you are taken from you
+    instead, and piggy banks leak value instead of filling. Jokers that hand out neither points
+    nor value are untouched and keep doing their job — Insider still reveals, Seri tetik still
+    holds the hand open. A turn can never pay less than nothing, so the worst it can do is make a
+    turn worthless; your round score never goes backwards, and a drained piggy bank stops at empty.
+  Switched-off jokers/powers grey out in their bars (they keep their sell value), a **reversed**
+  joker goes purple and is tagged TERS, and a sealed cell is drawn barred on the board (a cold
+  lock, distinct from the red scar of an eroded cell).
   Note that **Harcama vergisi hangs off the same trigger as board erosion** — an empty draw pile
   on that round costs you both cards and arena. Numbers are balance placeholders, as usual.
 - **A run is now 15 rounds** — surviving round 15 ends the run in victory (`GamePhase.RunWon`,
