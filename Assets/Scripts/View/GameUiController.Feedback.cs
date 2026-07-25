@@ -271,7 +271,25 @@ namespace ProjectBlock.View
             sb.Append("Seed ").Append(lastSeedUsed)
                 .Append(Loc.Pick("   Deck: ", "   Deste: ")).Append(currentDeck.Name).Append('\n');
             sb.Append(Loc.Pick("Round ", "Raunt ")).Append(session.RoundNumber)
-                .Append(Loc.Pick("   Turn ", "   Tur ")).Append(round.TurnNumber).Append('\n');
+                .Append(" / ").Append(session.Config.TotalRounds);
+            if (round.Config.IsBossRound)
+            {
+                sb.Append(Loc.Pick("  [BOSS", "  [PATRON"));
+                if (round.Boss != null)
+                {
+                    sb.Append(": ").Append(round.Boss.DisplayName);
+                    if (round.Boss.StatusText != null)
+                    {
+                        sb.Append(" - ").Append(round.Boss.StatusText);
+                    }
+                }
+                sb.Append(']');
+            }
+            sb.Append(Loc.Pick("   Turn ", "   Tur ")).Append(round.TurnNumber).Append('\n');
+            if (round.Boss != null)
+            {
+                sb.Append(round.Boss.Description).Append('\n');
+            }
             // RoundScore lives in the scaled economy; lift the threshold to match for display.
             sb.Append(Loc.Pick("Score ", "Puan ")).Append(round.RoundScore)
                 .Append(" / ").Append(round.Config.ScoreThreshold * session.Config.Scoring.ScoreScale);
@@ -366,6 +384,14 @@ namespace ProjectBlock.View
             {
                 case GamePhase.GameOver:
                     messageText.text = Loc.Pick("GAME OVER - ", "OYUN BİTTİ - ") + DescribeLoss(round.Loss)
+                        + Loc.Pick("\n[R] new run", "\n[R] yeni oyun");
+                    break;
+                case GamePhase.RunWon:
+                    messageText.text = Loc.Pick(
+                            "RUN COMPLETE! All ", "OYUN TAMAMLANDI! ")
+                        + session.Config.TotalRounds
+                        + Loc.Pick(" rounds survived.\nFinal score ", " rauntun hepsi geçildi.\nSon puan ")
+                        + session.TotalScore
                         + Loc.Pick("\n[R] new run", "\n[R] yeni oyun");
                     break;
                 case GamePhase.Market:

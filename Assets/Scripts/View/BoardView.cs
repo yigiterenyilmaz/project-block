@@ -18,6 +18,13 @@ namespace ProjectBlock.View
         /// <summary>A cell shuffle erosion ATE. Deliberately not hidden like an ordinary hole:
         /// the player has to see what the stalling cost them, and that its row/column is dead.</summary>
         private static readonly Color DeadColor = new Color(0.30f, 0.10f, 0.12f, 0.85f);
+
+        /// <summary>An empty cell a boss has sealed off ("Mapus") - it reads as barred, not
+        /// as a cube, because nothing can be placed there but nothing occupies it either.
+        /// Deliberately COLD, not another scar red: an eaten cell (DeadColor) is gone for good
+        /// and kills its line, while a seal lifts again next turn. The two can sit on the same
+        /// board, so they must not look alike.</summary>
+        private static readonly Color SealedColor = new Color(0.20f, 0.24f, 0.40f);
         private static readonly Color ValidPreviewColor = new Color(0.35f, 1f, 0.45f, 0.6f);
         private static readonly Color InvalidPreviewColor = new Color(1f, 0.35f, 0.35f, 0.6f);
         private static readonly Color ExplosionPreviewColor = new Color(1f, 0.78f, 0.25f, 0.65f);
@@ -296,7 +303,7 @@ namespace ProjectBlock.View
                     Cube? cube = board.GetCube(gp);
                     Color color = cube.HasValue
                         ? ViewUtil.CubeDisplayColor(cube.Value)
-                        : EmptyColor;
+                        : (board.IsSealed(gp) ? SealedColor : EmptyColor);
                     cellRenderers[x, y].color = color;
                     kindCache[x, y] = cube.HasValue ? cube.Value.Kind : (CubeKind?)null;
                     baseColorCache[x, y] = color;

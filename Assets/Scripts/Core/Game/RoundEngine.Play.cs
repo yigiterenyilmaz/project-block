@@ -1,4 +1,4 @@
-// PURPOSE: RoundEngine player-facing play API - shape/rotation/fox queries, playing a
+﻿// PURPOSE: RoundEngine player-facing play API - shape/rotation/fox queries, playing a
 // hand or bonus card, the advance decision, hand redraw/replace, and the hand
 // discard/refill primitives jokers reuse.
 
@@ -19,8 +19,8 @@ namespace ProjectBlock.Core
         /// may hang off the board). UI and play methods both use this.</summary>
         public bool CanPlaceCard(BlockCard card, GridPos origin)
         {
-            return Board.CanPlace(EffectiveShape(card), origin, card.Has(BlockElement.Ghost),
-                card.Has(BlockElement.Negative));
+            return Board.CanPlace(EffectiveShape(card), origin, Has(card, BlockElement.Ghost),
+                Has(card, BlockElement.Negative));
         }
 
         /// <summary>The shape this card currently places: fox reshapes replace the base
@@ -60,7 +60,7 @@ namespace ProjectBlock.Core
                 throw new ArgumentOutOfRangeException("handIndex");
             }
             BlockCard card = Hand[handIndex];
-            if (!ignoreMechanicalRequirement && !card.Has(BlockElement.Mechanical))
+            if (!ignoreMechanicalRequirement && !Has(card, BlockElement.Mechanical))
             {
                 throw new InvalidOperationException("Only mechanical blocks can rotate.");
             }
@@ -79,7 +79,7 @@ namespace ProjectBlock.Core
                 throw new ArgumentOutOfRangeException("handIndex");
             }
             BlockCard card = Hand[handIndex];
-            if (!card.Has(BlockElement.Fox))
+            if (!Has(card, BlockElement.Fox))
             {
                 throw new InvalidOperationException("Only fox blocks can be reshaped.");
             }

@@ -1,4 +1,4 @@
-// PURPOSE: RoundEngine.ResolvePlacement - the ordered turn resolver. KEEP THE ORDER
+﻿// PURPOSE: RoundEngine.ResolvePlacement - the ordered turn resolver. KEEP THE ORDER
 // STABLE: place+score, explode lines, clean sweep, gold upkeep, finalize score,
 // card disposition, hand refill, end-of-turn hooks, threshold + status.
 
@@ -50,13 +50,13 @@ namespace ProjectBlock.Core
             // 1. place + score. A NEGATIVE block places nothing - it erases what it covers
             // and goes with it - so it is resolved after the placement score below, which
             // would otherwise overwrite what the erasure earns.
-            bool negative = card.Has(BlockElement.Negative);
+            bool negative = Has(card, BlockElement.Negative);
             if (!negative)
             {
                 report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
-                    card.Has(BlockElement.Ghost));
+                    Has(card, BlockElement.Ghost));
             }
-            if (card.Has(BlockElement.Dynamite))
+            if (Has(card, BlockElement.Dynamite))
             {
                 var state = new DynamiteState();
                 state.FullSize = report.PlacedCells.Count;
@@ -237,7 +237,12 @@ namespace ProjectBlock.Core
                 {
                     DisposeCard(report.BurnedCard);
                 }
-                // Bonus plays do not refill the hand - the hand was not touched.
+                // Bonus plays do not refill the hand - the hand was not touched. Unless the
+                // boss says otherwise: "Feda" makes the whole hand the price of a bonus card.
+                if (Boss != null)
+                {
+                    Boss.OnBonusCardPlayed(currentTurn);
+                }
             }
             else
             {
@@ -257,6 +262,13 @@ namespace ProjectBlock.Core
             if (session != null)
             {
                 session.Powers.DispatchAfterTurnScored(currentTurn);
+            }
+            // The boss harasses last, after the player's own end-of-turn effects have run, but
+            // still BEFORE the threshold and dead-end checks - so what it does this turn can
+            // decide the round (a sealed cell or a frozen card may be the last straw).
+            if (Boss != null)
+            {
+                Boss.AfterTurnScored(currentTurn);
             }
 
             // 8.5 the arena erodes if the draw pile has run dry too often. After the hooks, so a

@@ -95,6 +95,23 @@ namespace ProjectBlock.Core
             return Deck.TakeCard(cardId);
         }
 
+        /// <summary>Pulls a card the run deck just lost out of this round too, so a tax bites
+        /// now instead of next round (GameSession.TaxOwnedCards). A card the player is HOLDING
+        /// is left alone: it vanishes at round end anyway, and yanking it out of the hand could
+        /// dead-end the round through no fault of the player's.</summary>
+        internal void TaxCardOutOfRound(BlockCard card)
+        {
+            if (card == null)
+            {
+                return;
+            }
+            BlockCard pulled = Deck.TakeCard(card.Id);
+            if (pulled != null)
+            {
+                Deck.RemoveFromRound(pulled);
+            }
+        }
+
         /// <summary>"Pull the earned score to the threshold": the round's contribution to the
         /// run-wide TotalScore is capped at the threshold and the local meter drops to it.
         /// Used by "İkinci şans" and "Totem" in overtime, where the score is above threshold.</summary>
@@ -135,30 +152,70 @@ namespace ProjectBlock.Core
         /// scoring when there is no dead zone.</summary>
         private int ScoreLineExplosionScored(LineExplosionResult explosion, int cubesExploded)
         {
-            int scoredLines = explosion.LineCount;
-            int scoredCubes = cubesExploded;
-            if (Rules.DeadZoneRows > 0)
+            return PriceLines(BuildLineScore(explosion, cubesExploded, true));
+        }
+
+        /// <summary>Splits an explosion into the counts a boss round prices ("Ufuk"/"Kule" pay
+        /// for one axis only). <paramref name="honourDeadZone"/> drops retro dead-zone rows and
+        /// cubes; the between-turn path passes false, keeping its long-standing behaviour.</summary>
+        private LineExplosionScore BuildLineScore(LineExplosionResult explosion, int cubesExploded,
+            bool honourDeadZone)
+        {
+            bool deadZone = honourDeadZone && Rules.DeadZoneRows > 0;
+            int scoredRows = 0;
+            for (int i = 0; i < explosion.Rows.Count; i++)
             {
-                int deadRows = 0;
-                for (int i = 0; i < explosion.Rows.Count; i++)
+                if (!deadZone || !IsDeadRow(explosion.Rows[i]))
                 {
-                    if (IsDeadRow(explosion.Rows[i]))
-                    {
-                        deadRows++;
-                    }
+                    scoredRows++;
                 }
-                int deadCubes = 0;
-                for (int i = 0; i < explosion.ExplodedCells.Count; i++)
-                {
-                    if (IsDeadRow(explosion.ExplodedCells[i].Y))
-                    {
-                        deadCubes++;
-                    }
-                }
-                scoredLines = System.Math.Max(0, explosion.LineCount - deadRows);
-                scoredCubes = System.Math.Max(0, cubesExploded - deadCubes);
             }
-            return scorer.ScoreLineExplosion(scoredLines, scoredCubes);
+            int deadCubes = 0;
+            int rowCubes = 0;
+            int columnCubes = 0;
+            for (int i = 0; i < explosion.ExplodedCells.Count; i++)
+            {
+                GridPos cell = explosion.ExplodedCells[i];
+                if (deadZone && IsDeadRow(cell.Y))
+                {
+                    deadCubes++;
+                    continue; // scores for nothing, on either axis
+                }
+                if (Contains(explosion.Rows, cell.Y))
+                {
+                    rowCubes++;
+                }
+                if (Contains(explosion.Columns, cell.X))
+                {
+                    columnCubes++;
+                }
+            }
+            int scoredCubes = System.Math.Max(0, cubesExploded - deadCubes);
+            return new LineExplosionScore(scoredRows, explosion.Columns.Count, scoredCubes,
+                rowCubes, columnCubes);
+        }
+
+        /// <summary>What those counts pay. The boss round gets the final say; with no boss this
+        /// is exactly the plain rule, so an ordinary round scores byte-identically to before.</summary>
+        private int PriceLines(LineExplosionScore lines)
+        {
+            if (Boss != null)
+            {
+                return Boss.ScoreLineExplosion(scorer, lines);
+            }
+            return scorer.ScoreLineExplosion(lines.Rows + lines.Columns, lines.Cubes);
+        }
+
+        private static bool Contains(IReadOnlyList<int> values, int value)
+        {
+            for (int i = 0; i < values.Count; i++)
+            {
+                if (values[i] == value)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>Retro/Tetris gravity, run after a placement's full rows have cleared: the rows

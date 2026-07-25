@@ -112,7 +112,8 @@ namespace ProjectBlock.Core
         {
             Power power = Find(instanceId);
             RoundEngine round = session.CurrentRound;
-            if (power == null || round == null || !power.Charged)
+            if (power == null || round == null || !power.Charged
+                || round.IsSilencedByBoss(power))
             {
                 return false;
             }
@@ -133,6 +134,10 @@ namespace ProjectBlock.Core
             if (power == null || round == null || !power.Charged)
             {
                 return false;
+            }
+            if (round.IsSilencedByBoss(power))
+            {
+                return false; // a boss round has this power switched off ("Anarşi", "Oburluk")
             }
             // A rescue power ONLY works in the dead-end pause; every other power only works
             // during normal play. The "one power per turn" budget does not apply to a rescue:
@@ -164,6 +169,7 @@ namespace ProjectBlock.Core
             for (int i = 0; i < powers.Count; i++)
             {
                 if (powers[i].IsDeadEndRescue && powers[i].Charged
+                    && !round.IsSilencedByBoss(powers[i])
                     && powers[i].CanRun(RoundCtx(round), ActivationTarget.None))
                 {
                     return true;
@@ -203,6 +209,11 @@ namespace ProjectBlock.Core
                 round.NotePowerUsed();
             }
             session.Jokers.DispatchPowerUsed(round, power.DefId);
+            if (round.Boss != null)
+            {
+                // The boss sees it last ("Özel tüketim vergisi" bills the deck for the use).
+                round.Boss.OnPowerUsed(RoundCtx(round), power.DefId);
+            }
             RaiseChanged();
             return true;
         }
@@ -280,10 +291,17 @@ namespace ProjectBlock.Core
         /// every power's AfterCleanSweep hook but grants no recharge.</summary>
         public void DispatchCleanSweep(TurnContext turn, bool recharge)
         {
+            // "Tükenmişlik": nothing refills a charge for the rest of the round, so even the
+            // powers' own economy - the sweep - pays them nothing.
+            bool blocked = turn.Round != null && turn.Round.PowerRechargeBlocked;
             Snapshot();
             for (int i = 0; i < dispatchBuffer.Count; i++)
             {
-                if (recharge)
+                if (turn.Round != null && turn.Round.IsSilencedByBoss(dispatchBuffer[i]))
+                {
+                    continue; // silenced by a boss round: no recharge, no hook
+                }
+                if (recharge && !blocked)
                 {
                     dispatchBuffer[i].Recharge();
                 }
@@ -297,6 +315,10 @@ namespace ProjectBlock.Core
             Snapshot();
             for (int i = 0; i < dispatchBuffer.Count; i++)
             {
+                if (turn.Round != null && turn.Round.IsSilencedByBoss(dispatchBuffer[i]))
+                {
+                    continue;
+                }
                 dispatchBuffer[i].AfterTurnScored(turn);
             }
             RaiseChanged();
@@ -306,11 +328,27 @@ namespace ProjectBlock.Core
         /// pays the powers' economy without running the full per-turn sweep dispatch.</summary>
         public void RechargeAll()
         {
+            if (RechargeBlocked)
+            {
+                return;
+            }
             for (int i = 0; i < powers.Count; i++)
             {
                 powers[i].Recharge();
             }
             RaiseChanged();
+        }
+
+        /// <summary>True while a boss round forbids every refill ("Tükenmişlik"). Guards every
+        /// IN-ROUND recharge path; the charge a power starts a round with is not affected,
+        /// because that one is handed out before the boss takes over.</summary>
+        private bool RechargeBlocked
+        {
+            get
+            {
+                RoundEngine round = session != null ? session.CurrentRound : null;
+                return round != null && round.PowerRechargeBlocked;
+            }
         }
 
         /// <summary>Spends a specific power's charge by instance id ("Hileli zar", which is
@@ -333,7 +371,7 @@ namespace ProjectBlock.Core
         public bool Recharge(int instanceId)
         {
             Power power = Find(instanceId);
-            if (power == null || power.Charged)
+            if (power == null || power.Charged || RechargeBlocked)
             {
                 return false;
             }
@@ -360,6 +398,10 @@ namespace ProjectBlock.Core
         /// power is already charged, so the joker does not waste its own charge.</summary>
         public bool RechargeOne()
         {
+            if (RechargeBlocked)
+            {
+                return false; // "Powerbank" keeps its own charge rather than wasting it
+            }
             for (int i = 0; i < powers.Count; i++)
             {
                 if (!powers[i].Charged)

@@ -1,4 +1,4 @@
-// Targeted tests for the joker framework and the wave-1 jokers. Compiled INTO the Core
+﻿// Targeted tests for the joker framework and the wave-1 jokers. Compiled INTO the Core
 // assembly, so internal members (TurnReport setters, engine internals) are reachable.
 
 using System;
@@ -97,6 +97,19 @@ public static class JokerTests
         Erosion_AddedCellsStillDoNotKillLines();
         Erosion_RealPlayRunsTheClockAndEndsTheRound();
         Progression_BoardSizeStepsWithTheRoundBands();
+        RunLength_FifteenRoundsThenRunWon();
+        BossRounds_FlaggedEveryThirdRound();
+        Boss_DrawnOncePerRunAndOnlyOnFlaggedRounds();
+        Boss_UfukAndKulePayForOneAxisOnly();
+        Boss_AlikoymaSeizesACardButNeverTheLast();
+        Boss_MapusSealsOneCellPerTurn();
+        Boss_FedaMakesABonusCardCostTheHand();
+        Boss_AnarsiSilencesEverythingRare();
+        Boss_OburlukEatsOnlyWhenSlotsAreFull();
+        Boss_TukenmislikStopsEveryRefill();
+        Boss_VanilyaStripsEveryElement();
+        Boss_TaxesTakeCardsOutOfTheRunDeck();
+        Boss_HarcamaVergisiAndErosionShareTheSameTrigger();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
 
@@ -233,6 +246,14 @@ public static class JokerTests
         return BlockShape.FromCells(cells);
     }
 
+    /// <summary>True once a run has finished, either way (lost OR won). Every driver loop below
+    /// waits on this: a new terminal phase that is not listed here would leave them spinning to
+    /// their safety cap instead of stopping.</summary>
+    private static bool RunIsOver(GameSession session)
+    {
+        return session.Phase == GamePhase.GameOver || session.Phase == GamePhase.RunWon;
+    }
+
     /// <summary>Plays greedily until the round leaves InProgress or the cap is hit.</summary>
     private static int PlayTurns(GameSession session, int maxTurns)
     {
@@ -275,6 +296,10 @@ public static class JokerTests
     {
         for (int i = 0; i < round.Hand.Count; i++)
         {
+            if (round.IsFrozen(round.Hand[i].Id))
+            {
+                continue; // frozen cards cannot be played (see PlayTurns)
+            }
             var origins = round.GetValidOrigins(round.Hand[i].Shape);
             if (origins.Count > 0)
             {
@@ -1622,12 +1647,17 @@ public static class JokerTests
             "cells " + tilsim.ConvertedCellCount);
 
         // The claimed ground reaches the next board through RoundConfig.
-        var config = new RoundConfig(2, 6, 6, 100);
+        var config = new RoundConfig(2, 6, 6, 100, null, ShuffleErosion.FromCenter, true);
         RoundConfig grown = tilsim.FilterRoundConfig(
             new SessionContext(session, session.Rng), config);
         Check(grown.ExtraPlayableCells.Count == tilsim.ConvertedCellCount,
             "the next round gets the extra cells",
             "cells " + grown.ExtraPlayableCells.Count);
+        // A filter REBUILDS the config, so every field it does not care about has to come
+        // across untouched - that is what RoundConfig.WithBoard is for.
+        Check(grown.IsBossRound, "the boss flag survives tilsim's round-config filter");
+        Check(grown.Erosion == ShuffleErosion.FromCenter,
+            "and so does the erosion style", "erosion " + grown.Erosion);
     }
 
     private static void Inflation_GrowsThenSqueezesBack()
@@ -2668,6 +2698,749 @@ public static class JokerTests
         Check(threwOnRoundZero, "there is no round 0 - round numbers are 1-based");
     }
 
+    private static void RunLength_FifteenRoundsThenRunWon()
+    {
+        Section("run length / 15 rounds, then RunWon");
+        GameSession session = NewSession(4242, 4, 1, 30, 1);
+        // Placement scores nothing by default, so one cube would never clear even a threshold
+        // of 1; with a point per cube every round is won on its first turn.
+        session.Config.Scoring.PointsPerCubePlaced = 1;
+        Check(session.Config.TotalRounds == 15, "a run is 15 rounds long",
+            "" + session.Config.TotalRounds);
+
+        int markets = 0;
+        int safety = 0;
+        while (!RunIsOver(session) && safety++ < 400)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                markets++;
+                session.LeaveMarket();
+                continue;
+            }
+            RoundEngine playing = session.CurrentRound;
+            if (playing.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                playing.DecideAdvance(true);
+                continue;
+            }
+            if (playing.Status != RoundStatus.InProgress || PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+
+        Check(session.Phase == GamePhase.RunWon, "surviving the last round wins the run",
+            "phase " + session.Phase);
+        Check(session.RoundNumber == 15, "the run ends on round 15",
+            "round " + session.RoundNumber);
+        Check(markets == 14, "one market between each pair of rounds, none after the last",
+            "markets " + markets);
+        Check(session.CurrentRound.Loss == null, "a won run carries no loss reason",
+            "loss " + session.CurrentRound.Loss);
+
+        // There is no market to leave once the run is won (the phase check catches this one).
+        Check(RefusesToLeaveMarket(session), "no market to leave after the run is won");
+
+        // The run length is an invariant, not just a UI convention: a session sitting in a market
+        // whose round IS the last one must refuse to start another round. That state is only
+        // reachable by shortening the run mid-flight, which is exactly why the guard exists.
+        GameSession shortened = NewSession(4245, 4, 1, 30, 1);
+        shortened.Config.Scoring.PointsPerCubePlaced = 1;
+        PlayTurns(shortened, 1);
+        if (shortened.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+        {
+            shortened.CurrentRound.DecideAdvance(true);
+        }
+        Check(shortened.Phase == GamePhase.Market, "a short run reached its first market",
+            "phase " + shortened.Phase);
+        shortened.Config.TotalRounds = shortened.RoundNumber; // pretend this was the last round
+        Check(RefusesToLeaveMarket(shortened),
+            "LeaveMarket refuses to walk past the final round");
+
+        // Losing the FINAL round is still a loss - RunWon is only for surviving it.
+        GameSession lost = DriveToFinalRound(4243);
+        Check(lost.RoundNumber == 15 && lost.Phase == GamePhase.Round,
+            "a second run reaches the final round",
+            "round " + lost.RoundNumber + " phase " + lost.Phase);
+        lost.CurrentRound.DeclareLoss(LossReason.NoPlayableMove);
+        Check(lost.Phase == GamePhase.GameOver,
+            "losing the final round is GameOver, not RunWon", "phase " + lost.Phase);
+    }
+
+    /// <summary>True when LeaveMarket refuses (throws) instead of starting another round.</summary>
+    private static bool RefusesToLeaveMarket(GameSession session)
+    {
+        try
+        {
+            session.LeaveMarket();
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>Plays the cheapest possible run (one turn per round) up to the START of the
+    /// final round, leaving it InProgress.</summary>
+    private static GameSession DriveToFinalRound(int seed)
+    {
+        GameSession session = NewSession(seed, 4, 1, 30, 1);
+        session.Config.Scoring.PointsPerCubePlaced = 1;
+        int safety = 0;
+        while (!session.IsFinalRound && !RunIsOver(session) && safety++ < 400)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                session.LeaveMarket();
+                continue;
+            }
+            RoundEngine round = session.CurrentRound;
+            if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                round.DecideAdvance(true);
+                continue;
+            }
+            if (round.Status != RoundStatus.InProgress || PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        return session;
+    }
+
+    private static void Boss_DrawnOncePerRunAndOnlyOnFlaggedRounds()
+    {
+        Section("boss / drawn per flagged round, never twice in a run");
+        var config = new GameConfig();
+        config.RngSeed = 5150;
+        config.Deck = new DeckDefinition("test", 30, new SizedShapeGenerator(1));
+        config.Scoring.PointsPerCubePlaced = 1;
+        var session = new GameSession(config); // real progression -> rounds 3,6,9,12,15 are bosses
+        Check(session.CurrentRound.Boss == null, "round 1 has no boss",
+            "boss " + session.CurrentRound.Boss);
+
+        var bossRounds = new List<int>();
+        int safety = 0;
+        while (!RunIsOver(session) && safety++ < 2000)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                session.LeaveMarket();
+                if (session.CurrentRound.Boss != null)
+                {
+                    bossRounds.Add(session.RoundNumber);
+                }
+                Check(session.CurrentRound.Config.IsBossRound == (session.CurrentRound.Boss != null),
+                    "round " + session.RoundNumber + ": a boss exists exactly when flagged");
+                continue;
+            }
+            RoundEngine round = session.CurrentRound;
+            if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                round.DecideAdvance(true);
+                continue;
+            }
+            // A boss round may be unwinnable for this dumb driver; stop at the first stall.
+            if (round.Status != RoundStatus.InProgress || PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        Check(bossRounds.Count > 0, "the run met at least one boss", "met " + bossRounds.Count);
+        bool allThirds = true;
+        for (int i = 0; i < bossRounds.Count; i++)
+        {
+            if (bossRounds[i] % 3 != 0)
+            {
+                allThirds = false;
+            }
+        }
+        Check(allThirds, "every boss landed on a third round", string.Join(",", bossRounds));
+
+        // No repeats until the catalogue is exhausted. With all 11 bosses written and only five
+        // boss rounds in a run that means never; while fewer are registered the draw is allowed
+        // to wrap, which is exactly the documented fallback.
+        int distinctExpected = Math.Min(BossRegistry.All.Count, session.BossesFought.Count);
+        var firstDraws = new HashSet<string>();
+        for (int i = 0; i < distinctExpected; i++)
+        {
+            firstDraws.Add(session.BossesFought[i]);
+        }
+        Check(firstDraws.Count == distinctExpected,
+            "the first " + distinctExpected + " bosses of the run are all different",
+            string.Join(",", session.BossesFought));
+        Check(session.BossesFought.Count == bossRounds.Count,
+            "one boss drawn per boss round",
+            "drawn " + session.BossesFought.Count + " rounds " + bossRounds.Count);
+
+        // Same seed, same bosses: selection must be deterministic.
+        var replayConfig = new GameConfig();
+        replayConfig.RngSeed = 5150;
+        replayConfig.Deck = new DeckDefinition("test", 30, new SizedShapeGenerator(1));
+        var replay = new GameSession(replayConfig);
+        replay.Config.Scoring.PointsPerCubePlaced = 1;
+        int guard = 0;
+        while (replay.RoundNumber < 3 && !RunIsOver(replay) && guard++ < 200)
+        {
+            if (replay.Phase == GamePhase.Market) { replay.LeaveMarket(); continue; }
+            if (replay.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                replay.CurrentRound.DecideAdvance(true);
+                continue;
+            }
+            if (PlayTurns(replay, 1) == 0) { break; }
+        }
+        Check(replay.CurrentRound.Boss != null && session.BossesFought.Count > 0
+            && replay.CurrentRound.Boss.DefId == session.BossesFought[0],
+            "the same seed draws the same first boss",
+            "replay " + (replay.CurrentRound.Boss != null ? replay.CurrentRound.Boss.DefId : "none"));
+    }
+
+    private static void Boss_UfukAndKulePayForOneAxisOnly()
+    {
+        Section("boss / ufuk pays rows, kule pays columns");
+        // A 4x4 board, 4-cube bars: playing four of them fills the board, and the LAST one
+        // completes its own row plus all four columns at once - a mixed-axis explosion.
+        var scorer = new DefaultScoreCalculator(new ScoringConfig());
+        var ufuk = new UfukBoss();
+        var kule = new KuleBoss();
+
+        // rows only: 2 rows, no columns, 8 cubes (4 per row)
+        var rowsOnly = new LineExplosionScore(2, 0, 8, 8, 0);
+        Check(ufuk.ScoreLineExplosion(scorer, rowsOnly) > 0, "ufuk pays for a rows-only clear",
+            "" + ufuk.ScoreLineExplosion(scorer, rowsOnly));
+        Check(kule.ScoreLineExplosion(scorer, rowsOnly) == 0,
+            "kule pays nothing for a rows-only clear",
+            "" + kule.ScoreLineExplosion(scorer, rowsOnly));
+
+        // columns only
+        var colsOnly = new LineExplosionScore(0, 2, 8, 0, 8);
+        Check(kule.ScoreLineExplosion(scorer, colsOnly) > 0, "kule pays for a columns-only clear",
+            "" + kule.ScoreLineExplosion(scorer, colsOnly));
+        Check(ufuk.ScoreLineExplosion(scorer, colsOnly) == 0,
+            "ufuk pays nothing for a columns-only clear",
+            "" + ufuk.ScoreLineExplosion(scorer, colsOnly));
+
+        // Mixed clears: each boss must price its OWN axis and be blind to the other one. Two
+        // scores that differ only in the off-axis must therefore pay exactly the same.
+        var mixedA = new LineExplosionScore(1, 2, 20, 5, 9);
+        var moreRows = new LineExplosionScore(4, 2, 40, 17, 9);   // same columns, more rows
+        var moreCols = new LineExplosionScore(1, 6, 40, 5, 25);   // same rows, more columns
+        Check(kule.ScoreLineExplosion(scorer, mixedA) == kule.ScoreLineExplosion(scorer, moreRows),
+            "kule is blind to how many rows also went",
+            kule.ScoreLineExplosion(scorer, mixedA) + " vs "
+                + kule.ScoreLineExplosion(scorer, moreRows));
+        Check(ufuk.ScoreLineExplosion(scorer, mixedA) == ufuk.ScoreLineExplosion(scorer, moreCols),
+            "ufuk is blind to how many columns also went",
+            ufuk.ScoreLineExplosion(scorer, mixedA) + " vs "
+                + ufuk.ScoreLineExplosion(scorer, moreCols));
+        Check(ufuk.ScoreLineExplosion(scorer, mixedA)
+            == (int)(scorer.ScoreLineExplosion(1, 5) * ufuk.RowBonus),
+            "ufuk prices a mixed clear as its rows alone, plus the bonus",
+            "" + ufuk.ScoreLineExplosion(scorer, mixedA));
+        Check(kule.ScoreLineExplosion(scorer, mixedA)
+            == (int)(scorer.ScoreLineExplosion(2, 9) * kule.ColumnBonus),
+            "kule prices a mixed clear as its columns alone, plus the bonus",
+            "" + kule.ScoreLineExplosion(scorer, mixedA));
+
+        // The bonus really is a bonus: one row under Ufuk beats one row unmodified.
+        var oneRow = new LineExplosionScore(1, 0, 4, 4, 0);
+        Check(ufuk.ScoreLineExplosion(scorer, oneRow) > scorer.ScoreLineExplosion(1, 4),
+            "ufuk's own axis pays above the plain rate",
+            "boss " + ufuk.ScoreLineExplosion(scorer, oneRow)
+                + " plain " + scorer.ScoreLineExplosion(1, 4));
+
+        // And end to end through a real round: the same rows-only clear, with and without Kule.
+        TurnReport plainLast = FillBottomRow(NewSession(5151, 4, 1000000, 40, 1), null);
+        TurnReport kuleLast = FillBottomRow(NewSession(5151, 4, 1000000, 40, 1), new KuleBoss());
+        TurnReport ufukLast = FillBottomRow(NewSession(5151, 4, 1000000, 40, 1), new UfukBoss());
+        Check(plainLast != null && plainLast.ExplodedRows.Count == 1
+            && plainLast.ExplodedColumns.Count == 0, "filling the bottom row clears one row only",
+            plainLast == null ? "no turn" : "rows " + plainLast.ExplodedRows.Count
+                + " cols " + plainLast.ExplodedColumns.Count);
+        Check(plainLast != null && plainLast.Score.BaseLines > 0, "a plain round pays for that row",
+            plainLast == null ? "no turn" : "lines " + plainLast.Score.BaseLines);
+        Check(kuleLast != null && kuleLast.Score.BaseLines == 0,
+            "kule pays nothing for a row clear",
+            kuleLast == null ? "no turn" : "lines " + kuleLast.Score.BaseLines);
+        Check(ufukLast != null && plainLast != null
+            && ufukLast.Score.BaseLines > plainLast.Score.BaseLines,
+            "ufuk pays MORE than plain for that same row",
+            (ufukLast == null ? "no turn" : "ufuk " + ufukLast.Score.BaseLines)
+                + " plain " + (plainLast == null ? "?" : "" + plainLast.Score.BaseLines));
+    }
+
+    /// <summary>Plays four 1x1 cards along the bottom row of a 4-wide board, which completes
+    /// that row and nothing else. Returns the clearing turn's report.</summary>
+    private static TurnReport FillBottomRow(GameSession session, BossRound boss)
+    {
+        if (boss != null)
+        {
+            session.CurrentRound.SetBoss(boss);
+        }
+        RoundEngine round = session.CurrentRound;
+        TurnReport last = null;
+        for (int x = 0; x < 4; x++)
+        {
+            last = round.PlayFromHand(0, new GridPos(x, 0));
+        }
+        return last;
+    }
+
+    private static void Boss_AlikoymaSeizesACardButNeverTheLast()
+    {
+        Section("boss / alikoyma holds a card back");
+        var session = NewSession(5160, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = new AlikoymaBoss();
+        round.SetBoss(boss);
+        boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+
+        Check(boss.SeizedCardId != 0, "it seizes a card at round start",
+            "seized " + boss.SeizedCardId);
+        Check(round.IsFrozen(boss.SeizedCardId), "the seized card is frozen");
+        int frozenNow = 0;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.IsFrozen(round.Hand[i].Id))
+            {
+                frozenNow++;
+            }
+        }
+        Check(frozenNow == 1, "exactly one card is held at a time", "frozen " + frozenNow);
+
+        // The seized card cannot be played, and the hold moves on after the turn resolves.
+        int seized = boss.SeizedCardId;
+        int seizedIndex = -1;
+        int freeIndex = -1;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.Hand[i].Id == seized) { seizedIndex = i; }
+            else if (freeIndex < 0) { freeIndex = i; }
+        }
+        bool refused = false;
+        try
+        {
+            round.PlayFromHand(seizedIndex, new GridPos(0, 0));
+        }
+        catch (InvalidOperationException)
+        {
+            refused = true;
+        }
+        Check(refused, "the held card refuses to be played");
+        round.PlayFromHand(freeIndex, new GridPos(0, 0));
+        Check(!round.IsFrozen(seized), "the old hold expired when the turn resolved");
+        Check(boss.SeizedCardId != 0 && round.IsFrozen(boss.SeizedCardId),
+            "and a fresh card is held for the next turn");
+
+        // A one-card hand is left alone, or the boss would take the last option away.
+        var solo = NewSession(5161, 6, 1000000, 40, 1);
+        solo.Config.Rules.HandSize = 1;
+        var soloBoss = new AlikoymaBoss();
+        solo.CurrentRound.SetBoss(soloBoss);
+        while (solo.CurrentRound.Hand.Count > 1)
+        {
+            solo.CurrentRound.DiscardWholeHand();
+            solo.CurrentRound.RefillHandToSize();
+        }
+        soloBoss.OnRoundStarted(new RoundContext(solo, solo.Rng, solo.CurrentRound));
+        Check(soloBoss.SeizedCardId == 0, "a single-card hand is never seized",
+            "seized " + soloBoss.SeizedCardId);
+    }
+
+    private static void Boss_MapusSealsOneCellPerTurn()
+    {
+        Section("boss / mapus seals a cell");
+        var session = NewSession(5162, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = new MapusBoss();
+        round.SetBoss(boss);
+        boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+
+        Check(boss.HasSeal, "a cell is sealed at round start");
+        GridPos sealed1 = boss.SealedCell;
+        Check(round.Board.IsSealed(sealed1), "the board knows the cell is sealed",
+            sealed1.X + "," + sealed1.Y);
+        Check(round.Board.SealedCells.Count == 1, "exactly one cell is sealed",
+            "count " + round.Board.SealedCells.Count);
+        Check(!round.Board.GetCube(sealed1).HasValue, "a sealed cell holds no cube");
+
+        // Placement refuses it, and so does every path that asks the board where a block fits.
+        Check(!round.CanPlaceCard(round.Hand[0], sealed1), "a block cannot be placed on it");
+        Check(!round.Board.CanPlace(round.Hand[0].Shape, sealed1), "CanPlace refuses it directly");
+        List<GridPos> origins = round.GetValidOrigins(round.Hand[0].Shape);
+        bool offered = false;
+        for (int i = 0; i < origins.Count; i++)
+        {
+            if (origins[i].X == sealed1.X && origins[i].Y == sealed1.Y)
+            {
+                offered = true;
+            }
+        }
+        Check(!offered, "the sealed cell is not offered as a legal origin");
+        Check(origins.Count == round.Board.PlayableCellCount - 1,
+            "every OTHER empty cell is still legal",
+            "origins " + origins.Count + " cells " + round.Board.PlayableCellCount);
+
+        // The seal moves each turn and never accumulates.
+        round.PlayFromHand(0, origins[0]);
+        Check(round.Board.SealedCells.Count == 1, "still exactly one cell after a turn",
+            "count " + round.Board.SealedCells.Count);
+        bool oldSealLifted = !round.Board.IsSealed(sealed1)
+            || (boss.HasSeal && boss.SealedCell.X == sealed1.X && boss.SealedCell.Y == sealed1.Y);
+        Check(oldSealLifted, "the previous seal is gone unless it was re-picked",
+            "old " + sealed1.X + "," + sealed1.Y + " new " + boss.SealedCell.X + "," + boss.SealedCell.Y);
+    }
+
+    private static void Boss_FedaMakesABonusCardCostTheHand()
+    {
+        Section("boss / feda sacrifices the hand");
+        var session = NewSession(5163, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(new FedaBoss());
+
+        BlockCard bonus = session.CreateCard(Bar(1), null);
+        round.AddBonusCard(bonus, BonusPlayOutcome.ToDiscard);
+        var heldBefore = new List<int>();
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            heldBefore.Add(round.Hand[i].Id);
+        }
+        int discardBefore = round.Deck.DiscardCount;
+
+        round.PlayFromBonus(0, new GridPos(0, 0));
+
+        Check(round.Hand.Count == session.Config.Rules.HandSize,
+            "a fresh hand was dealt", "hand " + round.Hand.Count);
+        bool anyKept = false;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (heldBefore.Contains(round.Hand[i].Id))
+            {
+                anyKept = true;
+            }
+        }
+        Check(!anyKept, "none of the sacrificed cards is still in hand");
+        Check(round.Deck.DiscardCount > discardBefore,
+            "the sacrificed hand went to the discard",
+            discardBefore + " -> " + round.Deck.DiscardCount);
+
+        // Without the boss a bonus play leaves the hand exactly as it was.
+        var plain = NewSession(5163, 6, 1000000, 40, 1);
+        BlockCard plainBonus = plain.CreateCard(Bar(1), null);
+        plain.CurrentRound.AddBonusCard(plainBonus, BonusPlayOutcome.ToDiscard);
+        int firstHeld = plain.CurrentRound.Hand[0].Id;
+        plain.CurrentRound.PlayFromBonus(0, new GridPos(0, 0));
+        Check(plain.CurrentRound.Hand[0].Id == firstHeld,
+            "an ordinary round keeps its hand through a bonus play");
+    }
+
+    private static void Boss_AnarsiSilencesEverythingRare()
+    {
+        Section("boss / anarsi silences rare and legendary");
+        var session = NewSession(5170, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        // renovasyon is common, seri_tetik is rare, oryantasyon is legendary (RarityTable).
+        Joker common = session.Jokers.Add(new RenovasyonJoker());
+        Joker rare = session.Jokers.Add(new SeriTetikJoker());
+        Power commonPower = session.Powers.Add(new CimbizPower());
+        Power rarePower = session.Powers.Add(new KumSaatiPower());
+        round.SetBoss(new AnarsiBoss());
+
+        Check(!round.IsSilencedByBoss(common), "a common joker keeps working");
+        Check(round.IsSilencedByBoss(rare), "a rare joker is silenced");
+        Check(!round.IsSilencedByBoss(commonPower), "a common power keeps working");
+        Check(round.IsSilencedByBoss(rarePower), "a rare power is silenced");
+
+        // Silencing really does gate the inventories, not just report a flag.
+        Check(!session.Jokers.CanActivate(rare.InstanceId),
+            "a silenced joker cannot be activated");
+        Check(!session.Powers.CanUse(rarePower.InstanceId, ActivationTarget.None),
+            "a silenced power cannot be used");
+        Check(session.Powers.CanBeginUse(commonPower.InstanceId),
+            "the common power is still usable");
+        Check(rare.SellValue > 0, "a silenced joker keeps its sell value",
+            "value " + rare.SellValue);
+
+        // Renovasyon (common, charged) still runs, so the gate is not blanket-blocking.
+        Check(session.Jokers.CanActivate(common.InstanceId),
+            "the common joker is still activatable");
+    }
+
+    private static void Boss_OburlukEatsOnlyWhenSlotsAreFull()
+    {
+        Section("boss / oburluk punishes a full inventory");
+        // Not full: nothing is switched off.
+        var roomy = NewSession(5171, 6, 1000000, 40, 1);
+        roomy.Jokers.Add(new RenovasyonJoker());
+        var roomyBoss = new OburlukBoss();
+        roomy.CurrentRound.SetBoss(roomyBoss);
+        roomyBoss.OnRoundStarted(new RoundContext(roomy, roomy.Rng, roomy.CurrentRound));
+        Check(roomyBoss.SilencedJokerId == 0, "a free joker slot means nothing is eaten",
+            "silenced " + roomyBoss.SilencedJokerId);
+
+        // Full: exactly one joker and one power go quiet.
+        var full = NewSession(5172, 6, 1000000, 40, 1);
+        full.Jokers.MaxSlots = 2;
+        full.Powers.MaxSlots = 2;
+        full.Jokers.Add(new RenovasyonJoker());
+        full.Jokers.Add(new InsiderJoker());
+        full.Powers.Add(new CimbizPower());
+        full.Powers.Add(new KlonPower());
+        Check(full.Jokers.IsFull && full.Powers.IsFull, "both inventories are full");
+        var boss = new OburlukBoss();
+        full.CurrentRound.SetBoss(boss);
+        boss.OnRoundStarted(new RoundContext(full, full.Rng, full.CurrentRound));
+
+        Check(boss.SilencedJokerId != 0, "a joker was switched off",
+            "silenced " + boss.SilencedJokerId);
+        Check(boss.SilencedPowerId != 0, "a power was switched off",
+            "silenced " + boss.SilencedPowerId);
+        int silencedJokers = 0;
+        foreach (Joker joker in full.Jokers.Jokers)
+        {
+            if (full.CurrentRound.IsSilencedByBoss(joker))
+            {
+                silencedJokers++;
+            }
+        }
+        Check(silencedJokers == 1, "exactly one joker, not all of them",
+            "silenced " + silencedJokers);
+        int silencedPowers = 0;
+        foreach (Power power in full.Powers.Powers)
+        {
+            if (full.CurrentRound.IsSilencedByBoss(power))
+            {
+                silencedPowers++;
+            }
+        }
+        Check(silencedPowers == 1, "exactly one power", "silenced " + silencedPowers);
+    }
+
+    private static void Boss_TukenmislikStopsEveryRefill()
+    {
+        Section("boss / tukenmislik blocks every recharge");
+        var session = NewSession(5173, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        Power power = session.Powers.Add(new CimbizPower());
+        round.SetBoss(new TukenmislikBoss());
+
+        Check(power.Charged, "the round still starts with a charged power");
+        Check(round.PowerRechargeBlocked, "the round reports refills as blocked");
+        session.Powers.BurnCharge(power);
+        Check(!power.Charged, "the charge is gone once spent");
+
+        session.Powers.RechargeAll();
+        Check(!power.Charged, "a blanket recharge does nothing");
+        Check(!session.Powers.Recharge(power.InstanceId), "a targeted recharge refuses");
+        Check(!session.Powers.RechargeOne(), "Powerbank's refill refuses");
+        Check(!power.Charged, "the power is still empty after every attempt");
+
+        // A clean sweep - the powers' whole economy - also pays nothing now. Driven through the
+        // real dispatch, because that (not RechargeAll) is what a sweep actually calls.
+        var sweepCtx = new TurnContext(session, session.Rng, round, new TurnReport(),
+            new ScoreBreakdown());
+        session.Powers.DispatchCleanSweep(sweepCtx, true);
+        Check(!power.Charged, "not even a clean sweep refills it");
+
+        // Sanity: the very same sweep DOES refill on a round with no boss.
+        var plain = NewSession(5173, 6, 1000000, 40, 1);
+        Power plainPower = plain.Powers.Add(new CimbizPower());
+        plain.Powers.BurnCharge(plainPower);
+        var plainCtx = new TurnContext(plain, plain.Rng, plain.CurrentRound, new TurnReport(),
+            new ScoreBreakdown());
+        plain.Powers.DispatchCleanSweep(plainCtx, true);
+        Check(plainPower.Charged, "an ordinary round's sweep refills it");
+    }
+
+    private static void Boss_VanilyaStripsEveryElement()
+    {
+        Section("boss / vanilya ignores block elements");
+        var session = NewSession(5180, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(new VanilyaBoss());
+        Check(round.ElementsIgnored, "the round reports elements as ignored");
+
+        // A gold block places PLAIN cubes: no gold upkeep, and it is destructible again.
+        BlockCard gold = session.CreateCard(Bar(2), new[] { BlockElement.Gold });
+        round.AddBonusCard(gold, BonusPlayOutcome.ToDiscard);
+        TurnReport report = round.PlayFromBonus(0, new GridPos(0, 0));
+        Cube? placed = round.Board.GetCube(new GridPos(0, 0));
+        Check(placed.HasValue && placed.Value.Kind == CubeKind.Normal,
+            "a gold block stamps ordinary cubes",
+            placed.HasValue ? placed.Value.Kind.ToString() : "empty");
+        Check(report.GoldBonus == 0, "no gold upkeep is paid", "bonus " + report.GoldBonus);
+
+        // Mechanical rotation is refused, and the UI is told the same thing.
+        BlockCard gears = session.CreateCard(Bar(2), new[] { BlockElement.Mechanical });
+        round.AddBonusCard(gears, BonusPlayOutcome.ToDiscard);
+        Check(!round.CardHasElement(gears, BlockElement.Mechanical),
+            "the engine reports the card as plain");
+        Check(gears.Has(BlockElement.Mechanical),
+            "the card itself keeps its element (it is only ignored)");
+
+        // Ghost overhang is gone: a ghost block may no longer hang off the edge.
+        BlockCard ghost = session.CreateCard(Bar(2), new[] { BlockElement.Ghost });
+        var offEdge = new GridPos(5, 0); // a 2-wide bar at x=5 hangs over a 6-wide board
+        Check(!round.CanPlaceCard(ghost, offEdge), "a ghost block cannot overhang under vanilya");
+
+        // Sanity: the same card DOES overhang and pay gold on an ordinary round.
+        var plain = NewSession(5180, 6, 1000000, 40, 1);
+        BlockCard plainGhost = plain.CreateCard(Bar(2), new[] { BlockElement.Ghost });
+        Check(plain.CurrentRound.CanPlaceCard(plainGhost, offEdge),
+            "an ordinary round still allows the overhang");
+        BlockCard plainGold = plain.CreateCard(Bar(2), new[] { BlockElement.Gold });
+        plain.CurrentRound.AddBonusCard(plainGold, BonusPlayOutcome.ToDiscard);
+        TurnReport plainReport = plain.CurrentRound.PlayFromBonus(0, new GridPos(0, 0));
+        Check(plainReport.GoldBonus > 0, "and still pays the gold upkeep",
+            "bonus " + plainReport.GoldBonus);
+    }
+
+    private static void Boss_TaxesTakeCardsOutOfTheRunDeck()
+    {
+        Section("boss / the two deck taxes");
+        // "Harcama vergisi": emptying the draw pile costs the run deck two cards.
+        var session = NewSession(5181, 6, 1000000, 12, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = new HarcamaVergisiBoss();
+        round.SetBoss(boss);
+        int ownedBefore = session.OwnedCards.Count;
+
+        // Churn the hand until the draw pile runs dry at least once.
+        int guard = 0;
+        while (boss.TaxedCards == 0 && guard++ < 40 && round.Status == RoundStatus.InProgress)
+        {
+            round.CycleHandWithoutReshuffle();
+        }
+        Check(boss.TaxedCards > 0, "emptying the draw pile taxed the deck",
+            "taxed " + boss.TaxedCards);
+        Check(boss.TaxedCards == boss.CardsPerEmptying,
+            "exactly two cards per emptying, not one per failed draw",
+            "taxed " + boss.TaxedCards);
+        Check(session.OwnedCards.Count == ownedBefore - boss.TaxedCards,
+            "the cards left the RUN deck, not just the round",
+            ownedBefore + " -> " + session.OwnedCards.Count);
+
+        // "Özel tüketim vergisi": using a power costs a card.
+        var exSession = NewSession(5182, 6, 1000000, 20, 1);
+        var exBoss = new OzelTuketimVergisiBoss();
+        exSession.CurrentRound.SetBoss(exBoss);
+        // Büyüteç just reveals draw cards, so it always runs - the tax, not the power, is
+        // what this test is about.
+        Power power = exSession.Powers.Add(new BuyutecPower());
+        int exOwnedBefore = exSession.OwnedCards.Count;
+        Check(exSession.Powers.TryUse(power.InstanceId, ActivationTarget.None),
+            "the power ran");
+        Check(exBoss.TaxedCards == 1, "using it cost exactly one card",
+            "taxed " + exBoss.TaxedCards);
+        Check(exSession.OwnedCards.Count == exOwnedBefore - 1,
+            "and that card left the run deck",
+            exOwnedBefore + " -> " + exSession.OwnedCards.Count);
+
+        // The floor: a tax never shrinks the deck below the hand size, which would lose the
+        // NEXT round during construction.
+        var tiny = NewSession(5183, 6, 1000000, 4, 1);
+        int floor = tiny.Config.Rules.HandSize;
+        int removed = tiny.TaxOwnedCards(99, tiny.Rng);
+        Check(tiny.OwnedCards.Count == floor, "the deck stops at the hand size",
+            "left " + tiny.OwnedCards.Count + " floor " + floor);
+        Check(removed == 4 - floor, "only what could be taken was taken", "removed " + removed);
+    }
+
+    private static void Boss_HarcamaVergisiAndErosionShareTheSameTrigger()
+    {
+        Section("boss / the deck tax and the erosion clock share one trigger");
+        // Both features hang off THE SAME event - the draw pile running dry. "Harcama vergisi"
+        // taxes the run deck for it and shuffle erosion eats the arena for it, so a boss round
+        // makes one empty deck bite twice. This test exists to keep that deliberate, because
+        // the two were written independently and merged.
+        var session = NewErodingSession(5190, 5, 14, ShuffleErosion.FromOutside, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = new HarcamaVergisiBoss();
+        round.SetBoss(boss);
+        int ownedBefore = session.OwnedCards.Count;
+        int freeRecycles = round.FreeDeckRecyclesLeft;
+        Check(freeRecycles > 0, "the round starts with free recycles", "left " + freeRecycles);
+
+        // Churn until the pile has run dry once: the tax bites immediately, the arena does not
+        // (the first recycles are free).
+        int guard = 0;
+        while (boss.TaxedCards == 0 && guard++ < 40 && round.Status == RoundStatus.InProgress)
+        {
+            round.CycleHandWithoutReshuffle();
+        }
+        Check(boss.TaxedCards > 0, "the tax bit on the first drying-out",
+            "taxed " + boss.TaxedCards);
+        Check(session.OwnedCards.Count < ownedBefore, "cards left the run deck",
+            ownedBefore + " -> " + session.OwnedCards.Count);
+        Check(round.BoardErosionCount == 0, "but the free allowance spared the arena",
+            "erosions " + round.BoardErosionCount);
+        Check(round.FreeDeckRecyclesLeft < freeRecycles,
+            "the same event still moved the erosion clock",
+            "left " + round.FreeDeckRecyclesLeft);
+
+        // Past the allowance the arena erodes too, on top of the tax.
+        int sizeBefore = round.Board.Width;
+        int taxedBefore = boss.TaxedCards;
+        guard = 0;
+        while (round.BoardErosionCount == 0 && guard++ < 40
+            && round.Status == RoundStatus.InProgress)
+        {
+            round.DebugForceDeckRecycle();
+        }
+        Check(round.BoardErosionCount > 0, "the clock eventually eats the arena",
+            "erosions " + round.BoardErosionCount);
+        Check(round.Board.Width < sizeBefore || round.Board.DeadCellCount > 0,
+            "the board really got smaller or scarred",
+            sizeBefore + " -> " + round.Board.Width + " dead " + round.Board.DeadCellCount);
+        Check(boss.TaxedCards >= taxedBefore, "and the tax kept its own tally",
+            "taxed " + boss.TaxedCards);
+
+        // A forced recycle is not a "drying out" the boss sees (no draw was attempted), so the
+        // two counters are independent - neither drives the other.
+        Check(boss.TaxedCards == taxedBefore,
+            "a forced recycle alone does not tax: the tax follows an actual empty draw",
+            "taxed " + boss.TaxedCards + " was " + taxedBefore);
+    }
+
+    private static void BossRounds_FlaggedEveryThirdRound()
+    {
+        Section("boss rounds / every third round is flagged");
+        var progression = new DefaultRoundProgression();
+        var flagged = new List<int>();
+        for (int n = 1; n <= 15; n++)
+        {
+            if (progression.GetRound(n).IsBossRound)
+            {
+                flagged.Add(n);
+            }
+        }
+        Check(flagged.Count == 5, "five boss rounds in a 15-round run", "count " + flagged.Count);
+        Check(flagged.Count == 5 && flagged[0] == 3 && flagged[1] == 6 && flagged[2] == 9
+            && flagged[3] == 12 && flagged[4] == 15, "they are rounds 3, 6, 9, 12 and 15",
+            string.Join(",", flagged));
+        Check(!progression.GetRound(1).IsBossRound && !progression.GetRound(2).IsBossRound,
+            "the opening rounds are ordinary");
+        progression.BossRoundInterval = 0;
+        Check(!progression.GetRound(3).IsBossRound, "interval 0 disables boss rounds");
+
+        // Anything that REBUILDS a RoundConfig must carry the flag across, or a boss round
+        // silently stops being one the moment a power filters it.
+        var session = NewSession(4244, 6, 1000000, 40, 1);
+        var retro = (RetroPower)session.Powers.Add(new RetroPower());
+        Check(session.Powers.TryUse(retro.InstanceId, ActivationTarget.None), "retro toggled on");
+        var boss = new RoundConfig(3, 6, 6, 100, null, ShuffleErosion.Both, true);
+        RoundConfig filtered = retro.FilterRoundConfig(
+            new SessionContext(session, session.Rng), boss);
+        Check(filtered.BoardHeight > boss.BoardHeight, "retro grew the board (it rebuilt the config)",
+            "height " + filtered.BoardHeight);
+        Check(filtered.IsBossRound, "the boss flag survives retro's round-config filter");
+        Check(filtered.Erosion == ShuffleErosion.Both,
+            "and so does the erosion style", "erosion " + filtered.Erosion);
+    }
+
     private static void AllRegisteredJokers_HaveDistinctIdsAndText()
     {
         Section("registry / catalogue sanity");
@@ -2782,7 +3555,7 @@ public static class JokerTests
             subscribed.TurnResolved += auditor;
 
             int safety = 0;
-            while (session.Phase != GamePhase.GameOver && safety++ < 500 && failure == null)
+            while (!RunIsOver(session) && safety++ < 500 && failure == null)
             {
                 if (!ReferenceEquals(subscribed, session.CurrentRound))
                 {
@@ -3016,7 +3789,7 @@ public static class JokerTests
         // Restore placement scoring (default is 0 now) so greedy play reaches the market.
         session.Config.Scoring.PointsPerCubePlaced = 1;
         int safety = 0;
-        while (session.Phase != GamePhase.GameOver && safety++ < 400)
+        while (!RunIsOver(session) && safety++ < 400)
         {
             if (session.Phase == GamePhase.Market)
             {
@@ -3068,7 +3841,7 @@ public static class JokerTests
         config.Scoring.PointsPerCubePlaced = 1;
         var session = new GameSession(config);
         int safety = 0;
-        while (session.Phase != GamePhase.GameOver && safety++ < 400)
+        while (!RunIsOver(session) && safety++ < 400)
         {
             if (session.Phase == GamePhase.Market)
             {
@@ -3129,7 +3902,7 @@ public static class JokerTests
 
         var sb = new StringBuilder();
         int safety = 0;
-        while (session.Phase != GamePhase.GameOver && safety++ < 400)
+        while (!RunIsOver(session) && safety++ < 400)
         {
             if (session.Phase == GamePhase.Market)
             {

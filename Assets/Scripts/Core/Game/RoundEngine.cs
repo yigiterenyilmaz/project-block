@@ -69,6 +69,77 @@ namespace ProjectBlock.Core
                 - NextContinueCost - Rules.HandSize;
         }
 
+        /// <summary>This round's boss ("patron"), or null on an ordinary round. Round-scoped:
+        /// it dies with this engine, which is what keeps a boss's rule bends from leaking into
+        /// the next round. Assigned once by GameSession before the round's first turn.</summary>
+        public BossRound Boss { get; private set; }
+
+        /// <summary>Attaches the boss GameSession drew for this round. Called once, right
+        /// after construction and before any hook runs.</summary>
+        internal void SetBoss(BossRound boss)
+        {
+            Boss = boss;
+            // The board stamps cubes itself, so it needs the answer too ("Vanilya"). Carried
+            // across by CreateResized, so an inflation power cannot lose it mid-round.
+            Board.IgnoreElements = ElementsIgnored;
+        }
+
+        /// <summary>True while every block must behave as a plain block ("Vanilya"): no fire,
+        /// no ghost overhang, no rotation, no dynamite - the element is simply not there.</summary>
+        public bool ElementsIgnored
+        {
+            get { return Boss != null && Boss.IgnoresBlockElements; }
+        }
+
+        /// <summary>Does this card carry that element RIGHT NOW? The one place the engine asks,
+        /// so a boss that suppresses elements suppresses ALL of them consistently - placement,
+        /// rotation, the no-move check and the cube kinds alike.</summary>
+        private bool Has(BlockCard card, BlockElement element)
+        {
+            return !ElementsIgnored && card.Has(element);
+        }
+
+        /// <summary>Public form of the above, for the UI: it must not offer a rotation or a
+        /// reshape that the engine would refuse.</summary>
+        public bool CardHasElement(BlockCard card, BlockElement element)
+        {
+            return card != null && Has(card, element);
+        }
+
+        /// <summary>True if this round's boss has silenced that joker ("Anarşi", "Oburluk"):
+        /// every hook is skipped and it cannot be activated, exactly like the overtime gate.
+        /// Public so the UI can grey the panel out for the same reason the rules ignore it.</summary>
+        public bool IsSilencedByBoss(Joker joker)
+        {
+            return Boss != null && joker != null && Boss.DisablesJoker(joker);
+        }
+
+        /// <summary>As above, for a power: it cannot be used and its hooks are skipped.</summary>
+        public bool IsSilencedByBoss(Power power)
+        {
+            return Boss != null && power != null && Boss.DisablesPower(power);
+        }
+
+        /// <summary>True while nothing may put a charge back into a power this round
+        /// ("Tükenmişlik"). The round-start charge is already in place by then.</summary>
+        public bool PowerRechargeBlocked
+        {
+            get { return Boss != null && Boss.BlocksPowerRecharge; }
+        }
+
+        /// <summary>Forbids placement on one empty cell ("Mapus"). Board mutations go through
+        /// the engine, so the seal and the no-playable-move check can never disagree.</summary>
+        internal void SealBoardCell(GridPos cell)
+        {
+            Board.SealCell(cell);
+        }
+
+        /// <summary>Lifts every placement seal (a boss re-picks its cell each turn).</summary>
+        internal void ClearBoardSeals()
+        {
+            Board.ClearSeals();
+        }
+
         public RoundStatus Status { get; private set; }
 
         /// <summary>Set when Status is Lost (may be set earlier if an advance offer is
@@ -218,7 +289,10 @@ namespace ProjectBlock.Core
             // and the FX still play, but no points are gained.
             if (Rules.CountExternalSweeps)
             {
-                AddScoreOutsideTurn(scorer.ScoreLineExplosion(lines.LineCount, lines.ExplodedCells.Count));
+                // Priced through the boss too ("Ufuk"/"Kule" govern every line clear), but with
+                // no dead-zone adjustment - that is this path's long-standing behaviour.
+                AddScoreOutsideTurn(PriceLines(
+                    BuildLineScore(lines, lines.ExplodedCells.Count, false)));
             }
             TryResolveCleanSweep();
         }
@@ -580,6 +654,11 @@ namespace ProjectBlock.Core
                 }
             }
         }
+
+        /// <summary>True once the draw pile has been reported dry and no card has been drawn
+        /// since. Keeps "the deck ran out" a single event per drying-out, however many draw
+        /// attempts hit the empty pile ("Harcama vergisi" taxes per event, not per attempt).</summary>
+        private bool drawPileReportedEmpty;
 
         /// <summary>Set when a NEGATIVE block already sampled the sweep pre-condition, so the
         /// normal explosion path does not re-sample it on a board the erasure just changed.</summary>

@@ -372,8 +372,9 @@ namespace ProjectBlock.Core
             }
             var cells = new List<GridPos>(config.ExtraPlayableCells);
             cells.AddRange(convertedCells);
-            return new RoundConfig(config.RoundNumber, config.BoardWidth, config.BoardHeight,
-                config.ScoreThreshold, cells, config.Erosion);
+            // WithBoard, not a hand-written rebuild: the erosion style and the boss flag come
+            // along by themselves (see RoundConfig's header - both have been dropped before).
+            return config.WithBoard(config.BoardWidth, config.BoardHeight, cells);
         }
     }
 
@@ -609,9 +610,8 @@ namespace ProjectBlock.Core
                 return config;
             }
             ctx.Rules.DeadZoneRows = DeadZoneHeight;
-            return new RoundConfig(config.RoundNumber, config.BoardWidth,
-                config.BoardHeight + DeadZoneHeight, config.ScoreThreshold,
-                config.ExtraPlayableCells, config.Erosion);
+            return config.WithBoard(config.BoardWidth, config.BoardHeight + DeadZoneHeight,
+                config.ExtraPlayableCells);
         }
 
         public override void OnRemoved(SessionContext ctx)

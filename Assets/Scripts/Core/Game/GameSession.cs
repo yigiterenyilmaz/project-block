@@ -17,6 +17,13 @@ namespace ProjectBlock.Core
         /// <summary>1-based number of the current (or just lost) round.</summary>
         public int RoundNumber { get; private set; }
 
+        /// <summary>True while the LAST round of the run is being played. Advancing out of it
+        /// wins the run (GamePhase.RunWon) instead of opening a market.</summary>
+        public bool IsFinalRound
+        {
+            get { return RoundNumber >= Config.TotalRounds; }
+        }
+
         /// <summary>Run-wide score, doubling as market currency (confirmed design).</summary>
         public long TotalScore { get; private set; }
 
@@ -88,6 +95,23 @@ namespace ProjectBlock.Core
         /// <summary>Owned card ids "Hileli zar" guaranteed onto the top of the next round's
         /// draw pile, or null. Consumed once when that round's engine is built.</summary>
         private List<int> pendingOpeningHand;
+
+        /// <summary>Bosses already met this run. A run never repeats a boss, so this is what
+        /// the draw excludes.</summary>
+        private readonly List<string> bossesFought = new List<string>();
+
+        /// <summary>Boss kinds already met this run, in the order they were fought.</summary>
+        public IReadOnlyList<string> BossesFought
+        {
+            get { return bossesFought; }
+        }
+
+        /// <summary>The boss of the current round, or null on an ordinary round. Shortcut for
+        /// the UI - the boss itself lives on the RoundEngine.</summary>
+        public BossRound ActiveBoss
+        {
+            get { return CurrentRound != null ? CurrentRound.Boss : null; }
+        }
 
         /// <summary>"Hileli zar": guarantee these owned cards into the next round's opening
         /// hand (they are moved to the top of the fresh draw pile). Market-phase only.</summary>
@@ -357,11 +381,50 @@ namespace ProjectBlock.Core
             {
                 throw new InvalidOperationException("Not in the market phase.");
             }
+            if (IsFinalRound)
+            {
+                // Unreachable today (the final round wins instead of opening a market), but the
+                // run length is an invariant: RoundNumber must never walk past TotalRounds.
+                throw new InvalidOperationException(
+                    "The run is over - round " + RoundNumber + " of " + Config.TotalRounds + ".");
+            }
             Jokers.DispatchMarketLeft(purchasedThisMarket);
             PendingMarketDiscount = 0.0; // spent on this visit, never carried to the next
             rerollCount = 0;
             RoundNumber++;
             StartRound();
+        }
+
+        /// <summary>
+        /// PERMANENTLY takes cards out of the run deck - the two tax bosses ("Harcama vergisi",
+        /// "Özel tüketim vergisi"). Unlike the overtime continue cost this is not round-scoped:
+        /// the cards leave OwnedCards for good, so later rounds are poorer too. They are pulled
+        /// out of the round in progress as well, so the tax bites immediately.
+        ///
+        /// Refuses to shrink the deck below a playable size (the hand size): a deck smaller than
+        /// that loses the NEXT round during construction, which is a bug, not a difficulty.
+        /// Returns how many cards actually left.
+        /// </summary>
+        public int TaxOwnedCards(int count, IRandomSource taxRng)
+        {
+            if (count <= 0 || taxRng == null)
+            {
+                return 0;
+            }
+            int floor = Config.Rules.HandSize;
+            int taken = 0;
+            for (int i = 0; i < count && ownedCards.Count > floor; i++)
+            {
+                BlockCard card = ownedCards[taxRng.NextInt(0, ownedCards.Count)];
+                ownedCards.Remove(card);
+                if (CurrentRound != null)
+                {
+                    // Out of the piles too, so it cannot still be drawn this round.
+                    CurrentRound.TaxCardOutOfRound(card);
+                }
+                taken++;
+            }
+            return taken;
         }
 
         /// <summary>Adds run currency (a joker sale today; market refunds later).</summary>
@@ -469,6 +532,12 @@ namespace ProjectBlock.Core
             roundConfig = Jokers.FilterRoundConfig(roundConfig);
             roundConfig = Powers.FilterRoundConfig(roundConfig);
             CurrentRound = new RoundEngine(roundConfig, Config.Rules, ownedCards, rng, scorer, this, Jokers);
+            // The boss is attached before anything else runs, so it governs the round's very
+            // first turn. Ordinary rounds get null and behave exactly as they always have.
+            if (roundConfig.IsBossRound)
+            {
+                CurrentRound.SetBoss(DrawBoss());
+            }
             CurrentRound.TurnResolved += OnTurnResolved;
             CurrentRound.StatusChanged += OnRoundStatusChanged;
             SetPhase(GamePhase.Round);
@@ -481,6 +550,46 @@ namespace ProjectBlock.Core
             }
             Jokers.DispatchRoundStarted(CurrentRound);
             Powers.DispatchRoundStarted(CurrentRound);
+            // The antagonist moves last: the player's jokers and powers are set up (and the
+            // powers recharged) before the boss picks a victim or takes its first bite.
+            if (CurrentRound.Boss != null)
+            {
+                CurrentRound.Boss.OnRoundStarted(new RoundContext(this, rng, CurrentRound));
+            }
+        }
+
+        /// <summary>
+        /// Draws the boss for a flagged round: a random kind this run has not met yet, so five
+        /// boss rounds never repeat themselves. Deterministic and drawn from its OWN rng (seed +
+        /// round number), so boss selection never disturbs the main stream that shuffles decks
+        /// and drives play - an ordinary round is unaffected by bosses existing at all.
+        /// Falls back to allowing repeats only if a run somehow has more boss rounds than there
+        /// are bosses.
+        /// </summary>
+        private BossRound DrawBoss()
+        {
+            IReadOnlyList<BossDefinition> catalogue = BossRegistry.All;
+            if (catalogue.Count == 0)
+            {
+                return null; // no content yet: the round is simply flagged and plays normally
+            }
+            var pool = new List<BossDefinition>();
+            for (int i = 0; i < catalogue.Count; i++)
+            {
+                if (!bossesFought.Contains(catalogue[i].DefId))
+                {
+                    pool.Add(catalogue[i]);
+                }
+            }
+            if (pool.Count == 0)
+            {
+                pool.AddRange(catalogue);
+            }
+            var bossRng = new SeededRandom(
+                unchecked(resolvedSeed * 1566083941 + RoundNumber * 31337));
+            BossDefinition picked = pool[bossRng.NextInt(0, pool.Count)];
+            bossesFought.Add(picked.DefId);
+            return picked.Create();
         }
 
         private void OnTurnResolved(TurnReport report)
@@ -492,7 +601,16 @@ namespace ProjectBlock.Core
         {
             if (status == RoundStatus.Advanced)
             {
+                // Round-end effects pay out either way - a run-winning round must still settle
+                // the kumbara jokers - so this runs BEFORE the win check.
                 Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Advanced);
+                if (IsFinalRound)
+                {
+                    // Survived the last round: the run is won and there is no market to
+                    // stock, because there is no round after this one to prepare for.
+                    SetPhase(GamePhase.RunWon);
+                    return;
+                }
                 rerollCount = 0; // a fresh reroll price each market visit
                 RestockMarket();
                 purchasedThisMarket = false;

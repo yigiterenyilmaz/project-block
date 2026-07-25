@@ -1,5 +1,5 @@
 // PURPOSE: The difficulty curve - board size comes from a fixed table of round ranges, the
-// threshold grows geometrically.
+// threshold grows geometrically, and every third round is flagged as a boss round.
 //
 // CONFIRMED DESIGN: the board-size table. A run is 15 rounds, numbered 1-15, and the table
 // covers exactly that: rounds 1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9. A round past the table
@@ -8,7 +8,10 @@
 // Each band also names the erosion that punishes a stalling round (ShuffleErosion): the small
 // arena loses its rim, the middle one is hollowed out from the centre, and the last one suffers
 // both at once.
-// TUNABLE PLACEHOLDER: the threshold numbers.
+// TUNABLE PLACEHOLDER: the threshold numbers and the boss interval.
+//
+// Run LENGTH is not decided here: that is GameConfig.TotalRounds. This table is written to
+// cover exactly that many rounds, so the two are meant to be changed together.
 
 using System;
 
@@ -32,6 +35,11 @@ namespace ProjectBlock.Core
         public int BaseThreshold = 60;
         public double ThresholdGrowthFactor = 1.5;
 
+        /// <summary>Every n-th round is a boss round ("patron raundu"): 3 means 3, 6, 9, 12, 15.
+        /// 0 disables them. This is the ONLY place that decides which rounds are boss rounds -
+        /// everything else reads RoundConfig.IsBossRound, and GameSession draws the boss itself.</summary>
+        public int BossRoundInterval = 3;
+
         public RoundConfig GetRound(int roundNumber)
         {
             if (roundNumber < 1)
@@ -41,7 +49,14 @@ namespace ProjectBlock.Core
             BoardSizeBand band = BandFor(roundNumber);
             double rawThreshold = BaseThreshold * Math.Pow(ThresholdGrowthFactor, roundNumber - 1);
             int threshold = (int)(Math.Ceiling(rawThreshold / 5.0) * 5.0);
-            return new RoundConfig(roundNumber, band.Size, band.Size, threshold, null, band.Erosion);
+            return new RoundConfig(roundNumber, band.Size, band.Size, threshold, null,
+                band.Erosion, IsBossRound(roundNumber));
+        }
+
+        /// <summary>Whether a round is a boss round, without building its whole config.</summary>
+        public bool IsBossRound(int roundNumber)
+        {
+            return BossRoundInterval > 0 && roundNumber % BossRoundInterval == 0;
         }
 
         /// <summary>Board edge length for a round.</summary>

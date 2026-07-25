@@ -7,6 +7,35 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **Boss rounds** — every third round (3, 6, 9, 12, 15) now draws a **boss** that bends the rules
+  against you for that round only. A run never fights the same boss twice, the draw is
+  deterministic from the run seed, and the HUD names the boss and describes what it is doing.
+  All eleven:
+  - **Alıkoyma** — seizes a random card in your hand every turn (never your last one).
+  - **Mapus** — seals one random empty cell per turn: nothing can be placed there, and the row
+    and column through it cannot be completed either.
+  - **Vanilya** — every block loses its element for the round (no fire, gold, ghost, gears, TNT).
+  - **Feda** — playing a bonus card also throws your whole hand into the discard; a new hand is dealt.
+  - **Tükenmişlik** — powers never refill for the rest of the round, not even from a clean sweep.
+  - **Anarşi** — every rare and legendary joker and power is switched off for the round.
+  - **Harcama vergisi** — each time your draw pile empties, **2 cards leave your deck for the rest
+    of the run**.
+  - **Özel tüketim vergisi** — using a power **permanently** costs a card from your deck.
+  - **Ufuk** — only horizontal clears score (they pay a little more); columns pay nothing.
+  - **Kule** — the same, mirrored: only vertical clears score.
+  - **Oburluk** — if your joker slots are full, one random joker goes silent for the round; same
+    for your powers. A free slot keeps everything working.
+  Switched-off jokers/powers grey out in their bars (they keep their sell value), and a sealed
+  cell is drawn barred on the board (a cold lock, distinct from the red scar of an eroded cell).
+  Note that **Harcama vergisi hangs off the same trigger as board erosion** — an empty draw pile
+  on that round costs you both cards and arena. Numbers are balance placeholders, as usual.
+- **A run is now 15 rounds** — surviving round 15 ends the run in victory (`GamePhase.RunWon`,
+  shown as "RUN COMPLETE" with the final score) instead of opening another market. `GameOver`
+  now means a loss and nothing else, so losing round 15 is still a loss. Run length lives in
+  `GameConfig.TotalRounds`, independent of the difficulty curve.
+- **Boss rounds flagged** — rounds 3, 6, 9, 12 and 15 are marked `RoundConfig.IsBossRound`
+  (`DefaultRoundProgression.BossRoundInterval`) and the HUD labels them `[BOSS]`. The flag is
+  scaffolding only: **no boss behaviour yet**, it just gives that work one thing to hang off.
 - **Board-power explosion FX** — whole-board powers that destroy board-dependent cells
   (**Bardağın Boş Tarafı**, **Çerçeve**...) now play the explosion animation on the cells they
   clear, via a between-turn destruction log the view reads. (The inflation deflate crush FX is

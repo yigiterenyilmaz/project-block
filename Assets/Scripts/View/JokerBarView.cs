@@ -23,6 +23,10 @@ namespace ProjectBlock.View
         private static readonly Color PanelColor = new Color(0.13f, 0.15f, 0.19f, 0.92f);
         private static readonly Color ReadyColor = new Color(0.20f, 0.34f, 0.24f, 0.95f);
         private static readonly Color TargetingColor = new Color(0.42f, 0.32f, 0.12f, 0.97f);
+
+        /// <summary>Switched off by a boss round ("Anarşi", "Oburluk") - still owned, still
+        /// sellable, but doing nothing this round.</summary>
+        private static readonly Color SilencedColor = new Color(0.26f, 0.10f, 0.12f, 0.95f);
         private static readonly Color NameColor = new Color(1f, 0.93f, 0.72f);
         private static readonly Color BodyColor = new Color(0.80f, 0.84f, 0.90f);
 
@@ -169,7 +173,13 @@ namespace ProjectBlock.View
             bool ready = session.Jokers.CanActivate(joker.InstanceId);
             bool targeting = targetingInstanceId.HasValue
                 && targetingInstanceId.Value == joker.InstanceId;
-            panel.Background.color = targeting ? TargetingColor : (ready ? ReadyColor : PanelColor);
+            // A boss round can switch a joker off entirely ("Anarşi", "Oburluk"). That outranks
+            // the activation state: the panel must not look ready when nothing will happen.
+            bool silenced = session.CurrentRound != null
+                && session.CurrentRound.IsSilencedByBoss(joker);
+            panel.Background.color = silenced
+                ? SilencedColor
+                : (targeting ? TargetingColor : (ready ? ReadyColor : PanelColor));
 
             // The background still belongs to the activation state (ready/targeting), so rarity
             // rides on the edge strip and the name colour instead of fighting it for the panel.
@@ -204,6 +214,10 @@ namespace ProjectBlock.View
             if (joker.DisabledInOvertime)
             {
                 line.Append(Loc.Pick("   (off in overtime)", "   (uzatmada kapalı)"));
+            }
+            if (silenced)
+            {
+                line.Append(Loc.Pick("   (BOSS: off)", "   (PATRON: kapalı)"));
             }
             panel.Body.text = line.ToString();
         }
