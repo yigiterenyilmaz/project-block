@@ -14,6 +14,10 @@ namespace ProjectBlock.View
     {
         private static readonly Color BackgroundColor = new Color(0.10f, 0.11f, 0.13f);
         private static readonly Color EmptyColor = new Color(0.17f, 0.18f, 0.22f);
+
+        /// <summary>A cell shuffle erosion ATE. Deliberately not hidden like an ordinary hole:
+        /// the player has to see what the stalling cost them, and that its row/column is dead.</summary>
+        private static readonly Color DeadColor = new Color(0.30f, 0.10f, 0.12f, 0.85f);
         private static readonly Color ValidPreviewColor = new Color(0.35f, 1f, 0.45f, 0.6f);
         private static readonly Color InvalidPreviewColor = new Color(1f, 0.35f, 0.35f, 0.6f);
         private static readonly Color ExplosionPreviewColor = new Color(1f, 0.78f, 0.25f, 0.65f);
@@ -275,8 +279,16 @@ namespace ProjectBlock.View
                     var gp = new GridPos(board.MinX + x, board.MinY + y);
                     if (!board.IsInside(gp))
                     {
-                        // hole: stays a hidden gap, never a cube (ghost traces draw separately)
                         kindCache[x, y] = null;
+                        if (board.IsDead(gp))
+                        {
+                            // eaten by erosion: shown as scar tissue, not as a gap
+                            cellRenderers[x, y].enabled = true;
+                            cellRenderers[x, y].color = DeadColor;
+                            baseColorCache[x, y] = DeadColor;
+                            continue;
+                        }
+                        // hole: stays a hidden gap, never a cube (ghost traces draw separately)
                         cellRenderers[x, y].enabled = false;
                         continue;
                     }

@@ -284,6 +284,28 @@ namespace ProjectBlock.View
             sb.Append(Loc.Pick("Draw ", "Çekme ")).Append(round.Deck.DrawCount)
                 .Append(Loc.Pick("   Discard ", "   Iskarta ")).Append(round.Deck.DiscardCount)
                 .Append(Loc.Pick("   Removed ", "   Çıkan ")).Append(round.Deck.RemovedCount).Append('\n');
+            // The anti-stalling clock: how many more times the deck may run dry for free, and
+            // how much of the arena the stalling has already cost.
+            if (round.Config.Erosion != ShuffleErosion.None)
+            {
+                sb.Append(Loc.Pick("Board ", "Alan ")).Append(round.Board.Width)
+                    .Append('x').Append(round.Board.Height);
+                if (round.Board.DeadCellCount > 0)
+                {
+                    sb.Append(Loc.Pick("  eaten ", "  yenen ")).Append(round.Board.DeadCellCount);
+                }
+                if (round.FreeDeckRecyclesLeft > 0)
+                {
+                    sb.Append(Loc.Pick("   free reshuffles ", "   bedava karma "))
+                        .Append(round.FreeDeckRecyclesLeft);
+                }
+                else
+                {
+                    sb.Append(Loc.Pick("   ERODING - next reshuffle eats the board",
+                        "   ERİYOR - sıradaki karma alanı yiyor"));
+                }
+                sb.Append('\n');
+            }
             sb.Append(Loc.Pick("Jokers ", "Joker ")).Append(session.Jokers.Count);
             if (session.Jokers.Count > 0)
             {
