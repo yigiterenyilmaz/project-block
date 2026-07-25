@@ -35,8 +35,12 @@ namespace ProjectBlock.View
             Color backdrop = howToPlayReturnTo == AppScreen.Paused
                 ? MenuSkin.OverlayBackdrop
                 : MenuSkin.Backdrop;
+            var entries = new System.Collections.Generic.List<MenuEntry>
+            {
+                MenuEntry.Of(Loc.Pick("BACK", "GERİ"))
+            };
             menu.ShowText(Loc.Pick("HOW TO PLAY", "NASIL OYNANIR"), HowToPlayBody(),
-                Loc.Pick("BACK", "GERİ"), backdrop);
+                entries, backdrop);
         }
 
         /// <summary>Input for a reading screen: the only entry is BACK, and Escape does the

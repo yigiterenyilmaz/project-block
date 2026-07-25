@@ -186,6 +186,16 @@ namespace ProjectBlock.View
             config.RngSeed = lastSeedUsed;
             config.Deck = currentDeck;
             session = new GameSession(config);
+            // Both terminal phases raise the run-summary flag; Update opens the screen once
+            // nothing is animating (see .RunSummary).
+            runOverPending = false;
+            session.PhaseChanged += OnSessionPhaseChanged;
+            // A run can be over before the subscription exists: GameSession's constructor loses
+            // the round outright if the deck is smaller than the hand. Catch that case here.
+            if (session.Phase == GamePhase.GameOver || session.Phase == GamePhase.RunWon)
+            {
+                runOverPending = true;
+            }
             draggedCard = null;
             foxPickSlot = -1;
             sellCardsMode = false;
@@ -247,6 +257,14 @@ namespace ProjectBlock.View
             if (session == null || waterAnimating || supurgeAnimating)
             {
                 return; // input is locked while a board animation plays
+            }
+            // The run ended: this waits for the guard above to stop firing, so the last
+            // placement's blast finishes playing before the summary covers the board.
+            if (runOverPending)
+            {
+                runOverPending = false;
+                OpenRunSummary();
+                return;
             }
             UpdateHover(mouse);
             if (kb != null && kb.rKey.wasPressedThisFrame)

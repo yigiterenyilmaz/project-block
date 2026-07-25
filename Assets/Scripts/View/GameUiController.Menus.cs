@@ -41,7 +41,11 @@ namespace ProjectBlock.View
 
             /// <summary>The controls / rules reading screen, reachable from the same two
             /// places as Settings.</summary>
-            HowToPlay
+            HowToPlay,
+
+            /// <summary>The run has ended - won or lost - and its summary is up. The session
+            /// is kept alive here because the summary is reading it.</summary>
+            RunOver
         }
 
         // Entry order per menu. Named so the dispatches below never index by a bare number.
@@ -90,6 +94,9 @@ namespace ProjectBlock.View
                     break;
                 case AppScreen.HowToPlay:
                     ShowHowToPlay();
+                    break;
+                case AppScreen.RunOver:
+                    ShowRunSummary();
                     break;
                 default:
                     ShowTitleMenu();
@@ -148,13 +155,17 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            if (screen == AppScreen.Paused)
+            switch (screen)
             {
-                ActivatePauseEntry(chosen);
-            }
-            else
-            {
-                ActivateTitleEntry(chosen);
+                case AppScreen.Paused:
+                    ActivatePauseEntry(chosen);
+                    break;
+                case AppScreen.RunOver:
+                    ActivateSummaryEntry(chosen);
+                    break;
+                default:
+                    ActivateTitleEntry(chosen);
+                    break;
             }
         }
 
