@@ -238,11 +238,16 @@ namespace ProjectBlock.View
                 GoToTitle();
                 return;
             }
-            if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
+            if (mouse == null)
             {
                 return;
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+            deckSelect.SetHovered(world);
+            if (!mouse.leftButton.wasPressedThisFrame)
+            {
+                return;
+            }
             int index = deckSelect.DeckAt(world);
             if (index < 0)
             {

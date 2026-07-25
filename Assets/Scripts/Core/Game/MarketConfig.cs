@@ -40,10 +40,12 @@ namespace ProjectBlock.Core
         public int PowerPrice = 50;
 
         /// <summary>Rarity price multipliers: a rare/legendary joker or power costs this many
-        /// times its base price (before the global ScoreScale). Balance placeholders.</summary>
-        public int CommonPriceMultiplier = 1;
-        public int RarePriceMultiplier = 2;
-        public int LegendaryPriceMultiplier = 3;
+        /// times its base price (before the global ScoreScale). Fractional by design - the
+        /// caller rounds the multiplied base price BEFORE applying ScoreScale, so a x1.5 rare
+        /// stays a round number in the scaled economy. Balance placeholders.</summary>
+        public double CommonPriceMultiplier = 1.0;
+        public double RarePriceMultiplier = 1.5;
+        public double LegendaryPriceMultiplier = 2.0;
 
         /// <summary>Relative shop-appearance weights per rarity: commoner items are far likelier
         /// to be offered, legendaries seldom. Balance placeholders.</summary>

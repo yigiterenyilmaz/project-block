@@ -31,13 +31,21 @@ namespace ProjectBlock.View
         public static Color Subtitle = new Color(0.55f, 0.60f, 0.68f);
 
         public static Color Button = new Color(0.13f, 0.15f, 0.19f, 0.95f);
-        public static Color ButtonHover = new Color(0.22f, 0.26f, 0.32f, 0.98f);
+
+        /// <summary>The highlighted row. Deliberately a long way from Button: a hover you have
+        /// to look for is the same as no hover at all.</summary>
+        public static Color ButtonHover = new Color(0.31f, 0.37f, 0.48f, 1f);
+
+        /// <summary>Bar down the left edge of the highlighted row - the unmistakable part of
+        /// the highlight, since a colour shift alone reads poorly on a dark panel.</summary>
+        public static Color Accent = new Color(1f, 0.82f, 0.35f);
 
         /// <summary>An entry that exists but cannot be chosen yet (Continue with no save).
         /// Deliberately still legible - a hidden entry teaches the player nothing.</summary>
         public static Color ButtonDisabled = new Color(0.10f, 0.11f, 0.13f, 0.85f);
 
         public static Color Label = new Color(0.90f, 0.93f, 0.97f);
+        public static Color LabelSelected = new Color(1f, 0.98f, 0.90f);
         public static Color LabelDisabled = new Color(0.42f, 0.45f, 0.50f);
 
         /// <summary>The small explanatory line under a disabled entry.</summary>
@@ -54,6 +62,9 @@ namespace ProjectBlock.View
         public const float ButtonWidth = 460f;
         public const float ButtonHeight = 76f;
         public const float ButtonGap = 14f;
+
+        /// <summary>Width of the highlight bar on the selected row.</summary>
+        public const float AccentWidth = 7f;
 
         /// <summary>Gap between the header block and the first button.</summary>
         public const float HeaderGap = 70f;

@@ -58,7 +58,7 @@ namespace ProjectBlock.View
             };
             menu.ShowText(
                 won ? Loc.Pick("RUN COMPLETE", "OYUN TAMAMLANDI") : Loc.Pick("RUN OVER", "OYUN BİTTİ"),
-                RunSummaryBody(), entries, MenuSkin.Backdrop);
+                RunSummaryBody(), null, entries, MenuSkin.Backdrop);
         }
 
         private string RunSummaryBody()

@@ -1,10 +1,22 @@
-// PURPOSE: GameUiController's how-to-play / controls screen - the only place the game
-// explains itself to someone who has not read the code.
+// PURPOSE: GameUiController's how-to-play screen - the only place the game explains itself
+// to someone who has not read the design doc.
 //
-// KEEP THIS HONEST: it documents the controls the other partials actually implement
-// (.Drag for placing, .Bars for the joker/power strips and the market, .Menus for Escape).
-// When a key changes there, change it here too - a wrong controls screen is worse than none.
+// PAGED, NOT SCROLLED: the body is a fixed box and uGUI Text simply CLIPS what does not fit,
+// so a single long page silently loses its tail (the controls section did exactly that). Each
+// page is one topic and is kept short enough to fit; adding material means adding a page, not
+// growing one. Keep every page at or under ~19 lines.
+//
+// KEEP THIS HONEST in two directions:
+//  - it documents the controls the other partials actually implement (.Drag for placing,
+//    .Bars for the strips and the market, .Menus for Escape). A wrong controls screen is
+//    worse than none.
+//  - it describes only mechanics that EXIST. Cut or unbuilt ideas from the design doc (mirror
+//    blocks, the kumbara element, the bonus/fragile/infinite market variants) are deliberately
+//    absent - promising a tester something the build cannot do wastes their time.
+// It deliberately does NOT list individual jokers, powers or bosses: there are 80 of them,
+// they change weekly, and the player meets them in the market with their own descriptions.
 
+using System.Collections.Generic;
 using ProjectBlock.Core;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -17,9 +29,12 @@ namespace ProjectBlock.View
         /// paused run, exactly like settings.</summary>
         private AppScreen howToPlayReturnTo = AppScreen.Title;
 
+        private int howToPage;
+
         private void OpenHowToPlay(AppScreen returnTo)
         {
             howToPlayReturnTo = returnTo;
+            howToPage = 0;
             screen = AppScreen.HowToPlay;
             ShowHowToPlay();
         }
@@ -32,19 +47,21 @@ namespace ProjectBlock.View
 
         private void ShowHowToPlay()
         {
+            string[][] pages = HowToPlayPages();
+            howToPage = Mathf.Clamp(howToPage, 0, pages.Length - 1);
             Color backdrop = howToPlayReturnTo == AppScreen.Paused
                 ? MenuSkin.OverlayBackdrop
                 : MenuSkin.Backdrop;
-            var entries = new System.Collections.Generic.List<MenuEntry>
-            {
-                MenuEntry.Of(Loc.Pick("BACK", "GERİ"))
-            };
-            menu.ShowText(Loc.Pick("HOW TO PLAY", "NASIL OYNANIR"), HowToPlayBody(),
-                entries, backdrop);
+            var entries = new List<MenuEntry> { MenuEntry.Of(Loc.Pick("BACK", "GERİ")) };
+            string hint = Loc.Pick("←  →  page ", "←  →  sayfa ")
+                + (howToPage + 1) + " / " + pages.Length
+                + Loc.Pick("     [Esc] back", "     [Esc] geri");
+            menu.ShowText(Loc.Pick("HOW TO PLAY", "NASIL OYNANIR"),
+                string.Join("\n", pages[howToPage]), hint, entries, backdrop);
         }
 
-        /// <summary>Input for a reading screen: the only entry is BACK, and Escape does the
-        /// same thing.</summary>
+        /// <summary>Input for the reading screen: left/right (or the wheel) turn pages, BACK
+        /// and Escape leave.</summary>
         private void HandleHowToPlayInput(Keyboard kb, Mouse mouse)
         {
             if (kb != null && kb.escapeKey.wasPressedThisFrame)
@@ -52,77 +69,307 @@ namespace ProjectBlock.View
                 CloseHowToPlay();
                 return;
             }
+            if (kb != null)
+            {
+                if (kb.rightArrowKey.wasPressedThisFrame)
+                {
+                    TurnHowToPlayPage(+1);
+                    return;
+                }
+                if (kb.leftArrowKey.wasPressedThisFrame)
+                {
+                    TurnHowToPlayPage(-1);
+                    return;
+                }
+            }
+            if (mouse != null)
+            {
+                float scroll = mouse.scroll.ReadValue().y;
+                if (Mathf.Abs(scroll) > 0.01f)
+                {
+                    TurnHowToPlayPage(scroll > 0f ? -1 : +1);
+                    return;
+                }
+            }
             if (ReadMenuChoice(kb, mouse) >= 0)
             {
                 CloseHowToPlay();
             }
         }
 
-        private static string HowToPlayBody()
+        /// <summary>Turns a page, stopping at both ends rather than wrapping - wrapping from
+        /// the last page back to the first reads as "the screen glitched".</summary>
+        private void TurnHowToPlayPage(int delta)
         {
-            string[] english =
+            int wanted = Mathf.Clamp(howToPage + delta, 0, HowToPlayPages().Length - 1);
+            if (wanted == howToPage)
             {
-                "GOAL",
-                "   Fill a whole row or column and it blows up. Reach the round's score threshold",
-                "   to move on. A run is 15 rounds; every 3rd one is a boss round that bends a rule.",
-                "",
-                "PLACING BLOCKS",
-                "   Drag a block from your hand onto the board. Right-click a block to rotate a",
-                "   GEARS block or reshape a FOX one. Clearing the LAST cube off the board is a",
-                "   clean sweep: it pays a bonus and recharges every power.",
-                "",
-                "JOKERS AND POWERS",
-                "   Jokers sit along the top and bend the rules on their own - you buy them and",
-                "   leave them alone. Powers sit on the left: one charge each, at most one per",
-                "   turn, and using one never costs you a turn. Click either to use it (or 1-9",
-                "   for jokers). A clean sweep is what puts power charges back.",
-                "",
-                "THE MARKET",
-                "   Between rounds: click an offer to buy, click your deck to sell cards, REROLL",
-                "   to restock the whole shelf. [N] starts the next round.",
-                "",
-                "OVERTIME",
-                "   Once you pass the threshold you can [A] advance to the market, or [C] continue",
-                "   playing for more points. Continuing costs cards out of your deck, and the price",
-                "   goes up every time you do it.",
-                "",
-                "KEYS",
-                "   [Esc] pause      [L] language      [F2] rarity grader",
-                "   Debug: [R] new run  [D] deck  [S] redraw hand  [B] bonus card",
-                "          [J] grant joker  [P] grant power  [K] sell last joker"
-            };
-            string[] turkish =
+                return;
+            }
+            howToPage = wanted;
+            ShowHowToPlay();
+        }
+
+        private static string[][] HowToPlayPages()
+        {
+            return Loc.Language == GameLanguage.Turkish ? TurkishPages() : EnglishPages();
+        }
+
+        private static string[][] EnglishPages()
+        {
+            return new[]
             {
-                "AMAÇ",
-                "   Bir satırı ya da sütunu tamamen doldur, patlasın. Rauntun puan eşiğine ulaşınca",
-                "   ilerlersin. Bir oyun 15 raunt; her 3. raunt bir kuralı büken patron raundudur.",
-                "",
-                "BLOK YERLEŞTİRME",
-                "   Elindeki bloğu oyun alanına sürükle. Sağ tık ÇARK bloğunu döndürür, TİLKİ",
-                "   bloğunu yeniden şekillendirir. Alandaki SON küpü de temizlemek 'temizlik'tir:",
-                "   bonus kazandırır ve bütün güçleri yeniden doldurur.",
-                "",
-                "JOKERLER VE GÜÇLER",
-                "   Jokerler üstte durur ve kuralları kendiliğinden büker - alırsın, sonra unutursun.",
-                "   Güçler solda: her birinin tek şarjı vardır, turda en fazla biri kullanılır ve",
-                "   kullanmak tur harcamaz. Kullanmak için tıkla (jokerler için 1-9 da olur).",
-                "   Güç şarjlarını geri getiren şey temizliktir.",
-                "",
-                "MARKET",
-                "   Rauntlar arası: almak için tekliflere tıkla, kart satmak için desteye tıkla,",
-                "   rafı yenilemek için REROLL. [N] sonraki raundu başlatır.",
-                "",
-                "UZATMA",
-                "   Eşiği geçtikten sonra [A] ile markete ilerlersin ya da [C] ile daha fazla puan",
-                "   için devam edersin. Devam etmek desteden kart götürür ve her seferinde",
-                "   bedeli artar.",
-                "",
-                "TUŞLAR",
-                "   [Esc] duraklat      [L] dil      [F2] nadirlik not defteri",
-                "   Debug: [R] yeni oyun  [D] deste  [S] eli yenile  [B] bonus kart",
-                "          [J] joker ver  [P] güç ver  [K] son jokeri sat"
+                new[]
+                {
+                    "THE GOAL",
+                    "   Drag a block out of your hand onto the arena. Fill a whole row or column",
+                    "   and it blows up.",
+                    "",
+                    "   Every round has its own arena size and its own SCORE THRESHOLD. Reach the",
+                    "   threshold and you earn the right to move on. A run is 15 rounds, and every",
+                    "   3rd one is a BOSS ROUND that bends a rule against you.",
+                    "",
+                    "   Score is also your money: what you earn is what you spend in the market.",
+                    "",
+                    "CLEAN SWEEP",
+                    "   Emptying the arena completely is a 'clean sweep'. It pays a large bonus and",
+                    "   recharges every power you hold - it is the engine of the whole game.",
+                    "   A few block types are ignored by the check, so an arena holding only those",
+                    "   still counts as swept."
+                },
+                new[]
+                {
+                    "THE TURN",
+                    "   You hold 3 blocks. Place one, it goes to the discard, and you draw a",
+                    "   replacement. Jokers and powers can change how many you hold.",
+                    "",
+                    "PASSING THE THRESHOLD",
+                    "   The discard is shuffled back into the draw pile and you are offered the",
+                    "   market. You can take it, or CONTINUE for more points.",
+                    "",
+                    "OVERTIME",
+                    "   Once you continue, the offer to leave only comes back on each clean sweep.",
+                    "   Continuing costs cards out of the round, and the price rises every time.",
+                    "   Regular actions pay almost nothing now - the reward is for surviving each",
+                    "   overtime, and it grows.",
+                    "   If the draw pile empties before you sweep, you LOSE.",
+                    "",
+                    "LOSING",
+                    "   The usual way is the arena filling up with nothing in hand that fits.",
+                    "   Some jokers, powers and bosses can end a run in their own ways."
+                },
+                new[]
+                {
+                    "YOUR DECKS",
+                    "   YOUR COLLECTION is every card you own. It is what a round is dealt from.",
+                    "   The DRAW PILE is what you draw from; when it runs out, the discard is",
+                    "   shuffled back into it.",
+                    "   The DISCARD is where played and dumped cards pile up.",
+                    "",
+                    "   You pick a deck archetype when a run starts - classic, small blocks, big",
+                    "   blocks or chaos - and it decides what shapes you keep drawing all run.",
+                    "   Cards bought in the market join your collection from the next round.",
+                    "",
+                    "BONUS HAND",
+                    "   Extra blocks that do not take up a hand slot. Playing one burns the next",
+                    "   card off the draw pile face-up into the discard, and the bonus block is",
+                    "   usually spent for good.",
+                    "",
+                    "EROSION - THE STALLING CLOCK",
+                    "   Run the draw pile dry too often in one round and the arena starts eroding:",
+                    "   the rim, a growing hole in the middle, or both. An EATEN cell is worse than",
+                    "   a hole - it kills its row and its column, which can never be cleared again."
+                },
+                new[]
+                {
+                    "BLOCK TYPES",
+                    "   Blocks bought in the market can carry an element.",
+                    "",
+                    "   FIRE          one cube of it explodes, the whole block goes with it",
+                    "   WATER         runs downhill and spreads; fire it touches turns to obsidian",
+                    "   OBSIDIAN      cannot be destroyed, but the sweep check ignores it",
+                    "   GOLD          the same, and it pays points every turn it sits there",
+                    "   GHOST         can hang off the edge, as long as one cube is on the arena",
+                    "   DYNAMITE      if the whole block goes at once the turn you place it,",
+                    "                 the entire arena is cleared",
+                    "   TRANSPARENT   you can build on top of it",
+                    "   MECHANICAL    right-click to rotate it in hand",
+                    "   FOX           right-click to reshape it into another shape from your deck",
+                    "   NEGATIVE      the anti-block: drop it ON cubes and it erases them, going",
+                    "                 with them - obsidian and gold refuse it",
+                    "   VOID          a 1x1 trap some jokers hand out: whatever lands on it dies"
+                },
+                new[]
+                {
+                    "JOKERS",
+                    "   Bought in the market and then left alone - they are passive, never need",
+                    "   recharging, and bend the rules on their own. You have a limited number of",
+                    "   slots. They act in the order you bought them, and they stack rather than",
+                    "   overwrite each other.",
+                    "",
+                    "POWERS",
+                    "   Active instead. Each holds ONE charge, you may use at most one per turn,",
+                    "   and using one never costs you a turn. A clean sweep is what puts the",
+                    "   charges back - which is why sweeping matters even when you are ahead.",
+                    "",
+                    "RARITY",
+                    "   Common, rare and legendary. Rarer things cost more and show up in the shop",
+                    "   less often, and you may hold only one legendary joker at a time.",
+                    "",
+                    "BOSS ROUNDS",
+                    "   Every 3rd round brings one antagonist that bends a single rule for that",
+                    "   round only - stealing from your hand, sealing cells, stripping elements,",
+                    "   taxing your collection, silencing jokers, or limiting what scores.",
+                    "   Never two at once, and never the same boss twice in a run."
+                },
+                new[]
+                {
+                    "THE MARKET",
+                    "   Between rounds: click an offer to buy it, click your deck to sell cards,",
+                    "   click a joker or power in its bar to sell it, REROLL to restock the whole",
+                    "   shelf for a price that rises each time you do it.",
+                    "   [N] starts the next round.",
+                    "",
+                    "KEYS",
+                    "   [Esc]  pause          [L]  language         [F2]  rarity grader",
+                    "   [1-9]  use a joker    [A]  advance          [C]   continue (overtime)",
+                    "",
+                    "   Right-click a block in hand to rotate MECHANICAL / reshape FOX.",
+                    "   Click the draw pile to look through your collection.",
+                    "",
+                    "DEBUG KEYS",
+                    "   [R] new run    [D] deck    [S] redraw hand    [B] bonus card",
+                    "   [J] grant joker    [P] grant power    [K] sell the last joker"
+                }
             };
-            return string.Join("\n", Loc.Language == GameLanguage.Turkish ? turkish : english);
+        }
+
+        private static string[][] TurkishPages()
+        {
+            return new[]
+            {
+                new[]
+                {
+                    "AMAÇ",
+                    "   Elindeki bloğu oyun alanına sürükle. Bir satırı ya da sütunu tamamen",
+                    "   doldurursan patlar.",
+                    "",
+                    "   Her rauntun kendi alan büyüklüğü ve kendi PUAN EŞİĞİ vardır. Eşiğe",
+                    "   ulaşınca sonraki raunta geçme hakkı kazanırsın. Bir oyun 15 raunt sürer",
+                    "   ve her 3. raunt, sana karşı bir kuralı büken bir PATRON RAUNDUDUR.",
+                    "",
+                    "   Puan aynı zamanda paran: kazandığın şey markette harcadığın şeydir.",
+                    "",
+                    "TEMİZLİK",
+                    "   Oyun alanını tamamen boşaltmak 'temizlik'tir. Bol puan kazandırır ve",
+                    "   elindeki bütün güçleri yeniden doldurur - oyunun motoru budur.",
+                    "   Bazı blok türleri bu kontrolde sayılmaz; sadece onlardan oluşan bir alan",
+                    "   yine de temizlenmiş sayılır."
+                },
+                new[]
+                {
+                    "TUR",
+                    "   Elinde 3 blok tutarsın. Birini koyarsın, o kart ıskartaya gider ve yerine",
+                    "   yeni bir kart çekersin. Jokerler ve güçler el boyutunu değiştirebilir.",
+                    "",
+                    "EŞİĞİ GEÇMEK",
+                    "   Iskarta çekme destesine karılır ve sana market teklif edilir. Kabul",
+                    "   edebilirsin ya da daha çok puan için DEVAM edebilirsin.",
+                    "",
+                    "UZATMA",
+                    "   Devam ettikten sonra çıkma teklifi yalnızca her temizlikte geri gelir.",
+                    "   Devam etmek raunttan kart götürür ve bedeli her seferinde artar.",
+                    "   Artık sıradan hamleler neredeyse hiç puan vermez - ödül her uzatmayı",
+                    "   atlatmaktadır ve giderek büyür.",
+                    "   Temizlik yapmadan çekme destesi biterse KAYBEDERSİN.",
+                    "",
+                    "KAYBETMEK",
+                    "   Olağan yol, alanın dolması ve elindeki hiçbir bloğun sığmamasıdır.",
+                    "   Bazı jokerler, güçler ve patronlar da kendi yollarıyla oyunu bitirebilir."
+                },
+                new[]
+                {
+                    "DESTELERİN",
+                    "   OYUN DESTESİ sahip olduğun bütün kartlardır; raunt ondan dağıtılır.",
+                    "   ÇEKME DESTESİ kart çektiğin yerdir; bitince ıskarta karılıp yerine konur.",
+                    "   ISKARTA oynanan ve elden çıkarılan kartların biriktiği yerdir.",
+                    "",
+                    "   Oyun başlarken bir deste türü seçersin - klasik, küçük bloklar, büyük",
+                    "   bloklar ya da kaos - ve bu, oyun boyunca çekeceğin şekilleri belirler.",
+                    "   Marketten aldığın kartlar sonraki rauntta desteye karışır.",
+                    "",
+                    "BONUS EL",
+                    "   Elde yer kaplamayan ek bloklar. Birini oynadığında çekme destesinin",
+                    "   üstündeki kart açık şekilde ıskartaya yakılır ve bonus blok genelde",
+                    "   tamamen harcanmış olur.",
+                    "",
+                    "EROZYON - OYALANMA SAATİ",
+                    "   Bir rauntta çekme destesini çok kez bitirirsen alan erimeye başlar:",
+                    "   kenardan, ortada büyüyen bir delikten ya da ikisinden birden. YENEN bir",
+                    "   hücre delikten beterdir - satırını ve sütununu öldürür, bir daha temizlenemez."
+                },
+                new[]
+                {
+                    "BLOK TÜRLERİ",
+                    "   Marketten alınan bloklar bir element taşıyabilir.",
+                    "",
+                    "   ATEŞ          bir küpü patlarsa bütün blok onunla birlikte patlar",
+                    "   SU            yer çekimiyle akar ve yayılır; değdiği ateşi obsidyen yapar",
+                    "   OBSİDYEN      yok edilemez, ama temizlik kontrolünde sayılmaz",
+                    "   ALTIN         aynısı, üstelik alanda durduğu her tur puan kazandırır",
+                    "   HAYALET       en az bir küpü alanda kalmak şartıyla dışarı taşabilir",
+                    "   DİNAMİT       koyduğun turda bütün blok tek seferde patlarsa",
+                    "                 oyun alanının tamamı temizlenir",
+                    "   TRANSPARAN    üstüne blok koyabilirsin",
+                    "   ÇARK          elindeyken sağ tıkla döndürürsün",
+                    "   TİLKİ         sağ tıkla destendeki başka bir şekle sokarsın",
+                    "   NEGATİF       anti-blok: küplerin ÜSTÜNE koyarsın, onları siler ve",
+                    "                 kendisi de gider - obsidyen ve altın onu reddeder",
+                    "   BOŞLUK        bazı jokerlerin verdiği 1x1 tuzak: üstüne düşen küp ölür"
+                },
+                new[]
+                {
+                    "JOKERLER",
+                    "   Marketten alınır ve sonra unutulur - pasiftirler, yeniden doldurulmaları",
+                    "   gerekmez ve kuralları kendiliğinden bükerler. Sınırlı sayıda slotun var.",
+                    "   Aldığın sırayla çalışırlar ve birbirlerinin üstüne biner, birbirlerini",
+                    "   ezmezler.",
+                    "",
+                    "GÜÇLER",
+                    "   Bunlar aktiftir. Her birinin TEK şarjı vardır, turda en fazla birini",
+                    "   kullanabilirsin ve kullanmak sana tur harcatmaz. Şarjları geri getiren",
+                    "   şey temizliktir - öndeyken bile temizlik yapmanın sebebi budur.",
+                    "",
+                    "NADİRLİK",
+                    "   Yaygın, nadir ve efsanevi. Nadir olanlar daha pahalıdır, markette daha",
+                    "   seyrek çıkar ve aynı anda yalnızca bir efsanevi joker tutabilirsin.",
+                    "",
+                    "PATRON RAUNTLARI",
+                    "   Her 3. raunt, yalnızca o raunt için tek bir kuralı büken bir düşman",
+                    "   getirir - elinden kart çalmak, hücre mühürlemek, elementleri silmek,",
+                    "   desteni vergilendirmek, jokerleri susturmak ya da neyin puan verdiğini",
+                    "   kısıtlamak. Aynı anda iki tane olmaz, bir oyunda aynısı iki kez gelmez."
+                },
+                new[]
+                {
+                    "MARKET",
+                    "   Rauntlar arası: almak için teklife tıkla, kart satmak için desteye tıkla,",
+                    "   joker ya da güç satmak için barındaki panele tıkla, bütün rafı yenilemek",
+                    "   için REROLL - bedeli her kullanışta artar.",
+                    "   [N] sonraki raundu başlatır.",
+                    "",
+                    "TUŞLAR",
+                    "   [Esc]  duraklat       [L]  dil              [F2]  nadirlik defteri",
+                    "   [1-9]  joker kullan   [A]  markete geç      [C]   devam et (uzatma)",
+                    "",
+                    "   Elindeki bloğa sağ tık: ÇARK döndürür, TİLKİ şekil değiştirir.",
+                    "   Çekme destesine tıklayarak bütün kartlarına bakabilirsin.",
+                    "",
+                    "DEBUG TUŞLARI",
+                    "   [R] yeni oyun    [D] deste    [S] eli yenile    [B] bonus kart",
+                    "   [J] joker ver    [P] güç ver    [K] son jokeri sat"
+                }
+            };
         }
     }
 }

@@ -50,13 +50,17 @@ namespace ProjectBlock.View
         private const float SubtitleHeight = 34f;
 
         // Reading-screen (ShowText) body block.
-        private const float BodyWidth = 1120f;
+        private const float BodyWidth = 1180f;
         private const float BodyHeight = 620f;
+
+        /// <summary>The navigation line under a reading screen's body.</summary>
+        private const float HintHeight = 32f;
 
         private sealed class Row
         {
             public GameObject Root;
             public Image Background;
+            public Image Accent;
             public Text Label;
             public bool Enabled;
         }
@@ -145,8 +149,8 @@ namespace ProjectBlock.View
         /// underneath. The entries are normal rows, so the usual click/arrow/Enter input path
         /// drives this screen too. The body shrinks as entries are added, so the whole thing
         /// keeps fitting on screen.</summary>
-        public void ShowText(string title, string body, IReadOnlyList<MenuEntry> entries,
-            Color backdropColor)
+        public void ShowText(string title, string body, string hint,
+            IReadOnlyList<MenuEntry> entries, Color backdropColor)
         {
             if (root == null)
             {
@@ -171,7 +175,8 @@ namespace ProjectBlock.View
             // the bottom of the screen however many buttons a screen ends up with.
             float bodyHeight = Mathf.Max(200f,
                 BodyHeight - (buttons - MenuSkin.ButtonHeight));
-            float y = (TitleHeight + gap + bodyHeight + gap + buttons) * 0.5f;
+            float hintHeight = string.IsNullOrEmpty(hint) ? 0f : HintHeight;
+            float y = (TitleHeight + gap + bodyHeight + hintHeight + gap + buttons) * 0.5f;
 
             MakeText(root, "Title", new Vector2(0f, y - TitleHeight * 0.5f),
                 new Vector2(BodyWidth, TitleHeight), title,
@@ -182,7 +187,16 @@ namespace ProjectBlock.View
                 new Vector2(BodyWidth, bodyHeight), body,
                 MenuSkin.BodyFontSize, MenuSkin.Label);
             text.alignment = TextAnchor.UpperLeft;
-            y -= bodyHeight + gap;
+            y -= bodyHeight;
+
+            if (hintHeight > 0f)
+            {
+                MakeText(root, "Hint", new Vector2(0f, y - hintHeight * 0.5f),
+                    new Vector2(BodyWidth, hintHeight), hint,
+                    MenuSkin.SubtitleFontSize, MenuSkin.Subtitle);
+                y -= hintHeight;
+            }
+            y -= gap;
 
             for (int i = 0; i < entries.Count; i++)
             {
@@ -281,10 +295,14 @@ namespace ProjectBlock.View
             for (int i = 0; i < rows.Count; i++)
             {
                 Row row = rows[i];
+                bool highlighted = row.Enabled && i == Selected;
                 row.Background.color = !row.Enabled
                     ? MenuSkin.ButtonDisabled
-                    : i == Selected ? MenuSkin.ButtonHover : MenuSkin.Button;
-                row.Label.color = row.Enabled ? MenuSkin.Label : MenuSkin.LabelDisabled;
+                    : highlighted ? MenuSkin.ButtonHover : MenuSkin.Button;
+                row.Label.color = !row.Enabled
+                    ? MenuSkin.LabelDisabled
+                    : highlighted ? MenuSkin.LabelSelected : MenuSkin.Label;
+                row.Accent.enabled = highlighted;
             }
         }
 
@@ -296,6 +314,11 @@ namespace ProjectBlock.View
                 new Vector2(MenuSkin.ButtonWidth, MenuSkin.ButtonHeight),
                 MenuSkin.Button, MenuSkin.ButtonSprite);
             row.Root = row.Background.gameObject;
+            row.Accent = MakeImage(row.Root.transform, "Accent",
+                new Vector2(-MenuSkin.ButtonWidth * 0.5f + MenuSkin.AccentWidth, 0f),
+                new Vector2(MenuSkin.AccentWidth, MenuSkin.ButtonHeight - 18f),
+                MenuSkin.Accent, null);
+            row.Accent.enabled = false; // switched on for the highlighted row only
 
             bool hasNote = !string.IsNullOrEmpty(entry.Note);
             // With a note the label lifts a little so the two share the button cleanly.
