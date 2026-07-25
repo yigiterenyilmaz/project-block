@@ -541,13 +541,27 @@ namespace ProjectBlock.Core
                 taken = TotalScore;
             }
             TotalScore -= taken;
+            CurrencyTakenByEffects += taken;
             return taken;
         }
+
+        /// <summary>
+        /// Run currency taken away by an EFFECT rather than earned, spent or sold - "Cana
+        /// geleceğine mala" charging the purse, an overtime cap clawing back farmed score.
+        /// Book-keeping only: it exists so the books can be balanced (the fuzz suite proves
+        /// TotalScore against it), and nothing in the rules reads it.
+        /// </summary>
+        public long CurrencyTakenByEffects { get; private set; }
 
         /// <summary>Adds run currency (a joker sale today; market refunds later).</summary>
         public void AddCurrency(long amount)
         {
             TotalScore += amount;
+            if (amount < 0)
+            {
+                // A negative grant is an effect taking money back (the overtime score cap).
+                CurrencyTakenByEffects += -amount;
+            }
         }
 
         /// <summary>The session RNG. Everything random in the run must come from here.</summary>

@@ -329,6 +329,48 @@ namespace ProjectBlock.Core
             exploded.Add(pos);
         }
 
+        /// <summary>
+        /// FORGETTING, which is not destruction. Lifts every cube of one card off the board
+        /// whatever kind it is - obsidian, gold and a Parazit host included - because the board
+        /// is not breaking them, it is ceasing to remember they were ever laid ("Alzheimer").
+        /// Ghost traces hanging outside the grid go with them.
+        ///
+        /// Nothing here feeds the destruction bookkeeping: the caller re-baselines the snapshot
+        /// afterwards, which is what keeps these cubes out of the turn's tally, its score and
+        /// the clean-sweep pre-condition. Returns the cells that were cleared.
+        /// </summary>
+        public List<GridPos> ForgetCard(int cardId)
+        {
+            var cleared = new List<GridPos>();
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    Cube? cube = cells[x, y];
+                    if (cube.HasValue && cube.Value.SourceCardId == cardId)
+                    {
+                        cells[x, y] = null;
+                        OccupiedCount--;
+                        cleared.Add(new GridPos(x + MinX, y + MinY));
+                    }
+                }
+            }
+            var ghosts = new List<GridPos>();
+            foreach (KeyValuePair<GridPos, Cube> ghost in outsideCubes)
+            {
+                if (ghost.Value.SourceCardId == cardId)
+                {
+                    ghosts.Add(ghost.Key);
+                }
+            }
+            for (int i = 0; i < ghosts.Count; i++)
+            {
+                outsideCubes.Remove(ghosts[i]);
+                cleared.Add(ghosts[i]);
+            }
+            return cleared;
+        }
+
         /// <summary>Dynamite: destroys every destructible cube on the board.</summary>
         public List<GridPos> DestroyAllDestructible()
         {

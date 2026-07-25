@@ -37,6 +37,21 @@ namespace ProjectBlock.Core
             extraExplodedCells.AddRange(cells);
         }
 
+        private readonly List<GridPos> forgottenCells = new List<GridPos>();
+
+        /// <summary>Cells "Alzheimer" FORGOT this turn. Deliberately separate from every
+        /// explosion list: nothing was destroyed, so the View marks them their own way and no
+        /// score or tally is involved.</summary>
+        public IReadOnlyList<GridPos> ForgottenCells
+        {
+            get { return forgottenCells; }
+        }
+
+        internal void AddForgottenCells(IReadOnlyList<GridPos> cells)
+        {
+            forgottenCells.AddRange(cells);
+        }
+
         /// <summary>True if this turn emptied the board ("temizlik").</summary>
         public bool CleanSweep { get; internal set; }
 

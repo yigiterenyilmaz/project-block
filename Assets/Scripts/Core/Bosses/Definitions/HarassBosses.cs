@@ -245,4 +245,100 @@ namespace ProjectBlock.Core
             get { return Loc.Pick("fill up to win", "dolduran kazanır"); }
         }
     }
+
+    /// <summary>
+    /// "Alzheimer" - the board keeps losing its memory. Every turn it forgets the card played
+    /// MemoryTurns ago, and whatever is left of that card is lifted off the arena.
+    ///
+    /// "Whatever is left" is the point: the block does NOT have to be intact. A four-cube card
+    /// that has already had three of its cubes blown out still loses the fourth, exactly as if
+    /// it had never been laid.
+    ///
+    /// FORGETTING IS NOT DESTRUCTION. It pays nothing, counts toward no sweep and feeds no
+    /// tally - and nothing survives it, obsidian and gold and a Parazit host included, because
+    /// the board is not breaking those cubes, it is ceasing to remember them. That last part is
+    /// the boss's one gift: a stone you could never shift will eventually be forgotten.
+    ///
+    /// The memory is per WORLD-agnostic card id, so a card laid in the mirror world ("Öteki
+    /// dünya") is forgotten there too.
+    /// </summary>
+    public sealed class AlzheimerBoss : BossRound
+    {
+        /// <summary>How many turns a card stays remembered.</summary>
+        public int MemoryTurns = 5;
+
+        /// <summary>Card played on each turn, main world and mirror, indexed by turn - 1.
+        /// -1 where a world played nothing that turn.</summary>
+        private readonly List<int> mainCardByTurn = new List<int>();
+        private readonly List<int> mirrorCardByTurn = new List<int>();
+
+        private int cellsForgotten;
+
+        public AlzheimerBoss()
+            : base("alzheimer", "Alzheimer")
+        {
+            SetDescription(
+                "Every turn the board forgets the card you played 5 turns ago: whatever is left "
+                    + "of it is lifted off, intact or not. Nothing survives being forgotten - "
+                    + "not even obsidian or gold.",
+                "Her tur, 5 tur önce oynadığın kart unutulur: o karttan geriye ne kaldıysa "
+                    + "alandan kalkar, bütün olması gerekmez. Unutulmaya hiçbir şey direnemez - "
+                    + "obsidyen ve altın bile.");
+        }
+
+        /// <summary>Cells forgotten so far this round, for the UI.</summary>
+        public int CellsForgotten
+        {
+            get { return cellsForgotten; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return cellsForgotten > 0
+                    ? cellsForgotten + Loc.Pick(" forgotten", " unutuldu")
+                    : Loc.Pick("remembering", "hatırlıyor");
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            mainCardByTurn.Clear();
+            mirrorCardByTurn.Clear();
+            cellsForgotten = 0;
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            // Remember this turn, padding for any turn this boss did not see, so the list index
+            // always is the turn number - 1 and the look-back can never slip.
+            int turnNumber = turn.Round.TurnNumber;
+            while (mainCardByTurn.Count < turnNumber)
+            {
+                mainCardByTurn.Add(-1);
+                mirrorCardByTurn.Add(-1);
+            }
+            mainCardByTurn[turnNumber - 1] = turn.Report.Card != null ? turn.Report.Card.Id : -1;
+            mirrorCardByTurn[turnNumber - 1] =
+                turn.Report.MirrorCard != null ? turn.Report.MirrorCard.Id : -1;
+
+            int forgetTurn = turnNumber - MemoryTurns;
+            if (forgetTurn < 1)
+            {
+                return; // nothing is old enough to have slipped the board's mind yet
+            }
+            Forget(turn, mainCardByTurn[forgetTurn - 1]);
+            Forget(turn, mirrorCardByTurn[forgetTurn - 1]);
+        }
+
+        private void Forget(TurnContext turn, int cardId)
+        {
+            if (cardId < 0)
+            {
+                return;
+            }
+            cellsForgotten += turn.Round.ForgetCard(cardId).Count;
+        }
+    }
 }

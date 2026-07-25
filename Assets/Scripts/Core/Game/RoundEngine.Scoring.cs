@@ -304,6 +304,33 @@ namespace ProjectBlock.Core
             SetStatus(RoundStatus.Advanced);
         }
 
+        /// <summary>
+        /// "Alzheimer": lifts a card's cubes off EVERY world without any of the bookkeeping a
+        /// destruction carries - no score, no sweep, nothing for "Kayıt defteri" to count. The
+        /// snapshot is re-baselined straight afterwards, and THAT is what makes it not a
+        /// destruction: the turn's diff never sees these cubes leave.
+        ///
+        /// Indestructible cubes go too. The board is not breaking them, it is forgetting they
+        /// were ever laid, and nothing survives being forgotten.
+        /// </summary>
+        internal IReadOnlyList<GridPos> ForgetCard(int cardId)
+        {
+            var cleared = new List<GridPos>(MainBoard.ForgetCard(cardId));
+            if (MirrorBoard != null)
+            {
+                cleared.AddRange(MirrorBoard.ForgetCard(cardId));
+            }
+            if (cleared.Count > 0)
+            {
+                ResyncSnapshot();
+                if (currentReport != null)
+                {
+                    currentReport.AddForgottenCells(cleared);
+                }
+            }
+            return cleared;
+        }
+
         /// <summary>Records why the RUN ended on a round the player actually survived
         /// ("Kredi kartı" hitting its deadline). The status stays Advanced - the round was won -
         /// so nothing re-reads this as a lost round; it only gives the UI a cause to name.</summary>

@@ -135,6 +135,11 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Boss_AlzheimerForgetsWhatWasPlayedFiveTurnsAgo();
+        Boss_AlzheimerTakesWhateverIsLeftOfTheBlock();
+        Boss_AlzheimerForgetsEvenTheUnbreakable();
+        Boss_AlzheimerForgettingIsNotDestruction();
+        Boss_AlzheimerRemembersNothingBeforeTheLimit();
         Boss_CikmazTurnsTheRoundUpsideDown();
         Boss_CikmazLosesOnASweep();
         Boss_CikmazLosesOnTheThreshold();
@@ -4277,6 +4282,161 @@ public static class JokerTests
             "and the circuit still counted as completed, even though the line ate its cells");
     }
 
+    private static void Boss_AlzheimerForgetsWhatWasPlayedFiveTurnsAgo()
+    {
+        Section("boss / alzheimer forgets the card played five turns ago");
+        var session = NewSession(8300, 8, 1000000, 40, 3);
+        RoundEngine round = session.CurrentRound;
+        var boss = new AlzheimerBoss();
+        round.SetBoss(boss);
+
+        // Play one card and remember exactly which cells it laid.
+        TurnReport first = PlayOneCard(round);
+        Check(first != null && first.PlacedCells.Count > 0, "a card was played",
+            first == null ? "none" : "cells " + first.PlacedCells.Count);
+        int cardId = first.Card.Id;
+        var laid = new List<GridPos>(first.PlacedCells);
+        Check(round.Board.CountCubesOf(cardId) == laid.Count, "its cubes are on the board",
+            "" + round.Board.CountCubesOf(cardId));
+
+        // It survives every turn up to the memory limit.
+        for (int i = 1; i < boss.MemoryTurns; i++)
+        {
+            PlayTurns(session, 1);
+            Check(round.Board.CountCubesOf(cardId) > 0,
+                "still remembered after " + i + " more turn(s)",
+                "left " + round.Board.CountCubesOf(cardId));
+        }
+
+        // The turn that reaches the limit forgets it.
+        TurnReport forgetting = PlayOneCard(round);
+        Check(round.Board.CountCubesOf(cardId) == 0, "and then it is gone from the board",
+            "left " + round.Board.CountCubesOf(cardId));
+        Check(forgetting.ForgottenCells.Count > 0, "the turn reported what it forgot",
+            "cells " + forgetting.ForgottenCells.Count);
+        Check(boss.CellsForgotten > 0, "and the boss counted it",
+            "" + boss.CellsForgotten);
+    }
+
+    private static void Boss_AlzheimerTakesWhateverIsLeftOfTheBlock()
+    {
+        Section("boss / alzheimer takes what is LEFT of a block, whole or not");
+        var session = NewSession(8301, 8, 1000000, 40, 4);
+        RoundEngine round = session.CurrentRound;
+        var boss = new AlzheimerBoss();
+        round.SetBoss(boss);
+
+        TurnReport first = PlayOneCard(round);
+        int cardId = first.Card.Id;
+        var laid = new List<GridPos>(first.PlacedCells);
+        Check(laid.Count >= 3, "a block of at least three cubes", "cells " + laid.Count);
+
+        // Blow away all but one of its cubes by hand, so the block is already broken.
+        for (int i = 0; i < laid.Count - 1; i++)
+        {
+            round.Board.DestroyCube(laid[i]);
+        }
+        Check(round.Board.CountCubesOf(cardId) == 1, "one lonely cube is left",
+            "" + round.Board.CountCubesOf(cardId));
+
+        PlayTurns(session, boss.MemoryTurns);
+        Check(round.Board.CountCubesOf(cardId) == 0,
+            "and the last cube is forgotten too - the block need not be whole",
+            "left " + round.Board.CountCubesOf(cardId));
+    }
+
+    private static void Boss_AlzheimerForgetsEvenTheUnbreakable()
+    {
+        Section("boss / alzheimer forgets obsidian and gold, which nothing else can shift");
+        var session = NewSession(8302, 8, 1000000, 40, 2);
+        RoundEngine round = session.CurrentRound;
+        var boss = new AlzheimerBoss();
+        round.SetBoss(boss);
+
+        TurnReport first = PlayOneCard(round);
+        int cardId = first.Card.Id;
+        var laid = new List<GridPos>(first.PlacedCells);
+        // Turn its cubes into the two kinds the game cannot destroy, and protect one on top.
+        round.Board.SetCubeKind(laid[0], CubeKind.Obsidian);
+        if (laid.Count > 1)
+        {
+            round.Board.SetCubeKind(laid[1], CubeKind.Gold);
+            round.Board.SetCubeProtected(laid[1]);
+        }
+        Check(!round.Board.DestroyCube(laid[0]), "obsidian really does refuse destruction");
+        Check(round.Board.CountCubesOf(cardId) == laid.Count, "the cubes are all still there",
+            "" + round.Board.CountCubesOf(cardId));
+
+        PlayTurns(session, boss.MemoryTurns);
+        Check(round.Board.CountCubesOf(cardId) == 0,
+            "forgetting takes them anyway - nothing survives being forgotten",
+            "left " + round.Board.CountCubesOf(cardId));
+    }
+
+    private static void Boss_AlzheimerForgettingIsNotDestruction()
+    {
+        Section("boss / forgetting pays nothing and triggers no sweep");
+        var session = NewSession(8303, 4, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = new AlzheimerBoss();
+        round.SetBoss(boss);
+
+        TurnReport first = PlayOneCard(round);
+        int cardId = first.Card.Id;
+        // Leave ONLY that card on the board, so forgetting it empties the arena entirely.
+        foreach (GridPos cell in AllPlayableCells(round.Board))
+        {
+            Cube? cube = round.Board.GetCube(cell);
+            if (cube.HasValue && cube.Value.SourceCardId != cardId)
+            {
+                round.Board.DestroyCube(cell);
+            }
+        }
+        int sweepsBefore = round.CleanSweepCount;
+
+        // Run to the memory limit, clearing the board of anything else each turn so that the
+        // forgetting is what empties it.
+        for (int i = 0; i < boss.MemoryTurns; i++)
+        {
+            TurnReport report = PlayOneCard(round);
+            if (report == null) { break; }
+            foreach (GridPos cell in AllPlayableCells(round.Board))
+            {
+                Cube? cube = round.Board.GetCube(cell);
+                if (cube.HasValue && cube.Value.SourceCardId != cardId
+                    && round.Board.CountCubesOf(cardId) > 0)
+                {
+                    round.Board.DestroyCube(cell);
+                }
+            }
+        }
+        Check(round.Board.CountCubesOf(cardId) == 0, "the card was forgotten",
+            "left " + round.Board.CountCubesOf(cardId));
+        Check(round.CleanSweepCount == sweepsBefore,
+            "and emptying the board that way was NOT a clean sweep",
+            sweepsBefore + " -> " + round.CleanSweepCount);
+    }
+
+    private static void Boss_AlzheimerRemembersNothingBeforeTheLimit()
+    {
+        Section("boss / nothing is forgotten in the first turns");
+        var session = NewSession(8304, 8, 1000000, 40, 3);
+        RoundEngine round = session.CurrentRound;
+        var boss = new AlzheimerBoss();
+        round.SetBoss(boss);
+
+        int occupied = 0;
+        for (int i = 0; i < boss.MemoryTurns - 1; i++)
+        {
+            PlayOneCard(round);
+            occupied = round.Board.OccupiedCount;
+        }
+        Check(boss.CellsForgotten == 0, "nothing has slipped its mind yet",
+            "forgotten " + boss.CellsForgotten);
+        Check(occupied > 0, "and the board has been filling up all along",
+            "occupied " + occupied);
+    }
+
     private static void Boss_CikmazTurnsTheRoundUpsideDown()
     {
         Section("boss / çıkmaz: filling up wins, sweeping or scoring loses");
@@ -5160,10 +5320,15 @@ public static class JokerTests
                 }
             }
 
-            if (failure == null && session.TotalScore != expectedTotal + saleIncome)
+            // The books must balance: every point in TotalScore came from a turn or a sale,
+            // minus whatever an EFFECT took back (a boss charging the purse, an overtime cap
+            // clawing back farmed score). The fuzz never enters the market, so nothing is spent.
+            long expected = expectedTotal + saleIncome - session.CurrencyTakenByEffects;
+            if (failure == null && session.TotalScore != expected)
             {
                 failure = "seed " + seed + ": TotalScore " + session.TotalScore
-                    + " != turns " + expectedTotal + " + sales " + saleIncome;
+                    + " != turns " + expectedTotal + " + sales " + saleIncome
+                    + " - taken " + session.CurrencyTakenByEffects;
             }
             runs++;
         }

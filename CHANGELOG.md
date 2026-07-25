@@ -53,7 +53,7 @@ everything here is unreleased and balance numbers are still placeholders.
 - **Boss rounds** — every third round (3, 6, 9, 12, 15) now draws a **boss** that bends the rules
   against you for that round only. A run never fights the same boss twice, the draw is
   deterministic from the run seed, and the HUD names the boss and describes what it is doing.
-  All sixteen:
+  All seventeen:
   - **Alıkoyma** — seizes a random card in your hand every turn (never your last one).
   - **Mapus** — seals one random empty cell per turn: nothing can be placed there, and the row
     and column through it cannot be completed either.
@@ -77,6 +77,12 @@ everything here is unreleased and balance numbers are still placeholders.
     vergisi and with board erosion, so cycling the deck on that round is expensive three ways.
   - **Taş ve sopa** — every joker and every power is switched off, whatever its rarity: just you
     and the board. In exchange the score threshold drops by a quarter.
+  - **Alzheimer** — every turn the board **forgets** the card you played 5 turns ago: whatever
+    is left of it is lifted off the arena, intact or not. A four-cube block that has already had
+    three cubes blown out still loses the fourth. Forgetting is **not destruction** — it pays
+    nothing, counts toward no clean sweep and feeds no tally — and **nothing survives it**, not
+    obsidian, not gold, not a Parazit host. That last part is the boss's one gift: a stone you
+    could never shift will eventually be forgotten.
   - **Çıkmaz** — the round played backwards: **running out of room WINS it**, while **emptying
     the board or reaching the score threshold LOSES it**. The whole round is an exercise in
     playing badly on purpose — fill the arena, clear as little as you can, and above all do not
