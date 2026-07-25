@@ -110,6 +110,10 @@ namespace ProjectBlock.View
         private int parazitCardId;
         private CubePickerView cubePicker;
         private bool sellCardsMode;
+
+        /// <summary>True while the deck overlay's scrollbar is being dragged. Held across frames
+        /// because every move rebuilds the overlay under the cursor.</summary>
+        private bool deckScrollDragging;
         private int lastSeedUsed;
 
         // Hover tooltip (world-space): a small panel rebuilt only when the target changes.
@@ -340,15 +344,41 @@ namespace ProjectBlock.View
                     return;
                 }
                 // The wheel scrolls a deck too long to fit - the overlay re-lays itself out and
-                // remembers where it was, so selling from page 3 stays on page 3.
+                // remembers where it was, so selling from page 3 stays on page 3. A notch is
+                // 120 units, and a notch moving half a row is what makes it feel continuous
+                // rather than teleporting.
                 if (mouse != null)
                 {
                     float deckScroll = mouse.scroll.ReadValue().y;
                     if (Mathf.Abs(deckScroll) > 0.01f)
                     {
-                        deckOverlay.Scroll(deckScroll > 0f ? -1 : +1);
+                        deckOverlay.Scroll(-deckScroll / 240f);
                         return;
                     }
+                }
+                // Dragging the scrollbar. Held across frames, so the drag survives the rebuild
+                // each move causes, and it swallows the click that started it - otherwise the
+                // press would fall through to "clicked nothing, close the overlay".
+                if (mouse != null && deckScrollDragging)
+                {
+                    if (mouse.leftButton.isPressed)
+                    {
+                        deckOverlay.ScrollToWorldY(
+                            cam.ScreenToWorldPoint(mouse.position.ReadValue()).y);
+                    }
+                    else
+                    {
+                        deckScrollDragging = false;
+                    }
+                    return;
+                }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame
+                    && deckOverlay.ScrollbarAt(cam.ScreenToWorldPoint(mouse.position.ReadValue())))
+                {
+                    deckScrollDragging = true;
+                    deckOverlay.ScrollToWorldY(
+                        cam.ScreenToWorldPoint(mouse.position.ReadValue()).y);
+                    return;
                 }
                 if (mouse != null && mouse.leftButton.wasPressedThisFrame && hileliPickMode)
                 {
@@ -424,6 +454,13 @@ namespace ProjectBlock.View
                             UpdateHud();
                             return;
                         }
+                    }
+                    // A click INSIDE the panel that hit nothing is not a request to leave: the
+                    // overlay used to close on any miss, so reaching for the scrollbar or the
+                    // gap between two cards dismissed the whole screen.
+                    if (deckOverlay.PanelContains(cam.ScreenToWorldPoint(mouse.position.ReadValue())))
+                    {
+                        return;
                     }
                     sellCardsMode = false;
                     deckOverlay.Hide();

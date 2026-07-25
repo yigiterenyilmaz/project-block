@@ -41,8 +41,13 @@ namespace ProjectBlock.View
         private CardVisual discardTopVisual;
         private TextMesh drawCountLabel;
 
-        /// <summary>"click: sell cards" over the draw pile, shown in the market only.</summary>
+        /// <summary>The "SELL CARDS" plate over the draw pile, shown in the market only.</summary>
+        private Transform sellHintRoot;
         private TextMesh sellHintLabel;
+
+        private static readonly Color SellHintBodyColor = new Color(0.20f, 0.24f, 0.34f);
+        private static readonly Color SellHintFrameColor = new Color(0.55f, 0.62f, 0.78f);
+        private static readonly Color SellHintTextColor = new Color(1f, 0.92f, 0.45f);
         private int discardTopId = -1;
         private CardVisual drawTopVisual;
         private int drawTopId = -1;
@@ -413,26 +418,32 @@ namespace ProjectBlock.View
                 new Vector2(0f, CardVisual.BodyHeight * 0.5f + 0.34f), "0",
                 56, 0.07f, Color.white, 37, TextAnchor.MiddleCenter);
             // Above the count, and only in the market: the deck pile is also the SELL screen,
-            // which nothing on screen said. Built here and toggled, so it costs nothing while
-            // a round is being played.
-            sellHintLabel = ViewUtil.MakeText3D(drawPileRoot, "SellHint",
-                new Vector2(0f, CardVisual.BodyHeight * 0.5f + 0.78f),
-                Loc.Pick("click: sell cards", "tıkla: kart sat"),
-                70, 0.032f, new Color(1f, 0.92f, 0.45f), 37, TextAnchor.MiddleCenter);
-            sellHintLabel.gameObject.SetActive(false);
+            // which nothing on screen said. A framed plate rather than loose text - floating
+            // words over the background read as a debug print, not as something to click.
+            sellHintRoot = MakePileRoot("SellHint",
+                new Vector2(0f, CardVisual.BodyHeight * 0.5f + 0.86f));
+            sellHintRoot.SetParent(drawPileRoot, false);
+            var hintSize = new Vector2(2.32f, 0.52f);
+            ViewUtil.MakeRect(sellHintRoot, "Frame", Vector2.zero,
+                hintSize + new Vector2(0.11f, 0.11f), SellHintFrameColor, 36);
+            ViewUtil.MakeRect(sellHintRoot, "Body", Vector2.zero, hintSize, SellHintBodyColor, 37);
+            sellHintLabel = ViewUtil.MakeText3D(sellHintRoot, "Label", Vector2.zero,
+                Loc.Pick("SELL CARDS", "KART SAT"),
+                70, 0.030f, SellHintTextColor, 38, TextAnchor.MiddleCenter);
+            sellHintRoot.gameObject.SetActive(false);
         }
 
         /// <summary>Shows or hides the "click to sell" prompt over the draw pile. The controller
         /// turns it on for the market phase only.</summary>
         public void SetSellHint(bool visible)
         {
-            if (sellHintLabel == null)
+            if (sellHintRoot == null)
             {
                 return;
             }
             // Re-texted on every toggle so a language switch mid-run is picked up.
-            sellHintLabel.text = Loc.Pick("click: sell cards", "tıkla: kart sat");
-            sellHintLabel.gameObject.SetActive(visible);
+            sellHintLabel.text = Loc.Pick("SELL CARDS", "KART SAT");
+            sellHintRoot.gameObject.SetActive(visible);
         }
 
         private Transform MakePileRoot(string name, Vector2 position)

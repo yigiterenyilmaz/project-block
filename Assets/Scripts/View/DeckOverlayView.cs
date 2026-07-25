@@ -1,4 +1,4 @@
-// PURPOSE: Full-screen overlay that lists the player's WHOLE owned deck ("oyun
+﻿// PURPOSE: Full-screen overlay that lists the player's WHOLE owned deck ("oyun
 // destesi"), opened by clicking the draw pile. Cards are shown SORTED (by size, then
 // id), never in draw order - the draw pile is face-down and its order must not leak.
 // Future reveal jokers (Insider, Büyüteç) will get their own explicit reveal UI.
@@ -32,6 +32,10 @@ namespace ProjectBlock.View
 
         private const float PanelHalfWidth = 5.15f;
 
+        /// <summary>How far past the visible band a partly-scrolled row may show before it is
+        /// culled. Sized to the panel's padding so overspill never reaches the title.</summary>
+        private const float CullSlack = 0.3f;
+
         /// <summary>Opaque, like the market's: the sell screen used to be a 78% black wash with
         /// the whole shelf legible underneath it.</summary>
         private static readonly Color PanelColor = new Color(0.05f, 0.06f, 0.08f, 1f);
@@ -44,9 +48,21 @@ namespace ProjectBlock.View
 
         public bool IsOpen { get; private set; }
 
-        /// <summary>First row shown. Kept across a rebuild so selling a card does not throw the
-        /// player back to the top of their deck; ResetScroll starts a fresh visit at the top.</summary>
-        private int scrollRow;
+        /// <summary>How far the list is scrolled, IN ROWS and fractional - half a row is a real
+        /// position, which is what makes the wheel feel continuous instead of teleporting a row
+        /// at a time. Kept across a rebuild so selling a card does not throw the player back to
+        /// the top of their deck; ResetScroll starts a fresh visit at the top.</summary>
+        private float scrollRows;
+
+        /// <summary>The scrollbar track, for hit-testing a click or a drag on it.</summary>
+        private Vector2 scrollTrackCenter;
+        private Vector2 scrollTrackHalf;
+        private bool scrollbarShown;
+
+        /// <summary>Panel bounds, so a click INSIDE the overlay does not close it - only a click
+        /// on the dim outside does.</summary>
+        private Vector2 panelBoundsCenter;
+        private Vector2 panelBoundsHalf;
 
         /// <summary>What the last Show was given, so a scroll can re-lay-out without the
         /// controller having to remember which mode the overlay is in.</summary>
@@ -85,8 +101,8 @@ namespace ProjectBlock.View
             bool priced = sellValue != null;
             float pitch = priced ? PricedSpacingY : SpacingY;
             totalRows = (sorted.Count + Columns - 1) / Columns;
-            int maxScroll = Mathf.Max(0, totalRows - VisibleRows);
-            scrollRow = Mathf.Clamp(scrollRow, 0, maxScroll);
+            float maxScroll = Mathf.Max(0, totalRows - VisibleRows);
+            scrollRows = Mathf.Clamp(scrollRows, 0f, maxScroll);
             int shownRows = Mathf.Min(VisibleRows, totalRows);
 
             float gridBottom = GridTop - (shownRows - 1) * pitch;
@@ -107,6 +123,8 @@ namespace ProjectBlock.View
             ViewUtil.MakeRect(transform, "PanelFrame", panelCenter,
                 panelSize + new Vector2(0.22f, 0.22f), PanelFrameColor, 40);
             ViewUtil.MakeRect(transform, "Panel", panelCenter, panelSize, PanelColor, 41);
+            panelBoundsCenter = panelCenter;
+            panelBoundsHalf = panelSize * 0.5f + new Vector2(0.11f, 0.11f);
 
             ViewUtil.MakeText3D(transform, "Title", new Vector2(0f, titleY),
                 priced
@@ -116,8 +134,15 @@ namespace ProjectBlock.View
                         "DESTEN  -  " + sorted.Count + " kart"),
                 90, 0.030f, TitleColor, 44, TextAnchor.MiddleCenter);
 
-            int firstIndex = scrollRow * Columns;
-            int lastIndex = Mathf.Min(sorted.Count, (scrollRow + VisibleRows) * Columns);
+            // A fractional offset means the row above and the row below can BOTH be partly on
+            // screen, so the window reaches one row past the visible band on each side and rows
+            // are then culled by their CENTRE. The overspill lands in the panel's padding, which
+            // matters because TextMesh price labels cannot be clipped by a sprite mask.
+            int firstIndex = Mathf.Max(0, (Mathf.FloorToInt(scrollRows) - 1) * Columns);
+            int lastIndex = Mathf.Min(sorted.Count,
+                (Mathf.CeilToInt(scrollRows) + VisibleRows + 1) * Columns);
+            float cullTop = GridTop + CullSlack;
+            float cullBottom = gridBottom - CullSlack;
             for (int i = firstIndex; i < lastIndex; i++)
             {
                 int row = i / Columns;
@@ -125,7 +150,11 @@ namespace ProjectBlock.View
                 int columnsInRow = Mathf.Min(Columns, sorted.Count - row * Columns);
                 float startX = -(columnsInRow - 1) * SpacingX * 0.5f;
                 var position = new Vector2(startX + column * SpacingX,
-                    GridTop - (row - scrollRow) * pitch);
+                    GridTop - (row - scrollRows) * pitch);
+                if (position.y > cullTop || position.y < cullBottom)
+                {
+                    continue;
+                }
                 CardVisual visual = CardVisual.Create(transform, "Overlay_" + sorted[i].Id,
                     sorted[i], true, false, position, 42);
                 visual.transform.localScale = new Vector3(CardScale, CardScale, 1f);
@@ -146,33 +175,71 @@ namespace ProjectBlock.View
                 entryVisuals.Add(visual);
             }
 
+            scrollbarShown = scrolls;
             if (scrolls)
             {
                 BuildScrollbar(GridTop + cardHalf, gridBottom - cardHalf, maxScroll);
-                ViewUtil.MakeText3D(transform, "ScrollHint", new Vector2(0f, hintY),
-                    Loc.Pick(
-                        "mouse wheel to scroll    -    rows " + (scrollRow + 1) + "-"
-                            + Mathf.Min(scrollRow + VisibleRows, totalRows) + " of " + totalRows,
-                        "kaydırmak için tekerlek    -    satır " + (scrollRow + 1) + "-"
-                            + Mathf.Min(scrollRow + VisibleRows, totalRows) + " / " + totalRows),
-                    90, 0.023f, HintColor, 44, TextAnchor.MiddleCenter);
             }
+            ViewUtil.MakeText3D(transform, "CloseHint", new Vector2(0f, hintY),
+                scrolls
+                    ? Loc.Pick("wheel or drag the bar to scroll    -    click outside to close",
+                        "tekerlek ya da çubukla kaydır    -    kapatmak için dışarı tıkla")
+                    : Loc.Pick("click outside to close", "kapatmak için dışarı tıkla"),
+                90, 0.023f, HintColor, 44, TextAnchor.MiddleCenter);
         }
 
-        /// <summary>Scrolls the list by whole rows and re-lays it out. No-op when the overlay
-        /// is not showing a scrollable list.</summary>
-        public void Scroll(int deltaRows)
+        /// <summary>True if the point is inside the overlay's panel. A click in here must NOT
+        /// close the overlay - only one on the dim outside it does.</summary>
+        public bool PanelContains(Vector2 world)
+        {
+            return IsOpen
+                && Mathf.Abs(world.x - panelBoundsCenter.x) <= panelBoundsHalf.x
+                && Mathf.Abs(world.y - panelBoundsCenter.y) <= panelBoundsHalf.y;
+        }
+
+        /// <summary>True if the point is on the scrollbar (track or thumb) - the start of a drag.
+        /// Generous horizontally, because the bar itself is deliberately thin.</summary>
+        public bool ScrollbarAt(Vector2 world)
+        {
+            return scrollbarShown
+                && Mathf.Abs(world.x - scrollTrackCenter.x) <= scrollTrackHalf.x + 0.22f
+                && Mathf.Abs(world.y - scrollTrackCenter.y) <= scrollTrackHalf.y + 0.22f;
+        }
+
+        /// <summary>Jumps the list so the thumb follows this y - the click-and-drag path. The
+        /// top of the track is the top of the deck.</summary>
+        public void ScrollToWorldY(float worldY)
+        {
+            if (!scrollbarShown || lastCards == null || totalRows <= VisibleRows)
+            {
+                return;
+            }
+            float top = scrollTrackCenter.y + scrollTrackHalf.y;
+            float bottom = scrollTrackCenter.y - scrollTrackHalf.y;
+            float t = Mathf.InverseLerp(top, bottom, worldY);
+            SetScroll(t * (totalRows - VisibleRows));
+        }
+
+        /// <summary>Scrolls the list by a FRACTION of a row and re-lays it out. No-op when the
+        /// overlay is not showing a scrollable list.</summary>
+        public void Scroll(float deltaRows)
+        {
+            SetScroll(scrollRows + deltaRows);
+        }
+
+        private void SetScroll(float wantedRows)
         {
             if (!IsOpen || lastCards == null || totalRows <= VisibleRows)
             {
                 return;
             }
-            int wanted = Mathf.Clamp(scrollRow + deltaRows, 0, totalRows - VisibleRows);
-            if (wanted == scrollRow)
+            float wanted = Mathf.Clamp(wantedRows, 0f, totalRows - VisibleRows);
+            // A rebuild per frame is fine at this scale, but not a rebuild per NOTHING.
+            if (Mathf.Abs(wanted - scrollRows) < 0.0005f)
             {
                 return;
             }
-            scrollRow = wanted;
+            scrollRows = wanted;
             Show(lastCards, lastSellValue);
         }
 
@@ -180,22 +247,24 @@ namespace ProjectBlock.View
         /// every rebuild - selling a card must not scroll the list out from under the player.</summary>
         public void ResetScroll()
         {
-            scrollRow = 0;
+            scrollRows = 0f;
         }
 
         /// <summary>Track and thumb down the right edge, showing where in the deck you are.</summary>
-        private void BuildScrollbar(float top, float bottom, int maxScroll)
+        private void BuildScrollbar(float top, float bottom, float maxScroll)
         {
             float x = PanelHalfWidth - 0.24f;
             float height = top - bottom;
-            ViewUtil.MakeRect(transform, "ScrollTrack", new Vector2(x, (top + bottom) * 0.5f),
-                new Vector2(0.1f, height), ScrollTrackColor, 43);
+            scrollTrackCenter = new Vector2(x, (top + bottom) * 0.5f);
+            scrollTrackHalf = new Vector2(0.08f, height * 0.5f);
+            ViewUtil.MakeRect(transform, "ScrollTrack", scrollTrackCenter,
+                new Vector2(0.16f, height), ScrollTrackColor, 43);
             float thumbHeight = Mathf.Max(0.5f, height * VisibleRows / totalRows);
             float travel = height - thumbHeight;
-            float t = maxScroll > 0 ? scrollRow / (float)maxScroll : 0f;
+            float t = maxScroll > 0f ? scrollRows / maxScroll : 0f;
             float thumbY = top - thumbHeight * 0.5f - travel * t;
             ViewUtil.MakeRect(transform, "ScrollThumb", new Vector2(x, thumbY),
-                new Vector2(0.16f, thumbHeight), ScrollThumbColor, 44);
+                new Vector2(0.22f, thumbHeight), ScrollThumbColor, 44);
         }
 
         /// <summary>Shows the owned deck as the "Hileli Zar" opening-hand PICKER: each selected
