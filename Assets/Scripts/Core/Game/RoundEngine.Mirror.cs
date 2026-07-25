@@ -89,6 +89,13 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>Swaps the mirror's board object, for the one effect that replaces a board
+        /// rather than mutating it (the inflation powers aimed at the mirror).</summary>
+        private void ReplaceMirrorBoard(GameBoard board)
+        {
+            MirrorBoard = board;
+        }
+
         /// <summary>True if that card could be placed there in the mirror world.</summary>
         public bool CanPlaceMirrorCard(BlockCard card, GridPos origin)
         {

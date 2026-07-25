@@ -43,6 +43,55 @@ namespace ProjectBlock.View
         /// <summary>Index into MirrorHand the player has picked up, or -1.</summary>
         private int mirrorPickedIndex = -1;
 
+        /// <summary>Which world a joker or power with NO board target goes to. Toggled with [W]
+        /// and meaningless while only one world exists. An effect the player POINTS at a cell
+        /// ignores this - where you clicked already says which world you meant.</summary>
+        private bool effectsOnMirror;
+
+        /// <summary>Aims a target-less activation at the world the player selected.</summary>
+        private ActivationTarget AimedAtChosenWorld(ActivationTarget target)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || !round.HasMirrorWorld)
+            {
+                return target;
+            }
+            return target.OnWorld(effectsOnMirror);
+        }
+
+        /// <summary>Resolves a click into a board cell in EITHER world. The world comes from the
+        /// board that was actually clicked, so a pointed effect never needs the [W] toggle.</summary>
+        private bool TryBoardTargetAt(Vector2 world, out ActivationTarget target)
+        {
+            GridPos cell;
+            if (boardView.TryWorldToCell(world, out cell))
+            {
+                target = ActivationTarget.Board(cell);
+                return true;
+            }
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round != null && round.HasMirrorWorld && mirrorBoardView != null
+                && mirrorBoardView.TryWorldToCell(world, out cell))
+            {
+                target = ActivationTarget.Board(cell).OnWorld(true);
+                return true;
+            }
+            target = ActivationTarget.None;
+            return false;
+        }
+
+        /// <summary>[W] flips which world target-less jokers and powers act on.</summary>
+        private bool ToggleEffectWorld(RoundEngine round)
+        {
+            if (round == null || !round.HasMirrorWorld)
+            {
+                return false;
+            }
+            effectsOnMirror = !effectsOnMirror;
+            UpdateHud();
+            return true;
+        }
+
         /// <summary>Board size the MAIN world should use right now.</summary>
         private float MainBoardWorldSize
         {
@@ -298,6 +347,13 @@ namespace ProjectBlock.View
                 sb.Append(Loc.Pick("   [M] play mirror alone", "   [M] sadece ayna oyna"));
             }
             sb.Append('\n');
+            // Which world an untargeted joker/power goes to. A POINTED one ignores this: the
+            // board you click is the world you meant.
+            sb.Append(Loc.Pick("[W] effects -> ", "[W] etkiler -> "))
+                .Append(effectsOnMirror
+                    ? Loc.Pick("MIRROR world", "AYNA dünya")
+                    : Loc.Pick("MAIN world", "ANA dünya"))
+                .Append('\n');
         }
     }
 }

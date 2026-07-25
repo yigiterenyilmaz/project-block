@@ -153,7 +153,17 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            return power.CanRun(RoundCtx(round), target);
+            // Asked against the world it would actually run on, or a power that reads the board
+            // to decide would answer about the wrong one ("Öteki dünya").
+            bool previousWorld = round.BeginMirrorTargeting(target.OnMirrorWorld);
+            try
+            {
+                return power.CanRun(RoundCtx(round), target);
+            }
+            finally
+            {
+                round.EndMirrorTargeting(previousWorld);
+            }
         }
 
         /// <summary>True if the player holds a charged rescue power that could open a gap.
@@ -189,7 +199,20 @@ namespace ProjectBlock.Core
             Power power = Find(instanceId);
             RoundEngine round = session.CurrentRound;
             power.KeepChargeAfterUse = false;
-            if (!power.Run(RoundCtx(round), target))
+            // "Öteki dünya": the power runs against the world the player pointed it at. Only the
+            // Run itself is aimed - the charge, the recharge and the boss's bill that follow all
+            // belong to the round, not to a world.
+            bool previousWorld = round.BeginMirrorTargeting(target.OnMirrorWorld);
+            bool ran;
+            try
+            {
+                ran = power.Run(RoundCtx(round), target);
+            }
+            finally
+            {
+                round.EndMirrorTargeting(previousWorld);
+            }
+            if (!ran)
             {
                 return false;
             }

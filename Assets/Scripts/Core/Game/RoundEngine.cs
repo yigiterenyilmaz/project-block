@@ -18,7 +18,49 @@ namespace ProjectBlock.Core
         public RoundConfig Config { get; }
         public RoundRules Rules { get; }
         /// <summary>Replaced wholesale by the inflation powers, which resize it mid-round.</summary>
-        public GameBoard Board { get; private set; }
+        public GameBoard Board
+        {
+            get
+            {
+                // "Öteki dünya": while a joker or power is being pointed at the mirror world,
+                // Board IS the mirror. One indirection here is what lets all 39 jokers and 30
+                // powers act on either world without one of them knowing a second world exists -
+                // they ask the round for "the board" exactly as they always did.
+                //
+                // The window is opened ONLY around an activation (see JokerInventory /
+                // PowerInventory), so the turn resolver, the refills and every check outside it
+                // always see the main world.
+                return targetingMirrorWorld && MirrorBoard != null ? MirrorBoard : mainBoard;
+            }
+            private set { mainBoard = value; }
+        }
+
+        /// <summary>The main world's board, whatever a joker is currently pointed at.</summary>
+        public GameBoard MainBoard
+        {
+            get { return mainBoard; }
+        }
+
+        private GameBoard mainBoard;
+
+        /// <summary>True while an activation is aimed at the mirror world. Never set outside the
+        /// inventories' activation window.</summary>
+        private bool targetingMirrorWorld;
+
+        /// <summary>Opens the "aim at the mirror" window. Returns the previous state, which the
+        /// caller must restore in a finally - a throwing joker must never leave the engine
+        /// pointing at the wrong world.</summary>
+        internal bool BeginMirrorTargeting(bool onMirror)
+        {
+            bool previous = targetingMirrorWorld;
+            targetingMirrorWorld = onMirror && MirrorBoard != null;
+            return previous;
+        }
+
+        internal void EndMirrorTargeting(bool previous)
+        {
+            targetingMirrorWorld = previous;
+        }
         public RoundDeck Deck { get; }
         public Hand Hand { get; }
 
@@ -273,7 +315,17 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            Board = resized;
+            // Written back to the world it was READ from. Board is an indirection while an
+            // activation is aimed at the mirror ("Öteki dünya"), so an inflation power pointed
+            // at the mirror must replace the mirror's board, not the main one.
+            if (targetingMirrorWorld && MirrorBoard != null)
+            {
+                ReplaceMirrorBoard(resized);
+            }
+            else
+            {
+                mainBoard = resized;
+            }
             ResyncSnapshot();
             CaptureTurnStartCardCounts();
             return true;

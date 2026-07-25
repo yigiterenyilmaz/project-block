@@ -68,13 +68,14 @@ namespace ProjectBlock.View
                     }
                     if (power.Targeting == ActivationTargeting.BoardCell)
                     {
-                        GridPos cell;
-                        if (!boardView.TryWorldToCell(world, out cell))
+                        // Either world: the board you clicked is the world you meant.
+                        ActivationTarget cellTarget;
+                        if (!TryBoardTargetAt(world, out cellTarget))
                         {
                             CancelTargeting();
                             return;
                         }
-                        RunPowerActivation(power, ActivationTarget.Board(cell));
+                        RunPowerActivation(power, cellTarget);
                         return;
                     }
                     CardVisual hit = cardLayer.CardAt(world);
@@ -103,13 +104,13 @@ namespace ProjectBlock.View
                     }
                     if (joker.Targeting == ActivationTargeting.BoardCell)
                     {
-                        GridPos cell;
-                        if (!boardView.TryWorldToCell(world, out cell))
+                        ActivationTarget cellTarget;
+                        if (!TryBoardTargetAt(world, out cellTarget))
                         {
                             CancelTargeting();
                             return;
                         }
-                        RunActivation(joker, ActivationTarget.Board(cell));
+                        RunActivation(joker, cellTarget);
                         return;
                     }
                     CardVisual hit = cardLayer.CardAt(world);

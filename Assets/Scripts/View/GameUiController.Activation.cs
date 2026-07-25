@@ -38,7 +38,7 @@ namespace ProjectBlock.View
                 jokerBar.Refresh(session, pendingTargetJokerId);
                 return;
             }
-            RunActivation(joker, ActivationTarget.None);
+            RunActivation(joker, AimedAtChosenWorld(ActivationTarget.None));
         }
 
         private void OpenBatakPicker(BatakPower batak)
@@ -239,7 +239,7 @@ namespace ProjectBlock.View
                 powerBar.Refresh(session, pendingTargetPowerId);
                 return;
             }
-            RunPowerActivation(power, ActivationTarget.None);
+            RunPowerActivation(power, AimedAtChosenWorld(ActivationTarget.None));
         }
 
         private void RunPowerActivation(Power power, ActivationTarget target)
@@ -447,7 +447,8 @@ namespace ProjectBlock.View
                 {
                     continue;
                 }
-                ActivationTarget target = ActivationTarget.LineSwap(axis, first, second);
+                ActivationTarget target = AimedAtChosenWorld(
+                    ActivationTarget.LineSwap(axis, first, second));
                 if (session.Powers.TryUse(powers[i].InstanceId, target))
                 {
                     sfx.Shuffle();

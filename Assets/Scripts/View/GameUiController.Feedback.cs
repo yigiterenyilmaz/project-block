@@ -391,8 +391,8 @@ namespace ProjectBlock.View
                 "Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run   L: türkçe\n",
                 "Debug - S: eli yenile   B: bonus kart   D: deste seç   R: yeni oyun   L: english\n"));
             sb.Append(Loc.Pick(
-                "Debug - J: pick joker   P: pick power   K: sell last joker   O: pay debt (market)",
-                "Debug - J: joker seç   P: güç seç   K: son jokeri sat   O: borç öde (market)"));
+                "Debug - J: pick joker   P: pick power   K: sell last joker   O: pay debt   W/M: two worlds",
+                "Debug - J: joker seç   P: güç seç   K: son jokeri sat   O: borç öde   W/M: iki dünya"));
             infoText.text = sb.ToString();
 
             if (pendingTargetJokerId.HasValue)

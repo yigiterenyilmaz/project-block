@@ -27,6 +27,11 @@ namespace ProjectBlock.Core
         public readonly int? LineA;
         public readonly int? LineB;
 
+        /// <summary>"Öteki dünya": aim this activation at the MIRROR world instead of the main
+        /// one. False everywhere else, and meaningless when no mirror is open. Carried on the
+        /// target rather than passed alongside it so every existing call site keeps working.</summary>
+        public readonly bool OnMirrorWorld;
+
         public ActivationTarget(int? handIndex, GridPos? cell)
             : this(handIndex, cell, null, null, null)
         {
@@ -34,12 +39,25 @@ namespace ProjectBlock.Core
 
         public ActivationTarget(int? handIndex, GridPos? cell, LineAxis? axis,
             int? lineA, int? lineB)
+            : this(handIndex, cell, axis, lineA, lineB, false)
+        {
+        }
+
+        public ActivationTarget(int? handIndex, GridPos? cell, LineAxis? axis,
+            int? lineA, int? lineB, bool onMirrorWorld)
         {
             HandIndex = handIndex;
             Cell = cell;
             Axis = axis;
             LineA = lineA;
             LineB = lineB;
+            OnMirrorWorld = onMirrorWorld;
+        }
+
+        /// <summary>The same target, aimed at the other world.</summary>
+        public ActivationTarget OnWorld(bool mirror)
+        {
+            return new ActivationTarget(HandIndex, Cell, Axis, LineA, LineB, mirror);
         }
 
         public static readonly ActivationTarget None = new ActivationTarget(null, null);

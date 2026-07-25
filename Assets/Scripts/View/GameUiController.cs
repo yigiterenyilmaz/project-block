@@ -580,6 +580,11 @@ namespace ProjectBlock.View
                 {
                     return;
                 }
+                // [W] flips which world a target-less joker or power acts on.
+                if (kb != null && kb.wKey.wasPressedThisFrame && ToggleEffectWorld(dual))
+                {
+                    return;
+                }
                 UpdateMirrorPreview(dual, mouse);
                 if (HandleMirrorInput(dual, mouse))
                 {

@@ -120,6 +120,8 @@ public static class JokerTests
         OtekiDunya_AStuckWorldSitsOutInsteadOfLosing();
         OtekiDunya_EachWorldSweepsForItself();
         OtekiDunya_TheMainWorldCannotPlayAlone();
+        OtekiDunya_PowersHitTheWorldTheyArePointedAt();
+        OtekiDunya_TargetingAlwaysSnapsBack();
         OtekiDunya_LeavesAnOrdinaryRoundAlone();
         Devre_TracesAMonotoneEdgeToEdgePath();
         Devre_WaitsForARandomTurnAndThenStays();
@@ -3762,6 +3764,89 @@ public static class JokerTests
         Check(round.MirrorReadyForTurn, "a stuck mirror no longer blocks the main world");
         TurnReport solo = PlayOneCard(round);
         Check(solo != null, "and the main world plays on alone");
+    }
+
+    /// <summary>A dual-world session with both boards full and this turn's power budget free -
+    /// opening the mirror spends a power, so a turn has to pass before another can be used.</summary>
+    private static GameSession DualWorldWithFullBoards(int seed)
+    {
+        var session = NewSession(seed, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var opener = (OtekiDunyaPower)session.Powers.Add(new OtekiDunyaPower());
+        session.Powers.DispatchRoundStarted(round);
+        session.Powers.TryUse(opener.InstanceId, ActivationTarget.None);
+        PlayMirrorTurn(session); // frees the one-power-per-turn budget
+
+        FillBoardSolid(round, session);
+        foreach (GridPos cell in AllPlayableCells(round.MirrorBoard))
+        {
+            if (!round.MirrorBoard.GetCube(cell).HasValue)
+            {
+                round.MirrorBoard.SetCubeAt(cell, new Cube(CubeKind.Normal, 9700));
+            }
+        }
+        return session;
+    }
+
+    private static void OtekiDunya_PowersHitTheWorldTheyArePointedAt()
+    {
+        Section("öteki dünya / a power hits the world it was pointed at");
+        // Çerçeve clears the outer ring of "the board" - and never knew a second one exists.
+        // Aimed at the mirror, only the mirror may lose its ring.
+        var atMirror = DualWorldWithFullBoards(8008);
+        RoundEngine round = atMirror.CurrentRound;
+        int mainBefore = round.MainBoard.OccupiedCount;
+        int mirrorBefore = round.MirrorBoard.OccupiedCount;
+        Check(mainBefore > 0 && mirrorBefore > 0, "both worlds are full",
+            mainBefore + " / " + mirrorBefore);
+
+        var frame = (CercevePower)atMirror.Powers.Add(new CercevePower());
+        Check(atMirror.Powers.TryUse(frame.InstanceId, ActivationTarget.None.OnWorld(true)),
+            "the power ran, aimed at the mirror");
+        Check(round.MirrorBoard.OccupiedCount < mirrorBefore,
+            "the MIRROR lost its outer ring",
+            mirrorBefore + " -> " + round.MirrorBoard.OccupiedCount);
+        Check(round.MainBoard.OccupiedCount == mainBefore,
+            "and the main world was not touched at all",
+            mainBefore + " -> " + round.MainBoard.OccupiedCount);
+
+        // The same power with no world named hits the main one, as it always did.
+        var atMain = DualWorldWithFullBoards(8008);
+        RoundEngine round2 = atMain.CurrentRound;
+        int mainBefore2 = round2.MainBoard.OccupiedCount;
+        int mirrorBefore2 = round2.MirrorBoard.OccupiedCount;
+        var frame2 = (CercevePower)atMain.Powers.Add(new CercevePower());
+        Check(atMain.Powers.TryUse(frame2.InstanceId, ActivationTarget.None),
+            "the same power ran with no world named");
+        Check(round2.MainBoard.OccupiedCount < mainBefore2,
+            "this time the MAIN world lost its ring",
+            mainBefore2 + " -> " + round2.MainBoard.OccupiedCount);
+        Check(round2.MirrorBoard.OccupiedCount == mirrorBefore2,
+            "and the mirror was left alone",
+            mirrorBefore2 + " -> " + round2.MirrorBoard.OccupiedCount);
+    }
+
+    private static void OtekiDunya_TargetingAlwaysSnapsBack()
+    {
+        Section("öteki dünya / the aim never sticks past the activation");
+        var session = NewSession(8009, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var opener = (OtekiDunyaPower)session.Powers.Add(new OtekiDunyaPower());
+        session.Powers.DispatchRoundStarted(round);
+        session.Powers.TryUse(opener.InstanceId, ActivationTarget.None);
+
+        GameBoard mainBoard = round.MainBoard;
+        Check(round.Board == mainBoard, "outside an activation Board is the main world");
+
+        var frame = (CercevePower)session.Powers.Add(new CercevePower());
+        session.Powers.DispatchRoundStarted(round);
+        session.Powers.TryUse(frame.InstanceId, ActivationTarget.None.OnWorld(true));
+        Check(round.Board == mainBoard, "and it is the main world again straight afterwards");
+
+        // The turn resolver must never see the mirror through Board either.
+        TurnReport report = PlayMirrorTurn(session);
+        Check(report != null, "a dual turn still resolves normally");
+        Check(round.Board == round.MainBoard, "with Board still meaning the main world");
     }
 
     private static void OtekiDunya_LeavesAnOrdinaryRoundAlone()

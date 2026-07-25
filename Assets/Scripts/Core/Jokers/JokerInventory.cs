@@ -229,11 +229,24 @@ namespace ProjectBlock.Core
                 return false;
             }
             RoundContext ctx = RoundCtx(round);
-            if (!joker.CanActivate(ctx))
+            // "Öteki dünya": aim the round at the world the player picked for the whole
+            // activation, so a joker that asks for "the board" gets the one it was pointed at.
+            // In a finally, because a throwing joker must not leave the engine looking the wrong
+            // way for the rest of the round.
+            bool previousWorld = round.BeginMirrorTargeting(target.OnMirrorWorld);
+            bool ran;
+            try
             {
-                return false;
+                if (!joker.CanActivate(ctx))
+                {
+                    return false;
+                }
+                ran = joker.Activate(ctx, target);
             }
-            bool ran = joker.Activate(ctx, target);
+            finally
+            {
+                round.EndMirrorTargeting(previousWorld);
+            }
             if (ran)
             {
                 RaiseChanged();
