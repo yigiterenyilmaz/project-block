@@ -53,7 +53,7 @@ everything here is unreleased and balance numbers are still placeholders.
 - **Boss rounds** — every third round (3, 6, 9, 12, 15) now draws a **boss** that bends the rules
   against you for that round only. A run never fights the same boss twice, the draw is
   deterministic from the run seed, and the HUD names the boss and describes what it is doing.
-  All fifteen:
+  All sixteen:
   - **Alıkoyma** — seizes a random card in your hand every turn (never your last one).
   - **Mapus** — seals one random empty cell per turn: nothing can be placed there, and the row
     and column through it cannot be completed either.
@@ -77,6 +77,13 @@ everything here is unreleased and balance numbers are still placeholders.
     vergisi and with board erosion, so cycling the deck on that round is expensive three ways.
   - **Taş ve sopa** — every joker and every power is switched off, whatever its rarity: just you
     and the board. In exchange the score threshold drops by a quarter.
+  - **Çıkmaz** — the round played backwards: **running out of room WINS it**, while **emptying
+    the board or reaching the score threshold LOSES it**. The whole round is an exercise in
+    playing badly on purpose — fill the arena, clear as little as you can, and above all do not
+    score well. The **automatic** dead-end rescue (Deprem) is skipped, because a joker firing on
+    its own would take a win you never chose to give up; the **offered** one (Kentsel Dönüşüm)
+    still appears, and declining it is how you win. If a turn both dead-ends and breaks a rule,
+    the loss wins — a careless last move still kills you.
   - **Terslik** — your jokers turn on you: the points they would give you are taken from you
     instead, and piggy banks leak value instead of filling. Jokers that hand out neither points
     nor value are untouched and keep doing their job — Insider still reveals, Seri tetik still

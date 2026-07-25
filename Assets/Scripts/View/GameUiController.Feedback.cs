@@ -506,6 +506,12 @@ namespace ProjectBlock.View
                 case LossReason.RetroTopOut:
                     return Loc.Pick("topped out - no room to drop from above",
                         "tepeye ulaştın - yukarıdan blok düşecek yer yok");
+                case LossReason.ForbiddenCleanSweep:
+                    return Loc.Pick("you cleared the board - Çıkmaz forbids it",
+                        "tahtayı temizledin - Çıkmaz buna izin vermiyor");
+                case LossReason.ForbiddenThreshold:
+                    return Loc.Pick("you reached the threshold - Çıkmaz forbids it",
+                        "puan eşiğine ulaştın - Çıkmaz buna izin vermiyor");
                 case LossReason.DebtNotRepaid:
                     return Loc.Pick("a boss round ended with your market debt still open",
                         "patron raundu bitti, market borcun hâlâ açıktı");
