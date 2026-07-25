@@ -269,6 +269,10 @@ namespace ProjectBlock.Core
             var fullRows = new List<int>();
             for (int y = 0; y < Height; y++)
             {
+                if (RowIsKilled(y))
+                {
+                    continue; // same rule as ResolveFullLines: an eaten cell kills the line
+                }
                 bool full = false;
                 for (int x = 0; x < Width; x++)
                 {
@@ -288,6 +292,10 @@ namespace ProjectBlock.Core
             var fullColumns = new List<int>();
             for (int x = 0; x < Width; x++)
             {
+                if (ColumnIsKilled(x))
+                {
+                    continue;
+                }
                 bool full = false;
                 for (int y = 0; y < Height; y++)
                 {

@@ -148,6 +148,46 @@ namespace ProjectBlock.Core
             return moved;
         }
 
+        /// <summary>
+        /// A row with an EATEN cell in it is dead: that cell can never hold a cube, so the row
+        /// can never be full and never explodes again. This is deliberately different from a
+        /// plain hole in the bounding box (a cell that was never board, e.g. the filler around
+        /// what "Kentsel Dönüşüm" and "Tılsım" bolt on) - those are simply skipped, so adding a
+        /// cell to the board must never kill the rows it stretches the bounding box across.
+        /// </summary>
+        internal bool RowIsKilled(int y)
+        {
+            if (DeadCellCount == 0)
+            {
+                return false; // fast path: no erosion has happened on this board
+            }
+            for (int x = 0; x < Width; x++)
+            {
+                if (dead[x, y])
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Column counterpart of RowIsKilled.</summary>
+        internal bool ColumnIsKilled(int x)
+        {
+            if (DeadCellCount == 0)
+            {
+                return false;
+            }
+            for (int y = 0; y < Height; y++)
+            {
+                if (dead[x, y])
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private bool RowHasCube(int y)
         {
             for (int x = 0; x < Width; x++)
@@ -184,6 +224,10 @@ namespace ProjectBlock.Core
             var fullRows = new List<int>();
             for (int y = 0; y < Height; y++)
             {
+                if (RowIsKilled(y))
+                {
+                    continue; // erosion ate a cell of this row - it can never be full again
+                }
                 bool full = false;
                 for (int x = 0; x < Width; x++)
                 {
@@ -203,6 +247,10 @@ namespace ProjectBlock.Core
             var fullColumns = new List<int>();
             for (int x = 0; !rowsOnly && x < Width; x++)
             {
+                if (ColumnIsKilled(x))
+                {
+                    continue;
+                }
                 bool full = false;
                 for (int y = 0; y < Height; y++)
                 {

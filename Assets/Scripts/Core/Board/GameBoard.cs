@@ -22,6 +22,11 @@ namespace ProjectBlock.Core
     /// A line is full when every PLAYABLE cell of that row/column is occupied, so an added
     /// cell genuinely extends the row it sits in. Rows with no playable cells never explode.
     ///
+    /// THE ONE EXCEPTION: a cell EATEN by shuffle erosion (MarkDead) is not merely skipped - it
+    /// kills its row and its column outright, because an unfillable cell sits inside the line.
+    /// A hole that was never board (bounding-box filler around bolted-on cells) does NOT do
+    /// that, or adding a cell to the board would kill the rows it stretched the box across.
+    ///
     /// Cells added through the CONSTRUCTOR must be non-negative (that path keeps the origin
     /// at 0,0). Mid-round inflation goes through CreateResized instead, which grows on any
     /// side by moving MinX/MinY - so existing coordinates never change.
@@ -33,6 +38,13 @@ namespace ProjectBlock.Core
         /// <summary>Which cells of the bounding box are real play area.</summary>
         private readonly bool[,] playable;
 
+        /// <summary>Cells that were play area and have been EATEN AWAY mid-round (shuffle
+        /// erosion). They are not playable any more, and unlike an ordinary hole in the bounding
+        /// box they also KILL their row and column: an unfillable cell sits in the middle of the
+        /// line, so that line can never be full again. That is the whole point of hollowing the
+        /// board out from the centre - see ShuffleErosion.</summary>
+        private readonly bool[,] dead;
+
         /// <summary>Coordinate of the leftmost column / bottom row. Normally 0, but a board
         /// inflated on its left or bottom side extends into NEGATIVE coordinates instead of
         /// renumbering everything - so a cube that sat at (2,3) still sits at (2,3) after the
@@ -41,8 +53,12 @@ namespace ProjectBlock.Core
 
         public int MinY { get; }
 
-        /// <summary>Playable cells in total - the honest "size" of an irregular board.</summary>
-        public int PlayableCellCount { get; }
+        /// <summary>Playable cells in total - the honest "size" of an irregular board. Shrinks
+        /// as erosion eats cells away.</summary>
+        public int PlayableCellCount { get; private set; }
+
+        /// <summary>Cells erosion has eaten. 0 on every untouched board.</summary>
+        public int DeadCellCount { get; private set; }
 
         /// <summary>GHOST RULE: cubes placed outside the grid persist here (visible as a
         /// ghostly trace; the future Tılsım power converts their space into board).
@@ -95,6 +111,7 @@ namespace ProjectBlock.Core
             Height = boxHeight;
             cells = new Cube?[boxWidth, boxHeight];
             playable = new bool[boxWidth, boxHeight];
+            dead = new bool[boxWidth, boxHeight];
 
             int count = 0;
             for (int x = 0; x < width; x++)
@@ -116,9 +133,9 @@ namespace ProjectBlock.Core
             PlayableCellCount = count;
         }
 
-        /// <summary>Board built from an explicit mask; only CreateResized uses this.</summary>
+        /// <summary>Board built from explicit masks; only CreateResized uses this.</summary>
         private GameBoard(int minX, int minY, int width, int height, bool[,] mask,
-            int playableCount)
+            bool[,] deadMask, int playableCount, int deadCount)
         {
             MinX = minX;
             MinY = minY;
@@ -126,7 +143,9 @@ namespace ProjectBlock.Core
             Height = height;
             cells = new Cube?[width, height];
             playable = mask;
+            dead = deadMask;
             PlayableCellCount = playableCount;
+            DeadCellCount = deadCount;
         }
 
         /// <summary>
@@ -153,7 +172,9 @@ namespace ProjectBlock.Core
             int newMinY = source.MinY - bottom;
 
             var mask = new bool[newWidth, newHeight];
+            var deadMask = new bool[newWidth, newHeight];
             int count = 0;
+            int deadCount = 0;
             for (int ix = 0; ix < newWidth; ix++)
             {
                 for (int iy = 0; iy < newHeight; iy++)
@@ -166,14 +187,23 @@ namespace ProjectBlock.Core
                     // Inside the old board: keep its mask, holes and all. Outside it: this is
                     // freshly inflated ground, so it is play area.
                     mask[ix, iy] = inSource ? source.playable[sx, sy] : true;
+                    // Eaten cells stay eaten across a resize. A band that erosion removed
+                    // wholesale left the bounding box, so it is simply not here any more; only
+                    // interior kills survive as dead cells.
+                    deadMask[ix, iy] = inSource && source.dead[sx, sy];
                     if (mask[ix, iy])
                     {
                         count++;
                     }
+                    if (deadMask[ix, iy])
+                    {
+                        deadCount++;
+                    }
                 }
             }
 
-            var board = new GameBoard(newMinX, newMinY, newWidth, newHeight, mask, count);
+            var board = new GameBoard(newMinX, newMinY, newWidth, newHeight, mask, deadMask,
+                count, deadCount);
             for (int sx = 0; sx < source.Width; sx++)
             {
                 for (int sy = 0; sy < source.Height; sy++)
@@ -215,6 +245,55 @@ namespace ProjectBlock.Core
         public bool IsPlayable(GridPos pos)
         {
             return IsInside(pos);
+        }
+
+        /// <summary>True for a cell erosion has EATEN. Never playable, and it kills the row and
+        /// the column it sits in. The View draws these differently from a plain hole.</summary>
+        public bool IsDead(GridPos pos)
+        {
+            int ix = pos.X - MinX;
+            int iy = pos.Y - MinY;
+            return ix >= 0 && ix < Width && iy >= 0 && iy < Height && dead[ix, iy];
+        }
+
+        /// <summary>
+        /// EROSION: eats the given cells. They stop being play area and become DEAD, which also
+        /// kills their rows and columns for line purposes (see the `dead` field).
+        ///
+        /// Any cube still standing on an eaten cell goes with it, protection and
+        /// indestructibility included - the cell itself ceases to exist, so nothing can stay
+        /// there. The caller is expected to have destroyed what it could through the engine
+        /// first (so the destruction log and the per-card bookkeeping stay honest); this only
+        /// clears the stragglers. Cells that are already dead, or were never playable, are
+        /// skipped. Returns the cells actually eaten.
+        /// </summary>
+        internal List<GridPos> MarkDead(IEnumerable<GridPos> targets)
+        {
+            var eaten = new List<GridPos>();
+            foreach (GridPos pos in targets)
+            {
+                int ix = pos.X - MinX;
+                int iy = pos.Y - MinY;
+                if (ix < 0 || ix >= Width || iy < 0 || iy >= Height)
+                {
+                    continue;
+                }
+                if (dead[ix, iy] || !playable[ix, iy])
+                {
+                    continue;
+                }
+                if (cells[ix, iy].HasValue)
+                {
+                    cells[ix, iy] = null;
+                    OccupiedCount--;
+                }
+                playable[ix, iy] = false;
+                dead[ix, iy] = true;
+                PlayableCellCount--;
+                DeadCellCount++;
+                eaten.Add(pos);
+            }
+            return eaten;
         }
 
         public Cube? GetCube(GridPos pos)
