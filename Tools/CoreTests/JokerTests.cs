@@ -135,6 +135,10 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Boss_YuruyenMerdivenCarriesEveryRowUp();
+        Boss_YuruyenMerdivenLeavesTheBottomRowEmpty();
+        Boss_YuruyenMerdivenIsNotDestruction();
+        Boss_YuruyenMerdivenNeverCompletesALine();
         Boss_AlzheimerForgetsWhatWasPlayedFiveTurnsAgo();
         Boss_AlzheimerTakesWhateverIsLeftOfTheBlock();
         Boss_AlzheimerForgetsEvenTheUnbreakable();
@@ -4282,6 +4286,158 @@ public static class JokerTests
             "and the circuit still counted as completed, even though the line ate its cells");
     }
 
+    private static void Boss_YuruyenMerdivenCarriesEveryRowUp()
+    {
+        Section("boss / yürüyen merdiven: every row rides up, the top row is carried off");
+        var session = NewSession(8400, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = new YuruyenMerdivenBoss();
+        round.SetBoss(boss);
+        GameBoard board = round.Board;
+
+        // A recognisable pattern: one cube per row, each in its own column.
+        int rows = board.Height;
+        for (int y = 0; y < rows; y++)
+        {
+            board.SetCubeAt(new GridPos(board.MinX + y % board.Width, board.MinY + y),
+                new Cube(CubeKind.Normal, 9900 + y));
+        }
+        int before = board.OccupiedCount;
+        Check(before == rows, "one cube per row to start", "occupied " + before);
+        int topCardId = 9900 + rows - 1;
+        Check(board.CountCubesOf(topCardId) == 1, "and the top row's cube is identifiable");
+
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "a turn resolved");
+
+        // The top row's cube is gone; the ones below it moved up exactly one.
+        Check(board.CountCubesOf(topCardId) == 0, "the top row was carried off the board",
+            "left " + board.CountCubesOf(topCardId));
+        for (int y = 0; y < rows - 1; y++)
+        {
+            var expected = new GridPos(board.MinX + y % board.Width, board.MinY + y + 1);
+            Cube? cube = board.GetCube(expected);
+            bool moved = cube.HasValue && cube.Value.SourceCardId == 9900 + y;
+            if (!moved)
+            {
+                Check(false, "row " + y + " rode up exactly one",
+                    "expected card " + (9900 + y) + " at " + expected);
+                break;
+            }
+            if (y == rows - 2)
+            {
+                Check(true, "every row below the top rode up exactly one");
+            }
+        }
+        Check(report.LiftedCells.Count > 0, "and the turn reported what was carried off",
+            "cells " + report.LiftedCells.Count);
+        Check(boss.CellsCarriedOff > 0, "the boss counted it", "" + boss.CellsCarriedOff);
+    }
+
+    private static void Boss_YuruyenMerdivenLeavesTheBottomRowEmpty()
+    {
+        Section("boss / the space it gives back arrives at the bottom");
+        // Board level, so the ride is measured on its own rather than through a player who
+        // would be filling cells in at the same time.
+        var board = new GameBoard(5, 5);
+        for (int x = 0; x < board.Width; x++)
+        {
+            for (int y = 0; y < board.Height; y++)
+            {
+                board.SetCubeAt(new GridPos(x, y), new Cube(CubeKind.Normal, 9930 + y));
+            }
+        }
+        Check(board.OccupiedCount == 25, "a completely full 5x5", "" + board.OccupiedCount);
+
+        List<GridPos> lost = board.ShiftRowsUp();
+        Check(lost.Count == board.Width, "one full row was carried off",
+            "lost " + lost.Count);
+        Check(board.OccupiedCount == 20, "and the board is one row lighter",
+            "" + board.OccupiedCount);
+
+        int bottomOccupied = 0;
+        for (int x = 0; x < board.Width; x++)
+        {
+            if (board.GetCube(new GridPos(x, 0)).HasValue)
+            {
+                bottomOccupied++;
+            }
+        }
+        Check(bottomOccupied == 0, "the new room arrived at the BOTTOM, completely empty",
+            bottomOccupied + " of " + board.Width);
+        Check(board.CountCubesOf(9930 + 4) == 0, "the old top row is gone");
+        Check(board.CountCubesOf(9930) == board.Width, "and the old bottom row survived, above",
+            "" + board.CountCubesOf(9930));
+    }
+
+    private static void Boss_YuruyenMerdivenIsNotDestruction()
+    {
+        Section("boss / the ride pays nothing and never sweeps");
+        var session = NewSession(8402, 4, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(new YuruyenMerdivenBoss());
+        GameBoard board = round.Board;
+
+        // A single cube on the TOP row: the ride carries it off and empties the board.
+        for (int x = board.MinX; x < board.MinX + board.Width; x++)
+        {
+            board.SetCubeAt(new GridPos(x, board.MinY + board.Height - 1),
+                new Cube(CubeKind.Normal, 9910));
+        }
+        int sweepsBefore = round.CleanSweepCount;
+        long scoreBefore = session.TotalScore;
+        int roundBefore = round.RoundScore;
+
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "a turn resolved");
+        Check(board.CountCubesOf(9910) == 0, "the top row rode off",
+            "left " + board.CountCubesOf(9910));
+        Check(round.CleanSweepCount == sweepsBefore,
+            "carrying the last cubes away is not a clean sweep",
+            sweepsBefore + " -> " + round.CleanSweepCount);
+        // The turn's own placement may score; the RIDE must add nothing on top of it.
+        Check(round.RoundScore - roundBefore == report.ScoreGained,
+            "the round score moved by exactly the turn's own gain",
+            (round.RoundScore - roundBefore) + " vs " + report.ScoreGained);
+        Check(session.TotalScore - scoreBefore == report.ScoreGained,
+            "and so did the run score", "" + (session.TotalScore - scoreBefore));
+    }
+
+    private static void Boss_YuruyenMerdivenNeverCompletesALine()
+    {
+        Section("boss / a row that was not full does not become full by moving");
+        // Board level again: the claim is about the RIDE, and a player filling cells in at the
+        // same time would prove nothing either way.
+        var board = new GameBoard(5, 5);
+        // Two rows one cube short, with the gaps in DIFFERENT columns - if moving could ever
+        // merge rows or slide cubes sideways, this is where it would show.
+        for (int x = 1; x < board.Width; x++)
+        {
+            board.SetCubeAt(new GridPos(x, 0), new Cube(CubeKind.Normal, 9920));
+        }
+        for (int x = 0; x < board.Width - 1; x++)
+        {
+            board.SetCubeAt(new GridPos(x, 1), new Cube(CubeKind.Normal, 9921));
+        }
+        Check(board.ResolveFullLines().LineCount == 0, "nothing is full to start with");
+
+        for (int ride = 0; ride < 3; ride++)
+        {
+            board.ShiftRowsUp();
+            LineExplosionResult lines = board.ResolveFullLines();
+            if (lines.LineCount != 0)
+            {
+                Check(false, "the ride completed a line on pass " + (ride + 1),
+                    "rows " + lines.Rows.Count + " cols " + lines.Columns.Count);
+                return;
+            }
+        }
+        Check(true, "three rides later still nothing has completed itself");
+        Check(board.CountCubesOf(9920) == 4 && board.CountCubesOf(9921) == 4,
+            "both rows kept their gap exactly as it was",
+            board.CountCubesOf(9920) + " / " + board.CountCubesOf(9921));
+    }
+
     private static void Boss_AlzheimerForgetsWhatWasPlayedFiveTurnsAgo()
     {
         Section("boss / alzheimer forgets the card played five turns ago");
@@ -4312,8 +4468,8 @@ public static class JokerTests
         TurnReport forgetting = PlayOneCard(round);
         Check(round.Board.CountCubesOf(cardId) == 0, "and then it is gone from the board",
             "left " + round.Board.CountCubesOf(cardId));
-        Check(forgetting.ForgottenCells.Count > 0, "the turn reported what it forgot",
-            "cells " + forgetting.ForgottenCells.Count);
+        Check(forgetting.LiftedCells.Count > 0, "the turn reported what it forgot",
+            "cells " + forgetting.LiftedCells.Count);
         Check(boss.CellsForgotten > 0, "and the boss counted it",
             "" + boss.CellsForgotten);
     }

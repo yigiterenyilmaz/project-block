@@ -85,6 +85,9 @@ namespace ProjectBlock.View
             if (report.CubesExploded == 0 && report.ExtraExplodedCells.Count == 0)
             {
                 comboStreak = 0;
+                // A turn where a boss only LIFTED cells still needs its puff drawn - it just
+                // breaks no combo and shakes no camera, because nothing exploded.
+                EmitBlastParticles(round, report);
                 return;
             }
             comboStreak++;
@@ -136,6 +139,17 @@ namespace ProjectBlock.View
             foreach (GridPos cell in report.ExtraExplodedCells)
             {
                 blastFx.EmitAt(boardView.CellToWorld(cell), blastColor, 4);
+            }
+            // Cells a BOSS lifted off rather than destroyed ("Alzheimer" forgetting a card,
+            // "Yürüyen merdiven" carrying a row away). A pale, cold puff instead of the warm
+            // explosion, because nothing blew up and nothing was earned.
+            if (report.LiftedCells.Count > 0)
+            {
+                var faded = new Color(0.62f, 0.68f, 0.82f, 0.9f);
+                foreach (GridPos cell in report.LiftedCells)
+                {
+                    blastFx.EmitAt(boardView.CellToWorld(cell), faded, 3);
+                }
             }
             if (report.CleanSweep)
             {

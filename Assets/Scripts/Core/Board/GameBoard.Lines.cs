@@ -371,6 +371,57 @@ namespace ProjectBlock.Core
             return cleared;
         }
 
+        /// <summary>
+        /// THE ESCALATOR ("Yürüyen merdiven"): every row rides up one. The top row leaves the
+        /// board entirely and a fresh empty row arrives at the bottom.
+        ///
+        /// Like forgetting, this is NOT destruction - the board is carrying cubes away, not
+        /// breaking them - so nothing here resists it and the caller re-baselines the snapshot
+        /// so the turn's diff never sees it. A cube that rides into a cell which is not play
+        /// area (a hole, or one erosion ate) goes with the rest: there is nowhere to stand.
+        ///
+        /// Rows keep their contents, so a row that was not full does not become full by moving:
+        /// the escalator never completes a line. Returns the cells whose cubes were carried off.
+        /// </summary>
+        public List<GridPos> ShiftRowsUp()
+        {
+            var lost = new List<GridPos>();
+            for (int x = 0; x < Width; x++)
+            {
+                // The top row rides off the end.
+                if (cells[x, Height - 1].HasValue)
+                {
+                    lost.Add(new GridPos(x + MinX, Height - 1 + MinY));
+                }
+                for (int y = Height - 1; y >= 1; y--)
+                {
+                    cells[x, y] = cells[x, y - 1];
+                }
+                cells[x, 0] = null; // a fresh empty row arrives underneath
+            }
+            // Anything that rode into a cell that is not play area has nowhere to stand.
+            int occupied = 0;
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    if (!cells[x, y].HasValue)
+                    {
+                        continue;
+                    }
+                    if (!playable[x, y])
+                    {
+                        cells[x, y] = null;
+                        lost.Add(new GridPos(x + MinX, y + MinY));
+                        continue;
+                    }
+                    occupied++;
+                }
+            }
+            OccupiedCount = occupied;
+            return lost;
+        }
+
         /// <summary>Dynamite: destroys every destructible cube on the board.</summary>
         public List<GridPos> DestroyAllDestructible()
         {

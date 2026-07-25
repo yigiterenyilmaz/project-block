@@ -53,7 +53,7 @@ everything here is unreleased and balance numbers are still placeholders.
 - **Boss rounds** — every third round (3, 6, 9, 12, 15) now draws a **boss** that bends the rules
   against you for that round only. A run never fights the same boss twice, the draw is
   deterministic from the run seed, and the HUD names the boss and describes what it is doing.
-  All seventeen:
+  All eighteen:
   - **Alıkoyma** — seizes a random card in your hand every turn (never your last one).
   - **Mapus** — seals one random empty cell per turn: nothing can be placed there, and the row
     and column through it cannot be completed either.
@@ -77,6 +77,12 @@ everything here is unreleased and balance numbers are still placeholders.
     vergisi and with board erosion, so cycling the deck on that round is expensive three ways.
   - **Taş ve sopa** — every joker and every power is switched off, whatever its rarity: just you
     and the board. In exchange the score threshold drops by a quarter.
+  - **Yürüyen merdiven** — at the end of every turn the whole board **rides up one row**: the
+    top row is carried off and a fresh empty row arrives at the bottom. Like forgetting, the ride
+    is **not destruction** — it pays nothing, sweeps nothing, and nothing resists it. A row keeps
+    its contents while it moves, so the escalator can never complete a line for you. What it does
+    is worse: everything you build drifts towards the exit, and the room you keep getting back
+    arrives at the **bottom**, where a tall block cannot use it.
   - **Alzheimer** — every turn the board **forgets** the card you played 5 turns ago: whatever
     is left of it is lifted off the arena, intact or not. A four-cube block that has already had
     three cubes blown out still loses the fourth. Forgetting is **not destruction** — it pays

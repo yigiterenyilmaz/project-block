@@ -341,4 +341,61 @@ namespace ProjectBlock.Core
             cellsForgotten += turn.Round.ForgetCard(cardId).Count;
         }
     }
+
+    /// <summary>
+    /// "Yürüyen merdiven" - the arena is a moving staircase. At the end of every turn every row
+    /// rides up one, the top row is carried off the board, and a fresh empty row arrives at the
+    /// bottom.
+    ///
+    /// It is not destruction: the board is carrying cubes away rather than breaking them, so the
+    /// ride pays nothing, counts toward no clean sweep and feeds no tally, and nothing resists it.
+    ///
+    /// A row keeps its contents while it moves, so the escalator can never complete a line. What
+    /// it does is far worse: everything you build drifts towards the exit, and the space you keep
+    /// getting back arrives at the BOTTOM, where a tall block cannot use it.
+    ///
+    /// It runs from the end-of-turn hook, which is before the threshold and dead-end checks, so
+    /// the ride can genuinely decide the round either way - it can carry off the block that was
+    /// about to lose you the round, or take the row you were one cube from clearing.
+    /// </summary>
+    public sealed class YuruyenMerdivenBoss : BossRound
+    {
+        private int cellsCarriedOff;
+
+        public YuruyenMerdivenBoss()
+            : base("yuruyen_merdiven", "Yürüyen Merdiven")
+        {
+            SetDescription(
+                "At the end of every turn the whole board rides up one row. The top row is "
+                    + "carried off and a fresh empty row arrives at the bottom.",
+                "Her tur sonunda bütün oyun alanı bir satır yukarı kayar. En üstteki satır "
+                    + "alandan çıkar, en alta boş bir satır gelir.");
+        }
+
+        /// <summary>Cells carried off the top so far this round, for the UI.</summary>
+        public int CellsCarriedOff
+        {
+            get { return cellsCarriedOff; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return cellsCarriedOff > 0
+                    ? cellsCarriedOff + Loc.Pick(" carried off", " taşındı")
+                    : Loc.Pick("rising", "yükseliyor");
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            cellsCarriedOff = 0;
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            cellsCarriedOff += turn.Round.EscalateBoards().Count;
+        }
+    }
 }

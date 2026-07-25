@@ -37,19 +37,20 @@ namespace ProjectBlock.Core
             extraExplodedCells.AddRange(cells);
         }
 
-        private readonly List<GridPos> forgottenCells = new List<GridPos>();
+        private readonly List<GridPos> liftedCells = new List<GridPos>();
 
-        /// <summary>Cells "Alzheimer" FORGOT this turn. Deliberately separate from every
-        /// explosion list: nothing was destroyed, so the View marks them their own way and no
-        /// score or tally is involved.</summary>
-        public IReadOnlyList<GridPos> ForgottenCells
+        /// <summary>Cells a BOSS lifted off the board this turn without destroying anything -
+        /// "Alzheimer" forgetting a card, "Yürüyen merdiven" carrying a row off the top.
+        /// Deliberately separate from every explosion list: nothing was destroyed, so no score,
+        /// no sweep and no tally are involved, and the View marks them its own way.</summary>
+        public IReadOnlyList<GridPos> LiftedCells
         {
-            get { return forgottenCells; }
+            get { return liftedCells; }
         }
 
-        internal void AddForgottenCells(IReadOnlyList<GridPos> cells)
+        internal void AddLiftedCells(IReadOnlyList<GridPos> cells)
         {
-            forgottenCells.AddRange(cells);
+            liftedCells.AddRange(cells);
         }
 
         /// <summary>True if this turn emptied the board ("temizlik").</summary>

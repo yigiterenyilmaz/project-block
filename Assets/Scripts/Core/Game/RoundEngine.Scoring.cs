@@ -325,10 +325,32 @@ namespace ProjectBlock.Core
                 ResyncSnapshot();
                 if (currentReport != null)
                 {
-                    currentReport.AddForgottenCells(cleared);
+                    currentReport.AddLiftedCells(cleared);
                 }
             }
             return cleared;
+        }
+
+        /// <summary>
+        /// "Yürüyen merdiven": runs the escalator on EVERY world - each row rides up one and the
+        /// top row is carried off. Same terms as forgetting: no score, no sweep, no tally, and
+        /// the snapshot is re-baselined so the turn's diff never reads it as a destruction.
+        /// </summary>
+        internal IReadOnlyList<GridPos> EscalateBoards()
+        {
+            var lost = new List<GridPos>(MainBoard.ShiftRowsUp());
+            if (MirrorBoard != null)
+            {
+                lost.AddRange(MirrorBoard.ShiftRowsUp());
+            }
+            // ALWAYS re-baseline: the escalator moves cubes even when it carries none off, and a
+            // moved cube would otherwise read as a destroyed one.
+            ResyncSnapshot();
+            if (lost.Count > 0 && currentReport != null)
+            {
+                currentReport.AddLiftedCells(lost);
+            }
+            return lost;
         }
 
         /// <summary>Records why the RUN ended on a round the player actually survived
