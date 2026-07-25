@@ -60,6 +60,11 @@ namespace ProjectBlock.Core
             }
             if (!ThresholdPassed && RoundScore >= ScaledThreshold)
             {
+                if (RoundOutcomeInverted)
+                {
+                    DeclareLoss(LossReason.ForbiddenThreshold); // "Çıkmaz", between turns
+                    return;
+                }
                 ThresholdPassed = true;
                 Deck.ShuffleDiscardIntoDraw();
                 EnterOvertime();

@@ -235,9 +235,16 @@ namespace ProjectBlock.Core
             // first jokers, automatically ("Deprem"); then, if the player holds a rescue
             // power ("Kentsel Dönüşüm"), the round PAUSES in AwaitingRescue so they can use
             // it. Loss is set either way, so declining the offer simply confirms it.
-            Loss = LossReason.NoPlayableMove;
+            //
+            // "Çıkmaz" turns all of this around: running out of room is the WIN. The automatic
+            // joker rescue is skipped - it would take a win the player never chose to give up -
+            // while the OFFERED power rescue still runs, because declining it is the win and
+            // that makes the choice a real one.
+            bool inverted = RoundOutcomeInverted;
+            Loss = inverted ? (LossReason?)null : LossReason.NoPlayableMove;
 
-            if (session != null && hooks.TryRescueFromDeadEnd(new RoundContext(session, rng, this)))
+            if (!inverted && session != null
+                && hooks.TryRescueFromDeadEnd(new RoundContext(session, rng, this)))
             {
                 Loss = null;
                 CheckForNoPlayableMove(); // the rescue may not have been enough
@@ -250,7 +257,7 @@ namespace ProjectBlock.Core
                 return;
             }
 
-            SetStatus(RoundStatus.Lost);
+            SetStatus(inverted ? RoundStatus.Advanced : RoundStatus.Lost);
         }
 
         /// <summary>Runs the dead-end check from outside a placement. Tests and the UI use it;
@@ -266,11 +273,19 @@ namespace ProjectBlock.Core
             DeclineRescue();
         }
 
-        /// <summary>Declines the rescue offer and takes the loss (the UI's "give up" path).</summary>
+        /// <summary>Declines the rescue offer and takes the loss (the UI's "give up" path).
+        /// Under "Çıkmaz" declining is how you WIN: the offer was the only thing standing
+        /// between the player and the dead end they were playing for.</summary>
         internal void DeclineRescue()
         {
             if (Status != RoundStatus.AwaitingRescue)
             {
+                return;
+            }
+            if (RoundOutcomeInverted)
+            {
+                Loss = null;
+                SetStatus(RoundStatus.Advanced);
                 return;
             }
             SetStatus(RoundStatus.Lost);

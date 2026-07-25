@@ -191,6 +191,13 @@ namespace ProjectBlock.Core
             get { return Boss != null && Boss.BlocksPowerRecharge; }
         }
 
+        /// <summary>"Çıkmaz": running out of room WINS this round, while a clean sweep or
+        /// reaching the threshold LOSES it. Read live at the three places a round is decided.</summary>
+        public bool RoundOutcomeInverted
+        {
+            get { return Boss != null && Boss.InvertsRoundOutcome; }
+        }
+
         /// <summary>True while every joker pays the player BACKWARDS ("Terslik"): the points and
         /// the sell value it grants itself become losses of the same size. Read live by
         /// JokerInventory, which opens the inversion window around joker dispatch only - powers,

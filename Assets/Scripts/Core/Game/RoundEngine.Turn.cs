@@ -310,11 +310,20 @@ namespace ProjectBlock.Core
             // 9. threshold check (first pass only)
             if (!ThresholdPassed && RoundScore >= ScaledThreshold)
             {
-                ThresholdPassed = true;
-                report.ThresholdJustPassed = true;
-                Deck.ShuffleDiscardIntoDraw();
-                pendingAdvanceOffer = true;
-                EnterOvertime();
+                // "Çıkmaz": the bar is a trap, not a goal. Reaching it ends the round as a
+                // loss, so there is no overtime and no advance offer to make.
+                if (RoundOutcomeInverted)
+                {
+                    Loss = LossReason.ForbiddenThreshold;
+                }
+                else
+                {
+                    ThresholdPassed = true;
+                    report.ThresholdJustPassed = true;
+                    Deck.ShuffleDiscardIntoDraw();
+                    pendingAdvanceOffer = true;
+                    EnterOvertime();
+                }
             }
 
             // Retro top-out: a block reached the top row, so nothing can drop from above (Tetris).

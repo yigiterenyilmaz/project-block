@@ -30,6 +30,14 @@ namespace ProjectBlock.Core
         /// <summary>"Kredi kartı": a boss round ended with the market debt still open. The ONLY
         /// reason that ends a run without the round itself being lost - the board was fine, the
         /// books were not.</summary>
-        DebtNotRepaid = 5
+        DebtNotRepaid = 5,
+
+        /// <summary>"Çıkmaz": the board was emptied. On that round a clean sweep is the one
+        /// thing you must not do.</summary>
+        ForbiddenCleanSweep = 6,
+
+        /// <summary>"Çıkmaz": the score threshold was reached. On that round scoring too well
+        /// is a defeat, not a victory.</summary>
+        ForbiddenThreshold = 7
     }
 }

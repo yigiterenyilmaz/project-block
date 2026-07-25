@@ -140,6 +140,20 @@ namespace ProjectBlock.Core
             return threshold;
         }
 
+        /// <summary>
+        /// "Çıkmaz": the round's win condition is turned inside out. Running out of room WINS
+        /// the round; a clean sweep or reaching the threshold LOSES it.
+        ///
+        /// The engine reads this at the three places that decide a round, and at a fourth: the
+        /// AUTOMATIC dead-end rescues (a joker like "Deprem") are skipped, because they would
+        /// take a win the player never chose to give up. A rescue the player is OFFERED (the
+        /// "Kentsel Dönüşüm" power) still runs - declining it is the win, so the choice is real.
+        /// </summary>
+        public virtual bool InvertsRoundOutcome
+        {
+            get { return false; }
+        }
+
         // ---------------------------------------------------------------------- events
 
         /// <summary>End of a resolved turn - after the hand refill, BEFORE the threshold and

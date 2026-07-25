@@ -46,6 +46,10 @@ namespace ProjectBlock.Core
                 }
                 externalClearReady = false;
                 CleanSweepCount++;
+                if (RoundOutcomeInverted)
+                {
+                    DeclareLoss(LossReason.ForbiddenCleanSweep); // "Çıkmaz", between turns
+                }
                 AddScoreOutsideTurn(PriceCleanSweep());
                 if (session != null)
                 {
@@ -73,6 +77,12 @@ namespace ProjectBlock.Core
             sweepResolvedThisTurn = true;
             CleanSweepCount++;
             currentReport.CleanSweep = true;
+            // "Çıkmaz": emptying the board is the one thing you must not do. The sweep still
+            // resolves in full - it happened - and the round ends on it.
+            if (RoundOutcomeInverted)
+            {
+                Loss = LossReason.ForbiddenCleanSweep;
+            }
 
             // Does this sweep "count"? The player's placement clear and Kayıt defteri's counter
             // always do (external == false); a joker/power-triggered sweep only counts while

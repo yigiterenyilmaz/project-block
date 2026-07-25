@@ -205,4 +205,44 @@ namespace ProjectBlock.Core
             round.RefillHandToSize();
         }
     }
+
+    /// <summary>
+    /// "Çıkmaz" - the round played backwards. Running out of room WINS it; emptying the board
+    /// or reaching the score threshold LOSES it.
+    ///
+    /// So the whole round is an exercise in playing badly on purpose: fill the arena, clear as
+    /// little as you can get away with, and above all do not score well. Lines may still be
+    /// cleared - that is often the only way to keep going - but a clear that empties the board
+    /// is fatal, and so is creeping over the bar.
+    ///
+    /// Two rulings the engine carries (RoundEngine.RoundOutcomeInverted):
+    ///  - the AUTOMATIC dead-end rescue is skipped, because a joker firing on its own would take
+    ///    a win the player never chose to give up. The OFFERED rescue power still appears -
+    ///    declining it is the win, which makes the offer a real decision instead of a formality;
+    ///  - if a turn both dead-ends AND breaks a rule, the LOSS wins. That falls out of the
+    ///    engine's own step order (threshold and sweep are settled before the dead-end check)
+    ///    and it is the right way round: a careless last move should still kill you.
+    /// </summary>
+    public sealed class CikmazBoss : BossRound
+    {
+        public CikmazBoss()
+            : base("cikmaz", "Çıkmaz")
+        {
+            SetDescription(
+                "The round is upside down: you WIN it by running out of room, and you LOSE it by "
+                    + "clearing the board or reaching the score threshold. Play badly on purpose.",
+                "Raunt tersine döner: yer kalmayınca KAZANIRSIN, tahtayı temizlersen ya da puan "
+                    + "eşiğine ulaşırsan KAYBEDERSİN. Bilerek kötü oyna.");
+        }
+
+        public override bool InvertsRoundOutcome
+        {
+            get { return true; }
+        }
+
+        public override string StatusText
+        {
+            get { return Loc.Pick("fill up to win", "dolduran kazanır"); }
+        }
+    }
 }

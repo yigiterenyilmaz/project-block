@@ -135,6 +135,10 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Boss_CikmazTurnsTheRoundUpsideDown();
+        Boss_CikmazLosesOnASweep();
+        Boss_CikmazLosesOnTheThreshold();
+        Boss_CikmazSilencesTheAutomaticRescueOnly();
         Boss_TitizlikPaysForNothingButASweep();
         Boss_TitizlikLeavesJokerBonusesAlone();
         Boss_CanaGelecegineMalaTakesAQuarterOfThePurse();
@@ -4271,6 +4275,113 @@ public static class JokerTests
             "the same placement cleared a line", "rows " + report.ExplodedRows.Count);
         Check(joker.BrokenThisRound,
             "and the circuit still counted as completed, even though the line ate its cells");
+    }
+
+    private static void Boss_CikmazTurnsTheRoundUpsideDown()
+    {
+        Section("boss / çıkmaz: filling up wins, sweeping or scoring loses");
+        // 1. A dead end WINS the round.
+        var deadEnd = NewSession(8200, 4, 1000000, 40, 3);
+        RoundEngine round = deadEnd.CurrentRound;
+        round.SetBoss(new CikmazBoss());
+        Check(round.RoundOutcomeInverted, "the round reports itself inverted");
+        FillBoardSolid(round, deadEnd);
+        round.DebugCheckForDeadEnd();
+        Check(round.Status == RoundStatus.Advanced, "running out of room WON the round",
+            "status " + round.Status);
+        Check(round.Loss == null, "and there is no loss recorded", "loss " + round.Loss);
+
+        // The same board without the boss is the loss it always was.
+        var plain = NewSession(8200, 4, 1000000, 40, 3);
+        FillBoardSolid(plain.CurrentRound, plain);
+        plain.CurrentRound.DebugCheckForDeadEnd();
+        Check(plain.CurrentRound.Status == RoundStatus.Lost,
+            "without the boss the same dead end still loses",
+            "status " + plain.CurrentRound.Status);
+    }
+
+    private static void Boss_CikmazLosesOnASweep()
+    {
+        Section("boss / çıkmaz: emptying the board loses the round");
+        var session = NewSession(8201, 4, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(new CikmazBoss());
+        // One cube short of a full row, on an otherwise empty board: closing it clears the row
+        // AND empties the board - a clean sweep.
+        int row = round.Board.MinY;
+        for (int x = round.Board.MinX + 1; x < round.Board.MinX + round.Board.Width; x++)
+        {
+            round.Board.SetCubeAt(new GridPos(x, row), new Cube(CubeKind.Normal, 9800));
+        }
+        TurnReport report = round.PlayFromHand(0, new GridPos(round.Board.MinX, row));
+        Check(report.CleanSweep, "the board was swept");
+        Check(round.Status == RoundStatus.Lost, "and that lost the round",
+            "status " + round.Status);
+        Check(round.Loss == LossReason.ForbiddenCleanSweep, "for the sweep, by name",
+            "loss " + round.Loss);
+    }
+
+    private static void Boss_CikmazLosesOnTheThreshold()
+    {
+        Section("boss / çıkmaz: reaching the threshold loses the round");
+        var session = NewSession(8202, 6, 20, 40, 3);
+        session.Config.Scoring.PointsPerCubePlaced = 50; // one placement clears the low bar
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(new CikmazBoss());
+
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "a card was played");
+        Check(round.RoundScore >= round.ScoreThreshold * session.Config.Scoring.ScoreScale,
+            "the score reached the bar", round.RoundScore + " / " + round.ScoreThreshold);
+        Check(round.Status == RoundStatus.Lost, "which lost the round", "status " + round.Status);
+        Check(round.Loss == LossReason.ForbiddenThreshold, "for the threshold, by name",
+            "loss " + round.Loss);
+        Check(!round.ThresholdPassed, "and no overtime was ever entered");
+        Check(!report.ThresholdJustPassed, "nor an advance offer raised");
+    }
+
+    private static void Boss_CikmazSilencesTheAutomaticRescueOnly()
+    {
+        Section("boss / çıkmaz: the automatic rescue is skipped, the offered one is not");
+        // Deprem fires by itself on a dead end - under Çıkmaz that would steal the win.
+        var auto = NewSession(8203, 4, 1000000, 40, 3);
+        RoundEngine round = auto.CurrentRound;
+        var deprem = (DepremJoker)auto.Jokers.Add(new DepremJoker());
+        round.SetBoss(new CikmazBoss());
+        auto.Jokers.DispatchRoundStarted(round);
+        FillBoardSolid(round, auto);
+        int occupied = round.Board.OccupiedCount;
+        round.DebugCheckForDeadEnd();
+        Check(round.Status == RoundStatus.Advanced, "the dead end still won the round",
+            "status " + round.Status);
+        Check(round.Board.OccupiedCount == occupied, "Deprem never fired - the board is intact",
+            occupied + " -> " + round.Board.OccupiedCount);
+        Check(deprem.CollapseCount == 0, "and it recorded no collapse",
+            "collapses " + deprem.CollapseCount);
+
+        // Without the boss the very same joker DOES rescue, so it is the boss doing this.
+        var normal = NewSession(8203, 4, 1000000, 40, 3);
+        var deprem2 = (DepremJoker)normal.Jokers.Add(new DepremJoker());
+        normal.Jokers.DispatchRoundStarted(normal.CurrentRound);
+        FillBoardSolid(normal.CurrentRound, normal);
+        normal.CurrentRound.DebugCheckForDeadEnd();
+        Check(deprem2.CollapseCount > 0, "on an ordinary round Deprem rescues as usual",
+            "collapses " + deprem2.CollapseCount);
+
+        // The OFFERED rescue still appears - and declining it is how you win.
+        var offered = NewSession(8204, 4, 1000000, 40, 3);
+        RoundEngine round3 = offered.CurrentRound;
+        offered.Powers.Add(new KentselDonusumPower());
+        round3.SetBoss(new CikmazBoss());
+        offered.Powers.DispatchRoundStarted(round3);
+        FillBoardSolid(round3, offered);
+        round3.DebugCheckForDeadEnd();
+        Check(round3.Status == RoundStatus.AwaitingRescue,
+            "the rescue power is still offered", "status " + round3.Status);
+        offered.DeclineDeadEndRescue();
+        Check(round3.Status == RoundStatus.Advanced, "and declining it WINS the round",
+            "status " + round3.Status);
+        Check(round3.Loss == null, "with no loss recorded", "loss " + round3.Loss);
     }
 
     private static void Boss_TitizlikPaysForNothingButASweep()
