@@ -7,6 +7,18 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **Şifacı (joker)** — every 5 turns it gives **one use back** to a random **spent** joker. The
+  clock does not run down while there is nothing to heal: if no joker is empty when it comes
+  due, it stays ready and heals the moment one empties, then sleeps again. So the wait is a
+  promise, not a window you can miss. Passive jokers (and the healer itself) are never patients.
+- **Yer altı kaynakları (joker)** — a finite seam of fuel for your **powers**. Every 3 turns it
+  refills your spent **common** powers, every 5 turns your spent **rare** ones, on two clocks
+  that run independently. Each power refilled costs the seam — **1** for a common, **2** for a
+  rare — out of a capacity of 10 that is **never replenished, not even by a new round**. A tick
+  with nothing to refuel is free. When the seam is worked out the joker goes quiet and does
+  nothing at all — but it then **sells for exactly what you paid for it**, so it is a loan of
+  fuel rather than a purchase: you get your money and your slot back. Legendary powers are
+  outside the seam entirely.
 - **Öteki dünya (power)** — clones the board and opens the copy **beneath** it; the rest of the
   round is played across both worlds. The mirror is a copy of the arena *as it stands when you
   cast it*, so timing is the whole game: cast it clean and you get two clean boards, cast it
