@@ -45,8 +45,8 @@ namespace ProjectBlock.Core
                     + "the treasure for a reward, the dynamite for a penalty - hitting both at "
                     + "once cancels out, and finding either removes the other.",
                 "Her raunt gizlice bir kareye hazine, bir kareye dinamit konur. Hazineyi "
-                    + "patlatÄ±rsan Ã¶dÃ¼l, dinamiti patlatÄ±rsan ceza alÄ±rsÄ±n - ikisine birden "
-                    + "denk gelirsen birbirini gÃ¶tÃ¼rÃ¼r, birini bulmak diÄŸerini kaldÄ±rÄ±r.");
+                    + "patlatırsan ödül, dinamiti patlatırsan ceza alırsın - ikisine birden "
+                    + "denk gelirsen birbirini götürür, birini bulmak diğerini kaldırır.");
         }
 
         public override string StatusText
@@ -59,13 +59,13 @@ namespace ProjectBlock.Core
                 }
                 if (!TreasureCell.HasValue)
                 {
-                    return Loc.Pick("dynamite left", "dinamit kaldÄ±");
+                    return Loc.Pick("dynamite left", "dinamit kaldı");
                 }
                 if (!DynamiteCell.HasValue)
                 {
-                    return Loc.Pick("treasure left", "hazine kaldÄ±");
+                    return Loc.Pick("treasure left", "hazine kaldı");
                 }
-                return Loc.Pick("buried", "gÃ¶mÃ¼lÃ¼");
+                return Loc.Pick("buried", "gömülü");
             }
         }
 
@@ -124,7 +124,7 @@ namespace ProjectBlock.Core
                 // Both in one explosion: they cancel, and the hunt is over for this round.
                 TreasureCell = null;
                 DynamiteCell = null;
-                LastOutcome = Loc.Pick("cancelled out", "birbirini gÃ¶tÃ¼rdÃ¼");
+                LastOutcome = Loc.Pick("cancelled out", "birbirini götürdü");
                 return;
             }
             if (treasureHit)
@@ -191,7 +191,7 @@ namespace ProjectBlock.Core
                     {
                         return false; // nothing spent to refill - the benefit re-rolls
                     }
-                    LastOutcome = Loc.Pick("treasure: a power refilled", "hazine: bir gÃ¼Ã§ doldu");
+                    LastOutcome = Loc.Pick("treasure: a power refilled", "hazine: bir güç doldu");
                     return true;
                 }
                 default:
@@ -249,7 +249,7 @@ namespace ProjectBlock.Core
                     Power victim = charged[turn.Rng.NextInt(0, charged.Count)];
                     turn.Session.Powers.BurnCharge(victim);
                     LastOutcome = Loc.Pick("dynamite: " + victim.DisplayName + " drained",
-                        "dinamit: " + victim.DisplayName + " tÃ¼kendi");
+                        "dinamit: " + victim.DisplayName + " tükendi");
                     return true;
                 }
                 case 1:
@@ -282,7 +282,7 @@ namespace ProjectBlock.Core
                     }
                     round.DiscardWholeHand();
                     round.RefillHandToSize();
-                    LastOutcome = Loc.Pick("dynamite: hand discarded", "dinamit: el Ä±skartaya gitti");
+                    LastOutcome = Loc.Pick("dynamite: hand discarded", "dinamit: el ıskartaya gitti");
                     return true;
                 }
             }

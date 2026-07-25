@@ -1,4 +1,4 @@
-﻿// PURPOSE: Jokers that act on the hand and the draw pile: Renovasyon, Ä°ade, Insider.
+﻿// PURPOSE: Jokers that act on the hand and the draw pile: Renovasyon, İade, Insider.
 // The first two are the game's first PLAYER-ACTIVATED jokers - they spend a per-round
 // charge and call an engine primitive; they consume no turn.
 //
@@ -7,7 +7,7 @@
 //    reshuffles the discard into the draw pile. In overtime the discard is otherwise
 //    never recycled, so leaving it on would hand the player a free deck refill and defuse
 //    the deck-out loss entirely - strictly better than paying the continue cost.
-//  - Ä°ade stays ON: ReplaceHandCard draws through the normal rules, so in overtime an
+//  - İade stays ON: ReplaceHandCard draws through the normal rules, so in overtime an
 //    empty draw pile is a loss like any other draw. Using it there is a real gamble.
 //
 // All numbers below are BALANCE PLACEHOLDERS.
@@ -23,8 +23,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Twice per round, discard your whole hand and draw a fresh one. "
                     + "Costs no turn; disabled in overtime.",
-                "Raunt baÅŸÄ±na 2 kez tÃ¼m elini Ä±skartaya atÄ±p yeni el Ã§ekersin. "
-                    + "Tur harcamaz, uzatmada Ã§alÄ±ÅŸmaz.");
+                "Raunt başına 2 kez tüm elini ıskartaya atıp yeni el çekersin. "
+                    + "Tur harcamaz, uzatmada çalışmaz.");
             ChargesPerRound = 2;
         }
 
@@ -50,16 +50,16 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Ä°ade" - swap ONE held card for the top of the draw pile, twice per round.
+    /// <summary>"İade" - swap ONE held card for the top of the draw pile, twice per round.
     /// Only the returned card goes to the discard; the rest of the hand is untouched.</summary>
     public sealed class IadeJoker : Joker
     {
         public IadeJoker()
-            : base("iade", "Ä°ade")
+            : base("iade", "İade")
         {
             SetDescription(
                 "Twice per round, return a single held block and draw a replacement. Costs no turn.",
-                "Raunt baÅŸÄ±na 2 kez elindeki tek bir bloÄŸu iade edip yenisini Ã§ekersin. Tur harcamaz.");
+                "Raunt başına 2 kez elindeki tek bir bloğu iade edip yenisini çekersin. Tur harcamaz.");
             ChargesPerRound = 2;
         }
 
@@ -105,7 +105,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "You see the top card of the draw pile.",
-                "Ã‡ekme destesinin en Ã¼stÃ¼ndeki kartÄ± gÃ¶rÃ¼rsÃ¼n.");
+                "Çekme destesinin en üstündeki kartı görürsün.");
         }
 
         public override void OnAcquired(SessionContext ctx)
@@ -126,7 +126,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"HafÄ±za" - bonus-hand cards you did not play carry over into the next round.
+    /// <summary>"Hafıza" - bonus-hand cards you did not play carry over into the next round.
     /// If more carry over than the round-start hand size, the excess is trimmed at random.
     /// Only round-scoped bonus cards (copies) carry; owned deck cards would duplicate the
     /// ones already reshuffled into the draw pile, so they are left behind.</summary>
@@ -137,18 +137,18 @@ namespace ProjectBlock.Core
         private int baseHandSize = -1;
 
         public HafizaJoker()
-            : base("hafiza", "HafÄ±za")
+            : base("hafiza", "Hafıza")
         {
             SetDescription(
                 "Bonus-hand cards you did not play carry over to the next round. Any beyond "
                     + "your round-start hand size are discarded at random.",
-                "Elinde kalan bonus kartlar sonraki raunda taÅŸÄ±nÄ±r. Raunt baÅŸÄ±ndaki el "
-                    + "bÃ¼yÃ¼klÃ¼ÄŸÃ¼nÃ¼ aÅŸan kartlar rastgele atÄ±lÄ±r.");
+                "Elinde kalan bonus kartlar sonraki raunda taşınır. Raunt başındaki el "
+                    + "büyüklüğünü aşan kartlar rastgele atılır.");
         }
 
         public override string StatusText
         {
-            get { return Loc.Pick(carried.Count + " carried", carried.Count + " taÅŸÄ±nan"); }
+            get { return Loc.Pick(carried.Count + " carried", carried.Count + " taşınan"); }
         }
 
         public override void OnRoundStarted(RoundContext ctx)

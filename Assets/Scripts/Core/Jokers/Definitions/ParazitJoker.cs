@@ -45,9 +45,9 @@ namespace ProjectBlock.Core
                 "In the market, attach a joker to a cube of a block in your deck. That joker "
                     + "takes no slot. Its host cube is sweep-exempt and unbreakable by other "
                     + "jokers and powers - only a line you complete destroys it (and the joker).",
-                "Markette bir jokeri destendeki bir bloÄŸun kÃ¼pÃ¼ne takarsÄ±n. O joker slot "
-                    + "iÅŸgal etmez. Konak kÃ¼p temizliÄŸe girmez ve baÅŸka joker/gÃ¼Ã§lerle kÄ±rÄ±lmaz "
-                    + "- sadece senin tamamladÄ±ÄŸÄ±n bir satÄ±r onu (ve jokeri) yok eder.");
+                "Markette bir jokeri destendeki bir bloğun küpüne takarsın. O joker slot "
+                    + "işgal etmez. Konak küp temizliğe girmez ve başka joker/güçlerle kırılmaz "
+                    + "- sadece senin tamamladığın bir satır onu (ve jokeri) yok eder.");
         }
 
         public bool HasBinding
@@ -60,8 +60,8 @@ namespace ProjectBlock.Core
             get
             {
                 return HasBinding
-                    ? Loc.Pick("bound to block #" + HostCardId, "blok #" + HostCardId + "'e baÄŸlÄ±")
-                    : Loc.Pick("idle", "boÅŸta");
+                    ? Loc.Pick("bound to block #" + HostCardId, "blok #" + HostCardId + "'e bağlı")
+                    : Loc.Pick("idle", "boşta");
             }
         }
 

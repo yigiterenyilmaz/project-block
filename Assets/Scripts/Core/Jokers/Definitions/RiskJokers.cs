@@ -26,8 +26,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Hand size +2, but at the end of every turn the unused cards are discarded "
                     + "and replaced. Disabled in overtime.",
-                "El boyutu +2, ama her tur sonunda kullanÄ±lmayan kartlar Ä±skartaya "
-                    + "gidip yenileri gelir. Uzatmada Ã§alÄ±ÅŸmaz.");
+                "El boyutu +2, ama her tur sonunda kullanılmayan kartlar ıskartaya "
+                    + "gidip yenileri gelir. Uzatmada çalışmaz.");
         }
 
         public override bool DisabledInOvertime
@@ -41,7 +41,7 @@ namespace ProjectBlock.Core
             {
                 return applied
                     ? Loc.Pick("hand +" + ExtraHandSize, "el +" + ExtraHandSize)
-                    : Loc.Pick("off", "kapalÄ±");
+                    : Loc.Pick("off", "kapalı");
             }
         }
 

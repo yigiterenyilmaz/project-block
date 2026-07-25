@@ -1,4 +1,4 @@
-﻿// PURPOSE: The three "compare this block with the previous one" jokers: Ã§Ä±ÄŸ (bigger),
+﻿// PURPOSE: The three "compare this block with the previous one" jokers: çığ (bigger),
 // dondurma (smaller), Siyam (identical shape). They share StreakJoker, which owns the
 // streak bookkeeping so each joker only answers one question: does this placement
 // continue the run?
@@ -7,7 +7,7 @@
 //  - Size means CUBE COUNT (BlockShape.Size), not bounding box.
 //  - A placement that does not continue the run RESTARTS it at 1 with the new card as the
 //    baseline - it never merely pauses. (Otherwise Siyam turns would be free protection
-//    for a Ã§Ä±ÄŸ streak.)
+//    for a çığ streak.)
 //  - Bonus-hand plays are turns too, so they take part in every streak.
 //  - "Same shape" is exact normalized-shape equality (BlockShape.CanonicalKey). Rotations
 //    and mirrors are NOT the same shape - the base game never rotates a block.
@@ -20,7 +20,7 @@
 
 namespace ProjectBlock.Core
 {
-    /// <summary>Shared streak counting for Ã§Ä±ÄŸ / dondurma / Siyam. All numbers are
+    /// <summary>Shared streak counting for çığ / dondurma / Siyam. All numbers are
     /// BALANCE PLACEHOLDERS.</summary>
     public abstract class StreakJoker : Joker
     {
@@ -84,15 +84,15 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Ã§Ä±ÄŸ" - each block bigger than the last one.</summary>
+    /// <summary>"çığ" - each block bigger than the last one.</summary>
     public sealed class CigJoker : StreakJoker
     {
         public CigJoker()
-            : base("cig", "Ã‡Ä±ÄŸ")
+            : base("cig", "Çığ")
         {
             SetDescription(
                 "Score bonus for placing a BIGGER block than last turn; grows as the streak lasts.",
-                "Her tur bir Ã¶ncekinden BÃœYÃœK blok koyarsan puan bonusu; seri uzadÄ±kÃ§a bÃ¼yÃ¼r.");
+                "Her tur bir öncekinden BÜYÜK blok koyarsan puan bonusu; seri uzadıkça büyür.");
         }
 
         protected override bool Continues(BlockShape previous, BlockShape current)
@@ -109,7 +109,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Score bonus for placing a SMALLER block than last turn; grows as the streak lasts.",
-                "Her tur bir Ã¶ncekinden KÃœÃ‡ÃœK blok koyarsan puan bonusu; seri uzadÄ±kÃ§a bÃ¼yÃ¼r.");
+                "Her tur bir öncekinden KÜÇÜK blok koyarsan puan bonusu; seri uzadıkça büyür.");
         }
 
         protected override bool Continues(BlockShape previous, BlockShape current)
@@ -126,7 +126,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Score bonus for placing the SAME shape as last turn; grows as the streak lasts.",
-                "Her tur bir Ã¶ncekiyle AYNI ÅŸekli koyarsan puan bonusu; seri uzadÄ±kÃ§a bÃ¼yÃ¼r.");
+                "Her tur bir öncekiyle AYNI şekli koyarsan puan bonusu; seri uzadıkça büyür.");
             MinStreak = 2;          // no natural ceiling, so it pays from the first repeat
             PointsPerStreakStep = 25;
         }

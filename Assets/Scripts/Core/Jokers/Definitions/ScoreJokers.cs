@@ -30,7 +30,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Whenever a row and a column explode in the same turn, your score gains grow permanently.",
-                "AynÄ± turda satÄ±r ve sÃ¼tun birlikte patlarsa kazandÄ±ÄŸÄ±n puan kalÄ±cÄ± olarak artar.");
+                "Aynı turda satır ve sütun birlikte patlarsa kazandığın puan kalıcı olarak artar.");
         }
 
         public override string StatusText
@@ -66,7 +66,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "You gain points every time the draw pile runs out.",
-                "Ã‡ekme destesi her tÃ¼kendiÄŸinde puan kazanÄ±rsÄ±n.");
+                "Çekme destesi her tükendiğinde puan kazanırsın.");
         }
 
         public override string StatusText
@@ -107,7 +107,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "The fewer cards your deck holds, the more points you score each turn.",
-                "Destendeki kart sayÄ±sÄ± ne kadar az ise her tur o kadar fazla puan kazanÄ±rsÄ±n.");
+                "Destendeki kart sayısı ne kadar az ise her tur o kadar fazla puan kazanırsın.");
         }
 
         public override string StatusText
@@ -150,10 +150,10 @@ namespace ProjectBlock.Core
                 "Clean sweeps triggered by jokers and powers count as real sweeps - they pay "
                     + "the sweep bonus and recharge your powers, just like emptying the board on "
                     + "a placement. Normally such a between-placements clear does not count.",
-                "Jokerler ve gÃ¼Ã§ler tarafÄ±ndan tetiklenen temizlikler de gerÃ§ek temizlik sayÄ±lÄ±r "
-                    + "- tÄ±pkÄ± blok koyarak tahtayÄ± boÅŸaltmak gibi temizlik bonusunu verir ve "
-                    + "gÃ¼Ã§lerini ÅŸarj eder. Normalde blok koymalar arasÄ±ndaki bÃ¶yle bir temizlik "
-                    + "sayÄ±lmaz.");
+                "Jokerler ve güçler tarafından tetiklenen temizlikler de gerçek temizlik sayılır "
+                    + "- tıpkı blok koyarak tahtayı boşaltmak gibi temizlik bonusunu verir ve "
+                    + "güçlerini şarj eder. Normalde blok koymalar arasındaki böyle bir temizlik "
+                    + "sayılmaz.");
         }
 
         public override void OnAcquired(SessionContext ctx)
@@ -188,12 +188,12 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Placing a block scores points - one bonus for every cube you place.",
-                "Blok koymak puan kazandÄ±rÄ±r - koyduÄŸun her kÃ¼p iÃ§in bonus.");
+                "Blok koymak puan kazandırır - koyduğun her küp için bonus.");
         }
 
         public override string StatusText
         {
-            get { return Loc.Pick("+" + PointsPerCube + "/cube", "+" + PointsPerCube + "/kÃ¼p"); }
+            get { return Loc.Pick("+" + PointsPerCube + "/cube", "+" + PointsPerCube + "/küp"); }
         }
 
         public override void ModifyScore(TurnContext turn)

@@ -45,9 +45,9 @@ namespace ProjectBlock.Core
                 "A few turns in, it dares you to clear a marked row or column within a "
                     + "deadline for a bonus. Miss it and it moves and halves the bonus, up to "
                     + "three tries; clear any one and it is done for the round.",
-                "BirkaÃ§ tur sonra iÅŸaretlediÄŸi bir satÄ±rÄ± ya da sÃ¼tunu sÃ¼re dolmadan "
-                    + "patlatman iÃ§in bonus vaat eder. Tutturamazsan yer deÄŸiÅŸtirip bonusu "
-                    + "yarÄ±ya bÃ¶ler, en fazla Ã¼Ã§ deneme; birini tutturursan o raunt biter.");
+                "Birkaç tur sonra işaretlediği bir satırı ya da sütunu süre dolmadan "
+                    + "patlatman için bonus vaat eder. Tutturamazsan yer değiştirip bonusu "
+                    + "yarıya böler, en fazla üç deneme; birini tutturursan o raunt biter.");
         }
 
         /// <summary>True once the event is over for the round (paid out or three misses).</summary>
@@ -94,8 +94,8 @@ namespace ProjectBlock.Core
                 {
                     return Loc.Pick("waiting", "bekliyor");
                 }
-                string what = markIsRow ? Loc.Pick("row", "satÄ±r") : Loc.Pick("col", "sÃ¼tun");
-                return what + " " + markedLine + " Â· " + turnsLeft + Loc.Pick("t", "t");
+                string what = markIsRow ? Loc.Pick("row", "satır") : Loc.Pick("col", "sütun");
+                return what + " " + markedLine + " · " + turnsLeft + Loc.Pick("t", "t");
             }
         }
 

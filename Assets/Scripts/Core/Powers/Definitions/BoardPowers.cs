@@ -1,4 +1,4 @@
-﻿// PURPOSE: Powers that act on the board: Ã‡aprazlama, Ã‡erÃ§eve, BardaÄŸÄ±n boÅŸ tarafÄ±, MayÄ±n,
+﻿// PURPOSE: Powers that act on the board: Çaprazlama, Çerçeve, Bardağın boş tarafı, Mayın,
 // eko, Buldozer.
 // Every one of them destroys or rewrites cubes through RoundEngine, never through GameBoard
 // directly, so the destruction log, the countable tally and the clean-sweep pre-condition
@@ -13,18 +13,18 @@ using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>"Ã‡aprazlama" - blows up a plus-shaped area around a chosen cell.</summary>
+    /// <summary>"Çaprazlama" - blows up a plus-shaped area around a chosen cell.</summary>
     public sealed class CaprazlamaPower : Power
     {
         /// <summary>How far each arm of the plus reaches from the centre.</summary>
         public int ArmLength = 2;
 
         public CaprazlamaPower()
-            : base("caprazlama", "Ã‡aprazlama")
+            : base("caprazlama", "Çaprazlama")
         {
             SetDescription(
                 "Blows up the blocks in a plus-shaped area around a chosen centre.",
-                "SeÃ§tiÄŸin merkezden + ÅŸeklinde bir alandaki bloklarÄ± patlatÄ±r.");
+                "Seçtiğin merkezden + şeklinde bir alandaki blokları patlatır.");
         }
 
         public override ActivationTargeting Targeting
@@ -63,15 +63,15 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Ã‡erÃ§eve" - clears the outermost ring of the board.</summary>
+    /// <summary>"Çerçeve" - clears the outermost ring of the board.</summary>
     public sealed class CercevePower : Power
     {
         public CercevePower()
-            : base("cerceve", "Ã‡erÃ§eve")
+            : base("cerceve", "Çerçeve")
         {
             SetDescription(
                 "Clears the blocks on the outermost ring of the board.",
-                "Oyun alanÄ±nÄ±n en dÄ±ÅŸ katmanÄ±ndaki bloklarÄ± temizler.");
+                "Oyun alanının en dış katmanındaki blokları temizler.");
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -100,20 +100,20 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"BardaÄŸÄ±n boÅŸ tarafÄ±" - inverts the board: every filled cell empties and
+    /// <summary>"Bardağın boş tarafı" - inverts the board: every filled cell empties and
     /// every empty cell fills. The new cubes are plain, with no element.
     /// NO SAFETY NET, by design: inverting a nearly-empty board can bury the player, so the
     /// power is only worth using when the board is crowded. That is the tactical point.</summary>
     public sealed class BardaginBosTarafiPower : Power
     {
         public BardaginBosTarafiPower()
-            : base("bardagin_bos_tarafi", "BardaÄŸÄ±n BoÅŸ TarafÄ±")
+            : base("bardagin_bos_tarafi", "Bardağın Boş Tarafı")
         {
             SetDescription(
                 "Filled and empty cells on the board swap places (new cubes carry no element). "
                     + "Any row or column the new cubes complete explodes.",
-                "Oyun alanÄ±ndaki dolu ve boÅŸ kareler yer deÄŸiÅŸtirir (yeni kÃ¼pler elementsizdir). "
-                    + "Yeni kÃ¼plerin tamamladÄ±ÄŸÄ± satÄ±r veya sÃ¼tun patlar.");
+                "Oyun alanındaki dolu ve boş kareler yer değiştirir (yeni küpler elementsizdir). "
+                    + "Yeni küplerin tamamladığı satır veya sütun patlar.");
         }
 
         /// <summary>Refused on an empty board: there would be nothing to invert away, and the
@@ -184,8 +184,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "The first use (free) memorises the next explosion; using it again replays "
                     + "it on the same squares. Memory resets every round.",
-                "Ä°lk kullanÄ±m (bedava) sonraki patlamayÄ± hafÄ±zaya alÄ±r, tekrar kullandÄ±ÄŸÄ±nda "
-                    + "o patlamayÄ± aynÄ± karelerde tekrar eder. HafÄ±za her raunt sÄ±fÄ±rlanÄ±r.");
+                "İlk kullanım (bedava) sonraki patlamayı hafızaya alır, tekrar kullandığında "
+                    + "o patlamayı aynı karelerde tekrar eder. Hafıza her raunt sıfırlanır.");
         }
 
         public bool HasMemory
@@ -199,9 +199,9 @@ namespace ProjectBlock.Core
             {
                 if (HasMemory)
                 {
-                    return Loc.Pick(memory.Count + " squares ready", memory.Count + " kare hazÄ±r");
+                    return Loc.Pick(memory.Count + " squares ready", memory.Count + " kare hazır");
                 }
-                return listening ? Loc.Pick("listening", "dinliyor") : Loc.Pick("empty", "boÅŸ");
+                return listening ? Loc.Pick("listening", "dinliyor") : Loc.Pick("empty", "boş");
             }
         }
 
@@ -250,18 +250,18 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"MayÄ±n" - pops one chosen cube. Dropped on an EMPTY cell it instead leaves a
+    /// <summary>"Mayın" - pops one chosen cube. Dropped on an EMPTY cell it instead leaves a
     /// mine there, which detonates the cube that later lands on it.
     /// Using it costs no turn, like every power.</summary>
     public sealed class MayinPower : Power
     {
         public MayinPower()
-            : base("mayin", "MayÄ±n")
+            : base("mayin", "Mayın")
         {
             SetDescription(
                 "Pops a chosen cube. Dropped on an empty cell it arms a mine that "
                     + "detonates the cube that lands on it.",
-                "SeÃ§tiÄŸin kÃ¼pÃ¼ patlatÄ±r. BoÅŸ kareye koyarsan Ã¼stÃ¼ne kÃ¼p geldiÄŸinde patlar.");
+                "Seçtiğin küpü patlatır. Boş kareye koyarsan üstüne küp geldiğinde patlar.");
         }
 
         public override ActivationTargeting Targeting
@@ -304,7 +304,7 @@ namespace ProjectBlock.Core
     /// obsidian at all.
     ///
     /// In exchange it is completely inert as far as the score economy is concerned: no
-    /// points, nothing added to the "KayÄ±t defteri" ledger, and it can never trigger a clean
+    /// points, nothing added to the "Kayıt defteri" ledger, and it can never trigger a clean
     /// sweep - not even by emptying the board. It buys space and nothing else.
     /// </summary>
     public sealed class BuldozerPower : Power
@@ -326,8 +326,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Flattens two neighbouring rows or columns, chosen at random. Crushes even "
                     + "obsidian and gold. Pays no points and never counts as a clean sweep.",
-                "Rastgele seÃ§ilen ardÄ±ÅŸÄ±k 2 satÄ±rÄ± ya da 2 sÃ¼tunu siler. Obsidyeni ve altÄ±nÄ± "
-                    + "bile ezer. Puan vermez, temizlik sayÄ±lmaz.");
+                "Rastgele seçilen ardışık 2 satırı ya da 2 sütunu siler. Obsidyeni ve altını "
+                    + "bile ezer. Puan vermez, temizlik sayılmaz.");
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
