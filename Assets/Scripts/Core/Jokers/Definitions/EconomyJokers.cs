@@ -1,4 +1,4 @@
-// PURPOSE: The jokers wired into the run economy and the market: Damlaya Damlaya Göl Olur,
+﻿// PURPOSE: The jokers wired into the run economy and the market: Damlaya Damlaya GÃ¶l Olur,
 // ihale, Kara delik, Enfeksiyon.
 //
 // "Powerbank" lives here too, now that powers exist: it is the only joker that reaches into
@@ -10,7 +10,7 @@ using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>"Damlaya Damlaya Göl Olur" - skip the market and the next round pays for it.
+    /// <summary>"Damlaya Damlaya GÃ¶l Olur" - skip the market and the next round pays for it.
     /// The bonus lands on every turn of that round, so it counts toward the threshold and
     /// cannot hand the player a free advance offer before a single block is placed.</summary>
     public sealed class DamlayaJoker : Joker
@@ -24,12 +24,11 @@ namespace ProjectBlock.Core
         public int ActiveBonus { get; private set; }
 
         public DamlayaJoker()
-            : base("damlaya", "Damlaya Damlaya Göl Olur")
+            : base("damlaya", "Damlaya Damlaya GÃ¶l Olur")
         {
             SetDescription(
                 "Buy nothing at the market and the next round pays a score bonus every turn.",
-                "Marketten bir şey almazsan sonraki raunt her tur puan bonusu alırsın.");
-            BaseSellValue = 45;
+                "Marketten bir ÅŸey almazsan sonraki raunt her tur puan bonusu alÄ±rsÄ±n.");
         }
 
         public override string StatusText
@@ -71,14 +70,13 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Once per round, recharges a spent power without waiting for a clean sweep.",
-                "Raunt başına 1 kez, harcanmış bir gücü temizlik beklemeden doldurur.");
+                "Raunt baÅŸÄ±na 1 kez, harcanmÄ±ÅŸ bir gÃ¼cÃ¼ temizlik beklemeden doldurur.");
             ChargesPerRound = 1;
-            BaseSellValue = 55;
         }
 
         public override string StatusText
         {
-            get { return ChargesLeft > 0 ? Loc.Pick("ready", "hazır") : Loc.Pick("used", "kullanıldı"); }
+            get { return ChargesLeft > 0 ? Loc.Pick("ready", "hazÄ±r") : Loc.Pick("used", "kullanÄ±ldÄ±"); }
         }
 
         public override bool CanActivate(RoundContext ctx)
@@ -133,14 +131,13 @@ namespace ProjectBlock.Core
         public int PremiumPerRound = 15;
 
         public IhaleJoker()
-            : base("ihale", "İhale")
+            : base("ihale", "Ä°hale")
         {
             SetDescription(
                 "At every round start it puts a premium on a random joker's sell price. "
                     + "No new auction opens until that joker is sold.",
-                "Her raunt başında rastgele bir jokere ek satış fiyatı biçer. "
-                    + "O joker satılana kadar yeni ihale açılmaz.");
-            BaseSellValue = 40;
+                "Her raunt baÅŸÄ±nda rastgele bir jokere ek satÄ±ÅŸ fiyatÄ± biÃ§er. "
+                    + "O joker satÄ±lana kadar yeni ihale aÃ§Ä±lmaz.");
         }
 
         public override string StatusText
@@ -198,14 +195,13 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Every clean sweep adds a 1x1 void block to your discard. A void block "
                     + "can be placed on a filled cell and swallows whatever lands on it.",
-                "Her temizlikte ıskartana 1x1 boşluk bloğu ekler. Boşluk bloğu "
-                    + "dolu hücreye konabilir ve üstüne geleni yutar.");
-            BaseSellValue = 70;
+                "Her temizlikte Ä±skartana 1x1 boÅŸluk bloÄŸu ekler. BoÅŸluk bloÄŸu "
+                    + "dolu hÃ¼creye konabilir ve Ã¼stÃ¼ne geleni yutar.");
         }
 
         public override string StatusText
         {
-            get { return Loc.Pick(GrantedThisRound + " voids", GrantedThisRound + " boşluk"); }
+            get { return Loc.Pick(GrantedThisRound + " voids", GrantedThisRound + " boÅŸluk"); }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -323,11 +319,10 @@ namespace ProjectBlock.Core
                 "Infect one cube. When the same block has sat on it for 3 turns the whole "
                     + "block detonates. The first detonation spreads the infection once into "
                     + "a 3x3 plus - and no further.",
-                "Bir küpü enfekte edersin. Aynı blok o karede 3 tur durursa blok tümüyle "
-                    + "patlar. İlk patlama enfeksiyonu bir kez 3x3 artı şeklinde yayar - "
-                    + "daha fazla değil.");
+                "Bir kÃ¼pÃ¼ enfekte edersin. AynÄ± blok o karede 3 tur durursa blok tÃ¼mÃ¼yle "
+                    + "patlar. Ä°lk patlama enfeksiyonu bir kez 3x3 artÄ± ÅŸeklinde yayar - "
+                    + "daha fazla deÄŸil.");
             ChargesPerRound = 1;
-            BaseSellValue = 60;
         }
 
         /// <summary>The player points at the cube to infect.</summary>
@@ -342,7 +337,7 @@ namespace ProjectBlock.Core
             {
                 return infected.Count > 0
                     ? Loc.Pick(infected.Count + " infected", infected.Count + " enfekte")
-                    : Loc.Pick("ready", "hazır");
+                    : Loc.Pick("ready", "hazÄ±r");
             }
         }
 

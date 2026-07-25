@@ -1,5 +1,5 @@
-// PURPOSE: Jokers that rewrite how the two piles work: Oryantasyon, Dezenformasyon,
-// İmitasyon, Fraksiyon. They are the deck-economy counterpart of the board jokers, and
+﻿// PURPOSE: Jokers that rewrite how the two piles work: Oryantasyon, Dezenformasyon,
+// Ä°mitasyon, Fraksiyon. They are the deck-economy counterpart of the board jokers, and
 // they all lean on RoundDeck primitives rather than touching the piles by hand.
 //
 // WHY THESE ARE DANGEROUS TO BALANCE: the loss conditions of the game are deck-based
@@ -9,7 +9,7 @@
 //                  never runs out, which nearly removes the deck-out loss.
 //   Dezenformasyon - the discard becomes a live draw source every other turn, so overtime
 //                  loses its "the discard never comes back" bite.
-//   İmitasyon    - hand size tracks the discard, so it can demand more cards than the draw
+//   Ä°mitasyon    - hand size tracks the discard, so it can demand more cards than the draw
 //                  pile holds. That is a real way to lose, hence MaxHandSize.
 //   Fraksiyon    - halves the draw pile on purpose, then lets the player swap the piles once.
 //
@@ -27,9 +27,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Played cards are buried at a random depth of the draw pile instead of "
                     + "being discarded. The pile's top card is always visible.",
-                "Kartlar ıskartaya değil, çekme destesinin rastgele bir yerine "
-                    + "girer. Destenin en üstteki kartı hep görünür.");
-            BaseSellValue = 55;
+                "Kartlar Ä±skartaya deÄŸil, Ã§ekme destesinin rastgele bir yerine "
+                    + "girer. Destenin en Ã¼stteki kartÄ± hep gÃ¶rÃ¼nÃ¼r.");
             IsLegendary = true;
         }
 
@@ -81,11 +80,10 @@ namespace ProjectBlock.Core
                     + "kept separate and never merged. Each turn the two roles swap - you draw "
                     + "from one and discard into the other, and which is which flips every turn - "
                     + "and at the end of every turn each pile is shuffled within itself. Hand +1.",
-                "Açılış eli dağıtıldıktan sonra çekme destesi iki eşit desteye bölünür, asla "
-                    + "birbirine karışmazlar. Her tur roller yer değiştirir - birinden çeker, "
-                    + "diğerine atarsın, hangisinin hangisi olduğu her tur değişir - ve her tur "
-                    + "sonunda her deste kendi içinde karılır. El +1.");
-            BaseSellValue = 60;
+                "AÃ§Ä±lÄ±ÅŸ eli daÄŸÄ±tÄ±ldÄ±ktan sonra Ã§ekme destesi iki eÅŸit desteye bÃ¶lÃ¼nÃ¼r, asla "
+                    + "birbirine karÄ±ÅŸmazlar. Her tur roller yer deÄŸiÅŸtirir - birinden Ã§eker, "
+                    + "diÄŸerine atarsÄ±n, hangisinin hangisi olduÄŸu her tur deÄŸiÅŸir - ve her tur "
+                    + "sonunda her deste kendi iÃ§inde karÄ±lÄ±r. El +1.");
             IsLegendary = true;
         }
 
@@ -95,7 +93,7 @@ namespace ProjectBlock.Core
             {
                 bool normal = TurnsSeen % 2 == 0;
                 return Loc.Pick(normal ? "normal flow" : "reversed flow",
-                    (normal ? "normal" : "ters") + " yön");
+                    (normal ? "normal" : "ters") + " yÃ¶n");
             }
         }
 
@@ -149,7 +147,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"İmitasyon" - the hand mirrors the discard: as many cards as the discard
+    /// <summary>"Ä°mitasyon" - the hand mirrors the discard: as many cards as the discard
     /// holds, at least one. Whatever is left in hand at end of turn is thrown onto the discard,
     /// which is what makes the hand grow. The refill only ever draws what the draw pile
     /// actually holds - it never auto-recycles the discard and a short pile is never a loss;
@@ -163,18 +161,17 @@ namespace ProjectBlock.Core
         private int originalHandSize = -1;
 
         public ImitasyonJoker()
-            : base("imitasyon", "İmitasyon")
+            : base("imitasyon", "Ä°mitasyon")
         {
             SetDescription(
                 "Your hand size equals the discard pile's card count (min 1); leftover hand "
                     + "cards are discarded each turn. Refills draw only what the draw pile "
                     + "holds - it never reshuffles to fill up, and the discard is recycled only "
                     + "when you play into an empty draw pile.",
-                "El boyutun ıskartadaki kart sayısına eşittir (en az 1); tur sonunda elde "
-                    + "kalanlar ıskartaya gider. El sadece çekme destesinde olanı çeker - "
-                    + "dolmak için karmaz; ıskarta yalnızca boş desteye kart oynadığında geri "
-                    + "karılır.");
-            BaseSellValue = 60;
+                "El boyutun Ä±skartadaki kart sayÄ±sÄ±na eÅŸittir (en az 1); tur sonunda elde "
+                    + "kalanlar Ä±skartaya gider. El sadece Ã§ekme destesinde olanÄ± Ã§eker - "
+                    + "dolmak iÃ§in karmaz; Ä±skarta yalnÄ±zca boÅŸ desteye kart oynadÄ±ÄŸÄ±nda geri "
+                    + "karÄ±lÄ±r.");
             IsLegendary = true;
         }
 
@@ -183,8 +180,8 @@ namespace ProjectBlock.Core
             get
             {
                 return originalHandSize >= 0
-                    ? Loc.Pick("hand = discard", "el = ıskarta")
-                    : Loc.Pick("off", "kapalı");
+                    ? Loc.Pick("hand = discard", "el = Ä±skarta")
+                    : Loc.Pick("off", "kapalÄ±");
             }
         }
 
@@ -267,11 +264,10 @@ namespace ProjectBlock.Core
                     + "split in two; you may then inspect half the discard by clicking it. "
                     + "You may swap the piles once until the next split - after a swap the "
                     + "discard is hidden again.",
-                "Raunt başında ve deste bitince desteler karılıp ikiye bölünür; sonra "
-                    + "ıskartaya tıklayarak yarısını inceleyebilirsin. Sonraki bölünmeye kadar "
-                    + "desteleri bir kez takas edebilirsin - takastan sonra ıskarta yine gizlenir.");
+                "Raunt baÅŸÄ±nda ve deste bitince desteler karÄ±lÄ±p ikiye bÃ¶lÃ¼nÃ¼r; sonra "
+                    + "Ä±skartaya tÄ±klayarak yarÄ±sÄ±nÄ± inceleyebilirsin. Sonraki bÃ¶lÃ¼nmeye kadar "
+                    + "desteleri bir kez takas edebilirsin - takastan sonra Ä±skarta yine gizlenir.");
             ChargesPerRound = 0; // charges are per RESHUFFLE here, not per round
-            BaseSellValue = 65;
             IsLegendary = true;
         }
 
@@ -283,7 +279,7 @@ namespace ProjectBlock.Core
             get
             {
                 return SwapAvailable
-                    ? Loc.Pick("swap ready", "takas hazır")
+                    ? Loc.Pick("swap ready", "takas hazÄ±r")
                     : Loc.Pick("no swap", "takas yok");
             }
         }

@@ -1,5 +1,5 @@
-// PURPOSE: Powers that act on the cards rather than the board: Cımbız, Klon, Büyüteç,
-// Transfer, Hologram, Hızlı çekim şarjörü.
+﻿// PURPOSE: Powers that act on the cards rather than the board: CÄ±mbÄ±z, Klon, BÃ¼yÃ¼teÃ§,
+// Transfer, Hologram, HÄ±zlÄ± Ã§ekim ÅŸarjÃ¶rÃ¼.
 //
 // None of them costs a turn (the central power rule), so they are all about setting up the
 // placement you are ABOUT to make.
@@ -10,17 +10,16 @@ using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>"Cımbız" - rotate any held block, not just a mechanical one. The engine
+    /// <summary>"CÄ±mbÄ±z" - rotate any held block, not just a mechanical one. The engine
     /// already knows how to rotate; this power just lifts the "mechanical only" gate.</summary>
     public sealed class CimbizPower : Power
     {
         public CimbizPower()
-            : base("cimbiz", "Cımbız")
+            : base("cimbiz", "CÄ±mbÄ±z")
         {
             SetDescription(
                 "Rotates a held block of your choice (it does not need to be mechanical).",
-                "Elindeki seçtiğin bloğu çevirir (mekanik blok olması gerekmez).");
-            BaseSellValue = 35;
+                "Elindeki seÃ§tiÄŸin bloÄŸu Ã§evirir (mekanik blok olmasÄ± gerekmez).");
         }
 
         public override ActivationTargeting Targeting
@@ -52,8 +51,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Adds 2 copies of a held card of your choice to your bonus hand.",
-                "Elindeki seçtiğin kartın 2 kopyasını bonus eline ekler.");
-            BaseSellValue = 45;
+                "Elindeki seÃ§tiÄŸin kartÄ±n 2 kopyasÄ±nÄ± bonus eline ekler.");
         }
 
         public override ActivationTargeting Targeting
@@ -74,7 +72,7 @@ namespace ProjectBlock.Core
             for (int i = 0; i < CopyCount; i++)
             {
                 // Fresh ids: the copies are their own cards, so the board can tell their
-                // cubes apart from the original's (fire chains, "Kazı çalışması"...).
+                // cubes apart from the original's (fire chains, "KazÄ± Ã§alÄ±ÅŸmasÄ±"...).
                 BlockCard copy = ctx.Session.CreateCard(source.Shape, source.Elements);
                 ctx.Round.AddBonusCard(copy, BonusPlayOutcome.ExpireFromRound);
             }
@@ -82,7 +80,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Büyüteç" - the top two cards of the draw pile turn face-up. Pure information
+    /// <summary>"BÃ¼yÃ¼teÃ§" - the top two cards of the draw pile turn face-up. Pure information
     /// (the draw order itself is untouched) and CONSUMABLE: every card drawn uncovers one fewer
     /// (2 -> 1 -> 0), decremented centrally in RoundEngine.NoteCardDrawn.</summary>
     public sealed class BuyutecPower : Power
@@ -90,14 +88,13 @@ namespace ProjectBlock.Core
         public int RevealCount = 2;
 
         public BuyutecPower()
-            : base("buyutec", "Büyüteç")
+            : base("buyutec", "BÃ¼yÃ¼teÃ§")
         {
             SetDescription(
                 "Reveals the top two cards of the draw pile. As you draw, one fewer stays "
                     + "revealed (2, then 1, then none).",
-                "Çekme destesinin en üstteki iki kartını açığa çıkarır. Kart çektikçe biri daha "
-                    + "az görünür (2, sonra 1, sonra hiç).");
-            BaseSellValue = 30;
+                "Ã‡ekme destesinin en Ã¼stteki iki kartÄ±nÄ± aÃ§Ä±ÄŸa Ã§Ä±karÄ±r. Kart Ã§ektikÃ§e biri daha "
+                    + "az gÃ¶rÃ¼nÃ¼r (2, sonra 1, sonra hiÃ§).");
         }
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
@@ -132,9 +129,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Swaps the last discarded card with the top of the draw pile; "
                     + "you see what you gave away.",
-                "Iskartadaki son kart ile çekme destesinin üstündeki kart yer "
-                    + "değiştirir; verdiğin kartı görürsün.");
-            BaseSellValue = 35;
+                "Iskartadaki son kart ile Ã§ekme destesinin Ã¼stÃ¼ndeki kart yer "
+                    + "deÄŸiÅŸtirir; verdiÄŸin kartÄ± gÃ¶rÃ¼rsÃ¼n.");
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -157,8 +153,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Moves a bonus-hand card into the discard, folding it back into the piles.",
-                "Bonus elindeki bir kartı ıskartaya çıkarıp desteye katar.");
-            BaseSellValue = 30;
+                "Bonus elindeki bir kartÄ± Ä±skartaya Ã§Ä±karÄ±p desteye katar.");
         }
 
         public override ActivationTargeting Targeting
@@ -193,18 +188,17 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Hızlı çekim şarjörü" - dumps whatever is left of the draw pile into the
+    /// <summary>"HÄ±zlÄ± Ã§ekim ÅŸarjÃ¶rÃ¼" - dumps whatever is left of the draw pile into the
     /// discard and shuffles everything back, which is the fastest way to reach the cards you
     /// buried. In overtime the reshuffle is the point: nothing else recycles the discard.</summary>
     public sealed class HizliCekimSarjoruPower : Power
     {
         public HizliCekimSarjoruPower()
-            : base("hizli_cekim_sarjoru", "Hızlı Çekim Şarjörü")
+            : base("hizli_cekim_sarjoru", "HÄ±zlÄ± Ã‡ekim ÅarjÃ¶rÃ¼")
         {
             SetDescription(
                 "Instantly empties the draw pile and forces the discard to reshuffle in.",
-                "Çekme destesini anında bitirir ve ıskartanın karılmasını sağlar.");
-            BaseSellValue = 45;
+                "Ã‡ekme destesini anÄ±nda bitirir ve Ä±skartanÄ±n karÄ±lmasÄ±nÄ± saÄŸlar.");
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -222,7 +216,7 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>Shared helper for the powers that drop throwaway copies of pile cards into the
-    /// bonus hand (Aşırma, Yedekleme, Soğuk füzyon). Copies get fresh ids so the board can
+    /// bonus hand (AÅŸÄ±rma, Yedekleme, SoÄŸuk fÃ¼zyon). Copies get fresh ids so the board can
     /// tell their cubes apart from the original's.</summary>
     internal static class BonusCopyHelper
     {
@@ -251,8 +245,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "In the market, choose the cards that make up your next round's opening hand.",
-                "Market fazında sonraki rauntun başlangıç elini seçebilmeni sağlar.");
-            BaseSellValue = 55;
+                "Market fazÄ±nda sonraki rauntun baÅŸlangÄ±Ã§ elini seÃ§ebilmeni saÄŸlar.");
         }
 
         // Used from the market, not the in-round power path, so it never runs here.
@@ -267,18 +260,17 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Aşırma" - drops 2 copies of a random DRAW-pile card into the bonus hand.</summary>
+    /// <summary>"AÅŸÄ±rma" - drops 2 copies of a random DRAW-pile card into the bonus hand.</summary>
     public sealed class AsirmaPower : Power
     {
         public int CopyCount = 2;
 
         public AsirmaPower()
-            : base("asirma", "Aşırma")
+            : base("asirma", "AÅŸÄ±rma")
         {
             SetDescription(
                 "Adds 2 copies of a random card from the draw pile to your bonus hand.",
-                "Çekme destesinden rastgele bir kartın 2 kopyasını bonus eline ekler.");
-            BaseSellValue = 40;
+                "Ã‡ekme destesinden rastgele bir kartÄ±n 2 kopyasÄ±nÄ± bonus eline ekler.");
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -308,8 +300,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Adds 2 copies of a random card from the discard pile to your bonus hand.",
-                "Iskartadan rastgele bir kartın 2 kopyasını bonus eline ekler.");
-            BaseSellValue = 40;
+                "Iskartadan rastgele bir kartÄ±n 2 kopyasÄ±nÄ± bonus eline ekler.");
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -329,7 +320,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Bükülme" - marks a held card and drops a copy in the bonus hand. For the rest
+    /// <summary>"BÃ¼kÃ¼lme" - marks a held card and drops a copy in the bonus hand. For the rest
     /// of the round, every time that marked card is drawn back INTO the hand another copy is
     /// added. A clean sweep recharges the power, so it can be re-used to mark a new card.</summary>
     public sealed class BukulmePower : Power
@@ -338,16 +329,15 @@ namespace ProjectBlock.Core
         private bool markedInHand;
 
         public BukulmePower()
-            : base("bukulme", "Bükülme")
+            : base("bukulme", "BÃ¼kÃ¼lme")
         {
             SetDescription(
                 "Mark a held card and copy it to your bonus hand. For the rest of the round, "
                     + "each time the marked card is drawn into your hand another copy is added. "
                     + "A clean sweep lets you re-mark.",
-                "Elindeki bir kartı işaretler ve kopyasını bonus ele koyarsın. O raunt boyunca "
-                    + "işaretli kart her ele çekildiğinde bir kopyası daha eklenir. Temizlik "
-                    + "yaptığında yeniden işaretleyebilirsin.");
-            BaseSellValue = 55;
+                "Elindeki bir kartÄ± iÅŸaretler ve kopyasÄ±nÄ± bonus ele koyarsÄ±n. O raunt boyunca "
+                    + "iÅŸaretli kart her ele Ã§ekildiÄŸinde bir kopyasÄ± daha eklenir. Temizlik "
+                    + "yaptÄ±ÄŸÄ±nda yeniden iÅŸaretleyebilirsin.");
         }
 
         public override ActivationTargeting Targeting
@@ -360,8 +350,8 @@ namespace ProjectBlock.Core
             get
             {
                 return markedCardId.HasValue
-                    ? Loc.Pick("marked #" + markedCardId.Value, "işaretli #" + markedCardId.Value)
-                    : Loc.Pick("idle", "boşta");
+                    ? Loc.Pick("marked #" + markedCardId.Value, "iÅŸaretli #" + markedCardId.Value)
+                    : Loc.Pick("idle", "boÅŸta");
             }
         }
 
@@ -422,17 +412,16 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Soğuk füzyon" - copies one DISCARD card and one DRAW card into the bonus
+    /// <summary>"SoÄŸuk fÃ¼zyon" - copies one DISCARD card and one DRAW card into the bonus
     /// hand (whichever piles have a card; needs at least one).</summary>
     public sealed class SogukFuzyonPower : Power
     {
         public SogukFuzyonPower()
-            : base("soguk_fuzyon", "Soğuk Füzyon")
+            : base("soguk_fuzyon", "SoÄŸuk FÃ¼zyon")
         {
             SetDescription(
                 "Copies one card from the discard and one from the draw pile into your bonus hand.",
-                "Iskartadan bir kartın ve çekme elinden bir kartın kopyasını bonus ele koyar.");
-            BaseSellValue = 45;
+                "Iskartadan bir kartÄ±n ve Ã§ekme elinden bir kartÄ±n kopyasÄ±nÄ± bonus ele koyar.");
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)

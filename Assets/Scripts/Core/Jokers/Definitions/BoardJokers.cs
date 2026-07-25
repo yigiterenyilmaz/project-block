@@ -1,13 +1,13 @@
-// PURPOSE: Jokers that reshape the board itself: Robot süpürge, Kayıt defteri,
-// Kazı çalışması, Deprem. They are the first jokers that DESTROY cubes, so they
+﻿// PURPOSE: Jokers that reshape the board itself: Robot sÃ¼pÃ¼rge, KayÄ±t defteri,
+// KazÄ± Ã§alÄ±ÅŸmasÄ±, Deprem. They are the first jokers that DESTROY cubes, so they
 // all obey the same two engine rules:
 //   - destruction goes through RoundEngine.DestroyCubes, which logs what died (kind +
 //     source card) and feeds the sweep pre-condition;
 //   - a sweep is never detected locally - TryResolveCleanSweep / ForceCleanSweep decide.
 //
 // EXPLOSION ACCOUNTING (confirmed table, see docs/jokers-plan.md):
-//   line explosion       -> scores, counts for Kayıt defteri, can trigger a sweep
-//   Robot süpürge        -> no score,  counts,                 can trigger a sweep
+//   line explosion       -> scores, counts for KayÄ±t defteri, can trigger a sweep
+//   Robot sÃ¼pÃ¼rge        -> no score,  counts,                 can trigger a sweep
 //   Deprem               -> no score,  does NOT count,          can NEVER trigger a sweep
 // Deprem is deliberately inert: a free board wipe that also fed the counter would hand
 // out sweeps for nothing.
@@ -18,7 +18,7 @@ using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>"Robot süpürge" - eats random cubes after every turn. If it takes the last
+    /// <summary>"Robot sÃ¼pÃ¼rge" - eats random cubes after every turn. If it takes the last
     /// one and that triggers a sweep, it gets hungrier for the rest of the round and then
     /// needs a couple of turns to recharge.</summary>
     public sealed class RobotSupurgeJoker : Joker
@@ -41,14 +41,13 @@ namespace ProjectBlock.Core
         }
 
         public RobotSupurgeJoker()
-            : base("robot_supurge", "Robot Süpürge")
+            : base("robot_supurge", "Robot SÃ¼pÃ¼rge")
         {
             SetDescription(
                 "Deletes random cubes after every turn. Triggering the sweep itself grows "
                     + "its capacity and sends it on a short rest.",
-                "Her turdan sonra rastgele küp siler. Temizliği kendisi tetiklerse "
-                    + "kapasitesi artar ve kısa süre dinlenir.");
-            BaseSellValue = 55;
+                "Her turdan sonra rastgele kÃ¼p siler. TemizliÄŸi kendisi tetiklerse "
+                    + "kapasitesi artar ve kÄ±sa sÃ¼re dinlenir.");
         }
 
         public override string StatusText
@@ -57,7 +56,7 @@ namespace ProjectBlock.Core
             {
                 return Cooldown > 0
                     ? Loc.Pick("resting " + Cooldown, "dinleniyor " + Cooldown)
-                    : Loc.Pick(Capacity + " cubes/turn", Capacity + " küp/tur");
+                    : Loc.Pick(Capacity + " cubes/turn", Capacity + " kÃ¼p/tur");
             }
         }
 
@@ -100,7 +99,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Kayıt defteri" - counts destroyed cubes and calls a sweep when the count
+    /// <summary>"KayÄ±t defteri" - counts destroyed cubes and calls a sweep when the count
     /// reaches the board's cell count. While it is held, emptying the board is NOT a sweep
     /// any more; the ledger is the only source. Off in overtime (the counter would freeze
     /// the discard recycle and make the round unwinnable).</summary>
@@ -113,14 +112,13 @@ namespace ProjectBlock.Core
         public int Target { get; private set; }
 
         public KayitDefteriJoker()
-            : base("kayit_defteri", "Kayıt Defteri")
+            : base("kayit_defteri", "KayÄ±t Defteri")
         {
             SetDescription(
                 "Counts exploded cubes; reaching the board's size triggers a clean sweep. "
                     + "While it is held, emptying the board does not count as one.",
-                "Patlatılan küpleri sayar; sayı alan büyüklüğüne ulaşınca temizlik "
-                    + "tetikler. Bu joker dururken alanı boşaltmak temizlik sayılmaz.");
-            BaseSellValue = 60;
+                "PatlatÄ±lan kÃ¼pleri sayar; sayÄ± alan bÃ¼yÃ¼klÃ¼ÄŸÃ¼ne ulaÅŸÄ±nca temizlik "
+                    + "tetikler. Bu joker dururken alanÄ± boÅŸaltmak temizlik sayÄ±lmaz.");
         }
 
         /// <summary>Overtime would otherwise leave no way to recycle the discard.</summary>
@@ -137,7 +135,7 @@ namespace ProjectBlock.Core
         public override void OnRoundStarted(RoundContext ctx)
         {
             Counter = 0;
-            // PlayableCellCount, not Width*Height: an irregular board ("Tılsım") has
+            // PlayableCellCount, not Width*Height: an irregular board ("TÄ±lsÄ±m") has
             // holes in its bounding box that are not play area.
             Target = ctx.Round.Board.PlayableCellCount;
             ctx.Round.SuppressNaturalSweep = true;
@@ -190,7 +188,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Kazı çalışması" - the block you place, if it explodes whole in one go on the
+    /// <summary>"KazÄ± Ã§alÄ±ÅŸmasÄ±" - the block you place, if it explodes whole in one go on the
     /// very turn you place it, comes back to the bonus hand. A block that survives to a later
     /// turn, or that had already lost cubes, does not qualify.</summary>
     public sealed class KaziCalismasiJoker : Joker
@@ -199,13 +197,12 @@ namespace ProjectBlock.Core
         public int RecoveredThisRound { get; private set; }
 
         public KaziCalismasiJoker()
-            : base("kazi_calismasi", "Kazı Çalışması")
+            : base("kazi_calismasi", "KazÄ± Ã‡alÄ±ÅŸmasÄ±")
         {
             SetDescription(
                 "A block that explodes whole in one go on the turn you place it is returned "
                     + "to your bonus hand.",
-                "Koyduğun turda tek seferde tümüyle patlayan blok bonus eline iade edilir.");
-            BaseSellValue = 50;
+                "KoyduÄŸun turda tek seferde tÃ¼mÃ¼yle patlayan blok bonus eline iade edilir.");
         }
 
         public override string StatusText
@@ -294,9 +291,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Once per round, if the board fills up and nothing fits, an earthquake brings "
                     + "down a quarter of the cubes so you can play on. Pays no points.",
-                "Raunt başına bir kez: oyun alanı dolup koyacak yer kalmazsa deprem olur ve "
-                    + "küplerin dörtte biri yıkılır, oyuna devam edersin. Puan vermez.");
-            BaseSellValue = 65;
+                "Raunt baÅŸÄ±na bir kez: oyun alanÄ± dolup koyacak yer kalmazsa deprem olur ve "
+                    + "kÃ¼plerin dÃ¶rtte biri yÄ±kÄ±lÄ±r, oyuna devam edersin. Puan vermez.");
         }
 
         public override string StatusText
@@ -304,8 +300,8 @@ namespace ProjectBlock.Core
             get
             {
                 return usedThisRound
-                    ? Loc.Pick("used", "kullanıldı")
-                    : Loc.Pick("ready", "hazır");
+                    ? Loc.Pick("used", "kullanÄ±ldÄ±")
+                    : Loc.Pick("ready", "hazÄ±r");
             }
         }
 

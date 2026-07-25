@@ -1,4 +1,4 @@
-// PURPOSE: Two score jokers that react to a board/deck event rather than to the block
+﻿// PURPOSE: Two score jokers that react to a board/deck event rather than to the block
 // played: bereket (permanent growth) and Harcama bonusu (payout when the draw pile runs
 // out).
 //
@@ -30,8 +30,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Whenever a row and a column explode in the same turn, your score gains grow permanently.",
-                "Aynı turda satır ve sütun birlikte patlarsa kazandığın puan kalıcı olarak artar.");
-            BaseSellValue = 50;
+                "AynÄ± turda satÄ±r ve sÃ¼tun birlikte patlarsa kazandÄ±ÄŸÄ±n puan kalÄ±cÄ± olarak artar.");
         }
 
         public override string StatusText
@@ -67,8 +66,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "You gain points every time the draw pile runs out.",
-                "Çekme destesi her tükendiğinde puan kazanırsın.");
-            BaseSellValue = 40;
+                "Ã‡ekme destesi her tÃ¼kendiÄŸinde puan kazanÄ±rsÄ±n.");
         }
 
         public override string StatusText
@@ -109,8 +107,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "The fewer cards your deck holds, the more points you score each turn.",
-                "Destendeki kart sayısı ne kadar az ise her tur o kadar fazla puan kazanırsın.");
-            BaseSellValue = 45;
+                "Destendeki kart sayÄ±sÄ± ne kadar az ise her tur o kadar fazla puan kazanÄ±rsÄ±n.");
         }
 
         public override string StatusText
@@ -153,11 +150,10 @@ namespace ProjectBlock.Core
                 "Clean sweeps triggered by jokers and powers count as real sweeps - they pay "
                     + "the sweep bonus and recharge your powers, just like emptying the board on "
                     + "a placement. Normally such a between-placements clear does not count.",
-                "Jokerler ve güçler tarafından tetiklenen temizlikler de gerçek temizlik sayılır "
-                    + "- tıpkı blok koyarak tahtayı boşaltmak gibi temizlik bonusunu verir ve "
-                    + "güçlerini şarj eder. Normalde blok koymalar arasındaki böyle bir temizlik "
-                    + "sayılmaz.");
-            BaseSellValue = 55;
+                "Jokerler ve gÃ¼Ã§ler tarafÄ±ndan tetiklenen temizlikler de gerÃ§ek temizlik sayÄ±lÄ±r "
+                    + "- tÄ±pkÄ± blok koyarak tahtayÄ± boÅŸaltmak gibi temizlik bonusunu verir ve "
+                    + "gÃ¼Ã§lerini ÅŸarj eder. Normalde blok koymalar arasÄ±ndaki bÃ¶yle bir temizlik "
+                    + "sayÄ±lmaz.");
         }
 
         public override void OnAcquired(SessionContext ctx)
@@ -192,13 +188,12 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Placing a block scores points - one bonus for every cube you place.",
-                "Blok koymak puan kazandırır - koyduğun her küp için bonus.");
-            BaseSellValue = 40;
+                "Blok koymak puan kazandÄ±rÄ±r - koyduÄŸun her kÃ¼p iÃ§in bonus.");
         }
 
         public override string StatusText
         {
-            get { return Loc.Pick("+" + PointsPerCube + "/cube", "+" + PointsPerCube + "/küp"); }
+            get { return Loc.Pick("+" + PointsPerCube + "/cube", "+" + PointsPerCube + "/kÃ¼p"); }
         }
 
         public override void ModifyScore(TurnContext turn)

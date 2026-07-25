@@ -107,7 +107,12 @@ namespace ProjectBlock.View
             float titleY = topRowY + HeaderOffset + 0.95f;
             ViewUtil.MakeText3D(transform, "Title", new Vector2(Center.x, titleY), "MARKET",
                 60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, titleY - 0.42f),
+            // What you have to spend. The shelf shows prices everywhere and used to leave the
+            // player to work their balance out from the HUD dump.
+            ViewUtil.MakeText3D(transform, "Balance", new Vector2(Center.x, titleY - 0.40f),
+                Loc.Pick("you have ", "paran: ") + session.TotalScore,
+                80, 0.020f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, titleY - 0.72f),
                 Loc.Pick(
                     "click a joker or a power to sell it  -  click the deck pile to sell cards",
                     "satmak için jokere veya güce tıkla  -  kart satmak için desteye tıkla"),

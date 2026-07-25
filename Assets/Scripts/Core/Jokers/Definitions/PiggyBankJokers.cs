@@ -1,9 +1,9 @@
-// PURPOSE: The three "kumbara" jokers. They do not score - they make THEMSELVES more
+﻿// PURPOSE: The three "kumbara" jokers. They do not score - they make THEMSELVES more
 // valuable, and the player cashes that in by selling them. Each one banks on a different
 // rhythm, so they reward different play:
-//   Domuz Kumbarası - per round survived   (slow, safe)
+//   Domuz KumbarasÄ± - per round survived   (slow, safe)
 //   Cimri Kumbara   - per turn held        (fast, rewards long rounds)
-//   Altın Kumbara   - turns + sweeps + rounds (rewards clearing the board)
+//   AltÄ±n Kumbara   - turns + sweeps + rounds (rewards clearing the board)
 //
 // These work TODAY even though the market does not exist yet: value accrues into
 // Joker.AccruedValue and JokerInventory.Sell already pays it out as run currency.
@@ -17,18 +17,17 @@
 
 namespace ProjectBlock.Core
 {
-    /// <summary>"Domuz Kumbarası" - gains value at the end of every round survived.</summary>
+    /// <summary>"Domuz KumbarasÄ±" - gains value at the end of every round survived.</summary>
     public sealed class DomuzKumbarasiJoker : Joker
     {
         public int ValuePerRound = 25;
 
         public DomuzKumbarasiJoker()
-            : base("domuz_kumbarasi", "Domuz Kumbarası")
+            : base("domuz_kumbarasi", "Domuz KumbarasÄ±")
         {
             SetDescription(
                 "Its sell value grows after every round you complete.",
-                "Tamamladığın her raunt sonunda satış değeri artar.");
-            BaseSellValue = 20;
+                "TamamladÄ±ÄŸÄ±n her raunt sonunda satÄ±ÅŸ deÄŸeri artar.");
         }
 
         public override void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
@@ -50,8 +49,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Its sell value grows a little for every turn you hold it.",
-                "Elde tutulduğu her turda satış değeri biraz artar.");
-            BaseSellValue = 15;
+                "Elde tutulduÄŸu her turda satÄ±ÅŸ deÄŸeri biraz artar.");
         }
 
         public override void AfterTurnScored(TurnContext turn)
@@ -60,7 +58,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Altın Kumbara" - banks on turns, clean sweeps and finished rounds.</summary>
+    /// <summary>"AltÄ±n Kumbara" - banks on turns, clean sweeps and finished rounds.</summary>
     public sealed class AltinKumbaraJoker : Joker
     {
         public int ValuePerTurn = 2;
@@ -68,12 +66,11 @@ namespace ProjectBlock.Core
         public int ValuePerRound = 20;
 
         public AltinKumbaraJoker()
-            : base("altin_kumbara", "Altın Kumbara")
+            : base("altin_kumbara", "AltÄ±n Kumbara")
         {
             SetDescription(
                 "Every turn, every clean sweep and every completed round grows its sell value.",
-                "Her tur, her temizlik ve tamamladığın her raunt satış değerini artırır.");
-            BaseSellValue = 30;
+                "Her tur, her temizlik ve tamamladÄ±ÄŸÄ±n her raunt satÄ±ÅŸ deÄŸerini artÄ±rÄ±r.");
         }
 
         public override void AfterTurnScored(TurnContext turn)

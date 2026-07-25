@@ -14,7 +14,9 @@ namespace ProjectBlock.Core
     public static class SaveGame
     {
         /// <summary>Bump whenever the save layout changes. Older files are then refused.</summary>
-        public const int FormatVersion = 1;
+        // 2 (2026-07-25): BaseSellValue left Joker/Power (sell value is now derived from the
+        // buy price), so every joker and power writes one field fewer.
+        public const int FormatVersion = 2;
 
         private const string VersionKey = "version";
 

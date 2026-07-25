@@ -56,20 +56,16 @@ namespace ProjectBlock.Core
 
         // ---------------------------------------------------------------- sell value
 
-        /// <summary>Base price the market will buy this joker back for.</summary>
-        public int BaseSellValue { get; protected set; } = 25;
-
         /// <summary>Value the joker earned by itself (the three kumbara jokers).</summary>
         public int AccruedValue { get; private set; }
 
         /// <summary>Extra price put on this joker by "ihale". Written from outside.</summary>
         public int AuctionPremium { get; internal set; }
 
-        /// <summary>What the market pays for this joker right now.</summary>
-        public int SellValue
-        {
-            get { return BaseSellValue + AccruedValue + AuctionPremium; }
-        }
+        // The BASE sell value is NOT a field here: it is MarketConfig.JokerSellValue(rarity),
+        // a fixed fraction of the buy price, so sell can never drift above buy. Ask
+        // JokerInventory.SellValueOf(joker) for the whole number (base + the two fields above);
+        // a joker has no session, so it cannot answer that by itself.
 
         /// <summary>Grows SellValue. The kumbara jokers call this from their hooks.</summary>
         protected void Accrue(int amount)

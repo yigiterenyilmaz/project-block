@@ -2,11 +2,13 @@
 // CONTINUE picks it back up.
 //
 // AUTOSAVE, NOT A SAVE BUTTON: the run is written after every resolved turn, when the pause
-// menu opens, and when the application quits. "Continue any time" should not depend on the
-// player remembering to do anything.
+// menu opens, when the player leaves a run from the pause menu, and when the application quits.
+// "Continue any time" should not depend on the player remembering to do anything.
 //
-// A save is DELETED the moment the run it describes is over, so CONTINUE never offers a run
-// that has already been won or lost.
+// A save is DELETED only when it describes a run that can no longer be continued: one that has
+// been won or lost, or one that could not be read back. LEAVING a run does not delete it -
+// SAVE & QUIT writes it and goes to the title, and RESTART simply overwrites it with the new
+// run's first autosave.
 
 using ProjectBlock.Core;
 using UnityEngine;
@@ -34,7 +36,7 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Drops the saved run - it is over, or it has been abandoned.</summary>
+        /// <summary>Drops the saved run: it is over, or the file could not be read back.</summary>
         private void DiscardSave()
         {
             SaveFileStore.Delete();

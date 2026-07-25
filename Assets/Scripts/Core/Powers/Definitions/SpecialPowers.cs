@@ -1,5 +1,5 @@
-// PURPOSE: The three powers that need machinery of their own: Kum saati (rewinds the
-// board), Olta (fishes a marked card out of the piles) and Tılsım (turns ghost traces into
+﻿// PURPOSE: The three powers that need machinery of their own: Kum saati (rewinds the
+// board), Olta (fishes a marked card out of the piles) and TÄ±lsÄ±m (turns ghost traces into
 // real play area).
 //
 // All numbers are BALANCE PLACEHOLDERS.
@@ -22,8 +22,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Rewinds the board 2 turns. The hand, the piles and the score stay put.",
-                "Oyun alanını 2 tur geriye sarar. El, deste ve ıskarta olduğu gibi kalır.");
-            BaseSellValue = 60;
+                "Oyun alanÄ±nÄ± 2 tur geriye sarar. El, deste ve Ä±skarta olduÄŸu gibi kalÄ±r.");
         }
 
         public override string StatusText
@@ -75,10 +74,9 @@ namespace ProjectBlock.Core
                 "Mark one held card per round; reel it back into your bonus hand. Pulling it "
                     + "from the draw pile is free (the rod stays ready); pulling it from the "
                     + "discard locks the rod until the next clean sweep.",
-                "Raunt başına bir kart işaretlersin; kartı bonus eline çekersin. Çekme "
-                    + "destesinden çekmek bedavadır (olta hazır kalır); ıskartadan çekersen "
-                    + "olta bir sonraki temizliğe kadar kilitlenir.");
-            BaseSellValue = 55;
+                "Raunt baÅŸÄ±na bir kart iÅŸaretlersin; kartÄ± bonus eline Ã§ekersin. Ã‡ekme "
+                    + "destesinden Ã§ekmek bedavadÄ±r (olta hazÄ±r kalÄ±r); Ä±skartadan Ã§ekersen "
+                    + "olta bir sonraki temizliÄŸe kadar kilitlenir.");
         }
 
         public override string StatusText
@@ -87,11 +85,11 @@ namespace ProjectBlock.Core
             {
                 if (StuckUntilSweep)
                 {
-                    return Loc.Pick("stuck", "takıldı");
+                    return Loc.Pick("stuck", "takÄ±ldÄ±");
                 }
                 return MarkedCardId.HasValue
-                    ? Loc.Pick("marked", "işaretli")
-                    : Loc.Pick("idle", "boşta");
+                    ? Loc.Pick("marked", "iÅŸaretli")
+                    : Loc.Pick("idle", "boÅŸta");
             }
         }
 
@@ -197,7 +195,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"İkinci şans" - overtime only, once per round: clears the board (no score, no
+    /// <summary>"Ä°kinci ÅŸans" - overtime only, once per round: clears the board (no score, no
     /// sweep), pulls the earned score back down to the threshold, reshuffles the whole deck
     /// (including the hand) into the draw pile and deals a fresh hand, and lets the round
     /// continue - a fresh overtime attempt.</summary>
@@ -206,16 +204,15 @@ namespace ProjectBlock.Core
         private bool usedThisRound;
 
         public IkinciSansPower()
-            : base("ikinci_sans", "İkinci Şans")
+            : base("ikinci_sans", "Ä°kinci Åans")
         {
             SetDescription(
                 "Overtime only, once per round: clears the board (no score, no sweep), pulls "
                     + "your score back to the threshold, reshuffles the deck into the draw pile, "
                     + "deals a fresh hand and plays on.",
-                "Sadece uzatmada, raunt başına bir kez: oyun alanını temizler (puan yok, "
-                    + "temizlik sayılmaz), puanını eşiğe çeker, desteyi karıp çekme destesine "
-                    + "koyar, yeni bir el dağıtır ve oyun devam eder.");
-            BaseSellValue = 60;
+                "Sadece uzatmada, raunt baÅŸÄ±na bir kez: oyun alanÄ±nÄ± temizler (puan yok, "
+                    + "temizlik sayÄ±lmaz), puanÄ±nÄ± eÅŸiÄŸe Ã§eker, desteyi karÄ±p Ã§ekme destesine "
+                    + "koyar, yeni bir el daÄŸÄ±tÄ±r ve oyun devam eder.");
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -228,7 +225,7 @@ namespace ProjectBlock.Core
             get
             {
                 return usedThisRound
-                    ? Loc.Pick("used", "kullanıldı")
+                    ? Loc.Pick("used", "kullanÄ±ldÄ±")
                     : Loc.Pick("overtime only", "sadece uzatma");
             }
         }
@@ -247,7 +244,7 @@ namespace ProjectBlock.Core
             // RedrawHand discards the current hand and shuffles the whole discard (now holding
             // the dumped draw pile AND the hand) back into the draw pile, then deals a fresh
             // hand - a clean overtime restart. This intentional recycle is fine: the power is
-            // overtime-only and once per round (unlike the free-recycle gating on İade).
+            // overtime-only and once per round (unlike the free-recycle gating on Ä°ade).
             round.RedrawHand();
             usedThisRound = true;
             return true;
@@ -264,8 +261,7 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Overtime only: pulls your score to the threshold, sends you to the market, "
                     + "and is destroyed.",
-                "Sadece uzatmada: puanını eşiğe çeker, seni market fazına geçirir ve yok olur.");
-            BaseSellValue = 70;
+                "Sadece uzatmada: puanÄ±nÄ± eÅŸiÄŸe Ã§eker, seni market fazÄ±na geÃ§irir ve yok olur.");
         }
 
         public override string StatusText
@@ -288,12 +284,12 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>
-    /// "Tılsım" - blows up the ghost cubes hanging off the edge of the board and turns the
+    /// "TÄ±lsÄ±m" - blows up the ghost cubes hanging off the edge of the board and turns the
     /// space they occupied into real play area for the rest of the RUN... except the design
     /// says it resets when the round ends, so the cells are granted for the current round
     /// only and handed back at round end.
     ///
-    /// It leans on the same seam "Kentsel Dönüşüm" uses: extra playable cells travel to the
+    /// It leans on the same seam "Kentsel DÃ¶nÃ¼ÅŸÃ¼m" uses: extra playable cells travel to the
     /// next board through RoundConfig. Because the board of the CURRENT round already exists,
     /// the conversion takes effect from the next round - the ghosts are cleared immediately,
     /// the ground they leave behind opens next round.
@@ -306,14 +302,13 @@ namespace ProjectBlock.Core
         private readonly List<GridPos> convertedCells = new List<GridPos>();
 
         public TilsimPower()
-            : base("tilsim", "Tılsım")
+            : base("tilsim", "TÄ±lsÄ±m")
         {
             SetDescription(
                 "Blows up ghost blocks and turns the space they covered outside the map "
                     + "into play area. Resets when the round ends.",
-                "Hayalet blokları patlatır ve harita dışında kapladıkları yeri "
-                    + "oyun alanına katar. Raunt bitince sıfırlanır.");
-            BaseSellValue = 65;
+                "Hayalet bloklarÄ± patlatÄ±r ve harita dÄ±ÅŸÄ±nda kapladÄ±klarÄ± yeri "
+                    + "oyun alanÄ±na katar. Raunt bitince sÄ±fÄ±rlanÄ±r.");
         }
 
         /// <summary>Cells this power is currently granting to the board.</summary>
@@ -328,7 +323,7 @@ namespace ProjectBlock.Core
             {
                 return convertedCells.Count > 0
                     ? Loc.Pick("+" + convertedCells.Count + " cells", "+" + convertedCells.Count + " kare")
-                    : Loc.Pick("ready", "hazır");
+                    : Loc.Pick("ready", "hazÄ±r");
             }
         }
 
@@ -378,12 +373,12 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Halüsinasyon" - a power with no fixed identity: it appears as a random power
+    /// <summary>"HalÃ¼sinasyon" - a power with no fixed identity: it appears as a random power
     /// and, whenever used, instantly recharges and morphs into a DIFFERENT random one. It only
     /// ever becomes an instant, self-contained power (one clean Run) - never a legendary /
     /// reality-bending one, never one that needs special routing (Olta's marking, Hileli zar's
     /// market picker, Eko's arm-and-replay), and never one that carries state across turns
-    /// (inflation, Bükülme). Everything the current form needs - its targeting, preview, run
+    /// (inflation, BÃ¼kÃ¼lme). Everything the current form needs - its targeting, preview, run
     /// and can-run - is delegated to that inner power, so from the engine's side it behaves
     /// exactly like whatever it currently is.</summary>
     public sealed class HalusinasyonPower : Power
@@ -400,16 +395,15 @@ namespace ProjectBlock.Core
         private Power current;
 
         public HalusinasyonPower()
-            : base("halusinasyon", "Halüsinasyon")
+            : base("halusinasyon", "HalÃ¼sinasyon")
         {
             SetDescription(
                 "Appears as a random power. USE it to run that power, or RIGHT-CLICK to skip to a "
                     + "different random one. Either way it spends its charge and refills next round. "
                     + "Never becomes a legendary power.",
-                "Rastgele bir güç olarak görünür. KULLANINCA o gücü çalıştırır, SAĞ TIKLAYINCA başka "
-                    + "bir rastgele güce atlar. Her iki durumda da şarjını harcar ve gelecek raunt "
-                    + "dolar. Asla efsanevi bir güce dönüşmez.");
-            BaseSellValue = 55;
+                "Rastgele bir gÃ¼Ã§ olarak gÃ¶rÃ¼nÃ¼r. KULLANINCA o gÃ¼cÃ¼ Ã§alÄ±ÅŸtÄ±rÄ±r, SAÄ TIKLAYINCA baÅŸka "
+                    + "bir rastgele gÃ¼ce atlar. Her iki durumda da ÅŸarjÄ±nÄ± harcar ve gelecek raunt "
+                    + "dolar. Asla efsanevi bir gÃ¼ce dÃ¶nÃ¼ÅŸmez.");
         }
 
         public override string Description
@@ -422,7 +416,7 @@ namespace ProjectBlock.Core
                 }
                 return Loc.Pick(
                     "Random power - now " + current.DisplayName + ": " + current.Description,
-                    "Rastgele güç - şu an " + current.DisplayName + ": " + current.Description);
+                    "Rastgele gÃ¼Ã§ - ÅŸu an " + current.DisplayName + ": " + current.Description);
             }
         }
 
@@ -431,8 +425,8 @@ namespace ProjectBlock.Core
             get
             {
                 return current == null
-                    ? Loc.Pick("rolling...", "değişiyor...")
-                    : Loc.Pick("now: " + current.DisplayName, "şu an: " + current.DisplayName);
+                    ? Loc.Pick("rolling...", "deÄŸiÅŸiyor...")
+                    : Loc.Pick("now: " + current.DisplayName, "ÅŸu an: " + current.DisplayName);
             }
         }
 
@@ -505,7 +499,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Karakter oluşturma" - a maker's power. Using it opens a designer (in the UI)
+    /// <summary>"Karakter oluÅŸturma" - a maker's power. Using it opens a designer (in the UI)
     /// where the player draws any shape and picks an element; the custom block is baked into
     /// the owned deck and shuffles in from the next round. The whole effect - and spending the
     /// charge - is done in one place, GameSession.CreateDesignedBlock, once the designer is
@@ -514,14 +508,13 @@ namespace ProjectBlock.Core
     public sealed class KarakterOlusturmaPower : Power
     {
         public KarakterOlusturmaPower()
-            : base("karakter_olusturma", "Karakter Oluşturma")
+            : base("karakter_olusturma", "Karakter OluÅŸturma")
         {
             SetDescription(
                 "Design a custom block - any shape, any element - and bake it into your deck. "
                     + "It shuffles in from the next round.",
-                "İstediğin şekil ve elementte özel bir blok tasarla ve destene ekle. Sonraki "
-                    + "raunttan itibaren desteye karışır.");
-            BaseSellValue = 55;
+                "Ä°stediÄŸin ÅŸekil ve elementte Ã¶zel bir blok tasarla ve destene ekle. Sonraki "
+                    + "raunttan itibaren desteye karÄ±ÅŸÄ±r.");
         }
 
         /// <summary>Usable whenever the standard rules allow (the UI opens the designer then);
@@ -556,14 +549,13 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Toggle tetris mode: blocks fall from the top and can be rotated, and each "
                     + "placement scores a bonus. Use again to switch back. Never runs out.",
-                "Tetris modunu aç/kapat: bloklar yukarıdan düşer ve döndürülebilir, her koyuş "
-                    + "bonus puan verir. Kapatmak için tekrar kullan. Tükenmez.");
-            BaseSellValue = 50;
+                "Tetris modunu aÃ§/kapat: bloklar yukarÄ±dan dÃ¼ÅŸer ve dÃ¶ndÃ¼rÃ¼lebilir, her koyuÅŸ "
+                    + "bonus puan verir. Kapatmak iÃ§in tekrar kullan. TÃ¼kenmez.");
         }
 
         public override string StatusText
         {
-            get { return on ? Loc.Pick("ON", "AÇIK") : Loc.Pick("off", "kapalı"); }
+            get { return on ? Loc.Pick("ON", "AÃ‡IK") : Loc.Pick("off", "kapalÄ±"); }
         }
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
@@ -659,9 +651,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Bet that you will sweep the board within a chosen number of turns. Miss it and "
                     + "the round ends; make it and the payout multiplies.",
-                "İstersen 'şu kadar turda temizlerim' diye bahse girersin. Tutturamazsan raunt "
-                    + "biter, tutturursan aradaki puanı katlayarak alırsın.");
-            BaseSellValue = 65;
+                "Ä°stersen 'ÅŸu kadar turda temizlerim' diye bahse girersin. Tutturamazsan raunt "
+                    + "biter, tutturursan aradaki puanÄ± katlayarak alÄ±rsÄ±n.");
         }
 
         public bool HasActiveBet
@@ -777,7 +768,7 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>
-    /// "Kentsel Dönüşüm" - the rescue power. It only comes out at the moment the board has
+    /// "Kentsel DÃ¶nÃ¼ÅŸÃ¼m" - the rescue power. It only comes out at the moment the board has
     /// filled up and nothing in hand fits: the player swaps two whole rows, or two whole
     /// columns, hoping the rearrangement opens a gap their block can use.
     ///
@@ -792,14 +783,13 @@ namespace ProjectBlock.Core
     public sealed class KentselDonusumPower : Power
     {
         public KentselDonusumPower()
-            : base("kentsel_donusum", "Kentsel Dönüşüm")
+            : base("kentsel_donusum", "Kentsel DÃ¶nÃ¼ÅŸÃ¼m")
         {
             SetDescription(
                 "When the board fills up and nothing fits, swap two rows or two columns to "
                     + "open a gap and play on. Destroys nothing, scores nothing.",
-                "Oyun alanı dolup koyacak yer kalmazsa iki satırın ya da iki sütunun yerini "
-                    + "değiştirip oyuna devam edersin. Hiçbir küpü yok etmez, puan vermez.");
-            BaseSellValue = 70;
+                "Oyun alanÄ± dolup koyacak yer kalmazsa iki satÄ±rÄ±n ya da iki sÃ¼tunun yerini "
+                    + "deÄŸiÅŸtirip oyuna devam edersin. HiÃ§bir kÃ¼pÃ¼ yok etmez, puan vermez.");
         }
 
         /// <summary>Usable only in the dead-end pause - see the class docs.</summary>
@@ -815,7 +805,7 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return Loc.Pick("when stuck", "tıkanınca"); }
+            get { return Loc.Pick("when stuck", "tÄ±kanÄ±nca"); }
         }
 
         /// <summary>Without a pick this reports whether a swap COULD help, which is what the

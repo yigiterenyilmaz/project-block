@@ -9,7 +9,7 @@ everything here is unreleased and balance numbers are still placeholders.
 ### Added
 - **Menus** — the game no longer drops you straight into a run. It boots to a **title screen**
   (Play → deck select → run), **Escape pauses** mid-round (resume / restart / how to play /
-  settings / abandon), there is a **settings** screen (language, master volume, seed
+  settings / save & quit), there is a **settings** screen (language, master volume, seed
   random-or-pinned, turn logs — all persisted), a **how to play / controls** screen, and a real
   **end-of-run summary** (final score, rounds survived, jokers, powers, bosses fought) instead
   of the old one-line HUD message. Every screen is one reusable `MenuScreenView` on the existing
@@ -18,7 +18,8 @@ everything here is unreleased and balance numbers are still placeholders.
   removed** — every hotkey and the F2 grader work exactly as before.
 - **Save and continue** — a run can be saved at **any** point, mid-round included, and
   **CONTINUE** on the title picks it up. It autosaves after every turn, when you pause, and on
-  quit; the save is dropped when the run ends or is abandoned. Everything travels: board (holes
+  quit, and leaving a run from the pause menu (**SAVE & QUIT**, formerly "abandon run") writes it
+  down rather than throwing it away — a save is only dropped when the run ends. Everything travels: board (holes
   and eroded cells kept distinct), piles, hand and bonus hand, score, status, dynamite/fox/
   rotation/freeze memories, the rewind history Kum Saati reaches into, the erosion clock, the
   market shelf, the boss, and every joker and power with its own internal state. The random

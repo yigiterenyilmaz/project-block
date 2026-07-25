@@ -644,12 +644,13 @@ public static class JokerTests
         var session = NewSession(17, 6, 40, 24, 1);
         var cimri = (CimriKumbaraJoker)session.Jokers.Add(new CimriKumbaraJoker());
         cimri.ValuePerTurn = 3;
-        int baseValue = cimri.SellValue;
+        int baseValue = session.Jokers.SellValueOf(cimri);
 
         int turns = PlayTurns(session, 4);
         Check(turns == 4, "played four turns", "got " + turns);
         Check(cimri.AccruedValue == 12, "banked 3 per turn", "got " + cimri.AccruedValue);
-        Check(cimri.SellValue == baseValue + 12, "sell value includes the accrual");
+        Check(session.Jokers.SellValueOf(cimri) == baseValue + 12,
+            "sell value includes the accrual");
 
         long before = session.TotalScore;
         int paid = session.Jokers.Sell(cimri);
@@ -1094,7 +1095,9 @@ public static class JokerTests
         Joker auctioned = session.Jokers.Find(firstTarget);
         Check(auctioned.AuctionPremium > 0, "the premium is on the joker",
             "premium " + auctioned.AuctionPremium);
-        Check(auctioned.SellValue > auctioned.BaseSellValue, "sell value went up");
+        Check(session.Jokers.SellValueOf(auctioned)
+            > session.Config.Market.JokerSellValue(RarityTable.For(auctioned.DefId)),
+            "sell value went up");
 
         session.Jokers.DispatchRoundStarted(session.CurrentRound);
         Check(session.Jokers.ActiveAuctionInstanceId == firstTarget,
@@ -3161,8 +3164,8 @@ public static class JokerTests
             "a silenced power cannot be used");
         Check(session.Powers.CanBeginUse(commonPower.InstanceId),
             "the common power is still usable");
-        Check(rare.SellValue > 0, "a silenced joker keeps its sell value",
-            "value " + rare.SellValue);
+        Check(session.Jokers.SellValueOf(rare) > 0, "a silenced joker keeps its sell value",
+            "value " + session.Jokers.SellValueOf(rare));
 
         // Renovasyon (common, charged) still runs, so the gate is not blanket-blocking.
         Check(session.Jokers.CanActivate(common.InstanceId),
@@ -3931,7 +3934,8 @@ public static class JokerTests
         }
         foreach (Joker joker in session.Jokers.Jokers)
         {
-            sb.Append(joker.DefId).Append('=').Append(joker.SellValue).Append(';');
+            sb.Append(joker.DefId).Append('=')
+                .Append(session.Jokers.SellValueOf(joker)).Append(';');
         }
         sb.Append("total=").Append(session.TotalScore);
         return sb.ToString();

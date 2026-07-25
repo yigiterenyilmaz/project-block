@@ -1,4 +1,4 @@
-// PURPOSE: The two jokers that trade safety for power: Seri tetik (a bigger hand that
+﻿// PURPOSE: The two jokers that trade safety for power: Seri tetik (a bigger hand that
 // churns itself every turn) and Batak (an optional bet that can lose the run outright).
 //
 // Batak is the first joker that can END a round, through RoundEngine.DeclareLoss. It obeys
@@ -26,9 +26,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Hand size +2, but at the end of every turn the unused cards are discarded "
                     + "and replaced. Disabled in overtime.",
-                "El boyutu +2, ama her tur sonunda kullanılmayan kartlar ıskartaya "
-                    + "gidip yenileri gelir. Uzatmada çalışmaz.");
-            BaseSellValue = 55;
+                "El boyutu +2, ama her tur sonunda kullanÄ±lmayan kartlar Ä±skartaya "
+                    + "gidip yenileri gelir. Uzatmada Ã§alÄ±ÅŸmaz.");
         }
 
         public override bool DisabledInOvertime
@@ -42,7 +41,7 @@ namespace ProjectBlock.Core
             {
                 return applied
                     ? Loc.Pick("hand +" + ExtraHandSize, "el +" + ExtraHandSize)
-                    : Loc.Pick("off", "kapalı");
+                    : Loc.Pick("off", "kapalÄ±");
             }
         }
 

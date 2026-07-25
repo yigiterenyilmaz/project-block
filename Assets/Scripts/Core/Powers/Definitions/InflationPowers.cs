@@ -1,4 +1,4 @@
-// PURPOSE: The three inflation powers. They are the only things in the game that resize the
+﻿// PURPOSE: The three inflation powers. They are the only things in the game that resize the
 // board WHILE a round is running, which is why RoundEngine grew ReshapeBoard /
 // ShrinkBoardPushingInward for them.
 //
@@ -50,8 +50,8 @@ namespace ProjectBlock.Core
             get
             {
                 return IsInflated
-                    ? Loc.Pick(TurnsLeft + " turns inflated", TurnsLeft + " tur şişkin")
-                    : Loc.Pick("ready", "hazır");
+                    ? Loc.Pick(TurnsLeft + " turns inflated", TurnsLeft + " tur ÅŸiÅŸkin")
+                    : Loc.Pick("ready", "hazÄ±r");
             }
         }
 
@@ -103,9 +103,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Widens the board by one column on each side. Lasts 3 turns; "
                     + "when it ends, blocks are pushed back inward.",
-                "Oyun alanının genişliğini sağdan ve soldan birer artırır. "
-                    + "3 tur sürer, bitince bloklar içeri ittirilir.");
-            BaseSellValue = 55;
+                "Oyun alanÄ±nÄ±n geniÅŸliÄŸini saÄŸdan ve soldan birer artÄ±rÄ±r. "
+                    + "3 tur sÃ¼rer, bitince bloklar iÃ§eri ittirilir.");
         }
     }
 
@@ -118,9 +117,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Raises the board by one row at the top and bottom. Lasts 3 turns; "
                     + "when it ends, blocks are pushed back inward.",
-                "Oyun alanının yüksekliğini alttan ve üstten birer artırır. "
-                    + "3 tur sürer, bitince bloklar içeri ittirilir.");
-            BaseSellValue = 55;
+                "Oyun alanÄ±nÄ±n yÃ¼ksekliÄŸini alttan ve Ã¼stten birer artÄ±rÄ±r. "
+                    + "3 tur sÃ¼rer, bitince bloklar iÃ§eri ittirilir.");
         }
     }
 
@@ -133,9 +131,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Grows the board by one cell in every direction. Lasts 3 turns; "
                     + "when it ends, blocks are pushed back inward.",
-                "Oyun alanını her yönden birer artırır. 3 tur sürer, "
-                    + "bitince bloklar içeri ittirilir.");
-            BaseSellValue = 70;
+                "Oyun alanÄ±nÄ± her yÃ¶nden birer artÄ±rÄ±r. 3 tur sÃ¼rer, "
+                    + "bitince bloklar iÃ§eri ittirilir.");
         }
     }
 }

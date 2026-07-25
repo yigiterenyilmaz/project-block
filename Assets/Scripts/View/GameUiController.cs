@@ -79,6 +79,11 @@ namespace ProjectBlock.View
         private readonly List<InfectedCell> infectionBuffer = new List<InfectedCell>();
         private Text infoText;
         private Text messageText;
+
+        /// <summary>The run's banked score - which is also the money the market spends. It gets
+        /// its own prominent line because it was previously only findable halfway down the
+        /// debug dump, and the market never showed it at all.</summary>
+        private Text totalText;
         private Camera cam;
         private Vector3 camBasePosition;
         private Coroutine shakeRoutine;

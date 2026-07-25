@@ -149,7 +149,20 @@ namespace ProjectBlock.Core
             return true;
         }
 
-        /// <summary>Sells a joker for its SellValue, which is added to the run score/currency.
+        /// <summary>What the market pays for this joker right now, before the global ScoreScale:
+        /// a fixed fraction of its rarity's buy price, plus everything the joker earned itself
+        /// (kumbara accrual and the "ihale" premium, both paid at full value).</summary>
+        public int SellValueOf(Joker joker)
+        {
+            if (joker == null)
+            {
+                return 0;
+            }
+            return session.Config.Market.JokerSellValue(RarityTable.For(joker.DefId))
+                + joker.AccruedValue + joker.AuctionPremium;
+        }
+
+        /// <summary>Sells a joker for its sell value, which is added to the run score/currency.
         /// EXTENSION POINT: the real market will call this; it works today for debugging.</summary>
         public int Sell(Joker joker)
         {
@@ -157,7 +170,7 @@ namespace ProjectBlock.Core
             {
                 return 0;
             }
-            int value = joker.SellValue * session.Config.Scoring.ScoreScale;
+            int value = SellValueOf(joker) * session.Config.Scoring.ScoreScale;
             if (!Remove(joker))
             {
                 return 0;

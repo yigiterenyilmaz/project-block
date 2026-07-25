@@ -22,7 +22,8 @@ namespace ProjectBlock.View
         public string Label;
         public bool Enabled;
 
-        /// <summary>Small line under the label explaining a disabled entry, or null.</summary>
+        /// <summary>Small line under the label: why an entry is disabled, or what a choice the
+        /// player might hesitate over actually does. Rendered whenever it is set.</summary>
         public string Note;
 
         public static MenuEntry Of(string label)
@@ -30,6 +31,15 @@ namespace ProjectBlock.View
             var entry = new MenuEntry();
             entry.Label = label;
             entry.Enabled = true;
+            return entry;
+        }
+
+        /// <summary>An enabled entry that explains itself - for choices where guessing wrong
+        /// costs the player something (leaving a run, restarting one).</summary>
+        public static MenuEntry Of(string label, string note)
+        {
+            MenuEntry entry = Of(label);
+            entry.Note = note;
             return entry;
         }
 

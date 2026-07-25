@@ -59,7 +59,7 @@ namespace ProjectBlock.View
         private const int PauseRestart = 1;
         private const int PauseHowToPlay = 2;
         private const int PauseSettings = 3;
-        private const int PauseAbandon = 4;
+        private const int PauseSaveAndQuit = 4;
 
         private AppScreen screen = AppScreen.Title;
         private MenuScreenView menu;
@@ -72,7 +72,7 @@ namespace ProjectBlock.View
             deckSelect.Hide();
             SetRunPresentationVisible(false);
             // Handles a null session by turning the CRT, the hum and the bit-crush off, so a
-            // run abandoned in retro mode cannot leave the title screen green and buzzing.
+            // run LEFT in retro mode cannot leave the title screen green and buzzing.
             SyncRetroPresentation();
             ShowCurrentMenu();
         }
@@ -288,10 +288,16 @@ namespace ProjectBlock.View
             var entries = new List<MenuEntry>
             {
                 MenuEntry.Of(Loc.Pick("RESUME", "DEVAM ET")),
-                MenuEntry.Of(Loc.Pick("RESTART RUN", "BAŞTAN BAŞLA")),
+                MenuEntry.Of(Loc.Pick("RESTART RUN", "BAŞTAN BAŞLA"),
+                    Loc.Pick("this run is replaced by a new one",
+                        "bu oyunun yerini yeni bir oyun alır")),
                 MenuEntry.Of(Loc.Pick("HOW TO PLAY", "NASIL OYNANIR")),
                 MenuEntry.Of(Loc.Pick("SETTINGS", "AYARLAR")),
-                MenuEntry.Of(Loc.Pick("ABANDON RUN", "OYUNU BIRAK"))
+                // Named for what it DOES, not for leaving: the old "ABANDON RUN" read as
+                // "throw the run away", which is exactly what it no longer means.
+                MenuEntry.Of(Loc.Pick("SAVE & QUIT", "KAYDET VE ÇIK"),
+                    Loc.Pick("your run is kept - CONTINUE picks it up",
+                        "oyunun kaydedilir - DEVAM ET ile sürdürürsün"))
             };
             // The run stays visible behind a translucent backdrop - the player is mid-round and
             // is deciding about the board they can see.
@@ -328,8 +334,8 @@ namespace ProjectBlock.View
                 case PauseSettings:
                     OpenSettings(AppScreen.Paused);
                     break;
-                case PauseAbandon:
-                    AbandonRun();
+                case PauseSaveAndQuit:
+                    SaveAndQuitRun();
                     break;
             }
         }
@@ -350,13 +356,17 @@ namespace ProjectBlock.View
             NewGame();
         }
 
-        /// <summary>Drops the run and goes back to the title. The session is released so the
-        /// title screen cannot show anything of it - including a retro CRT left switched on.</summary>
-        private void AbandonRun()
+        /// <summary>Writes the run down and goes back to the title, leaving it there to be picked
+        /// up with CONTINUE. Leaving a run is NOT a way to lose it - the only things that drop a
+        /// save are finishing the run and starting a different one.
+        ///
+        /// The save is taken BEFORE the session is released, and the session is released so the
+        /// title screen cannot show anything of the run - including a retro CRT left switched on.</summary>
+        private void SaveAndQuitRun()
         {
-            Debug.Log("[project_block] Run abandoned at round "
+            Debug.Log("[project_block] Run saved and left at round "
                 + (session != null ? session.RoundNumber : 0));
-            DiscardSave(); // abandoning is deliberate - CONTINUE must not offer it back
+            AutoSave();
             session = null;
             GoToTitle();
         }
@@ -372,6 +382,7 @@ namespace ProjectBlock.View
             blastFx.gameObject.SetActive(visible);
             infoText.gameObject.SetActive(visible);
             messageText.gameObject.SetActive(visible);
+            totalText.gameObject.SetActive(visible);
             jokerBar.SetVisible(visible);
             powerBar.SetVisible(visible);
             if (visible)

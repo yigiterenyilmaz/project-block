@@ -1,11 +1,11 @@
-// PURPOSE: The jokers that bend the elemental block rules: midas, elmas kazma, Tutuştur,
-// Yangın, Taşkın, Buzluk, Simya. They only work because the element system exists - every
+﻿// PURPOSE: The jokers that bend the elemental block rules: midas, elmas kazma, TutuÅŸtur,
+// YangÄ±n, TaÅŸkÄ±n, Buzluk, Simya. They only work because the element system exists - every
 // one of them reads or rewrites cube kinds through GameBoard/CubeRules, never by hand.
 //
 // CONFIRMED RULES:
 //  - midas: a gold block normally pays only while it sits ON THE BOARD. Midas extends that
 //    to gold held in HAND, bonus hand included - holding it is enough.
-//  - Element conversions (Taşkın, Yangın) keep the cube's source card, so fire chains and
+//  - Element conversions (TaÅŸkÄ±n, YangÄ±n) keep the cube's source card, so fire chains and
 //    "whole block exploded" checks still see the original block.
 //  - Buzluk freezes wall-touching water into ice. Ice does not block a clean sweep (a board
 //    holding only ice counts as swept) but it CAN be exploded, and pays extra when it is.
@@ -36,9 +36,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Gold blocks pay their bonus in your hand too (bonus hand included), "
                     + "and every gold cube is worth more.",
-                "Altın bloklar elindeyken de bonus verir (bonus el dahil) "
-                    + "ve her altın küp daha çok puan kazandırır.");
-            BaseSellValue = 60;
+                "AltÄ±n bloklar elindeyken de bonus verir (bonus el dahil) "
+                    + "ve her altÄ±n kÃ¼p daha Ã§ok puan kazandÄ±rÄ±r.");
         }
 
         /// <summary>Permanently raises the board-side gold bonus (a live ScoringConfig buff).</summary>
@@ -54,7 +53,7 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return Loc.Pick(GoldCubesHeld + " gold cubes", GoldCubesHeld + " altın küp"); }
+            get { return Loc.Pick(GoldCubesHeld + " gold cubes", GoldCubesHeld + " altÄ±n kÃ¼p"); }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -100,8 +99,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "A clean sweep also shatters obsidian, which pays points.",
-                "Temizlik yapınca obsidyenler de patlar ve puan verir.");
-            BaseSellValue = 55;
+                "Temizlik yapÄ±nca obsidyenler de patlar ve puan verir.");
         }
 
         public override void AfterCleanSweep(TurnContext turn)
@@ -121,7 +119,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Tutuştur" - when a fire cube goes up, every fire cube on the board goes with
+    /// <summary>"TutuÅŸtur" - when a fire cube goes up, every fire cube on the board goes with
     /// it. The engine's own fire rule only chains within one block; this chains the board.</summary>
     public sealed class TutusturJoker : Joker
     {
@@ -129,12 +127,11 @@ namespace ProjectBlock.Core
         public int PointsPerChainedCube = 4;
 
         public TutusturJoker()
-            : base("tutustur", "Tutuştur")
+            : base("tutustur", "TutuÅŸtur")
         {
             SetDescription(
                 "When one fire block explodes, ALL fire blocks on the board explode.",
-                "Bir ateş bloğu patlayınca alandaki TÜM ateş blokları patlar.");
-            BaseSellValue = 60;
+                "Bir ateÅŸ bloÄŸu patlayÄ±nca alandaki TÃœM ateÅŸ bloklarÄ± patlar.");
         }
 
         public override void AfterLineExplosion(TurnContext turn)
@@ -168,7 +165,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>Shared body of "Yangın" and "Taşkın": once per round, every cube next to a
+    /// <summary>Shared body of "YangÄ±n" and "TaÅŸkÄ±n": once per round, every cube next to a
     /// cube of the source kind becomes that kind too. One ring only - no chain reaction,
     /// which would trivially convert the whole board.</summary>
     public abstract class SpreadJoker : Joker
@@ -221,29 +218,27 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Yangın" - once per round, fire spreads to its neighbours.</summary>
+    /// <summary>"YangÄ±n" - once per round, fire spreads to its neighbours.</summary>
     public sealed class YanginJoker : SpreadJoker
     {
         public YanginJoker()
-            : base("yangin", "Yangın", CubeKind.Fire)
+            : base("yangin", "YangÄ±n", CubeKind.Fire)
         {
             SetDescription(
                 "Once per round: the blocks around fire blocks turn to fire too.",
-                "Raunt başına 1 kez: ateş bloklarının etrafındaki bloklar da ateş olur.");
-            BaseSellValue = 50;
+                "Raunt baÅŸÄ±na 1 kez: ateÅŸ bloklarÄ±nÄ±n etrafÄ±ndaki bloklar da ateÅŸ olur.");
         }
     }
 
-    /// <summary>"Taşkın" - once per round, water spreads to its neighbours.</summary>
+    /// <summary>"TaÅŸkÄ±n" - once per round, water spreads to its neighbours.</summary>
     public sealed class TaskinJoker : SpreadJoker
     {
         public TaskinJoker()
-            : base("taskin", "Taşkın", CubeKind.Water)
+            : base("taskin", "TaÅŸkÄ±n", CubeKind.Water)
         {
             SetDescription(
                 "Once per round: the blocks around water blocks turn to water too.",
-                "Raunt başına 1 kez: su bloklarının etrafındaki bloklar da su olur.");
-            BaseSellValue = 50;
+                "Raunt baÅŸÄ±na 1 kez: su bloklarÄ±nÄ±n etrafÄ±ndaki bloklar da su olur.");
         }
     }
 
@@ -262,9 +257,8 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Water blocks touching a wall freeze. Ice never blocks a clean sweep "
                     + "and pays extra when exploded.",
-                "Duvara değen su blokları donar. Buz temizliği engellemez ve "
-                    + "patlayınca ek puan verir.");
-            BaseSellValue = 60;
+                "Duvara deÄŸen su bloklarÄ± donar. Buz temizliÄŸi engellemez ve "
+                    + "patlayÄ±nca ek puan verir.");
         }
 
         public override string StatusText
@@ -331,8 +325,7 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Elemental blocks in the market arrive with 2 elements at once.",
-                "Marketteki elementli bloklar aynı anda 2 elemente sahip gelir.");
-            BaseSellValue = 65;
+                "Marketteki elementli bloklar aynÄ± anda 2 elemente sahip gelir.");
         }
 
         public override BlockCard FilterMarketOffer(SessionContext ctx, BlockCard card)

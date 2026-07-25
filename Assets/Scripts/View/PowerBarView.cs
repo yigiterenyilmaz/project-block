@@ -214,7 +214,7 @@ namespace ProjectBlock.View
                 ? Loc.Pick("charged", "dolu")
                 : Loc.Pick("empty (sweep refills)", "boş (temizlik doldurur)"));
             line.Append('\n').Append(Loc.Pick("sell ", "satış "))
-                .Append(power.BaseSellValue * session.Config.Scoring.ScoreScale);
+                .Append(session.Powers.SellValueOf(power) * session.Config.Scoring.ScoreScale);
             if (silenced)
             {
                 line.Append(Loc.Pick("   (BOSS: off)", "   (PATRON: kapalı)"));

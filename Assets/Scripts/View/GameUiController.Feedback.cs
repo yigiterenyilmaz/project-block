@@ -267,8 +267,35 @@ namespace ProjectBlock.View
             boardView.ShowInfections(infectionBuffer);
         }
 
+        /// <summary>The prominent score line: the run total (which is also the market's money)
+        /// and, while a round is being played, how that round stands against its threshold.
+        /// Both numbers are in the scaled economy, so the threshold is lifted to match.</summary>
+        private void UpdateScoreHud()
+        {
+            if (totalText == null)
+            {
+                return;
+            }
+            if (session == null)
+            {
+                totalText.text = string.Empty;
+                return;
+            }
+            var sb = new StringBuilder();
+            sb.Append(Loc.Pick("TOTAL ", "TOPLAM ")).Append(session.TotalScore);
+            RoundEngine round = session.CurrentRound;
+            if (session.Phase == GamePhase.Round && round != null)
+            {
+                sb.Append(Loc.Pick("        round ", "        raunt "))
+                    .Append(round.RoundScore).Append(" / ")
+                    .Append(round.Config.ScoreThreshold * session.Config.Scoring.ScoreScale);
+            }
+            totalText.text = sb.ToString();
+        }
+
         private void UpdateHud()
         {
+            UpdateScoreHud();
             RoundEngine round = session.CurrentRound;
             var sb = new StringBuilder();
             sb.Append("Seed ").Append(lastSeedUsed)
@@ -301,7 +328,8 @@ namespace ProjectBlock.View
                 sb.Append(Loc.Pick("  [threshold passed]", "  [eşik geçildi]"));
             }
             sb.Append('\n');
-            sb.Append(Loc.Pick("Total score ", "Toplam puan ")).Append(session.TotalScore).Append('\n');
+            // The run total is NOT repeated here - it has its own line at the top of the screen
+            // (UpdateScoreHud), because it is real UI rather than debug furniture.
             sb.Append(Loc.Pick("Draw ", "Çekme ")).Append(round.Deck.DrawCount)
                 .Append(Loc.Pick("   Discard ", "   Iskarta ")).Append(round.Deck.DiscardCount)
                 .Append(Loc.Pick("   Removed ", "   Çıkan ")).Append(round.Deck.RemovedCount).Append('\n');

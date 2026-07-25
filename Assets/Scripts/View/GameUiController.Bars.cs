@@ -101,7 +101,7 @@ namespace ProjectBlock.View
             return true;
         }
 
-        /// <summary>In the market, clicking a power panel sells it for its BaseSellValue.</summary>
+        /// <summary>In the market, clicking a power panel sells it for its sell value.</summary>
         private bool TrySellPowerFromBar(Mouse mouse)
         {
             int index = powerBar.PowerIndexAt(mouse.position.ReadValue());
