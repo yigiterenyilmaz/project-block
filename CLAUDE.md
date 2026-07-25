@@ -116,6 +116,14 @@ to `TurnResolved` — that event stays a post-fact notification for the UI.
 All 35 planned jokers are implemented, and so are 17 of the 18 powers - only "Dolly" is
 left, set aside by the designer. See `docs/jokers-plan.md`.
 
+**Market credit ("Kredi kartı") is a SESSION rule, not joker state.** `GameSession` owns
+`Debt`, `Spend` (own points first, borrow the shortfall) and `RepayDebt` (manual, market-only);
+the joker is only the switch that turns `CreditAvailable` on and names the interest rate. The
+debt compounds at every round end and a **boss round** that ends with it open ends the run
+(`LossReason.DebtNotRepaid`) — checked BEFORE the final-round win, so round 15 can be survived
+and still lost. A credit joker cannot be sold while it owes (`JokerInventory.CanSell`), which
+is what stops the debt being walked away from.
+
 - `Assets/Scripts/Core/Powers/` — the power system. `Power.cs` is the base type,
   `PowerInventory.cs` the only caller. Powers are ACTIVE: one charge, refilled by a clean
   sweep or a new round, at most one per turn, and using one never costs a turn.

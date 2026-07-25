@@ -7,6 +7,17 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **Kredi kartı (joker)** — shop in the market with points you do not have. Your own score goes
+  first and the shortfall becomes **debt**, which gains **10% interest at the end of every
+  round**. Repaying is deliberately manual (`[O]` in the market): carrying the debt one more
+  round is the decision the joker is built around. If a **boss round** ends with the debt still
+  open you **lose the run** — round 15 included, so surviving the last round does not settle
+  your books and the final market is not a free shopping spree. The joker **cannot be sold**
+  while the debt is open, so there is no walking away from it. Practical consequence worth
+  knowing: since paying only happens in the market, the real deadline is the market *before* the
+  boss round — what you earn during the boss round itself cannot save you. The HUD shows the
+  debt next to the score, names the round you must pay by, and the run-over screen says which
+  it was (`LossReason.DebtNotRepaid`, the only loss in the game that is not about the board).
 - **Boss rounds** — every third round (3, 6, 9, 12, 15) now draws a **boss** that bends the rules
   against you for that round only. A run never fights the same boss twice, the draw is
   deterministic from the run seed, and the HUD names the boss and describes what it is doing.
