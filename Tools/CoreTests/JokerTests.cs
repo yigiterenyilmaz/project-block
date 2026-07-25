@@ -86,6 +86,16 @@ public static class JokerTests
         MeydanOkuma_MarksThenPaysOnClear();
         MeydanOkuma_HalvesAndGivesUpAfterThreeMisses();
         Powerbank_RechargesASpentPower();
+        Erosion_FirstTwoRecyclesAreFreeThenTheRimGoes();
+        Erosion_RimNeverEatsTheLastCell();
+        Erosion_CentreHoleKillsItsRowAndColumn();
+        Erosion_CentreHoleGrowsAndStaysASuperset();
+        Erosion_BothStylesHitTogether();
+        Erosion_EatenCubesCostNoScoreAndNoSweep();
+        Erosion_EatsThroughIndestructibleAndProtectedCubes();
+        Erosion_NoneLeavesTheBoardAlone();
+        Erosion_AddedCellsStillDoNotKillLines();
+        Erosion_RealPlayRunsTheClockAndEndsTheRound();
         Progression_BoardSizeStepsWithTheRoundBands();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
@@ -148,16 +158,23 @@ public static class JokerTests
     {
         private readonly int size;
         private readonly int threshold;
+        private readonly ShuffleErosion erosion;
 
         public FixedProgression(int size, int threshold)
+            : this(size, threshold, ShuffleErosion.None)
+        {
+        }
+
+        public FixedProgression(int size, int threshold, ShuffleErosion erosion)
         {
             this.size = size;
             this.threshold = threshold;
+            this.erosion = erosion;
         }
 
         public RoundConfig GetRound(int roundNumber)
         {
-            return new RoundConfig(roundNumber, size, size, threshold);
+            return new RoundConfig(roundNumber, size, size, threshold, null, erosion);
         }
     }
 
@@ -169,6 +186,18 @@ public static class JokerTests
         config.Deck = new DeckDefinition("test", deckSize,
             new SizedShapeGenerator(shapeSizes.Length > 0 ? shapeSizes : new[] { 1 }));
         config.Progression = new FixedProgression(boardSize, threshold);
+        return new GameSession(config);
+    }
+
+    /// <summary>As NewSession, but the round suffers a shuffle-erosion style.</summary>
+    private static GameSession NewErodingSession(int seed, int boardSize, int deckSize,
+        ShuffleErosion erosion, params int[] shapeSizes)
+    {
+        var config = new GameConfig();
+        config.RngSeed = seed;
+        config.Deck = new DeckDefinition("test", deckSize,
+            new SizedShapeGenerator(shapeSizes.Length > 0 ? shapeSizes : new[] { 1 }));
+        config.Progression = new FixedProgression(boardSize, 1000000, erosion);
         return new GameSession(config);
     }
 
@@ -2311,6 +2340,269 @@ public static class JokerTests
         Check(session.Jokers.TryActivate(joker.InstanceId, ActivationTarget.None), "powerbank ran");
         Check(power.Charged, "the power is charged again");
         Check(!session.Jokers.CanActivate(joker.InstanceId), "its own single charge is spent");
+    }
+
+    private static bool ListHas(IReadOnlyList<int> list, int value)
+    {
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (list[i] == value)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void Erosion_FirstTwoRecyclesAreFreeThenTheRimGoes()
+    {
+        Section("erosion / two free recycles, then the rim goes alternating sides");
+        var session = NewErodingSession(701, 5, 40, ShuffleErosion.FromOutside, 1);
+        RoundEngine round = session.CurrentRound;
+
+        Check(round.Board.Width == 5 && round.Board.Height == 5, "starts 5x5");
+        Check(round.FreeDeckRecyclesLeft == 2, "two free recycles to start");
+
+        round.DebugForceDeckRecycle();
+        Check(round.Board.Width == 5 && round.BoardErosionCount == 0,
+            "the first recycle is free", round.Board.Width + "x" + round.Board.Height);
+        Check(round.FreeDeckRecyclesLeft == 1, "one free recycle left");
+        round.DebugForceDeckRecycle();
+        Check(round.Board.Width == 5 && round.BoardErosionCount == 0, "the second is free too");
+        Check(round.FreeDeckRecyclesLeft == 0, "and now the allowance is spent");
+
+        // 3rd recycle: odd step, so the TOP row and the RIGHT column go. MinX/MinY stay put.
+        int minX = round.Board.MinX;
+        int minY = round.Board.MinY;
+        round.DebugForceDeckRecycle();
+        Check(round.Board.Width == 4 && round.Board.Height == 4, "the third recycle cuts it to 4x4",
+            round.Board.Width + "x" + round.Board.Height);
+        Check(round.BoardErosionCount == 1, "one erosion recorded");
+        Check(round.Board.MinX == minX && round.Board.MinY == minY,
+            "the top row and the right column went, so the origin did not move");
+
+        // 4th recycle: even step, so the BOTTOM row and the LEFT column go - the origin moves in.
+        round.DebugForceDeckRecycle();
+        Check(round.Board.Width == 3 && round.Board.Height == 3, "the fourth cuts it to 3x3",
+            round.Board.Width + "x" + round.Board.Height);
+        Check(round.Board.MinX == minX + 1 && round.Board.MinY == minY + 1,
+            "this time the bottom row and the left column went, so the arena stayed centred",
+            "min " + round.Board.MinX + "," + round.Board.MinY);
+
+        round.DebugForceDeckRecycle();
+        Check(round.Board.Width == 2 && round.Board.Height == 2, "then 2x2");
+        Check(round.Board.DeadCellCount == 0, "rim erosion leaves no dead cells - the band is gone");
+    }
+
+    private static void Erosion_RimNeverEatsTheLastCell()
+    {
+        Section("erosion / the rim stops at a 1x1 sliver instead of erasing the board");
+        var session = NewErodingSession(702, 5, 40, ShuffleErosion.FromOutside, 1);
+        RoundEngine round = session.CurrentRound;
+        for (int i = 0; i < 12; i++)
+        {
+            round.DebugForceDeckRecycle();
+        }
+        Check(round.Board.Width >= 1 && round.Board.Height >= 1, "the board still exists",
+            round.Board.Width + "x" + round.Board.Height);
+        Check(round.Board.PlayableCellCount >= 1, "and still has a cell");
+    }
+
+    private static void Erosion_CentreHoleKillsItsRowAndColumn()
+    {
+        Section("erosion / the centre hole kills its row and column for good");
+        var session = NewErodingSession(703, 5, 40, ShuffleErosion.FromCenter, 1);
+        RoundEngine round = session.CurrentRound;
+        int cellsBefore = round.Board.PlayableCellCount;
+
+        round.DebugForceDeckRecycle();
+        round.DebugForceDeckRecycle();
+        Check(round.Board.PlayableCellCount == cellsBefore, "the free recycles change nothing");
+
+        round.DebugForceDeckRecycle();
+        var centre = new GridPos(round.Board.MinX + 2, round.Board.MinY + 2);
+        Check(round.Board.IsDead(centre), "the middle cell of a 5x5 was eaten");
+        Check(!round.Board.IsInside(centre), "an eaten cell is not play area");
+        Check(round.Board.PlayableCellCount == cellsBefore - 1, "one cell fewer to fill",
+            round.Board.PlayableCellCount.ToString());
+        Check(round.Board.Width == 5 && round.Board.Height == 5,
+            "centre erosion does not shrink the bounding box");
+
+        // Fill everything that is still playable. The eaten cell's row and column must NOT
+        // explode - that is the punishment - while the other rows/columns must.
+        FillBoardSolid(round, session);
+        LineExplosionResult lines = round.Board.ResolveFullLines();
+        Check(!ListHas(lines.Rows, 2), "row 2 runs through the hole, so it never explodes",
+            "rows " + string.Join(",", lines.Rows));
+        Check(!ListHas(lines.Columns, 2), "column 2 likewise",
+            "cols " + string.Join(",", lines.Columns));
+        Check(lines.Rows.Count == 4 && lines.Columns.Count == 4,
+            "the other four rows and columns still clear normally",
+            lines.Rows.Count + " rows / " + lines.Columns.Count + " cols");
+    }
+
+    private static void Erosion_CentreHoleGrowsAndStaysASuperset()
+    {
+        Section("erosion / the centre hole grows 1x1 -> 2x2 -> 3x3 and never gives cells back");
+        var session = NewErodingSession(704, 7, 40, ShuffleErosion.FromCenter, 1);
+        RoundEngine round = session.CurrentRound;
+        round.DebugForceDeckRecycle();
+        round.DebugForceDeckRecycle();
+
+        round.DebugForceDeckRecycle();
+        Check(round.Board.DeadCellCount == 1, "step 1 eats the single centre cell",
+            round.Board.DeadCellCount.ToString());
+        var first = new GridPos(round.Board.MinX + 3, round.Board.MinY + 3);
+        Check(round.Board.IsDead(first), "and it is the exact centre of a 7x7");
+
+        round.DebugForceDeckRecycle();
+        Check(round.Board.DeadCellCount == 4, "step 2 eats a 2x2",
+            round.Board.DeadCellCount.ToString());
+        Check(round.Board.IsDead(first), "the first cell is still dead - the hole only grows");
+
+        round.DebugForceDeckRecycle();
+        Check(round.Board.DeadCellCount == 9, "step 3 eats a 3x3",
+            round.Board.DeadCellCount.ToString());
+        Check(round.Board.IsDead(first), "and it still contains everything eaten before");
+
+        // A 3x3 hole in a 7x7 kills rows 2,3,4 and columns 2,3,4: only 4+4 lines are left alive.
+        FillBoardSolid(round, session);
+        LineExplosionResult lines = round.Board.ResolveFullLines();
+        Check(lines.Rows.Count == 4 && lines.Columns.Count == 4,
+            "three rows and three columns are dead for the rest of the round",
+            lines.Rows.Count + " rows / " + lines.Columns.Count + " cols");
+    }
+
+    private static void Erosion_BothStylesHitTogether()
+    {
+        Section("erosion / the last band loses the rim AND is hollowed out at once");
+        var session = NewErodingSession(705, 9, 40, ShuffleErosion.Both, 1);
+        RoundEngine round = session.CurrentRound;
+        round.DebugForceDeckRecycle();
+        round.DebugForceDeckRecycle();
+
+        round.DebugForceDeckRecycle();
+        Check(round.Board.Width == 8 && round.Board.Height == 8, "the rim went: 9x9 -> 8x8",
+            round.Board.Width + "x" + round.Board.Height);
+        Check(round.Board.DeadCellCount == 1, "and the centre was hollowed at the same time",
+            round.Board.DeadCellCount.ToString());
+
+        round.DebugForceDeckRecycle();
+        Check(round.Board.Width == 7 && round.Board.Height == 7, "then 7x7",
+            round.Board.Width + "x" + round.Board.Height);
+        Check(round.Board.DeadCellCount >= 4, "with a bigger hole",
+            round.Board.DeadCellCount.ToString());
+        Check(round.Board.PlayableCellCount < 49 - 3,
+            "so the arena collapses much faster than either style alone",
+            round.Board.PlayableCellCount.ToString());
+    }
+
+    private static void Erosion_EatenCubesCostNoScoreAndNoSweep()
+    {
+        Section("erosion / cubes on eaten cells die scorelessly and never trigger a sweep");
+        var session = NewErodingSession(706, 5, 40, ShuffleErosion.FromOutside, 1);
+        RoundEngine round = session.CurrentRound;
+        round.DebugForceDeckRecycle();
+        round.DebugForceDeckRecycle();
+
+        // One lone cube, sitting in the top row that the next erosion takes.
+        var doomed = new GridPos(round.Board.MinX + 1, round.Board.MinY + round.Board.Height - 1);
+        round.Board.SetCubeAt(doomed, new Cube(CubeKind.Normal, 9100));
+        Check(round.Board.OccupiedCount == 1, "the board holds exactly that cube");
+
+        int scoreBefore = round.RoundScore;
+        int sweepsBefore = round.CleanSweepCount;
+        round.DebugForceDeckRecycle();
+
+        Check(round.Board.OccupiedCount == 0, "the cube went with its cell");
+        Check(round.RoundScore == scoreBefore, "and paid nothing",
+            scoreBefore + " -> " + round.RoundScore);
+        Check(round.CleanSweepCount == sweepsBefore,
+            "emptying the board this way is not a clean sweep");
+    }
+
+    private static void Erosion_EatsThroughIndestructibleAndProtectedCubes()
+    {
+        Section("erosion / obsidian and a Parazit host cannot squat on a cell that ceases to exist");
+        var session = NewErodingSession(707, 5, 40, ShuffleErosion.FromCenter, 1);
+        RoundEngine round = session.CurrentRound;
+        round.DebugForceDeckRecycle();
+        round.DebugForceDeckRecycle();
+
+        var centre = new GridPos(round.Board.MinX + 2, round.Board.MinY + 2);
+        round.Board.SetCubeAt(centre, new Cube(CubeKind.Obsidian, 9200));
+        round.Board.SetCubeProtected(centre); // the toughest cube in the game
+        Check(round.Board.GetCube(centre).HasValue, "a protected obsidian cube sits in the middle");
+
+        round.DebugForceDeckRecycle();
+        Check(round.Board.IsDead(centre), "the cell was eaten anyway");
+        Check(!round.Board.GetCube(centre).HasValue, "and the cube with it");
+        Check(round.Board.OccupiedCount == 0, "the occupied count stayed honest");
+    }
+
+    private static void Erosion_NoneLeavesTheBoardAlone()
+    {
+        Section("erosion / a band with no erosion never shrinks");
+        var session = NewErodingSession(708, 5, 40, ShuffleErosion.None, 1);
+        RoundEngine round = session.CurrentRound;
+        for (int i = 0; i < 8; i++)
+        {
+            round.DebugForceDeckRecycle();
+        }
+        Check(round.Board.Width == 5 && round.Board.Height == 5, "still 5x5");
+        Check(round.Board.DeadCellCount == 0 && round.BoardErosionCount == 0, "nothing was eaten");
+        Check(round.DeckRecycleCount == 8, "the recycles were still counted");
+    }
+
+    private static void Erosion_AddedCellsStillDoNotKillLines()
+    {
+        Section("erosion / a hole that was never board (Tılsım/Kentsel Dönüşüm filler) is harmless");
+        // A 4x4 board with one extra cell bolted on at (4,1): the bounding box becomes 5x4, so
+        // column 4 is a hole on three rows. Those holes must stay SKIPPED, not line-killing.
+        var config = new RoundConfig(1, 4, 4, 1000000, new[] { new GridPos(4, 1) });
+        var board = new GameBoard(config.BoardWidth, config.BoardHeight, config.ExtraPlayableCells);
+        Check(board.Width == 5 && board.Height == 4, "the bounding box stretched to hold it",
+            board.Width + "x" + board.Height);
+        Check(board.DeadCellCount == 0, "and nothing is dead - those cells were never board");
+
+        for (int y = 0; y < board.Height; y++)
+        {
+            for (int x = 0; x < board.Width; x++)
+            {
+                var pos = new GridPos(x, y);
+                if (board.IsInside(pos))
+                {
+                    board.SetCubeAt(pos, new Cube(CubeKind.Normal, 9300));
+                }
+            }
+        }
+        LineExplosionResult lines = board.ResolveFullLines();
+        Check(lines.Rows.Count == 4, "every row still explodes when filled",
+            lines.Rows.Count + " rows");
+        Check(lines.Columns.Count == 5, "and every column, the bolted-on one included",
+            lines.Columns.Count + " cols");
+    }
+
+    private static void Erosion_RealPlayRunsTheClockAndEndsTheRound()
+    {
+        Section("erosion / a real round that keeps recycling erodes and eventually ends");
+        // A 4-card deck against a hand of 3: the draw pile runs dry every couple of turns, so
+        // this drives the WIRING (DrawWithRules -> NoteDeckRecycled -> end-of-turn erosion)
+        // rather than the debug seam.
+        var session = NewErodingSession(709, 5, 4, ShuffleErosion.FromOutside, 1);
+        RoundEngine round = session.CurrentRound;
+        int startWidth = round.Board.Width;
+
+        PlayTurns(session, 60);
+        Check(round.DeckRecycleCount >= 3, "the deck really did run dry repeatedly",
+            "recycles " + round.DeckRecycleCount);
+        Check(round.BoardErosionCount >= 1, "so the arena eroded through normal play",
+            "erosions " + round.BoardErosionCount);
+        Check(round.Board.Width < startWidth, "the board is smaller than it started",
+            startWidth + " -> " + round.Board.Width);
+        Check(round.BoardErosionCount == round.DeckRecycleCount - round.Rules.FreeDeckRecycles,
+            "and exactly the earned number of erosions landed - no double-charging",
+            round.BoardErosionCount + " vs " + round.DeckRecycleCount);
     }
 
     private static void Progression_BoardSizeStepsWithTheRoundBands()

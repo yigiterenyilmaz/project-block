@@ -142,6 +142,10 @@ namespace ProjectBlock.Core
             if (Deck.DiscardCount > 0)
             {
                 Deck.ShuffleDiscardIntoDraw();
+                // THE anti-stalling trigger: this is the one place "the cards ran out" happens.
+                // Past the free allowance it costs the player a piece of the arena, applied at
+                // the end of the turn (see ApplyPendingBoardErosion).
+                NoteDeckRecycled();
                 BlockCard recycled = Deck.DrawTop();
                 if (recycled != null)
                 {

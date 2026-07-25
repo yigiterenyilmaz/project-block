@@ -312,6 +312,187 @@ namespace ProjectBlock.Core
             }
         }
 
+        // ---- anti-stalling clock: the arena erodes once the deck keeps recycling ----
+
+        /// <summary>Times the DRAW PILE RAN DRY this round and the discard was poured back into
+        /// it. Deliberately not RoundDeck.ShuffleCount: that also counts the reshuffles the rules
+        /// and the jokers order (the threshold recycle, a hand redraw, "Dezenformasyon" every
+        /// single turn), and none of those mean "you have run out of cards".</summary>
+        public int DeckRecycleCount { get; private set; }
+
+        /// <summary>Erosions already applied to this round's board.</summary>
+        public int BoardErosionCount { get; private set; }
+
+        /// <summary>Recycles left before the board starts eroding, or 0 once it has started.
+        /// The UI shows this as the round's shot clock.</summary>
+        public int FreeDeckRecyclesLeft
+        {
+            get
+            {
+                int left = Rules.FreeDeckRecycles - DeckRecycleCount;
+                return left > 0 ? left : 0;
+            }
+        }
+
+        /// <summary>Called from the ONE place a dry draw pile is refilled from the discard
+        /// (DrawWithRules). The erosion it earns is applied later, at a safe point in the turn -
+        /// never in the middle of a draw.</summary>
+        private void NoteDeckRecycled()
+        {
+            DeckRecycleCount++;
+        }
+
+        /// <summary>TEST/DEBUG seam: pretends the draw pile ran dry once and settles whatever
+        /// erosion that earns, so the clock can be driven without dealing out a whole deck.
+        /// Real play goes through DrawWithRules -> NoteDeckRecycled.</summary>
+        internal void DebugForceDeckRecycle()
+        {
+            NoteDeckRecycled();
+            ApplyPendingBoardErosion();
+        }
+
+        /// <summary>
+        /// Eats as much of the board as the recycles so far have earned. Idempotent: it only ever
+        /// applies the difference between what is owed and what has already been applied, so it is
+        /// safe to call from several places and safe to call every turn.
+        ///
+        /// Deliberately NOT called from inside DrawWithRules: a draw happens in the middle of a
+        /// refill loop, and reshaping the board there would move the ground under the placement
+        /// being resolved. The turn resolver calls this after the end-of-turn hooks instead, so
+        /// the erosion still lands on the same turn that ran the deck dry, before the threshold
+        /// check and before the dead-end check - which is what lets erosion legitimately end a
+        /// round.
+        /// </summary>
+        private void ApplyPendingBoardErosion()
+        {
+            ShuffleErosion mode = Config.Erosion;
+            if (mode == ShuffleErosion.None)
+            {
+                return;
+            }
+            int owed = DeckRecycleCount - Rules.FreeDeckRecycles;
+            if (owed <= BoardErosionCount)
+            {
+                return;
+            }
+            bool changed = false;
+            while (BoardErosionCount < owed)
+            {
+                BoardErosionCount++;
+                changed |= ErodeOnce(BoardErosionCount, mode);
+            }
+            if (changed)
+            {
+                // Shrinking makes the surviving rows shorter, so the squeeze can complete a line
+                // that was one cell short. Same treatment as the inflation deflate: it explodes
+                // under the normal rules and only scores while "Genel temizlik" is held.
+                ResolveFullLinesOutsideTurn();
+            }
+        }
+
+        /// <summary>One erosion step. The step number drives BOTH which sides the rim loses and
+        /// how big the centre hole is, so the two styles stay in lockstep in the "Both" band.</summary>
+        private bool ErodeOnce(int step, ShuffleErosion mode)
+        {
+            bool changed = false;
+            if (mode == ShuffleErosion.FromOutside || mode == ShuffleErosion.Both)
+            {
+                changed |= ErodeRim(step);
+            }
+            if (mode == ShuffleErosion.FromCenter || mode == ShuffleErosion.Both)
+            {
+                changed |= ErodeCentre(step);
+            }
+            return changed;
+        }
+
+        /// <summary>
+        /// Takes one row and one column off the rim, ALTERNATING sides: odd steps take the top
+        /// row and the right column, even steps the bottom row and the left column. Over two
+        /// steps that is symmetric, so the arena stays where the player is looking instead of
+        /// creeping into a corner.
+        ///
+        /// Cubes standing in the doomed bands are destroyed, scorelessly and without counting
+        /// toward a clean sweep or "Kayıt defteri" - the same terms as Buldozer and Deprem.
+        /// </summary>
+        private bool ErodeRim(int step)
+        {
+            bool topRight = (step % 2) == 1;
+            int left = topRight ? 0 : 1;
+            int right = topRight ? 1 : 0;
+            int bottom = topRight ? 0 : 1;
+            int top = topRight ? 1 : 0;
+            if (Board.Width - left - right < 1 || Board.Height - bottom - top < 1)
+            {
+                return false; // nothing left to take - the board is already a sliver
+            }
+            DestroyCubes(RimCells(left, right, bottom, top), false, true);
+            return ReshapeBoard(-left, -right, -bottom, -top);
+        }
+
+        /// <summary>Every cell of the bands about to be removed, in absolute coordinates.</summary>
+        private List<GridPos> RimCells(int left, int right, int bottom, int top)
+        {
+            int minX = Board.MinX;
+            int minY = Board.MinY;
+            int maxX = Board.MinX + Board.Width - 1;
+            int maxY = Board.MinY + Board.Height - 1;
+            var cells = new List<GridPos>();
+            for (int x = minX; x <= maxX; x++)
+            {
+                for (int y = minY; y <= maxY; y++)
+                {
+                    if (x < minX + left || x > maxX - right || y < minY + bottom || y > maxY - top)
+                    {
+                        cells.Add(new GridPos(x, y));
+                    }
+                }
+            }
+            return cells;
+        }
+
+        /// <summary>
+        /// Hollows the board out from the middle: a step x step square of DEAD cells centred on
+        /// the current board. Step 1 is the single centre cell, step 2 a 2x2, step 3 a 3x3.
+        ///
+        /// An even-sided square cannot sit exactly in the middle of an odd-sided board, so it is
+        /// biased toward the lower coordinates ((size - n) / 2 truncates). Odd steps land dead
+        /// centre, and because the centre is recomputed on the CURRENT board every step, the dead
+        /// region is simply the union of the squares placed so far - cells never come back.
+        ///
+        /// The cells are eaten, not just emptied: they kill their rows and columns for good.
+        /// </summary>
+        private bool ErodeCentre(int step)
+        {
+            int w = step < Board.Width ? step : Board.Width;
+            int h = step < Board.Height ? step : Board.Height;
+            if (w < 1 || h < 1)
+            {
+                return false;
+            }
+            int startX = Board.MinX + (Board.Width - w) / 2;
+            int startY = Board.MinY + (Board.Height - h) / 2;
+            var doomed = new List<GridPos>();
+            for (int x = 0; x < w; x++)
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    doomed.Add(new GridPos(startX + x, startY + y));
+                }
+            }
+            // Destroy through the engine first so the destruction log and the per-card
+            // bookkeeping see it; MarkDead then clears anything that resisted (a Parazit host
+            // cannot squat on a cell that no longer exists) and eats the cells themselves.
+            DestroyCubes(doomed, false, true);
+            List<GridPos> eaten = Board.MarkDead(doomed);
+            if (eaten.Count == 0)
+            {
+                return false;
+            }
+            LogDestruction();
+            return true;
+        }
+
         /// <summary>"Kayıt defteri": while true, emptying the board is no longer a sweep.
         /// Only ForceCleanSweep can raise the event.</summary>
         internal bool SuppressNaturalSweep { get; set; }

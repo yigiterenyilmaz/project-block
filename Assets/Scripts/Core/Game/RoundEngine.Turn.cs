@@ -259,6 +259,12 @@ namespace ProjectBlock.Core
                 session.Powers.DispatchAfterTurnScored(currentTurn);
             }
 
+            // 8.5 the arena erodes if the draw pile has run dry too often. After the hooks, so a
+            // joker that refilled the hand in step 8 is counted too; before the threshold and
+            // dead-end checks below, so a line the squeeze completes still scores this turn and
+            // an erosion that leaves nowhere to play can genuinely end the round.
+            ApplyPendingBoardErosion();
+
             // 9. threshold check (first pass only)
             if (!ThresholdPassed && RoundScore >= ScaledThreshold)
             {

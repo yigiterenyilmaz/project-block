@@ -27,19 +27,32 @@ namespace ProjectBlock.Core
         /// and up, never left or down (see GameBoard).</summary>
         public IReadOnlyList<GridPos> ExtraPlayableCells { get; }
 
+        /// <summary>How this round's arena erodes once the draw pile has run dry more than
+        /// RoundRules.FreeDeckRecycles times - the anti-stalling clock. Comes from the round
+        /// band (see DefaultRoundProgression), so it is fixed for the whole round.</summary>
+        public ShuffleErosion Erosion { get; }
+
         public RoundConfig(int roundNumber, int boardWidth, int boardHeight, int scoreThreshold)
-            : this(roundNumber, boardWidth, boardHeight, scoreThreshold, null)
+            : this(roundNumber, boardWidth, boardHeight, scoreThreshold, null, ShuffleErosion.None)
         {
         }
 
         public RoundConfig(int roundNumber, int boardWidth, int boardHeight, int scoreThreshold,
             IReadOnlyList<GridPos> extraPlayableCells)
+            : this(roundNumber, boardWidth, boardHeight, scoreThreshold, extraPlayableCells,
+                ShuffleErosion.None)
+        {
+        }
+
+        public RoundConfig(int roundNumber, int boardWidth, int boardHeight, int scoreThreshold,
+            IReadOnlyList<GridPos> extraPlayableCells, ShuffleErosion erosion)
         {
             RoundNumber = roundNumber;
             BoardWidth = boardWidth;
             BoardHeight = boardHeight;
             ScoreThreshold = scoreThreshold;
             ExtraPlayableCells = extraPlayableCells ?? NoExtraCells;
+            Erosion = erosion;
         }
     }
 }

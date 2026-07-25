@@ -180,6 +180,9 @@ namespace ProjectBlock.Core
             EnsurePlacingAllowed();
             DiscardHandAndReshuffle();
             RefillHand();
+            // A redraw resolves no turn, so nothing else would apply the erosion its refill may
+            // have earned - and the dead-end check below has to see the eroded board.
+            ApplyPendingBoardErosion();
             if (Loss != null)
             {
                 SetStatus(RoundStatus.Lost);
