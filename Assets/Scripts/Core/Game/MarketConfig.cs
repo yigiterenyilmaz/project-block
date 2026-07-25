@@ -54,7 +54,7 @@ namespace ProjectBlock.Core
         public int LegendaryWeight = 8;
 
         /// <summary>Price multiplier for a rarity tier.</summary>
-        public int PriceMultiplier(Rarity rarity)
+        public double PriceMultiplier(Rarity rarity)
         {
             switch (rarity)
             {

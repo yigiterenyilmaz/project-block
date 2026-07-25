@@ -744,7 +744,9 @@ namespace ProjectBlock.Core
                     }
                     legendaryTaken = true;
                 }
-                int price = market.JokerPrice * market.PriceMultiplier(def.Rarity)
+                // Rounded BEFORE the scale so a fractional rarity multiplier still yields a
+                // round price in the scaled economy (40 * 1.5 = 60 -> 600, not 599.99...).
+                int price = (int)Math.Round(market.JokerPrice * market.PriceMultiplier(def.Rarity))
                     * Config.Scoring.ScoreScale;
                 newOffers.Add(new MarketOffer(def, Discounted(price)));
                 taken++;
@@ -795,7 +797,8 @@ namespace ProjectBlock.Core
             for (int i = 0; i < count; i++)
             {
                 PowerDefinition def = keyed[i].Value;
-                int price = market.PowerPrice * market.PriceMultiplier(def.Rarity)
+                // Rounded before the scale, as in AddJokerOffers.
+                int price = (int)Math.Round(market.PowerPrice * market.PriceMultiplier(def.Rarity))
                     * Config.Scoring.ScoreScale;
                 newOffers.Add(new MarketOffer(def, Discounted(price)));
             }

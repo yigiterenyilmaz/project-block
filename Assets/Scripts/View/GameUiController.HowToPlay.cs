@@ -13,8 +13,10 @@
 //  - it describes only mechanics that EXIST. Cut or unbuilt ideas from the design doc (mirror
 //    blocks, the kumbara element, the bonus/fragile/infinite market variants) are deliberately
 //    absent - promising a tester something the build cannot do wastes their time.
-// It deliberately does NOT list individual jokers, powers or bosses: there are 80 of them,
-// they change weekly, and the player meets them in the market with their own descriptions.
+// It deliberately does NOT enumerate individual jokers, powers, bosses or block elements:
+// there are well over a hundred between them, they change weekly, and the player meets each
+// one in the market with its own description. This screen teaches the CONCEPTS - what a
+// joker is versus a power, what an element does to a block - not the catalogue.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -182,30 +184,17 @@ namespace ProjectBlock.View
                 },
                 new[]
                 {
-                    "BLOCK TYPES",
-                    "   Blocks bought in the market can carry an element.",
+                    "BLOCKS AND ELEMENTS",
+                    "   A block bought in the market can carry an element that changes how it",
+                    "   behaves - burning, flowing, refusing to be destroyed, paying points while",
+                    "   it sits there, turning in your hand, or erasing whatever it lands on.",
+                    "   Every card shows what it carries, and the market describes it before you",
+                    "   buy it.",
                     "",
-                    "   FIRE          one cube of it explodes, the whole block goes with it",
-                    "   WATER         runs downhill and spreads; fire it touches turns to obsidian",
-                    "   OBSIDIAN      cannot be destroyed, but the sweep check ignores it",
-                    "   GOLD          the same, and it pays points every turn it sits there",
-                    "   GHOST         can hang off the edge, as long as one cube is on the arena",
-                    "   DYNAMITE      if the whole block goes at once the turn you place it,",
-                    "                 the entire arena is cleared",
-                    "   TRANSPARENT   you can build on top of it",
-                    "   MECHANICAL    right-click to rotate it in hand",
-                    "   FOX           right-click to reshape it into another shape from your deck",
-                    "   NEGATIVE      the anti-block: drop it ON cubes and it erases them, going",
-                    "                 with them - obsidian and gold refuse it",
-                    "   VOID          a 1x1 trap some jokers hand out: whatever lands on it dies"
-                },
-                new[]
-                {
                     "JOKERS",
-                    "   Bought in the market and then left alone - they are passive, never need",
-                    "   recharging, and bend the rules on their own. You have a limited number of",
-                    "   slots. They act in the order you bought them, and they stack rather than",
-                    "   overwrite each other.",
+                    "   Bought and then left alone - passive, never need recharging, and they bend",
+                    "   the rules on their own. You have a limited number of slots. They act in the",
+                    "   order you bought them and stack rather than overwrite each other.",
                     "",
                     "POWERS",
                     "   Active instead. Each holds ONE charge, you may use at most one per turn,",
@@ -213,17 +202,17 @@ namespace ProjectBlock.View
                     "   charges back - which is why sweeping matters even when you are ahead.",
                     "",
                     "RARITY",
-                    "   Common, rare and legendary. Rarer things cost more and show up in the shop",
-                    "   less often, and you may hold only one legendary joker at a time.",
-                    "",
+                    "   Common, rare and legendary. Rarer costs more and shows up less often, and",
+                    "   you may hold only one legendary joker at a time."
+                },
+                new[]
+                {
                     "BOSS ROUNDS",
                     "   Every 3rd round brings one antagonist that bends a single rule for that",
                     "   round only - stealing from your hand, sealing cells, stripping elements,",
                     "   taxing your collection, silencing jokers, or limiting what scores.",
-                    "   Never two at once, and never the same boss twice in a run."
-                },
-                new[]
-                {
+                    "   Never two at once, and never the same boss twice in a run.",
+                    "",
                     "THE MARKET",
                     "   Between rounds: click an offer to buy it, click your deck to sell cards,",
                     "   click a joker or power in its bar to sell it, REROLL to restock the whole",
@@ -231,15 +220,13 @@ namespace ProjectBlock.View
                     "   [N] starts the next round.",
                     "",
                     "KEYS",
-                    "   [Esc]  pause          [L]  language         [F2]  rarity grader",
-                    "   [1-9]  use a joker    [A]  advance          [C]   continue (overtime)",
-                    "",
-                    "   Right-click a block in hand to rotate MECHANICAL / reshape FOX.",
+                    "   [Esc] pause      [L] language      [F2] rarity grader",
+                    "   [1-9] use a joker      [A] advance      [C] continue (overtime)",
+                    "   Right-click a block in hand to rotate or reshape it.",
                     "   Click the draw pile to look through your collection.",
                     "",
-                    "DEBUG KEYS",
-                    "   [R] new run    [D] deck    [S] redraw hand    [B] bonus card",
-                    "   [J] grant joker    [P] grant power    [K] sell the last joker"
+                    "   Debug: [R] new run  [D] deck  [S] redraw  [B] bonus card",
+                    "          [J] grant joker  [P] grant power  [K] sell the last joker"
                 }
             };
         }
@@ -310,30 +297,17 @@ namespace ProjectBlock.View
                 },
                 new[]
                 {
-                    "BLOK TÜRLERİ",
-                    "   Marketten alınan bloklar bir element taşıyabilir.",
+                    "BLOKLAR VE ELEMENTLER",
+                    "   Marketten alınan bir blok, davranışını değiştiren bir element taşıyabilir",
+                    "   - yanan, akan, yok edilemeyen, durduğu sürece puan kazandıran, elinde",
+                    "   dönen ya da üstüne düştüğü şeyi silen türler vardır.",
+                    "   Her kart ne taşıdığını gösterir; market de almadan önce ne yaptığını",
+                    "   anlatır.",
                     "",
-                    "   ATEŞ          bir küpü patlarsa bütün blok onunla birlikte patlar",
-                    "   SU            yer çekimiyle akar ve yayılır; değdiği ateşi obsidyen yapar",
-                    "   OBSİDYEN      yok edilemez, ama temizlik kontrolünde sayılmaz",
-                    "   ALTIN         aynısı, üstelik alanda durduğu her tur puan kazandırır",
-                    "   HAYALET       en az bir küpü alanda kalmak şartıyla dışarı taşabilir",
-                    "   DİNAMİT       koyduğun turda bütün blok tek seferde patlarsa",
-                    "                 oyun alanının tamamı temizlenir",
-                    "   TRANSPARAN    üstüne blok koyabilirsin",
-                    "   ÇARK          elindeyken sağ tıkla döndürürsün",
-                    "   TİLKİ         sağ tıkla destendeki başka bir şekle sokarsın",
-                    "   NEGATİF       anti-blok: küplerin ÜSTÜNE koyarsın, onları siler ve",
-                    "                 kendisi de gider - obsidyen ve altın onu reddeder",
-                    "   BOŞLUK        bazı jokerlerin verdiği 1x1 tuzak: üstüne düşen küp ölür"
-                },
-                new[]
-                {
                     "JOKERLER",
-                    "   Marketten alınır ve sonra unutulur - pasiftirler, yeniden doldurulmaları",
-                    "   gerekmez ve kuralları kendiliğinden bükerler. Sınırlı sayıda slotun var.",
-                    "   Aldığın sırayla çalışırlar ve birbirlerinin üstüne biner, birbirlerini",
-                    "   ezmezler.",
+                    "   Alınır ve sonra unutulur - pasiftirler, yeniden doldurulmaları gerekmez ve",
+                    "   kuralları kendiliğinden bükerler. Sınırlı sayıda slotun var. Aldığın",
+                    "   sırayla çalışırlar; birbirlerinin üstüne binerler, birbirlerini ezmezler.",
                     "",
                     "GÜÇLER",
                     "   Bunlar aktiftir. Her birinin TEK şarjı vardır, turda en fazla birini",
@@ -341,17 +315,17 @@ namespace ProjectBlock.View
                     "   şey temizliktir - öndeyken bile temizlik yapmanın sebebi budur.",
                     "",
                     "NADİRLİK",
-                    "   Yaygın, nadir ve efsanevi. Nadir olanlar daha pahalıdır, markette daha",
-                    "   seyrek çıkar ve aynı anda yalnızca bir efsanevi joker tutabilirsin.",
-                    "",
+                    "   Yaygın, nadir ve efsanevi. Nadir olan daha pahalıdır, daha seyrek çıkar ve",
+                    "   aynı anda yalnızca bir efsanevi joker tutabilirsin."
+                },
+                new[]
+                {
                     "PATRON RAUNTLARI",
                     "   Her 3. raunt, yalnızca o raunt için tek bir kuralı büken bir düşman",
                     "   getirir - elinden kart çalmak, hücre mühürlemek, elementleri silmek,",
                     "   desteni vergilendirmek, jokerleri susturmak ya da neyin puan verdiğini",
-                    "   kısıtlamak. Aynı anda iki tane olmaz, bir oyunda aynısı iki kez gelmez."
-                },
-                new[]
-                {
+                    "   kısıtlamak. Aynı anda iki tane olmaz, bir oyunda aynısı iki kez gelmez.",
+                    "",
                     "MARKET",
                     "   Rauntlar arası: almak için teklife tıkla, kart satmak için desteye tıkla,",
                     "   joker ya da güç satmak için barındaki panele tıkla, bütün rafı yenilemek",
@@ -359,15 +333,13 @@ namespace ProjectBlock.View
                     "   [N] sonraki raundu başlatır.",
                     "",
                     "TUŞLAR",
-                    "   [Esc]  duraklat       [L]  dil              [F2]  nadirlik defteri",
-                    "   [1-9]  joker kullan   [A]  markete geç      [C]   devam et (uzatma)",
-                    "",
-                    "   Elindeki bloğa sağ tık: ÇARK döndürür, TİLKİ şekil değiştirir.",
+                    "   [Esc] duraklat      [L] dil      [F2] nadirlik defteri",
+                    "   [1-9] joker kullan      [A] markete geç      [C] devam et (uzatma)",
+                    "   Elindeki bloğa sağ tık: döndürür ya da şeklini değiştirir.",
                     "   Çekme destesine tıklayarak bütün kartlarına bakabilirsin.",
                     "",
-                    "DEBUG TUŞLARI",
-                    "   [R] yeni oyun    [D] deste    [S] eli yenile    [B] bonus kart",
-                    "   [J] joker ver    [P] güç ver    [K] son jokeri sat"
+                    "   Debug: [R] yeni oyun  [D] deste  [S] eli yenile  [B] bonus kart",
+                    "          [J] joker ver  [P] güç ver  [K] son jokeri sat"
                 }
             };
         }

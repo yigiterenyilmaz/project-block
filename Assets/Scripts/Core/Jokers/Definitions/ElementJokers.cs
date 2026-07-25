@@ -34,10 +34,10 @@ namespace ProjectBlock.Core
             : base("midas", "Midas")
         {
             SetDescription(
-                "Holding a gold block in hand (bonus hand included) also earns its bonus, "
-                    + "and every gold cube on the board is worth more.",
-                "Altın bloğu elinde tutmak da bonusu için yeterlidir (bonus el dahil), "
-                    + "ayrıca tahtadaki her altın küp daha çok puan verir.");
+                "Gold blocks pay their bonus in your hand too (bonus hand included), "
+                    + "and every gold cube is worth more.",
+                "Altın bloklar elindeyken de bonus verir (bonus el dahil) "
+                    + "ve her altın küp daha çok puan kazandırır.");
             BaseSellValue = 60;
         }
 
