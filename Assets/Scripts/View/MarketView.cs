@@ -26,7 +26,17 @@ namespace ProjectBlock.View
 
         private static readonly Vector2 Center = new Vector2(0f, -0.2f);
 
-        private static readonly Color BackdropColor = new Color(0.05f, 0.06f, 0.08f, 0.93f);
+        /// <summary>Fully opaque: the market is a screen of its own, and the board showing
+        /// through it made the offers hard to read.</summary>
+        private static readonly Color BackdropColor = new Color(0.05f, 0.06f, 0.08f, 1f);
+
+        /// <summary>The border drawn around the whole panel. Distinct from FrameColor, which
+        /// belongs to the individual offer tiles.</summary>
+        private static readonly Color PanelFrameColor = new Color(0.30f, 0.34f, 0.44f);
+
+        /// <summary>How far the frame sticks out past the backdrop on every side.</summary>
+        private const float PanelBorder = 0.11f;
+
         private static readonly Color FrameColor = new Color(0.16f, 0.17f, 0.21f);
         private static readonly Color AffordablePriceColor = new Color(1f, 0.92f, 0.45f);
         private static readonly Color TooExpensiveColor = new Color(1f, 0.45f, 0.4f);
@@ -101,9 +111,14 @@ namespace ProjectBlock.View
 
             // The backdrop grows downward by RerollExtra so the reroll button has room under
             // the last offer row while the title stays where it was at the top.
-            ViewUtil.MakeRect(transform, "Backdrop", new Vector2(Center.x, Center.y - RerollExtra * 0.5f),
-                new Vector2(Mathf.Max(maxSpan + CardVisual.BodyWidth + 1.4f, 6f),
-                    rowOffers.Count * RowPitch + 2.2f + RerollExtra), BackdropColor, 33);
+            var panelCenter = new Vector2(Center.x, Center.y - RerollExtra * 0.5f);
+            var panelSize = new Vector2(Mathf.Max(maxSpan + CardVisual.BodyWidth + 1.4f, 6f),
+                rowOffers.Count * RowPitch + 2.2f + RerollExtra);
+            // Frame first and one sorting step further back, so all that shows of it is the
+            // margin around the opaque backdrop - which is exactly the border.
+            ViewUtil.MakeRect(transform, "PanelFrame", panelCenter,
+                panelSize + new Vector2(PanelBorder * 2f, PanelBorder * 2f), PanelFrameColor, 32);
+            ViewUtil.MakeRect(transform, "Backdrop", panelCenter, panelSize, BackdropColor, 33);
             float titleY = topRowY + HeaderOffset + 0.95f;
             ViewUtil.MakeText3D(transform, "Title", new Vector2(Center.x, titleY), "MARKET",
                 60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
