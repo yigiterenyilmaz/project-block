@@ -15,15 +15,22 @@ namespace ProjectBlock.View
     /// <summary>Renders and hit-tests the market offers.</summary>
     public sealed class MarketView : MonoBehaviour
     {
-        private const float OfferSpacing = 2.2f;
+        private const float OfferSpacing = 2.5f;
 
         /// <summary>Vertical distance between two section rows. Leaves room under each row's
-        /// prices for that section's own reroll button.</summary>
-        private const float RowPitch = 3.2f;
+        /// prices for that section's own reroll button, plus air between sections.</summary>
+        private const float RowPitch = 3.9f;
 
         /// <summary>Section header above a row's tiles / price label below them.</summary>
-        private const float HeaderOffset = 1.15f;
-        private const float PriceOffset = 1.2f;
+        private const float HeaderOffset = 1.4f;
+        private const float PriceOffset = 1.35f;
+
+        /// <summary>Reroll button, below the row's prices.</summary>
+        private const float RerollOffset = 0.78f;
+
+        /// <summary>Backdrop height reserved at the TOP for the title, the balance and the
+        /// sell hint.</summary>
+        private const float HeaderExtra = 2.8f;
 
         private static readonly Vector2 Center = new Vector2(0f, -0.2f);
 
@@ -54,7 +61,7 @@ namespace ProjectBlock.View
 
         /// <summary>Extra backdrop height reserved at the bottom for the last row's reroll
         /// button and the prompt line under it.</summary>
-        private const float RerollExtra = 1.0f;
+        private const float RerollExtra = 1.4f;
 
         /// <summary>Joker and power tiles are WIDER than a block card, because they carry text
         /// rather than a shape preview. Widening rather than shrinking the font is what lets the
@@ -144,8 +151,8 @@ namespace ProjectBlock.View
             // Widest tile kind decides the margin, or the joker/power tiles would poke out of
             // the panel now that they are wider than a block card.
             float widestTile = Mathf.Max(CardVisual.BodyWidth, NamedTileWidth);
-            var panelSize = new Vector2(Mathf.Max(maxSpan + widestTile + 1.4f, 6f),
-                rowOffers.Count * RowPitch + 2.2f + RerollExtra);
+            var panelSize = new Vector2(Mathf.Max(maxSpan + widestTile + 1.8f, 6f),
+                rowOffers.Count * RowPitch + HeaderExtra + RerollExtra);
             // Frame first and one sorting step further back, so all that shows of it is the
             // margin around the opaque backdrop - which is exactly the border.
             ViewUtil.MakeRect(transform, "PanelFrame", panelCenter,
@@ -156,10 +163,10 @@ namespace ProjectBlock.View
                 60, 0.07f, Color.white, 38, TextAnchor.MiddleCenter);
             // What you have to spend. The shelf shows prices everywhere and used to leave the
             // player to work their balance out from the HUD dump.
-            ViewUtil.MakeText3D(transform, "Balance", new Vector2(Center.x, titleY - 0.40f),
+            ViewUtil.MakeText3D(transform, "Balance", new Vector2(Center.x, titleY - 0.52f),
                 Loc.Pick("you have ", "paran: ") + session.TotalScore,
                 90, 0.026f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, titleY - 0.72f),
+            ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, titleY - 0.98f),
                 Loc.Pick(
                     "click a joker or a power to sell it  -  click the deck pile to sell cards",
                     "satmak için jokere veya güce tıkla  -  kart satmak için desteye tıkla"),
@@ -247,8 +254,8 @@ namespace ProjectBlock.View
                 float rowY = topRowY - r * RowPitch;
                 var button = new SectionButton();
                 button.Kind = rowKinds[r];
-                button.Center = new Vector2(Center.x, rowY - PriceOffset - 0.55f);
-                button.Half = new Vector2(1.25f, 0.27f);
+                button.Center = new Vector2(Center.x, rowY - PriceOffset - RerollOffset);
+                button.Half = new Vector2(1.3f, 0.3f);
                 rerollButtons.Add(button);
                 ViewUtil.MakeRect(transform, "Reroll_" + r, button.Center, button.Half * 2f,
                     canReroll ? RerollButtonColor : RerollButtonDisabledColor, 34);
@@ -263,7 +270,7 @@ namespace ProjectBlock.View
             // space, so the two simply printed on top of each other.
             float bottomRowY = topRowY - (rowOffers.Count - 1) * RowPitch;
             ViewUtil.MakeText3D(transform, "Prompt",
-                new Vector2(Center.x, bottomRowY - PriceOffset - 1.15f),
+                new Vector2(Center.x, bottomRowY - PriceOffset - RerollOffset - 0.75f),
                 Loc.Pick("click a block to add it to your deck    -    [N] start round ",
                         "desteye katmak için bloğa tıkla    -    [N] raunt başlat: ")
                     + (session.RoundNumber + 1),
@@ -291,9 +298,14 @@ namespace ProjectBlock.View
                 return;
             }
             const float Margin = 0.94f;
+            // Scales UP as well as down. Without that, spacing and readability fight each other:
+            // every bit of breathing room added to the layout would come straight out of the
+            // text size. Filling the available space means the spacing below is purely a
+            // question of PROPORTION, and the panel is always as large as the window allows.
+            const float MaxScale = 2.2f;
             float halfHeight = cam.orthographicSize * Margin;
             float halfWidth = halfHeight * cam.aspect;
-            float scale = Mathf.Min(1f,
+            float scale = Mathf.Min(MaxScale,
                 Mathf.Min(halfHeight / (panelSize.y * 0.5f), halfWidth / (panelSize.x * 0.5f)));
             transform.localScale = new Vector3(scale, scale, 1f);
             // Centre the panel on the camera, so shrinking never parks it off to one side.
