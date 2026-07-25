@@ -102,6 +102,28 @@ namespace ProjectBlock.View
 
         private readonly List<SectionButton> rerollButtons = new List<SectionButton>();
 
+        /// <summary>Index-aligned with the offers: whether a tile is already sold, and whether
+        /// the player can afford it. The hover outline reads both, so it never lights up an
+        /// offer that a click would do nothing with, and it warns before the click when the
+        /// price is out of reach.</summary>
+        private readonly List<bool> offerSold = new List<bool>();
+        private readonly List<bool> offerAffordable = new List<bool>();
+
+        /// <summary>Whether the shared reroll price is affordable, cached at build time.</summary>
+        private bool rerollAffordable;
+
+        /// <summary>The hover outline: four thin edges reused every frame. An OUTLINE rather
+        /// than a tint because the tiles are built from many pieces at several sorting orders -
+        /// a frame around them never has to know what it is framing, and never covers it.</summary>
+        private readonly SpriteRenderer[] hoverEdges = new SpriteRenderer[4];
+
+        private static readonly Color HoverColor = new Color(1f, 0.92f, 0.45f);
+        private static readonly Color HoverBlockedColor = new Color(1f, 0.45f, 0.4f);
+
+        /// <summary>Thickness of the hover outline and how far it stands off the tile.</summary>
+        private const float HoverEdge = 0.075f;
+        private const float HoverInset = 0.13f;
+
         /// <summary>(Re)builds the market display as stacked section ROWS - BLOCKS, JOKERS,
         /// POWERS - each row horizontally centered with its header above it and the prices
         /// below. Rows keep the screen narrow no matter how many offers are stocked.</summary>
@@ -138,6 +160,8 @@ namespace ProjectBlock.View
             {
                 offerCenters.Add(Vector2.zero);
                 offerHalfWidths.Add(CardVisual.BodyWidth * 0.5f);
+                offerSold.Add(offers[i].Sold);
+                offerAffordable.Add(session.TotalScore >= offers[i].Price);
             }
 
             float maxSpan = 0f;
@@ -271,6 +295,7 @@ namespace ProjectBlock.View
             // The price is shared across sections, so it escalates however you spend it.
             long rerollCost = session.NextRerollCost;
             bool canReroll = session.TotalScore >= rerollCost;
+            rerollAffordable = canReroll;
             for (int r = 0; r < rowOffers.Count; r++)
             {
                 float rowY = topRowY - r * RowPitch;
@@ -303,6 +328,7 @@ namespace ProjectBlock.View
                     + (session.RoundNumber + 1),
                 90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
+            BuildHoverOutline();
             FitToCamera(panelCenter, panelSize);
         }
 
@@ -386,7 +412,15 @@ namespace ProjectBlock.View
             offerCenters.Clear();
             offerHalfWidths.Clear();
             offerRarities.Clear();
+            offerSold.Clear();
+            offerAffordable.Clear();
             rerollButtons.Clear();
+            // The outline's objects go with every other child below, so drop the references
+            // rather than leave four destroyed renderers behind.
+            for (int i = 0; i < hoverEdges.Length; i++)
+            {
+                hoverEdges[i] = null;
+            }
             // Undo the fit so a stale scale cannot survive into the next Show.
             transform.localScale = Vector3.one;
             transform.position = Vector3.zero;
@@ -421,6 +455,98 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Offer index under a world point, or -1.</summary>
+        /// <summary>Creates the four outline edges, hidden. Sorting order 39 puts them above
+        /// every tile piece (36/37) and its price (38), so an outline is never half-buried by
+        /// whatever it is drawn around.</summary>
+        private void BuildHoverOutline()
+        {
+            for (int i = 0; i < hoverEdges.Length; i++)
+            {
+                hoverEdges[i] = ViewUtil.MakeRect(transform, "HoverEdge_" + i, Vector2.zero,
+                    Vector2.one, HoverColor, 39);
+                hoverEdges[i].enabled = false;
+            }
+        }
+
+        /// <summary>
+        /// Outlines whatever the mouse is over - an offer tile or a section's reroll button -
+        /// and hides the outline when it is over neither. Call it every frame while the market
+        /// is up; it only moves four existing renderers, so it never rebuilds the shelf.
+        ///
+        /// Sold offers deliberately do NOT light up: clicking one does nothing, and a highlight
+        /// that promises otherwise is worse than none.
+        /// </summary>
+        public void SetHover(Vector2 world)
+        {
+            int index = OfferAt(world);
+            if (index >= 0 && index < offerSold.Count && !offerSold[index])
+            {
+                ShowHoverOutline(offerCenters[index],
+                    new Vector2(offerHalfWidths[index], TileHeight * 0.5f),
+                    offerAffordable[index] ? HoverColor : HoverBlockedColor);
+                return;
+            }
+            Vector2 local = ToLocal(world);
+            for (int i = 0; i < rerollButtons.Count; i++)
+            {
+                SectionButton button = rerollButtons[i];
+                if (Mathf.Abs(local.x - button.Center.x) <= button.Half.x
+                    && Mathf.Abs(local.y - button.Center.y) <= button.Half.y)
+                {
+                    ShowHoverOutline(button.Center, button.Half,
+                        rerollAffordable ? HoverColor : HoverBlockedColor);
+                    return;
+                }
+            }
+            HideHoverOutline();
+        }
+
+        /// <summary>Wraps the four edges around a box, in the view's LOCAL space (the panel is
+        /// scaled to fit the camera, so world coordinates would be the wrong size).</summary>
+        private void ShowHoverOutline(Vector2 center, Vector2 half, Color color)
+        {
+            if (hoverEdges[0] == null)
+            {
+                return; // the shelf is not built (or was just hidden)
+            }
+            Vector2 outer = half + new Vector2(HoverInset, HoverInset);
+            float spanX = outer.x * 2f + HoverEdge;
+            float spanY = outer.y * 2f + HoverEdge;
+            Place(hoverEdges[0], center + new Vector2(0f, outer.y), new Vector2(spanX, HoverEdge));
+            Place(hoverEdges[1], center - new Vector2(0f, outer.y), new Vector2(spanX, HoverEdge));
+            Place(hoverEdges[2], center - new Vector2(outer.x, 0f), new Vector2(HoverEdge, spanY));
+            Place(hoverEdges[3], center + new Vector2(outer.x, 0f), new Vector2(HoverEdge, spanY));
+            for (int i = 0; i < hoverEdges.Length; i++)
+            {
+                hoverEdges[i].color = color;
+                hoverEdges[i].enabled = true;
+            }
+        }
+
+        private static void Place(SpriteRenderer edge, Vector2 center, Vector2 size)
+        {
+            edge.transform.localPosition = new Vector3(center.x, center.y, 0f);
+            edge.transform.localScale = new Vector3(size.x, size.y, 1f);
+        }
+
+        /// <summary>Drops the hover outline - the shelf is covered by a modal, or gone. Safe to
+        /// call when no market is showing.</summary>
+        public void ClearHover()
+        {
+            HideHoverOutline();
+        }
+
+        private void HideHoverOutline()
+        {
+            for (int i = 0; i < hoverEdges.Length; i++)
+            {
+                if (hoverEdges[i] != null)
+                {
+                    hoverEdges[i].enabled = false;
+                }
+            }
+        }
+
         public int OfferAt(Vector2 world)
         {
             Vector2 local = ToLocal(world);

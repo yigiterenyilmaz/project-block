@@ -25,10 +25,23 @@ namespace ProjectBlock.View
             if (draggedCard != null || deckSelect.IsOpen)
             {
                 cardLayer.SetHoveredCard(-1);
+                marketView.ClearHover();
                 HideTooltip();
                 return;
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+
+            // The market's hover outline is decided ONCE, here, before any of the modal
+            // branches below return: a picker or the deck overlay standing over the shelf must
+            // not leave a highlight glowing underneath it.
+            if (session.Phase != GamePhase.Market || grantPicker.IsOpen || deckOverlay.IsOpen)
+            {
+                marketView.ClearHover();
+            }
+            else
+            {
+                marketView.SetHover(world);
+            }
 
             if (grantPicker.IsOpen)
             {
