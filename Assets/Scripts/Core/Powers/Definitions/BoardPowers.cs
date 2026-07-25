@@ -397,4 +397,65 @@ namespace ProjectBlock.Core
             }
         }
     }
+
+    /// <summary>
+    /// "Öteki dünya" - opens a SECOND board beneath the first and plays the rest of the round
+    /// across both.
+    ///
+    /// The mirror is a CLONE of the arena as it stands the moment this is cast, so WHEN you use
+    /// it matters as much as whether you do: cast it on a clean board and you get two clean
+    /// boards, cast it on a full one and you get two full ones. It lasts until the round ends.
+    ///
+    /// The two worlds share the deck and the discard - only the hands are separate - so a turn
+    /// now costs two cards out of the same piles. A world with nowhere to play sits the turn out
+    /// rather than ending the round; only both being stuck at once loses it. Each world sweeps
+    /// for itself, and the same COLUMN exploding in both on the same turn is the pay-off.
+    ///
+    /// The round's threshold rises to match, which is the price of the second board.
+    ///
+    /// All the machinery is in RoundEngine.Mirror - this class only opens the door.
+    /// </summary>
+    public sealed class OtekiDunyaPower : Power
+    {
+        /// <summary>What the round's score threshold is multiplied by while both worlds run.</summary>
+        public double ThresholdFactor = 1.5;
+
+        /// <summary>Bonus per column that explodes in BOTH worlds on the same turn.</summary>
+        public int MirroredColumnBonus = 90;
+
+        public OtekiDunyaPower()
+            : base("oteki_dunya", "Öteki Dünya")
+        {
+            SetDescription(
+                "Clones the board and opens the copy beneath it. From then on a turn is one card "
+                    + "in each world, drawn from the same deck. Explode the same column in both "
+                    + "worlds on one turn for a big bonus. The round's threshold rises by half.",
+                "Oyun alanını klonlar ve kopyasını altına açar. Bundan sonra bir tur, aynı "
+                    + "desteden çekilen iki karttır - her dünyaya bir tane. Aynı sütunu iki "
+                    + "dünyada birden patlatırsan büyük bonus alırsın. Rauntun eşiği yarı "
+                    + "yarıya yükselir.");
+            BaseSellValue = 95;
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return Loc.Pick("threshold x" + ThresholdFactor, "eşik x" + ThresholdFactor);
+            }
+        }
+
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            // Once per round, and only while there is still a round left to reshape.
+            return ctx.Round != null && !ctx.Round.HasMirrorWorld
+                && ctx.Round.Status == RoundStatus.InProgress;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            return ctx.Round.OpenMirrorWorld(ThresholdFactor, MirroredColumnBonus,
+                ctx.Rules.HandSize);
+        }
+    }
 }

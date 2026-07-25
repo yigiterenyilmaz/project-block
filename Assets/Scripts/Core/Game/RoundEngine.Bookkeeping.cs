@@ -225,6 +225,12 @@ namespace ProjectBlock.Core
                     return;
                 }
             }
+            // "Öteki dünya": neither world can end the round on its own. A world with nowhere to
+            // play sits the turn out, so the round is only lost when BOTH are stuck.
+            if (MirrorHasAnyMove)
+            {
+                return;
+            }
             // DEAD END. Before the round ends, effects that can open a gap get their turn:
             // first jokers, automatically ("Deprem"); then, if the player holds a rescue
             // power ("Kentsel Dönüşüm"), the round PAUSES in AwaitingRescue so they can use

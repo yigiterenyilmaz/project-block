@@ -113,6 +113,13 @@ public static class JokerTests
         KrediKarti_BossRoundWithOpenDebtEndsTheRun();
         KrediKarti_ADebtFreeBossRoundIsFine();
         KrediKarti_CannotBeSoldWhileInDebt();
+        OtekiDunya_ClonesTheBoardAndRaisesTheBar();
+        OtekiDunya_TheTwoWorldsShareOneDeck();
+        OtekiDunya_OneTurnIsACardInEachWorld();
+        OtekiDunya_MatchingColumnsPay();
+        OtekiDunya_AStuckWorldSitsOutInsteadOfLosing();
+        OtekiDunya_EachWorldSweepsForItself();
+        OtekiDunya_LeavesAnOrdinaryRoundAlone();
         Devre_TracesAMonotoneEdgeToEdgePath();
         Devre_WaitsForARandomTurnAndThenStays();
         Devre_BreakingItExplodesThePathAndPays();
@@ -3474,6 +3481,262 @@ public static class JokerTests
             Check(!session.Jokers.CanSell(card),
                 "still short of the full amount, so still locked", "debt " + session.Debt);
         }
+    }
+
+    /// <summary>Plays one dual-world turn: books the mirror's half, then plays the main world.
+    /// Returns the report, or null if neither world could act.</summary>
+    private static TurnReport PlayMirrorTurn(GameSession session)
+    {
+        RoundEngine round = session.CurrentRound;
+        for (int i = 0; i < round.MirrorHand.Count; i++)
+        {
+            BlockCard card = round.MirrorHand[i];
+            if (round.IsFrozen(card.Id)) { continue; }
+            List<GridPos> origins = round.GetValidMirrorOrigins(card);
+            if (origins.Count > 0)
+            {
+                round.StageMirrorPlay(i, origins[0]);
+                break;
+            }
+        }
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            BlockCard card = round.Hand[i];
+            if (round.IsFrozen(card.Id)) { continue; }
+            List<GridPos> origins = round.GetValidOrigins(card.Shape);
+            if (origins.Count > 0)
+            {
+                return round.PlayFromHand(i, origins[0]);
+            }
+        }
+        // The main world is stuck: the mirror plays alone.
+        return round.MirrorHasStagedPlay ? round.PlayMirrorOnly() : null;
+    }
+
+    private static void OtekiDunya_ClonesTheBoardAndRaisesTheBar()
+    {
+        Section("öteki dünya / clones the arena and raises the bar");
+        var session = NewSession(8000, 5, 400, 40, 3);
+        RoundEngine round = session.CurrentRound;
+        var power = (OtekiDunyaPower)session.Powers.Add(new OtekiDunyaPower());
+        session.Powers.DispatchRoundStarted(round);
+
+        Check(!round.HasMirrorWorld, "an ordinary round has one world");
+        Check(round.MirrorBoard == null && round.MirrorHand == null, "and no mirror state at all");
+        int plainBar = round.ScoreThreshold;
+
+        // Build something first, so the clone genuinely copies a board with cubes on it.
+        PlayTurns(session, 2);
+        int occupiedBefore = round.Board.OccupiedCount;
+        Check(occupiedBefore > 0, "there are cubes to clone", "occupied " + occupiedBefore);
+
+        Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.None), "the power ran");
+        Check(round.HasMirrorWorld, "the second world is open");
+        Check(round.MirrorBoard.Width == round.Board.Width
+            && round.MirrorBoard.Height == round.Board.Height, "same size as the original");
+        Check(round.MirrorBoard.OccupiedCount == occupiedBefore,
+            "and an exact copy of what was on it",
+            occupiedBefore + " vs " + round.MirrorBoard.OccupiedCount);
+        Check(round.MirrorHand.Count > 0, "the mirror was dealt its own hand",
+            "hand " + round.MirrorHand.Count);
+
+        Check(round.ScoreThreshold > plainBar, "the bar went up",
+            plainBar + " -> " + round.ScoreThreshold);
+        Check(round.ScoreThreshold == (int)System.Math.Ceiling(plainBar * power.ThresholdFactor),
+            "by exactly the power's factor, rounded up", "" + round.ScoreThreshold);
+
+        Check(!session.Powers.CanUse(power.InstanceId, ActivationTarget.None),
+            "and it cannot be opened twice");
+    }
+
+    private static void OtekiDunya_TheTwoWorldsShareOneDeck()
+    {
+        Section("öteki dünya / separate hands, one deck");
+        var session = NewSession(8001, 5, 1000000, 40, 3);
+        RoundEngine round = session.CurrentRound;
+        var power = (OtekiDunyaPower)session.Powers.Add(new OtekiDunyaPower());
+        session.Powers.DispatchRoundStarted(round);
+        int drawBefore = round.Deck.DrawCount;
+        session.Powers.TryUse(power.InstanceId, ActivationTarget.None);
+
+        Check(round.Deck.DrawCount == drawBefore - round.MirrorHand.Count,
+            "the mirror's hand came out of the SHARED draw pile",
+            drawBefore + " -> " + round.Deck.DrawCount);
+
+        // No card is in both hands at once.
+        bool overlap = false;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            for (int j = 0; j < round.MirrorHand.Count; j++)
+            {
+                if (round.Hand[i].Id == round.MirrorHand[j].Id) { overlap = true; }
+            }
+        }
+        Check(!overlap, "the two hands never hold the same card");
+
+        // A dual turn spends two cards from the one deck.
+        int totalBefore = round.Deck.DrawCount + round.Deck.DiscardCount;
+        PlayMirrorTurn(session);
+        int totalAfter = round.Deck.DrawCount + round.Deck.DiscardCount
+            + round.Hand.Count + round.MirrorHand.Count;
+        Check(totalAfter >= totalBefore, "cards are conserved across both worlds",
+            totalBefore + " -> " + totalAfter);
+    }
+
+    private static void OtekiDunya_OneTurnIsACardInEachWorld()
+    {
+        Section("öteki dünya / one turn is a card in each world");
+        var session = NewSession(8002, 5, 1000000, 40, 3);
+        RoundEngine round = session.CurrentRound;
+        var power = (OtekiDunyaPower)session.Powers.Add(new OtekiDunyaPower());
+        session.Powers.DispatchRoundStarted(round);
+        session.Powers.TryUse(power.InstanceId, ActivationTarget.None);
+
+        Check(round.MirrorHasAnyMove, "the mirror has somewhere to play");
+        Check(!round.MirrorReadyForTurn, "and until it books its half the turn is not ready");
+
+        BlockCard mirrorCard = round.MirrorHand[0];
+        List<GridPos> origins = round.GetValidMirrorOrigins(mirrorCard);
+        Check(origins.Count > 0, "the mirror card has legal origins");
+        Check(round.StageMirrorPlay(0, origins[0]), "booking the mirror's half works");
+        Check(round.MirrorReadyForTurn, "now the turn is ready");
+        Check(round.StagedMirrorCard == mirrorCard, "and the booking is the card we chose");
+
+        int mirrorOccupiedBefore = round.MirrorBoard.OccupiedCount;
+        int mainOccupiedBefore = round.Board.OccupiedCount;
+        TurnReport report = null;
+        for (int i = 0; i < round.Hand.Count && report == null; i++)
+        {
+            List<GridPos> mainOrigins = round.GetValidOrigins(round.Hand[i].Shape);
+            if (mainOrigins.Count > 0) { report = round.PlayFromHand(i, mainOrigins[0]); }
+        }
+        Check(report != null, "the main world played");
+        Check(report.MirrorCard == mirrorCard, "and the report names the mirror's card too");
+        Check(report.MirrorPlacedCells.Count > 0, "the mirror's block really landed",
+            "cells " + report.MirrorPlacedCells.Count);
+        Check(round.MirrorBoard.OccupiedCount > mirrorOccupiedBefore
+            || report.MirrorExplodedCells.Count > 0, "the mirror board changed");
+        Check(round.Board.OccupiedCount != mainOccupiedBefore
+            || report.CubesExploded > 0, "so did the main board");
+        Check(!round.MirrorHasStagedPlay, "and the booking was consumed");
+        Check(round.MirrorHand.Count > 0, "the mirror hand refilled from the shared deck",
+            "hand " + round.MirrorHand.Count);
+    }
+
+    private static void OtekiDunya_MatchingColumnsPay()
+    {
+        Section("öteki dünya / the same column in both worlds pays a bonus");
+        var session = NewSession(8003, 4, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (OtekiDunyaPower)session.Powers.Add(new OtekiDunyaPower());
+        session.Powers.DispatchRoundStarted(round);
+        session.Powers.TryUse(power.InstanceId, ActivationTarget.None);
+
+        // Fill column 1 in BOTH worlds except its bottom cell, so a single-cube placement in
+        // each completes the same column on the same turn.
+        int column = round.Board.MinX + 1;
+        for (int y = round.Board.MinY + 1; y < round.Board.MinY + round.Board.Height; y++)
+        {
+            round.Board.SetCubeAt(new GridPos(column, y), new Cube(CubeKind.Normal, 9600));
+            round.MirrorBoard.SetCubeAt(new GridPos(column, y), new Cube(CubeKind.Normal, 9601));
+        }
+        var hole = new GridPos(column, round.Board.MinY);
+
+        Check(round.StageMirrorPlay(0, hole), "the mirror closes its column");
+        TurnReport report = round.PlayFromHand(0, hole);
+        Check(report.ExplodedColumns.Count > 0, "the main world's column exploded",
+            "cols " + report.ExplodedColumns.Count);
+        Check(report.MirrorExplodedColumns.Count > 0, "and the mirror's did too",
+            "cols " + report.MirrorExplodedColumns.Count);
+        Check(report.MirroredColumns.Count > 0, "the match was spotted",
+            "matched " + report.MirroredColumns.Count);
+        Check(report.MirroredColumns[0] == column - round.Board.MinX,
+            "and it is the column we set up", "" + report.MirroredColumns[0]);
+        Check(report.Score.BaseLines >= power.MirroredColumnBonus,
+            "the bonus is in the turn's score", "lines " + report.Score.BaseLines);
+    }
+
+    private static void OtekiDunya_AStuckWorldSitsOutInsteadOfLosing()
+    {
+        Section("öteki dünya / a stuck world sits the turn out, it does not end the round");
+        var session = NewSession(8004, 4, 1000000, 40, 3);
+        RoundEngine round = session.CurrentRound;
+        var power = (OtekiDunyaPower)session.Powers.Add(new OtekiDunyaPower());
+        session.Powers.DispatchRoundStarted(round);
+        session.Powers.TryUse(power.InstanceId, ActivationTarget.None);
+
+        // Wall the MIRROR off completely: it can play nothing at all.
+        foreach (GridPos cell in AllPlayableCells(round.MirrorBoard))
+        {
+            if (!round.MirrorBoard.GetCube(cell).HasValue)
+            {
+                round.MirrorBoard.SetCubeAt(cell, new Cube(CubeKind.Obsidian, 9602));
+            }
+        }
+        Check(!round.MirrorHasAnyMove, "the mirror is completely stuck");
+        Check(round.MirrorReadyForTurn, "so it no longer holds the turn up");
+        Check(round.Status == RoundStatus.InProgress, "and the round is still running");
+
+        TurnReport report = PlayMirrorTurn(session);
+        Check(report != null, "the turn still resolved");
+        Check(report.MirrorCard == null, "with the mirror sitting it out");
+        Check(round.Status == RoundStatus.InProgress || round.Status == RoundStatus.AwaitingAdvanceDecision,
+            "and the round did not end because one world was stuck", "status " + round.Status);
+    }
+
+    private static void OtekiDunya_EachWorldSweepsForItself()
+    {
+        Section("öteki dünya / each world sweeps for itself");
+        var session = NewSession(8005, 4, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (OtekiDunyaPower)session.Powers.Add(new OtekiDunyaPower());
+        session.Powers.DispatchRoundStarted(round);
+        session.Powers.TryUse(power.InstanceId, ActivationTarget.None);
+
+        // The MIRROR alone is one cube short of a full row; the main board is left empty, so
+        // only the mirror can sweep this turn.
+        int row = round.MirrorBoard.MinY;
+        for (int x = round.MirrorBoard.MinX + 1;
+            x < round.MirrorBoard.MinX + round.MirrorBoard.Width; x++)
+        {
+            round.MirrorBoard.SetCubeAt(new GridPos(x, row), new Cube(CubeKind.Normal, 9603));
+        }
+        var hole = new GridPos(round.MirrorBoard.MinX, row);
+        Check(round.StageMirrorPlay(0, hole), "the mirror closes its row");
+
+        int sweepsBefore = round.CleanSweepCount;
+        TurnReport report = null;
+        for (int i = 0; i < round.Hand.Count && report == null; i++)
+        {
+            List<GridPos> origins = round.GetValidOrigins(round.Hand[i].Shape);
+            if (origins.Count > 0) { report = round.PlayFromHand(i, origins[0]); }
+        }
+        Check(report != null, "the turn resolved");
+        Check(report.MirrorCleanSweep, "the mirror swept its own board");
+        Check(!report.CleanSweep, "the main world did not - each world sweeps for itself");
+        Check(round.CleanSweepCount == sweepsBefore + 1, "and it counted once",
+            sweepsBefore + " -> " + round.CleanSweepCount);
+        Check(round.MirrorBoard.OccupiedCount == 0, "the mirror board really is empty");
+    }
+
+    private static void OtekiDunya_LeavesAnOrdinaryRoundAlone()
+    {
+        Section("öteki dünya / an unopened round behaves exactly as before");
+        var session = NewSession(8006, 6, 1000000, 40, 3);
+        RoundEngine round = session.CurrentRound;
+        session.Powers.Add(new OtekiDunyaPower()); // held but never used
+        session.Powers.DispatchRoundStarted(round);
+
+        Check(!round.HasMirrorWorld, "no mirror");
+        Check(round.MirrorReadyForTurn, "the turn is never held up waiting for one");
+        Check(!round.MirrorHasAnyMove, "and the mirror reports no moves");
+        Check(round.ScoreThreshold == round.Config.ScoreThreshold, "the bar is untouched");
+
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "a plain turn still resolves");
+        Check(report.MirrorCard == null && report.MirrorPlacedCells.Count == 0,
+            "and reports nothing about a second world");
+        Check(report.MirroredColumns.Count == 0, "no column match to pay");
     }
 
     private static void Devre_TracesAMonotoneEdgeToEdgePath()

@@ -20,6 +20,7 @@ namespace ProjectBlock.Core
             Register(() => new EkoPower());
             Register(() => new CercevePower());
             Register(() => new BuldozerPower());
+            Register(() => new OtekiDunyaPower());
             Register(() => new KlonPower());
             Register(() => new BuyutecPower());
             Register(() => new TransferPower());

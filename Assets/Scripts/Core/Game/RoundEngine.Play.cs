@@ -108,6 +108,28 @@ namespace ProjectBlock.Core
             return ResolvePlacement(card, origin, false, BonusPlayOutcome.ExpireFromRound);
         }
 
+        /// <summary>
+        /// "Öteki dünya": resolves a turn in which the MAIN world sits out - it has nowhere left
+        /// to put anything - and only the mirror plays. Refused unless that is genuinely the
+        /// case, so it can never be used to skip a turn the main world could have played.
+        /// The mirror's half must already be staged.
+        /// </summary>
+        public TurnReport PlayMirrorOnly()
+        {
+            EnsurePlacingAllowed();
+            if (!HasMirrorWorld || !MirrorHasStagedPlay)
+            {
+                throw new InvalidOperationException("No staged mirror play to resolve.");
+            }
+            if (MainWorldHasAnyMove)
+            {
+                throw new InvalidOperationException(
+                    "The main world can still play - it may not sit the turn out.");
+            }
+            return ResolvePlacement(null, default(GridPos), false,
+                BonusPlayOutcome.ExpireFromRound);
+        }
+
         /// <summary>Plays a bonus-hand card. Counts as the turn's placement (confirmed rule).</summary>
         public TurnReport PlayFromBonus(int bonusIndex, GridPos origin)
         {

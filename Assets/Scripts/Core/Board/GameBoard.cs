@@ -285,6 +285,49 @@ namespace ProjectBlock.Core
             return board;
         }
 
+        /// <summary>
+        /// An exact copy of a board: same size, same origin, same holes, same eaten cells, same
+        /// cubes, same ghost traces. "Öteki dünya" clones the arena the moment it is cast, so the
+        /// mirror world starts as whatever the player had built - which is why WHEN you cast it
+        /// matters as much as whether you do.
+        ///
+        /// Placement seals are NOT copied: a seal belongs to the boss's one chosen cell on one
+        /// board, and duplicating it would seal a cell the boss never picked.
+        /// </summary>
+        public static GameBoard CreateClone(GameBoard source)
+        {
+            var mask = new bool[source.Width, source.Height];
+            var deadMask = new bool[source.Width, source.Height];
+            for (int x = 0; x < source.Width; x++)
+            {
+                for (int y = 0; y < source.Height; y++)
+                {
+                    mask[x, y] = source.playable[x, y];
+                    deadMask[x, y] = source.dead[x, y];
+                }
+            }
+            var clone = new GameBoard(source.MinX, source.MinY, source.Width, source.Height,
+                mask, deadMask, source.PlayableCellCount, source.DeadCellCount);
+            for (int x = 0; x < source.Width; x++)
+            {
+                for (int y = 0; y < source.Height; y++)
+                {
+                    Cube? cube = source.cells[x, y];
+                    if (cube.HasValue)
+                    {
+                        clone.cells[x, y] = cube.Value;
+                        clone.OccupiedCount++;
+                    }
+                }
+            }
+            foreach (KeyValuePair<GridPos, Cube> ghost in source.outsideCubes)
+            {
+                clone.outsideCubes[ghost.Key] = ghost.Value;
+            }
+            clone.IgnoreElements = source.IgnoreElements;
+            return clone;
+        }
+
         /// <summary>True for a real play cell. On a plain rectangle this is just a bounds
         /// check; on a grown board it also rejects the holes in the bounding box.</summary>
         public bool IsInside(GridPos pos)

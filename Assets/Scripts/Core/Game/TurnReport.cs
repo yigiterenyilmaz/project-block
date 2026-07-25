@@ -104,6 +104,25 @@ namespace ProjectBlock.Core
 
         public RoundStatus StatusAfter { get; internal set; }
 
+        // ---- the SECOND world ("Öteki dünya"). All empty/null on an ordinary round. ----
+
+        /// <summary>The card the mirror world played this turn, or null (no mirror, or the
+        /// mirror had nowhere to put anything and sat the turn out).</summary>
+        public BlockCard MirrorCard { get; internal set; }
+
+        public IReadOnlyList<GridPos> MirrorPlacedCells { get; internal set; }
+        public IReadOnlyList<int> MirrorExplodedRows { get; internal set; }
+        public IReadOnlyList<int> MirrorExplodedColumns { get; internal set; }
+        public IReadOnlyList<GridPos> MirrorExplodedCells { get; internal set; }
+
+        /// <summary>The mirror world emptied its own board this turn. Each world sweeps for
+        /// itself, so this is independent of CleanSweep.</summary>
+        public bool MirrorCleanSweep { get; internal set; }
+
+        /// <summary>Columns that exploded in BOTH worlds this turn - the pay-off "Öteki dünya"
+        /// is built around, and what the View celebrates.</summary>
+        public IReadOnlyList<int> MirroredColumns { get; internal set; }
+
         internal TurnReport()
         {
             PlacedCells = Array.Empty<GridPos>();
@@ -112,6 +131,11 @@ namespace ProjectBlock.Core
             WaterFallFrames = Array.Empty<IReadOnlyList<WaterMove>>();
             DestroyedCubes = Array.Empty<DestroyedCube>();
             CardsFullyDestroyed = Array.Empty<int>();
+            MirrorPlacedCells = Array.Empty<GridPos>();
+            MirrorExplodedRows = Array.Empty<int>();
+            MirrorExplodedColumns = Array.Empty<int>();
+            MirrorExplodedCells = Array.Empty<GridPos>();
+            MirroredColumns = Array.Empty<int>();
         }
     }
 }

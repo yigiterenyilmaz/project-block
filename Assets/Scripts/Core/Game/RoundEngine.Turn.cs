@@ -50,13 +50,18 @@ namespace ProjectBlock.Core
             // 1. place + score. A NEGATIVE block places nothing - it erases what it covers
             // and goes with it - so it is resolved after the placement score below, which
             // would otherwise overwrite what the erasure earns.
-            bool negative = Has(card, BlockElement.Negative);
-            if (!negative)
+            //
+            // card is NULL only in one case: "Öteki dünya" is open, the main world has nowhere
+            // left to put anything, and the mirror world is playing this turn alone. Everything
+            // that belongs to the main card is skipped; the rest of the turn runs unchanged.
+            bool mainWorldSitsOut = card == null;
+            bool negative = !mainWorldSitsOut && Has(card, BlockElement.Negative);
+            if (!mainWorldSitsOut && !negative)
             {
                 report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
                     Has(card, BlockElement.Ghost));
             }
-            if (Has(card, BlockElement.Dynamite))
+            if (!mainWorldSitsOut && Has(card, BlockElement.Dynamite))
             {
                 var state = new DynamiteState();
                 state.FullSize = report.PlacedCells.Count;
@@ -64,19 +69,26 @@ namespace ProjectBlock.Core
                 state.PlacementTurn = TurnNumber;
                 dynamiteBlocks[card.Id] = state;
             }
-            breakdown.BasePlacement = scorer.ScorePlacement(report.PlacedCells.Count);
+            // 1b. the mirror world's half of the turn lands with the main one, so both worlds'
+            //     placements are in before anything explodes.
+            ApplyStagedMirrorPlacement(report);
+            breakdown.BasePlacement = scorer.ScorePlacement(
+                report.PlacedCells.Count + report.MirrorPlacedCells.Count);
             if (Rules.RetroMode)
             {
                 // retro pays a flat bonus for every placement (ScoringConfig.RetroPlacementBonus)
                 breakdown.BasePlacement += scorer.RetroPlacementBonus;
             }
-            if (negative)
+            if (negative && !mainWorldSitsOut)
             {
                 ResolveNegativePlacement(card, origin, report, breakdown);
             }
             var waterFrames = new List<IReadOnlyList<WaterMove>>();
 
-            cardPlacedSize[card.Id] = report.PlacedCells.Count;
+            if (!mainWorldSitsOut)
+            {
+                cardPlacedSize[card.Id] = report.PlacedCells.Count;
+            }
 
             // 2. explode full lines + score (fire chains resolve inside the board).
             // WATER RULE (confirmed 2026-07-19): a freshly placed water block that completes a
@@ -164,6 +176,13 @@ namespace ProjectBlock.Core
                 ResyncSnapshot();
             }
             report.WaterFallFrames = waterFrames;
+
+            // 2.5 the SECOND world ("Öteki dünya") clears its own lines, sweeps for itself and
+            //     pays the cross-world column bonus. Here, right after the main world's own
+            //     explosion, so both clears belong to this turn and a matching column can be
+            //     seen at all. A no-op on every ordinary round.
+            ResolveMirrorExplosions(report);
+
             hooks.AfterLineExplosion(currentTurn);
 
             // Retro gravity: classic Tetris. A locked block stays exactly where it landed; when
@@ -252,7 +271,7 @@ namespace ProjectBlock.Core
                     Boss.OnBonusCardPlayed(currentTurn);
                 }
             }
-            else
+            else if (!mainWorldSitsOut)
             {
                 DisposeCard(card);
                 // 7. refill - unless a joker manages the hand itself ("İmitasyon" refills in
@@ -262,6 +281,9 @@ namespace ProjectBlock.Core
                     RefillHand();
                 }
             }
+            // The mirror tops up from the SAME piles. A short mirror hand is never a loss - a
+            // world with nothing playable simply sits out the next turn.
+            RefillMirrorHand();
 
             TickFreezes(); // a frozen card thaws after the agreed number of resolved turns
 

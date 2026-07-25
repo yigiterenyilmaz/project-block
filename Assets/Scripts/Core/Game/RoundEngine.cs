@@ -46,7 +46,17 @@ namespace ProjectBlock.Core
             get
             {
                 int threshold = Config.ScoreThreshold;
-                return Boss != null ? Boss.FilterScoreThreshold(threshold) : threshold;
+                if (Boss != null)
+                {
+                    threshold = Boss.FilterScoreThreshold(threshold);
+                }
+                if (HasMirrorWorld)
+                {
+                    // "Öteki dünya" doubles your board and raises the bar to match. Rounded UP,
+                    // so opening the second world always costs something.
+                    threshold = (int)System.Math.Ceiling(threshold * MirrorThresholdFactor);
+                }
+                return threshold;
             }
         }
 
