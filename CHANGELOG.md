@@ -12,11 +12,11 @@ everything here is unreleased and balance numbers are still placeholders.
   cast it*, so timing is the whole game: cast it clean and you get two clean boards, cast it
   full and you get two full ones. The two worlds **share the deck and the discard** — only the
   hands are separate — so a turn now costs two cards from one pile. **A turn is a card in each
-  world**: you book the mirror'''s half, then play above, and both land together. Explode the
+  world**: you book the mirror's half, then play above, and both land together. Explode the
   **same column in both worlds on one turn** for a bonus. Each world **sweeps for itself**. A
   world with nowhere to play **sits the turn out** instead of ending the round — only both being
-  stuck at once loses it ( resolves a turn with the mirror alone when the main world is
-  stuck). The round'''s threshold rises by half, which is the price of the second board.
+  stuck at once loses it (`[M]` resolves a turn with the mirror alone when the main world is the
+  stuck one). The round's threshold rises by half, which is the price of the second board.
 - **Devre (joker)** — at some point each round a winding **circuit** is traced from one edge of
   the board to the opposite one. It runs edge to edge and is monotone along that axis: it winds
   up and down freely but never doubles back. Fill every cell of it and the circuit **breaks** —
