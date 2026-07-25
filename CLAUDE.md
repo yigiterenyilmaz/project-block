@@ -29,7 +29,9 @@ Unity 6 (6000.3.6f1), 2D URP, **new Input System only**.
 - Rules that jokers/powers may bend live in mutable config objects (`RoundRules`,
   `ScoringConfig`) that the engine reads live — don't cache their values.
 - Numbers in `ScoringConfig` / `DefaultRoundProgression` / the joker fields are balance
-  placeholders; the flow around them is confirmed design.
+  placeholders; the flow around them is confirmed design. One exception: the board-size
+  table (`DefaultRoundProgression.BoardSizeBands` — rounds 0-5 on 5x5, 6-11 on 7x7, 12-15
+  on 9x9) is confirmed design, not a knob to tune.
 - Turkish design terms → code names: el = `Hand`/turn, çekme destesi = `RoundDeck.DrawPile`,
   ıskarta = discard, oyun destesi = `GameSession.OwnedCards`, raunt = round,
   temizlik = clean sweep, bonus el = bonus hand, eşik = `RoundConfig.ScoreThreshold`,

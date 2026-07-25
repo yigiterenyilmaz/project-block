@@ -7,6 +7,31 @@ tasarım soruları aşağıdadır. Koda dair tüm iddialar dosyalara karşı do�
 Sayılar (streak eşikleri, bonus miktarları, üst sınırlar) placeholder — hepsi joker sınıflarında
 public alan, serbestçe ayarlanabilir.
 
+## Güncel — oyun alanı boyutu artık sabit bir tablo (2026-07-25)
+
+Oyun alanı artık "her N roundda +1" diye büyümüyor; sabit round aralıklarında basamak
+atlıyor. Tasarımcının verdiği tablo (`DefaultRoundProgression.BoardSizeBands`, satırlar
+`BoardSizeBand` tipinde, iki uç da **dahil**):
+
+| round | oyun alanı |
+| ----- | ---------- |
+| 0–5   | 5x5        |
+| 6–11  | 7x7        |
+| 12–15 | 9x9        |
+
+Round numaraları kodda **1-tabanlı** — oynanacak bir round 0 yok, yani ilk bant pratikte
+1–5 roundlarını kapsıyor. Tablonun bittiği yerden sonrası (16+) son bandın boyutunda kalır,
+yani eğri sonda uçuruma düşmez.
+
+Tablo veri: farklı bir eğri (patron roundu, varyant) yalnızca başka bir bant dizisi verir.
+`BaseBoardSize` / `MaxBoardSize` / `GrowBoardEveryNRounds` alanları kalktı.
+
+**Boyuta bağlı jokerlerde/güçlerde bu ne oynatıyor** (hiçbiri hata değil, hepsi denge
+gözlemi): Kayıt defteri eşiği `Width*Height` olduğu için ilk bantta 36 değil 25 küp;
+Buldozer gücünün 2 sıralık bandı 5x5'te alanın %40'ı (9x9'da %22); Meydan Okuma'nın
+`max(3, satırdaki boş kare)` süresinde ilk bantta taban değer baskın; enflasyon güçlerinin
++1'i 5x5'te göreli olarak çok daha büyük.
+
 ## 0. Durum — 35 jokerin 34'ü yazıldı
 
 ### Parazit yazıldı (enes'in market kodu geldikten sonra)
@@ -1000,7 +1025,7 @@ Parazit ships last, but nothing in v1 blocks it because the two hard prerequisit
 - A run-scoped board-shape modifier owned by GameSession and injected into RoundEngine construction — the RoundEngine constructor hardcodes new GameBoard(config.BoardWidth, config.BoardHeight) with no seam for extra cells or altered dimensions
 - If 'bir blokluk yer' means cell(s) outside the rectangle: non-rectangular board support (an occupancy/validity mask) touching IsInside, CanPlace, ResolveFullLines full-line detection (what a 'full' row/column means with extra cells), IsCleanForSweep, AnyPlacementExists / GetValidOrigins loop bounds, and ToAscii — the board is rectangular in every algorithm today
 - A round-end decision step/API for choosing where the space opens (if player-chosen), fitting into the Market phase flow
-- Reconciliation with DefaultRoundProgression's own board growth (6x6 up to 10x10): a rule for what happens to previously opened cells when the base rectangle later expands over or past them
+- Reconciliation with DefaultRoundProgression's own board growth (the band table: 5x5, then 7x7, then 9x9): a rule for what happens to previously opened cells when the base rectangle later expands over or past them
 - GameSession: joker inventory subsystem (shared prerequisite)
 
 **Durum (state):** Per-run: the accumulated permanently opened extra cells (positions or a size delta), growing by one per completed round while held. Explicitly 'kalıcı', so it must survive RoundEngine replacement every round — and possibly even the joker being sold (open question).
