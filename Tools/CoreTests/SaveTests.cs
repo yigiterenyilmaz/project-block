@@ -29,6 +29,10 @@ public static class SaveTests
         RngRestoresToTheSamePosition();
         RngRestoreSurvivesMixedDraws();
         RngLogIsRunLengthEncoded();
+        EveryJokerRoundTrips();
+        EveryPowerRoundTrips();
+        EveryBossRoundTrips();
+        ContentStateCarriesRealValues();
         Console.WriteLine(failures == 0
             ? "save tests: all passed"
             : "save tests: " + failures + " FAILED");
@@ -353,6 +357,121 @@ public static class SaveTests
         CheckEqual(5000, rng.DrawCount, "5000 draws were counted");
         Check(text.Length < 200, "5000 consecutive draws compress to a tiny log (got "
             + text.Length + " chars)");
+    }
+
+    /// <summary>Saves an object's whole field state to text.</summary>
+    private static string StateOf(object instance)
+    {
+        var w = new SaveWriter();
+        ContentStateSerializer.Save(w, "s", instance);
+        return w.ToText();
+    }
+
+    /// <summary>Save -> load into a fresh instance -> save again. If the two texts match, every
+    /// field the walker writes it also reads back, for that exact type.</summary>
+    private static void RoundTripContent(object original, object fresh, string what)
+    {
+        string first = StateOf(original);
+        try
+        {
+            ContentStateSerializer.Load(new SaveReader(first), "s", fresh);
+        }
+        catch (Exception e)
+        {
+            failures++;
+            Console.WriteLine("  FAIL " + what + " threw on load: " + e.Message);
+            return;
+        }
+        CheckEqual(first, StateOf(fresh), what + " round-trips");
+    }
+
+    /// <summary>Every registered joker, so a new joker that holds an unsupported field shape
+    /// fails HERE rather than silently losing its state in a player's save.</summary>
+    private static void EveryJokerRoundTrips()
+    {
+        int checkedCount = 0;
+        foreach (JokerDefinition definition in JokerRegistry.All)
+        {
+            RoundTripContent(definition.Create(), definition.Create(), "joker " + definition.DefId);
+            checkedCount++;
+        }
+        Check(checkedCount > 30, "all jokers were round-tripped (" + checkedCount + ")");
+    }
+
+    private static void EveryPowerRoundTrips()
+    {
+        int checkedCount = 0;
+        foreach (PowerDefinition definition in PowerRegistry.All)
+        {
+            RoundTripContent(definition.Create(), definition.Create(), "power " + definition.DefId);
+            checkedCount++;
+        }
+        Check(checkedCount > 25, "all powers were round-tripped (" + checkedCount + ")");
+    }
+
+    private static void EveryBossRoundTrips()
+    {
+        int checkedCount = 0;
+        foreach (BossDefinition definition in BossRegistry.All)
+        {
+            RoundTripContent(definition.Create(), definition.Create(), "boss " + definition.DefId);
+            checkedCount++;
+        }
+        Check(checkedCount > 8, "all bosses were round-tripped (" + checkedCount + ")");
+    }
+
+    /// <summary>The round-trip above would still pass if every field were skipped, since two
+    /// fresh instances look alike. So poke real values in first and prove they travel.</summary>
+    private static void ContentStateCarriesRealValues()
+    {
+        foreach (JokerDefinition definition in JokerRegistry.All)
+        {
+            Joker original = definition.Create();
+            int poked = PokeFields(original);
+            if (poked == 0)
+            {
+                continue; // a stateless joker - nothing to prove here
+            }
+            Joker fresh = definition.Create();
+            string before = StateOf(original);
+            Check(before != StateOf(fresh), "poking changed " + definition.DefId + "'s state");
+            ContentStateSerializer.Load(new SaveReader(before), "s", fresh);
+            CheckEqual(before, StateOf(fresh), definition.DefId + " carries poked values");
+        }
+    }
+
+    /// <summary>Writes recognisable values into the simple fields of an object. Returns how many
+    /// were changed. The object is never RUN afterwards, only serialized, so the values do not
+    /// have to be legal game states.</summary>
+    private static int PokeFields(object instance)
+    {
+        int poked = 0;
+        System.Reflection.FieldInfo[] fields = instance.GetType().GetFields(
+            System.Reflection.BindingFlags.Instance
+            | System.Reflection.BindingFlags.Public
+            | System.Reflection.BindingFlags.NonPublic);
+        for (int i = 0; i < fields.Length; i++)
+        {
+            Type type = fields[i].FieldType;
+            // Values are chosen to differ from ANY plausible default - a poke that happened to
+            // write the value already there would make the "state changed" check meaningless.
+            if (type == typeof(int))
+            {
+                fields[i].SetValue(instance, 10007 + i);
+                poked++;
+            }
+            else if (type == typeof(bool))
+            {
+                fields[i].SetValue(instance, !(bool)fields[i].GetValue(instance));
+                poked++;
+            }
+            else if (type == typeof(double))
+            {
+                fields[i].SetValue(instance, 1234.5 + i);
+                poked++;
+            }
+        }
+        return poked;
     }
 
     private static void CardTableRejectsUnknownId()
