@@ -22,6 +22,11 @@ namespace ProjectBlock.View
         /// must not show the leftovers of a run behind it.</summary>
         public static Color Backdrop = new Color(0.04f, 0.05f, 0.08f, 0.97f);
 
+        /// <summary>Backdrop for a menu opened OVER a live run (pause, and the screens reached
+        /// from it). Translucent on purpose - the player is mid-round and wants to see the
+        /// board they are deciding about.</summary>
+        public static Color OverlayBackdrop = new Color(0.03f, 0.04f, 0.06f, 0.80f);
+
         public static Color Title = new Color(1f, 0.93f, 0.72f);
         public static Color Subtitle = new Color(0.55f, 0.60f, 0.68f);
 

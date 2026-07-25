@@ -163,8 +163,12 @@ namespace ProjectBlock.View
             if (screen != AppScreen.Playing)
             {
                 // No run to refresh - just re-text the menu. deckSelect was closed above, so a
-                // switch made during the deck pick lands back on the title.
-                screen = AppScreen.Title;
+                // switch made during the deck pick lands back on the title; a PAUSED run must
+                // stay paused, or changing language would silently resume it.
+                if (screen == AppScreen.DeckSelect)
+                {
+                    screen = AppScreen.Title;
+                }
                 ShowCurrentMenu();
                 return;
             }
@@ -585,6 +589,14 @@ namespace ProjectBlock.View
             }
             if (HandleJokerInput(kb))
             {
+                return;
+            }
+            // THE LAST Escape handler: every modal above returns before reaching this, and
+            // HandleJokerInput has just consumed Escape if a joker/power was awaiting a target.
+            // So Escape only pauses when it would otherwise do nothing. Keep this last.
+            if (kb != null && kb.escapeKey.wasPressedThisFrame)
+            {
+                OpenPauseMenu();
                 return;
             }
             switch (session.Phase)

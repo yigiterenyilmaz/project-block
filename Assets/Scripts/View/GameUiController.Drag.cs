@@ -14,6 +14,25 @@ namespace ProjectBlock.View
 {
     partial class GameUiController
     {
+        /// <summary>Drops a card that is mid-drag back into the hand, undoing the pick-up's
+        /// visual changes. Used when something takes the frame away from the drag - opening the
+        /// pause menu - so the card never stays stuck under the cursor at half alpha.</summary>
+        private void CancelDrag()
+        {
+            if (draggedCard == null)
+            {
+                return;
+            }
+            draggedCard.SetSortingBoost(0);
+            draggedCard.SetAlpha(1f);
+            draggedCard = null;
+            boardView.ClearPreview();
+            if (session != null && session.CurrentRound != null)
+            {
+                cardLayer.Sync(session.CurrentRound, null); // snaps the card home
+            }
+        }
+
         private void HandleDrag(RoundEngine round, Mouse mouse)
         {
             if (mouse == null)

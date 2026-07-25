@@ -28,13 +28,22 @@ namespace ProjectBlock.View
             DeckSelect,
 
             /// <summary>A run owns the screen; every other partial of this class applies.</summary>
-            Playing
+            Playing,
+
+            /// <summary>A run is on screen but suspended behind the pause menu. The run's own
+            /// state is untouched - nothing is ticking, because the game only advances on
+            /// input and the menu layer is eating all of it.</summary>
+            Paused
         }
 
-        // Title entry order. Named so the dispatch below never indexes by a bare number.
+        // Entry order per menu. Named so the dispatches below never index by a bare number.
         private const int TitlePlay = 0;
         private const int TitleContinue = 1;
         private const int TitleQuit = 2;
+
+        private const int PauseResume = 0;
+        private const int PauseRestart = 1;
+        private const int PauseAbandon = 2;
 
         private AppScreen screen = AppScreen.Title;
         private MenuScreenView menu;
@@ -56,12 +65,18 @@ namespace ProjectBlock.View
         /// path after a language switch.</summary>
         private void ShowCurrentMenu()
         {
-            if (screen == AppScreen.DeckSelect)
+            switch (screen)
             {
-                deckSelect.Show(DeckLibrary.All, currentDeck);
-                return;
+                case AppScreen.DeckSelect:
+                    deckSelect.Show(DeckLibrary.All, currentDeck);
+                    break;
+                case AppScreen.Paused:
+                    ShowPauseMenu();
+                    break;
+                default:
+                    ShowTitleMenu();
+                    break;
             }
-            ShowTitleMenu();
         }
 
         private void ShowTitleMenu()
@@ -92,6 +107,31 @@ namespace ProjectBlock.View
                 HandleTitleDeckSelect(kb, mouse);
                 return;
             }
+            // Escape closes the pause menu it opened.
+            if (screen == AppScreen.Paused && kb != null && kb.escapeKey.wasPressedThisFrame)
+            {
+                ResumeRun();
+                return;
+            }
+            int chosen = ReadMenuChoice(kb, mouse);
+            if (chosen < 0)
+            {
+                return;
+            }
+            if (screen == AppScreen.Paused)
+            {
+                ActivatePauseEntry(chosen);
+            }
+            else
+            {
+                ActivateTitleEntry(chosen);
+            }
+        }
+
+        /// <summary>Mouse hover, arrow-key movement and "pick it" for any entry menu, shared by
+        /// every screen. Returns the chosen entry, or -1 when this frame chose nothing.</summary>
+        private int ReadMenuChoice(Keyboard kb, Mouse mouse)
+        {
             if (mouse != null)
             {
                 menu.UpdateHover(mouse.position.ReadValue());
@@ -101,23 +141,23 @@ namespace ProjectBlock.View
                 if (kb.downArrowKey.wasPressedThisFrame)
                 {
                     menu.MoveSelection(+1);
-                    return;
+                    return -1;
                 }
                 if (kb.upArrowKey.wasPressedThisFrame)
                 {
                     menu.MoveSelection(-1);
-                    return;
+                    return -1;
                 }
                 if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)
                 {
-                    ActivateTitleEntry(menu.Activate());
-                    return;
+                    return menu.Activate();
                 }
             }
             if (mouse != null && mouse.leftButton.wasPressedThisFrame)
             {
-                ActivateTitleEntry(menu.EntryAt(mouse.position.ReadValue()));
+                return menu.EntryAt(mouse.position.ReadValue());
             }
+            return -1;
         }
 
         private void ActivateTitleEntry(int index)
@@ -170,6 +210,89 @@ namespace ProjectBlock.View
             screen = AppScreen.Playing;
             SetRunPresentationVisible(true);
             NewGame();
+        }
+
+        // ------------------------------------------------------------------------ pause
+
+        /// <summary>Suspends the run behind the pause overlay. Nothing about the round is
+        /// touched: the game only advances on input, and the menu layer is now eating all of
+        /// it. Reached from the LAST Escape handler in Update, so every in-game modal and the
+        /// joker/power targeting cancel still get the key first.</summary>
+        private void OpenPauseMenu()
+        {
+            CancelDrag(); // a card held under the cursor must not stay stuck there
+            HideTooltip();
+            screen = AppScreen.Paused;
+            ShowPauseMenu();
+        }
+
+        private void ShowPauseMenu()
+        {
+            var entries = new List<MenuEntry>
+            {
+                MenuEntry.Of(Loc.Pick("RESUME", "DEVAM ET")),
+                MenuEntry.Of(Loc.Pick("RESTART RUN", "BAŞTAN BAŞLA")),
+                MenuEntry.Of(Loc.Pick("ABANDON RUN", "OYUNU BIRAK"))
+            };
+            // The run stays visible behind a translucent backdrop - the player is mid-round and
+            // is deciding about the board they can see.
+            menu.Show(Loc.Pick("PAUSED", "DURAKLATILDI"), DescribeRunProgress(), entries,
+                MenuSkin.OverlayBackdrop);
+        }
+
+        /// <summary>"Round 4 / 15     total score 1250" - context for a decision taken from a
+        /// menu, where the HUD may be covered.</summary>
+        private string DescribeRunProgress()
+        {
+            if (session == null)
+            {
+                return string.Empty;
+            }
+            return Loc.Pick("Round ", "Raunt ") + session.RoundNumber
+                + " / " + session.Config.TotalRounds
+                + Loc.Pick("     total score ", "     toplam puan ") + session.TotalScore;
+        }
+
+        private void ActivatePauseEntry(int index)
+        {
+            switch (index)
+            {
+                case PauseResume:
+                    ResumeRun();
+                    break;
+                case PauseRestart:
+                    RestartRun();
+                    break;
+                case PauseAbandon:
+                    AbandonRun();
+                    break;
+            }
+        }
+
+        private void ResumeRun()
+        {
+            menu.Hide();
+            screen = AppScreen.Playing;
+        }
+
+        /// <summary>Starts the run over. Confirmed choice: a restart rolls a FRESH seed (unless
+        /// one is pinned), matching what the R debug key has always done.</summary>
+        private void RestartRun()
+        {
+            menu.Hide();
+            screen = AppScreen.Playing;
+            SetRunPresentationVisible(true);
+            NewGame();
+        }
+
+        /// <summary>Drops the run and goes back to the title. The session is released so the
+        /// title screen cannot show anything of it - including a retro CRT left switched on.</summary>
+        private void AbandonRun()
+        {
+            Debug.Log("[project_block] Run abandoned at round "
+                + (session != null ? session.RoundNumber : 0));
+            session = null;
+            GoToTitle();
         }
 
         /// <summary>Shows or hides everything that belongs to a run in progress. The persistent

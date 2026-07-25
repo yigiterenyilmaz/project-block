@@ -79,8 +79,16 @@ namespace ProjectBlock.View
             go.SetActive(false);
         }
 
-        /// <summary>Draws a menu, replacing whatever was on screen.</summary>
+        /// <summary>Draws a menu over an opaque backdrop, replacing whatever was on screen.</summary>
         public void Show(string title, string subtitle, IReadOnlyList<MenuEntry> entries)
+        {
+            Show(title, subtitle, entries, MenuSkin.Backdrop);
+        }
+
+        /// <summary>As above, with an explicit backdrop - a menu opened over a live run passes
+        /// MenuSkin.OverlayBackdrop so the board stays readable behind it.</summary>
+        public void Show(string title, string subtitle, IReadOnlyList<MenuEntry> entries,
+            Color backdropColor)
         {
             if (root == null)
             {
@@ -95,7 +103,7 @@ namespace ProjectBlock.View
 
             // Stretched over the whole screen rather than sized, so it covers any resolution.
             RectTransform backdrop = MakeImage(root, "Backdrop", Vector2.zero, Vector2.zero,
-                MenuSkin.Backdrop, MenuSkin.BackdropSprite).rectTransform;
+                backdropColor, MenuSkin.BackdropSprite).rectTransform;
             backdrop.anchorMin = Vector2.zero;
             backdrop.anchorMax = Vector2.one;
             backdrop.offsetMin = Vector2.zero;
