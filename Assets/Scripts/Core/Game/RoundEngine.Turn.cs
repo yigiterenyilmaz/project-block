@@ -171,7 +171,9 @@ namespace ProjectBlock.Core
             LogDestruction();
             if (explosion.LineCount > 0)
             {
-                breakdown.BaseLines = ScoreLineExplosionScored(explosion, cubesExploded);
+                breakdown.BaseLines = ScoreLineExplosionScored(explosion, cubesExploded)
+                    // "Karantina" charges for the cubes that stood in its zones.
+                    + AdjustExplosionScore(explosion.ExplodedCells);
                 Board.SettleWaterAndReact(waterFrames); // explosions pull the floor out from water
                 ResyncSnapshot();
             }

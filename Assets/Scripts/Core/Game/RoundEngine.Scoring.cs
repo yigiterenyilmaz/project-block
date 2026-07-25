@@ -211,6 +211,13 @@ namespace ProjectBlock.Core
             return scorer.ScoreLineExplosion(lines.Rows + lines.Columns, lines.Cubes);
         }
 
+        /// <summary>What a boss adds to or takes off an explosion for the SPECIFIC cells it
+        /// touched ("Karantina"). 0 with no boss, so an ordinary round is untouched.</summary>
+        private int AdjustExplosionScore(IReadOnlyList<GridPos> cells)
+        {
+            return Boss != null ? Boss.AdjustExplosionScore(scorer, cells) : 0;
+        }
+
         /// <summary>What a clean sweep pays. Same deal as PriceLines: the boss gets the final
         /// say ("Titizlik" pays more for the one thing it leaves standing), and with no boss it
         /// is exactly the plain rule.</summary>

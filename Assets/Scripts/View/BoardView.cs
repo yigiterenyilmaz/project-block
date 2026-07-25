@@ -35,6 +35,10 @@ namespace ProjectBlock.View
         /// cell and a full one, since the route crosses both.</summary>
         private static readonly Color CircuitColor = new Color(0.35f, 1f, 0.75f, 0.85f);
 
+        /// <summary>"Karantina": a cube exploded in here costs what it would have earned. A
+        /// sickly wash over the cell, so the zone reads without hiding what stands in it.</summary>
+        private static readonly Color QuarantineTint = new Color(0.75f, 0.72f, 0.20f);
+
         private GameBoard board;
         private SpriteRenderer[,] cellRenderers;
         private SpriteRenderer[,] previewRenderers;
@@ -46,6 +50,10 @@ namespace ProjectBlock.View
 
         /// <summary>Nodes of "Devre"'s traced circuit, redrawn whenever the route changes.</summary>
         private readonly List<GameObject> circuitMarkers = new List<GameObject>();
+
+        /// <summary>"Karantina"'s sealed rows and columns, in absolute board coordinates.</summary>
+        private readonly List<int> quarantinedRows = new List<int>();
+        private readonly List<int> quarantinedColumns = new List<int>();
         private ParticleSystem ambient;
         private float ambientTimer;
         private bool animatingWater;
@@ -311,6 +319,11 @@ namespace ProjectBlock.View
                     Color color = cube.HasValue
                         ? ViewUtil.CubeDisplayColor(cube.Value)
                         : (board.IsSealed(gp) ? SealedColor : EmptyColor);
+                    // "Karantina" washes its sealed lines without hiding what stands in them.
+                    if (IsQuarantined(gp))
+                    {
+                        color = Color.Lerp(color, QuarantineTint, cube.HasValue ? 0.45f : 0.6f);
+                    }
                     cellRenderers[x, y].color = color;
                     kindCache[x, y] = cube.HasValue ? cube.Value.Kind : (CubeKind?)null;
                     baseColorCache[x, y] = color;
@@ -422,6 +435,21 @@ namespace ProjectBlock.View
         /// arrives in order, so consecutive nodes are always neighbours and the chain reads as a
         /// line. Pass null or an empty list to clear it. Drawn ON TOP of the cells, because a
         /// circuit cell may be empty or full and the player has to see the route either way.</summary>
+        /// <summary>Marks "Karantina"'s sealed lines. Pass nulls to clear them.</summary>
+        public void ShowQuarantine(IReadOnlyList<int> rows, IReadOnlyList<int> columns)
+        {
+            quarantinedRows.Clear();
+            quarantinedColumns.Clear();
+            if (rows != null) { quarantinedRows.AddRange(rows); }
+            if (columns != null) { quarantinedColumns.AddRange(columns); }
+        }
+
+        /// <summary>True if that cell stands in a sealed row or column.</summary>
+        private bool IsQuarantined(GridPos cell)
+        {
+            return quarantinedRows.Contains(cell.Y) || quarantinedColumns.Contains(cell.X);
+        }
+
         public void ShowCircuit(IReadOnlyList<GridPos> cells)
         {
             for (int i = circuitMarkers.Count - 1; i >= 0; i--)

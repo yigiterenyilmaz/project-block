@@ -283,6 +283,22 @@ namespace ProjectBlock.View
             }
             boardView.ShowInfections(infectionBuffer);
             RefreshCircuit();
+            RefreshQuarantine();
+        }
+
+        /// <summary>Hands "Karantina"'s sealed lines to the board view, which washes them.</summary>
+        private void RefreshQuarantine()
+        {
+            RoundEngine round = session.CurrentRound;
+            var boss = round != null ? round.Boss as KarantinaBoss : null;
+            if (boss != null)
+            {
+                boardView.ShowQuarantine(boss.QuarantinedRows, boss.QuarantinedColumns);
+            }
+            else
+            {
+                boardView.ShowQuarantine(null, null);
+            }
         }
 
         /// <summary>Hands "Devre"'s traced circuit to the board view. Same shape as the infection

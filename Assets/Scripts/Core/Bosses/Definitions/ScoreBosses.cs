@@ -7,6 +7,8 @@
 //
 // The bonus multipliers are BALANCE PLACEHOLDERS (public fields, tune freely).
 
+using System.Collections.Generic;
+
 namespace ProjectBlock.Core
 {
     /// <summary>"Ufuk" - only horizontal clears pay, and they pay a little more.</summary>
@@ -99,6 +101,160 @@ namespace ProjectBlock.Core
         public override int ScoreCleanSweep(IScoreCalculator scorer)
         {
             return (int)(scorer.ScoreCleanSweep() * SweepBonus);
+        }
+    }
+
+    /// <summary>
+    /// "Karantina" - the arena is sealed off a ring at a time. Every few turns two more of the
+    /// OUTERMOST lines not yet quarantined are marked, in one of three shapes: a row and a
+    /// column, two rows, or two columns.
+    ///
+    /// A cube that explodes while standing in a quarantined line does not merely fail to pay -
+    /// it LOSES exactly what it would have earned. Only those cubes: a five-cube row clear with
+    /// two of them inside a zone still pays full price for the other three, so a clear that
+    /// clips a zone is a trade rather than a disaster.
+    ///
+    /// The zones ACCUMULATE and work inward: the rim first, then the ring behind it, and so on,
+    /// until there is barely a safe square left. That is the clock this boss runs on.
+    ///
+    /// Lines are held in ABSOLUTE board coordinates, so a line that erosion later carries off
+    /// the board simply stops matching, exactly as it should - that row is gone.
+    /// </summary>
+    public sealed class KarantinaBoss : BossRound
+    {
+        /// <summary>Turns between one sealing and the next.</summary>
+        public int SealEveryTurns = 4;
+
+        /// <summary>Lines sealed each time.</summary>
+        public int LinesPerSealing = 2;
+
+        private readonly List<int> rows = new List<int>();
+        private readonly List<int> columns = new List<int>();
+        private int turnsSinceSealing;
+
+        public KarantinaBoss()
+            : base("karantina", "Karantina")
+        {
+            SetDescription(
+                "Every 4 turns two more of the outermost rows or columns are quarantined, "
+                    + "working inward. A cube that explodes inside a zone loses exactly what it "
+                    + "would have earned - the cubes outside still pay in full.",
+                "Her 4 turda en dıştaki iki satır ya da sütun daha karantinaya alınır ve "
+                    + "içeri doğru ilerler. Karantinada patlayan küp, kazandıracağı kadar "
+                    + "kaybettirir - dışarıdaki küpler tam puanını vermeye devam eder.");
+        }
+
+        /// <summary>Quarantined rows and columns, in ABSOLUTE board coordinates, for the UI.</summary>
+        public IReadOnlyList<int> QuarantinedRows
+        {
+            get { return rows; }
+        }
+
+        public IReadOnlyList<int> QuarantinedColumns
+        {
+            get { return columns; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                int sealed_ = rows.Count + columns.Count;
+                return sealed_ > 0
+                    ? sealed_ + Loc.Pick(" lines sealed", " hat kapalı")
+                    : Loc.Pick("clean", "temiz");
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            rows.Clear();
+            columns.Clear();
+            turnsSinceSealing = 0;
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            turnsSinceSealing++;
+            if (turnsSinceSealing < SealEveryTurns)
+            {
+                return;
+            }
+            turnsSinceSealing = 0;
+            Seal(turn.Round.Board, turn.Rng);
+        }
+
+        /// <summary>Seals two more lines: a row and a column, two rows, or two columns, drawn
+        /// from the outermost that are still clean. Falls back to whatever is left when one axis
+        /// runs out, so the sealing never silently does nothing while lines remain.</summary>
+        private void Seal(GameBoard board, IRandomSource rng)
+        {
+            int shape = rng.NextInt(0, 3); // 0 = row + column, 1 = two rows, 2 = two columns
+            for (int taken = 0; taken < LinesPerSealing; taken++)
+            {
+                bool wantRow = shape == 1 || (shape == 0 && taken == 0);
+                if (!TrySealLine(board, rng, wantRow) && !TrySealLine(board, rng, !wantRow))
+                {
+                    return; // the whole board is sealed - nothing left to take
+                }
+            }
+        }
+
+        /// <summary>Seals the outermost clean line on one axis, from whichever end the rng
+        /// picks (falling back to the other end when that one is already sealed).</summary>
+        private bool TrySealLine(GameBoard board, IRandomSource rng, bool row)
+        {
+            List<int> taken = row ? rows : columns;
+            int min = row ? board.MinY : board.MinX;
+            int count = row ? board.Height : board.Width;
+            int low = -1;
+            int high = -1;
+            for (int i = 0; i < count; i++)
+            {
+                if (!taken.Contains(min + i)) { low = min + i; break; }
+            }
+            for (int i = count - 1; i >= 0; i--)
+            {
+                if (!taken.Contains(min + i)) { high = min + i; break; }
+            }
+            if (low < 0)
+            {
+                return false; // every line on this axis is already sealed
+            }
+            int pick = low == high ? low : (rng.NextInt(0, 2) == 0 ? low : high);
+            taken.Add(pick);
+            return true;
+        }
+
+        /// <summary>True if that cell stands in a quarantined row or column.</summary>
+        public bool IsQuarantined(GridPos cell)
+        {
+            return rows.Contains(cell.Y) || columns.Contains(cell.X);
+        }
+
+        public override int AdjustExplosionScore(IScoreCalculator scorer,
+            IReadOnlyList<GridPos> cells)
+        {
+            if (cells == null || (rows.Count == 0 && columns.Count == 0))
+            {
+                return 0;
+            }
+            int inside = 0;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (IsQuarantined(cells[i]))
+                {
+                    inside++;
+                }
+            }
+            if (inside == 0)
+            {
+                return 0;
+            }
+            // The normal price already paid for these cubes, so taking TWICE their value turns
+            // that payment into a loss of the same size - "it costs what it would have earned".
+            int perCube = scorer.ScoreLineExplosion(0, 1);
+            return -2 * inside * perCube;
         }
     }
 }

@@ -135,6 +135,9 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Boss_KarantinaSealsOutwardInAndCharges();
+        Boss_KarantinaChargesOnlyTheCubesInside();
+        Boss_KarantinaChangesNothingWithoutTheBoss();
         Boss_YuruyenMerdivenCarriesEveryRowUp();
         Boss_YuruyenMerdivenLeavesTheBottomRowEmpty();
         Boss_YuruyenMerdivenIsNotDestruction();
@@ -4284,6 +4287,130 @@ public static class JokerTests
             "the same placement cleared a line", "rows " + report.ExplodedRows.Count);
         Check(joker.BrokenThisRound,
             "and the circuit still counted as completed, even though the line ate its cells");
+    }
+
+    private static void Boss_KarantinaSealsOutwardInAndCharges()
+    {
+        Section("boss / karantina seals the rim inward and charges for cubes inside it");
+        var scorer = new DefaultScoreCalculator(new ScoringConfig());
+        var session = NewSession(8500, 7, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = new KarantinaBoss();
+        round.SetBoss(boss);
+        GameBoard board = round.Board;
+
+        Check(boss.QuarantinedRows.Count + boss.QuarantinedColumns.Count == 0,
+            "nothing is sealed to start with");
+        Check(boss.AdjustExplosionScore(scorer, new List<GridPos> { new GridPos(0, 0) }) == 0,
+            "and no cube is charged for");
+
+        // The first sealing lands on the rim.
+        PlayTurns(session, boss.SealEveryTurns);
+        int sealed1 = boss.QuarantinedRows.Count + boss.QuarantinedColumns.Count;
+        Check(sealed1 == boss.LinesPerSealing, "two lines sealed on the first tick",
+            "" + sealed1);
+        int minX = board.MinX;
+        int maxX = board.MinX + board.Width - 1;
+        int minY = board.MinY;
+        int maxY = board.MinY + board.Height - 1;
+        bool onRim = true;
+        foreach (int r in boss.QuarantinedRows) { onRim &= r == minY || r == maxY; }
+        foreach (int c in boss.QuarantinedColumns) { onRim &= c == minX || c == maxX; }
+        Check(onRim, "and both of them are on the OUTERMOST ring");
+
+        // The next sealing adds two more, never repeating one.
+        PlayTurns(session, boss.SealEveryTurns);
+        int sealed2 = boss.QuarantinedRows.Count + boss.QuarantinedColumns.Count;
+        Check(sealed2 == sealed1 + boss.LinesPerSealing, "the zones ACCUMULATE",
+            sealed1 + " -> " + sealed2);
+        var seen = new HashSet<string>();
+        bool distinct = true;
+        foreach (int r in boss.QuarantinedRows) { distinct &= seen.Add("r" + r); }
+        foreach (int c in boss.QuarantinedColumns) { distinct &= seen.Add("c" + c); }
+        Check(distinct, "with no line sealed twice");
+
+        // Keep going: it must work inward rather than stalling on the rim.
+        for (int i = 0; i < 4; i++)
+        {
+            PlayTurns(session, boss.SealEveryTurns);
+        }
+        int sealedLater = boss.QuarantinedRows.Count + boss.QuarantinedColumns.Count;
+        Check(sealedLater > sealed2, "later sealings keep taking new lines",
+            sealed2 + " -> " + sealedLater);
+        bool wentInward = false;
+        foreach (int r in boss.QuarantinedRows)
+        {
+            if (r != minY && r != maxY) { wentInward = true; }
+        }
+        foreach (int c in boss.QuarantinedColumns)
+        {
+            if (c != minX && c != maxX) { wentInward = true; }
+        }
+        Check(wentInward, "and the quarantine has moved off the rim, inward");
+    }
+
+    private static void Boss_KarantinaChargesOnlyTheCubesInside()
+    {
+        Section("boss / only the cubes inside a zone lose; the rest still pay");
+        var scorer = new DefaultScoreCalculator(new ScoringConfig());
+        var boss = new KarantinaBoss();
+        var session = NewSession(8501, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(boss);
+        PlayTurns(session, boss.SealEveryTurns);
+        Check(boss.QuarantinedRows.Count + boss.QuarantinedColumns.Count > 0,
+            "a zone exists");
+
+        // Five cubes, two of them inside the zone: the adjustment must charge for exactly two.
+        var inside = new List<GridPos>();
+        var outside = new List<GridPos>();
+        GameBoard board = round.Board;
+        for (int x = board.MinX; x < board.MinX + board.Width; x++)
+        {
+            for (int y = board.MinY; y < board.MinY + board.Height; y++)
+            {
+                var cell = new GridPos(x, y);
+                if (boss.IsQuarantined(cell)) { inside.Add(cell); }
+                else { outside.Add(cell); }
+            }
+        }
+        Check(inside.Count >= 2 && outside.Count >= 3, "the board has both kinds of cell",
+            inside.Count + " inside / " + outside.Count + " outside");
+
+        var mixed = new List<GridPos> { inside[0], inside[1], outside[0], outside[1], outside[2] };
+        int perCube = scorer.ScoreLineExplosion(0, 1);
+        int adjustment = boss.AdjustExplosionScore(scorer, mixed);
+        Check(adjustment == -2 * 2 * perCube,
+            "exactly the two inside are charged, twice their value",
+            adjustment + " expected " + (-2 * 2 * perCube));
+
+        // Which is to say: those two LOSE what they would have earned, the other three keep it.
+        int normal = 5 * perCube;
+        int withBoss = normal + adjustment;
+        Check(withBoss == 3 * perCube - 2 * perCube,
+            "3 cubes pay, 2 cubes cost - exactly as designed",
+            withBoss + " = " + (3 * perCube) + " - " + (2 * perCube));
+
+        Check(boss.AdjustExplosionScore(scorer, outside) == 0,
+            "a clear that misses the zone entirely is charged nothing");
+    }
+
+    private static void Boss_KarantinaChangesNothingWithoutTheBoss()
+    {
+        Section("boss / karantina touches nothing on an ordinary round");
+        var scorer = new DefaultScoreCalculator(new ScoringConfig());
+        var plain = NewSession(8502, 6, 1000000, 40, 1);
+        RoundEngine round = plain.CurrentRound;
+        Check(round.Boss == null, "no boss");
+        long before = plain.TotalScore;
+        PlayTurns(plain, 8);
+        Check(plain.TotalScore >= before, "an ordinary round scores forward as always",
+            before + " -> " + plain.TotalScore);
+        // And the hook itself is a no-op on the base type.
+        var vanilla = new VanilyaBoss();
+        Check(vanilla.AdjustExplosionScore(scorer,
+            new List<GridPos> { new GridPos(0, 0), new GridPos(1, 1) }) == 0,
+            "every other boss adjusts nothing");
     }
 
     private static void Boss_YuruyenMerdivenCarriesEveryRowUp()

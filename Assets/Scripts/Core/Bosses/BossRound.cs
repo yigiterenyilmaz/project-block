@@ -15,6 +15,8 @@
 // Hooks are virtual no-ops; a boss overrides only what it needs. Queries are asked every
 // time the engine reaches the decision, so a boss may change its answer mid-round.
 
+using System.Collections.Generic;
+
 namespace ProjectBlock.Core
 {
     /// <summary>A boss round's rules. Subclass, override what you need, register in BossRegistry.</summary>
@@ -115,6 +117,22 @@ namespace ProjectBlock.Core
         public virtual int ScoreLineExplosion(IScoreCalculator scorer, LineExplosionScore lines)
         {
             return scorer.ScoreLineExplosion(lines.Rows + lines.Columns, lines.Cubes);
+        }
+
+        /// <summary>
+        /// Score a boss adds to - or takes off - an explosion, judged on the CELLS it actually
+        /// touched rather than on the counts ("Karantina" charging for the ones inside its
+        /// zones). The counts in LineExplosionScore cannot express "which cubes", which is why
+        /// this is a separate hook rather than another argument to ScoreLineExplosion.
+        ///
+        /// Return a negative number to take score away. It is applied on top of the normal
+        /// price, so a boss that wants a cube to LOSE what it would have earned returns twice
+        /// its value negated. The cells are absolute board coordinates.
+        /// </summary>
+        public virtual int AdjustExplosionScore(IScoreCalculator scorer,
+            IReadOnlyList<GridPos> cells)
+        {
+            return 0;
         }
 
         /// <summary>Rewrites what a clean sweep pays ("Titizlik" sweetening the one thing it

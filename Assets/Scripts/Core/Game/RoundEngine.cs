@@ -382,7 +382,8 @@ namespace ProjectBlock.Core
                 // Priced through the boss too ("Ufuk"/"Kule" govern every line clear), but with
                 // no dead-zone adjustment - that is this path's long-standing behaviour.
                 AddScoreOutsideTurn(PriceLines(
-                    BuildLineScore(lines, lines.ExplodedCells.Count, false)));
+                    BuildLineScore(lines, lines.ExplodedCells.Count, false))
+                    + AdjustExplosionScore(lines.ExplodedCells));
             }
             TryResolveCleanSweep();
         }

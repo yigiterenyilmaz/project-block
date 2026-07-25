@@ -341,7 +341,8 @@ namespace ProjectBlock.Core
             if (lines.LineCount > 0)
             {
                 breakdown.BaseLines += PriceLines(
-                    BuildLineScore(lines, lines.ExplodedCells.Count, false));
+                    BuildLineScore(lines, lines.ExplodedCells.Count, false))
+                    + AdjustExplosionScore(lines.ExplodedCells);
             }
 
             // Each world sweeps for itself (confirmed): emptying the mirror is its own sweep.
