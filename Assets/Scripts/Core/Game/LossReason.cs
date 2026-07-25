@@ -25,6 +25,11 @@ namespace ProjectBlock.Core
 
         /// <summary>Retro top-out: a block reached the very top row, so there is no room to drop
         /// the next piece from above (even if lower rows still have gaps) - like Tetris.</summary>
-        RetroTopOut = 4
+        RetroTopOut = 4,
+
+        /// <summary>"Kredi kartı": a boss round ended with the market debt still open. The ONLY
+        /// reason that ends a run without the round itself being lost - the board was fine, the
+        /// books were not.</summary>
+        DebtNotRepaid = 5
     }
 }

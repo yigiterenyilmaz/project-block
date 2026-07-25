@@ -132,11 +132,55 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>True while any held joker lets the player buy on credit ("Kredi kartı").</summary>
+        public bool GrantsMarketCredit
+        {
+            get
+            {
+                for (int i = 0; i < jokers.Count; i++)
+                {
+                    if (jokers[i].GrantsMarketCredit)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        /// <summary>Interest the debt accrues per round, in percent - the highest any held credit
+        /// joker charges. 0 when none is held.</summary>
+        public int MarketCreditInterestPercent
+        {
+            get
+            {
+                int highest = 0;
+                for (int i = 0; i < jokers.Count; i++)
+                {
+                    if (jokers[i].GrantsMarketCredit
+                        && jokers[i].MarketCreditInterestPercent > highest)
+                    {
+                        highest = jokers[i].MarketCreditInterestPercent;
+                    }
+                }
+                return highest;
+            }
+        }
+
+        /// <summary>False while selling this joker would let the player walk away from what they
+        /// borrowed through it: a credit joker is locked until the debt is back to zero. The UI
+        /// asks this so it can grey the sale out rather than silently refusing it.</summary>
+        public bool CanSell(Joker joker)
+        {
+            return joker != null && !(joker.GrantsMarketCredit && session.Debt > 0);
+        }
+
         /// <summary>Sells a joker for its SellValue, which is added to the run score/currency.
+        /// Returns 0 and changes nothing when the sale is refused (see CanSell).
         /// EXTENSION POINT: the real market will call this; it works today for debugging.</summary>
         public int Sell(Joker joker)
         {
-            if (joker == null)
+            if (joker == null || !CanSell(joker))
             {
                 return 0;
             }

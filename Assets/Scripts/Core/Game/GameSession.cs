@@ -27,6 +27,99 @@ namespace ProjectBlock.Core
         /// <summary>Run-wide score, doubling as market currency (confirmed design).</summary>
         public long TotalScore { get; private set; }
 
+        // ------------------------------------------------------------------- market credit
+        //
+        // "Kredi kartı" lets the player buy past what they own. The shortfall becomes DEBT, the
+        // debt compounds at the end of every round, and a boss round that ends with it still
+        // open ends the RUN - the one loss in the game that has nothing to do with the board.
+        //
+        // Repayment is deliberately MANUAL (RepayDebt, a market action): choosing to carry the
+        // debt one more round is the decision the joker is built around. Practical consequence,
+        // worth knowing: since paying only happens in the market, the real deadline is the
+        // market BEFORE the boss round - what you earn during the boss round cannot save you.
+
+        /// <summary>What the player owes, in the scaled run economy. 0 when debt-free.</summary>
+        public long Debt { get; private set; }
+
+        /// <summary>True while a held joker lets the player buy with points they do not have.</summary>
+        public bool CreditAvailable
+        {
+            get { return Jokers.GrantsMarketCredit; }
+        }
+
+        /// <summary>True if this price is payable at all - out of the run score, or on credit.</summary>
+        public bool CanAfford(long price)
+        {
+            return TotalScore >= price || CreditAvailable;
+        }
+
+        /// <summary>Pays a market price: the player's own points first, the rest borrowed. Only
+        /// ever called after CanAfford said yes.</summary>
+        private void Spend(long price)
+        {
+            if (TotalScore >= price)
+            {
+                TotalScore -= price;
+                return;
+            }
+            // Spend what there is and borrow the difference - a credit card, not a blank cheque
+            // that ignores the balance.
+            Debt += price - TotalScore;
+            TotalScore = 0;
+        }
+
+        /// <summary>
+        /// Pays the debt down from the run score, in the market. Pays as much of
+        /// <paramref name="amount"/> as the player both owes and can afford, and returns what
+        /// actually moved. Nothing happens outside the market, and paying is never automatic:
+        /// earnings pile up in TotalScore until the player chooses to settle.
+        /// </summary>
+        public long RepayDebt(long amount)
+        {
+            if (Phase != GamePhase.Market || amount <= 0 || Debt <= 0)
+            {
+                return 0;
+            }
+            long paid = amount;
+            if (paid > Debt)
+            {
+                paid = Debt;
+            }
+            if (paid > TotalScore)
+            {
+                paid = TotalScore;
+            }
+            if (paid <= 0)
+            {
+                return 0;
+            }
+            TotalScore -= paid;
+            Debt -= paid;
+            return paid;
+        }
+
+        /// <summary>Settles as much of the debt as the run score covers.</summary>
+        public long RepayDebtInFull()
+        {
+            return RepayDebt(Debt);
+        }
+
+        /// <summary>Compounds the debt at the end of a round. Rounded UP, so a small debt still
+        /// grows instead of sitting still forever.</summary>
+        private void AccrueDebtInterest()
+        {
+            if (Debt <= 0)
+            {
+                return;
+            }
+            int percent = Jokers.MarketCreditInterestPercent;
+            if (percent <= 0)
+            {
+                return;
+            }
+            Debt += (Debt * percent + 99) / 100;
+        }
+
         /// <summary>Engine of the current round. Replaced wholesale every round.</summary>
         public RoundEngine CurrentRound { get; private set; }
 
@@ -191,7 +284,7 @@ namespace ProjectBlock.Core
                 throw new ArgumentOutOfRangeException("offerIndex");
             }
             MarketOffer offer = Market.Offers[offerIndex];
-            if (offer.Sold || TotalScore < offer.Price)
+            if (offer.Sold || !CanAfford(offer.Price))
             {
                 return false;
             }
@@ -215,7 +308,7 @@ namespace ProjectBlock.Core
             {
                 ownedCards.Add(offer.Card);
             }
-            TotalScore -= offer.Price;
+            Spend(offer.Price);
             offer.Sold = true;
             purchasedThisMarket = true;
             return true;
@@ -243,11 +336,11 @@ namespace ProjectBlock.Core
                 throw new InvalidOperationException("Not in the market phase.");
             }
             long cost = NextRerollCost;
-            if (TotalScore < cost)
+            if (!CanAfford(cost))
             {
                 return false;
             }
-            TotalScore -= cost;
+            Spend(cost);
             rerollCount++;
             RestockMarket(rerollCount);
             return true;
@@ -604,6 +697,18 @@ namespace ProjectBlock.Core
                 // Round-end effects pay out either way - a run-winning round must still settle
                 // the kumbara jokers - so this runs BEFORE the win check.
                 Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Advanced);
+
+                // "Kredi kartı": the debt compounds every round, and a BOSS round that ends with
+                // it still open ends the run. Deliberately ahead of the win check - surviving the
+                // final round does not settle your books, so round 15 can be survived and still
+                // lost. Without that, the last market would be a free shopping spree.
+                AccrueDebtInterest();
+                if (Debt > 0 && CurrentRound.Config.IsBossRound)
+                {
+                    CurrentRound.NoteRunLoss(LossReason.DebtNotRepaid);
+                    SetPhase(GamePhase.GameOver);
+                    return;
+                }
                 if (IsFinalRound)
                 {
                     // Survived the last round: the run is won and there is no market to

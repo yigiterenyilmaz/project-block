@@ -54,6 +54,20 @@ namespace ProjectBlock.Core
         /// and the debug picker enforce that through GameSession. Set in the constructor.</summary>
         public bool IsLegendary { get; protected set; }
 
+        /// <summary>True while this joker lets the player buy in the market with points they do
+        /// not have ("Kredi kartı"). GameSession asks the inventory, never a specific joker.</summary>
+        public virtual bool GrantsMarketCredit
+        {
+            get { return false; }
+        }
+
+        /// <summary>Interest charged on the debt at the end of every round, in percent. Only
+        /// meaningful on a joker that grants credit. Balance placeholder.</summary>
+        public virtual int MarketCreditInterestPercent
+        {
+            get { return 0; }
+        }
+
         // ---------------------------------------------------------------- sell value
 
         /// <summary>Base price the market will buy this joker back for.</summary>

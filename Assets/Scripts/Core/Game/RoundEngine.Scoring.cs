@@ -291,6 +291,17 @@ namespace ProjectBlock.Core
             SetStatus(RoundStatus.Advanced);
         }
 
+        /// <summary>Records why the RUN ended on a round the player actually survived
+        /// ("Kredi kartı" hitting its deadline). The status stays Advanced - the round was won -
+        /// so nothing re-reads this as a lost round; it only gives the UI a cause to name.</summary>
+        internal void NoteRunLoss(LossReason reason)
+        {
+            if (Loss == null)
+            {
+                Loss = reason;
+            }
+        }
+
         /// <summary>Ends the round with a joker-defined reason ("Batak" losing its bet).
         /// Obeys the standing rule that a pending advance offer outranks a same-turn loss.</summary>
         internal void DeclareLoss(LossReason reason)
