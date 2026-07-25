@@ -152,9 +152,11 @@ namespace ProjectBlock.View
             // is sized to CONTAIN them. Padding constants used to guess at the panel's size,
             // and the guess was wrong: the first section header landed on the sell hint.
             float firstHeaderY = topRowY + HeaderOffset;
-            float sellHintY = firstHeaderY + 0.62f;
-            float balanceY = sellHintY + 0.46f;
-            float titleY = balanceY + 0.68f;
+            // Gaps scale with the type: the hint lines were bumped up a size, so the rhythm
+            // above them has to open up or the balance line sits on top of the hint.
+            float sellHintY = firstHeaderY + 0.68f;
+            float balanceY = sellHintY + 0.56f;
+            float titleY = balanceY + 0.74f;
             float promptY = bottomRowY - PriceOffset - 0.85f;
 
             // Widest tile kind decides the row's reach - joker/power tiles are wider than a
@@ -180,13 +182,13 @@ namespace ProjectBlock.View
             // What you have to spend. The shelf shows prices everywhere and used to leave the
             // player to work their balance out from the HUD dump.
             ViewUtil.MakeText3D(transform, "Balance", new Vector2(Center.x, balanceY),
-                Loc.Pick("you have ", "paran: ") + session.TotalScore,
-                90, 0.028f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleCenter);
+                Loc.Pick("You have ", "Paran: ") + session.TotalScore,
+                90, 0.032f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, sellHintY),
                 Loc.Pick(
-                    "click a joker or a power to sell it  -  click the deck pile to sell cards",
-                    "satmak için jokere veya güce tıkla  -  kart satmak için desteye tıkla"),
-                90, 0.019f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                    "Click a joker or a power to sell it  -  click the deck pile to sell cards",
+                    "Satmak için jokere veya güce tıkla  -  kart satmak için desteye tıkla"),
+                90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             for (int r = 0; r < rowOffers.Count; r++)
             {
@@ -282,9 +284,11 @@ namespace ProjectBlock.View
                 Color inkColor = canReroll ? AffordablePriceColor : TooExpensiveColor;
                 ViewUtil.MakeRect(transform, "Reroll_" + r, button.Center, button.Half * 2f,
                     canReroll ? RerollButtonColor : RerollButtonDisabledColor, 34);
+                // Finer thickness than the ring's radius would suggest: the segments overlap
+                // into a smooth circle, so a fat stroke just makes a blob at this size.
                 ViewUtil.MakeRefreshIcon(transform, "RerollIcon_" + r,
-                    button.Center + new Vector2(-button.Half.x + 0.42f, 0.02f),
-                    0.19f, 0.075f, inkColor, 38);
+                    button.Center + new Vector2(-button.Half.x + 0.42f, -0.02f),
+                    0.17f, 0.055f, inkColor, 38);
                 ViewUtil.MakeText3D(transform, "RerollLabel_" + r,
                     button.Center + new Vector2(0.26f, 0f), rerollCost.ToString(),
                     90, 0.030f, inkColor, 38, TextAnchor.MiddleCenter);
@@ -294,10 +298,10 @@ namespace ProjectBlock.View
             // top of the screen, where the opaque panel now sits - the canvas draws over world
             // space, so the two simply printed on top of each other.
             ViewUtil.MakeText3D(transform, "Prompt", new Vector2(Center.x, promptY),
-                Loc.Pick("click a block to add it to your deck    -    [N] start round ",
-                        "desteye katmak için bloğa tıkla    -    [N] raunt başlat: ")
+                Loc.Pick("Click a block to add it to your deck    -    [N] start round ",
+                        "Desteye katmak için bloğa tıkla    -    [N] raunt başlat: ")
                     + (session.RoundNumber + 1),
-                90, 0.018f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             FitToCamera(panelCenter, panelSize);
         }

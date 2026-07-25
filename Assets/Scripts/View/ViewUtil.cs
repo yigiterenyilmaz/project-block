@@ -158,28 +158,33 @@ namespace ProjectBlock.View
         public static void MakeRefreshIcon(Transform parent, string name, Vector2 center,
             float radius, float thickness, Color color, int sortingOrder)
         {
-            const int Segments = 12;
-            const float StartDegrees = 35f;
-            const float SweepDegrees = 290f;
+            // Dense enough that the squares OVERLAP into a smooth ring: at 12 segments the gaps
+            // between them were wider than the segments, which is what made the old icon read as
+            // a lumpy letter rather than a circle.
+            const int Segments = 30;
+            const float StartDegrees = 400f;  // 40 degrees, one full turn on so the sweep is
+            const float EndDegrees = 90f;     // clockwise and FINISHES at the top of the ring
             for (int i = 0; i < Segments; i++)
             {
-                float degrees = StartDegrees + SweepDegrees * i / (Segments - 1);
+                float degrees = Mathf.Lerp(StartDegrees, EndDegrees, i / (float)(Segments - 1));
                 float radians = degrees * Mathf.Deg2Rad;
                 Vector2 at = center
                     + new Vector2(Mathf.Cos(radians), Mathf.Sin(radians)) * radius;
                 MakeRect(parent, name + "_arc" + i, at,
                     new Vector2(thickness, thickness), color, sortingOrder);
             }
-            // Arrowhead at the sweep's end: three stacked bars narrowing to a point. Rects
-            // cannot rotate, so it is axis-aligned - at this size that reads fine.
-            float endRadians = (StartDegrees + SweepDegrees) * Mathf.Deg2Rad;
-            Vector2 tip = center
-                + new Vector2(Mathf.Cos(endRadians), Mathf.Sin(endRadians)) * radius;
+            // The arrowhead closes the ring at the TOP, which is the whole reason the sweep ends
+            // there: MakeRect cannot rotate, and at the top of a circle the tangent is exactly
+            // horizontal, so a triangle of axis-aligned bars really does point along the ring
+            // (clockwise) instead of off at an angle.
+            Vector2 tip = center + new Vector2(thickness * 1.9f, radius);
             for (int i = 0; i < 3; i++)
             {
+                // Vertical bars marching back from the tip, growing taller - a right-pointing
+                // triangle. The tip bar is one pixel of thickness, the last is the full head.
                 MakeRect(parent, name + "_head" + i,
-                    tip + new Vector2(0f, thickness * (1f - i) * 0.85f),
-                    new Vector2(thickness * (0.8f + i * 1.1f), thickness * 0.85f),
+                    tip - new Vector2(thickness * 0.62f * i, 0f),
+                    new Vector2(thickness * 0.62f, thickness * (0.7f + i * 1.15f)),
                     color, sortingOrder);
             }
         }
