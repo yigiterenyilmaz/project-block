@@ -378,10 +378,17 @@ namespace ProjectBlock.Core
 
         // ---------------------------------------------------------------------- internals
 
-        /// <summary>The central overtime gate - see the file header.</summary>
+        /// <summary>The central gate - see the file header. Two reasons a joker goes quiet:
+        /// overtime (its own DisabledInOvertime) and a boss round silencing it ("Anarşi",
+        /// "Oburluk"). Both are checked HERE so no joker ever tests for either.</summary>
         private static bool IsGated(Joker joker, RoundEngine round)
         {
-            return joker.DisabledInOvertime && round != null && round.ThresholdPassed;
+            if (round == null)
+            {
+                return false;
+            }
+            return (joker.DisabledInOvertime && round.ThresholdPassed)
+                || round.IsSilencedByBoss(joker);
         }
 
         private void Snapshot()

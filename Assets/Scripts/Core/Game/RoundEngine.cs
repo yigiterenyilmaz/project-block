@@ -81,6 +81,27 @@ namespace ProjectBlock.Core
             Boss = boss;
         }
 
+        /// <summary>True if this round's boss has silenced that joker ("Anarşi", "Oburluk"):
+        /// every hook is skipped and it cannot be activated, exactly like the overtime gate.
+        /// Public so the UI can grey the panel out for the same reason the rules ignore it.</summary>
+        public bool IsSilencedByBoss(Joker joker)
+        {
+            return Boss != null && joker != null && Boss.DisablesJoker(joker);
+        }
+
+        /// <summary>As above, for a power: it cannot be used and its hooks are skipped.</summary>
+        public bool IsSilencedByBoss(Power power)
+        {
+            return Boss != null && power != null && Boss.DisablesPower(power);
+        }
+
+        /// <summary>True while nothing may put a charge back into a power this round
+        /// ("Tükenmişlik"). The round-start charge is already in place by then.</summary>
+        public bool PowerRechargeBlocked
+        {
+            get { return Boss != null && Boss.BlocksPowerRecharge; }
+        }
+
         /// <summary>Forbids placement on one empty cell ("Mapus"). Board mutations go through
         /// the engine, so the seal and the no-playable-move check can never disagree.</summary>
         internal void SealBoardCell(GridPos cell)

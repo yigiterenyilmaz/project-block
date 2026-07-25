@@ -93,6 +93,9 @@ public static class JokerTests
         Boss_AlikoymaSeizesACardButNeverTheLast();
         Boss_MapusSealsOneCellPerTurn();
         Boss_FedaMakesABonusCardCostTheHand();
+        Boss_AnarsiSilencesEverythingRare();
+        Boss_OburlukEatsOnlyWhenSlotsAreFull();
+        Boss_TukenmislikStopsEveryRefill();
         AllRegisteredJokers_HaveDistinctIdsAndText();
         Fuzz_RandomJokerSets_HoldInvariants();
 
@@ -2769,6 +2772,124 @@ public static class JokerTests
         plain.CurrentRound.PlayFromBonus(0, new GridPos(0, 0));
         Check(plain.CurrentRound.Hand[0].Id == firstHeld,
             "an ordinary round keeps its hand through a bonus play");
+    }
+
+    private static void Boss_AnarsiSilencesEverythingRare()
+    {
+        Section("boss / anarsi silences rare and legendary");
+        var session = NewSession(5170, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        // renovasyon is common, seri_tetik is rare, oryantasyon is legendary (RarityTable).
+        Joker common = session.Jokers.Add(new RenovasyonJoker());
+        Joker rare = session.Jokers.Add(new SeriTetikJoker());
+        Power commonPower = session.Powers.Add(new CimbizPower());
+        Power rarePower = session.Powers.Add(new KumSaatiPower());
+        round.SetBoss(new AnarsiBoss());
+
+        Check(!round.IsSilencedByBoss(common), "a common joker keeps working");
+        Check(round.IsSilencedByBoss(rare), "a rare joker is silenced");
+        Check(!round.IsSilencedByBoss(commonPower), "a common power keeps working");
+        Check(round.IsSilencedByBoss(rarePower), "a rare power is silenced");
+
+        // Silencing really does gate the inventories, not just report a flag.
+        Check(!session.Jokers.CanActivate(rare.InstanceId),
+            "a silenced joker cannot be activated");
+        Check(!session.Powers.CanUse(rarePower.InstanceId, ActivationTarget.None),
+            "a silenced power cannot be used");
+        Check(session.Powers.CanBeginUse(commonPower.InstanceId),
+            "the common power is still usable");
+        Check(rare.SellValue > 0, "a silenced joker keeps its sell value",
+            "value " + rare.SellValue);
+
+        // Renovasyon (common, charged) still runs, so the gate is not blanket-blocking.
+        Check(session.Jokers.CanActivate(common.InstanceId),
+            "the common joker is still activatable");
+    }
+
+    private static void Boss_OburlukEatsOnlyWhenSlotsAreFull()
+    {
+        Section("boss / oburluk punishes a full inventory");
+        // Not full: nothing is switched off.
+        var roomy = NewSession(5171, 6, 1000000, 40, 1);
+        roomy.Jokers.Add(new RenovasyonJoker());
+        var roomyBoss = new OburlukBoss();
+        roomy.CurrentRound.SetBoss(roomyBoss);
+        roomyBoss.OnRoundStarted(new RoundContext(roomy, roomy.Rng, roomy.CurrentRound));
+        Check(roomyBoss.SilencedJokerId == 0, "a free joker slot means nothing is eaten",
+            "silenced " + roomyBoss.SilencedJokerId);
+
+        // Full: exactly one joker and one power go quiet.
+        var full = NewSession(5172, 6, 1000000, 40, 1);
+        full.Jokers.MaxSlots = 2;
+        full.Powers.MaxSlots = 2;
+        full.Jokers.Add(new RenovasyonJoker());
+        full.Jokers.Add(new InsiderJoker());
+        full.Powers.Add(new CimbizPower());
+        full.Powers.Add(new KlonPower());
+        Check(full.Jokers.IsFull && full.Powers.IsFull, "both inventories are full");
+        var boss = new OburlukBoss();
+        full.CurrentRound.SetBoss(boss);
+        boss.OnRoundStarted(new RoundContext(full, full.Rng, full.CurrentRound));
+
+        Check(boss.SilencedJokerId != 0, "a joker was switched off",
+            "silenced " + boss.SilencedJokerId);
+        Check(boss.SilencedPowerId != 0, "a power was switched off",
+            "silenced " + boss.SilencedPowerId);
+        int silencedJokers = 0;
+        foreach (Joker joker in full.Jokers.Jokers)
+        {
+            if (full.CurrentRound.IsSilencedByBoss(joker))
+            {
+                silencedJokers++;
+            }
+        }
+        Check(silencedJokers == 1, "exactly one joker, not all of them",
+            "silenced " + silencedJokers);
+        int silencedPowers = 0;
+        foreach (Power power in full.Powers.Powers)
+        {
+            if (full.CurrentRound.IsSilencedByBoss(power))
+            {
+                silencedPowers++;
+            }
+        }
+        Check(silencedPowers == 1, "exactly one power", "silenced " + silencedPowers);
+    }
+
+    private static void Boss_TukenmislikStopsEveryRefill()
+    {
+        Section("boss / tukenmislik blocks every recharge");
+        var session = NewSession(5173, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        Power power = session.Powers.Add(new CimbizPower());
+        round.SetBoss(new TukenmislikBoss());
+
+        Check(power.Charged, "the round still starts with a charged power");
+        Check(round.PowerRechargeBlocked, "the round reports refills as blocked");
+        session.Powers.BurnCharge(power);
+        Check(!power.Charged, "the charge is gone once spent");
+
+        session.Powers.RechargeAll();
+        Check(!power.Charged, "a blanket recharge does nothing");
+        Check(!session.Powers.Recharge(power.InstanceId), "a targeted recharge refuses");
+        Check(!session.Powers.RechargeOne(), "Powerbank's refill refuses");
+        Check(!power.Charged, "the power is still empty after every attempt");
+
+        // A clean sweep - the powers' whole economy - also pays nothing now. Driven through the
+        // real dispatch, because that (not RechargeAll) is what a sweep actually calls.
+        var sweepCtx = new TurnContext(session, session.Rng, round, new TurnReport(),
+            new ScoreBreakdown());
+        session.Powers.DispatchCleanSweep(sweepCtx, true);
+        Check(!power.Charged, "not even a clean sweep refills it");
+
+        // Sanity: the very same sweep DOES refill on a round with no boss.
+        var plain = NewSession(5173, 6, 1000000, 40, 1);
+        Power plainPower = plain.Powers.Add(new CimbizPower());
+        plain.Powers.BurnCharge(plainPower);
+        var plainCtx = new TurnContext(plain, plain.Rng, plain.CurrentRound, new TurnReport(),
+            new ScoreBreakdown());
+        plain.Powers.DispatchCleanSweep(plainCtx, true);
+        Check(plainPower.Charged, "an ordinary round's sweep refills it");
     }
 
     private static void BossRounds_FlaggedEveryThirdRound()

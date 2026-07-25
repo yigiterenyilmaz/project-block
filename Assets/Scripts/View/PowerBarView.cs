@@ -28,6 +28,10 @@ namespace ProjectBlock.View
         private static readonly Color BodyColor = new Color(0.80f, 0.84f, 0.90f);
         private static readonly Color SpentTextColor = new Color(0.55f, 0.58f, 0.62f);
 
+        /// <summary>Switched off by a boss round ("Anarşi", "Oburluk"): charged or not, it
+        /// cannot be used this round.</summary>
+        private static readonly Color SilencedColor = new Color(0.26f, 0.10f, 0.12f, 0.95f);
+
         private readonly List<Panel> panels = new List<Panel>();
         private RectTransform root;
 
@@ -170,7 +174,12 @@ namespace ProjectBlock.View
             bool ready = session.Powers.CanBeginUse(power.InstanceId);
             bool targeting = targetingInstanceId.HasValue
                 && targetingInstanceId.Value == power.InstanceId;
-            panel.Background.color = targeting ? TargetingColor
+            // Silenced by a boss outranks everything else: a charged power that cannot be used
+            // must not look ready.
+            bool silenced = session.CurrentRound != null
+                && session.CurrentRound.IsSilencedByBoss(power);
+            panel.Background.color = silenced ? SilencedColor
+                : targeting ? TargetingColor
                 : !power.Charged ? SpentColor
                 : ready ? ReadyColor : PanelColor;
             // Spent still greys the whole panel out; rarity only tints the charged state and
@@ -195,6 +204,15 @@ namespace ProjectBlock.View
                 : Loc.Pick("empty (sweep refills)", "boş (temizlik doldurur)"));
             line.Append('\n').Append(Loc.Pick("sell ", "satış "))
                 .Append(power.BaseSellValue * session.Config.Scoring.ScoreScale);
+            if (silenced)
+            {
+                line.Append(Loc.Pick("   (BOSS: off)", "   (PATRON: kapalı)"));
+            }
+            else if (session.CurrentRound != null && session.CurrentRound.PowerRechargeBlocked
+                && !power.Charged)
+            {
+                line.Append(Loc.Pick("   (BOSS: no refill)", "   (PATRON: dolmaz)"));
+            }
             panel.Body.text = line.ToString();
         }
 

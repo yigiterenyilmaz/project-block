@@ -21,8 +21,11 @@ namespace ProjectBlock.Core
             Register(() => new AlikoymaBoss());
             Register(() => new MapusBoss());
             Register(() => new FedaBoss());
+            Register(() => new TukenmislikBoss());
+            Register(() => new AnarsiBoss());
             Register(() => new UfukBoss());
             Register(() => new KuleBoss());
+            Register(() => new OburlukBoss());
         }
 
         /// <summary>All known bosses, in design order.</summary>
