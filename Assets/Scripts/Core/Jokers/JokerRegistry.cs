@@ -55,6 +55,7 @@ namespace ProjectBlock.Core
             Register(() => new HafizaJoker());
             Register(() => new KolayParaJoker());
             Register(() => new KrediKartiJoker());
+            Register(() => new DevreJoker());
         }
 
         /// <summary>All known jokers, in design order.</summary>

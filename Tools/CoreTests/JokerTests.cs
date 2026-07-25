@@ -113,6 +113,11 @@ public static class JokerTests
         KrediKarti_BossRoundWithOpenDebtEndsTheRun();
         KrediKarti_ADebtFreeBossRoundIsFine();
         KrediKarti_CannotBeSoldWhileInDebt();
+        Devre_TracesAMonotoneEdgeToEdgePath();
+        Devre_WaitsForARandomTurnAndThenStays();
+        Devre_BreakingItExplodesThePathAndPays();
+        Devre_OnlyOneCircuitPerRound();
+        Devre_ALineClearOnTheSameTurnStillCounts();
         Boss_TitizlikPaysForNothingButASweep();
         Boss_TitizlikLeavesJokerBonusesAlone();
         Boss_CanaGelecegineMalaTakesAQuarterOfThePurse();
@@ -3469,6 +3474,206 @@ public static class JokerTests
             Check(!session.Jokers.CanSell(card),
                 "still short of the full amount, so still locked", "debt " + session.Debt);
         }
+    }
+
+    private static void Devre_TracesAMonotoneEdgeToEdgePath()
+    {
+        Section("devre / traces a connected, edge-to-edge, never-doubling-back circuit");
+        // Many rounds' worth of circuits, so the shape rules are checked against real variety
+        // rather than one lucky draw.
+        bool allConnected = true;
+        bool allMonotone = true;
+        bool allEdgeToEdge = true;
+        bool allOnBoard = true;
+        bool anyWound = false;
+        int traced = 0;
+
+        for (int seed = 7000; seed < 7040; seed++)
+        {
+            var session = NewSession(seed, 7, 1000000, 40, 1);
+            var joker = (DevreJoker)session.Jokers.Add(new DevreJoker());
+            RoundEngine round = session.CurrentRound;
+            session.Jokers.DispatchRoundStarted(round);
+            PlayTurns(session, joker.MaxArmTurn + 2);
+            if (!joker.HasCircuit)
+            {
+                continue;
+            }
+            traced++;
+            IReadOnlyList<GridPos> path = joker.Path;
+            GameBoard board = round.Board;
+
+            for (int i = 0; i < path.Count; i++)
+            {
+                if (!board.IsInside(path[i])) { allOnBoard = false; }
+                if (i == 0) { continue; }
+                int dx = path[i].X - path[i - 1].X;
+                int dy = path[i].Y - path[i - 1].Y;
+                // Every step is exactly one cell, straight - never diagonal, never a jump.
+                if (System.Math.Abs(dx) + System.Math.Abs(dy) != 1) { allConnected = false; }
+            }
+
+            bool horizontal = joker.PathIsHorizontal;
+            if (horizontal)
+            {
+                if (path[0].X != board.MinX || path[path.Count - 1].X != board.MinX + board.Width - 1)
+                {
+                    allEdgeToEdge = false;
+                }
+                for (int i = 1; i < path.Count; i++)
+                {
+                    if (path[i].X < path[i - 1].X) { allMonotone = false; } // doubled back
+                    if (path[i].Y != path[i - 1].Y) { anyWound = true; }
+                }
+            }
+            else
+            {
+                if (path[0].Y != board.MinY || path[path.Count - 1].Y != board.MinY + board.Height - 1)
+                {
+                    allEdgeToEdge = false;
+                }
+                for (int i = 1; i < path.Count; i++)
+                {
+                    if (path[i].Y < path[i - 1].Y) { allMonotone = false; }
+                    if (path[i].X != path[i - 1].X) { anyWound = true; }
+                }
+            }
+        }
+
+        Check(traced > 20, "circuits were traced across many rounds", "traced " + traced);
+        Check(allOnBoard, "every cell of every circuit is real play area");
+        Check(allConnected, "every step is one straight cell - the circuit is one unbroken line");
+        Check(allEdgeToEdge, "every circuit runs from one edge to the opposite one");
+        Check(allMonotone, "and NEVER doubles back along its own axis");
+        Check(anyWound, "but it does wind sideways - it is not just a straight line");
+    }
+
+    private static void Devre_WaitsForARandomTurnAndThenStays()
+    {
+        Section("devre / appears at a random turn and then waits all round");
+        var session = NewSession(7100, 6, 1000000, 40, 1);
+        var joker = (DevreJoker)session.Jokers.Add(new DevreJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        Check(!joker.HasCircuit, "nothing is traced on an empty board at round start");
+
+        PlayTurns(session, 1);
+        Check(!joker.HasCircuit, "still nothing after the first turn",
+            "turn " + round.TurnNumber);
+
+        PlayTurns(session, joker.MaxArmTurn + 2);
+        Check(joker.HasCircuit, "by the latest arm turn it is on the board",
+            "turn " + round.TurnNumber);
+
+        // No deadline: it is still there many turns later, untouched.
+        IReadOnlyList<GridPos> before = new List<GridPos>(joker.Path);
+        PlayTurns(session, 15);
+        if (!joker.BrokenThisRound)
+        {
+            Check(joker.HasCircuit, "and it is still waiting turns later - there is no deadline");
+            Check(joker.Path.Count == before.Count, "the same circuit, not a new one",
+                before.Count + " -> " + joker.Path.Count);
+        }
+        else
+        {
+            Check(true, "it was completed during play, which is the other legal outcome");
+        }
+    }
+
+    private static void Devre_BreakingItExplodesThePathAndPays()
+    {
+        Section("devre / completing the circuit breaks it, explodes it and pays");
+        var session = NewSession(7101, 5, 1000000, 40, 1);
+        var joker = (DevreJoker)session.Jokers.Add(new DevreJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        PlayTurns(session, joker.MaxArmTurn + 2);
+        Check(joker.HasCircuit, "a circuit is on the board");
+
+        var path = new List<GridPos>(joker.Path);
+        int cells = path.Count;
+        // Fill every cell of the circuit but one, by hand, then let a real turn close it.
+        for (int i = 0; i < path.Count; i++)
+        {
+            if (!round.Board.GetCube(path[i]).HasValue)
+            {
+                round.Board.SetCubeAt(path[i], new Cube(CubeKind.Normal, 9500));
+            }
+        }
+        Check(!joker.BrokenThisRound, "filling it by hand does not fire it - a turn has to resolve");
+
+        long scoreBefore = session.TotalScore;
+        PlayOneCard(round);
+        Check(joker.BrokenThisRound, "the next resolved turn breaks it");
+        Check(!joker.HasCircuit, "and the circuit is gone from the board");
+
+        int stillStanding = 0;
+        for (int i = 0; i < path.Count; i++)
+        {
+            if (round.Board.GetCube(path[i]).HasValue) { stillStanding++; }
+        }
+        Check(stillStanding <= 1, "the cubes on it exploded",
+            "still standing " + stillStanding + " of " + cells);
+        Check(session.TotalScore > scoreBefore, "and it paid",
+            scoreBefore + " -> " + session.TotalScore);
+    }
+
+    private static void Devre_OnlyOneCircuitPerRound()
+    {
+        Section("devre / one circuit per round, and a fresh one next round");
+        var session = NewSession(7102, 5, 1000000, 40, 1);
+        var joker = (DevreJoker)session.Jokers.Add(new DevreJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        PlayTurns(session, joker.MaxArmTurn + 2);
+        if (!joker.HasCircuit)
+        {
+            Check(false, "no circuit was traced", "turn " + round.TurnNumber);
+            return;
+        }
+        foreach (GridPos cell in new List<GridPos>(joker.Path))
+        {
+            if (!round.Board.GetCube(cell).HasValue)
+            {
+                round.Board.SetCubeAt(cell, new Cube(CubeKind.Normal, 9501));
+            }
+        }
+        PlayOneCard(round);
+        Check(joker.BrokenThisRound, "the circuit broke");
+
+        PlayTurns(session, 20);
+        Check(!joker.HasCircuit, "no second circuit appears in the same round");
+        Check(joker.BrokenThisRound, "it stays broken for the rest of the round");
+
+        // A new round re-arms it from scratch.
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        Check(!joker.BrokenThisRound, "a new round clears the broken flag");
+        Check(!joker.HasCircuit, "and starts untraced again");
+    }
+
+    private static void Devre_ALineClearOnTheSameTurnStillCounts()
+    {
+        Section("devre / a cell that blew up this turn still counts as filled");
+        var session = NewSession(7103, 5, 1000000, 40, 1);
+        var joker = (DevreJoker)session.Jokers.Add(new DevreJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        PlayTurns(session, joker.MaxArmTurn + 2);
+        Check(joker.HasCircuit, "a circuit is on the board");
+
+        // Fill the WHOLE board except one cell, so the closing placement completes both the
+        // circuit and at least one line - the line explodes first and empties circuit cells.
+        var path = new List<GridPos>(joker.Path);
+        FillBoardSolid(round, session);
+        GridPos gap = path[path.Count - 1];
+        round.Board.DestroyCube(gap);
+        // The hole is on the circuit, so closing it completes the circuit AND its row/column.
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "a card was played");
+        Check(report.ExplodedRows.Count + report.ExplodedColumns.Count > 0,
+            "the same placement cleared a line", "rows " + report.ExplodedRows.Count);
+        Check(joker.BrokenThisRound,
+            "and the circuit still counted as completed, even though the line ate its cells");
     }
 
     private static void Boss_TitizlikPaysForNothingButASweep()
