@@ -1,10 +1,10 @@
-// PURPOSE: The three bosses that attack what the player OWNS rather than the board -
+// PURPOSE: The four bosses that attack what the player OWNS rather than the board -
 // "Tükenmişlik" stops powers refilling, "Anarşi" silences everything rare, "Oburluk" punishes
-// a full inventory by switching one item off.
+// a full inventory by switching one item off, and "Terslik" turns every joker against you.
 //
-// None of them touches the inventories: silencing is a QUERY the inventories ask every time
-// (RoundEngine.IsSilencedByBoss), so nothing is removed, nothing is re-added, and no
-// permanent effect (a joker's hand-size bonus, say) is ever undone and redone.
+// None of them touches the inventories: silencing and inversion are QUERIES the inventories ask
+// every time (RoundEngine.IsSilencedByBoss / InvertsJokerScore), so nothing is removed, nothing
+// is re-added, and no permanent effect (a joker's hand-size bonus, say) is ever undone and redone.
 
 namespace ProjectBlock.Core
 {
@@ -116,6 +116,45 @@ namespace ProjectBlock.Core
         public override bool DisablesPower(Power power)
         {
             return silencedPower != 0 && power.InstanceId == silencedPower;
+        }
+    }
+
+    /// <summary>
+    /// "Terslik" - your jokers turn on you. Everything a joker GIVES this round is taken
+    /// instead: the points it would add are subtracted by the same amount, and a piggy bank
+    /// leaks value rather than filling.
+    ///
+    /// WHAT IT DOES NOT DO. Only the giving is reversed, not the joker. A joker that hands out
+    /// no points and no value has no opposite to turn into - "Insider" still reveals the top
+    /// card, "Seri tetik" still holds the hand open, "Deprem" still saves you from a dead end.
+    /// They keep working exactly as they do on any other round. That keeps the boss honest (it
+    /// punishes what you built your score on) and keeps it working for every joker added later,
+    /// with no per-joker opposite to invent.
+    ///
+    /// A turn can never pay less than nothing, so the worst this boss can do is make a turn
+    /// worthless - your round score never goes backwards. And a drained piggy bank stops at
+    /// zero; it cannot go into debt.
+    ///
+    /// The whole thing is one flag: the inversion window in JokerInventory does the work, so
+    /// this class has nothing of its own to run.
+    /// </summary>
+    public sealed class TerslikBoss : BossRound
+    {
+        public TerslikBoss()
+            : base("terslik", "Terslik")
+        {
+            SetDescription(
+                "Your jokers work against you this round: the points they would give you are "
+                    + "taken from you instead, and piggy banks leak value. Jokers that give "
+                    + "neither still do their job. A turn can never pay less than nothing.",
+                "Bu raunt jokerlerin sana karşı çalışır: kazandıracakları puanı kaybettirirler, "
+                    + "kumbaralar da dolmak yerine boşalır. Puan ya da değer vermeyen jokerler "
+                    + "normal çalışmaya devam eder. Bir tur hiçbir zaman eksiye düşürmez.");
+        }
+
+        public override bool InvertsJokerScore
+        {
+            get { return true; }
         }
     }
 }

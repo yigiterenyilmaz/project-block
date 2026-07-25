@@ -29,6 +29,7 @@ namespace ProjectBlock.Core
             Register(() => new UfukBoss());
             Register(() => new KuleBoss());
             Register(() => new OburlukBoss());
+            Register(() => new TerslikBoss());
         }
 
         /// <summary>All known bosses, in design order.</summary>

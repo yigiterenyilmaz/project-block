@@ -106,6 +106,12 @@ public static class JokerTests
         Boss_FedaMakesABonusCardCostTheHand();
         Boss_AnarsiSilencesEverythingRare();
         Boss_OburlukEatsOnlyWhenSlotsAreFull();
+        Boss_TerslikTurnsJokerPointsIntoLosses();
+        Terslik_ATurnNeverPaysLessThanNothing();
+        Terslik_LeavesJokersThatGiveNoPointsAlone();
+        Terslik_DrainsPiggyBanksInsteadOfFillingThem();
+        Terslik_NeverInvertsPowersOrTheBaseScore();
+        Terslik_TheWindowClosesAgain();
         Boss_TukenmislikStopsEveryRefill();
         Boss_VanilyaStripsEveryElement();
         Boss_TaxesTakeCardsOutOfTheRunDeck();
@@ -3167,6 +3173,183 @@ public static class JokerTests
         // Renovasyon (common, charged) still runs, so the gate is not blanket-blocking.
         Check(session.Jokers.CanActivate(common.InstanceId),
             "the common joker is still activatable");
+    }
+
+    private static void Boss_TerslikTurnsJokerPointsIntoLosses()
+    {
+        Section("boss / terslik turns joker points into losses");
+        // Kolay Para pays a flat amount per cube placed - the plainest "every block scores"
+        // joker there is, and exactly the case the design named.
+        var normal = NewSession(5180, 6, 1000000, 40, 3);
+        var plainJoker = (KolayParaJoker)normal.Jokers.Add(new KolayParaJoker());
+        normal.Jokers.DispatchRoundStarted(normal.CurrentRound);
+        TurnReport plainTurn = PlayOneCard(normal.CurrentRound);
+        int jokerGave = 0;
+        foreach (ScoreContribution c in plainTurn.Score.Contributions)
+        {
+            if (c.Source == plainJoker.DefId) { jokerGave += c.Flat; }
+        }
+        Check(jokerGave > 0, "without the boss the joker ADDS points", "gave " + jokerGave);
+
+        var cursed = NewSession(5180, 6, 1000000, 40, 3);
+        var cursedJoker = (KolayParaJoker)cursed.Jokers.Add(new KolayParaJoker());
+        cursed.CurrentRound.SetBoss(new TerslikBoss());
+        cursed.Jokers.DispatchRoundStarted(cursed.CurrentRound);
+        Check(cursed.CurrentRound.InvertsJokerScore, "the round reports itself inverted");
+        TurnReport cursedTurn = PlayOneCard(cursed.CurrentRound);
+        int jokerTook = 0;
+        foreach (ScoreContribution c in cursedTurn.Score.Contributions)
+        {
+            if (c.Source == cursedJoker.DefId) { jokerTook += c.Flat; }
+        }
+        Check(jokerTook == -jokerGave, "with the boss it TAKES exactly the same amount",
+            jokerGave + " -> " + jokerTook);
+        Check(cursedTurn.Score.Total < plainTurn.Score.Total,
+            "so the turn is worth less than it would have been",
+            plainTurn.Score.Total + " -> " + cursedTurn.Score.Total);
+    }
+
+    private static void Terslik_ATurnNeverPaysLessThanNothing()
+    {
+        Section("boss / terslik can empty a turn but never reverse it");
+        var session = NewSession(5181, 6, 1000000, 40, 3);
+        session.Config.Scoring.PointsPerCubePlaced = 10; // a turn that really does earn something
+        var joker = (KolayParaJoker)session.Jokers.Add(new KolayParaJoker());
+        // A penalty far bigger than anything the turn can earn.
+        joker.PointsPerCube = 100000;
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(new TerslikBoss());
+        session.Jokers.DispatchRoundStarted(round);
+
+        int before = round.RoundScore;
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "a card was played");
+        Check(report.Score.BaseTotal > 0, "the turn had real earnings to lose",
+            "base " + report.Score.BaseTotal);
+        Check(report.Score.FlatBonus < -report.Score.BaseTotal,
+            "and the joker's penalty is bigger than them",
+            "flat " + report.Score.FlatBonus);
+        Check(report.Score.Total == 0, "the turn pays exactly nothing, not a negative",
+            "total " + report.Score.Total);
+        Check(round.RoundScore == before, "and the round score does not go backwards",
+            before + " -> " + round.RoundScore);
+
+        // Several such turns in a row must still never dig a hole.
+        PlayTurns(session, 4);
+        Check(round.RoundScore >= before, "still no hole after more turns",
+            "" + round.RoundScore);
+    }
+
+    private static void Terslik_LeavesJokersThatGiveNoPointsAlone()
+    {
+        Section("boss / terslik does not touch jokers that hand out no points");
+        var session = NewSession(5182, 6, 1000000, 40, 1);
+        Joker insider = session.Jokers.Add(new InsiderJoker());
+        Joker renovasyon = session.Jokers.Add(new RenovasyonJoker());
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(new TerslikBoss());
+        session.Jokers.DispatchRoundStarted(round);
+
+        Check(!round.IsSilencedByBoss(insider), "they are NOT silenced - this is not Anarşi");
+        Check(session.Config.Rules.RevealTopDrawCard,
+            "Insider still reveals the top card, exactly as on any other round");
+        Check(session.Jokers.CanActivate(renovasyon.InstanceId),
+            "Renovasyon can still be activated");
+        Check(session.Jokers.TryActivate(renovasyon.InstanceId, ActivationTarget.None),
+            "and it still runs");
+    }
+
+    private static void Terslik_DrainsPiggyBanksInsteadOfFillingThem()
+    {
+        Section("boss / terslik makes a piggy bank leak instead of fill");
+        var session = NewSession(5183, 6, 1000000, 40, 1);
+        var bank = (CimriKumbaraJoker)session.Jokers.Add(new CimriKumbaraJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        // Fill it the honest way first, with no boss in play.
+        int empty = bank.SellValue;
+        PlayTurns(session, 6);
+        int filled = bank.SellValue;
+        Check(filled > empty, "it fills up on an ordinary round", empty + " -> " + filled);
+
+        // Now the boss arrives and the same hook starts running backwards.
+        round.SetBoss(new TerslikBoss());
+        PlayTurns(session, 3);
+        Check(bank.SellValue < filled, "under the boss the very same joker drains it",
+            filled + " -> " + bank.SellValue);
+
+        // An emptied bank cannot go into debt: sell value bottoms out at the base price.
+        PlayTurns(session, 80);
+        Check(bank.SellValue >= bank.BaseSellValue,
+            "and it stops at empty - a piggy bank never owes you money",
+            "value " + bank.SellValue + " base " + bank.BaseSellValue);
+    }
+
+    private static void Terslik_NeverInvertsPowersOrTheBaseScore()
+    {
+        Section("boss / terslik leaves powers and the base score alone");
+        var session = NewSession(5184, 6, 1000000, 40, 3);
+        session.Config.Scoring.PointsPerCubePlaced = 10; // placement pays nothing by default
+        RoundEngine round = session.CurrentRound;
+        round.SetBoss(new TerslikBoss());
+
+        // No jokers at all: the turn is pure base score, and it must be untouched.
+        TurnReport report = PlayOneCard(round);
+        Check(report.Score.Total > 0, "a turn with no jokers still scores normally",
+            "total " + report.Score.Total);
+        Check(report.Score.FlatBonus == 0, "and nothing was added or subtracted",
+            "flat " + report.Score.FlatBonus);
+
+        // A power that pays still pays: the inversion window is open around joker dispatch only.
+        var withPower = NewSession(5185, 6, 1000000, 40, 3);
+        withPower.CurrentRound.SetBoss(new TerslikBoss());
+        Power power = withPower.Powers.Add(new BuyutecPower());
+        withPower.Powers.DispatchRoundStarted(withPower.CurrentRound);
+        Check(!withPower.CurrentRound.IsSilencedByBoss(power), "the power is not silenced");
+        Check(withPower.Powers.CanUse(power.InstanceId, ActivationTarget.None),
+            "and it is usable");
+    }
+
+    private static void Terslik_TheWindowClosesAgain()
+    {
+        Section("boss / terslik never leaks into the next round");
+        var session = NewSession(5186, 6, 40, 40, 3);
+        RoundEngine bossRound = session.CurrentRound;
+        bossRound.SetBoss(new TerslikBoss());
+        var joker = (KolayParaJoker)session.Jokers.Add(new KolayParaJoker());
+        session.Jokers.DispatchRoundStarted(bossRound);
+        PlayTurns(session, 2);
+        Check(bossRound.InvertsJokerScore, "the boss round is inverted");
+
+        // Reach the market and start a plain round: the inversion must be gone.
+        int guard = 0;
+        while (session.Phase == GamePhase.Round && guard++ < 200)
+        {
+            if (session.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                session.CurrentRound.DecideAdvance(true);
+                continue;
+            }
+            if (PlayTurns(session, 1) == 0) { break; }
+        }
+        if (session.Phase == GamePhase.Market)
+        {
+            session.LeaveMarket();
+            RoundEngine plain = session.CurrentRound;
+            Check(!plain.InvertsJokerScore, "the next round is not inverted");
+            TurnReport report = PlayOneCard(plain);
+            int gave = 0;
+            foreach (ScoreContribution c in report.Score.Contributions)
+            {
+                if (c.Source == joker.DefId) { gave += c.Flat; }
+            }
+            Check(gave > 0, "and the joker pays the player again", "gave " + gave);
+        }
+        else
+        {
+            Check(false, "the run never reached a second round", "phase " + session.Phase);
+        }
     }
 
     private static void Boss_OburlukEatsOnlyWhenSlotsAreFull()
