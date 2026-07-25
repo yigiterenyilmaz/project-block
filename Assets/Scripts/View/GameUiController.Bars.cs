@@ -86,6 +86,19 @@ namespace ProjectBlock.View
             }
             Joker joker = session.Jokers.Jokers[index];
             Vector2? panelScreen = jokerBar.PanelScreenCenter(index);
+            // "Kredi kartı" is locked while its debt is open, so say so instead of silently
+            // doing nothing - a click that looks ignored reads as a bug.
+            if (!session.Jokers.CanSell(joker))
+            {
+                if (panelScreen.HasValue)
+                {
+                    Vector2 at = cam.ScreenToWorldPoint(panelScreen.Value);
+                    FloatingTextFx.Spawn(transform, at,
+                        Loc.Pick("PAY THE DEBT FIRST", "ÖNCE BORCU ÖDE"),
+                        new Color(1f, 0.45f, 0.4f), 48, 0.05f);
+                }
+                return true;
+            }
             long paid = session.Jokers.Sell(joker);
             Debug.Log("[project_block] Sold joker " + joker.DisplayName + " for " + paid);
             sfx.Buy();

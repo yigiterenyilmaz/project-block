@@ -298,7 +298,29 @@ namespace ProjectBlock.View
                 sb.Append(Loc.Pick("  [threshold passed]", "  [eşik geçildi]"));
             }
             sb.Append('\n');
-            sb.Append(Loc.Pick("Total score ", "Toplam puan ")).Append(session.TotalScore).Append('\n');
+            sb.Append(Loc.Pick("Total score ", "Toplam puan ")).Append(session.TotalScore);
+            // "Kredi kartı": the debt is the one number the player must not lose track of, so it
+            // sits next to the score it has to be paid out of, with the deadline spelled out.
+            if (session.Debt > 0)
+            {
+                sb.Append(Loc.Pick("   DEBT ", "   BORÇ ")).Append(session.Debt);
+                int next = NextBossRound(session);
+                if (next > 0)
+                {
+                    sb.Append(Loc.Pick("  (pay before round ", "  (raunt "))
+                        .Append(next)
+                        .Append(Loc.Pick(" or lose)", " bitmeden öde yoksa kaybedersin)"));
+                }
+                if (session.Phase == GamePhase.Market)
+                {
+                    sb.Append(Loc.Pick("   [O] pay", "   [O] öde"));
+                }
+            }
+            else if (session.CreditAvailable)
+            {
+                sb.Append(Loc.Pick("   (credit open)", "   (kredi açık)"));
+            }
+            sb.Append('\n');
             sb.Append(Loc.Pick("Draw ", "Çekme ")).Append(round.Deck.DrawCount)
                 .Append(Loc.Pick("   Discard ", "   Iskarta ")).Append(round.Deck.DiscardCount)
                 .Append(Loc.Pick("   Removed ", "   Çıkan ")).Append(round.Deck.RemovedCount).Append('\n');
@@ -342,8 +364,8 @@ namespace ProjectBlock.View
                 "Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run   L: türkçe\n",
                 "Debug - S: eli yenile   B: bonus kart   D: deste seç   R: yeni oyun   L: english\n"));
             sb.Append(Loc.Pick(
-                "Debug - J: pick joker   P: pick power   K: sell last joker",
-                "Debug - J: joker seç   P: güç seç   K: son jokeri sat"));
+                "Debug - J: pick joker   P: pick power   K: sell last joker   O: pay debt (market)",
+                "Debug - J: joker seç   P: güç seç   K: son jokeri sat   O: borç öde (market)"));
             infoText.text = sb.ToString();
 
             if (pendingTargetJokerId.HasValue)
@@ -424,6 +446,21 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>The round number of the next boss round at or after the current one - the
+        /// deadline the market debt has to be settled by. 0 when the progression has no boss
+        /// rounds at all.</summary>
+        private static int NextBossRound(GameSession session)
+        {
+            for (int round = session.RoundNumber; round <= session.Config.TotalRounds; round++)
+            {
+                if (session.Config.Progression.GetRound(round).IsBossRound)
+                {
+                    return round;
+                }
+            }
+            return 0;
+        }
+
         private static string DescribeLoss(LossReason? loss)
         {
             switch (loss)
@@ -442,6 +479,9 @@ namespace ProjectBlock.View
                 case LossReason.RetroTopOut:
                     return Loc.Pick("topped out - no room to drop from above",
                         "tepeye ulaştın - yukarıdan blok düşecek yer yok");
+                case LossReason.DebtNotRepaid:
+                    return Loc.Pick("a boss round ended with your market debt still open",
+                        "patron raundu bitti, market borcun hâlâ açıktı");
                 default:
                     return Loc.Pick("unknown", "bilinmiyor");
             }

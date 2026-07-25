@@ -574,7 +574,19 @@ namespace ProjectBlock.View
             switch (session.Phase)
             {
                 case GamePhase.Market:
-                    if (kb != null && kb.nKey.wasPressedThisFrame)
+                    // "Kredi kartı": settling the debt is a market action and never automatic,
+                    // so it needs its own key. O ("öde") pays down as much as the score covers -
+                    // P is already the power grant picker, and that handler runs first.
+                    if (kb != null && kb.oKey.wasPressedThisFrame && session.Debt > 0)
+                    {
+                        long paid = session.RepayDebtInFull();
+                        if (paid > 0)
+                        {
+                            sfx.Buy();
+                        }
+                        RefreshAll(null);
+                    }
+                    else if (kb != null && kb.nKey.wasPressedThisFrame)
                     {
                         session.LeaveMarket();
                         marketView.Hide();
