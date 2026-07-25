@@ -42,10 +42,12 @@ namespace ProjectBlock.Core
         /// <summary>Extra score per line beyond the first when several explode at once.</summary>
         public int MultiLineBonusPerExtraLine = 10;
 
-        /// <summary>Flat bonus for a clean sweep ("temizlik" - board fully emptied).
+        /// <summary>Flat bonus for a clean sweep ("temizlik" - board fully emptied). LOGICAL, so
+        /// the player sees it x ScoreScale: 50 here reads as 500 on screen.
         /// Rebalanced 2026-07-18: 150 dwarfed early thresholds and made overtime
-        /// farming explode (1600+ points in round 1).</summary>
-        public int CleanSweepBonus = 75;
+        /// farming explode (1600+ points in round 1). Rebalanced again 2026-07-25: 75 (750 on
+        /// screen) still paid too well against a 60-point first threshold.</summary>
+        public int CleanSweepBonus = 50;
 
         /// <summary>Per-turn bonus per gold cube sitting on the board.</summary>
         public int GoldPointsPerCubePerTurn = 1;
