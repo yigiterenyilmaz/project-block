@@ -231,9 +231,17 @@ namespace ProjectBlock.Core
             {
                 // The last step lands where it stands: the circuit must finish ON the far edge,
                 // not wander past it.
+                // Drawn from the range that actually FITS rather than clamped into it. Clamping
+                // pins the circuit to a wall: at the edge every out-of-range offset collapses
+                // onto the same cell, so a circuit that touches the side tends to hug it and
+                // come out as a plain straight line.
+                int lo = across - MaxWind;
+                int hi = across + MaxWind;
+                if (lo < 0) { lo = 0; }
+                if (hi > acrossCount - 1) { hi = acrossCount - 1; }
                 int next = along == alongCount - 1
                     ? across
-                    : Clamp(across + rng.NextInt(-MaxWind, MaxWind + 1), 0, acrossCount - 1);
+                    : lo + rng.NextInt(0, hi - lo + 1);
                 // Walked in the direction of TRAVEL, not lowest-first: the list is the route in
                 // order, so the UI can draw it as a line and every neighbouring pair really is
                 // one step apart.
@@ -255,7 +263,9 @@ namespace ProjectBlock.Core
                 }
                 across = next;
             }
-            if (traced.Count == 0)
+            // A circuit that never left its lane is just a row or a column, which the game
+            // already explodes on its own - reject it and trace another.
+            if (traced.Count == 0 || traced.Count <= alongCount)
             {
                 return false;
             }

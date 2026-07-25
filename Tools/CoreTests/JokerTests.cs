@@ -3485,7 +3485,7 @@ public static class JokerTests
         bool allMonotone = true;
         bool allEdgeToEdge = true;
         bool allOnBoard = true;
-        bool anyWound = false;
+        bool allWound = true;
         int traced = 0;
 
         for (int seed = 7000; seed < 7040; seed++)
@@ -3514,6 +3514,7 @@ public static class JokerTests
             }
 
             bool horizontal = joker.PathIsHorizontal;
+            bool wound = false;
             if (horizontal)
             {
                 if (path[0].X != board.MinX || path[path.Count - 1].X != board.MinX + board.Width - 1)
@@ -3523,7 +3524,7 @@ public static class JokerTests
                 for (int i = 1; i < path.Count; i++)
                 {
                     if (path[i].X < path[i - 1].X) { allMonotone = false; } // doubled back
-                    if (path[i].Y != path[i - 1].Y) { anyWound = true; }
+                    if (path[i].Y != path[i - 1].Y) { wound = true; }
                 }
             }
             else
@@ -3535,9 +3536,10 @@ public static class JokerTests
                 for (int i = 1; i < path.Count; i++)
                 {
                     if (path[i].Y < path[i - 1].Y) { allMonotone = false; }
-                    if (path[i].X != path[i - 1].X) { anyWound = true; }
+                    if (path[i].X != path[i - 1].X) { wound = true; }
                 }
             }
+            if (!wound) { allWound = false; }
         }
 
         Check(traced > 20, "circuits were traced across many rounds", "traced " + traced);
@@ -3545,7 +3547,8 @@ public static class JokerTests
         Check(allConnected, "every step is one straight cell - the circuit is one unbroken line");
         Check(allEdgeToEdge, "every circuit runs from one edge to the opposite one");
         Check(allMonotone, "and NEVER doubles back along its own axis");
-        Check(anyWound, "but it does wind sideways - it is not just a straight line");
+        Check(allWound, "and EVERY one of them winds - never a plain row or column, which the "
+            + "game already explodes on its own");
     }
 
     private static void Devre_WaitsForARandomTurnAndThenStays()
