@@ -123,6 +123,13 @@ public static class JokerTests
         OtekiDunya_PowersHitTheWorldTheyArePointedAt();
         OtekiDunya_TargetingAlwaysSnapsBack();
         OtekiDunya_LeavesAnOrdinaryRoundAlone();
+        Sifaci_HealsASpentJokerOnItsClock();
+        Sifaci_GivesOneUseNotAFullRefill();
+        Sifaci_NeverHealsItselfOrAPassiveJoker();
+        YerAlti_RefuelsPowersAndSpendsItsSeam();
+        YerAlti_CostsPerPowerNotPerTick();
+        YerAlti_GoesQuietWhenTheSeamRunsOut();
+        YerAlti_StillFullSellsNormally();
         Devre_TracesAMonotoneEdgeToEdgePath();
         Devre_WaitsForARandomTurnAndThenStays();
         Devre_BreakingItExplodesThePathAndPays();
@@ -3867,6 +3874,200 @@ public static class JokerTests
         Check(report.MirrorCard == null && report.MirrorPlacedCells.Count == 0,
             "and reports nothing about a second world");
         Check(report.MirroredColumns.Count == 0, "no column match to pay");
+    }
+
+    private static void Sifaci_HealsASpentJokerOnItsClock()
+    {
+        Section("şifacı / gives a spent joker one use back, on its own clock");
+        var session = NewSession(8100, 6, 1000000, 40, 1);
+        var healer = (SifaciJoker)session.Jokers.Add(new SifaciJoker());
+        var patient = (RenovasyonJoker)session.Jokers.Add(new RenovasyonJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        int full = patient.ChargesPerRound;
+        Check(full > 0, "the patient is a charged joker", "charges " + full);
+        Check(patient.ChargesLeft == full, "and starts full");
+
+        // Nothing is spent: the clock comes due and simply waits.
+        PlayTurns(session, healer.TurnsBetweenHeals + 2);
+        Check(healer.IsReadyToHeal, "with nothing to heal it sits ready",
+            "status " + healer.StatusText);
+        Check(patient.ChargesLeft == full, "and healed nothing");
+
+        // Empty the patient. The very next turn should heal it, without waiting again.
+        while (patient.ChargesLeft > 0)
+        {
+            session.Jokers.TryActivate(patient.InstanceId, ActivationTarget.None);
+        }
+        Check(patient.ChargesLeft == 0, "the patient is spent", "left " + patient.ChargesLeft);
+        PlayTurns(session, 1);
+        Check(patient.ChargesLeft == 1, "the waiting healer topped it up at once",
+            "left " + patient.ChargesLeft);
+        Check(!healer.IsReadyToHeal, "and went back to sleep");
+    }
+
+    private static void Sifaci_GivesOneUseNotAFullRefill()
+    {
+        Section("şifacı / one use back, not a full refill");
+        var session = NewSession(8101, 6, 1000000, 40, 1);
+        var healer = (SifaciJoker)session.Jokers.Add(new SifaciJoker());
+        // Renovasyon has 2 uses per round, so a full refill would be visible.
+        var patient = (RenovasyonJoker)session.Jokers.Add(new RenovasyonJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        int full = patient.ChargesPerRound;
+        Check(full >= 2, "the patient has more than one use", "charges " + full);
+
+        while (patient.ChargesLeft > 0)
+        {
+            if (!session.Jokers.TryActivate(patient.InstanceId, ActivationTarget.None))
+            {
+                break;
+            }
+        }
+        if (patient.ChargesLeft > 0)
+        {
+            Check(true, "the patient could not be emptied in this setup - skipped");
+            return;
+        }
+        PlayTurns(session, healer.TurnsBetweenHeals + 1);
+        Check(patient.ChargesLeft == 1, "exactly one use came back, not all of them",
+            patient.ChargesLeft + " of " + full);
+        Check(healer.IsReadyToHeal == false || patient.ChargesLeft == 1,
+            "the heal was spent on that one use");
+    }
+
+    private static void Sifaci_NeverHealsItselfOrAPassiveJoker()
+    {
+        Section("şifacı / passive jokers are not patients");
+        var session = NewSession(8102, 6, 1000000, 40, 1);
+        var healer = (SifaciJoker)session.Jokers.Add(new SifaciJoker());
+        Joker passive = session.Jokers.Add(new InsiderJoker()); // no charges at all
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+
+        Check(passive.ChargesPerRound == 0, "Insider has no charges to heal");
+        Check(healer.ChargesPerRound == 0, "and the healer itself is passive too");
+        PlayTurns(session, healer.TurnsBetweenHeals + 3);
+        Check(healer.IsReadyToHeal, "so it stays ready forever with nothing to do",
+            "status " + healer.StatusText);
+        Check(passive.ChargesLeft == 0, "and nothing was granted to a passive joker");
+    }
+
+    private static void YerAlti_RefuelsPowersAndSpendsItsSeam()
+    {
+        Section("yer altı kaynakları / refuels spent powers and pays for each out of the seam");
+        var session = NewSession(8103, 6, 1000000, 40, 1);
+        var mine = (YerAltiKaynaklariJoker)session.Jokers.Add(new YerAltiKaynaklariJoker());
+        // Büyüteç is common, Kum Saati is rare (RarityTable).
+        var common = (BuyutecPower)session.Powers.Add(new BuyutecPower());
+        var rare = (KumSaatiPower)session.Powers.Add(new KumSaatiPower());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        session.Powers.DispatchRoundStarted(round);
+
+        Check(mine.CapacityLeft == mine.Capacity, "the seam starts full",
+            "" + mine.CapacityLeft);
+        Check(RarityTable.For(common.DefId) == Rarity.Common, "Büyüteç is common");
+        Check(RarityTable.For(rare.DefId) == Rarity.Rare, "Kum Saati is rare");
+
+        // Drain the common one only, and let its 3-turn clock come round.
+        common.Spend();
+        Check(!common.Charged, "the common power is spent");
+        int seam = mine.CapacityLeft;
+        PlayTurns(session, mine.CommonEveryTurns);
+        Check(common.Charged, "it was refuelled");
+        Check(mine.CapacityLeft == seam - mine.CommonCost,
+            "and the seam paid exactly one for a common power",
+            seam + " -> " + mine.CapacityLeft);
+
+        // A rare one costs two.
+        rare.Spend();
+        seam = mine.CapacityLeft;
+        PlayTurns(session, mine.RareEveryTurns * 2);
+        Check(rare.Charged, "the rare power was refuelled too");
+        Check(mine.CapacityLeft <= seam - mine.RareCost,
+            "and a rare refill costs two", seam + " -> " + mine.CapacityLeft);
+    }
+
+    private static void YerAlti_CostsPerPowerNotPerTick()
+    {
+        Section("yer altı kaynakları / every power refilled costs, not every tick");
+        var session = NewSession(8104, 6, 1000000, 40, 1);
+        var mine = (YerAltiKaynaklariJoker)session.Jokers.Add(new YerAltiKaynaklariJoker());
+        var a = (BuyutecPower)session.Powers.Add(new BuyutecPower());
+        var b = (CimbizPower)session.Powers.Add(new CimbizPower());
+        var c = (KlonPower)session.Powers.Add(new KlonPower());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        session.Powers.DispatchRoundStarted(session.CurrentRound);
+        Check(RarityTable.For(b.DefId) == Rarity.Common
+            && RarityTable.For(c.DefId) == Rarity.Common, "all three are common");
+
+        a.Spend();
+        b.Spend();
+        c.Spend();
+        int seam = mine.CapacityLeft;
+        PlayTurns(session, mine.CommonEveryTurns);
+        Check(a.Charged && b.Charged && c.Charged, "all three were refuelled in one tick");
+        Check(mine.CapacityLeft == seam - 3 * mine.CommonCost,
+            "and the seam paid for THREE, not for one tick",
+            seam + " -> " + mine.CapacityLeft);
+
+        // A tick with nothing spent costs nothing at all.
+        seam = mine.CapacityLeft;
+        PlayTurns(session, mine.CommonEveryTurns + 1);
+        Check(mine.CapacityLeft == seam, "a tick with nothing to refuel is free",
+            seam + " -> " + mine.CapacityLeft);
+    }
+
+    private static void YerAlti_GoesQuietWhenTheSeamRunsOut()
+    {
+        Section("yer altı kaynakları / a worked-out seam does nothing and refunds what you paid");
+        var session = NewSession(8105, 6, 1000000, 40, 1);
+        var mine = (YerAltiKaynaklariJoker)session.Jokers.Add(new YerAltiKaynaklariJoker());
+        mine.Capacity = 2; // a thin seam, so it runs out inside one round
+        var power = (BuyutecPower)session.Powers.Add(new BuyutecPower());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        session.Powers.DispatchRoundStarted(session.CurrentRound);
+        Check(mine.CapacityLeft == 2, "a two-point seam", "" + mine.CapacityLeft);
+
+        for (int i = 0; i < 3 && !mine.IsExhausted; i++)
+        {
+            power.Spend();
+            PlayTurns(session, mine.CommonEveryTurns);
+        }
+        Check(mine.IsExhausted, "the seam is worked out", "left " + mine.CapacityLeft);
+
+        // Now it is inert. Proven by the SEAM rather than by the power: a clean sweep during
+        // these turns would recharge it anyway, and that has nothing to do with this joker.
+        power.Spend();
+        PlayTurns(session, mine.CommonEveryTurns + 2);
+        Check(mine.CapacityLeft == 0, "the seam stayed at nothing - it never acted",
+            "left " + mine.CapacityLeft);
+
+        // And it refunds the purchase price rather than its sell value.
+        int scale = session.Config.Scoring.ScoreScale;
+        Check(mine.SellPriceScaled(scale) == (long)mine.SellValue * scale,
+            "with no purchase price it still sells normally",
+            "" + mine.SellPriceScaled(scale));
+        mine.PurchasePrice = 12345;
+        Check(mine.SellPriceScaled(scale) == 12345,
+            "once bought, a worked-out seam refunds exactly what you paid",
+            "" + mine.SellPriceScaled(scale));
+    }
+
+    private static void YerAlti_StillFullSellsNormally()
+    {
+        Section("yer altı kaynakları / an unspent seam sells at its normal value");
+        var session = NewSession(8106, 6, 1000000, 40, 1);
+        var mine = (YerAltiKaynaklariJoker)session.Jokers.Add(new YerAltiKaynaklariJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        mine.PurchasePrice = 99999;
+        int scale = session.Config.Scoring.ScoreScale;
+        Check(!mine.IsExhausted, "the seam still has fuel");
+        Check(mine.SellPriceScaled(scale) == (long)mine.SellValue * scale,
+            "so it sells at its sell value, not the refund",
+            "" + mine.SellPriceScaled(scale));
     }
 
     private static void Devre_TracesAMonotoneEdgeToEdgePath()
