@@ -72,9 +72,10 @@ namespace ProjectBlock.View
         public const int TitleFontSize = 68;
         public const int SubtitleFontSize = 24;
         public const int LabelFontSize = 30;
-        public const int NoteFontSize = 19;
+        public const int NoteFontSize = 21;
 
-        /// <summary>The reading screens (how to play, run summary).</summary>
-        public const int BodyFontSize = 21;
+        /// <summary>The reading screens (how to play, run summary). A page is capped at ~19
+        /// lines, and the body box is 620 tall, so this has headroom to grow a little.</summary>
+        public const int BodyFontSize = 24;
     }
 }

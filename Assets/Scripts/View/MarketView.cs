@@ -55,10 +55,19 @@ namespace ProjectBlock.View
         /// prompt line under it.</summary>
         private const float RerollExtra = 2.1f;
 
+        /// <summary>Joker and power tiles are WIDER than a block card, because they carry text
+        /// rather than a shape preview. Widening rather than shrinking the font is what lets the
+        /// description be readable without losing most of itself to the ellipsis. Height stays
+        /// CardVisual.BodyHeight so the row headers and price labels keep their spacing.</summary>
+        private const float NamedTileWidth = 1.75f;
+
         /// <summary>Description lines a tile can show before running over its own bottom edge
         /// and into the price beneath it. The body is 1.8 tall, the description starts 0.12
-        /// above centre and a line at this size is roughly 0.11 - so eight is what fits.</summary>
-        private const int MaxDescriptionLines = 8;
+        /// above centre, and a line at this size is roughly 0.135.</summary>
+        private const int MaxDescriptionLines = 7;
+
+        /// <summary>Characters per description line at NamedTileWidth.</summary>
+        private const int DescriptionWrap = 16;
 
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
@@ -118,7 +127,10 @@ namespace ProjectBlock.View
             // The backdrop grows downward by RerollExtra so the reroll button has room under
             // the last offer row while the title stays where it was at the top.
             var panelCenter = new Vector2(Center.x, Center.y - RerollExtra * 0.5f);
-            var panelSize = new Vector2(Mathf.Max(maxSpan + CardVisual.BodyWidth + 1.4f, 6f),
+            // Widest tile kind decides the margin, or the joker/power tiles would poke out of
+            // the panel now that they are wider than a block card.
+            float widestTile = Mathf.Max(CardVisual.BodyWidth, NamedTileWidth);
+            var panelSize = new Vector2(Mathf.Max(maxSpan + widestTile + 1.4f, 6f),
                 rowOffers.Count * RowPitch + 2.2f + RerollExtra);
             // Frame first and one sorting step further back, so all that shows of it is the
             // margin around the opaque backdrop - which is exactly the border.
@@ -132,12 +144,12 @@ namespace ProjectBlock.View
             // player to work their balance out from the HUD dump.
             ViewUtil.MakeText3D(transform, "Balance", new Vector2(Center.x, titleY - 0.40f),
                 Loc.Pick("you have ", "paran: ") + session.TotalScore,
-                80, 0.020f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleCenter);
+                90, 0.026f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, titleY - 0.72f),
                 Loc.Pick(
                     "click a joker or a power to sell it  -  click the deck pile to sell cards",
                     "satmak için jokere veya güce tıkla  -  kart satmak için desteye tıkla"),
-                90, 0.013f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                90, 0.018f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             for (int r = 0; r < rowOffers.Count; r++)
             {
@@ -145,7 +157,7 @@ namespace ProjectBlock.View
                 List<int> row = rowOffers[r];
                 ViewUtil.MakeText3D(transform, SectionLabel(rowKinds[r]) + "Header",
                     new Vector2(Center.x, rowY + HeaderOffset), SectionLabel(rowKinds[r]),
-                    90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                    90, 0.026f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
                 float startX = Center.x - (row.Count - 1) * OfferSpacing * 0.5f;
                 for (int c = 0; c < row.Count; c++)
                 {
@@ -227,7 +239,7 @@ namespace ProjectBlock.View
                 Loc.Pick("click a block to add it to your deck    -    [N] start round ",
                         "desteye katmak için bloğa tıkla    -    [N] raunt başlat: ")
                     + (session.RoundNumber + 1),
-                90, 0.014f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                90, 0.018f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
         }
 
         /// <summary>The tag printed at the top of a tile: the tier word replaces the kind word
@@ -256,17 +268,17 @@ namespace ProjectBlock.View
             string displayName, string description, Color bodyColor, Color tagColor)
         {
             ViewUtil.MakeRect(transform, key + "Body_" + index, center,
-                new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight), bodyColor, 36);
+                new Vector2(NamedTileWidth, CardVisual.BodyHeight), bodyColor, 36);
             ViewUtil.MakeText3D(transform, key + "Tag_" + index,
                 center + new Vector2(0f, CardVisual.BodyHeight * 0.5f - 0.17f), label,
-                90, 0.015f, tagColor, 37, TextAnchor.MiddleCenter);
+                90, 0.018f, tagColor, 37, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, key + "Name_" + index,
-                center + new Vector2(0f, 0.5f), ViewUtil.WrapText(displayName, 13),
-                90, 0.022f, JokerNameColor, 37, TextAnchor.MiddleCenter);
+                center + new Vector2(0f, 0.5f), ViewUtil.WrapText(displayName, 15),
+                90, 0.025f, JokerNameColor, 37, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, key + "Desc_" + index,
                 center + new Vector2(0f, 0.12f),
-                ViewUtil.WrapText(description, 16, MaxDescriptionLines),
-                90, 0.012f, JokerDescColor, 37, TextAnchor.UpperCenter);
+                ViewUtil.WrapText(description, DescriptionWrap, MaxDescriptionLines),
+                90, 0.015f, JokerDescColor, 37, TextAnchor.UpperCenter);
         }
 
         public void Hide()

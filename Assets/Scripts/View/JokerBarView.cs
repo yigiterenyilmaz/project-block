@@ -249,9 +249,9 @@ namespace ProjectBlock.View
             background.raycastTarget = false;
 
             Image strip = MakeRarityStrip(rect);
-            Text title = MakeLabel(rect, "Title", new Vector2(10f, -8f), 20, NameColor,
+            Text title = MakeLabel(rect, "Title", new Vector2(10f, -8f), 22, NameColor,
                 FontStyle.Bold, PanelWidth - 20f, 24f);
-            Text body = MakeLabel(rect, "Body", new Vector2(10f, -34f), 17, BodyColor,
+            Text body = MakeLabel(rect, "Body", new Vector2(10f, -34f), 19, BodyColor,
                 FontStyle.Normal, PanelWidth - 20f, 52f);
 
             return new Panel

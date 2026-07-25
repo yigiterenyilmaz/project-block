@@ -97,7 +97,7 @@ namespace ProjectBlock.View
             scaler.referenceResolution = new Vector2(1920f, 1080f);
 
             infoText = MakeText(canvasGo.transform, "InfoText", new Vector2(0f, 1f),
-                new Vector2(16f, -16f), TextAnchor.UpperLeft, 22, Color.white);
+                new Vector2(16f, -16f), TextAnchor.UpperLeft, 24, Color.white);
             // Score first, at the top centre; the message line sits under it.
             totalText = MakeText(canvasGo.transform, "TotalText", new Vector2(0.5f, 1f),
                 new Vector2(0f, -14f), TextAnchor.UpperCenter, 34, new Color(1f, 0.86f, 0.42f));
