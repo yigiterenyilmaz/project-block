@@ -28,7 +28,11 @@ dropped that way once each.
   1. **One boss per round, round-scoped.** It dies with the engine, so a boss must NEVER mutate
      session state (`RoundRules`, `ScoringConfig`) to express a rule bend — that would leak into
      the next round. Bends are **queries** the engine asks live (`IgnoresBlockElements`,
-     `BlocksPowerRecharge`, `DisablesJoker/Power`, `BlocksPlacementOn`, `ScoreLineExplosion`).
+     `BlocksPowerRecharge`, `DisablesJoker/Power`, `BlocksPlacementOn`, `ScoreLineExplosion`,
+     `ScoreCleanSweep`, `OnlyCleanSweepsScore`, `FilterScoreThreshold`, `InvertsJokerScore`).
+     The score bosses rewrite **base values only** — a joker's own bonuses always land on top.
+     Read the round's bar from `RoundEngine.ScoreThreshold`, never `Config.ScoreThreshold`:
+     a boss may ask for less and the two must never disagree.
      The deck taxes are the one exception: taking cards out of `OwnedCards` is their effect,
      not a rule bend.
   2. **Silencing is central**, like the overtime gate: `RoundEngine.IsSilencedByBoss` is checked

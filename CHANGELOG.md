@@ -21,7 +21,7 @@ everything here is unreleased and balance numbers are still placeholders.
 - **Boss rounds** — every third round (3, 6, 9, 12, 15) now draws a **boss** that bends the rules
   against you for that round only. A run never fights the same boss twice, the draw is
   deterministic from the run seed, and the HUD names the boss and describes what it is doing.
-  All twelve:
+  All fifteen:
   - **Alıkoyma** — seizes a random card in your hand every turn (never your last one).
   - **Mapus** — seals one random empty cell per turn: nothing can be placed there, and the row
     and column through it cannot be completed either.
@@ -36,6 +36,15 @@ everything here is unreleased and balance numbers are still placeholders.
   - **Kule** — the same, mirrored: only vertical clears score.
   - **Oburluk** — if your joker slots are full, one random joker goes silent for the round; same
     for your powers. A free slot keeps everything working.
+  - **Titizlik** — only a clean sweep scores. Placing, clearing lines, combos and gold all pay
+    nothing; sweeps pay a little more than usual to make up for it. Like Ufuk and Kule it only
+    rewrites the BASE values, so your jokers' own bonuses still land — it beats your board, not
+    your build.
+  - **Cana geleceğine mala** — every time your draw pile runs out, a quarter of your score is
+    gone. Your deck is untouched; it is the purse that pays. Shares its trigger with Harcama
+    vergisi and with board erosion, so cycling the deck on that round is expensive three ways.
+  - **Taş ve sopa** — every joker and every power is switched off, whatever its rarity: just you
+    and the board. In exchange the score threshold drops by a quarter.
   - **Terslik** — your jokers turn on you: the points they would give you are taken from you
     instead, and piggy banks leak value instead of filling. Jokers that hand out neither points
     nor value are untouched and keep doing their job — Insider still reveals, Seri tetik still
