@@ -7,6 +7,16 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Added
+- **Devre (joker)** — at some point each round a winding **circuit** is traced from one edge of
+  the board to the opposite one. It runs edge to edge and is monotone along that axis: it winds
+  up and down freely but never doubles back. Fill every cell of it and the circuit **breaks** —
+  those blocks explode (a real explosion: it counts toward a clean sweep and toward Kayıt
+  defteri, and pays the normal per-cube rate) and you get a bonus on top that scales with how
+  long the circuit was. There is **no deadline**: it waits all round, which is what keeps it
+  different from Meydan Okuma. One circuit per round. A cell counts as filled if it is filled
+  now **or** was filled this turn and has already blown up, so a placement that completes the
+  circuit and a line at the same time does not lose the circuit to its own line clear. The route
+  is drawn on the board as a chain of green nodes.
 - **Kredi kartı (joker)** — shop in the market with points you do not have. Your own score goes
   first and the shortfall becomes **debt**, which gains **10% interest at the end of every
   round**. Repaying is deliberately manual (`[O]` in the market): carrying the debt one more
