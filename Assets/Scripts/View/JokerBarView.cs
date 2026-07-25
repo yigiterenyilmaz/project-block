@@ -27,6 +27,10 @@ namespace ProjectBlock.View
         /// <summary>Switched off by a boss round ("Anarşi", "Oburluk") - still owned, still
         /// sellable, but doing nothing this round.</summary>
         private static readonly Color SilencedColor = new Color(0.26f, 0.10f, 0.12f, 0.95f);
+
+        /// <summary>"Terslik": the joker still runs, it just pays the wrong way. Purple rather
+        /// than the silenced red, because switched-off and turned-around are different fates.</summary>
+        private static readonly Color InvertedColor = new Color(0.28f, 0.13f, 0.34f, 0.96f);
         private static readonly Color NameColor = new Color(1f, 0.93f, 0.72f);
         private static readonly Color BodyColor = new Color(0.80f, 0.84f, 0.90f);
 
@@ -177,9 +181,15 @@ namespace ProjectBlock.View
             // the activation state: the panel must not look ready when nothing will happen.
             bool silenced = session.CurrentRound != null
                 && session.CurrentRound.IsSilencedByBoss(joker);
+            // "Terslik" does not switch a joker off - it turns it around. Its own colour, so the
+            // two are never confused: a silenced joker does nothing, an inverted one hurts.
+            bool inverted = !silenced && session.CurrentRound != null
+                && session.CurrentRound.InvertsJokerScore;
             panel.Background.color = silenced
                 ? SilencedColor
-                : (targeting ? TargetingColor : (ready ? ReadyColor : PanelColor));
+                : inverted
+                    ? InvertedColor
+                    : (targeting ? TargetingColor : (ready ? ReadyColor : PanelColor));
 
             // The background still belongs to the activation state (ready/targeting), so rarity
             // rides on the edge strip and the name colour instead of fighting it for the panel.
@@ -211,6 +221,10 @@ namespace ProjectBlock.View
             }
             line.Append(Loc.Pick("sell ", "satış "))
                 .Append(joker.SellValue * session.Config.Scoring.ScoreScale);
+            if (inverted)
+            {
+                line.Append(Loc.Pick("   (REVERSED)", "   (TERS)"));
+            }
             if (joker.DisabledInOvertime)
             {
                 line.Append(Loc.Pick("   (off in overtime)", "   (uzatmada kapalı)"));
