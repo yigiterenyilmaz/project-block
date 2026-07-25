@@ -25,11 +25,18 @@ namespace ProjectBlock.View
             if (draggedCard != null || deckSelect.IsOpen)
             {
                 cardLayer.SetHoveredCard(-1);
+                cardLayer.SetDrawPileHovered(false);
                 marketView.ClearHover();
                 HideTooltip();
                 return;
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+
+            // The draw pile is clickable in both phases - the deck list in a round, the sell
+            // screen in the market - so it lights up whenever the pointer is on it and nothing
+            // is covering it.
+            cardLayer.SetDrawPileHovered(!deckOverlay.IsOpen && !grantPicker.IsOpen
+                && cardLayer.IsDrawPileAt(world));
 
             // The market's hover outline is decided ONCE, here, before any of the modal
             // branches below return: a picker or the deck overlay standing over the shelf must
