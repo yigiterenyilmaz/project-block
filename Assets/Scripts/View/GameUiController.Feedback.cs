@@ -262,6 +262,24 @@ namespace ProjectBlock.View
                 }
             }
             boardView.ShowInfections(infectionBuffer);
+            RefreshCircuit();
+        }
+
+        /// <summary>Hands "Devre"'s traced circuit to the board view. Same shape as the infection
+        /// pass: the joker holds the route, the board just draws it.</summary>
+        private void RefreshCircuit()
+        {
+            IReadOnlyList<Joker> jokers = session.Jokers.Jokers;
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                var devre = jokers[i] as DevreJoker;
+                if (devre != null && devre.HasCircuit)
+                {
+                    boardView.ShowCircuit(devre.Path);
+                    return;
+                }
+            }
+            boardView.ShowCircuit(null);
         }
 
         private void UpdateHud()

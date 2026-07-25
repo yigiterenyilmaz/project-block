@@ -31,6 +31,10 @@ namespace ProjectBlock.View
         private static readonly Color FallingPieceColor = new Color(0.45f, 0.85f, 1f, 0.9f);
         private static readonly Color FallingGhostColor = new Color(0.45f, 0.85f, 1f, 0.28f);
 
+        /// <summary>"Devre"'s circuit nodes - a circuit-board green that reads on both an empty
+        /// cell and a full one, since the route crosses both.</summary>
+        private static readonly Color CircuitColor = new Color(0.35f, 1f, 0.75f, 0.85f);
+
         private GameBoard board;
         private SpriteRenderer[,] cellRenderers;
         private SpriteRenderer[,] previewRenderers;
@@ -39,6 +43,9 @@ namespace ProjectBlock.View
         private readonly List<SpriteRenderer> ghostSprites = new List<SpriteRenderer>();
         private readonly List<SpriteRenderer> outsidePreviewSprites = new List<SpriteRenderer>();
         private readonly List<GameObject> infectionMarkers = new List<GameObject>();
+
+        /// <summary>Nodes of "Devre"'s traced circuit, redrawn whenever the route changes.</summary>
+        private readonly List<GameObject> circuitMarkers = new List<GameObject>();
         private ParticleSystem ambient;
         private float ambientTimer;
         private bool animatingWater;
@@ -408,6 +415,37 @@ namespace ProjectBlock.View
                     0.2f + 0.4f * progress + 0.25f * Mathf.Sin(time * 5f + m.Lx + m.Ly));
                 cellRenderers[m.Lx, m.Ly].color = Color.Lerp(baseColorCache[m.Lx, m.Ly],
                     InfectionGreen, blend);
+            }
+        }
+
+        /// <summary>Draws "Devre"'s circuit as a chain of small nodes across the grid. The route
+        /// arrives in order, so consecutive nodes are always neighbours and the chain reads as a
+        /// line. Pass null or an empty list to clear it. Drawn ON TOP of the cells, because a
+        /// circuit cell may be empty or full and the player has to see the route either way.</summary>
+        public void ShowCircuit(IReadOnlyList<GridPos> cells)
+        {
+            for (int i = circuitMarkers.Count - 1; i >= 0; i--)
+            {
+                if (circuitMarkers[i] != null)
+                {
+                    Destroy(circuitMarkers[i]);
+                }
+            }
+            circuitMarkers.Clear();
+            if (board == null || cells == null)
+            {
+                return;
+            }
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (!board.IsInside(cells[i]))
+                {
+                    continue;
+                }
+                SpriteRenderer node = ViewUtil.MakeRect(transform, "Circuit_" + i,
+                    CellToWorld(cells[i]), new Vector2(cellSize * 0.3f, cellSize * 0.3f),
+                    CircuitColor, 6);
+                circuitMarkers.Add(node.gameObject);
             }
         }
 
