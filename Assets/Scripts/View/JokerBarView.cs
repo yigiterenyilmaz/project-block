@@ -56,6 +56,17 @@ namespace ProjectBlock.View
             root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
         }
 
+        /// <summary>Shows or hides the whole strip. The menu layer hides it while no run is
+        /// on screen; a hidden strip also stops answering JokerIndexAt, because its panels
+        /// go inactive with it.</summary>
+        public void SetVisible(bool visible)
+        {
+            if (root != null)
+            {
+                root.gameObject.SetActive(visible);
+            }
+        }
+
         /// <summary>Redraws the strip. targetingInstanceId highlights the joker that is
         /// currently waiting for the player to pick a target.</summary>
         public void Refresh(GameSession session, int? targetingInstanceId)

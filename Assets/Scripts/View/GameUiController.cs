@@ -135,7 +135,8 @@ namespace ProjectBlock.View
             // a filter on the SoundFx object's sources is not reliably called.
             bitCrush = cam.gameObject.AddComponent<BitCrushFilter>();
             BuildViews();
-            NewGame();
+            // The game now boots to the title menu; a run starts from there (see .Menus).
+            GoToTitle();
         }
 
         /// <summary>Flips EN/TR, persists the choice, and re-texts every open view.</summary>
@@ -159,6 +160,14 @@ namespace ProjectBlock.View
             sellCardsMode = false;
             hileliPickMode = false;
             HideTooltip();
+            if (screen != AppScreen.Playing)
+            {
+                // No run to refresh - just re-text the menu. deckSelect was closed above, so a
+                // switch made during the deck pick lands back on the title.
+                screen = AppScreen.Title;
+                ShowCurrentMenu();
+                return;
+            }
             if (session != null && session.Phase == GamePhase.Market)
             {
                 marketView.Show(session);
@@ -222,12 +231,19 @@ namespace ProjectBlock.View
 
         private void Update()
         {
+            Keyboard kb = Keyboard.current;
+            Mouse mouse = Mouse.current;
+            // The menu layer owns the whole frame whenever a run is not on screen, so no menu
+            // has to know about drags, targeting or the in-game modals (see .Menus).
+            if (screen != AppScreen.Playing)
+            {
+                HandleMenuInput(kb, mouse);
+                return;
+            }
             if (session == null || waterAnimating || supurgeAnimating)
             {
                 return; // input is locked while a board animation plays
             }
-            Keyboard kb = Keyboard.current;
-            Mouse mouse = Mouse.current;
             UpdateHover(mouse);
             if (kb != null && kb.rKey.wasPressedThisFrame)
             {

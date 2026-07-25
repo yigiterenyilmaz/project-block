@@ -103,6 +103,13 @@ namespace ProjectBlock.View
 
             jokerBar.Build(canvasGo.transform);
             powerBar.Build(canvasGo.transform);
+
+            // Built last so it starts on top of the bars and the HUD text; Show() also
+            // re-asserts that, so this ordering is a convenience rather than a dependency.
+            var menuGo = new GameObject("MenuScreenView");
+            menuGo.transform.SetParent(transform, false);
+            menu = menuGo.AddComponent<MenuScreenView>();
+            menu.Build(canvasGo.transform);
         }
 
         private static Text MakeText(Transform parent, string name, Vector2 anchor,
