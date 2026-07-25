@@ -119,6 +119,7 @@ public static class JokerTests
         OtekiDunya_MatchingColumnsPay();
         OtekiDunya_AStuckWorldSitsOutInsteadOfLosing();
         OtekiDunya_EachWorldSweepsForItself();
+        OtekiDunya_TheMainWorldCannotPlayAlone();
         OtekiDunya_LeavesAnOrdinaryRoundAlone();
         Devre_TracesAMonotoneEdgeToEdgePath();
         Devre_WaitsForARandomTurnAndThenStays();
@@ -3717,6 +3718,50 @@ public static class JokerTests
         Check(round.CleanSweepCount == sweepsBefore + 1, "and it counted once",
             sweepsBefore + " -> " + round.CleanSweepCount);
         Check(round.MirrorBoard.OccupiedCount == 0, "the mirror board really is empty");
+    }
+
+    private static void OtekiDunya_TheMainWorldCannotPlayAlone()
+    {
+        Section("öteki dünya / the main world may not resolve a turn on its own");
+        var session = NewSession(8007, 5, 1000000, 40, 3);
+        RoundEngine round = session.CurrentRound;
+        var power = (OtekiDunyaPower)session.Powers.Add(new OtekiDunyaPower());
+        session.Powers.DispatchRoundStarted(round);
+        session.Powers.TryUse(power.InstanceId, ActivationTarget.None);
+        Check(round.MirrorHasAnyMove, "the mirror can play, so it must");
+
+        List<GridPos> origins = round.GetValidOrigins(round.Hand[0].Shape);
+        Check(origins.Count > 0, "the main world has a legal move");
+        bool refused = false;
+        try
+        {
+            round.PlayFromHand(0, origins[0]);
+        }
+        catch (System.InvalidOperationException)
+        {
+            refused = true;
+        }
+        Check(refused, "playing without booking the mirror's half is refused");
+        Check(round.TurnNumber == 0, "and no turn was burned", "turn " + round.TurnNumber);
+
+        // Book it, and the very same move goes through.
+        List<GridPos> mirrorOrigins = round.GetValidMirrorOrigins(round.MirrorHand[0]);
+        Check(round.StageMirrorPlay(0, mirrorOrigins[0]), "book the mirror's half");
+        TurnReport report = round.PlayFromHand(0, origins[0]);
+        Check(report != null && round.TurnNumber == 1, "now the turn resolves",
+            "turn " + round.TurnNumber);
+
+        // A mirror with nothing to do stops holding the turn up.
+        foreach (GridPos cell in AllPlayableCells(round.MirrorBoard))
+        {
+            if (!round.MirrorBoard.GetCube(cell).HasValue)
+            {
+                round.MirrorBoard.SetCubeAt(cell, new Cube(CubeKind.Obsidian, 9604));
+            }
+        }
+        Check(round.MirrorReadyForTurn, "a stuck mirror no longer blocks the main world");
+        TurnReport solo = PlayOneCard(round);
+        Check(solo != null, "and the main world plays on alone");
     }
 
     private static void OtekiDunya_LeavesAnOrdinaryRoundAlone()

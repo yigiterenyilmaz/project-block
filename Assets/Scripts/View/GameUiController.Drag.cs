@@ -222,7 +222,18 @@ namespace ProjectBlock.View
                 draggedCard = null;
                 released.SetSortingBoost(0);
                 released.SetAlpha(1f);
-                if (overBoard && valid)
+                // "Öteki dünya": a turn is a card in EACH world, so the main world cannot resolve
+                // one until the mirror has booked its half (the engine throws otherwise). Say so
+                // and hand the card back rather than letting the drop fail.
+                if (overBoard && valid && !round.MirrorReadyForTurn)
+                {
+                    FloatingTextFx.Spawn(transform, world,
+                        Loc.Pick("PLAY THE MIRROR WORLD FIRST", "ÖNCE AYNA DÜNYAYA OYNA"),
+                        new Color(1f, 0.55f, 0.4f), 46, 0.05f);
+                    released.MoveTo(released.HomePosition, 0.2f, null);
+                    boardView.ClearPreview();
+                }
+                else if (overBoard && valid)
                 {
                     int slot = released.SlotIndex;
                     TurnReport report = slot < round.Hand.Count

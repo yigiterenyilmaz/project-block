@@ -91,6 +91,7 @@ namespace ProjectBlock.Core
         public TurnReport PlayFromHand(int handIndex, GridPos origin)
         {
             EnsurePlacingAllowed();
+            EnsureMirrorReady();
             if (handIndex < 0 || handIndex >= Hand.Count)
             {
                 throw new ArgumentOutOfRangeException("handIndex");
@@ -134,6 +135,7 @@ namespace ProjectBlock.Core
         public TurnReport PlayFromBonus(int bonusIndex, GridPos origin)
         {
             EnsurePlacingAllowed();
+            EnsureMirrorReady();
             if (bonusIndex < 0 || bonusIndex >= bonusHand.Count)
             {
                 throw new ArgumentOutOfRangeException("bonusIndex");
@@ -282,6 +284,19 @@ namespace ProjectBlock.Core
             if (Status != RoundStatus.InProgress)
             {
                 throw new InvalidOperationException("Cannot place a block while round status is " + Status + ".");
+            }
+        }
+
+        /// <summary>"Öteki dünya": a turn is a card in EACH world, so the main world may not
+        /// resolve one until the mirror has booked its half - unless the mirror has nowhere to
+        /// play at all, in which case it sits the turn out. Enforced here rather than in the UI:
+        /// it is a rule of the round, not a courtesy of the screen.</summary>
+        private void EnsureMirrorReady()
+        {
+            if (!MirrorReadyForTurn)
+            {
+                throw new InvalidOperationException(
+                    "The mirror world has not played yet - a turn is a card in each world.");
             }
         }
     }

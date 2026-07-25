@@ -205,13 +205,19 @@ namespace ProjectBlock.View
         private void RefreshAll(TurnReport report)
         {
             RoundEngine round = session.CurrentRound;
-            if (boardView.Board != round.Board)
+            // "Öteki dünya" shrinks the main board and lifts it, to make room for the mirror
+            // below. With one world these are the values the board always had.
+            float mainSize = MainBoardWorldSize;
+            Vector2 mainCenter = MainBoardCenter;
+            if (boardView.Board != round.Board || !Mathf.Approximately(lastMainBoardSize, mainSize))
             {
-                boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
+                boardView.Rebuild(round.Board, mainSize, mainCenter);
+                lastMainBoardSize = mainSize;
             }
             boardView.Refresh();
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
+            RefreshMirrorWorld();
             RefreshInfections();
             cardLayer.Sync(round, report);
             flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
@@ -366,6 +372,7 @@ namespace ProjectBlock.View
                 }
                 sb.Append('\n');
             }
+            AppendMirrorHud(sb, round);
             sb.Append(Loc.Pick("Jokers ", "Joker ")).Append(session.Jokers.Count);
             if (session.Jokers.Count > 0)
             {

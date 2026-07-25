@@ -571,6 +571,21 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // "Öteki dünya": the mirror world books its half of the turn before the main world
+            // plays, so its input gets first refusal on the click.
+            if (session.Phase == GamePhase.Round)
+            {
+                RoundEngine dual = session.CurrentRound;
+                if (kb != null && kb.mKey.wasPressedThisFrame && TryPlayMirrorOnly(dual))
+                {
+                    return;
+                }
+                UpdateMirrorPreview(dual, mouse);
+                if (HandleMirrorInput(dual, mouse))
+                {
+                    return;
+                }
+            }
             switch (session.Phase)
             {
                 case GamePhase.Market:
