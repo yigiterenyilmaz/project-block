@@ -24,6 +24,9 @@ public static class JokerTests
         Streak_Dondurma_Decreasing();
         Streak_Siyam_SameShapeOnly();
         Streak_ResetsEachRound();
+        KutlecekimMerkezi_TurnsGravityAndTheWaterFollows();
+        KutlecekimMerkezi_TheDirectionIsRoundScoped();
+        KutlecekimMerkezi_RefusesAnythingButTheFourSides();
         Targeted_TargetFirstPaysAndTakesTheWholeBlock();
         Targeted_PlainCubeFirstSpendsTheBlockForGood();
         Targeted_BonusSurvivesTheSweepItCauses();
@@ -703,6 +706,90 @@ public static class JokerTests
 
         session.Jokers.DispatchRoundStarted(session.CurrentRound);
         Check(joker.Streak == 0, "round start clears the streak", "got " + joker.Streak);
+    }
+
+    // ---- "Kütleçekim merkezi". Water is the only thing on the board that travels after it is
+    // placed, so every test here paints water and checks WHERE it ends up.
+
+    private static void KutlecekimMerkezi_TurnsGravityAndTheWaterFollows()
+    {
+        Section("kütleçekim merkezi / gravity turns and the water follows it");
+        var session = NewSession(9800, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (KutlecekimMerkeziPower)session.Powers.Add(new KutlecekimMerkeziPower());
+        ClearBoard(round.Board);
+
+        Check(round.Board.WaterFlow.X == 0 && round.Board.WaterFlow.Y == -1,
+            "an ordinary arena pulls water straight down");
+
+        // One water cube in the middle of an empty board. Pulled LEFT it should end up against
+        // the left wall, on its own row.
+        round.Board.SetCubeAt(new GridPos(2, 2), new Cube(CubeKind.Water, 9801));
+        var ctx = new RoundContext(session, session.Rng, round);
+        Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.Direction(new GridPos(-1, 0))),
+            "the power runs when pointed at a side");
+        Check(round.Board.WaterFlow.X == -1 && round.Board.WaterFlow.Y == 0,
+            "the arena now pulls left");
+        Check(!round.Board.GetCube(new GridPos(2, 2)).HasValue, "the water left where it was");
+        Check(round.Board.GetCube(new GridPos(0, 2)).HasValue,
+            "and came to rest against the left wall, on its own row");
+
+        // And it KEEPS pulling that way: water placed later flows the same direction.
+        round.Board.SetCubeAt(new GridPos(4, 4), new Cube(CubeKind.Water, 9802));
+        round.Board.SettleWaterAndReact();
+        Check(round.Board.GetCube(new GridPos(0, 4)).HasValue,
+            "later water flows the same way without spending anything");
+    }
+
+    private static void KutlecekimMerkezi_TheDirectionIsRoundScoped()
+    {
+        Section("kütleçekim merkezi / the pull dies with the round");
+        var session = NewSession(9803, 5, 1, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (KutlecekimMerkeziPower)session.Powers.Add(new KutlecekimMerkeziPower());
+        session.Powers.TryUse(power.InstanceId, ActivationTarget.Direction(new GridPos(0, 1)));
+        Check(round.Board.WaterFlow.Y == 1, "gravity was turned upward");
+
+        // Into the next round: a fresh arena is built, and a fresh arena pulls downward.
+        int safety = 0;
+        while (session.Phase == GamePhase.Round && safety++ < 40)
+        {
+            if (session.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                session.CurrentRound.DecideAdvance(true);
+                break;
+            }
+            if (PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        if (session.Phase == GamePhase.Market)
+        {
+            session.LeaveMarket();
+            Check(session.CurrentRound.Board.WaterFlow.X == 0
+                && session.CurrentRound.Board.WaterFlow.Y == -1,
+                "the next round's arena pulls straight down again");
+        }
+        else
+        {
+            Check(true, "(the round did not finish - nothing to prove here)");
+        }
+    }
+
+    private static void KutlecekimMerkezi_RefusesAnythingButTheFourSides()
+    {
+        Section("kütleçekim merkezi / four sides, and no standing still");
+        var session = NewSession(9804, 5, 1000000, 40, 1);
+        var power = new KutlecekimMerkeziPower();
+        var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
+        Check(!power.CanRun(ctx, ActivationTarget.None), "a target with no direction is refused");
+        Check(!power.CanRun(ctx, ActivationTarget.Direction(new GridPos(0, 0))),
+            "standing still is not a direction");
+        Check(!power.CanRun(ctx, ActivationTarget.Direction(new GridPos(1, 1))),
+            "and neither is a diagonal");
+        Check(power.CanRun(ctx, ActivationTarget.Direction(new GridPos(0, 1))),
+            "up is");
     }
 
     // ---- "Hedefli" blocks. Every test lays a TWO-CUBE VERTICAL block whose target is the
