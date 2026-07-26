@@ -20,6 +20,16 @@ everything here is unreleased and balance numbers are still placeholders.
   a turn may be worth nothing, never less.
 
 ### Added
+- **Uzun Vadeli Yatırımcı (joker)** — a bet on the whole run. It is stocked **only in the first
+  five markets**, does nothing for the twelve rounds after that, and pays out in exactly one
+  place: the **final round**. There it is an **extra life** — lose that round and you play it
+  again from the start, once — and the **key to two powers no market ever sells**. It can **never
+  be sold**, so the slot is spent for the run whatever happens: reach the last round and it is the
+  strongest thing you own, fall short and you paid for nothing. The do-over is a real do-over: the
+  **same boss** comes back as a fresh instance, the failed attempt's round-end effects never fire,
+  and the score it banked is **clawed back**, so a replayed round can still only pay once.
+  *The two exclusive powers are not designed yet* — the unlock is wired (`Power.InvestorOnly`),
+  and naming them is all that is left.
 - **Savunmacı (joker)** — pays you for playing it safe, but only once you finally do not. Every
   round you finish **without going into overtime** banks a bonus. Then the first overtime you do
   go into and **come out of alive** pays the **whole bank at once** — and the bank starts filling
