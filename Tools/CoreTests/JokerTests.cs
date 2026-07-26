@@ -135,6 +135,11 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Besleme_MarksAPatchAndFeedsOnExplosions();
+        Besleme_GrowsWhenFedAndCostsMoreEachStep();
+        Besleme_StarvesAndFinallyDies();
+        Besleme_ItsBillNeverPushesTheRoundBackwards();
+        Besleme_TheCreatureSurvivesARoundChange();
         Kiraci_RipensAPlainCubeIntoGold();
         Kiraci_OnlyPlainCubesAreTenants();
         Kiraci_AnInterruptedTenancyStartsOver();
@@ -4295,6 +4300,148 @@ public static class JokerTests
             "the same placement cleared a line", "rows " + report.ExplodedRows.Count);
         Check(joker.BrokenThisRound,
             "and the circuit still counted as completed, even though the line ate its cells");
+    }
+
+    /// <summary>Fills the rows through the creature and plays a turn, so an explosion is
+    /// guaranteed to land on it. Returns the report, or null if no turn could resolve.</summary>
+    private static TurnReport FeedTheCreature(GameSession session, BeslemeJoker pet)
+    {
+        RoundEngine round = session.CurrentRound;
+        foreach (GridPos cell in new List<GridPos>(pet.Region))
+        {
+            for (int x = round.Board.MinX; x < round.Board.MinX + round.Board.Width; x++)
+            {
+                var pos = new GridPos(x, cell.Y);
+                if (round.Board.IsInside(pos) && !round.Board.GetCube(pos).HasValue)
+                {
+                    round.Board.SetCubeAt(pos, new Cube(CubeKind.Normal, 9980));
+                }
+            }
+        }
+        return PlayOneCard(round);
+    }
+
+    private static void Besleme_MarksAPatchAndFeedsOnExplosions()
+    {
+        Section("besleme / marks a patch, and cubes exploded in it are food");
+        var session = NewSession(9200, 7, 1000000, 40, 1);
+        var pet = (BeslemeJoker)session.Jokers.Add(new BeslemeJoker());
+        Check(!pet.IsAlive, "nothing is marked before a round starts");
+
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        Check(pet.IsAlive, "the first round after acquisition lays the mark");
+        Check(pet.Size == 1, "it starts at 1x1", "size " + pet.Size);
+        Check(pet.Region.Count == 1, "so it occupies one cell", "cells " + pet.Region.Count);
+        Check(round.Board.IsInside(pet.Region[0]), "on real play area");
+        Check(pet.Food == 0 && pet.FoodToGrow > 0, "and it is hungry for its first meal",
+            pet.Food + "/" + pet.FoodToGrow);
+
+        int foodBefore = pet.Food;
+        TurnReport report = FeedTheCreature(session, pet);
+        Check(report != null, "a turn resolved");
+        Check(pet.Food > foodBefore || pet.Size > 1,
+            "exploding cubes in its patch fed it", "food " + pet.Food + " size " + pet.Size);
+        Check(pet.HungerLeft > 0, "and it is not hungry any more");
+    }
+
+    private static void Besleme_GrowsWhenFedAndCostsMoreEachStep()
+    {
+        Section("besleme / it grows when fed, and each step costs more than the last");
+        var session = NewSession(9201, 7, 1000000, 40, 1);
+        var pet = (BeslemeJoker)session.Jokers.Add(new BeslemeJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        int costAtOne = pet.FoodToGrow;
+        int hungerAtOne = pet.HungerLeft;
+        int guard = 0;
+        while (pet.Size < 2 && guard++ < 25 && pet.IsAlive)
+        {
+            if (FeedTheCreature(session, pet) == null) { break; }
+        }
+        Check(pet.Size >= 2, "fed enough, it grew", "size " + pet.Size);
+        Check(pet.Region.Count > 1, "and it occupies more of the board now",
+            "cells " + pet.Region.Count);
+        Check(pet.FoodToGrow > costAtOne, "the NEXT step costs more than the last did",
+            costAtOne + " -> " + pet.FoodToGrow);
+        Check(pet.HungerLeft < hungerAtOne || pet.Food > 0,
+            "and a bigger creature has less patience", hungerAtOne + " -> " + pet.HungerLeft);
+    }
+
+    private static void Besleme_StarvesAndFinallyDies()
+    {
+        Section("besleme / neglected it starves, dies, and leaves the joker inert");
+        var session = NewSession(9202, 7, 1000000, 40, 1);
+        var pet = (BeslemeJoker)session.Jokers.Add(new BeslemeJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        Check(pet.IsAlive && pet.Size == 1, "a fresh 1x1 creature");
+
+        int guard = 0;
+        while (pet.IsAlive && guard++ < 40)
+        {
+            if (PlayTurns(session, 1) == 0) { break; }
+        }
+        Check(pet.IsDead, "starved, it died",
+            "alive " + pet.IsAlive + " after " + guard + " turns");
+        Check(pet.Region.Count == 0, "and it is gone from the board");
+
+        // Dead is dead: another round must not bring it back.
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        Check(pet.IsDead && !pet.IsAlive,
+            "a new round does not resurrect it - the joker is spent for the run");
+    }
+
+    private static void Besleme_ItsBillNeverPushesTheRoundBackwards()
+    {
+        Section("besleme / a starving creature can empty a turn but never the round");
+        var session = NewSession(9203, 7, 1000000, 40, 1);
+        session.Config.Scoring.PointsPerCubePlaced = 1;
+        var pet = (BeslemeJoker)session.Jokers.Add(new BeslemeJoker());
+        pet.DeathPenalty = 100000;
+        pet.ShrinkPenalty = 100000;
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        int guard = 0;
+        bool everWentBack = false;
+        while (pet.IsAlive && guard++ < 40)
+        {
+            int before = round.RoundScore;
+            if (PlayTurns(session, 1) == 0) { break; }
+            if (round.RoundScore < before) { everWentBack = true; }
+        }
+        Check(pet.IsDead, "the creature died and billed us", "alive " + pet.IsAlive);
+        Check(!everWentBack,
+            "and not one turn pushed the round score backwards, however big the bill");
+        Check(round.RoundScore >= 0, "the round score never went negative",
+            "" + round.RoundScore);
+    }
+
+    private static void Besleme_TheCreatureSurvivesARoundChange()
+    {
+        Section("besleme / the creature is coordinates, so a new round leaves it where it was");
+        var session = NewSession(9204, 7, 1000000, 40, 1);
+        var pet = (BeslemeJoker)session.Jokers.Add(new BeslemeJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        Check(pet.IsAlive, "marked");
+        var where = new List<GridPos>(pet.Region);
+        int size = pet.Size;
+
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        Check(pet.Size == size, "the size carried over", size + " -> " + pet.Size);
+        Check(pet.Region.Count == where.Count, "and so did the patch",
+            where.Count + " -> " + pet.Region.Count);
+        bool samePlace = where.Count == pet.Region.Count;
+        for (int i = 0; i < where.Count && i < pet.Region.Count; i++)
+        {
+            if (where[i].X != pet.Region[i].X || where[i].Y != pet.Region[i].Y)
+            {
+                samePlace = false;
+            }
+        }
+        Check(samePlace, "in exactly the same cells - it was never re-marked");
     }
 
     private static void Kiraci_RipensAPlainCubeIntoGold()
