@@ -24,6 +24,23 @@ everything here is unreleased and balance numbers are still placeholders.
   a turn may be worth nothing, never less.
 
 ### Added
+- **Four new jokers**, bringing the roster to 52:
+  - **Simetri** — leave the board a mirror image of itself across the middle and it pays;
+    mirrored on **both** axes pays **triple**. It wakes on the 5th turn — and every clean sweep puts
+    it back to sleep for another 5, so the empty board a sweep leaves behind (symmetric on every
+    axis there is) never pays. Judged on occupancy, not on what kind of cube sits where.
+  - **Barut Tedarikçisi** — every turn a **dynamite** block survives on the board it banks a charge,
+    and pays for all of them when it finally goes up. It pulls against dynamite's own rule: the
+    board-wipe detonation only fires on a block placed *and* fully exploded the same turn, which is
+    a block with zero charges. Two ways to play the same block.
+  - **Antimadde** — when a **negative** block erases element cubes you get their antimatter: a card
+    cut to the shape of exactly what you erased. Drop it so it covers **nothing but** cubes of that
+    element and **every** cube of that element on the board is annihilated at once. It rots in your
+    hand — the pay-off shrinks every turn and it is gone after 5 — so it is a race to find the
+    perfect overlay on a board that keeps changing under you.
+  - **Eforsuz Galibiyet** — finish a round without using a single **power** and the market pays you
+    a bonus as you walk in. Do it on a round you took into **overtime** and came out of alive and it
+    pays **double**. One power anywhere in the round forfeits it.
 - **Seven new boss rounds**, bringing the roster to 27:
   - **Enflasyon** — the score threshold climbs **3% with every turn you take**, compounding. Ten
     turns in the bar is a third higher, twenty in it is nearly double. It destroys nothing and pays
