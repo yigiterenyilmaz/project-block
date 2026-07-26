@@ -67,7 +67,7 @@ public static class Baseline
                 {
                     continue;
                 }
-                var origins = round.GetValidOrigins(round.Hand[i].Shape);
+                var origins = round.GetValidOrigins(round.EffectiveShape(round.Hand[i]));
                 if (origins.Count > 0)
                 {
                     handIndex = i;
