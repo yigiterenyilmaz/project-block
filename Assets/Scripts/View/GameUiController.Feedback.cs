@@ -130,6 +130,14 @@ namespace ProjectBlock.View
                 FloatingTextFx.Spawn(transform, new Vector2(0f, 1.4f),
                     Loc.Pick("CLEAN SWEEP!", "TEMİZLİK!"), new Color(1f, 0.85f, 0.3f), 80, 0.1f);
             }
+            // "Hedefli": the aim paid off. Shown in the block's own lime, so the popup and the
+            // cube the player was aiming at are obviously the same thing.
+            if (report.TargetedBlocksHit.Count > 0)
+            {
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.0f),
+                    Loc.Pick("TARGET HIT!", "HEDEF VURULDU!"),
+                    ViewUtil.ElementColor(BlockElement.Targeted), 68, 0.09f);
+            }
         }
 
         private void EmitBlastParticles(RoundEngine round, TurnReport report)

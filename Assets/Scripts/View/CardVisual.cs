@@ -85,9 +85,21 @@ namespace ProjectBlock.View
                 Track(ViewUtil.MakeRect(transform, "Body", Vector2.zero, bodySize,
                     bonusTint ? BonusFaceColor : FaceColor, order), order);
                 BlockShape shape = displayShape != null ? displayShape : card.Shape;
-                Color miniColor = card.Elements.Count > 0
-                    ? ViewUtil.ElementColor(card.Elements[0])
-                    : ViewUtil.ColorForCard(card.Id);
+                // "Hedefli" is a mark on ONE cube, not a colour for the whole block, so it is
+                // skipped when picking the block's body colour - otherwise a plain targeted card
+                // would be lime from edge to edge and the mark would be invisible.
+                Color miniColor = ViewUtil.ColorForCard(card.Id);
+                for (int i = 0; i < card.Elements.Count; i++)
+                {
+                    if (card.Elements[i] != BlockElement.Targeted)
+                    {
+                        miniColor = ViewUtil.ElementColor(card.Elements[i]);
+                        break;
+                    }
+                }
+                // Which cube carries the target, in the shape actually being drawn - so a rotated
+                // or reshaped card shows the mark where the block will really land it.
+                int targetCell = card.Has(BlockElement.Targeted) ? card.TargetIndexIn(shape) : -1;
                 // A per-cube designed block colours each cube by ITS element. Its per-cube array
                 // is aligned to card.Shape.Cells, so only index into it when we draw that shape
                 // (not a fox/mechanical displayShape); a plain cube keeps the neutral card colour.
@@ -106,6 +118,10 @@ namespace ProjectBlock.View
                         cubeColor = e.HasValue
                             ? ViewUtil.ElementColor(e.Value)
                             : ViewUtil.ColorForCard(card.Id);
+                    }
+                    if (i == targetCell)
+                    {
+                        cubeColor = ViewUtil.ElementColor(BlockElement.Targeted);
                     }
                     Track(ViewUtil.MakeCell(transform, "Mini",
                         bottomLeft + new Vector2(cell.X * mini, cell.Y * mini),

@@ -52,6 +52,9 @@ namespace ProjectBlock.View
                 case BlockElement.Dynamite: return new Color(0.88f, 0.2f, 0.15f);
                 case BlockElement.Mechanical: return new Color(0.6f, 0.65f, 0.7f);
                 case BlockElement.Fox: return new Color(0.85f, 0.5f, 0.2f);
+                // "Hedefli": a bright lime that belongs to nothing else on the board, so the one
+                // cube that matters is findable at a glance among cubes of every other colour.
+                case BlockElement.Targeted: return new Color(0.55f, 0.95f, 0.20f);
                 default: return Color.gray;
             }
         }
@@ -87,6 +90,9 @@ namespace ProjectBlock.View
                 // "Hidrolik pres": a hard industrial slate, so four cubes squeezed into one never
                 // reads as an ordinary block.
                 case CubeKind.Compressed: return new Color(0.30f, 0.34f, 0.42f);
+                // "Hedefli": the block's one marked cube. The rest of the block keeps its card
+                // colour, so the target stands out from its own siblings as well as the board.
+                case CubeKind.Target: return ElementColor(BlockElement.Targeted);
                 default: return ColorForCard(cube.SourceCardId);
             }
         }
@@ -107,6 +113,7 @@ namespace ProjectBlock.View
                 case CubeKind.Ice: return Loc.Pick("ice", "buz");
                 case CubeKind.Gangrene: return Loc.Pick("rot", "kangren");
                 case CubeKind.Compressed: return Loc.Pick("pressed", "pres");
+                case CubeKind.Target: return Loc.Pick("target", "hedef");
                 default: return Loc.Pick("plain", "sade");
             }
         }
@@ -125,6 +132,7 @@ namespace ProjectBlock.View
                 case BlockElement.Dynamite: return "TNT";
                 case BlockElement.Mechanical: return Loc.Pick("GEARS", "ÇARK");
                 case BlockElement.Fox: return Loc.Pick("FOX", "TİLKİ");
+                case BlockElement.Targeted: return Loc.Pick("TARGETED", "HEDEFLİ");
                 default: return element.ToString().ToUpperInvariant();
             }
         }
@@ -168,6 +176,14 @@ namespace ProjectBlock.View
                 case BlockElement.Fox:
                     return Loc.Pick("Right-click it in hand to reshape into any shape in your deck.",
                         "Eldeyken sağ tık ile destendeki herhangi bir şekle bürünür.");
+                case BlockElement.Targeted:
+                    return Loc.Pick(
+                        "One marked cube is its target. Break the TARGET first and the block pays "
+                            + "a bonus and goes up whole; break any other cube first and the "
+                            + "block is spent - it just stands there.",
+                        "İşaretli tek küpü onun hedefidir. Önce HEDEFİ patlatırsan blok bonus "
+                            + "verir ve tümüyle patlar; önce başka bir küpü giderse bloğun "
+                            + "etkisi kalmaz - orada öylece durur.");
                 default:
                     return string.Empty;
             }
