@@ -498,6 +498,16 @@ namespace ProjectBlock.View
                 .Append(Loc.Pick("   Deck: ", "   Deste: ")).Append(currentDeck.Name).Append('\n');
             sb.Append(Loc.Pick("Round ", "Raunt ")).Append(session.RoundNumber)
                 .Append(" / ").Append(session.Config.TotalRounds);
+            // A boss STAGE carries the number of the round it follows, so say so plainly - the
+            // player is not replaying round 3, they are fighting round 3's boss.
+            if (session.InBossStage)
+            {
+                sb.Append(Loc.Pick("  (boss stage)", "  (patron aşaması)"));
+            }
+            else if (session.BossStageFollowsThisRound)
+            {
+                sb.Append(Loc.Pick("  - boss next", "  - sonraki: patron"));
+            }
             if (round.Config.IsBossRound)
             {
                 sb.Append(Loc.Pick("  [BOSS", "  [PATRON"));
@@ -706,14 +716,19 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>The round number of the next boss round at or after the current one - the
-        /// deadline the market debt has to be settled by. 0 when the progression has no boss
-        /// rounds at all.</summary>
+        /// <summary>The number of the round whose BOSS STAGE is the next one coming - the
+        /// deadline the market debt has to be settled by, because a boss stage that ends with the
+        /// debt open ends the run. 0 when the progression has no boss stages at all.</summary>
         private static int NextBossRound(GameSession session)
         {
+            // Already in one: this is the deadline.
+            if (session.InBossStage)
+            {
+                return session.RoundNumber;
+            }
             for (int round = session.RoundNumber; round <= session.Config.TotalRounds; round++)
             {
-                if (session.Config.Progression.GetRound(round).IsBossRound)
+                if (session.Config.Progression.HasBossStageAfter(round))
                 {
                     return round;
                 }

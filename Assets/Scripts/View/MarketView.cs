@@ -323,9 +323,15 @@ namespace ProjectBlock.View
             // top of the screen, where the opaque panel now sits - the canvas draws over world
             // space, so the two simply printed on top of each other.
             ViewUtil.MakeText3D(transform, "Prompt", new Vector2(Center.x, promptY),
-                Loc.Pick("Click a block to add it to your deck    -    [N] start round ",
-                        "Desteye katmak için bloğa tıkla    -    [N] raunt başlat: ")
-                    + (session.RoundNumber + 1),
+                Loc.Pick("Click a block to add it to your deck    -    [N] start ",
+                        "Desteye katmak için bloğa tıkla    -    [N] başlat: ")
+                    // What comes next is the BOSS STAGE of the round just played when one follows
+                    // it - the player is walking into a wall and has to know before they shop.
+                    + (session.BossStageFollowsThisRound && !session.InBossStage
+                        ? Loc.Pick("the BOSS of round " + session.RoundNumber,
+                            session.RoundNumber + ". rauntun PATRONU")
+                        : Loc.Pick("round " + (session.RoundNumber + 1),
+                            "raunt " + (session.RoundNumber + 1))),
                 90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             BuildHoverOutline();
