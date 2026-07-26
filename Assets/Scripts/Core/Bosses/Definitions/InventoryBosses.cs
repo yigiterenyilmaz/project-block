@@ -120,25 +120,6 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>
-    /// "Terslik" - your jokers turn on you. Everything a joker GIVES this round is taken
-    /// instead: the points it would add are subtracted by the same amount, and a piggy bank
-    /// leaks value rather than filling.
-    ///
-    /// WHAT IT DOES NOT DO. Only the giving is reversed, not the joker. A joker that hands out
-    /// no points and no value has no opposite to turn into - "Insider" still reveals the top
-    /// card, "Seri tetik" still holds the hand open, "Deprem" still saves you from a dead end.
-    /// They keep working exactly as they do on any other round. That keeps the boss honest (it
-    /// punishes what you built your score on) and keeps it working for every joker added later,
-    /// with no per-joker opposite to invent.
-    ///
-    /// A turn can never pay less than nothing, so the worst this boss can do is make a turn
-    /// worthless - your round score never goes backwards. And a drained piggy bank stops at
-    /// zero; it cannot go into debt.
-    ///
-    /// The whole thing is one flag: the inversion window in JokerInventory does the work, so
-    /// this class has nothing of its own to run.
-    /// </summary>
-    /// <summary>
     /// "Taş ve sopa" - back to sticks and stones. Every joker and every power is switched off
     /// for the round, whatever its rarity, so the player is down to the board and their own
     /// judgement. In exchange the round asks for less: the score threshold drops.
@@ -185,6 +166,25 @@ namespace ProjectBlock.Core
         }
     }
 
+    /// <summary>
+    /// "Terslik" - your jokers turn on you. Everything a joker GIVES this round is taken
+    /// instead: the points it would add are subtracted by the same amount, and a piggy bank
+    /// leaks value rather than filling.
+    ///
+    /// WHAT IT DOES NOT DO. Only the giving is reversed, not the joker. A joker that hands out
+    /// no points and no value has no opposite to turn into - "Insider" still reveals the top
+    /// card, "Seri tetik" still holds the hand open, "Deprem" still saves you from a dead end.
+    /// They keep working exactly as they do on any other round. That keeps the boss honest (it
+    /// punishes what you built your score on) and keeps it working for every joker added later,
+    /// with no per-joker opposite to invent.
+    ///
+    /// A turn can never pay less than nothing, so the worst this boss can do is make a turn
+    /// worthless - your round score never goes backwards. And a drained piggy bank stops at
+    /// zero; it cannot go into debt.
+    ///
+    /// The whole thing is one flag: the inversion window in JokerInventory does the work, so
+    /// this class has nothing of its own to run.
+    /// </summary>
     public sealed class TerslikBoss : BossRound
     {
         public TerslikBoss()

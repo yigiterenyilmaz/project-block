@@ -160,9 +160,12 @@ namespace ProjectBlock.Core
             BaseTargeted = 0;
         }
 
-        /// <summary>Wipes every base value there is ("Bürokrasi bataklığı": the only income is the
-        /// task you were handed). A joker's own bonuses are untouched, exactly as with the score
-        /// bosses - this beats your board, not your build.</summary>
+        /// <summary>Wipes every base value the BOARD earns ("Bürokrasi bataklığı": the only income
+        /// is the task you were handed) - the clean-sweep bonus included, which is the one thing
+        /// KeepOnlyCleanSweep spares. A joker's own bonuses are untouched, exactly as with the
+        /// score bosses - this beats your board, not your build. The overtime WIN bonus survives
+        /// too: like the sweep bonus it is a reward for finishing, not income from a placement.
+        /// </summary>
         internal void KeepNoBaseScore()
         {
             KeepOnlyCleanSweep();

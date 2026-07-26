@@ -100,7 +100,6 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Short display name of an element for card labels.</summary>
         /// <summary>Short name of a CUBE kind, for a label that has to name what it acts on
         /// ("Antimadde" saying which element it annihilates).</summary>
         public static string KindLabel(CubeKind kind)
@@ -122,6 +121,7 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Short display name of an element for card labels.</summary>
         public static string ElementLabel(BlockElement element)
         {
             switch (element)
@@ -193,7 +193,6 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Greedy word wrap for the placeholder TextMesh labels (no auto-wrapping).</summary>
         /// <summary>
         /// A procedural "refresh" glyph: a ring of small squares with a gap on the right, and a
         /// tapered arrowhead at the end of the sweep. Built from rects like every other sprite
@@ -262,6 +261,7 @@ namespace ProjectBlock.View
             return kept.ToString();
         }
 
+        /// <summary>Greedy word wrap for the placeholder TextMesh labels (no auto-wrapping).</summary>
         public static string WrapText(string text, int maxCharsPerLine)
         {
             if (string.IsNullOrEmpty(text))

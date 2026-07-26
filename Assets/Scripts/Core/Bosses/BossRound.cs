@@ -60,8 +60,6 @@ namespace ProjectBlock.Core
 
         // ------------------------------------------------------------------- lifecycle
 
-        /// <summary>The round has been built and this boss is now attached to it. The one
-        /// place to pick a victim, arm a counter, or take a first bite.</summary>
         /// <summary>
         /// Reshapes the round before it is built - the ONE bend that cannot be a live query,
         /// because the board is made once and the boss has to be able to change its size
@@ -90,6 +88,8 @@ namespace ProjectBlock.Core
             return false;
         }
 
+        /// <summary>The round has been built and this boss is now attached to it. The one
+        /// place to pick a victim, arm a counter, or take a first bite.</summary>
         public virtual void OnRoundStarted(RoundContext ctx)
         {
         }
@@ -103,8 +103,6 @@ namespace ProjectBlock.Core
             get { return false; }
         }
 
-        /// <summary>True while nothing may put a charge back into a power ("Tükenmişlik") -
-        /// clean sweeps and "Powerbank" alike. The round-start recharge already happened.</summary>
         /// <summary>
         /// While true a full line does NOT explode - it just sits there, full ("Bilinmezlik").
         /// Asked live by the turn resolver, on BOTH worlds, because it is a rule about how lines
@@ -141,6 +139,8 @@ namespace ProjectBlock.Core
             get { return false; }
         }
 
+        /// <summary>True while nothing may put a charge back into a power ("Tükenmişlik") -
+        /// clean sweeps and "Powerbank" alike. The round-start recharge already happened.</summary>
         public virtual bool BlocksPowerRecharge
         {
             get { return false; }

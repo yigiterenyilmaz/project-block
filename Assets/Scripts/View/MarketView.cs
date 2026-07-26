@@ -460,7 +460,6 @@ namespace ProjectBlock.View
             return transform.InverseTransformPoint(new Vector3(world.x, world.y, 0f));
         }
 
-        /// <summary>Offer index under a world point, or -1.</summary>
         /// <summary>Creates the four outline edges, hidden. Sorting order 39 puts them above
         /// every tile piece (36/37) and its price (38), so an outline is never half-buried by
         /// whatever it is drawn around.</summary>
@@ -553,6 +552,7 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Offer index under a world point, or -1.</summary>
         public int OfferAt(Vector2 world)
         {
             Vector2 local = ToLocal(world);

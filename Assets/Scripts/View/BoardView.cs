@@ -587,10 +587,6 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Draws "Devre"'s circuit as a chain of small nodes across the grid. The route
-        /// arrives in order, so consecutive nodes are always neighbours and the chain reads as a
-        /// line. Pass null or an empty list to clear it. Drawn ON TOP of the cells, because a
-        /// circuit cell may be empty or full and the player has to see the route either way.</summary>
         /// <summary>Turns the lights out, or back on ("Alacakaranlık").</summary>
         public void SetDarkness(bool on)
         {
@@ -769,6 +765,10 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Draws "Devre"'s circuit as a chain of small nodes across the grid. The route
+        /// arrives in order, so consecutive nodes are always neighbours and the chain reads as a
+        /// line. Pass null or an empty list to clear it. Drawn ON TOP of the cells, because a
+        /// circuit cell may be empty or full and the player has to see the route either way.</summary>
         public void ShowCircuit(IReadOnlyList<GridPos> cells)
         {
             for (int i = circuitMarkers.Count - 1; i >= 0; i--)

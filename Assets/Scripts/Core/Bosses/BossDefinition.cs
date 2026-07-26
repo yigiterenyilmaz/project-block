@@ -29,7 +29,6 @@ namespace ProjectBlock.Core
             this.factory = factory;
         }
 
-        /// <summary>A fresh instance. One is minted per boss round, never reused.</summary>
         /// <summary>True for a kind that may only be a run's FIRST boss. Read off the sample,
         /// like Description.</summary>
         public bool OnlyOnFirstBossRound
@@ -37,6 +36,7 @@ namespace ProjectBlock.Core
             get { return sample.OnlyOnFirstBossRound; }
         }
 
+        /// <summary>A fresh instance. One is minted per boss round, never reused.</summary>
         public BossRound Create()
         {
             return factory();
