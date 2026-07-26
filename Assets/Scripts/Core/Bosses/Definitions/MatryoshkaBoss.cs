@@ -144,7 +144,7 @@ namespace ProjectBlock.Core
             }
             // 1. Was every line that went off aimed at a doll? Judged against the dolls as they
             //    stood BEFORE this turn's splits, which is exactly what the list still holds.
-            if (AnyLineHadNoDoll(turn.Report))
+            if (AnyLineHadNoDoll(turn.Report, round.Board))
             {
                 round.DeclareLoss(LossReason.LineWithoutDoll);
                 return; // a lost round is not also a won one - see DeclareRoundWon
@@ -184,19 +184,29 @@ namespace ProjectBlock.Core
             started = true;
         }
 
-        /// <summary>True if any row or column that exploded this turn held no doll at all.</summary>
-        private bool AnyLineHadNoDoll(TurnReport report)
+        /// <summary>
+        /// True if any row or column that exploded this turn held no doll at all.
+        ///
+        /// MIND THE COORDINATES. TurnReport.ExplodedRows/Columns are 0-BASED ARRAY INDICES (see
+        /// LineExplosionResult, and GameBoard.CollapseClearedRows which says so), while a doll
+        /// remembers the ABSOLUTE cell it sits on. The two only agree while the board's origin is
+        /// at 0,0 - and an inflation power grows the arena leftward and downward, which pushes
+        /// MinX/MinY negative. Without the shift below, a round played on an inflated board would
+        /// declare a doll-less line for a line that had a doll standing in it, and lose the round
+        /// for a move that was correct.
+        /// </summary>
+        private bool AnyLineHadNoDoll(TurnReport report, GameBoard board)
         {
             for (int i = 0; i < report.ExplodedRows.Count; i++)
             {
-                if (!AnyDollInRow(report.ExplodedRows[i]))
+                if (!AnyDollInRow(board.MinY + report.ExplodedRows[i]))
                 {
                     return true;
                 }
             }
             for (int i = 0; i < report.ExplodedColumns.Count; i++)
             {
-                if (!AnyDollInColumn(report.ExplodedColumns[i]))
+                if (!AnyDollInColumn(board.MinX + report.ExplodedColumns[i]))
                 {
                     return true;
                 }

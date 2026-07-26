@@ -155,7 +155,7 @@ namespace ProjectBlock.Core
             // 1. Every line that went off with the snake standing in it takes a segment off its
             //    tail. The line could not break the segments themselves, so they are still there
             //    to be counted.
-            int cuts = CountCutsFrom(turn.Report);
+            int cuts = CountCutsFrom(turn.Report, round.Board);
             for (int i = 0; i < cuts && body.Count > 0; i++)
             {
                 CutTail(round);
@@ -175,20 +175,28 @@ namespace ProjectBlock.Core
             round.NoteBoardRearranged();
         }
 
-        /// <summary>How many of this turn's exploding lines the snake was standing in.</summary>
-        private int CountCutsFrom(TurnReport report)
+        /// <summary>
+        /// How many of this turn's exploding lines the snake was standing in.
+        ///
+        /// MIND THE COORDINATES. TurnReport.ExplodedRows/Columns are 0-BASED ARRAY INDICES (see
+        /// LineExplosionResult), while the snake's body remembers ABSOLUTE cells. The two only
+        /// agree while the board's origin is at 0,0, and an inflation power pushes MinX/MinY
+        /// negative - so without the shift below the snake would stop being cut on an inflated
+        /// arena, and the round could no longer be won by killing it.
+        /// </summary>
+        private int CountCutsFrom(TurnReport report, GameBoard board)
         {
             int cuts = 0;
             for (int i = 0; i < report.ExplodedRows.Count; i++)
             {
-                if (OccupiesRow(report.ExplodedRows[i]))
+                if (OccupiesRow(board.MinY + report.ExplodedRows[i]))
                 {
                     cuts++;
                 }
             }
             for (int i = 0; i < report.ExplodedColumns.Count; i++)
             {
-                if (OccupiesColumn(report.ExplodedColumns[i]))
+                if (OccupiesColumn(board.MinX + report.ExplodedColumns[i]))
                 {
                     cuts++;
                 }
