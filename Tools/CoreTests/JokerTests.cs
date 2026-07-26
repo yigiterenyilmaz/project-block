@@ -135,6 +135,23 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Enflasyon_RaisesTheBarEveryTurn();
+        Enflasyon_CannotInflatePastWhatFits();
+        Hiclik_BillsForEveryCubeStanding();
+        Hiclik_CannotEatScoreAlreadyBanked();
+        Saatci_LosesTheRoundWhenTheTurnsRunOut();
+        Saatci_ARoundWonOnTheBuzzerIsNotLost();
+        Kitlik_FattensCardsButOnlyForTheRound();
+        Kitlik_TheGrowthStaysInOnePiece();
+        Merkezkac_FlingsCubesOutwardAndOffTheEdge();
+        Merkezkac_WhatGoesOverTheEdgePaysNothing();
+        DortKutup_SquaresTheBoardAndSealsThreeQuarters();
+        DortKutup_TurnsClockwiseEveryTurn();
+        DortKutup_ABlockedQuarterTurnsInsteadOfEndingTheRound();
+        Kangren_SpreadsAsOneGrowingPatch();
+        Kangren_RottenCubesStillExplode();
+        Kangren_AFullyRottenLineDiesAndTheRotJumps();
+        Kangren_ChargesRentForEveryRottenCube();
         Kacakci_TakesOneItemPerVisitForFree();
         Kacakci_SoundGoodsAreJustGoods();
         Kacakci_ADefectiveBlockLooksNormal();
@@ -368,7 +385,7 @@ public static class JokerTests
                 {
                     continue;
                 }
-                var origins = round.GetValidOrigins(round.Hand[i].Shape);
+                var origins = round.GetValidOrigins(round.EffectiveShape(round.Hand[i]));
                 if (origins.Count > 0)
                 {
                     handIndex = i;
@@ -395,7 +412,7 @@ public static class JokerTests
             {
                 continue; // frozen cards cannot be played (see PlayTurns)
             }
-            var origins = round.GetValidOrigins(round.Hand[i].Shape);
+            var origins = round.GetValidOrigins(round.EffectiveShape(round.Hand[i]));
             if (origins.Count > 0)
             {
                 return round.PlayFromHand(i, origins[0]);
@@ -3569,7 +3586,7 @@ public static class JokerTests
         {
             BlockCard card = round.Hand[i];
             if (round.IsFrozen(card.Id)) { continue; }
-            List<GridPos> origins = round.GetValidOrigins(card.Shape);
+            List<GridPos> origins = round.GetValidOrigins(round.EffectiveShape(card));
             if (origins.Count > 0)
             {
                 return round.PlayFromHand(i, origins[0]);
@@ -3673,7 +3690,7 @@ public static class JokerTests
         TurnReport report = null;
         for (int i = 0; i < round.Hand.Count && report == null; i++)
         {
-            List<GridPos> mainOrigins = round.GetValidOrigins(round.Hand[i].Shape);
+            List<GridPos> mainOrigins = round.GetValidOrigins(round.EffectiveShape(round.Hand[i]));
             if (mainOrigins.Count > 0) { report = round.PlayFromHand(i, mainOrigins[0]); }
         }
         Check(report != null, "the main world played");
@@ -3774,7 +3791,7 @@ public static class JokerTests
         TurnReport report = null;
         for (int i = 0; i < round.Hand.Count && report == null; i++)
         {
-            List<GridPos> origins = round.GetValidOrigins(round.Hand[i].Shape);
+            List<GridPos> origins = round.GetValidOrigins(round.EffectiveShape(round.Hand[i]));
             if (origins.Count > 0) { report = round.PlayFromHand(i, origins[0]); }
         }
         Check(report != null, "the turn resolved");
@@ -4438,6 +4455,498 @@ public static class JokerTests
         smuggler.DefectChancePercent = defectPercent;
         Check(AdvanceToMarket(session, 200), "reached the market", "phase " + session.Phase);
         return session;
+    }
+
+    /// <summary>A one-round session running a specific boss, so a boss can be tested without
+    /// waiting for the draw to hand it over.</summary>
+    private static GameSession NewBossSession(int seed, int boardSize, int threshold,
+        string bossDefId, int deckSize = 40, params int[] shapeSizes)
+    {
+        var config = new GameConfig();
+        config.RngSeed = seed;
+        config.TotalRounds = 12;
+        config.Deck = new DeckDefinition("test", deckSize,
+            new SizedShapeGenerator(shapeSizes.Length > 0 ? shapeSizes : new[] { 1 }));
+        config.Progression = new FixedProgression(boardSize, threshold, ShuffleErosion.None, true);
+        // Pinned rather than hand-attached, so the boss is in place BEFORE the engine builds the
+        // board - which is the only way a board-reshaping boss can be tested at all.
+        config.ForcedBossDefId = bossDefId;
+        return new GameSession(config);
+    }
+
+    private static void Enflasyon_RaisesTheBarEveryTurn()
+    {
+        Section("enflasyon / the bar climbs 3% per turn, compounding");
+        var session = NewBossSession(6100, 5, 1000, "enflasyon");
+        var boss = (EnflasyonBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+        Check(round.ScoreThreshold == 1000, "turn 0: the bar is the round's own",
+            "" + round.ScoreThreshold);
+
+        PlayOneCard(round);
+        int afterOne = round.ScoreThreshold;
+        Check(afterOne == 1030, "after one turn it is 3% higher", "" + afterOne);
+        PlayOneCard(round);
+        Check(round.ScoreThreshold == 1061, "after two it COMPOUNDS (1030 -> 1061, not 1060)",
+            "" + round.ScoreThreshold);
+
+        // Whatever the bar is, the engine and the config must not disagree about it.
+        Check(round.Config.ScoreThreshold == 1000, "the config still names the base bar");
+        Check(round.ScoreThreshold > round.Config.ScoreThreshold,
+            "and the LIVE bar is the one that moved - read RoundEngine, never Config");
+    }
+
+    private static void Enflasyon_CannotInflatePastWhatFits()
+    {
+        Section("enflasyon / a very long round cannot overflow the bar");
+        var session = NewBossSession(6101, 5, 1000000, "enflasyon");
+        var boss = (EnflasyonBoss)session.CurrentRound.Boss;
+        // 400 turns of 3% is 1.03^400 - astronomically past what an int holds once scaled.
+        for (int i = 0; i < 400; i++)
+        {
+            boss.AfterTurnScored(FakeTurn(Bar(1), new ScoreBreakdown()));
+        }
+        int bar = boss.FilterScoreThreshold(1000000);
+        Check(bar > 0, "the bar is still a positive number, not an overflow", "" + bar);
+        Check(bar <= 10000000, "and it is capped", "" + bar);
+    }
+
+    private static void Hiclik_BillsForEveryCubeStanding()
+    {
+        Section("hiçlik / every cube left standing costs score at the end of a turn");
+        var session = NewBossSession(6102, 5, 1000000, "hiclik", 40, 3);
+        var boss = (HiclikBoss)session.CurrentRound.Boss;
+        session.Config.Scoring.PointsPerCubePlaced = 40;
+        RoundEngine round = session.CurrentRound;
+
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "a turn resolved");
+        int standing = round.MainBoard.OccupiedCount;
+        Check(standing > 0, "cubes are standing", "" + standing);
+        Check(boss.BilledThisRound == standing * boss.CostPerCube,
+            "and the bill is one per cube", boss.BilledThisRound + " for " + standing);
+        Check(BreakdownCharged(report, boss.DefId, standing * boss.CostPerCube),
+            "and it came out of the turn, billed under the boss's own name",
+            "expected -" + (standing * boss.CostPerCube));
+        Check(report.ScoreGained < standing * session.Config.Scoring.PointsPerCubePlaced
+                * session.Config.Scoring.ScoreScale,
+            "so the turn banked less than the cubes it placed were worth",
+            "" + report.ScoreGained);
+    }
+
+    /// <summary>True if the breakdown carries a charge of exactly that size under that source.</summary>
+    private static bool BreakdownCharged(TurnReport report, string source, int amount)
+    {
+        foreach (ScoreContribution c in report.Score.Contributions)
+        {
+            if (c.Source == source && c.Flat == -amount)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void Hiclik_CannotEatScoreAlreadyBanked()
+    {
+        Section("hiçlik / a huge bill empties the turn, never the round");
+        var session = NewBossSession(6103, 5, 1000000, "hiclik", 40, 3);
+        var boss = (HiclikBoss)session.CurrentRound.Boss;
+        boss.CostPerCube = 100000;
+        session.Config.Scoring.PointsPerCubePlaced = 1;
+        RoundEngine round = session.CurrentRound;
+
+        bool everWentBack = false;
+        for (int i = 0; i < 8; i++)
+        {
+            int before = round.RoundScore;
+            if (PlayOneCard(round) == null) { break; }
+            if (round.RoundScore < before) { everWentBack = true; }
+        }
+        Check(boss.BilledThisRound > 0, "the rent was charged", "" + boss.BilledThisRound);
+        Check(!everWentBack, "and not one turn pushed the round score backwards");
+        Check(round.RoundScore >= 0, "the round score never went negative",
+            "" + round.RoundScore);
+    }
+
+    private static void Saatci_LosesTheRoundWhenTheTurnsRunOut()
+    {
+        Section("saatçi / the round is lost the turn the limit runs out");
+        var session = NewBossSession(6104, 5, 1000000, "saatci");
+        var boss = (SaatciBoss)session.CurrentRound.Boss;
+        boss.TurnLimit = 3;
+        RoundEngine round = session.CurrentRound;
+
+        PlayOneCard(round);
+        Check(boss.TurnsLeft == 2, "two left", "" + boss.TurnsLeft);
+        PlayOneCard(round);
+        Check(round.Status == RoundStatus.InProgress, "still going with one turn left",
+            "status " + round.Status);
+        PlayOneCard(round);
+        Check(round.Status == RoundStatus.Lost, "the third turn was the last one",
+            "status " + round.Status);
+        Check(round.Loss == LossReason.OutOfTurns, "and the clock is named as the cause",
+            "loss " + round.Loss);
+    }
+
+    private static void Saatci_ARoundWonOnTheBuzzerIsNotLost()
+    {
+        Section("saatçi / reaching the bar on the last turn is a WIN, not a loss");
+        var session = NewBossSession(6105, 5, 30, "saatci", 40, 3);
+        var boss = (SaatciBoss)session.CurrentRound.Boss;
+        boss.TurnLimit = 1;
+        session.Config.Scoring.PointsPerCubePlaced = 200; // one turn clears the bar
+        RoundEngine round = session.CurrentRound;
+
+        PlayOneCard(round);
+        Check(round.Loss != LossReason.OutOfTurns,
+            "the clock did NOT kill a round that was just won", "loss " + round.Loss);
+        Check(round.Status == RoundStatus.AwaitingAdvanceDecision,
+            "the advance offer is up as usual", "status " + round.Status);
+    }
+
+    private static void Kitlik_FattensCardsButOnlyForTheRound()
+    {
+        Section("kıtlık / cards coming back from the discard fatten, for this round only");
+        var session = NewBossSession(6106, 5, 1000000, "kitlik", 6, 1);
+        var boss = (KitlikBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+        var sizesBefore = new Dictionary<int, int>();
+        for (int i = 0; i < session.OwnedCards.Count; i++)
+        {
+            sizesBefore[session.OwnedCards[i].Id] = session.OwnedCards[i].Shape.Size;
+        }
+
+        // A deck of six runs dry fast, and the drying-out is when the discard comes back.
+        PlayTurns(session, 14);
+        Check(boss.CubesGrown > 0, "cards were fattened", "" + boss.CubesGrown);
+
+        bool anyEffectivelyBigger = false;
+        bool anyPrintedChanged = false;
+        for (int i = 0; i < session.OwnedCards.Count; i++)
+        {
+            BlockCard card = session.OwnedCards[i];
+            if (round.EffectiveShape(card).Size > sizesBefore[card.Id])
+            {
+                anyEffectivelyBigger = true;
+            }
+            if (card.Shape.Size != sizesBefore[card.Id])
+            {
+                anyPrintedChanged = true;
+            }
+        }
+        Check(anyEffectivelyBigger, "a card plays FATTER than it did");
+        Check(!anyPrintedChanged,
+            "but no card in the run deck was actually changed - the growth is round-scoped");
+    }
+
+    private static void Kitlik_TheGrowthStaysInOnePiece()
+    {
+        Section("kıtlık / a fattened card is still one connected block");
+        var session = NewBossSession(6107, 5, 1000000, "kitlik", 6, 2);
+        var boss = (KitlikBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+        PlayTurns(session, 14);
+        Check(boss.CubesGrown > 0, "cards were fattened", "" + boss.CubesGrown);
+
+        bool allConnected = true;
+        for (int i = 0; i < session.OwnedCards.Count; i++)
+        {
+            if (!ShapeIsConnected(round.EffectiveShape(session.OwnedCards[i])))
+            {
+                allConnected = false;
+            }
+        }
+        Check(allConnected, "every card in the deck is still in one piece");
+    }
+
+    /// <summary>Flood-fills a shape's cells to prove they form one block.</summary>
+    private static bool ShapeIsConnected(BlockShape shape)
+    {
+        var all = new HashSet<GridPos>(shape.Cells);
+        if (all.Count == 0)
+        {
+            return true;
+        }
+        var seen = new HashSet<GridPos>();
+        var frontier = new List<GridPos> { shape.Cells[0] };
+        seen.Add(shape.Cells[0]);
+        while (frontier.Count > 0)
+        {
+            GridPos cell = frontier[frontier.Count - 1];
+            frontier.RemoveAt(frontier.Count - 1);
+            var neighbours = new[]
+            {
+                new GridPos(cell.X + 1, cell.Y), new GridPos(cell.X - 1, cell.Y),
+                new GridPos(cell.X, cell.Y + 1), new GridPos(cell.X, cell.Y - 1)
+            };
+            foreach (GridPos n in neighbours)
+            {
+                if (all.Contains(n) && seen.Add(n))
+                {
+                    frontier.Add(n);
+                }
+            }
+        }
+        return seen.Count == all.Count;
+    }
+
+    private static void Merkezkac_FlingsCubesOutwardAndOffTheEdge()
+    {
+        Section("merkezkaç / cubes are flung one cell out, and the rim goes over the edge");
+        var board = new GameBoard(5, 5);
+        // Middle of the board, one cell up-right of centre, and one right on the rim.
+        board.SetCubeAt(new GridPos(2, 2), new Cube(CubeKind.Normal, 1)); // dead centre
+        board.SetCubeAt(new GridPos(3, 3), new Cube(CubeKind.Normal, 2));
+        board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 3)); // corner, on the rim
+
+        List<GridPos> lost = board.FlingCubesOutward();
+        Check(board.GetCube(new GridPos(2, 2)).HasValue,
+            "the cube on the exact centre did not move - there is no direction to fling it");
+        Check(!board.GetCube(new GridPos(3, 3)).HasValue
+            && board.GetCube(new GridPos(4, 4)).HasValue,
+            "the one up-and-right of centre moved diagonally out");
+        Check(!board.GetCube(new GridPos(0, 0)).HasValue, "the corner cube left its cell");
+        bool cornerLost = false;
+        foreach (GridPos cell in lost)
+        {
+            if (cell.X == 0 && cell.Y == 0) { cornerLost = true; }
+        }
+        Check(cornerLost, "and it went over the edge", "lost " + lost.Count);
+        Check(board.OccupiedCount == 2, "so two cubes are left on the board",
+            "" + board.OccupiedCount);
+    }
+
+    private static void Merkezkac_WhatGoesOverTheEdgePaysNothing()
+    {
+        Section("merkezkaç / what is flung off is lifted, not destroyed - it pays nothing");
+        var session = NewBossSession(6108, 5, 1000000, "merkezkac", 40, 3);
+        var boss = (MerkezkacBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+
+        TurnReport report = null;
+        for (int i = 0; i < 10 && boss.CubesFlungOff == 0; i++)
+        {
+            report = PlayOneCard(round);
+            if (report == null) { break; }
+        }
+        Check(boss.CubesFlungOff > 0, "cubes were flung off the arena",
+            "" + boss.CubesFlungOff);
+        Check(report.DestroyedCubes.Count == 0,
+            "and not one of them is in the destruction log - nothing was destroyed",
+            "" + report.DestroyedCubes.Count);
+        Check(report.LiftedCells.Count > 0, "they are reported as LIFTED",
+            "" + report.LiftedCells.Count);
+        Check(!report.CleanSweep, "and clearing the board this way is not a clean sweep");
+    }
+
+    private static void DortKutup_SquaresTheBoardAndSealsThreeQuarters()
+    {
+        Section("dört kutup / the arena is rounded up to even and only one quarter is open");
+        var session = NewBossSession(6109, 5, 1000000, "dort_kutup");
+        var boss = (DortKutupBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+        Check(round.MainBoard.Width == 6 && round.MainBoard.Height == 6,
+            "a 5x5 round became 6x6, so it splits into four equal quarters",
+            round.MainBoard.Width + "x" + round.MainBoard.Height);
+
+        Check(boss.ActiveQuadrant == 0, "the bottom-left quarter is live first",
+            "" + boss.ActiveQuadrant);
+        int open = 0;
+        foreach (GridPos cell in AllPlayableCells(round.MainBoard))
+        {
+            if (!round.MainBoard.IsSealed(cell)) { open++; }
+        }
+        Check(open == 9, "nine of the thirty-six cells are open - exactly one quarter",
+            "" + open);
+
+        // Everything open is inside the live quarter, and nothing outside it is.
+        List<GridPos> active = boss.ActiveCells(round.MainBoard);
+        bool allActiveOpen = true;
+        foreach (GridPos cell in active)
+        {
+            if (round.MainBoard.IsSealed(cell)) { allActiveOpen = false; }
+        }
+        Check(active.Count == 9 && allActiveOpen,
+            "and the live quarter is exactly the unsealed part", "active " + active.Count);
+    }
+
+    private static void DortKutup_TurnsClockwiseEveryTurn()
+    {
+        Section("dört kutup / the live quarter turns clockwise at the end of every turn");
+        var session = NewBossSession(6110, 5, 1000000, "dort_kutup");
+        var boss = (DortKutupBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+
+        var walked = new List<int> { boss.ActiveQuadrant };
+        for (int i = 0; i < 4; i++)
+        {
+            if (PlayOneCard(round) == null) { break; }
+            walked.Add(boss.ActiveQuadrant);
+        }
+        Check(walked.Count == 5, "five readings across four turns", "" + walked.Count);
+        bool clockwise = true;
+        for (int i = 1; i < walked.Count; i++)
+        {
+            if (walked[i] != (walked[i - 1] + 1) % 4) { clockwise = false; }
+        }
+        Check(clockwise, "each turn moved on by exactly one quarter",
+            string.Join(",", walked.ConvertAll(q => q.ToString()).ToArray()));
+        Check(walked[4] == walked[0], "and four turns bring it right back round");
+    }
+
+    private static void DortKutup_ABlockedQuarterTurnsInsteadOfEndingTheRound()
+    {
+        Section("dört kutup / a full quarter turns early and bills you, it does not end the round");
+        var session = NewBossSession(6111, 5, 1000000, "dort_kutup", 40, 1);
+        var boss = (DortKutupBoss)session.CurrentRound.Boss;
+        session.Config.Scoring.PointsPerCubePlaced = 100;
+        RoundEngine round = session.CurrentRound;
+        Check(boss.ActiveQuadrant == 0, "the bottom-left quarter is live");
+
+        // Brick the OTHER three quarters with cubes nothing can break, leaving only the live one
+        // usable. Done before a turn runs, so the engine walks into it the normal way: the quarter
+        // turns at the end of the turn and the dead-end check meets a wall.
+        var open = new HashSet<GridPos>(boss.ActiveCells(round.MainBoard));
+        foreach (GridPos cell in AllPlayableCells(round.MainBoard))
+        {
+            if (!open.Contains(cell) && !round.MainBoard.GetCube(cell).HasValue)
+            {
+                round.MainBoard.SetCubeAt(cell, new Cube(CubeKind.Obsidian, 9970));
+            }
+        }
+
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "the turn played into the one open quarter");
+        Check(round.Status != RoundStatus.Lost,
+            "three full quarters are NOT a dead end while the fourth has room",
+            "status " + round.Status + " loss " + round.Loss);
+        Check(boss.BlockedTurns == 3,
+            "the boss walked through all three walled quarters, charging for each",
+            "" + boss.BlockedTurns);
+        Check(boss.ActiveQuadrant == 0, "and came back round to the one with room",
+            "" + boss.ActiveQuadrant);
+        Check(round.RoundScore >= 0, "the penalties never take the round below zero",
+            "" + round.RoundScore);
+
+        // And it keeps going: the round is still playable, turn after turn.
+        Check(PlayOneCard(round) != null, "the next turn plays too");
+        Check(boss.BlockedTurns == 6, "charging three more for the same walk",
+            "" + boss.BlockedTurns);
+    }
+
+    private static void Kangren_SpreadsAsOneGrowingPatch()
+    {
+        Section("kangren / the rot seeds once and then only grows against itself");
+        var board = new GameBoard(5, 5);
+        var rng = new SeededRandom(6112);
+        GridPos? seed = board.SpreadGangrene(rng);
+        Check(seed.HasValue, "it seeded somewhere");
+        Check(board.CountGangrene() == 1, "one rotten cube", "" + board.CountGangrene());
+
+        for (int i = 0; i < 6; i++)
+        {
+            board.SpreadGangrene(rng);
+        }
+        Check(board.CountGangrene() == 7, "it took a cell per spread",
+            "" + board.CountGangrene());
+
+        // Every rotten cube must touch another one: it is a patch, not a scatter.
+        var rotten = new List<GridPos>();
+        foreach (GridPos cell in AllPlayableCells(board))
+        {
+            Cube? cube = board.GetCube(cell);
+            if (cube.HasValue && cube.Value.Kind == CubeKind.Gangrene) { rotten.Add(cell); }
+        }
+        bool allTouch = true;
+        foreach (GridPos cell in rotten)
+        {
+            bool touches = false;
+            foreach (GridPos other in rotten)
+            {
+                int d = System.Math.Abs(cell.X - other.X) + System.Math.Abs(cell.Y - other.Y);
+                if (d == 1) { touches = true; }
+            }
+            if (!touches) { allTouch = false; }
+        }
+        Check(allTouch, "and every rotten cube touches another - one patch, one origin");
+    }
+
+    private static void Kangren_RottenCubesStillExplode()
+    {
+        Section("kangren / a part-rotten line still explodes");
+        var board = new GameBoard(5, 5);
+        // Three rotten and two plain in the bottom row: a full line, and it must clear.
+        for (int x = 0; x < 3; x++)
+        {
+            board.SetCubeAt(new GridPos(x, 0), new Cube(CubeKind.Gangrene, -7));
+        }
+        board.SetCubeAt(new GridPos(3, 0), new Cube(CubeKind.Normal, 1));
+        board.SetCubeAt(new GridPos(4, 0), new Cube(CubeKind.Normal, 1));
+
+        LineExplosionResult result = board.ResolveFullLines();
+        Check(result.LineCount == 1, "the line exploded", "lines " + result.LineCount);
+        Check(result.ExplodedCells.Count == 5, "all five cubes went, rot included",
+            "" + result.ExplodedCells.Count);
+        Check(board.OccupiedCount == 0, "the row is clear", "" + board.OccupiedCount);
+    }
+
+    private static void Kangren_AFullyRottenLineDiesAndTheRotJumps()
+    {
+        Section("kangren / a wholly rotten line dies for good, and the rot jumps to the edge");
+        var board = new GameBoard(5, 5);
+        // Row 1 entirely rotten -> it dies. Nearest edge to row 1 is row 0.
+        for (int x = 0; x < 5; x++)
+        {
+            board.SetCubeAt(new GridPos(x, 1), new Cube(CubeKind.Gangrene, -7));
+        }
+        // Something standing in row 0 for the infection to jump onto, and one cell left empty.
+        board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 1));
+        board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Normal, 1));
+
+        List<GridPos> converted = board.InfectFullLines();
+        Check(board.RowIsInfectionDead(1), "row 1 is dead");
+        Check(converted.Count == 2, "and the two cubes standing in row 0 turned rotten",
+            "" + converted.Count);
+        Check(board.GetCube(new GridPos(0, 0)).Value.Kind == CubeKind.Gangrene,
+            "the first of them is rot now");
+        Check(!board.GetCube(new GridPos(2, 0)).HasValue,
+            "an EMPTY edge cell stayed empty - the jump converts, it never creates");
+
+        // The dead row can never explode again, however it is filled.
+        for (int x = 0; x < 5; x++)
+        {
+            if (!board.GetCube(new GridPos(x, 1)).HasValue)
+            {
+                board.SetCubeAt(new GridPos(x, 1), new Cube(CubeKind.Normal, 2));
+            }
+        }
+        LineExplosionResult result = board.ResolveFullLines();
+        bool row1Exploded = false;
+        foreach (int y in result.Rows)
+        {
+            if (y == 1) { row1Exploded = true; }
+        }
+        Check(!row1Exploded, "a full dead row does not explode - it is dead for the round");
+    }
+
+    private static void Kangren_ChargesRentForEveryRottenCube()
+    {
+        Section("kangren / every rotten cube standing costs score every turn");
+        var session = NewBossSession(6113, 5, 1000000, "kangren", 40, 3);
+        var boss = (KangrenBoss)session.CurrentRound.Boss;
+        session.Config.Scoring.PointsPerCubePlaced = 60;
+        RoundEngine round = session.CurrentRound;
+
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "a turn resolved");
+        int rotten = round.CountGangrene();
+        Check(rotten > 0, "the rot took a cell", "" + rotten);
+        Check(BreakdownCharged(report, boss.DefId, rotten * boss.RentPerCube),
+            "and the rent was billed under the boss's own name",
+            "expected -" + (rotten * boss.RentPerCube));
+        Check(round.RoundScore >= 0, "the round score never goes negative",
+            "" + round.RoundScore);
     }
 
     private static void Kacakci_TakesOneItemPerVisitForFree()
