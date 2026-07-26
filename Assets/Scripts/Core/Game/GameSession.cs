@@ -657,7 +657,12 @@ namespace ProjectBlock.Core
             return true;
         }
 
-        private void StartRound()
+        /// <summary><paramref name="replayBossDefId"/> is set only when a round is being played
+        /// AGAIN ("Uzun vadeli yatırımcı" spending its second chance): it pins the same boss KIND
+        /// as the attempt that failed, as a fresh instance. A do-over must be the same fight - and
+        /// drawing again would hand out a different boss, because the first one is already in
+        /// bossesFought.</summary>
+        private void StartRound(string replayBossDefId = null)
         {
             RoundConfig roundConfig = Config.Progression.GetRound(RoundNumber);
             roundConfig = Jokers.FilterRoundConfig(roundConfig);
@@ -667,8 +672,14 @@ namespace ProjectBlock.Core
             // first turn. Ordinary rounds get null and behave exactly as they always have.
             if (roundConfig.IsBossRound)
             {
-                CurrentRound.SetBoss(DrawBoss());
+                CurrentRound.SetBoss(replayBossDefId != null
+                    ? BossRegistry.Create(replayBossDefId)
+                    : DrawBoss());
             }
+            // The final round is where "Uzun vadeli yatırımcı" finally pays: its two exclusive
+            // powers are handed over now, before the round's first turn. Deliberately ahead of the
+            // Lost check below so a degenerate round start cannot swallow them.
+            GrantInvestorPowers();
             CurrentRound.TurnResolved += OnTurnResolved;
             CurrentRound.StatusChanged += OnRoundStatusChanged;
             SetPhase(GamePhase.Round);
@@ -688,6 +699,88 @@ namespace ProjectBlock.Core
                 CurrentRound.Boss.OnRoundStarted(new RoundContext(this, rng, CurrentRound));
             }
         }
+
+        /// <summary>
+        /// Hands over the InvestorOnly powers for the FINAL round, when a held joker unlocks them
+        /// ("Uzun vadeli yatırımcı"). They arrive charged, outside the normal slot limit - they are
+        /// a loan for one round, not stock the player had to make room for - and never twice: a
+        /// replayed final round finds them already held and adds nothing.
+        ///
+        /// There are no InvestorOnly powers in the registry yet, so today this is inert. When the
+        /// designer names the two, registering them is the whole of the work.
+        /// </summary>
+        private void GrantInvestorPowers()
+        {
+            if (!IsFinalRound || !Jokers.UnlocksInvestorPowers)
+            {
+                return;
+            }
+            IReadOnlyList<PowerDefinition> catalogue = PowerRegistry.All;
+            for (int i = 0; i < catalogue.Count; i++)
+            {
+                if (!catalogue[i].InvestorOnly || HoldsPower(catalogue[i].DefId))
+                {
+                    continue;
+                }
+                Powers.Add(catalogue[i].Create());
+            }
+        }
+
+        private bool HoldsPower(string defId)
+        {
+            foreach (Power held in Powers.Powers)
+            {
+                if (held.DefId == defId)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Spends "Uzun vadeli yatırımcı"'s one second chance on a lost FINAL round and plays that
+        /// round again from the start. Returns false - and changes nothing - when there is no
+        /// second chance to spend or this was not the last round, in which case the loss stands.
+        ///
+        /// The failed attempt is VOIDED, not ended: RoundOutcome.Lost is never dispatched for it
+        /// (a round-end effect must not settle for a round that is about to be replayed) and the
+        /// score it banked is clawed back out of the run currency, so a replayed round can still
+        /// only ever pay once. The same boss kind comes back as a fresh instance.
+        /// </summary>
+        private bool TryReplayFinalRound()
+        {
+            if (!IsFinalRound || CurrentRound == null)
+            {
+                return false;
+            }
+            Joker investor = Jokers.TryConsumeFinalRoundRetry();
+            if (investor == null)
+            {
+                return false;
+            }
+            // Un-bank the voided attempt. Clamped: an effect may already have emptied the purse
+            // ("Cana geleceğine mala"), and the run currency never goes negative.
+            long banked = CurrentRound.RoundScore;
+            if (banked > TotalScore)
+            {
+                banked = TotalScore;
+            }
+            if (banked > 0)
+            {
+                AddCurrency(-banked); // books it as taken by an effect, so the ledger balances
+            }
+            string bossDefId = CurrentRound.Boss != null ? CurrentRound.Boss.DefId : null;
+            CurrentRound.TurnResolved -= OnTurnResolved;
+            CurrentRound.StatusChanged -= OnRoundStatusChanged;
+            FinalRoundReplays++;
+            StartRound(bossDefId);
+            return true;
+        }
+
+        /// <summary>How many times the final round has been replayed this run (0 or 1 today).
+        /// For the HUD, so the player can see the second chance was spent.</summary>
+        public int FinalRoundReplays { get; private set; }
 
         /// <summary>
         /// Draws the boss for a flagged round: a random kind this run has not met yet, so five
@@ -762,6 +855,13 @@ namespace ProjectBlock.Core
             }
             else if (status == RoundStatus.Lost)
             {
+                // "Uzun vadeli yatırımcı": the last round, and only the last round, may be played
+                // again once. Ahead of everything else - the round is being voided, so nothing
+                // that settles a finished round may run for it.
+                if (TryReplayFinalRound())
+                {
+                    return;
+                }
                 Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Lost);
                 SetPhase(GamePhase.GameOver);
             }
@@ -853,6 +953,12 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
+                // An early-game-only bet ("Uzun vadeli yatırımcı") leaves the shop for good once
+                // its window closes - buying it late would be no investment at all.
+                if (RoundNumber > definition.LastOfferableRound)
+                {
+                    continue;
+                }
                 pool.Add(definition);
             }
             if (pool.Count == 0)
@@ -915,7 +1021,8 @@ namespace ProjectBlock.Core
             var pool = new List<PowerDefinition>();
             foreach (PowerDefinition definition in catalogue)
             {
-                if (!owned.Contains(definition.DefId))
+                // The investor's exclusive powers are not for sale at any price, in any market.
+                if (!owned.Contains(definition.DefId) && !definition.InvestorOnly)
                 {
                     pool.Add(definition);
                 }
