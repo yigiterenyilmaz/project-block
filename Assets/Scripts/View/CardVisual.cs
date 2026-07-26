@@ -122,20 +122,25 @@ namespace ProjectBlock.View
                     }
                     // A custom (player-designed) block is always tagged just "custom", even when
                     // it carries an element - its element still colours the cubes and drives play.
-                    // Smuggled goods are tagged as such above everything else: knowing a card
-                    // came off a lorry is what explains its shape.
-                    string bandText = card.IsSmuggled
-                        ? Loc.Pick("smuggled", "kaçak")
-                        : card.IsCustom
-                            ? Loc.Pick("custom", "özel")
-                            : string.Join("+", elementLabels);
+                    // Smuggled goods are tagged above everything else, and a DEFECTIVE one says
+                    // so outright: an ordinary-looking card that will not stay on the board has to
+                    // be readable in the hand, or the player wastes the turn without knowing why.
+                    string bandText = card.FallsThrough
+                        ? Loc.Pick("DEFECTIVE", "DEFOLU")
+                        : card.IsSmuggled
+                            ? Loc.Pick("smuggled", "kaçak")
+                            : card.IsCustom
+                                ? Loc.Pick("custom", "özel")
+                                : string.Join("+", elementLabels);
                     // A dark band behind plain text - outlines ghost on TextMesh, this doesn't.
                     var bandCenter = new Vector2(0f, BodyHeight * 0.5f - 0.15f);
                     Track(ViewUtil.MakeRect(transform, "ElementBand", bandCenter,
                         new Vector2(BodyWidth - 0.1f, 0.22f), new Color(0.1f, 0.11f, 0.14f, 0.92f),
                         order + 2), order + 2);
-                    Color labelColor = card.IsSmuggled
-                        ? new Color(1f, 0.72f, 0.35f) // smuggled: a warning amber
+                    Color labelColor = card.FallsThrough
+                        ? new Color(1f, 0.42f, 0.38f) // defective: a red warning
+                        : card.IsSmuggled
+                        ? new Color(1f, 0.72f, 0.35f) // sound smuggled goods: a milder amber
                         : card.Elements.Count > 0
                             ? Color.Lerp(ViewUtil.ElementColor(card.Elements[0]), Color.white, 0.4f)
                             : new Color(0.85f, 0.80f, 1f); // custom-only: a bright neutral tag

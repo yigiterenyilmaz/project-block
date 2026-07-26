@@ -294,6 +294,14 @@ namespace ProjectBlock.View
             ambient.Emit(emitParams, 1);
         }
         private float cellSize = 1f;
+
+        /// <summary>Edge length of one cell in world units, so an effect outside the board (a
+        /// defective smuggled block falling off the screen) can draw cubes at the right size.</summary>
+        public float CellWorldSize
+        {
+            get { return cellSize; }
+        }
+
         private Vector2 bottomLeft;
         private SpriteRenderer deadZoneLine; // red separator for the retro dead zone, or null
 

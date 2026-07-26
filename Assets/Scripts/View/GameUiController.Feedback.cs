@@ -163,6 +163,10 @@ namespace ProjectBlock.View
                     blastFx.EmitAt(boardView.CellToWorld(cell), faded, 3);
                 }
             }
+            // "Kaçakçı" defective goods: the cubes showed up and then let go. They fall through
+            // the arena and off the bottom of the screen - nothing landed, so there is nothing to
+            // blast, only something to drop.
+            DropFellThroughCubes(report);
             if (report.CleanSweep)
             {
                 var gold = new Color(1f, 0.85f, 0.3f);
@@ -171,6 +175,31 @@ namespace ProjectBlock.View
                     var pos = new Vector2(Random.Range(-3.2f, 3.2f), Random.Range(-2.2f, 4f));
                     blastFx.EmitAt(pos, gold, 2);
                 }
+            }
+        }
+
+        /// <summary>Drops the cubes of a card that would not stay on the board, in both worlds.
+        /// Staggered a little per cube so the block crumbles instead of sliding off as one slab.
+        /// </summary>
+        private void DropFellThroughCubes(TurnReport report)
+        {
+            SpawnFallingCubes(boardView, report.FellThroughCells, report.Card);
+            SpawnFallingCubes(mirrorBoardView, report.MirrorFellThroughCells, report.MirrorCard);
+        }
+
+        private void SpawnFallingCubes(BoardView view, IReadOnlyList<GridPos> cells, BlockCard card)
+        {
+            if (view == null || cells == null || cells.Count == 0)
+            {
+                return;
+            }
+            Color color = card != null && card.Elements.Count > 0
+                ? ViewUtil.ElementColor(card.Elements[0])
+                : ViewUtil.ColorForCard(card != null ? card.Id : 0);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                FallingCubeFx.Spawn(transform, view.CellToWorld(cells[i]),
+                    view.CellWorldSize * 0.86f, color, i * 0.045f);
             }
         }
 
