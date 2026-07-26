@@ -293,6 +293,9 @@ namespace ProjectBlock.View
             emitParams.startSize = size;
             ambient.Emit(emitParams, 1);
         }
+        /// <summary>Wash over a line "Kangren" took whole - it can never explode again.</summary>
+        public Color RotDeadLineColor = new Color(0.24f, 0.20f, 0.16f);
+
         private float cellSize = 1f;
 
         /// <summary>Edge length of one cell in world units, so an effect outside the board (a
@@ -414,6 +417,13 @@ namespace ProjectBlock.View
                     if (IsQuarantined(gp))
                     {
                         color = Color.Lerp(color, QuarantineTint, cube.HasValue ? 0.45f : 0.6f);
+                    }
+                    // "Kangren": a line the rot took WHOLE can never explode again, which the
+                    // player has to be able to see - an unexplodable full line otherwise reads as
+                    // a bug. Washed like the erosion scar it behaves like.
+                    if (board.RowIsInfectionDead(gp.Y) || board.ColumnIsInfectionDead(gp.X))
+                    {
+                        color = Color.Lerp(color, RotDeadLineColor, cube.HasValue ? 0.4f : 0.66f);
                     }
                     // "Besleme"'s creature: the patch you have to keep feeding, so it has to be
                     // unmistakable whether there is a cube standing on it or not.

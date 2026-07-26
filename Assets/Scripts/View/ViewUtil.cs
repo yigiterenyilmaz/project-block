@@ -81,6 +81,9 @@ namespace ProjectBlock.View
                 case CubeKind.Ice: return new Color(0.62f, 0.86f, 0.95f);
                 case CubeKind.Void: return new Color(0.10f, 0.07f, 0.16f);
                 case CubeKind.Mine: return new Color(0.42f, 0.12f, 0.12f);
+                // "Kangren" rot: a sickly grey-green, so a rotten cube is never mistaken for a
+                // healthy one however full the board is.
+                case CubeKind.Gangrene: return new Color(0.38f, 0.44f, 0.28f);
                 default: return ColorForCard(cube.SourceCardId);
             }
         }
