@@ -135,6 +135,10 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Savunmaci_BanksSafeRoundsAndNotGreedyOnes();
+        Savunmaci_AnOvertimeRoundBanksNothing();
+        Savunmaci_PaysTheBankOnASurvivedOvertime();
+        Savunmaci_TheBankRefillsAfterPaying();
         Besleme_MarksAPatchAndFeedsOnExplosions();
         Besleme_GrowsWhenFedAndCostsMoreEachStep();
         Besleme_StarvesAndFinallyDies();
@@ -4319,6 +4323,151 @@ public static class JokerTests
             }
         }
         return PlayOneCard(round);
+    }
+
+    /// <summary>Leaves the board one cube short of a full bottom row on an otherwise empty
+    /// board, so the next single-cube placement clears the row AND sweeps the board.</summary>
+    private static GridPos ArmASweep(RoundEngine round)
+    {
+        foreach (GridPos cell in AllPlayableCells(round.Board))
+        {
+            if (round.Board.GetCube(cell).HasValue)
+            {
+                round.Board.DestroyCubeForced(cell);
+            }
+        }
+        int row = round.Board.MinY;
+        for (int x = round.Board.MinX + 1; x < round.Board.MinX + round.Board.Width; x++)
+        {
+            round.Board.SetCubeAt(new GridPos(x, row), new Cube(CubeKind.Normal, 9990));
+        }
+        return new GridPos(round.Board.MinX, row);
+    }
+
+    private static void Savunmaci_BanksSafeRoundsAndNotGreedyOnes()
+    {
+        Section("savunmacı / a round finished without overtime banks, a greedy one does not");
+        var session = NewSession(9300, 5, 1000000, 40, 1);
+        var joker = (SavunmaciJoker)session.Jokers.Add(new SavunmaciJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        Check(joker.Banked == 0, "the bank starts empty");
+
+        // A round that ended WITHOUT the player ever declining the offer.
+        Check(round.ContinueCount == 0, "no offer was declined this round");
+        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
+        Check(joker.Banked == joker.BonusPerSafeRound, "so it banked a stack",
+            "" + joker.Banked);
+
+        // A LOST round banks nothing.
+        int before = joker.Banked;
+        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Lost);
+        Check(joker.Banked == before, "a lost round banks nothing",
+            before + " -> " + joker.Banked);
+    }
+
+    private static void Savunmaci_AnOvertimeRoundBanksNothing()
+    {
+        Section("savunmacı / a round the player went into overtime on banks nothing");
+        var session = NewSession(9301, 5, 30, 40, 1);
+        session.Config.Scoring.PointsPerCubePlaced = 200; // one placement clears the low bar
+        var joker = (SavunmaciJoker)session.Jokers.Add(new SavunmaciJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        PlayOneCard(round);
+        Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "the offer is up",
+            "status " + round.Status);
+        round.DecideAdvance(false); // decline it: THIS is going into overtime
+        Check(round.ContinueCount > 0, "the round is now flagged as an overtime round",
+            "continues " + round.ContinueCount);
+
+        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
+        Check(joker.Banked == 0, "so it banked nothing for that round", "" + joker.Banked);
+    }
+
+    private static void Savunmaci_PaysTheBankOnASurvivedOvertime()
+    {
+        Section("savunmacı / finishing an overtime cashes the whole bank in");
+        var session = NewSession(9302, 4, 30, 40, 1);
+        session.Config.Scoring.PointsPerCubePlaced = 200;
+        var joker = (SavunmaciJoker)session.Jokers.Add(new SavunmaciJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        // Pretend four safe rounds already went by.
+        for (int i = 0; i < 4; i++)
+        {
+            session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
+        }
+        int bank = joker.Banked;
+        Check(bank == 4 * joker.BonusPerSafeRound, "four safe rounds are banked", "" + bank);
+
+        // Cross the bar, decline, and then sweep the board - which is what finishing an
+        // overtime actually is.
+        PlayOneCard(round);
+        Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "the offer is up");
+        round.DecideAdvance(false);
+        Check(round.ContinueCount > 0, "in overtime now");
+
+        GridPos gap = ArmASweep(round);
+        int cashedBefore = joker.CashedOut;
+        TurnReport report = null;
+        for (int i = 0; i < round.Hand.Count && report == null; i++)
+        {
+            if (round.CanPlaceCard(round.Hand[i], gap) && !round.IsFrozen(round.Hand[i].Id))
+            {
+                report = round.PlayFromHand(i, gap);
+            }
+        }
+        Check(report != null, "a card closed the row");
+        Check(report.CleanSweep, "which swept the board - the overtime is finished",
+            "sweep " + report.CleanSweep);
+        Check(joker.CashedOut == cashedBefore + 1, "the bank paid out",
+            "cashed " + joker.CashedOut);
+        Check(joker.Banked == 0, "and it is empty again", "" + joker.Banked);
+
+        bool paidUs = false;
+        foreach (ScoreContribution c in report.Score.Contributions)
+        {
+            if (c.Source == joker.DefId && c.Flat == bank) { paidUs = true; }
+        }
+        Check(paidUs, "for exactly what had been banked", "expected " + bank);
+    }
+
+    private static void Savunmaci_TheBankRefillsAfterPaying()
+    {
+        Section("savunmacı / after paying, the bank fills again");
+        var session = NewSession(9303, 5, 1000000, 40, 1);
+        var joker = (SavunmaciJoker)session.Jokers.Add(new SavunmaciJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
+        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
+        Check(joker.Banked == 2 * joker.BonusPerSafeRound, "two rounds banked",
+            "" + joker.Banked);
+
+        // A sweep OUTSIDE an overtime must not touch the bank.
+        GridPos gap = ArmASweep(round);
+        TurnReport report = null;
+        for (int i = 0; i < round.Hand.Count && report == null; i++)
+        {
+            if (round.CanPlaceCard(round.Hand[i], gap) && !round.IsFrozen(round.Hand[i].Id))
+            {
+                report = round.PlayFromHand(i, gap);
+            }
+        }
+        Check(report != null && report.CleanSweep, "a sweep landed outside overtime");
+        Check(joker.Banked == 2 * joker.BonusPerSafeRound,
+            "and the bank is untouched - only an OVERTIME sweep cashes it",
+            "" + joker.Banked);
+        Check(joker.CashedOut == 0, "nothing was cashed out", "" + joker.CashedOut);
+
+        // And the bank keeps growing across further safe rounds.
+        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
+        Check(joker.Banked == 3 * joker.BonusPerSafeRound, "a third safe round banked too",
+            "" + joker.Banked);
     }
 
     private static void Besleme_MarksAPatchAndFeedsOnExplosions()
