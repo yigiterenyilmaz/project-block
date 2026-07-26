@@ -32,7 +32,13 @@ namespace ProjectBlock.Core
         /// <summary>Frozen water ("Buzluk" joker). Unlike obsidian/gold it CAN be exploded
         /// and pays a bonus when it is, but it does not block a clean sweep - a board that
         /// holds nothing but ice counts as swept.</summary>
-        Ice = 8
+        Ice = 8,
+
+        /// <summary>"Kangren" (boss round) rot. An ordinary destructible cube in every respect -
+        /// it fills a cell, blocks a clean sweep and breaks with a completed line - but it costs
+        /// score every turn it stands, and a line the infection takes ENTIRELY dies for good
+        /// (GameBoard.InfectFullLines).</summary>
+        Gangrene = 11
     }
 
     /// <summary>A cube occupying one board cell.</summary>
