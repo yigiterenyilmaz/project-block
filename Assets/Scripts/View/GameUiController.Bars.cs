@@ -366,11 +366,13 @@ namespace ProjectBlock.View
                 }
                 marketView.Show(session);
                 UpdateHud();
-                if (offer.Kind == MarketOfferKind.Joker)
+                if (offer.Kind == MarketOfferKind.Joker || smuggling)
                 {
+                    // A SMUGGLE always touches the joker bar even when the goods were a block:
+                    // "Kaçakçı" counts the haul, and its third sound one takes it off the bar.
                     jokerBar.Refresh(session, null);
                 }
-                else if (offer.Kind == MarketOfferKind.Power)
+                if (offer.Kind == MarketOfferKind.Power)
                 {
                     powerBar.Refresh(session, null);
                 }
