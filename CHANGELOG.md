@@ -24,6 +24,23 @@ everything here is unreleased and balance numbers are still placeholders.
   a turn may be worth nothing, never less.
 
 ### Added
+- **Four new powers**, bringing the roster to 35:
+  - **Neşter** (common) — cut a block in your hand in two, choosing which cubes go into the first
+    piece. **Both halves have to hold together**, so it cannot mint scattered nonsense. The pieces
+    are bonus cards and last the round; the whole block is back in your deck next round.
+  - **Lehimleme** (rare) — weld two cards in your hand into one, and you decide **where the second
+    sits against the first** — every legal join is offered, so the monster you end up with is your
+    call. Round-scoped like the scalpel.
+  - **Gen Nakli** (rare) — move the **element** out of a cube on the board and into a card in your
+    hand: the cube goes plain, the card goes elemental, and every rule that asks what a block is
+    made of sees it. It is a **loan** — when the card reaches the discard both go back to what they
+    were, the cube included if it is still standing.
+  - **Hidrolik Pres** (rare) — squeeze a **2x2** patch of arena into **one cell** for four turns:
+    three cells of room, right now. Break the pressed cube while it is shut and it pays for **four**.
+    On the fifth turn it opens — what is in the way is shoved outward and whatever goes **over the
+    edge scores**. **Obsidian and gold will not budge**, so a side holding one is not a direction
+    and it opens the other way; and if it cannot open at all it **detonates**, taking the stone
+    around it with it for nothing. That is the only thing in the game that removes those two.
 - **Four new jokers**, bringing the roster to 52:
   - **Simetri** — leave the board a mirror image of itself across the middle and it pays;
     mirrored on **both** axes pays **triple**. It wakes on the 5th turn — and every clean sweep puts
