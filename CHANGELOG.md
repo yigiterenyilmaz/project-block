@@ -35,6 +35,46 @@ everything here is unreleased and balance numbers are still placeholders.
   a turn may be worth nothing, never less.
 
 ### Added
+- **Mikrodalga (joker)** — a combo kept warm. Two explosions with **one quiet turn between them**
+  still count as a combo: the streak does not reset on that turn, it only sleeps, and the next
+  clear picks it up where it left off. Two quiet turns in a row still end it. Reheated food is not
+  fresh food, though — the turn that ends a gap pays **half** the combo bonus, while a streak
+  carried turn after turn keeps paying in full. So it patches the occasional hole in a real streak
+  rather than manufacturing one out of every other turn.
+- **Hedefli (block type)** — one marked cube of the block is its **target**. Break the TARGET in
+  the first explosion that reaches the block and it pays a bonus and goes up **whole**, taking the
+  cubes no line touched with it. Break any other cube first and the block is **spent**: it keeps
+  standing, keeps filling cells and keeps breaking normally, but it will never pay. It is armed
+  again the next time it comes round from the discard and is played, so a missed shot costs you
+  that placement and not the card. The target counts as "first" whenever it is *among* the cubes
+  of that first explosion — a line taking it along with two of its siblings is a hit. Buyable from
+  the market like any other block type.
+- **Five new boss rounds**, bringing the boss roster to 37:
+  - **Şaşırtmaca** — the shell game with your own hand. Cards are dealt **face down**; turning one
+    over **commits** you to it and locks the rest, so you play what you picked blind, wherever it
+    happens to fit. Afterwards the hand is shown to you, topped up, and mixed face down again — you
+    always know *what* you are holding and never *where*. Commit to a card that fits nowhere and
+    the lock lifts so you can pick again; you have still learned what it was.
+  - **Matruşka** — nothing scores this round, and the dolls are the whole task. A doll sits on one
+    cube; break that cube and it **splits in two**, again and again — **1, 2, 4, 8** — and cracking
+    the last of the eight ends the round for the **full threshold**. Two ways to fail: explode a
+    row or column with **no doll in it**, or leave a splitting doll **no cube to sit on**. The two
+    pull against each other, so you have to keep clearing *and* keep building.
+  - **Snake** — a long snake is loose in the arena. Every turn it picks a direction at random and
+    slides until a wall or a block stops it — and a block that stops it is **eaten**, whatever kind
+    it is, and the snake grows a segment for it. Its segments fill their cells (so a line they
+    complete does explode) but **cannot be broken**; what cuts it down is the explosion itself,
+    one segment off the tail per line it was standing in. Kill it and the round is yours for the
+    full threshold. It is 20 long on a 9x9, shorter on the smaller arenas.
+  - **İstilacı** — one column is **marked for demolition**, and three turns later everything in it
+    is swept away and you are **billed for every cube** that was standing there. Then the next
+    column is marked. Nothing is taken from you now, so the whole round is spent deciding whether
+    that column is worth building in for three more turns.
+  - **Tamagotchi** — it asks for **four block shapes** and you have until the draw pile next runs
+    dry to hand them over; miss the deadline and the round is lost. Only the **outline** matters,
+    never what a card is made of. Feeding costs no turn — but anything you feed it **leaves the
+    round**, so every meal thins the deck you are still trying to clear the board with, and
+    shortens the very clock you are racing.
 - **Four new powers**, bringing the roster to 35:
   - **Neşter** (common) — cut a block in your hand in two, choosing which cubes go into the first
     piece. **Both halves have to hold together**, so it cannot mint scattered nonsense. The pieces

@@ -93,7 +93,27 @@ Buldozer gücünün 2 sıralık bandı 5x5'te alanın %40'ı (9x9'da %22); Meyda
 `max(3, satırdaki boş kare)` süresinde ilk bantta taban değer baskın; enflasyon güçlerinin
 +1'i 5x5'te göreli olarak çok daha büyük.
 
-## 0. Durum — 35 jokerin 34'ü yazıldı
+## Güncel — kadro 53 joker / 35 güç / 37 patron (2026-07-26)
+
+Aşağıdaki bölümler ilk 31–35 jokerlik tasarım listesinin tarihçesi; sayıları oradan okuma.
+Kayıtlı içerik sayısı her zaman registry'lerden gelir (`JokerRegistry`, `PowerRegistry`,
+`BossRegistry`). Bu turda eklenenler:
+
+- **Mikrodalga (joker)** — kombo serisi **bir sessiz turu** affeder (`RoundRules.ComboBridgeTurns`);
+  arayı kapatan tur kombo bonusunun `ComboBridgedScorePercent` kadarını öder. İki sessiz tur seriyi
+  yine bitirir. Joker hiçbir puanı kendisi yazmaz, sadece bu iki kuralı açar.
+- **Hedefli (blok türü)** — bloğun **tek bir küpü** hedeftir (`BlockCard.TargetCellIndex` →
+  `CubeKind.Target`). Bloğa ulaşan ilk patlamada hedef giderse bonus verir ve blok tümüyle patlar;
+  başka bir küp önce giderse bloğun etkisi o oynanış için biter. Kural `RoundEngine.Targeted.cs`'te,
+  `LogDestruction` üzerinden — yani her yıkım kaynağı (satır, ateş zinciri, joker, güç, patron)
+  otomatik besler.
+- **Beş yeni patron** — Şaşırtmaca (kapalı el + kilit), Matruşka (1-2-4-8 bebek merdiveni),
+  Snake (yılan), İstilacı (işaretli sütun), Tamagotchi (dört şekil talebi).
+- **Yeni merkezi primitif:** `RoundEngine.DeclareRoundWon` — bir patron **kendi şartıyla** yenilebilir.
+  Tam eşik kadar puan yazar, `ThresholdPassed`'i set eder (uzatma açılmasın diye) ve doğrudan markete
+  gider. Aynı turdaki bir **kayıp bunu ezer**.
+
+## 0. Durum — 35 jokerin 34'ü yazıldı (tarihçe)
 
 ### Parazit yazıldı (enes'in market kodu geldikten sonra)
 

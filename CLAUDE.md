@@ -44,7 +44,8 @@ dropped that way once each.
      session state (`RoundRules`, `ScoringConfig`) to express a rule bend — that would leak into
      the next round. Bends are **queries** the engine asks live (`IgnoresBlockElements`,
      `BlocksPowerRecharge`, `DisablesJoker/Power`, `BlocksPlacementOn`, `ScoreLineExplosion`,
-     `ScoreCleanSweep`, `OnlyCleanSweepsScore`, `FilterScoreThreshold`, `InvertsJokerScore`).
+     `ScoreCleanSweep`, `OnlyCleanSweepsScore`, `FilterScoreThreshold`, `InvertsJokerScore`,
+     `LocksHandCard`, `HidesHandCards`).
      The ONE exception that cannot be a query is `FilterRoundConfig`: the board is built once, and
      "Dört kutup" has to change its SIZE, so a boss is **drawn before the engine exists** and gets
      to reshape the round first (via `RoundConfig.WithBoard`, never a hand-written `new`).
@@ -67,7 +68,14 @@ dropped that way once each.
      turns) must read `RoundEngine.ThresholdReached`, not `ThresholdPassed`, or it kills a round
      won on the buzzer; and a boss that restricts WHERE you may play gets `TryEscapeDeadEnd`,
      asked before the dead end is declared, so its own rule can never lock the round ("Dört kutup"
-     turns to the next quarter and bills the player for the turn they could not use).
+     turns to the next quarter and bills the player for the turn they could not use, "Şaşırtmaca"
+     lifts the lock when the card you committed to fits nowhere).
+  4. **A boss may be beaten on its OWN terms** — `RoundEngine.DeclareRoundWon` ("Matruşka"
+     cracking the last doll, "Snake" dying). It banks **exactly the threshold**, sets
+     `ThresholdPassed` so the turn resolver cannot also open overtime behind it, and goes straight
+     to the market: beating a boss hands you the shop, not another lap. A LOSS on the same turn
+     outranks it, so a careless last move still kills you. The status is settled at turn step 10
+     with every other outcome, never mid-turn.
   Beware: bosses make frozen cards and sealed cells routine, so any driver that plays a card
   must skip `IsFrozen` cards and ask the board (never a raw `card.Has(...)`) where a block fits —
   and must look for origins with **`RoundEngine.EffectiveShape(card)`, never `card.Shape`**, because
@@ -171,8 +179,20 @@ Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.
 
-All 35 planned jokers are implemented, and so are 17 of the 18 powers - only "Dolly" is
-left, set aside by the designer. See `docs/jokers-plan.md`.
+The roster now stands at **53 jokers, 35 powers and 37 bosses** (registry counts); of the
+originally planned powers only "Dolly" is left, set aside by the designer.
+See `docs/jokers-plan.md`.
+
+**Block types are not all card-wide.** Most elements colour the whole block, but "Hedefli"
+marks exactly ONE cube of it (`BlockCard.TargetCellIndex` -> `CubeKind.Target`, stamped by
+`GameBoard.Place`), and the rule that follows lives in `RoundEngine.Targeted.cs`: whichever of
+the block's cubes breaks FIRST decides everything - the target pays a bonus and takes the block
+with it, anything else spends the block for that placement. "First" is judged per DESTRUCTION
+BATCH, so a line that takes the target along with two plain cubes is a hit. It is settled from
+`LogDestruction`, the ONE place a destruction is noticed, so every source (line, fire chain,
+joker, power, boss, between-turn or in-turn) feeds it without knowing the rule exists. The index
+is into the EFFECTIVE shape, so a rotation or a reshape moves the mark with the cube the player
+was shown.
 
 **Market credit ("Kredi kartı") is a SESSION rule, not joker state.** `GameSession` owns
 `Debt`, `Spend` (own points first, borrow the shortfall) and `RepayDebt` (manual, market-only);
