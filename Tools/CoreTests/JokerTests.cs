@@ -135,6 +135,13 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Kacakci_TakesOneItemPerVisitForFree();
+        Kacakci_SoundGoodsAreJustGoods();
+        Kacakci_JunkBlockIsRealJunk();
+        Kacakci_ABrokenJokerIsSilencedCentrally();
+        Kacakci_ABrokenSmugglerSmugglesNothing();
+        Kacakci_ABrokenPowerArrivesEmptyAndFillsSlowly();
+        Kacakci_TheSmuggledItemStillCountsAsBuying();
         Yatirimci_IsOnlyStockedByTheEarlyMarkets();
         Yatirimci_CanNeverBeSold();
         Yatirimci_ReplaysTheLostFinalRound();
@@ -4405,6 +4412,219 @@ public static class JokerTests
             }
         }
         return seen;
+    }
+
+    /// <summary>Index of the first unsold offer of that kind in the market, or -1.</summary>
+    private static int FirstOfferOfKind(GameSession session, MarketOfferKind kind)
+    {
+        for (int i = 0; i < session.Market.Offers.Count; i++)
+        {
+            if (session.Market.Offers[i].Kind == kind && !session.Market.Offers[i].Sold)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>A session parked in its first market with a smuggler in the inventory.</summary>
+    private static GameSession NewSmugglingSession(int seed, int defectPercent,
+        out KacakciJoker smuggler)
+    {
+        GameSession session = NewShortRunSession(seed, 12, 40);
+        smuggler = (KacakciJoker)session.Jokers.Add(new KacakciJoker());
+        smuggler.DefectChancePercent = defectPercent;
+        Check(AdvanceToMarket(session, 200), "reached the market", "phase " + session.Phase);
+        return session;
+    }
+
+    private static void Kacakci_TakesOneItemPerVisitForFree()
+    {
+        Section("kaçakçı / one item per visit, and it costs nothing");
+        KacakciJoker smuggler;
+        GameSession session = NewSmugglingSession(4500, 0, out smuggler);
+        Check(session.CanSmuggle, "a free item is on offer");
+
+        int index = FirstOfferOfKind(session, MarketOfferKind.Block);
+        Check(index >= 0, "the market stocks a block");
+        long purse = session.TotalScore;
+        int deckBefore = session.OwnedCards.Count;
+        Check(session.TrySmuggleOffer(index), "the block walked out of the shop");
+        Check(session.TotalScore == purse, "and nothing was paid for it",
+            purse + " -> " + session.TotalScore);
+        Check(session.OwnedCards.Count == deckBefore + 1, "the deck grew by one",
+            deckBefore + " -> " + session.OwnedCards.Count);
+        Check(session.Market.Offers[index].Sold, "the offer is gone from the shelf");
+
+        // One per VISIT.
+        Check(!session.CanSmuggle, "the free item is spent for this visit");
+        int second = FirstOfferOfKind(session, MarketOfferKind.Block);
+        Check(second < 0 || !session.TrySmuggleOffer(second), "a second steal is refused");
+
+        // ...and it comes back at the next market.
+        session.LeaveMarket();
+        Check(AdvanceToMarket(session, 400), "reached the next market");
+        Check(session.CanSmuggle, "the next visit has its own free item");
+    }
+
+    private static void Kacakci_SoundGoodsAreJustGoods()
+    {
+        Section("kaçakçı / at 0% defect the goods are ordinary");
+        KacakciJoker smuggler;
+        GameSession session = NewSmugglingSession(4501, 0, out smuggler);
+
+        int index = FirstOfferOfKind(session, MarketOfferKind.Block);
+        MarketOffer offer = session.Market.Offers[index];
+        BlockShape wanted = offer.Card.Shape;
+        Check(session.TrySmuggleOffer(index), "smuggled a block");
+        BlockCard got = session.OwnedCards[session.OwnedCards.Count - 1];
+        Check(got.Shape.CanonicalKey == wanted.CanonicalKey,
+            "and it is the very block that was on the shelf");
+        Check(got.IsSmuggled, "tagged as smuggled, so the UI can say where it came from");
+    }
+
+    private static void Kacakci_JunkBlockIsRealJunk()
+    {
+        Section("kaçakçı / a defective block is junk no 5x5 board can hold");
+        KacakciJoker smuggler;
+        GameSession session = NewSmugglingSession(4502, 100, out smuggler);
+
+        int index = FirstOfferOfKind(session, MarketOfferKind.Block);
+        MarketOffer offer = session.Market.Offers[index];
+        Check(session.TrySmuggleOffer(index), "smuggled a block");
+        BlockCard junk = session.OwnedCards[session.OwnedCards.Count - 1];
+        Check(junk.Shape.CanonicalKey != offer.Card.Shape.CanonicalKey,
+            "what arrived is NOT what was on the shelf");
+        Check(junk.IsSmuggled, "and it is tagged as smuggled");
+        Check(junk.Shape.Width > 5 && junk.Shape.Height > 5,
+            "it is too big for a 5x5 board in both directions",
+            junk.Shape.Width + "x" + junk.Shape.Height);
+
+        // Prove it: an empty 5x5 board has nowhere to put it.
+        var board = new GameBoard(5, 5);
+        bool fitsAnywhere = false;
+        foreach (GridPos cell in AllPlayableCells(board))
+        {
+            if (board.CanPlace(junk.Shape, cell)) { fitsAnywhere = true; }
+        }
+        Check(!fitsAnywhere, "so an EMPTY 5x5 arena still has nowhere to put it");
+
+        // But it is not infinite garbage: a big empty board can take it.
+        var big = new GameBoard(9, 9);
+        bool fitsOnBig = false;
+        foreach (GridPos cell in AllPlayableCells(big))
+        {
+            if (big.CanPlace(junk.Shape, cell)) { fitsOnBig = true; }
+        }
+        Check(fitsOnBig, "while a wide open 9x9 can just about take it - junk, not impossible");
+    }
+
+    private static void Kacakci_ABrokenJokerIsSilencedCentrally()
+    {
+        Section("kaçakçı / a broken joker is gated, never removed");
+        var session = NewShortRunSession(4503, 12, 1000000);
+        // Set the defects by hand: the roll picks between them, and both need proving.
+        var dead = (RenovasyonJoker)session.Jokers.Add(new RenovasyonJoker());
+        dead.Defect = SmuggledDefect.NeverWorks;
+        Check(session.Jokers.Find(dead.InstanceId) != null,
+            "a dead joker is still HELD - it takes up its slot");
+        Check(!session.Jokers.CanActivate(dead.InstanceId),
+            "but it cannot be activated, in any round");
+        Check(!session.Jokers.TryActivate(dead.InstanceId, new ActivationTarget()),
+            "and activating it does nothing");
+
+        // The boss-round defect: fine normally, silent when it matters.
+        var bossShy = (RenovasyonJoker)session.Jokers.Add(new RenovasyonJoker());
+        bossShy.Defect = SmuggledDefect.DeadInBossRounds;
+        Check(!session.CurrentRound.Config.IsBossRound, "this round has no boss");
+        Check(session.Jokers.CanActivate(bossShy.InstanceId),
+            "so the boss-shy joker works normally here");
+
+        GameSession bossRun = NewShortRunSession(4504, 12, 1000000, true);
+        var shy2 = (RenovasyonJoker)bossRun.Jokers.Add(new RenovasyonJoker());
+        shy2.Defect = SmuggledDefect.DeadInBossRounds;
+        Check(bossRun.CurrentRound.Config.IsBossRound, "this round IS a boss round");
+        Check(!bossRun.Jokers.CanActivate(shy2.InstanceId),
+            "and there the boss-shy joker is silent");
+        var sound = (RenovasyonJoker)bossRun.Jokers.Add(new RenovasyonJoker());
+        Check(bossRun.Jokers.CanActivate(sound.InstanceId),
+            "while a sound joker beside it still works - the gate is per joker");
+    }
+
+    private static void Kacakci_ABrokenSmugglerSmugglesNothing()
+    {
+        Section("kaçakçı / a smuggler that never works cannot smuggle");
+        var session = NewShortRunSession(4505, 12, 40);
+        var smuggler = (KacakciJoker)session.Jokers.Add(new KacakciJoker());
+        Check(AdvanceToMarket(session, 200), "reached the market");
+        Check(session.CanSmuggle, "it works to begin with");
+        smuggler.Defect = SmuggledDefect.NeverWorks;
+        Check(!session.Jokers.EnablesSmuggling, "broken, it enables nothing");
+        Check(!session.CanSmuggle, "so there is no free item");
+        int index = FirstOfferOfKind(session, MarketOfferKind.Block);
+        Check(index < 0 || !session.TrySmuggleOffer(index), "and the steal is refused");
+    }
+
+    private static void Kacakci_ABrokenPowerArrivesEmptyAndFillsSlowly()
+    {
+        Section("kaçakçı / a defective power comes empty and fills at a quarter rate");
+        var session = NewShortRunSession(4506, 12, 1000000);
+        Power power = session.Powers.Add(new CimbizPower());
+        Check(power.Charged, "an ordinary power arrives charged");
+        Check(power.RechargeCost == 1, "and fills on one event", "" + power.RechargeCost);
+
+        power.MakeSmuggled(4);
+        Check(!power.Charged, "smuggled, it arrives EMPTY");
+        Check(power.RechargeCost == 4, "and needs four events", "" + power.RechargeCost);
+
+        session.Powers.RechargeAll();
+        Check(!power.Charged, "one recharge is not enough (1/4)",
+            "progress " + power.RechargeProgress);
+        session.Powers.RechargeAll();
+        session.Powers.RechargeAll();
+        Check(!power.Charged, "nor three (3/4)", "progress " + power.RechargeProgress);
+        session.Powers.RechargeAll();
+        Check(power.Charged, "the fourth fills it");
+        Check(power.RechargeProgress == 0, "and the meter reset for next time",
+            "" + power.RechargeProgress);
+
+        // Spending it starts the long wait over - the defect is permanent.
+        session.Powers.Spend(power.InstanceId);
+        Check(!power.Charged, "spent again");
+        session.Powers.RechargeAll();
+        Check(!power.Charged, "and the slow fill is still slow - the defect never wears off");
+    }
+
+    private static void Kacakci_TheSmuggledItemStillCountsAsBuying()
+    {
+        Section("kaçakçı / walking out with stolen stock still counts as shopping");
+        KacakciJoker smuggler;
+        GameSession session = NewSmugglingSession(4507, 0, out smuggler);
+        int index = FirstOfferOfKind(session, MarketOfferKind.Block);
+        Check(session.TrySmuggleOffer(index), "smuggled something");
+
+        // "Tutumluluk" and friends pay for leaving empty-handed; a free steal must not fool them.
+        var thrift = new SpyMarketLeftJoker();
+        session.Jokers.Add(thrift);
+        session.LeaveMarket();
+        Check(thrift.LastAnythingPurchased,
+            "the market was left having 'purchased' something");
+    }
+
+    /// <summary>Records what DispatchMarketLeft was told.</summary>
+    private sealed class SpyMarketLeftJoker : Joker
+    {
+        public bool LastAnythingPurchased;
+
+        public SpyMarketLeftJoker()
+            : base("spy_market_left", "Spy")
+        {
+        }
+
+        public override void OnMarketLeft(SessionContext ctx, bool anythingPurchased)
+        {
+            LastAnythingPurchased = anythingPurchased;
+        }
     }
 
     private static void Yatirimci_IsOnlyStockedByTheEarlyMarkets()
