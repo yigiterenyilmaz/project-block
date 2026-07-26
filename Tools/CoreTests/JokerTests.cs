@@ -137,7 +137,9 @@ public static class JokerTests
         Devre_ALineClearOnTheSameTurnStillCounts();
         Kacakci_TakesOneItemPerVisitForFree();
         Kacakci_SoundGoodsAreJustGoods();
-        Kacakci_JunkBlockIsRealJunk();
+        Kacakci_ADefectiveBlockLooksNormal();
+        Kacakci_ADefectiveBlockFallsRightThrough();
+        Kacakci_ADefectiveBlockCannotBeFarmed();
         Kacakci_ABrokenJokerIsSilencedCentrally();
         Kacakci_ABrokenSmugglerSmugglesNothing();
         Kacakci_ABrokenPowerArrivesEmptyAndFillsSlowly();
@@ -4483,40 +4485,83 @@ public static class JokerTests
         Check(got.IsSmuggled, "tagged as smuggled, so the UI can say where it came from");
     }
 
-    private static void Kacakci_JunkBlockIsRealJunk()
+    private static void Kacakci_ADefectiveBlockLooksNormal()
     {
-        Section("kaçakçı / a defective block is junk no 5x5 board can hold");
+        Section("kaçakçı / a defective block is an ordinary card that will not stick");
         KacakciJoker smuggler;
         GameSession session = NewSmugglingSession(4502, 100, out smuggler);
 
         int index = FirstOfferOfKind(session, MarketOfferKind.Block);
         MarketOffer offer = session.Market.Offers[index];
+        string wasOnTheShelf = offer.Card.Shape.CanonicalKey;
         Check(session.TrySmuggleOffer(index), "smuggled a block");
-        BlockCard junk = session.OwnedCards[session.OwnedCards.Count - 1];
-        Check(junk.Shape.CanonicalKey != offer.Card.Shape.CanonicalKey,
-            "what arrived is NOT what was on the shelf");
-        Check(junk.IsSmuggled, "and it is tagged as smuggled");
-        Check(junk.Shape.Width > 5 && junk.Shape.Height > 5,
-            "it is too big for a 5x5 board in both directions",
-            junk.Shape.Width + "x" + junk.Shape.Height);
+        BlockCard got = session.OwnedCards[session.OwnedCards.Count - 1];
+        Check(got.Shape.CanonicalKey == wasOnTheShelf,
+            "it is exactly the card that was on the shelf - the shape gives nothing away");
+        Check(got.IsSmuggled, "it is tagged as smuggled");
+        Check(got.FallsThrough, "and flagged as not staying on the board");
+    }
 
-        // Prove it: an empty 5x5 board has nowhere to put it.
-        var board = new GameBoard(5, 5);
-        bool fitsAnywhere = false;
-        foreach (GridPos cell in AllPlayableCells(board))
-        {
-            if (board.CanPlace(junk.Shape, cell)) { fitsAnywhere = true; }
-        }
-        Check(!fitsAnywhere, "so an EMPTY 5x5 arena still has nowhere to put it");
+    private static void Kacakci_ADefectiveBlockFallsRightThrough()
+    {
+        Section("kaçakçı / it drops through the arena and takes the turn with it");
+        var session = NewSession(4520, 5, 1000000, 40, 3);
+        RoundEngine round = session.CurrentRound;
 
-        // But it is not infinite garbage: a big empty board can take it.
-        var big = new GameBoard(9, 9);
-        bool fitsOnBig = false;
-        foreach (GridPos cell in AllPlayableCells(big))
+        // Break the whole hand, so whichever card the driver reaches for falls through.
+        for (int i = 0; i < round.Hand.Count; i++)
         {
-            if (big.CanPlace(junk.Shape, cell)) { fitsOnBig = true; }
+            round.Hand[i].IsSmuggled = true;
+            round.Hand[i].FallsThrough = true;
         }
-        Check(fitsOnBig, "while a wide open 9x9 can just about take it - junk, not impossible");
+        int occupiedBefore = round.Board.OccupiedCount;
+        int turnBefore = round.TurnNumber;
+        long scoreBefore = round.RoundScore;
+        int handBefore = round.Hand.Count;
+
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "the card was played - placement is legal, it just does not last");
+        Check(report.PlacedCells.Count == 0, "nothing landed on the board",
+            "" + report.PlacedCells.Count);
+        Check(report.FellThroughCells.Count > 0, "and the cells it fell through were recorded "
+            + "for the animation", "" + report.FellThroughCells.Count);
+        Check(round.Board.OccupiedCount == occupiedBefore, "the board is untouched",
+            occupiedBefore + " -> " + round.Board.OccupiedCount);
+        Check(report.Score.Total == 0, "the turn earned nothing at all",
+            "" + report.Score.Total);
+        Check(round.RoundScore == scoreBefore, "so the round score did not move",
+            scoreBefore + " -> " + round.RoundScore);
+        Check(report.ExplodedRows.Count == 0 && report.ExplodedColumns.Count == 0,
+            "nothing exploded - a card that is not there cannot complete a line");
+        Check(!report.CleanSweep, "and it is not a clean sweep either");
+
+        // The turn IS spent, and the card leaves the hand like any other play.
+        Check(round.TurnNumber == turnBefore + 1, "the turn was spent",
+            turnBefore + " -> " + round.TurnNumber);
+        Check(round.Hand.Count == handBefore, "the hand refilled, so no slot is jammed",
+            handBefore + " -> " + round.Hand.Count);
+        Check(round.Status == RoundStatus.InProgress, "and the round carries on",
+            "status " + round.Status);
+    }
+
+    private static void Kacakci_ADefectiveBlockCannotBeFarmed()
+    {
+        Section("kaçakçı / it costs the turn again every time it comes back round");
+        var session = NewSession(4521, 5, 1000000, 8, 1);
+        RoundEngine round = session.CurrentRound;
+        // Break the WHOLE deck, not just the hand: the hand refills from it, and the point of the
+        // test is that a junk card keeps costing turns every time it comes back round.
+        for (int i = 0; i < session.OwnedCards.Count; i++)
+        {
+            session.OwnedCards[i].FallsThrough = true;
+        }
+        // A whole hand of junk still plays out: turn after turn resolves, and the board never
+        // fills, so the round cannot dead-end on it either.
+        int played = PlayTurns(session, 6);
+        Check(played > 0, "junk cards keep playing", "played " + played);
+        Check(round.Board.OccupiedCount == 0, "and the board is still empty after all of them",
+            "" + round.Board.OccupiedCount);
+        Check(round.RoundScore == 0, "with nothing scored", "" + round.RoundScore);
     }
 
     private static void Kacakci_ABrokenJokerIsSilencedCentrally()
