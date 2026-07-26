@@ -58,6 +58,15 @@ everything here is unreleased and balance numbers are still placeholders.
   - **Eforsuz Galibiyet** — finish a round without using a single **power** and the market pays you
     a bonus as you walk in. Do it on a round you took into **overtime** and came out of alive and it
     pays **double**. One power anywhere in the round forfeits it.
+- **Mayın Eşeği (boss round)** — the shell game, bringing the boss roster to 32. A mine is put on
+  one cell and **shown** to you; then the whole arena is covered in black tiles, the covers **dance**,
+  and **the mine travels with its own cover**. Follow it with your eyes and you know where it landed;
+  blink and you are guessing. Do not explode that cell for **ten turns** — set it off and you take a
+  heavy score penalty, and a fresh mine is armed, shown and shuffled again. Survive the ten and it is
+  revealed and shuffled again anyway. **The cubes never move**: not one of them, ever. The board
+  after a shuffle is the board before it — the only thing that moves is the mine, and your certainty.
+  The path the cover takes is computed by the rules off the round's own seed, so what the player
+  follows really is where the mine went.
 - **Four more boss rounds**, bringing the roster to 31:
   - **Bilinmezlik** — a full line does **not** explode. It sits there, complete, taking up room,
     while you keep filling what is left. Then on a turn you cannot predict the rule comes back for
