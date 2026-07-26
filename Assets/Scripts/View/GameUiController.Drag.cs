@@ -379,6 +379,17 @@ namespace ProjectBlock.View
                 // must not even start falling - locking one would throw at PlayFromHand.
                 return;
             }
+            if (round.HandIsFaceDown && round.RevealedHandCardId != card.Id)
+            {
+                // "Şaşırtmaca" behind the falling-piece controller: CHOOSING the piece is the
+                // commitment, because retro never reaches the drag path where a click would
+                // normally make it. A card locked behind an earlier commitment is refused for
+                // the same reason a frozen one is.
+                if (round.RevealedHandCardId != 0 || !round.RevealHandCard(handIndex))
+                {
+                    return;
+                }
+            }
             GameBoard b = round.Board;
             int center = b.MinX + b.Width / 2;
             GridPos origin;

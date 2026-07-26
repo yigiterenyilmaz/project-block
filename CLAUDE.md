@@ -241,6 +241,7 @@ Core compiles and runs outside Unity:
 Test files compile INTO the Core assembly, so `internal` members are reachable.
 
 In-editor: open the enes scene and press Play. Drag a card onto the board to place it,
-A/C on offers, N leaves market, S redraws the hand, R restarts. Joker debug keys:
+A/C on offers, N leaves market, S redraws the hand, R restarts, F feeds the card under the
+cursor to a "Tamagotchi" boss. Joker debug keys:
 J grants the next joker from the registry, K sells the last one, 1-9 activate (a joker
 that needs a target then waits for a click, Esc cancels).
