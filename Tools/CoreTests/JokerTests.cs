@@ -154,6 +154,14 @@ public static class JokerTests
         Pres_WillNotBudgeObsidianAndDetonatesWhenStuck();
         Pres_OpensByItselfAfterFourTurns();
         MayinEsegi_ArmsAMineAndShufflesItAway();
+        Sasirtmaca_OneCommitmentPerTurnAndTheLockLifts();
+        Matruska_SplitsOnTheLadderAndWinsOnTheLastDoll();
+        Matruska_ADollLessLineLosesTheRound();
+        Snake_EatsWhatStopsItAndGrows();
+        Snake_ShrinksOnAnExplosionAndDyingWinsTheRound();
+        Istilaci_TakesTheMarkedColumnAndBills();
+        Tamagotchi_FeedingClearsTheDemandAndTheCardLeavesTheRound();
+        Tamagotchi_AnUnfedDemandLosesWhenTheDeckRunsDry();
         MayinEsegi_TheCubesAreUntouchedByAShuffle();
         MayinEsegi_SettingItOffCostsAndMovesIt();
         MayinEsegi_AQuietTurnJustRunsTheClockDown();
@@ -5129,6 +5137,316 @@ public static class JokerTests
         return new TurnContext(session, new SeededRandom(7), round, report, score);
     }
 
+    // ------------------------------------------------------------------ the five new bosses
+
+    private static void Sasirtmaca_OneCommitmentPerTurnAndTheLockLifts()
+    {
+        Section("şaşırtmaca / one blind commitment per turn");
+        var session = NewBossSession(9700, 5, 1000000, "sasirtmaca", 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (SasirtmacaBoss)round.Boss;
+
+        Check(round.HandIsFaceDown, "the hand is dealt face down");
+        Check(boss.RevealedCardId == 0, "and nothing is turned over yet");
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            Check(!round.IsLockedByBoss(round.Hand[i]),
+                "while nothing is turned over, nothing is locked");
+        }
+
+        int chosen = round.Hand[1].Id;
+        Check(round.RevealHandCard(1), "turning one over takes");
+        Check(boss.RevealedCardId == chosen, "it is the card that was picked");
+        Check(round.IsLockedByBoss(round.Hand[0]) && round.IsLockedByBoss(round.Hand[2]),
+            "and the rest of the hand locks behind it");
+        Check(!round.RevealHandCard(0), "a second commitment is refused");
+
+        // The engine must actually REFUSE to play a locked card, not merely mark it.
+        bool refused = false;
+        try
+        {
+            round.PlayFromHand(0, new GridPos(0, 0));
+        }
+        catch (InvalidOperationException)
+        {
+            refused = true;
+        }
+        Check(refused, "a locked card cannot be played");
+
+        PlayAt(round, new GridPos(0, 0));
+        Check(boss.RevealedCardId == 0, "the turn clears the commitment");
+        Check(boss.HandBeforeMix.Count > 0, "and the hand it mixed is remembered for the reveal");
+    }
+
+    private static void Matruska_SplitsOnTheLadderAndWinsOnTheLastDoll()
+    {
+        Section("matruşka / 1, 2, 4, 8 - and the last doll ends it");
+        var session = NewBossSession(9710, 5, 100, "matruska", 60, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (MatruskaBoss)round.Boss;
+        Check(boss.DollCount == 0, "an empty arena has nowhere to put a doll yet");
+
+        // One cube down, and the pet of a boss has its first host.
+        PlayAt(round, new GridPos(0, 0));
+        Check(boss.DollCount == 1, "the first doll arrives once there is a cube to sit on",
+            "" + boss.DollCount);
+        Check(round.RoundScore == 0, "and nothing this round scores by itself",
+            "" + round.RoundScore);
+
+        // Somewhere for the halves to land - SCATTERED, because a doll-less line going off is a
+        // lost round, so the spare cubes must not complete anything.
+        PaintBoard(round, session, CubeKind.Normal, new GridPos(1, 2), new GridPos(3, 2),
+            new GridPos(1, 4));
+        int before = boss.DollCount;
+        BreakTheDolls(session, round, boss);
+        Check(boss.DollCount > before, "breaking a doll's cube splits it in two",
+            before + " -> " + boss.DollCount);
+    }
+
+    /// <summary>Explodes the row the first doll is standing in, which is the only clear this
+    /// boss allows. Returns false when no doll could be reached.</summary>
+    private static bool BreakTheDolls(GameSession session, RoundEngine round, MatruskaBoss boss)
+    {
+        IReadOnlyList<GridPos> cells = boss.DollCells;
+        if (cells.Count == 0)
+        {
+            return false;
+        }
+        int y = cells[0].Y;
+        for (int x = 0; x < 4; x++)
+        {
+            PaintBoard(round, session, CubeKind.Normal, new GridPos(x, y));
+        }
+        return DropOneCube(round, new GridPos(4, y)) != null;
+    }
+
+    private static void Matruska_ADollLessLineLosesTheRound()
+    {
+        Section("matruşka / a line with no doll in it is a lost round");
+        var session = NewBossSession(9711, 5, 1000000, "matruska", 60, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (MatruskaBoss)round.Boss;
+        PlayAt(round, new GridPos(0, 0));
+        Check(boss.DollCount == 1, "one doll is on the board");
+
+        // Clear a row the doll is NOT in. There is exactly one doll and it sits on (0,0), so
+        // any other row is a forbidden target.
+        int dollRow = boss.DollCells[0].Y;
+        int victim = dollRow == 4 ? 3 : 4;
+        for (int x = 0; x < 4; x++)
+        {
+            PaintBoard(round, session, CubeKind.Normal, new GridPos(x, victim));
+        }
+        DropOneCube(round, new GridPos(4, victim));
+        Check(round.Loss == LossReason.LineWithoutDoll,
+            "clearing a doll-less line loses the round", "" + round.Loss);
+    }
+
+    private static void Snake_EatsWhatStopsItAndGrows()
+    {
+        Section("snake / it eats whatever stops it");
+        var session = NewBossSession(9720, 9, 1000000, "snake", 60, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (SnakeBoss)round.Boss;
+
+        Check(boss.Length == 20, "a 9x9 arena gets the full 20-long snake", "" + boss.Length);
+        int onBoard = round.Board.CountCubesOfKind(CubeKind.Snake);
+        Check(onBoard == boss.Length, "every segment is really on the board", "" + onBoard);
+
+        // Segments are cubes that no line can break and that no sweep waits for.
+        var segment = new Cube(CubeKind.Snake, SnakeBoss.SnakeCardId);
+        Check(!CubeRules.IsDestructible(segment), "a segment cannot be exploded");
+        Check(!CubeRules.CountsForCleanSweep(segment), "and it does not block a clean sweep");
+
+        // Drive the snake ALONE, with no explosion in the turn, so growth is the only thing that
+        // can change its length: a turn it feeds on must leave it longer than it started.
+        ClearBoardExceptSnake(round, boss);
+        int fed = 0;
+        for (int turn = 0; turn < 30 && fed == 0; turn++)
+        {
+            // A ring of food around the head, so whichever way it turns it runs into something.
+            FeedTheSnake(round, boss);
+            int lengthBefore = boss.Length;
+            int eatenBefore = boss.BlocksEaten;
+            boss.AfterTurnScored(FakeTurnFor(session, round));
+            if (boss.BlocksEaten > eatenBefore)
+            {
+                fed++;
+                Check(boss.Length == lengthBefore + 1, "eating a block made it one longer",
+                    lengthBefore + " -> " + boss.Length);
+                Check(round.Board.CountCubesOfKind(CubeKind.Snake) == boss.Length,
+                    "and the board agrees", "" + round.Board.CountCubesOfKind(CubeKind.Snake));
+            }
+        }
+        Check(fed > 0, "it fed at least once in thirty turns");
+    }
+
+    /// <summary>Empties everything that is not a snake segment.</summary>
+    private static void ClearBoardExceptSnake(RoundEngine round, SnakeBoss boss)
+    {
+        foreach (GridPos cell in AllPlayableCells(round.Board))
+        {
+            Cube? cube = round.Board.GetCube(cell);
+            if (cube.HasValue && cube.Value.Kind != CubeKind.Snake)
+            {
+                round.Board.DestroyCubeForced(cell);
+            }
+        }
+    }
+
+    /// <summary>Puts a plain cube in every empty cell around the snake's head, so it cannot slide
+    /// anywhere without running into one.</summary>
+    private static void FeedTheSnake(RoundEngine round, SnakeBoss boss)
+    {
+        GridPos head = boss.Body[0];
+        var around = new List<GridPos>
+        {
+            new GridPos(head.X + 1, head.Y), new GridPos(head.X - 1, head.Y),
+            new GridPos(head.X, head.Y + 1), new GridPos(head.X, head.Y - 1)
+        };
+        for (int i = 0; i < around.Count; i++)
+        {
+            if (round.Board.IsInside(around[i]) && !round.Board.GetCube(around[i]).HasValue)
+            {
+                round.Board.SetCubeAt(around[i], new Cube(CubeKind.Normal, 9722));
+            }
+        }
+    }
+
+    private static void Snake_ShrinksOnAnExplosionAndDyingWinsTheRound()
+    {
+        Section("snake / an explosion cuts it, and killing it takes the round");
+        var session = NewBossSession(9721, 5, 200, "snake", 60, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (SnakeBoss)round.Boss;
+        int start = boss.Length;
+        Check(start == 8, "a 5x5 arena gets a shorter snake", "" + start);
+
+        // Complete the row the snake's head is standing in: the line goes off, the segments
+        // survive it, and the snake loses one from the tail for it.
+        GridPos head = boss.Body[0];
+        var open = new List<GridPos>();
+        for (int x = 0; x < 5; x++)
+        {
+            var cell = new GridPos(x, head.Y);
+            if (!round.Board.GetCube(cell).HasValue)
+            {
+                open.Add(cell);
+            }
+        }
+        Check(open.Count > 0, "the snake's row has room to complete", "" + open.Count);
+        // Fill every gap but the last, then drop the cube that closes the row.
+        for (int i = 0; i < open.Count - 1; i++)
+        {
+            PaintBoard(round, session, CubeKind.Normal, open[i]);
+        }
+        DropOneCube(round, open[open.Count - 1]);
+        Check(boss.Length < start, "the explosion cut a segment off the tail",
+            start + " -> " + boss.Length);
+        Check(round.Board.CountCubesOfKind(CubeKind.Snake) == boss.Length,
+            "and the board agrees about how long it is");
+    }
+
+    private static void Istilaci_TakesTheMarkedColumnAndBills()
+    {
+        Section("istilacı / the marked column is taken three turns later");
+        var session = NewBossSession(9730, 5, 1000000, "istilaci", 60, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (IstilaciBoss)round.Boss;
+        Check(!boss.HasMark, "an empty arena has no column worth marking yet");
+
+        PlayAt(round, new GridPos(0, 0));
+        Check(boss.HasMark, "the first cube on the board earns a mark");
+        Check(boss.TurnsLeft == boss.FuseTurns, "with a full fuse", "" + boss.TurnsLeft);
+
+        int column = boss.MarkedColumn;
+        // Stack that column up so the demolition has something to take - but NOT full, or the
+        // next turn's line resolution would clear it before the invader ever gets there.
+        for (int y = 0; y < 3; y++)
+        {
+            PaintBoard(round, session, CubeKind.Normal, new GridPos(column, y));
+        }
+        int standing = 0;
+        for (int y = 0; y < 5; y++)
+        {
+            if (round.Board.GetCube(new GridPos(column, y)).HasValue) { standing++; }
+        }
+        Check(standing >= 3, "the column is stacked up", "" + standing);
+
+        // Three more turns and it goes. Played well away from the marked column.
+        for (int i = 0; i < boss.FuseTurns && boss.ColumnsTaken == 0; i++)
+        {
+            if (PlayAnywhereAvoiding(round, column) == null)
+            {
+                break;
+            }
+        }
+        Check(boss.ColumnsTaken >= 1, "the column was demolished", "" + boss.ColumnsTaken);
+        Check(boss.CubesTaken > 0, "and it took the cubes standing in it", "" + boss.CubesTaken);
+        int left = 0;
+        for (int y = 0; y < 5; y++)
+        {
+            if (round.Board.GetCube(new GridPos(column, y)).HasValue) { left++; }
+        }
+        Check(left == 0, "nothing is left in it", "" + left);
+    }
+
+    /// <summary>Plays the first legal placement that is NOT in the given column, so a test can
+    /// let the invader's fuse burn without feeding the column it is aimed at.</summary>
+    private static TurnReport PlayAnywhereAvoiding(RoundEngine round, int column)
+    {
+        foreach (GridPos origin in AllPlayableCells(round.Board))
+        {
+            if (origin.X == column)
+            {
+                continue;
+            }
+            TurnReport report = PlayAt(round, origin);
+            if (report != null)
+            {
+                return report;
+            }
+        }
+        return null;
+    }
+
+    private static void Tamagotchi_FeedingClearsTheDemandAndTheCardLeavesTheRound()
+    {
+        Section("tamagotchi / feeding it costs no turn and costs a card");
+        var session = NewBossSession(9740, 5, 1000000, "tamagotchi", 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (TamagotchiBoss)round.Boss;
+
+        Check(boss.Demands.Count == 4, "it asks for four shapes at round start",
+            "" + boss.Demands.Count);
+        // Every card in this deck is a single cube, so the whole hand is food.
+        Check(boss.Accepts(round, round.Hand[0]), "a matching card is food");
+
+        int turnBefore = round.TurnNumber;
+        int removedBefore = round.Deck.RemovedCount;
+        Check(round.FeedPet(0), "the pet takes it");
+        Check(boss.Demands.Count == 3, "one demand off the list", "" + boss.Demands.Count);
+        Check(round.TurnNumber == turnBefore, "feeding costs no turn", "" + round.TurnNumber);
+        Check(round.Deck.RemovedCount == removedBefore + 1,
+            "and the card left the round for good", "" + round.Deck.RemovedCount);
+        Check(round.Hand.Count == session.Config.Rules.HandSize,
+            "the hand topped itself back up", "" + round.Hand.Count);
+    }
+
+    private static void Tamagotchi_AnUnfedDemandLosesWhenTheDeckRunsDry()
+    {
+        Section("tamagotchi / an unfed pet is a lost round");
+        var session = NewBossSession(9741, 5, 1000000, "tamagotchi", 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (TamagotchiBoss)round.Boss;
+        Check(boss.Demands.Count > 0, "it is hungry");
+
+        // The deadline is the drying-out, whenever it comes.
+        boss.OnDrawPileEmptied(new RoundContext(session, session.Rng, round));
+        Check(round.Loss == LossReason.PetWentHungry,
+            "running the deck dry with the list unfed loses the round", "" + round.Loss);
+    }
+
     private static void Bilinmezlik_HoldsFullLinesUntilItFires()
     {
         Section("bilinmezlik / a full line sits there until the boss lets it go off");
@@ -5694,7 +6012,10 @@ public static class JokerTests
     {
         for (int i = 0; i < round.Hand.Count; i++)
         {
-            if (!round.IsFrozen(round.Hand[i].Id) && round.CanPlaceCard(round.Hand[i], origin))
+            // Frozen and boss-locked cards are skipped for the same reason: they are held, they
+            // fit, and they still may not be played.
+            if (!round.IsFrozen(round.Hand[i].Id) && !round.IsLockedByBoss(round.Hand[i])
+                && round.CanPlaceCard(round.Hand[i], origin))
             {
                 return round.PlayFromHand(i, origin);
             }
