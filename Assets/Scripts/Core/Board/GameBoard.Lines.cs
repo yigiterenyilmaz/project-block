@@ -228,6 +228,10 @@ namespace ProjectBlock.Core
                 {
                     continue; // erosion ate a cell of this row - it can never be full again
                 }
+                if (RowIsInfectionDead(y + MinY))
+                {
+                    continue; // "Kangren" took this row whole - it can never explode again
+                }
                 bool full = false;
                 for (int x = 0; x < Width; x++)
                 {
@@ -250,6 +254,10 @@ namespace ProjectBlock.Core
                 if (ColumnIsKilled(x))
                 {
                     continue;
+                }
+                if (ColumnIsInfectionDead(x + MinX))
+                {
+                    continue; // "Kangren" took this column whole
                 }
                 bool full = false;
                 for (int y = 0; y < Height; y++)
@@ -416,6 +424,97 @@ namespace ProjectBlock.Core
                         continue;
                     }
                     occupied++;
+                }
+            }
+            OccupiedCount = occupied;
+            return lost;
+        }
+
+        /// <summary>
+        /// "Merkezkaç kuvveti" (boss round): every cube is flung ONE cell further from the middle
+        /// of the arena, and whatever is flung off the edge is gone. Returns the absolute cells
+        /// that were lost - nothing was destroyed in the scoring sense, so the caller reports them
+        /// as LIFTED (no score, no sweep tally), exactly like the escalator carrying a row off.
+        ///
+        /// DIRECTION: each cube moves by the SIGN of its offset from the centre, on both axes at
+        /// once - so a cube up and to the right goes diagonally up and right, one straight above the
+        /// middle goes straight up. A cube sitting exactly ON the centre of an odd board has no
+        /// direction to be flung in and stays put; that is the one still point.
+        ///
+        /// ORDER: cubes are moved OUTSIDE-IN (furthest from the centre first), so a cube never
+        /// lands on one that has not moved yet. Anything landing on a hole or a dead cell has
+        /// nowhere to stand and is lost with the rest.
+        /// </summary>
+        public List<GridPos> FlingCubesOutward()
+        {
+            var lost = new List<GridPos>();
+            // Centre in half-cell units, so an even board's centre falls between cells and an odd
+            // board's lands on one. Compared doubled to keep it integer arithmetic.
+            int centreX2 = Width - 1;
+            int centreY2 = Height - 1;
+
+            // Every occupied cell, furthest-from-centre first. Chebyshev distance doubled, which
+            // is the number of steps this fling actually takes.
+            var order = new List<GridPos>();
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    if (cells[x, y].HasValue)
+                    {
+                        order.Add(new GridPos(x, y));
+                    }
+                }
+            }
+            order.Sort((a, b) =>
+            {
+                int da = System.Math.Max(System.Math.Abs(a.X * 2 - centreX2),
+                    System.Math.Abs(a.Y * 2 - centreY2));
+                int db = System.Math.Max(System.Math.Abs(b.X * 2 - centreX2),
+                    System.Math.Abs(b.Y * 2 - centreY2));
+                if (da != db)
+                {
+                    return db.CompareTo(da); // furthest first
+                }
+                // Stable tie-break, so the same board always flings the same way.
+                return a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y);
+            });
+
+            foreach (GridPos from in order)
+            {
+                Cube? cube = cells[from.X, from.Y];
+                if (!cube.HasValue)
+                {
+                    continue; // already moved away by an earlier step
+                }
+                int dx = System.Math.Sign(from.X * 2 - centreX2);
+                int dy = System.Math.Sign(from.Y * 2 - centreY2);
+                if (dx == 0 && dy == 0)
+                {
+                    continue; // dead centre of an odd board: nothing to fling it away from
+                }
+                int tx = from.X + dx;
+                int ty = from.Y + dy;
+                cells[from.X, from.Y] = null;
+                bool offBoard = tx < 0 || tx >= Width || ty < 0 || ty >= Height;
+                if (offBoard || !playable[tx, ty] || cells[tx, ty].HasValue)
+                {
+                    // Off the edge, onto a hole, or into something that could not move: gone.
+                    lost.Add(new GridPos(from.X + MinX, from.Y + MinY));
+                    continue;
+                }
+                cells[tx, ty] = cube;
+            }
+
+            int occupied = 0;
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    if (cells[x, y].HasValue)
+                    {
+                        occupied++;
+                    }
                 }
             }
             OccupiedCount = occupied;
