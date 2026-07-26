@@ -7,14 +7,29 @@ Unity 6 (6000.3.6f1), 2D URP, **new Input System only**.
 
 ## Run structure
 
-A run is **15 rounds** (`GameConfig.TotalRounds`). Surviving the last one ends the run in
-`GamePhase.RunWon` — no market after it, and `GameOver` stays loss-only, so anything waiting
-for a run to finish must accept **both** terminal phases. Every third round (3, 6, 9, 12, 15)
-is flagged `RoundConfig.IsBossRound` by `DefaultRoundProgression.BossRoundInterval`; that flag
-is the single source of truth for which rounds are boss rounds. Board size comes from
-`DefaultRoundProgression.BoardSizeBands` — a fixed table covering exactly those 15 rounds
-(1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9), and each band also names the `ShuffleErosion` that
-punishes a stalling round. Run length and that table are meant to change together.
+A run is a sequence of **STAGES**, not just rounds: **15 numbered rounds** (`GameConfig.TotalRounds`)
+with a **BOSS STAGE between every third one** — 1, 2, 3, *boss of 3*, 4, 5, 6, *boss of 6*, … 15,
+*boss of 15*. **Twenty stages in all.** A boss is its own stage; it is never one of the numbered
+rounds.
+
+- A boss stage **carries the number of the round it follows** (`GameSession.RoundNumber` stays 3),
+  and `GameSession.InBossStage` is what tells the two apart. `BossStageFollowsThisRound` asks
+  whether one is coming.
+- `DefaultRoundProgression.HasBossStageAfter` decides where they fall
+  (`BossRoundInterval`, every 3rd). `GetRound(number, bossStage)` builds either stage: a boss stage
+  keeps the arena of the round it follows and raises the bar instead (`BossThresholdFactor`, 1.5x).
+  `RoundConfig.IsBossRound` is true **only** for a boss stage and is still the single source of
+  truth for "this stage has a boss on it".
+- **A market opens after every stage**, boss stages included — 3 → market → *boss of 3* → market → 4.
+- The run ends on the **boss of round 15**. `IsFinalRound` means "the last STAGE", so it is false on
+  round 15 itself while its boss is still to come. Surviving it ends the run in `GamePhase.RunWon`
+  — no market after it, and `GameOver` stays loss-only, so anything waiting for a run to finish
+  must accept **both** terminal phases.
+
+Board size comes from `DefaultRoundProgression.BoardSizeBands` — a fixed table covering exactly
+those 15 numbered rounds (1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9), and each band also names the
+`ShuffleErosion` that punishes a stalling round. A boss stage inherits its round's band. Run length
+and that table are meant to change together.
 
 Anything that rebuilds a `RoundConfig` from another one (a joker/power `FilterRoundConfig`) must
 use **`RoundConfig.WithBoard`**, never a hand-written `new RoundConfig(...)`: a field listed by
@@ -95,11 +110,12 @@ dropped that way once each.
 - Rules that jokers/powers may bend live in mutable config objects (`RoundRules`,
   `ScoringConfig`) that the engine reads live — don't cache their values.
 - Numbers in `ScoringConfig` / `DefaultRoundProgression` / the joker fields are balance
-  placeholders; the flow around them is confirmed design. One exception: a run is 15 rounds
-  numbered 1-15, and the board-size table (`DefaultRoundProgression.BoardSizeBands` — rounds
-  1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9) is confirmed design, not a knob to tune. Surviving
-  round 15 wins the run (`GamePhase.RunWon`); `GameOver` is loss-only, so anything waiting for
-  a run to finish must accept both.
+  placeholders; the flow around them is confirmed design. One exception: a run is 15 numbered
+  rounds with a boss stage between every third (20 stages in all), and the board-size table
+  (`DefaultRoundProgression.BoardSizeBands` — rounds 1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9) is
+  confirmed design, not a knob to tune. Surviving the BOSS OF ROUND 15 wins the run
+  (`GamePhase.RunWon`); `GameOver` is loss-only, so anything waiting for a run to finish must
+  accept both.
 - **The threshold is a CEILING for normal play.** A round banks at most its own
   `RoundEngine.ScoreThreshold`: the turn that crosses the bar takes the score TO it and drops
   the excess, from the run currency too (`CapScoreAtThresholdOnCrossing`, called at BOTH
@@ -161,9 +177,9 @@ left, set aside by the designer. See `docs/jokers-plan.md`.
 **Market credit ("Kredi kartı") is a SESSION rule, not joker state.** `GameSession` owns
 `Debt`, `Spend` (own points first, borrow the shortfall) and `RepayDebt` (manual, market-only);
 the joker is only the switch that turns `CreditAvailable` on and names the interest rate. The
-debt compounds at every round end and a **boss round** that ends with it open ends the run
-(`LossReason.DebtNotRepaid`) — checked BEFORE the final-round win, so round 15 can be survived
-and still lost. A credit joker cannot be sold while it owes (`JokerInventory.CanSell`), which
+debt compounds at the end of every STAGE and a **boss stage** that ends with it open ends the run
+(`LossReason.DebtNotRepaid`) — checked BEFORE the final-stage win, so the boss of round 15 can be
+survived and still lost. The real deadline is therefore the market before a boss stage. A credit joker cannot be sold while it owes (`JokerInventory.CanSell`), which
 is what stops the debt being walked away from.
 
 - `Assets/Scripts/Core/Powers/` — the power system. `Power.cs` is the base type,

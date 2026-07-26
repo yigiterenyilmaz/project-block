@@ -7,6 +7,17 @@ everything here is unreleased and balance numbers are still placeholders.
 ## Unreleased — `balance`
 
 ### Changed
+- **A boss is now its own STAGE between two rounds, not one of the rounds.** A run is
+  1, 2, 3, *boss of 3*, 4, 5, 6, *boss of 6*, ... 15, *boss of 15* — **fifteen numbered rounds and
+  five boss stages, twenty in all**. Before this, round 3 *was* the boss round, so five of your
+  fifteen rounds were spent on bosses. Now every numbered round is yours and every boss is extra.
+  - A boss stage **carries the number of the round it follows** and is played on the **same arena**,
+    with the bar raised **50%** — a boss is a wall, not a new place.
+  - **A market opens after every stage**, boss stages included: 3 → market → *boss of 3* → market →
+    4. So you can prepare for a boss, and spend what beating it earned.
+  - The run now ends on the **boss of round 15**; surviving round 15 itself is no longer the end.
+  - The debt deadline follows it: the market **before a boss stage** is where "Kredi kartı" has to
+    be settled.
 - **A round's score is now capped at its own threshold.** The turn that crosses the bar takes
   you *to* it and no further — a clean sweep that would have carried 600 past a 650 bar all the
   way to 1200 now banks 650, and the run currency is capped with it, so the money can never
