@@ -135,6 +135,13 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Yatirimci_IsOnlyStockedByTheEarlyMarkets();
+        Yatirimci_CanNeverBeSold();
+        Yatirimci_ReplaysTheLostFinalRound();
+        Yatirimci_DoesNothingBeforeTheFinalRound();
+        Yatirimci_TheVoidedAttemptIsUnbanked();
+        Yatirimci_TheReplayIsTheSameFight();
+        Yatirimci_UnlocksTheExclusivePowers();
         Savunmaci_BanksSafeRoundsAndNotGreedyOnes();
         Savunmaci_AnOvertimeRoundBanksNothing();
         Savunmaci_PaysTheBankOnASurvivedOvertime();
@@ -244,6 +251,7 @@ public static class JokerTests
         private readonly int size;
         private readonly int threshold;
         private readonly ShuffleErosion erosion;
+        private readonly bool bossRounds;
 
         public FixedProgression(int size, int threshold)
             : this(size, threshold, ShuffleErosion.None)
@@ -251,15 +259,21 @@ public static class JokerTests
         }
 
         public FixedProgression(int size, int threshold, ShuffleErosion erosion)
+            : this(size, threshold, erosion, false)
+        {
+        }
+
+        public FixedProgression(int size, int threshold, ShuffleErosion erosion, bool bossRounds)
         {
             this.size = size;
             this.threshold = threshold;
             this.erosion = erosion;
+            this.bossRounds = bossRounds;
         }
 
         public RoundConfig GetRound(int roundNumber)
         {
-            return new RoundConfig(roundNumber, size, size, threshold, null, erosion);
+            return new RoundConfig(roundNumber, size, size, threshold, null, erosion, bossRounds);
         }
     }
 
@@ -4342,6 +4356,218 @@ public static class JokerTests
             round.Board.SetCubeAt(new GridPos(x, row), new Cube(CubeKind.Normal, 9990));
         }
         return new GridPos(round.Board.MinX, row);
+    }
+
+    /// <summary>A session whose run is <paramref name="totalRounds"/> long, so the LAST round is
+    /// reachable in a test without playing fifteen of them.</summary>
+    private static GameSession NewShortRunSession(int seed, int totalRounds, int threshold,
+        bool bossRounds = false)
+    {
+        var config = new GameConfig();
+        config.RngSeed = seed;
+        config.TotalRounds = totalRounds;
+        config.Deck = new DeckDefinition("test", 40, new SizedShapeGenerator(1));
+        config.Progression = new FixedProgression(5, threshold, ShuffleErosion.None, bossRounds);
+        return new GameSession(config);
+    }
+
+    /// <summary>True if the joker is anywhere in the current market stock.</summary>
+    private static bool MarketStocks(GameSession session, string defId)
+    {
+        for (int i = 0; i < session.Market.Offers.Count; i++)
+        {
+            MarketOffer offer = session.Market.Offers[i];
+            if (offer.Kind == MarketOfferKind.Joker && offer.Joker != null
+                && offer.Joker.DefId == defId)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Rerolls the market up to <paramref name="tries"/> times looking for the joker,
+    /// bankrolling the rerolls so cost never ends the search early. Returns how many of the
+    /// shops it appeared in.</summary>
+    private static int CountInRerolledShops(GameSession session, string defId, int tries)
+    {
+        int seen = MarketStocks(session, defId) ? 1 : 0;
+        for (int i = 0; i < tries; i++)
+        {
+            session.AddCurrency(1000000);
+            if (!session.RerollMarket())
+            {
+                break;
+            }
+            if (MarketStocks(session, defId))
+            {
+                seen++;
+            }
+        }
+        return seen;
+    }
+
+    private static void Yatirimci_IsOnlyStockedByTheEarlyMarkets()
+    {
+        Section("uzun vadeli yatırımcı / only the early markets stock it");
+        JokerDefinition def = JokerRegistry.Get("uzun_vadeli_yatirimci");
+        Check(def != null, "the joker is registered");
+        Check(def.LastOfferableRound == 5, "and its window closes after round 5",
+            "" + def.LastOfferableRound);
+
+        int limited = 0;
+        foreach (JokerDefinition other in JokerRegistry.All)
+        {
+            if (other.LastOfferableRound != int.MaxValue) { limited++; }
+        }
+        Check(limited == 1, "it is the only joker with a window at all", "" + limited);
+
+        // Round 1's market: it is in the pool, so enough rerolls must eventually turn it up.
+        var session = NewShortRunSession(4400, 12, 40);
+        Check(AdvanceToMarket(session, 200), "reached the first market",
+            "phase " + session.Phase);
+        Check(session.RoundNumber == 1, "after round 1", "round " + session.RoundNumber);
+        int early = CountInRerolledShops(session, "uzun_vadeli_yatirimci", 400);
+        Check(early > 0, "and it shows up in the early shop", "shops with it: " + early);
+
+        // Walk out to a late market and reroll just as hard: now it must NEVER appear.
+        int guard = 0;
+        while (session.RoundNumber < 8 && guard++ < 20)
+        {
+            session.LeaveMarket();
+            if (!AdvanceToMarket(session, 400)) { break; }
+        }
+        Check(session.RoundNumber >= 6, "reached a market past the window",
+            "round " + session.RoundNumber);
+        int late = CountInRerolledShops(session, "uzun_vadeli_yatirimci", 400);
+        Check(late == 0, "and the late shop never stocks it, however hard you reroll",
+            "shops with it: " + late);
+    }
+
+    private static void Yatirimci_CanNeverBeSold()
+    {
+        Section("uzun vadeli yatırımcı / the investment is locked in");
+        var session = NewSession(4401, 5, 1000000, 40, 1);
+        var joker = (UzunVadeliYatirimciJoker)session.Jokers.Add(new UzunVadeliYatirimciJoker());
+        Check(!session.Jokers.CanSell(joker), "the market refuses to buy it back");
+        long before = session.TotalScore;
+        Check(session.Jokers.Sell(joker) == 0, "selling pays nothing");
+        Check(session.TotalScore == before, "and nothing was paid in",
+            before + " -> " + session.TotalScore);
+        Check(session.Jokers.Find(joker.InstanceId) != null, "the joker is still held");
+
+        // Contrast: an ordinary joker in the same inventory sells fine, so the lock is on this
+        // joker and not on the inventory.
+        Joker ordinary = session.Jokers.Add(new RenovasyonJoker());
+        Check(session.Jokers.CanSell(ordinary), "an ordinary joker beside it still sells");
+    }
+
+    private static void Yatirimci_ReplaysTheLostFinalRound()
+    {
+        Section("uzun vadeli yatırımcı / it plays the lost final round again, once");
+        var session = NewShortRunSession(4402, 1, 1000000);
+        var joker = (UzunVadeliYatirimciJoker)session.Jokers.Add(new UzunVadeliYatirimciJoker());
+        Check(session.IsFinalRound, "round 1 is the final round of this short run");
+        RoundEngine first = session.CurrentRound;
+        Check(!joker.RetryUsed, "the second chance is unspent");
+
+        first.DeclareLoss(LossReason.NoPlayableMove);
+        Check(session.Phase == GamePhase.Round, "the run did NOT end",
+            "phase " + session.Phase);
+        Check(session.CurrentRound != first, "a fresh round engine is running");
+        Check(session.RoundNumber == 1, "the SAME round number", "" + session.RoundNumber);
+        Check(session.FinalRoundReplays == 1, "and it counted as a replay",
+            "" + session.FinalRoundReplays);
+        Check(joker.RetryUsed, "the second chance is spent");
+        Check(session.CurrentRound.Status == RoundStatus.InProgress, "the replay is playable",
+            "status " + session.CurrentRound.Status);
+
+        // The second loss is final: there is nothing left to spend.
+        session.CurrentRound.DeclareLoss(LossReason.NoPlayableMove);
+        Check(session.Phase == GamePhase.GameOver, "losing it again ends the run",
+            "phase " + session.Phase);
+        Check(session.FinalRoundReplays == 1, "and no second replay happened",
+            "" + session.FinalRoundReplays);
+    }
+
+    private static void Yatirimci_DoesNothingBeforeTheFinalRound()
+    {
+        Section("uzun vadeli yatırımcı / an earlier round is lost for good");
+        var session = NewShortRunSession(4403, 6, 1000000);
+        var joker = (UzunVadeliYatirimciJoker)session.Jokers.Add(new UzunVadeliYatirimciJoker());
+        Check(!session.IsFinalRound, "round 1 of 6 is not the final round");
+
+        session.CurrentRound.DeclareLoss(LossReason.NoPlayableMove);
+        Check(session.Phase == GamePhase.GameOver, "the run ended as usual",
+            "phase " + session.Phase);
+        Check(!joker.RetryUsed, "and the second chance was NOT touched - it is for the last round");
+        Check(session.FinalRoundReplays == 0, "no replay", "" + session.FinalRoundReplays);
+    }
+
+    private static void Yatirimci_TheVoidedAttemptIsUnbanked()
+    {
+        Section("uzun vadeli yatırımcı / the failed attempt's score is clawed back");
+        var session = NewShortRunSession(4404, 1, 1000000);
+        session.Config.Scoring.PointsPerCubePlaced = 50;
+        session.Jokers.Add(new UzunVadeliYatirimciJoker());
+        long atStart = session.TotalScore;
+        RoundEngine round = session.CurrentRound;
+
+        PlayTurns(session, 6);
+        long banked = round.RoundScore;
+        Check(banked > 0, "the attempt banked something", "" + banked);
+        Check(session.TotalScore == atStart + banked, "and the purse has it",
+            session.TotalScore + " vs " + (atStart + banked));
+        long takenBefore = session.CurrencyTakenByEffects;
+
+        round.DeclareLoss(LossReason.NoPlayableMove);
+        Check(session.CurrentRound != round, "the round is being replayed");
+        Check(session.TotalScore == atStart, "the purse is back where it started",
+            atStart + " vs " + session.TotalScore);
+        Check(session.CurrencyTakenByEffects == takenBefore + banked,
+            "and the claw-back is on the books, so the ledger balances",
+            "" + (session.CurrencyTakenByEffects - takenBefore));
+        Check(session.CurrentRound.RoundScore == 0, "the replay starts from zero score",
+            "" + session.CurrentRound.RoundScore);
+    }
+
+    private static void Yatirimci_TheReplayIsTheSameFight()
+    {
+        Section("uzun vadeli yatırımcı / the replay faces the same boss, freshly made");
+        var session = NewShortRunSession(4405, 1, 1000000, true);
+        session.Jokers.Add(new UzunVadeliYatirimciJoker());
+        RoundEngine first = session.CurrentRound;
+        Check(first.Config.IsBossRound, "the final round is a boss round");
+        Check(first.Boss != null, "and a boss was drawn", "boss " + first.Boss);
+        string bossId = first.Boss.DefId;
+
+        first.DeclareLoss(LossReason.NoPlayableMove);
+        Check(session.CurrentRound != first, "the round is being replayed");
+        Check(session.CurrentRound.Boss != null, "the replay has a boss too");
+        Check(session.CurrentRound.Boss.DefId == bossId, "the SAME boss kind - a do-over, not a "
+            + "different fight", bossId + " vs " + session.CurrentRound.Boss.DefId);
+        Check(!ReferenceEquals(session.CurrentRound.Boss, first.Boss),
+            "but a fresh instance, so nothing of the failed attempt carries over");
+    }
+
+    private static void Yatirimci_UnlocksTheExclusivePowers()
+    {
+        Section("uzun vadeli yatırımcı / it is the key to the powers no market sells");
+        var session = NewShortRunSession(4406, 1, 1000000);
+        Check(!session.Jokers.UnlocksInvestorPowers, "nothing unlocks them without the joker");
+        session.Jokers.Add(new UzunVadeliYatirimciJoker());
+        Check(session.Jokers.UnlocksInvestorPowers, "holding it turns the key");
+
+        // The two exclusive powers are not designed yet, so the catalogue has none. This asserts
+        // the plumbing is in place and unused: when they land, they must be InvestorOnly and no
+        // market may stock them.
+        int exclusive = 0;
+        foreach (PowerDefinition def in PowerRegistry.All)
+        {
+            if (def.InvestorOnly) { exclusive++; }
+        }
+        Check(exclusive == 0, "and the two exclusive powers are not written yet",
+            "" + exclusive);
     }
 
     private static void Savunmaci_BanksSafeRoundsAndNotGreedyOnes()
