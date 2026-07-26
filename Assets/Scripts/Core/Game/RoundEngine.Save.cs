@@ -40,6 +40,7 @@ namespace ProjectBlock.Core
             w.Write(key + ".loss", Loss.HasValue ? (int)Loss.Value : 0);
             w.Write(key + ".pendingOffer", pendingAdvanceOffer);
             w.Write(key + ".combo", comboCount);
+            w.Write(key + ".comboBlank", comboBlankTurns);
             w.Write(key + ".powersUsed", PowersUsedThisTurn);
             w.Write(key + ".recycles", DeckRecycleCount);
             w.Write(key + ".erosions", BoardErosionCount);
@@ -115,6 +116,7 @@ namespace ProjectBlock.Core
             round.Loss = hasLoss ? lossReason : (LossReason?)null;
             round.pendingAdvanceOffer = r.ReadBool(key + ".pendingOffer");
             round.comboCount = r.ReadInt(key + ".combo");
+            round.comboBlankTurns = r.ReadInt(key + ".comboBlank");
             round.PowersUsedThisTurn = r.ReadInt(key + ".powersUsed");
             round.DeckRecycleCount = r.ReadInt(key + ".recycles");
             round.BoardErosionCount = r.ReadInt(key + ".erosions");

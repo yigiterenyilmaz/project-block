@@ -237,14 +237,32 @@ namespace ProjectBlock.Core
             // comboCount*step; a turn that clears no line resets it. RedrawHand never reaches
             // here, so a redraw does not break the streak. BaseCombo is a regular base field,
             // so overtime trickles it like the rest of the regular score.
+            //
+            // "Mikrodalga" bends the RESET, not the streak: while Rules.ComboBridgeTurns allows
+            // it, a quiet turn is merely counted instead of ending the run, and the clear that
+            // comes after it picks the streak up where it left off. What crossing a gap costs is
+            // that one turn's bonus (Rules.ComboBridgedScorePercent) - the reheated combo is
+            // worth less than the one that never went cold. Both rules read live and both are
+            // inert in the base game, so an ordinary run behaves exactly as it always has.
             if (report.ExplodedRows.Count + report.ExplodedColumns.Count > 0)
             {
                 comboCount++;
-                breakdown.BaseCombo = scorer.ScoreCombo(comboCount);
+                int comboBonus = scorer.ScoreCombo(comboCount);
+                if (comboBlankTurns > 0)
+                {
+                    comboBonus = comboBonus * Rules.ComboBridgedScorePercent / 100;
+                }
+                comboBlankTurns = 0;
+                breakdown.BaseCombo = comboBonus;
+            }
+            else if (comboCount > 0 && comboBlankTurns < Rules.ComboBridgeTurns)
+            {
+                comboBlankTurns++; // the streak is only sleeping - see above
             }
             else
             {
                 comboCount = 0;
+                comboBlankTurns = 0;
             }
             report.ComboCount = comboCount;
 

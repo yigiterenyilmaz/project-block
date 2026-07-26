@@ -26,7 +26,10 @@ namespace ProjectBlock.Core
         // the purse, and every card writes the element it is the antimatter of.
         // 6 (2026-07-26): a run is now 15 numbered rounds with a BOSS STAGE between every third
         // one, so a save has to say which stage of its number it is on.
-        public const int FormatVersion = 6;
+        // 7 (2026-07-26): the combo can now be bridged ("Mikrodalga"), so the rules write the
+        // bridge allowance and its discount and the round writes how long the streak has been
+        // asleep.
+        public const int FormatVersion = 7;
 
         private const string VersionKey = "version";
 

@@ -27,6 +27,17 @@ namespace ProjectBlock.Core
         /// A joker that buys the player more time raises this.</summary>
         public int FreeDeckRecycles = 2;
 
+        /// <summary>"Mikrodalga": how many QUIET turns a combo streak survives. 0 in the base
+        /// game, where a turn that clears no line ends the streak on the spot. At 1 a single
+        /// blank turn between two clears no longer breaks the run - two in a row still do.</summary>
+        public int ComboBridgeTurns = 0;
+
+        /// <summary>What the combo bonus pays, in percent, on a turn that reached its step ACROSS
+        /// a bridged gap ("Mikrodalga"). 100 leaves it untouched; a warmed-over combo is worth
+        /// less than one kept alive turn after turn. Only that one turn is discounted - the next
+        /// genuinely consecutive clear pays in full again.</summary>
+        public int ComboBridgedScorePercent = 100;
+
         /// <summary>Pure UI flag: show the top card of the draw pile face-up ("Insider",
         /// "Oryantasyon"). The core never reads it - the draw order is unchanged either way.</summary>
         public bool RevealTopDrawCard = false;

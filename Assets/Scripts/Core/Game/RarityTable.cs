@@ -64,6 +64,7 @@ namespace ProjectBlock.Core
             { "barut_tedarikcisi", Rarity.Common },
             { "antimadde", Rarity.Legendary },
             { "eforsuz_galibiyet", Rarity.Common },
+            { "mikrodalga", Rarity.Rare },
             { "cimbiz", Rarity.Common },
             { "caprazlama", Rarity.Common },
             { "eko", Rarity.Rare },

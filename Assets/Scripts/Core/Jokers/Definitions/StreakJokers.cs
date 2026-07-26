@@ -1,7 +1,9 @@
-﻿// PURPOSE: The three "compare this block with the previous one" jokers: çığ (bigger),
-// dondurma (smaller), Siyam (identical shape). They share StreakJoker, which owns the
-// streak bookkeeping so each joker only answers one question: does this placement
-// continue the run?
+﻿// PURPOSE: The streak jokers. Three of them compare this block with the previous one - çığ
+// (bigger), dondurma (smaller), Siyam (identical shape) - and share StreakJoker, which owns
+// the streak bookkeeping so each joker only answers one question: does this placement
+// continue the run? The fourth, Mikrodalga, is a streak joker of a different kind: it does
+// not count placements at all, it bends the engine's own COMBO streak so it survives a quiet
+// turn.
 //
 // CONFIRMED RULES:
 //  - Size means CUBE COUNT (BlockShape.Size), not bounding box.
@@ -134,6 +136,73 @@ namespace ProjectBlock.Core
         protected override bool Continues(BlockShape previous, BlockShape current)
         {
             return previous.CanonicalKey == current.CanonicalKey;
+        }
+    }
+
+    /// <summary>
+    /// "Mikrodalga" - a combo kept warm. Two explosions with ONE quiet turn between them still
+    /// count as a combo: the streak does not reset on that turn, it merely sleeps, and the next
+    /// clear picks it up where it left off. Two quiet turns in a row still end it, so this buys
+    /// a breath, not immunity.
+    ///
+    /// Reheated food is not fresh food: the turn that ends a gap pays a REDUCED combo bonus
+    /// (BridgedScorePercent), while a streak carried turn after turn keeps paying in full. So
+    /// the joker is worth most to a player who nearly always clears - it patches the occasional
+    /// hole in a real streak rather than manufacturing one out of every other turn.
+    ///
+    /// It bends a rule instead of paying a bonus, so nothing here touches the score directly:
+    /// the two knobs live on RoundRules (ComboBridgeTurns, ComboBridgedScorePercent) and the
+    /// engine reads them live while it counts the streak. Both are inert at their defaults,
+    /// which is what keeps an ordinary run byte-identical to the base game.
+    ///
+    /// The numbers are BALANCE PLACEHOLDERS.
+    /// </summary>
+    public sealed class MikrodalgaJoker : Joker
+    {
+        /// <summary>Quiet turns a streak survives. One - "iki patlama arasında bir tur".</summary>
+        public int BridgeTurns = 1;
+
+        /// <summary>What the combo pays on the turn that ends a gap, in percent.</summary>
+        public int BridgedScorePercent = 50;
+
+        public MikrodalgaJoker()
+            : base("mikrodalga", "Mikrodalga")
+        {
+            SetDescription(
+                "Your combo survives ONE turn without a clear - two explosions with a quiet turn "
+                    + "between them still count as a combo. The turn that picks the streak back "
+                    + "up pays half the combo bonus; an unbroken streak still pays in full.",
+                "Kombon araya giren BİR turu affeder - arasında bir tur bulunan iki patlama da "
+                    + "kombodan sayılır. Seriyi geri alan tur kombo bonusunun yarısını öder; "
+                    + "hiç bozulmayan seri tam ödemeye devam eder.");
+        }
+
+        public override string StatusText
+        {
+            get { return Loc.Pick("combo kept warm", "kombo sıcak tutuluyor"); }
+        }
+
+        public override void OnAcquired(SessionContext ctx)
+        {
+            Apply(ctx.Rules);
+        }
+
+        public override void OnRemoved(SessionContext ctx)
+        {
+            ctx.Rules.ComboBridgeTurns = 0;
+            ctx.Rules.ComboBridgedScorePercent = 100;
+        }
+
+        // RoundRules is shared and another effect may have reset it; re-assert each round.
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            Apply(ctx.Rules);
+        }
+
+        private void Apply(RoundRules rules)
+        {
+            rules.ComboBridgeTurns = BridgeTurns;
+            rules.ComboBridgedScorePercent = BridgedScorePercent;
         }
     }
 }

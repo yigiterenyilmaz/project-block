@@ -349,6 +349,12 @@ namespace ProjectBlock.Core
         /// round starts it at 0 - and RedrawHand never touches it (it resolves no turn).</summary>
         private int comboCount;
 
+        /// <summary>Consecutive turns that cleared nothing while a streak is still alive
+        /// ("Mikrodalga" bridging a quiet turn). Always 0 in the base game, where the first
+        /// blank turn resets the streak instead of being counted. It is also what marks the
+        /// turn that ends a gap, so that turn's combo bonus can be paid at the reduced rate.</summary>
+        private int comboBlankTurns;
+
         // ---- destruction tracking: the board is diffed against a snapshot, so every
         // source (lines, fire chains, dynamite, joker effects) is captured the same way ----
         private readonly Dictionary<GridPos, Cube> boardSnapshot = new Dictionary<GridPos, Cube>();

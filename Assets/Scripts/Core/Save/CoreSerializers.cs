@@ -200,6 +200,8 @@ namespace ProjectBlock.Core
             w.Write(key + ".cardsPerContinue", rules.CardsRemovedPerContinue);
             w.Write(key + ".continueEscalation", rules.ContinueCostEscalation);
             w.Write(key + ".freeRecycles", rules.FreeDeckRecycles);
+            w.Write(key + ".comboBridge", rules.ComboBridgeTurns);
+            w.Write(key + ".comboBridgePercent", rules.ComboBridgedScorePercent);
             w.Write(key + ".revealTopDraw", rules.RevealTopDrawCard);
             w.Write(key + ".revealedDiscard", rules.RevealedDiscardCount);
             w.Write(key + ".hideDiscardTop", rules.HideDiscardTop);
@@ -218,6 +220,8 @@ namespace ProjectBlock.Core
             rules.CardsRemovedPerContinue = r.ReadInt(key + ".cardsPerContinue");
             rules.ContinueCostEscalation = r.ReadInt(key + ".continueEscalation");
             rules.FreeDeckRecycles = r.ReadInt(key + ".freeRecycles");
+            rules.ComboBridgeTurns = r.ReadInt(key + ".comboBridge");
+            rules.ComboBridgedScorePercent = r.ReadInt(key + ".comboBridgePercent");
             rules.RevealTopDrawCard = r.ReadBool(key + ".revealTopDraw");
             rules.RevealedDiscardCount = r.ReadInt(key + ".revealedDiscard");
             rules.HideDiscardTop = r.ReadBool(key + ".hideDiscardTop");
