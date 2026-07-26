@@ -204,7 +204,10 @@ namespace ProjectBlock.Core
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
             }
             Hand.RemoveAt(handIndex);
-            return ResolvePlacement(card, origin, false, BonusPlayOutcome.ExpireFromRound);
+            TurnReport report = ResolvePlacement(card, origin, false,
+                BonusPlayOutcome.ExpireFromRound);
+            report.HandIndex = handIndex;
+            return report;
         }
 
         /// <summary>

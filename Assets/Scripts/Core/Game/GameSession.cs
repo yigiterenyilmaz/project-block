@@ -995,10 +995,17 @@ namespace ProjectBlock.Core
             var pool = new List<BossDefinition>();
             for (int i = 0; i < catalogue.Count; i++)
             {
-                if (!bossesFought.Contains(catalogue[i].DefId))
+                if (bossesFought.Contains(catalogue[i].DefId))
                 {
-                    pool.Add(catalogue[i]);
+                    continue;
                 }
+                // "Bul parayı al karayı" is a coin flip, which is an introduction rather than a
+                // wall: it may only ever be a run's FIRST boss.
+                if (catalogue[i].OnlyOnFirstBossRound && bossesFought.Count > 0)
+                {
+                    continue;
+                }
+                pool.Add(catalogue[i]);
             }
             if (pool.Count == 0)
             {

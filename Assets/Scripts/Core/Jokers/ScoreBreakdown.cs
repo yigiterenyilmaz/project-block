@@ -152,6 +152,15 @@ namespace ProjectBlock.Core
             BaseGold = 0;
         }
 
+        /// <summary>Wipes every base value there is ("Bürokrasi bataklığı": the only income is the
+        /// task you were handed). A joker's own bonuses are untouched, exactly as with the score
+        /// bosses - this beats your board, not your build.</summary>
+        internal void KeepNoBaseScore()
+        {
+            KeepOnlyCleanSweep();
+            BaseSweep = 0;
+        }
+
         internal void Reset()
         {
             contributions.Clear();

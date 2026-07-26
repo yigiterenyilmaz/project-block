@@ -164,6 +164,19 @@ namespace ProjectBlock.Core
             Board.IgnoreElements = ElementsIgnored;
         }
 
+        /// <summary>True while a full line refuses to explode ("Bilinmezlik"). Read live by the
+        /// turn resolver, so the boss can switch it off for a single turn.</summary>
+        public bool LineExplosionsSuppressed
+        {
+            get { return Boss != null && Boss.SuppressesLineExplosions; }
+        }
+
+        /// <summary>True while nothing scores on its own ("Bürokrasi bataklığı").</summary>
+        public bool BaseScoreSuppressed
+        {
+            get { return Boss != null && Boss.SuppressesAllBaseScore; }
+        }
+
         /// <summary>True while every block must behave as a plain block ("Vanilya"): no fire,
         /// no ghost overhang, no rotation, no dynamite - the element is simply not there.</summary>
         public bool ElementsIgnored
@@ -228,6 +241,26 @@ namespace ProjectBlock.Core
         public bool InvertsJokerScore
         {
             get { return Boss != null && Boss.InvertsJokerScore; }
+        }
+
+        /// <summary>
+        /// "Bul parayı al karayı": the player's blind guess at which of their jokers/powers the
+        /// boss has switched off. Returns false when there is nothing to guess at or the moment
+        /// has passed.
+        ///
+        /// ONLY BEFORE THE FIRST TURN, and that is load-bearing: a silenced joker is visibly
+        /// silent, so a player allowed to wait one turn would read the answer off the screen
+        /// instead of guessing.
+        /// </summary>
+        public bool ChooseBossProtection(int instanceId)
+        {
+            var shell = Boss as BulParayiBoss;
+            if (shell == null || TurnNumber > 0 || !shell.AwaitingChoice)
+            {
+                return false;
+            }
+            shell.Protect(instanceId);
+            return true;
         }
 
         /// <summary>Forbids placement on one empty cell ("Mapus"). Board mutations go through

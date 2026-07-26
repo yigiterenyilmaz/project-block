@@ -105,6 +105,42 @@ namespace ProjectBlock.Core
 
         /// <summary>True while nothing may put a charge back into a power ("Tükenmişlik") -
         /// clean sweeps and "Powerbank" alike. The round-start recharge already happened.</summary>
+        /// <summary>
+        /// While true a full line does NOT explode - it just sits there, full ("Bilinmezlik").
+        /// Asked live by the turn resolver, on BOTH worlds, because it is a rule about how lines
+        /// behave rather than something done to one board.
+        ///
+        /// The board fills up fast under this, and running out of room is an ordinary dead end
+        /// (confirmed design): the boss does not rescue you from its own rule.
+        /// </summary>
+        public virtual bool SuppressesLineExplosions
+        {
+            get { return false; }
+        }
+
+        /// <summary>
+        /// While true NOTHING scores by itself - not a placement, not a line, not a combo, not
+        /// gold, not a sweep ("Bürokrasi bataklığı", where the only income is finishing the task
+        /// you were handed). A boss that switches this on has to pay the player itself, or the
+        /// round is unwinnable.
+        ///
+        /// Base values only, exactly like the score bosses: a joker's own bonuses still land.
+        /// </summary>
+        public virtual bool SuppressesAllBaseScore
+        {
+            get { return false; }
+        }
+
+        /// <summary>
+        /// True for a boss that may only ever be drawn as a run's FIRST boss ("Bul parayı al
+        /// karayı" is a coin flip, and a coin flip is an introduction, not a wall). Read by
+        /// GameSession.DrawBoss.
+        /// </summary>
+        public virtual bool OnlyOnFirstBossRound
+        {
+            get { return false; }
+        }
+
         public virtual bool BlocksPowerRecharge
         {
             get { return false; }

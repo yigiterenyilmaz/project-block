@@ -356,7 +356,9 @@ namespace ProjectBlock.Core
             }
             MirrorBoard.SettleWaterAndReact();
             bool wasClean = MirrorBoard.IsCleanForSweep();
-            LineExplosionResult lines = MirrorBoard.ResolveFullLines(Rules.RetroMode);
+            LineExplosionResult lines = LineExplosionsSuppressed
+                ? LineExplosionResult.None
+                : MirrorBoard.ResolveFullLines(Rules.RetroMode);
             report.MirrorExplodedRows = lines.Rows;
             report.MirrorExplodedColumns = lines.Columns;
             report.MirrorExplodedCells = lines.ExplodedCells;

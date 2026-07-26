@@ -16,6 +16,11 @@ namespace ProjectBlock.Core
         public GridPos Origin { get; internal set; }
         public IReadOnlyList<GridPos> PlacedCells { get; internal set; }
 
+        /// <summary>Which hand slot the card came from, or -1 for a bonus-hand card and for a
+        /// world that sat the turn out. Recorded for "Bürokrasi bataklığı", whose tasks can ask
+        /// you to play from one side of your hand.</summary>
+        public int HandIndex { get; internal set; } = -1;
+
         public IReadOnlyList<int> ExplodedRows { get; internal set; }
         public IReadOnlyList<int> ExplodedColumns { get; internal set; }
         public int CubesExploded { get; internal set; }

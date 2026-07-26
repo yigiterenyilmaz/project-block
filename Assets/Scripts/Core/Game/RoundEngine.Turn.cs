@@ -138,8 +138,12 @@ namespace ProjectBlock.Core
                 ResyncSnapshot();
                 CaptureTurnStartCardCounts();
             }
-            LineExplosionResult explosion = Board.ResolveFullLines(Rules.RetroMode);
-            if (explosion.LineCount == 0)
+            // "Bilinmezlik": a full line simply does not go off. Nothing is cleared, nothing is
+            // scored, and the line sits there full - which is what makes the board fill up.
+            LineExplosionResult explosion = LineExplosionsSuppressed
+                ? LineExplosionResult.None
+                : Board.ResolveFullLines(Rules.RetroMode);
+            if (explosion.LineCount == 0 && !LineExplosionsSuppressed)
             {
                 Board.SettleWaterAndReact(waterFrames); // nothing exploded in place -> water falls
                 ResyncSnapshot(); // water moved, nothing died - re-baseline the destruction diff
@@ -263,6 +267,12 @@ namespace ProjectBlock.Core
             if (Boss != null && Boss.OnlyCleanSweepsScore)
             {
                 breakdown.KeepOnlyCleanSweep();
+            }
+            // 4.6 "Bürokrasi bataklığı" goes further: nothing at all scores by itself, and the
+            //     boss pays the player from its own hooks instead. Same place, same rule shape.
+            if (BaseScoreSuppressed)
+            {
+                breakdown.KeepNoBaseScore();
             }
 
             // 5. finalize the score. In overtime the regular base (placement/lines/sweep/gold)
