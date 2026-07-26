@@ -34,6 +34,15 @@ everything here is unreleased and balance numbers are still placeholders.
   so a big enough penalty could undo score the player had already banked. Now clamped centrally:
   a turn may be worth nothing, never less.
 
+### Changed
+- **"Kaçakçı" now wears out.** A smuggler who keeps delivering gets caught: after it has handed
+  over **three SOUND items** it is finished and **leaves your inventory** for good. Junk does not
+  count against it — only the hauls that were actually worth having — so the same coin flip that
+  decides whether you got anything also decides how long the smuggler lives, and a run of good
+  luck is what kills it. At the default 50% defect rate that is about six market visits. The bar
+  shows how many good ones it has left in it. (Taking one item per market visit was already the
+  rule and is unchanged.)
+
 ### Added
 - **Kütleçekim Merkezi (power)** — the arena's gravity turns. Pick a side and **water falls that
   way** instead of down, for the rest of the round. Nothing else on the board moves: this is not a
