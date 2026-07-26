@@ -22,6 +22,11 @@ namespace ProjectBlock.Core
         /// independent: a variant run can be shorter or longer without a new progression.</summary>
         public int TotalRounds = 15;
 
+        /// <summary>DEBUG/TEST: DefId of the boss every flagged round must draw, or null for the
+        /// normal random draw. Set it and the whole real path still runs - the boss is drawn before
+        /// the engine exists, so one that reshapes the round ("Dort kutup") still does.</summary>
+        public string ForcedBossDefId;
+
         public RoundRules Rules = new RoundRules();
         public ScoringConfig Scoring = new ScoringConfig();
         public MarketConfig Market = new MarketConfig();

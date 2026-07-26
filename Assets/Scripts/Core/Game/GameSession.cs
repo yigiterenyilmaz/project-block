@@ -760,14 +760,26 @@ namespace ProjectBlock.Core
             RoundConfig roundConfig = Config.Progression.GetRound(RoundNumber);
             roundConfig = Jokers.FilterRoundConfig(roundConfig);
             roundConfig = Powers.FilterRoundConfig(roundConfig);
-            CurrentRound = new RoundEngine(roundConfig, Config.Rules, ownedCards, rng, scorer, this, Jokers);
-            // The boss is attached before anything else runs, so it governs the round's very
-            // first turn. Ordinary rounds get null and behave exactly as they always have.
+            // The boss is DRAWN before the engine exists, because it may reshape the round itself
+            // ("Dört kutup" rounding the arena up to an even edge). Drawing early costs nothing:
+            // DrawBoss has its own rng, so the main stream is untouched either way.
+            BossRound boss = null;
             if (roundConfig.IsBossRound)
             {
-                CurrentRound.SetBoss(replayBossDefId != null
+                boss = replayBossDefId != null
                     ? BossRegistry.Create(replayBossDefId)
-                    : DrawBoss());
+                    : DrawBoss();
+                if (boss != null)
+                {
+                    roundConfig = boss.FilterRoundConfig(roundConfig);
+                }
+            }
+            CurrentRound = new RoundEngine(roundConfig, Config.Rules, ownedCards, rng, scorer, this, Jokers);
+            // Attached before anything else runs, so it governs the round's very first turn.
+            // Ordinary rounds get null and behave exactly as they always have.
+            if (boss != null)
+            {
+                CurrentRound.SetBoss(boss);
             }
             // The final round is where "Uzun vadeli yatırımcı" finally pays: its two exclusive
             // powers are handed over now, before the round's first turn. Deliberately ahead of the
@@ -885,6 +897,12 @@ namespace ProjectBlock.Core
         /// </summary>
         private BossRound DrawBoss()
         {
+            // DEBUG/TEST override: a pinned boss skips the draw entirely (and the no-repeats
+            // bookkeeping, so the same one can be met every round on purpose).
+            if (Config.ForcedBossDefId != null)
+            {
+                return BossRegistry.Create(Config.ForcedBossDefId);
+            }
             IReadOnlyList<BossDefinition> catalogue = BossRegistry.All;
             if (catalogue.Count == 0)
             {

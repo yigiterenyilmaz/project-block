@@ -16,8 +16,9 @@ namespace ProjectBlock.Core
             int shufflesBeforeTurn = Deck.ShuffleCount;
             // Where the round score stood before this turn. A turn may end up worth NOTHING
             // (an inverted joker, a starving creature's bill) but it may never push the round
-            // score backwards - see the clamp at step 8.6.
-            int roundScoreBeforeTurn = RoundScore;
+            // score backwards - see ClampTurnScoreFloor, applied at step 8.6 and again after any
+            // late write, because some of them land after that (the dead-end check).
+            turnStartRoundScore = RoundScore;
 
             // Remember the board as it stands BEFORE this placement, so "Kum saati" can
             // rewind into it later. Oldest entries fall off the front.
@@ -328,13 +329,7 @@ namespace ProjectBlock.Core
             //     only ever eat what this turn earned, never bite into the round. The floor on
             //     ScoreBreakdown.Total covers the score that is settled before finalization;
             //     this covers everything added AFTER it, which lands on RoundScore directly.
-            if (RoundScore < roundScoreBeforeTurn)
-            {
-                RoundScore = roundScoreBeforeTurn;
-            }
-            // The session banks ScoreGained, so it has to say what the round actually took.
-            report.ScoreGained = RoundScore - roundScoreBeforeTurn;
-            report.RoundScoreAfter = RoundScore;
+            ClampTurnScoreFloor();
 
             // 9. threshold check (first pass only)
             if (!ThresholdPassed && RoundScore >= ScaledThreshold)

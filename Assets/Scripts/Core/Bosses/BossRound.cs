@@ -62,6 +62,34 @@ namespace ProjectBlock.Core
 
         /// <summary>The round has been built and this boss is now attached to it. The one
         /// place to pick a victim, arm a counter, or take a first bite.</summary>
+        /// <summary>
+        /// Reshapes the round before it is built - the ONE bend that cannot be a live query,
+        /// because the board is made once and the boss has to be able to change its size
+        /// ("Dört kutup" rounding the arena up to an even edge so it splits into four).
+        ///
+        /// Use RoundConfig.WithBoard, never a hand-written new RoundConfig: a field listed by hand
+        /// is a field that can be forgotten, and both IsBossRound and Erosion have been dropped
+        /// that way once each.
+        /// </summary>
+        public virtual RoundConfig FilterRoundConfig(RoundConfig config)
+        {
+            return config;
+        }
+
+        /// <summary>
+        /// The board is stuck and the round is about to end. A boss whose own rule caused the jam
+        /// gets to undo it instead ("Dört kutup" turning to the next region and charging for the
+        /// wasted turn). Return true if something changed; the engine then re-checks for a move and
+        /// may ask again, up to a bounded number of times.
+        ///
+        /// This is NOT a rescue in the player's favour - it exists so a boss cannot lock the round
+        /// with its own restriction. A boss that jams nothing should never override this.
+        /// </summary>
+        public virtual bool TryEscapeDeadEnd(RoundContext ctx)
+        {
+            return false;
+        }
+
         public virtual void OnRoundStarted(RoundContext ctx)
         {
         }

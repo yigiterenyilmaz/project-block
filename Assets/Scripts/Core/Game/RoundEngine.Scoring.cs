@@ -36,6 +36,42 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>
+        /// Bills the player a penalty from a boss, whether or not a turn is resolving ("Dört kutup"
+        /// charging for a turn the live quarter had no room for - which can happen mid-turn or at
+        /// round start, before there is any report to attach to).
+        ///
+        /// Inside a turn it goes through AddLateTurnScore, so the central round-score clamp covers
+        /// it and a turn can be emptied but never pushed below where it started. Outside one it is
+        /// floored at zero directly, because the round score and the run currency never go negative.
+        /// </summary>
+        internal void ChargeScore(int amount, string source)
+        {
+            if (amount <= 0)
+            {
+                return;
+            }
+            if (currentReport != null)
+            {
+                AddLateTurnScore(-amount, source);
+                return;
+            }
+            int scaled = amount * scorer.ScoreScale;
+            if (scaled > RoundScore)
+            {
+                scaled = RoundScore;
+            }
+            if (scaled <= 0)
+            {
+                return;
+            }
+            RoundScore -= scaled;
+            if (session != null)
+            {
+                session.AddCurrency(-scaled);
+            }
+        }
+
         /// <summary>Banks score from something that happened BETWEEN turns - a power, which
         /// never costs a turn and therefore has no TurnReport to attach to. Crossing the
         /// threshold here raises the advance offer exactly as it would mid-turn.</summary>
@@ -393,6 +429,59 @@ namespace ProjectBlock.Core
                 currentReport.AddLiftedCells(lost);
             }
             return lost;
+        }
+
+        /// <summary>
+        /// "Merkezkaç kuvveti": flings every cube one cell further from the middle, on BOTH worlds,
+        /// and reports what went over the edge. Same contract as EscalateBoards - the cubes are
+        /// LIFTED, not destroyed, so nothing scores, nothing counts toward a sweep and the
+        /// destruction diff is re-baselined so moved cubes do not read as dead ones.
+        /// </summary>
+        internal IReadOnlyList<GridPos> FlingBoardsOutward()
+        {
+            var lost = new List<GridPos>(MainBoard.FlingCubesOutward());
+            if (MirrorBoard != null)
+            {
+                lost.AddRange(MirrorBoard.FlingCubesOutward());
+            }
+            ResyncSnapshot();
+            if (lost.Count > 0 && currentReport != null)
+            {
+                currentReport.AddLiftedCells(lost);
+            }
+            return lost;
+        }
+
+        /// <summary>
+        /// "Kangren": spreads the infection one cell and lets it kill whatever line it has taken
+        /// whole, cascading to the nearest edge. Returns the cell it spread to, or null when there
+        /// was nowhere left.
+        ///
+        /// MAIN BOARD ONLY, like the other board bosses: "Öteki dünya" opening a second arena must
+        /// not double an infection that was balanced against one.
+        ///
+        /// The converted cells are reported as LIFTED - not because anything left the board, but
+        /// because that is the report's channel for "these cells changed without being destroyed",
+        /// and the View needs to know where to redraw. Nothing here scores or counts for a sweep.
+        /// </summary>
+        internal GridPos? SpreadGangrene()
+        {
+            GridPos? spread = MainBoard.SpreadGangrene(rng);
+            List<GridPos> converted = MainBoard.InfectFullLines();
+            // The infection changes cubes in place; a converted cube is not a destroyed one, so the
+            // destruction diff has to be re-baselined or it would read as a killing.
+            ResyncSnapshot();
+            if (converted.Count > 0 && currentReport != null)
+            {
+                currentReport.AddLiftedCells(converted);
+            }
+            return spread;
+        }
+
+        /// <summary>Gangrene cubes standing on the main board right now.</summary>
+        internal int CountGangrene()
+        {
+            return MainBoard.CountGangrene();
         }
 
         /// <summary>Records why the RUN ended on a round the player actually survived

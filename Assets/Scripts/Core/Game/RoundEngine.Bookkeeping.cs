@@ -102,6 +102,33 @@ namespace ProjectBlock.Core
             RoundScore += amount * scorer.ScoreScale;
             currentReport.ScoreGained = breakdown.Total;
             currentReport.RoundScoreAfter = RoundScore;
+            // Immediately, not only at step 8.6: a late write can land AFTER that step (the
+            // dead-end check runs later), and then nothing else would floor it.
+            ClampTurnScoreFloor();
+        }
+
+        /// <summary>
+        /// A TURN IS NEVER WORTH LESS THAN NOTHING. Puts RoundScore back where the turn started if
+        /// something pushed it below, and re-derives what the turn actually BANKED so the run
+        /// currency follows. Idempotent, so it is safe to apply at step 8.6 and again after every
+        /// late write - which is necessary, because some late writes happen after step 8.6.
+        ///
+        /// Deliberately does NOT touch the breakdown: report.Score.Total stays what the turn
+        /// EARNED, while report.ScoreGained is what it banked. They differ on a clamped turn
+        /// exactly as they differ on the threshold-crossing turn.
+        /// </summary>
+        private void ClampTurnScoreFloor()
+        {
+            if (currentReport == null)
+            {
+                return;
+            }
+            if (RoundScore < turnStartRoundScore)
+            {
+                RoundScore = turnStartRoundScore;
+            }
+            currentReport.ScoreGained = RoundScore - turnStartRoundScore;
+            currentReport.RoundScoreAfter = RoundScore;
         }
 
         /// <summary>Called via TurnContext. Multipliers are only meaningful before the score
@@ -208,6 +235,30 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>How many times a boss may re-open a board it jammed itself. Four, because the
+        /// one boss that does it has four regions to work through.</summary>
+        private const int BossDeadEndEscapeAttempts = 4;
+
+        /// <summary>True while anything the player holds fits somewhere, in either world.</summary>
+        private bool HasAnyPlayableMove()
+        {
+            for (int i = 0; i < Hand.Count; i++)
+            {
+                if (CanPlayCardAnywhere(Hand[i]))
+                {
+                    return true;
+                }
+            }
+            foreach (BonusSlot slot in bonusHand)
+            {
+                if (CanPlayCardAnywhere(slot.Card))
+                {
+                    return true;
+                }
+            }
+            return MirrorHasAnyMove;
+        }
+
         /// <summary>Base lose condition: no held block (hand or bonus) fits the board.</summary>
         private void CheckForNoPlayableMove()
         {
@@ -231,6 +282,25 @@ namespace ProjectBlock.Core
             {
                 return;
             }
+            // A boss whose OWN restriction jammed the board undoes it rather than letting the
+            // round die on it ("Dört kutup" turning to the next region, and billing the player for
+            // the turn they could not use). Bounded, and it only counts if a move actually opens
+            // up - a boss cannot loop here, and one that jams nothing never answers.
+            if (Boss != null && session != null)
+            {
+                for (int attempt = 0; attempt < BossDeadEndEscapeAttempts; attempt++)
+                {
+                    if (!Boss.TryEscapeDeadEnd(new RoundContext(session, rng, this)))
+                    {
+                        break;
+                    }
+                    if (HasAnyPlayableMove())
+                    {
+                        return;
+                    }
+                }
+            }
+
             // DEAD END. Before the round ends, effects that can open a gap get their turn:
             // first jokers, automatically ("Deprem"); then, if the player holds a rescue
             // power ("Kentsel Dönüşüm"), the round PAUSES in AwaitingRescue so they can use

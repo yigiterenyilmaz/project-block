@@ -108,8 +108,24 @@ namespace ProjectBlock.Core
             get { return ScoreThreshold * scorer.ScoreScale; }
         }
 
+        /// <summary>Where RoundScore stood when the turn in progress began. The floor a turn may
+        /// never push the round below (see ClampTurnScoreFloor).</summary>
+        private int turnStartRoundScore;
+
         /// <summary>True once RoundScore has reached the threshold; enables overtime rules.</summary>
         public bool ThresholdPassed { get; private set; }
+
+        /// <summary>
+        /// True when the bar is met RIGHT NOW, whether or not the engine has ticked ThresholdPassed
+        /// yet. A boss moves BEFORE the threshold check, so on the turn that crosses the bar
+        /// ThresholdPassed is still false while the score already covers it - a boss that ends the
+        /// round on a condition ("Saatçi" running out of turns) must not kill a round that was
+        /// just won.
+        /// </summary>
+        internal bool ThresholdReached
+        {
+            get { return ThresholdPassed || RoundScore >= ScaledThreshold; }
+        }
 
         /// <summary>Clean sweeps ("temizlik") triggered this round. Drives the escalating
         /// UI/sound feedback; future jokers (Batak, Kayıt defteri...) will also read it.</summary>

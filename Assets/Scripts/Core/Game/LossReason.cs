@@ -38,6 +38,10 @@ namespace ProjectBlock.Core
 
         /// <summary>"Çıkmaz": the score threshold was reached. On that round scoring too well
         /// is a defeat, not a victory.</summary>
-        ForbiddenThreshold = 7
+        ForbiddenThreshold = 7,
+
+        /// <summary>"Saatçi": the round had a hard turn limit and the bar was not reached
+        /// inside it.</summary>
+        OutOfTurns = 8
     }
 }
