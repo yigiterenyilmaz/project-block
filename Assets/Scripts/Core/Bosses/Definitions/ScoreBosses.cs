@@ -257,4 +257,153 @@ namespace ProjectBlock.Core
             return -2 * inside * perCube;
         }
     }
+
+    /// <summary>
+    /// "Enflasyon" - the bar will not hold still. Every turn you take, the score threshold rises
+    /// 3%, compounding, so a round you drift through gets away from you: ten turns in it is a third
+    /// higher than it started, twenty turns in it is nearly double.
+    ///
+    /// It is a pure THRESHOLD filter - it destroys nothing, takes nothing and pays nothing
+    /// differently. The pressure is entirely on the clock: score fast or do not score at all.
+    ///
+    /// The rise is counted in turns TAKEN, so the first turn is already measured against a raised
+    /// bar - the boss moves before the threshold check, which is what makes the pressure real.
+    /// Read live off RoundEngine.ScoreThreshold, so the bar on screen is always the bar the rules
+    /// use.
+    ///
+    /// The rate is a BALANCE PLACEHOLDER.
+    /// </summary>
+    public sealed class EnflasyonBoss : BossRound
+    {
+        /// <summary>How much the bar climbs per turn, in percent, compounding.</summary>
+        public double PercentPerTurn = 3.0;
+
+        private int turnsTaken;
+
+        public EnflasyonBoss()
+            : base("enflasyon", "Enflasyon")
+        {
+            SetDescription(
+                "The score threshold rises 3% with every turn you take, compounding. Take your "
+                    + "time and the bar runs away from you.",
+                "Puan eşiği attığın her turda %3 yükselir, bileşik olarak. Oyalanırsan eşik "
+                    + "senden kaçar.");
+        }
+
+        /// <summary>Turns taken so far, for the UI.</summary>
+        public int TurnsTaken
+        {
+            get { return turnsTaken; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                if (turnsTaken == 0)
+                {
+                    return Loc.Pick("+3%/turn", "tur başına %3");
+                }
+                int percent = (int)System.Math.Round((Multiplier - 1.0) * 100.0);
+                return "+" + percent + "%";
+            }
+        }
+
+        private double Multiplier
+        {
+            get { return System.Math.Pow(1.0 + PercentPerTurn / 100.0, turnsTaken); }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            turnsTaken = 0;
+        }
+
+        /// <summary>Rounded UP, so the bar always actually moves - a small threshold must not be
+        /// immune to inflation. Capped, because compounding has no natural ceiling: a round that
+        /// drags on for hundreds of turns would otherwise inflate the bar past what an int can
+        /// hold once RoundEngine scales it, and an overflowed threshold is a bar of nonsense
+        /// rather than a hard one. The cap is far beyond reachable either way.</summary>
+        public override int FilterScoreThreshold(int threshold)
+        {
+            double inflated = System.Math.Ceiling(threshold * Multiplier);
+            return inflated > MaxThreshold ? MaxThreshold : (int)inflated;
+        }
+
+        /// <summary>Ceiling on the inflated bar, low enough that scaling it cannot overflow.</summary>
+        private const int MaxThreshold = 10000000;
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            turnsTaken++;
+        }
+    }
+
+    /// <summary>
+    /// "Hiçlik" - the board itself bills you. At the end of every turn you lose score for every
+    /// cube left standing, so a board you let fill up bleeds you dry while it sits there.
+    ///
+    /// GOLD IS NOT EXEMPT (confirmed design): a gold cube still pays its upkeep bonus, and still
+    /// costs its rent here. It earns and it bleeds at the same time, which is exactly what makes
+    /// leaving one lying around a decision rather than a free win.
+    ///
+    /// The bill lands through AddLateTurnScore, AFTER the turn's score is finalized, so the
+    /// central round-score clamp (turn step 8.6) covers it: a turn may be emptied by this, never
+    /// pushed below where it started. A big board cannot take back score you already banked.
+    ///
+    /// The rate is a BALANCE PLACEHOLDER.
+    /// </summary>
+    public sealed class HiclikBoss : BossRound
+    {
+        /// <summary>Score lost per cube left standing at the end of a turn.</summary>
+        public int CostPerCube = 4;
+
+        private int billedThisRound;
+
+        public HiclikBoss()
+            : base("hiclik", "Hiçlik")
+        {
+            SetDescription(
+                "At the end of every turn you lose score for every cube still standing on the "
+                    + "board. Gold cubes pay their bonus AND their rent - they bleed you like all "
+                    + "the rest.",
+                "Her tur sonunda tahtada duran her küp için puan kaybedersin. Altın küpler "
+                    + "bonusunu da verir kirasını da alır - onlar da diğerleri gibi kanatır.");
+        }
+
+        /// <summary>Total billed this round, for the UI.</summary>
+        public int BilledThisRound
+        {
+            get { return billedThisRound; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return billedThisRound > 0
+                    ? "-" + billedThisRound
+                    : Loc.Pick("-" + CostPerCube + "/cube", "küp başına -" + CostPerCube);
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            billedThisRound = 0;
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            // The MAIN board only: "Öteki dünya" opening a second arena must not double the rent
+            // on a boss that was balanced against one.
+            int standing = turn.Round.MainBoard.OccupiedCount;
+            if (standing <= 0)
+            {
+                return;
+            }
+            int bill = standing * CostPerCube;
+            billedThisRound += bill;
+            turn.Round.AddLateTurnScore(-bill, DefId);
+        }
+    }
 }

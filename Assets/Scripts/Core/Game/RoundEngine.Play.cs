@@ -43,6 +43,57 @@ namespace ProjectBlock.Core
             return shape;
         }
 
+        /// <summary>
+        /// Grows a card by ONE cube, in a random spot against what it already has, so the block
+        /// stays in one piece and simply gets fatter ("Kıtlık" fattening every card that comes back
+        /// from the discard). Returns the new shape, or null when it could not grow.
+        ///
+        /// ROUND-SCOPED BY CONSTRUCTION: it writes to the same per-round override store the fox
+        /// reshape uses, so the card in GameSession.OwnedCards is never touched and the growth dies
+        /// with this engine. A boss must not leak into the next round, and this one cannot.
+        /// </summary>
+        internal BlockShape GrowCardShape(BlockCard card, IRandomSource growRng)
+        {
+            if (card == null || growRng == null)
+            {
+                return null;
+            }
+            BlockShape shape = EffectiveShape(card);
+            var occupied = new HashSet<GridPos>();
+            foreach (GridPos cell in shape.Cells)
+            {
+                occupied.Add(cell);
+            }
+            // Every empty cell touching the block, in a stable order so the pick is deterministic.
+            var candidates = new List<GridPos>();
+            var seen = new HashSet<GridPos>();
+            foreach (GridPos cell in shape.Cells)
+            {
+                TryOfferGrowthCell(new GridPos(cell.X + 1, cell.Y), occupied, seen, candidates);
+                TryOfferGrowthCell(new GridPos(cell.X - 1, cell.Y), occupied, seen, candidates);
+                TryOfferGrowthCell(new GridPos(cell.X, cell.Y + 1), occupied, seen, candidates);
+                TryOfferGrowthCell(new GridPos(cell.X, cell.Y - 1), occupied, seen, candidates);
+            }
+            if (candidates.Count == 0)
+            {
+                return null;
+            }
+            var grown = new List<GridPos>(shape.Cells);
+            grown.Add(candidates[growRng.NextInt(0, candidates.Count)]);
+            BlockShape next = BlockShape.FromCells(grown);
+            foxShapes[card.Id] = next;
+            return next;
+        }
+
+        private static void TryOfferGrowthCell(GridPos cell, HashSet<GridPos> occupied,
+            HashSet<GridPos> seen, List<GridPos> candidates)
+        {
+            if (!occupied.Contains(cell) && seen.Add(cell))
+            {
+                candidates.Add(cell);
+            }
+        }
+
         /// <summary>The board cells a shape at that origin would occupy, in shape order. Only the
         /// cells that are real play area, so a caller never has to filter. Used for a placement
         /// that is never going to happen: a defective smuggled card falling through the arena.

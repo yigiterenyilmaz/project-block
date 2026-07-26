@@ -433,4 +433,187 @@ namespace ProjectBlock.Core
             get { return Loc.Pick("playing blind", "körleme"); }
         }
     }
+
+    /// <summary>
+    /// "Saatçi" - a hard deadline. The round must be finished inside a fixed number of turns; the
+    /// turn the limit runs out with the bar unmet, the round is lost. No stalling, no grinding, no
+    /// waiting for the perfect hand.
+    ///
+    /// It reads ThresholdReached, not ThresholdPassed: a boss moves BEFORE the engine's threshold
+    /// check, so on the turn that crosses the bar the flag is still false while the score already
+    /// covers it. Without that, the watchmaker would kill a round that was just won on the buzzer.
+    ///
+    /// Once the bar IS met the clock stops mattering - the round is complete, and overtime plays by
+    /// its own rules (which are already a deadline of their own).
+    ///
+    /// The limit is a BALANCE PLACEHOLDER.
+    /// </summary>
+    public sealed class SaatciBoss : BossRound
+    {
+        /// <summary>Turns the player gets to reach the bar.</summary>
+        public int TurnLimit = 12;
+
+        public SaatciBoss()
+            : base("saatci", "Saatçi")
+        {
+            SetDescription(
+                "You have a hard turn limit. Reach the score threshold inside it or the round is "
+                    + "lost - there is no stalling this one out.",
+                "Kesin bir tur sınırın var. Puan eşiğini o sınırın içinde geç, yoksa raunt "
+                    + "kaybedilir - bunu oyalanarak geçemezsin.");
+        }
+
+        /// <summary>Turns left before the deadline, for the UI. Never below 0.</summary>
+        public int TurnsLeft { get; private set; }
+
+        public override string StatusText
+        {
+            get { return TurnsLeft + Loc.Pick(" turns left", " tur kaldı"); }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            TurnsLeft = TurnLimit;
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            TurnsLeft = TurnLimit - turn.Round.TurnNumber;
+            if (TurnsLeft < 0)
+            {
+                TurnsLeft = 0;
+            }
+            if (TurnsLeft > 0 || turn.Round.ThresholdReached)
+            {
+                return;
+            }
+            turn.Round.DeclareLoss(LossReason.OutOfTurns);
+        }
+    }
+
+    /// <summary>
+    /// "Kıtlık" - the deck turns against you. Every card that comes back from the discard picks up
+    /// ONE extra cube, in a random spot against what it already has, so the blocks you keep playing
+    /// keep getting fatter and harder to fit.
+    ///
+    /// It fires on the drying-out, which is the one moment the discard is recycled into the draw
+    /// pile - so a card grows once per full trip through the deck, and a big deck feeds you thin
+    /// cards for longer.
+    ///
+    /// ROUND-SCOPED (confirmed design): the growth lives in the engine's per-round shape store, the
+    /// same one the fox reshape writes to, so GameSession.OwnedCards is never touched and the deck
+    /// is its old self next round. This boss makes ONE round hell, it does not poison the run.
+    ///
+    /// The growth stays in ONE PIECE - the new cube always touches the block - so a fattened card
+    /// is a harder card, never a nonsense one.
+    /// </summary>
+    public sealed class KitlikBoss : BossRound
+    {
+        private int cubesGrown;
+
+        public KitlikBoss()
+            : base("kitlik", "Kıtlık")
+        {
+            SetDescription(
+                "Every card that comes back from the discard grows by one cube, somewhere at "
+                    + "random. Play on long enough and your whole deck is too fat to fit.",
+                "Iskartadan desteye dönen her kart rastgele bir yerinden bir küp büyür. Yeterince "
+                    + "uzun oynarsan bütün desten tahtaya sığmayacak kadar şişer.");
+        }
+
+        /// <summary>Cubes added to cards this round, for the UI.</summary>
+        public int CubesGrown
+        {
+            get { return cubesGrown; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return cubesGrown > 0
+                    ? "+" + cubesGrown + Loc.Pick(" cubes", " küp")
+                    : Loc.Pick("cards fatten", "kartlar şişer");
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            cubesGrown = 0;
+        }
+
+        /// <summary>The draw pile has just run dry, and the discard is about to be shuffled back
+        /// in. Everything sitting in it is a card that was played and is coming back - so every one
+        /// of them fattens.</summary>
+        public override void OnDrawPileEmptied(RoundContext ctx)
+        {
+            RoundEngine round = ctx.Round;
+            if (round == null)
+            {
+                return;
+            }
+            IReadOnlyList<BlockCard> comingBack = round.Deck.DiscardPile;
+            for (int i = 0; i < comingBack.Count; i++)
+            {
+                if (round.GrowCardShape(comingBack[i], ctx.Rng) != null)
+                {
+                    cubesGrown++;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// "Merkezkaç kuvveti" - the arena spins. At the end of every turn every cube is flung one cell
+    /// further from the middle, and whatever goes over the edge is gone for nothing: no score, no
+    /// clean-sweep credit, no ledger entry. Building outward is building on sand; the only place
+    /// anything stays put is the exact centre of an odd board.
+    ///
+    /// It empties the board FOR you, which sounds like a favour and is not: a line you spent three
+    /// turns assembling walks off the rim before you can complete it, and every cube that leaves
+    /// takes its score with it. The way to beat it is to clear lines the turn you build them.
+    ///
+    /// The cubes are LIFTED rather than destroyed (RoundEngine.FlingBoardsOutward), so nothing here
+    /// pays, nothing counts toward a sweep, and nothing lands in a destruction ledger.
+    /// </summary>
+    public sealed class MerkezkacBoss : BossRound
+    {
+        private int cubesFlungOff;
+
+        public MerkezkacBoss()
+            : base("merkezkac", "Merkezkaç Kuvveti")
+        {
+            SetDescription(
+                "At the end of every turn every cube is flung one cell further from the middle. "
+                    + "Whatever goes over the edge is destroyed and pays nothing.",
+                "Her tur sonunda tahtadaki her küp merkezden bir kare daha uzağa itilir. "
+                    + "Kenardan taşan küpler yok olur ve puan getirmez.");
+        }
+
+        /// <summary>Cubes flung off the arena this round, for the UI.</summary>
+        public int CubesFlungOff
+        {
+            get { return cubesFlungOff; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return cubesFlungOff > 0
+                    ? cubesFlungOff + Loc.Pick(" flung off", " savruldu")
+                    : Loc.Pick("spinning", "dönüyor");
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            cubesFlungOff = 0;
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            cubesFlungOff += turn.Round.FlingBoardsOutward().Count;
+        }
+    }
 }
