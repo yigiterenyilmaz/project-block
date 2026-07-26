@@ -24,6 +24,9 @@ public static class JokerTests
         Streak_Dondurma_Decreasing();
         Streak_Siyam_SameShapeOnly();
         Streak_ResetsEachRound();
+        Mikrodalga_BridgesOneQuietTurnAtHalfRate();
+        Mikrodalga_TwoQuietTurnsStillBreakTheStreak();
+        Mikrodalga_ConsecutiveClearAfterABridgePaysInFull();
         Bereket_PlusExplosionStacksPermanently();
         Insider_FlagFollowsOwnership();
         Renovasyon_SpendsChargesAndResetsPerRound();
@@ -689,6 +692,85 @@ public static class JokerTests
 
         session.Jokers.DispatchRoundStarted(session.CurrentRound);
         Check(joker.Streak == 0, "round start clears the streak", "got " + joker.Streak);
+    }
+
+    // ---- Mikrodalga. The joker itself does nothing but set two rule values, so every test
+    // here drives REAL turns: what is being checked is the engine's combo counter, not the
+    // joker's own bookkeeping. ComboBonusPerStep is 5, so a streak pays 0, 5, 10, 15...
+
+    private static void Mikrodalga_BridgesOneQuietTurnAtHalfRate()
+    {
+        Section("mikrodalga / a combo across one quiet turn");
+        Check(ComboAfterOneQuietTurn(false) == 0,
+            "without the joker a quiet turn ends the streak",
+            "got " + ComboAfterOneQuietTurn(false));
+        int bridged = ComboAfterOneQuietTurn(true);
+        // Third step of the streak = 10, reheated at 50%.
+        Check(bridged == 5, "with it the streak carries on at half rate", "got " + bridged);
+    }
+
+    private static void Mikrodalga_TwoQuietTurnsStillBreakTheStreak()
+    {
+        Section("mikrodalga / two quiet turns are too many");
+        GameSession session = ComboSession(true);
+        RoundEngine round = session.CurrentRound;
+        ClearOneRow(session, round, 0);
+        ClearOneRow(session, round, 1);
+        DropOneCube(round, new GridPos(1, 2));
+        DropOneCube(round, new GridPos(3, 2));
+        Check(ClearOneRow(session, round, 3) == 0,
+            "the second quiet turn resets the streak after all");
+    }
+
+    private static void Mikrodalga_ConsecutiveClearAfterABridgePaysInFull()
+    {
+        Section("mikrodalga / only the reheated turn is discounted");
+        GameSession session = ComboSession(true);
+        RoundEngine round = session.CurrentRound;
+        ClearOneRow(session, round, 0);
+        ClearOneRow(session, round, 1);
+        DropOneCube(round, new GridPos(2, 2));
+        Check(ClearOneRow(session, round, 3) == 5, "the turn that ends the gap is halved");
+        // Straight after it, with no gap: the fourth step pays its full 15.
+        Check(ClearOneRow(session, round, 4) == 15,
+            "the next consecutive clear is back to full rate");
+    }
+
+    /// <summary>Clear, clear, ONE quiet turn, clear - and what that last turn's combo paid.</summary>
+    private static int ComboAfterOneQuietTurn(bool withJoker)
+    {
+        GameSession session = ComboSession(withJoker);
+        RoundEngine round = session.CurrentRound;
+        ClearOneRow(session, round, 0);
+        ClearOneRow(session, round, 1);
+        DropOneCube(round, new GridPos(2, 2)); // clears nothing
+        return ClearOneRow(session, round, 3);
+    }
+
+    /// <summary>A 5x5 arena dealt nothing but single cubes, so a line can be completed - or
+    /// deliberately not completed - on any turn the test likes.</summary>
+    private static GameSession ComboSession(bool withJoker)
+    {
+        GameSession session = NewSession(91, 5, 1000000, 60, 1);
+        if (withJoker)
+        {
+            session.Jokers.Add(new MikrodalgaJoker());
+        }
+        return session;
+    }
+
+    /// <summary>Paints four cells of a row, drops the fifth as a real turn, and returns the
+    /// combo bonus that turn was paid.</summary>
+    private static int ClearOneRow(GameSession session, RoundEngine round, int y)
+    {
+        PaintBoard(round, session, CubeKind.Normal, new GridPos(0, y), new GridPos(1, y),
+            new GridPos(2, y), new GridPos(3, y));
+        return DropOneCube(round, new GridPos(4, y)).Score.BaseCombo;
+    }
+
+    private static TurnReport DropOneCube(RoundEngine round, GridPos cell)
+    {
+        return round.PlayFromHand(0, cell); // every card in this deck is a single cube
     }
 
     private static void Bereket_PlusExplosionStacksPermanently()
