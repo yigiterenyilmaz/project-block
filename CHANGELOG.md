@@ -35,6 +35,14 @@ everything here is unreleased and balance numbers are still placeholders.
   a turn may be worth nothing, never less.
 
 ### Added
+- **Kütleçekim Merkezi (power)** — the arena's gravity turns. Pick a side and **water falls that
+  way** instead of down, for the rest of the round. Nothing else on the board moves: this is not a
+  broom, it is a way to **aim your water** — the one thing on the board that keeps travelling
+  after it is placed. Pull it sideways and a water block laid on the left edge fills the gap on
+  the right; pull it upward and water climbs into the hole a clear just opened. The water already
+  standing there flows the new way **at once**, so spending the charge always does something you
+  can see, and any line it completes explodes. It recharges on a clean sweep like any power, so a
+  round with sweeps in it is a round you can re-aim several times.
 - **Mikrodalga (joker)** — a combo kept warm. Two explosions with **one quiet turn between them**
   still count as a combo: the streak does not reset on that turn, it only sleeps, and the next
   clear picks it up where it left off. Two quiet turns in a row still end it. Reheated food is not

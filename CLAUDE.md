@@ -179,9 +179,18 @@ Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.
 
-The roster now stands at **53 jokers, 35 powers and 37 bosses** (registry counts); of the
+The roster now stands at **53 jokers, 36 powers and 37 bosses** (registry counts); of the
 originally planned powers only "Dolly" is left, set aside by the designer.
 See `docs/jokers-plan.md`.
+
+**Water does not always fall downward.** `GameBoard.WaterFlow` is the one-cell step water
+settles along — `(0,-1)` on every ordinary arena, turned to any of the four sides for the rest
+of the round by the "Kütleçekim merkezi" power (`RoundEngine.SetWaterFlow`, which also makes the
+water already on the board obey at once). It lives on the BOARD, not in `RoundRules`, because
+that is what round-scopes it: a fresh arena every round means gravity stands back up on its own.
+Carried across `CreateResized` and `CreateClone`, so an inflation power cannot reset it and the
+mirror world inherits the same pull. Anything that reasons about where water ends up must read
+`WaterFlow` rather than assuming down.
 
 **Block types are not all card-wide.** Most elements colour the whole block, but "Hedefli"
 marks exactly ONE cube of it (`BlockCard.TargetCellIndex` -> `CubeKind.Target`, stamped by

@@ -93,7 +93,7 @@ Buldozer gücünün 2 sıralık bandı 5x5'te alanın %40'ı (9x9'da %22); Meyda
 `max(3, satırdaki boş kare)` süresinde ilk bantta taban değer baskın; enflasyon güçlerinin
 +1'i 5x5'te göreli olarak çok daha büyük.
 
-## Güncel — kadro 53 joker / 35 güç / 37 patron (2026-07-26)
+## Güncel — kadro 53 joker / 36 güç / 37 patron (2026-07-26)
 
 Aşağıdaki bölümler ilk 31–35 jokerlik tasarım listesinin tarihçesi; sayıları oradan okuma.
 Kayıtlı içerik sayısı her zaman registry'lerden gelir (`JokerRegistry`, `PowerRegistry`,
@@ -109,6 +109,11 @@ Kayıtlı içerik sayısı her zaman registry'lerden gelir (`JokerRegistry`, `Po
   otomatik besler.
 - **Beş yeni patron** — Şaşırtmaca (kapalı el + kilit), Matruşka (1-2-4-8 bebek merdiveni),
   Snake (yılan), İstilacı (işaretli sütun), Tamagotchi (dört şekil talebi).
+- **Kütleçekim Merkezi (güç)** — suyun düştüğü yönü dört yandan birine çevirir, o raunt boyunca
+  (`GameBoard.WaterFlow`, `RoundEngine.SetWaterFlow`). Yön **tahtada** durur, `RoundRules`'ta değil:
+  tahta her raunt yeniden kurulduğu için round-scope böyle bedavaya geliyor. Alandaki su hemen
+  akar; tamamladığı satır normal tur-arası kurallarla patlar. Yeni hedefleme modu:
+  `ActivationTargeting.Direction` (adım `ActivationTarget.Offset` içinde taşınır).
 - **Yeni merkezi primitif:** `RoundEngine.DeclareRoundWon` — bir patron **kendi şartıyla** yenilebilir.
   Tam eşik kadar puan yazar, `ThresholdPassed`'i set eder (uzatma açılmasın diye) ve doğrudan markete
   gider. Aynı turdaki bir **kayıp bunu ezer**.
