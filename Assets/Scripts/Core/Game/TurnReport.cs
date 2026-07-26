@@ -72,6 +72,28 @@ namespace ProjectBlock.Core
         /// ordinary turn. The cells themselves are in ExtraExplodedCells, like any late clear.</summary>
         public CubeKind? AnnihilatedKind { get; internal set; }
 
+        private readonly List<GridPos> targetedExplodedCells = new List<GridPos>();
+
+        /// <summary>
+        /// Cells a "Hedefli" payout took with the target when the block went up whole.
+        ///
+        /// A channel of its OWN rather than ExtraExplodedCells, and that is load-bearing:
+        /// "Antimadde" bills the player per cube in ExtraExplodedCells, so anything else that
+        /// wrote into that list would be paid for by a joker that did not cause it. (Reachable:
+        /// a negative block erasing a target cube mints an antimatter-of-Target card, and playing
+        /// it sets off every armed targeted block at once.) The View treats the two lists alike -
+        /// both are late clears that need blasting.
+        /// </summary>
+        public IReadOnlyList<GridPos> TargetedExplodedCells
+        {
+            get { return targetedExplodedCells; }
+        }
+
+        internal void AddTargetedExplodedCells(IReadOnlyList<GridPos> cells)
+        {
+            targetedExplodedCells.AddRange(cells);
+        }
+
         private readonly List<int> targetedBlocksHit = new List<int>();
 
         /// <summary>Card ids of "Hedefli" blocks whose TARGET was broken first this turn, so the

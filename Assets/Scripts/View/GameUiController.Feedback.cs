@@ -138,10 +138,10 @@ namespace ProjectBlock.View
                 sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
                 sfx.Flame();
             }
-            else if (report.CubesExploded > 0 || report.ExtraExplodedCells.Count > 0)
+            else if (report.CubesExploded > 0 || LateExplodedCount(report) > 0)
             {
-                // ExtraExplodedCells covers a late board-reshape clear (inflation deflate)
-                // that the placement's own CubesExploded count never saw.
+                // The late lists cover a board-reshape clear (inflation deflate) and a "Hedefli"
+                // payout - neither of which the placement's own CubesExploded count ever saw.
                 sfx.Explode();
             }
             // "Alacakaranlık": a blast is the one thing that shows the player anything, so it
@@ -154,15 +154,24 @@ namespace ProjectBlock.View
                     lit.Add(dead.Pos);
                 }
                 lit.AddRange(report.ExtraExplodedCells);
+                lit.AddRange(report.TargetedExplodedCells);
                 boardView.LightUpAround(lit);
             }
             HandleBlastFeedback(round, report);
         }
 
+        /// <summary>Cells this turn lost OUTSIDE the placement's own line explosion - a late
+        /// board-reshape clear and a "Hedefli" payout. They live in separate lists because a
+        /// joker bills against one of them, but every FX decision here treats them alike.</summary>
+        private static int LateExplodedCount(TurnReport report)
+        {
+            return report.ExtraExplodedCells.Count + report.TargetedExplodedCells.Count;
+        }
+
         /// <summary>Particles, shake, combo popups and the sweep celebration for one turn.</summary>
         private void HandleBlastFeedback(RoundEngine round, TurnReport report)
         {
-            if (report.CubesExploded == 0 && report.ExtraExplodedCells.Count == 0)
+            if (report.CubesExploded == 0 && LateExplodedCount(report) == 0)
             {
                 comboStreak = 0;
                 // A turn where a boss only LIFTED cells still needs its puff drawn - it just
@@ -225,6 +234,12 @@ namespace ProjectBlock.View
             // absolute cells - ExplodedRows/Columns never covered them. The board has already
             // been rebuilt to its new size by RefreshAll, so CellToWorld maps these correctly.
             foreach (GridPos cell in report.ExtraExplodedCells)
+            {
+                blastFx.EmitAt(boardView.CellToWorld(cell), blastColor, 4);
+            }
+            // A "Hedefli" payout keeps its cells in a list of its own (so "Antimadde" cannot be
+            // billed for them), but on screen it is the same late clear as any other.
+            foreach (GridPos cell in report.TargetedExplodedCells)
             {
                 blastFx.EmitAt(boardView.CellToWorld(cell), blastColor, 4);
             }

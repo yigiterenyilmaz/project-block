@@ -152,7 +152,9 @@ namespace ProjectBlock.Core
                     bonus += scorer.ScoreLineExplosion(0, blown.Count);
                     if (currentReport != null)
                     {
-                        currentReport.AddExtraExplodedCells(blown);
+                        // Its OWN channel, not ExtraExplodedCells: "Antimadde" bills per cube in
+                        // that list, and it must not be charged for a blast it did not cause.
+                        currentReport.AddTargetedExplodedCells(blown);
                     }
                 }
             }
