@@ -24,6 +24,9 @@ public static class SaveTests
         RulesAndScoringRoundTrip();
         BoardRoundTrip();
         BoardErosionAndSealsRoundTrip();
+        BoardInfectionDeadLinesRoundTrip();
+        SmuggledCardRoundTrip();
+        SessionDebtAndSmuggleFlagRoundTrip();
         CardTableSharesInstances();
         CardTableRejectsUnknownId();
         RngRestoresToTheSamePosition();
@@ -264,6 +267,73 @@ public static class SaveTests
             "playable count drops with the eaten cell");
         Check(back.IsSealed(new GridPos(0, 3)), "placement seal survives");
         Check(!back.IsSealed(new GridPos(1, 3)), "an unsealed cell stays unsealed");
+    }
+
+    /// <summary>"Kangren" dead lines: a line the rot took whole can never explode again, and that
+    /// has to survive a reload or a loaded board silently becomes completable.</summary>
+    private static void BoardInfectionDeadLinesRoundTrip()
+    {
+        var board = new GameBoard(5, 5);
+        for (int x = 0; x < 5; x++)
+        {
+            board.SetCubeAt(new GridPos(x, 1), new Cube(CubeKind.Gangrene, -7));
+        }
+        board.InfectFullLines();
+        Check(board.RowIsInfectionDead(1), "the row died before saving");
+
+        var w = new SaveWriter();
+        board.Save(w, "b");
+        GameBoard back = GameBoard.Load(new SaveReader(w.ToText()), "b");
+
+        Check(back.RowIsInfectionDead(1), "and it is still dead after loading");
+        Check(!back.RowIsInfectionDead(0), "a live row stays live");
+        Check(!back.ColumnIsInfectionDead(1), "and no column was killed by accident");
+        CheckEqual(CubeKind.Gangrene, back.GetCube(new GridPos(2, 1)).Value.Kind,
+            "the rotten cubes came back rotten");
+    }
+
+    /// <summary>"Kaçakçı": a defective card must not load as a healthy one - that would refund
+    /// the gamble for free.</summary>
+    private static void SmuggledCardRoundTrip()
+    {
+        var shape = BlockShape.FromCells(new[] { new GridPos(0, 0), new GridPos(1, 0) });
+        var junk = new BlockCard(31, shape);
+        junk.IsSmuggled = true;
+        junk.FallsThrough = true;
+        var sound = new BlockCard(32, shape);
+        sound.IsSmuggled = true;
+
+        var w = new SaveWriter();
+        CoreSerializers.WriteCard(w, "junk", junk);
+        CoreSerializers.WriteCard(w, "sound", sound);
+        var r = new SaveReader(w.ToText());
+        BlockCard backJunk = CoreSerializers.ReadCard(r, "junk");
+        BlockCard backSound = CoreSerializers.ReadCard(r, "sound");
+
+        Check(backJunk.IsSmuggled && backJunk.FallsThrough,
+            "the defective card is still defective");
+        Check(backSound.IsSmuggled && !backSound.FallsThrough,
+            "and sound smuggled goods are still sound");
+    }
+
+    /// <summary>The run-scoped numbers the joker wave added: an unsaved debt would be forgiven by
+    /// reloading, and an unsaved smuggle flag would hand out a second free item per market visit.
+    /// </summary>
+    private static void SessionDebtAndSmuggleFlagRoundTrip()
+    {
+        var session = new GameSession(NewConfig(777));
+        session.Jokers.Add(new KrediKartiJoker());
+        session.Jokers.Add(new KacakciJoker());
+
+        string text = SaveGame.Save(session);
+        GameSession back = SaveGame.Load(text, NewConfig(777));
+        CheckEqual(session.Debt, back.Debt, "the debt came back");
+        CheckEqual(session.CurrencyTakenByEffects, back.CurrencyTakenByEffects,
+            "and so did what effects had taken");
+        CheckEqual(session.FinalRoundReplays, back.FinalRoundReplays,
+            "and the final-round replay count");
+        CheckEqual(session.CanSmuggle, back.CanSmuggle,
+            "and whether the free market item is still there");
     }
 
     private static void CardTableSharesInstances()
