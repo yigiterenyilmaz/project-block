@@ -44,6 +44,10 @@ namespace ProjectBlock.View
         /// permanent); it is a place with a deadline on it.</summary>
         private static readonly Color DoomedColumnTint = new Color(0.85f, 0.45f, 0.12f);
 
+        /// <summary>"Kütleçekim merkezi"'s pull markers, in water's own blue - what they are
+        /// telling you about is where the WATER goes, and nothing else.</summary>
+        private static readonly Color GravityArrowColor = new Color(0.35f, 0.6f, 1f, 0.75f);
+
         /// <summary>"Karantina": a cube exploded in here costs what it would have earned. A
         /// sickly wash over the cell, so the zone reads without hiding what stands in it.</summary>
         private static readonly Color QuarantineTint = new Color(0.75f, 0.72f, 0.20f);
@@ -79,6 +83,10 @@ namespace ProjectBlock.View
 
         /// <summary>"Matruşka"'s dolls, redrawn whenever one splits or moves.</summary>
         private readonly List<GameObject> dollMarkers = new List<GameObject>();
+
+        /// <summary>"Kütleçekim merkezi"'s arrows, shown only while gravity is NOT pointing
+        /// down - normal gravity needs no explaining.</summary>
+        private readonly List<GameObject> gravityMarkers = new List<GameObject>();
 
         /// <summary>"İstilacı"'s marked column, or null when nothing is marked.</summary>
         private int? doomedColumn;
@@ -680,6 +688,45 @@ namespace ProjectBlock.View
         private bool IsQuarantined(GridPos cell)
         {
             return quarantinedRows.Contains(cell.Y) || quarantinedColumns.Contains(cell.X);
+        }
+
+        /// <summary>
+        /// "Kütleçekim merkezi": marks which way water is being pulled, with a row of pips just
+        /// outside the edge it falls towards. Nothing is drawn while gravity points DOWN, because
+        /// that is what every board does and a permanent marker for it would be noise.
+        /// </summary>
+        public void ShowGravity(GridPos flow)
+        {
+            for (int i = gravityMarkers.Count - 1; i >= 0; i--)
+            {
+                if (gravityMarkers[i] != null)
+                {
+                    Destroy(gravityMarkers[i]);
+                }
+            }
+            gravityMarkers.Clear();
+            if (board == null || (flow.X == 0 && flow.Y == -1))
+            {
+                return;
+            }
+            // One pip per lane, just beyond the edge the water is heading for.
+            bool horizontal = flow.X != 0;
+            int lanes = horizontal ? board.Height : board.Width;
+            for (int i = 0; i < lanes; i++)
+            {
+                GridPos edge = horizontal
+                    ? new GridPos(flow.X > 0 ? board.MinX + board.Width - 1 : board.MinX,
+                        board.MinY + i)
+                    : new GridPos(board.MinX + i,
+                        flow.Y > 0 ? board.MinY + board.Height - 1 : board.MinY);
+                Vector2 at = CellToWorld(edge)
+                    + new Vector2(flow.X, flow.Y) * (cellSize * 0.72f);
+                SpriteRenderer pip = ViewUtil.MakeRect(transform, "Gravity_" + i, at,
+                    new Vector2(cellSize * (horizontal ? 0.18f : 0.5f),
+                        cellSize * (horizontal ? 0.5f : 0.18f)),
+                    GravityArrowColor, 6);
+                gravityMarkers.Add(pip.gameObject);
+            }
         }
 
         /// <summary>Marks "İstilacı"'s doomed column. Pass null to clear it.</summary>

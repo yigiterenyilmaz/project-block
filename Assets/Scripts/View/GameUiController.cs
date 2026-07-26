@@ -62,7 +62,7 @@ namespace ProjectBlock.View
         // harmless if the Full Screen Pass feature/material is not wired yet (see docs/crt-edge-bend.md).
         private static readonly int CrtBendId = Shader.PropertyToID("_CrtBend");
 
-        private enum ChoiceKind { None, PowerbankTarget }
+        private enum ChoiceKind { None, PowerbankTarget, GravityDirection }
         private ChoiceKind pendingChoice;
         private int pendingChoiceJokerId;
         private readonly List<int> pendingChoiceValues = new List<int>();

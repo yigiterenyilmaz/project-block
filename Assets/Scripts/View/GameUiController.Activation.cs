@@ -72,6 +72,41 @@ namespace ProjectBlock.View
                 "Powerbank: hangi gücü doldur?"), labels);
         }
 
+        /// <summary>"Kütleçekim merkezi": asks which way water should fall. A direction is not a
+        /// place, so it is picked from a small list rather than clicked on the board - the same
+        /// modal Powerbank and Batak use.</summary>
+        private void OpenDirectionPicker(Power power)
+        {
+            pendingChoice = ChoiceKind.GravityDirection;
+            pendingChoiceJokerId = power.InstanceId;
+            pendingChoiceValues.Clear();
+            // The values are packed steps (see UnpackStep), in the same order as the labels.
+            pendingChoiceValues.Add(PackStep(0, 1));
+            pendingChoiceValues.Add(PackStep(0, -1));
+            pendingChoiceValues.Add(PackStep(-1, 0));
+            pendingChoiceValues.Add(PackStep(1, 0));
+            choicePicker.Show(
+                power.DisplayName + Loc.Pick(": water falls which way?", ": su hangi yöne aksın?"),
+                new List<string>
+                {
+                    Loc.Pick("UP", "YUKARI"),
+                    Loc.Pick("DOWN (normal)", "AŞAĞI (normal)"),
+                    Loc.Pick("LEFT", "SOLA"),
+                    Loc.Pick("RIGHT", "SAĞA")
+                });
+        }
+
+        // A GridPos will not fit in the picker's int list, so the step travels packed.
+        private static int PackStep(int x, int y)
+        {
+            return (x + 1) * 10 + (y + 1);
+        }
+
+        private static GridPos UnpackStep(int packed)
+        {
+            return new GridPos(packed / 10 - 1, packed % 10 - 1);
+        }
+
         private void ResolveChoice(int index)
         {
             if (index < 0 || index >= pendingChoiceValues.Count)
@@ -86,6 +121,17 @@ namespace ProjectBlock.View
                 {
                     Debug.Log("[project_block] Powerbank recharged power #" + pendingChoiceValues[index]);
                     jokerBar.PulseJoker(pendingChoiceJokerId);
+                }
+            }
+            else if (pendingChoice == ChoiceKind.GravityDirection)
+            {
+                Power power = session.Powers.Find(pendingChoiceJokerId);
+                if (power != null)
+                {
+                    GridPos step = UnpackStep(pendingChoiceValues[index]);
+                    // Straight through the normal power path, so the charge, the one-power-per-turn
+                    // rule and the between-turn FX capture all behave as they do for every power.
+                    RunPowerActivation(power, ActivationTarget.Direction(step));
                 }
             }
             RefreshAll(null);
@@ -246,6 +292,13 @@ namespace ProjectBlock.View
                 || power.Targeting == ActivationTargeting.CellAndHandCard)
             {
                 BeginWorkshopTargeting(power);
+                return;
+            }
+            // A DIRECTION is not a place on the board, so it is asked for with a picker rather
+            // than by waiting for a click ("Kütleçekim merkezi").
+            if (power.Targeting == ActivationTargeting.Direction)
+            {
+                OpenDirectionPicker(power);
                 return;
             }
             if (power.Targeting != ActivationTargeting.None)
@@ -442,6 +495,15 @@ namespace ProjectBlock.View
                 // "Totem" ends overtime and advances straight to the market mid-use; mirror the
                 // normal advance flow (RefreshAll + Show) so the market actually appears.
                 marketView.Show(session);
+            }
+            // "Kütleçekim merkezi": the flow it caused is the whole point of the power, so it is
+            // animated rather than teleported. RefreshAll has already drawn the water where it
+            // ended up, so the animation replays it from the start.
+            if (round != null && round.ExternalWaterFrames.Count > 0)
+            {
+                var flow = new List<IReadOnlyList<WaterMove>>(round.ExternalWaterFrames);
+                waterAnimating = true;
+                boardView.PlayWaterAnimation(flow, delegate { waterAnimating = false; });
             }
             PlayPowerBlast(blastCells);
         }

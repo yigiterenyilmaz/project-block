@@ -434,6 +434,9 @@ namespace ProjectBlock.View
                 boardView.ShowCreature(null);
                 boardView.ShowDolls(null, null);
                 boardView.ShowDoomedColumn(null);
+                // The pull markers sit OUTSIDE the arena and say nothing about what is on it, so
+                // they are the one marker the dark does not have to swallow.
+                boardView.ShowGravity(session.CurrentRound.Board.WaterFlow);
                 return;
             }
             boardView.ShowInfections(infectionBuffer);
@@ -441,6 +444,9 @@ namespace ProjectBlock.View
             RefreshQuarantine();
             RefreshCreature();
             RefreshBossBoardMarks();
+            // "Kütleçekim merkezi": which way the arena is pulling water. A no-op on every board
+            // that pulls it downward, which is nearly all of them.
+            boardView.ShowGravity(session.CurrentRound.Board.WaterFlow);
         }
 
         /// <summary>Hands the board view what the new bosses have put ON it: "Matruşka"'s dolls
