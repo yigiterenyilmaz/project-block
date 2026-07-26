@@ -98,6 +98,20 @@ namespace ProjectBlock.Core
             get { return false; }
         }
 
+        /// <summary>
+        /// True for a power NO market ever stocks: the only way to hold one is the final round with
+        /// "Uzun vadeli yatırımcı" in the inventory, which hands one of each over for that round.
+        /// GameSession keeps them out of the shop pool and does the handing over, so there is
+        /// nothing for the power itself to check.
+        ///
+        /// EXTENSION POINT: the two exclusive powers are not designed yet. Overriding this and
+        /// registering the power in PowerRegistry is the whole of the wiring.
+        /// </summary>
+        public virtual bool InvestorOnly
+        {
+            get { return false; }
+        }
+
         /// <summary>Extra conditions beyond "charged and a round is running". Override to
         /// refuse when the power would do nothing (no ghost cubes, empty bonus hand...).</summary>
         public virtual bool CanRun(RoundContext ctx, ActivationTarget target)

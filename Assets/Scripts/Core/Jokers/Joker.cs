@@ -68,7 +68,43 @@ namespace ProjectBlock.Core
             get { return 0; }
         }
 
+        /// <summary>Last round whose market may stock this joker kind ("Uzun vadeli yatırımcı" is
+        /// an EARLY-game bet, so it is only ever offered in the first markets). Unlimited by
+        /// default. Read by GameSession.AddJokerOffers off the catalogue's sample instance; the
+        /// debug picker ignores it, so every joker stays reachable for testing.</summary>
+        public virtual int LastOfferableRound
+        {
+            get { return int.MaxValue; }
+        }
+
+        /// <summary>True while this joker unlocks the InvestorOnly powers - the ones no market ever
+        /// stocks. GameSession asks the inventory when the final round starts, never a specific
+        /// joker.</summary>
+        public virtual bool UnlocksInvestorPowers
+        {
+            get { return false; }
+        }
+
+        /// <summary>
+        /// Offers up this joker's one-off second chance at a LOST FINAL ROUND, and spends it.
+        /// Returns false when it has none (which is every joker but "Uzun vadeli yatırımcı", and
+        /// that one only once). GameSession decides WHEN to ask, so a joker never has to know
+        /// which round it is - the same division of labour as the boss queries.
+        /// </summary>
+        internal virtual bool ConsumeFinalRoundRetry()
+        {
+            return false;
+        }
+
         // ---------------------------------------------------------------- sell value
+
+        /// <summary>True while this joker may never be sold at any price ("Uzun vadeli yatırımcı":
+        /// the investment is locked in for the run). Read by JokerInventory.CanSell, alongside the
+        /// credit joker's conditional lock.</summary>
+        public virtual bool NeverSellable
+        {
+            get { return false; }
+        }
 
         /// <summary>Base price the market will buy this joker back for.</summary>
         public int BaseSellValue { get; protected set; } = 25;

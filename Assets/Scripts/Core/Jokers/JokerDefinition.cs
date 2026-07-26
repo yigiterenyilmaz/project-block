@@ -25,6 +25,13 @@ namespace ProjectBlock.Core
             get { return RarityTable.For(DefId); }
         }
 
+        /// <summary>Last round whose market may stock this kind - int.MaxValue for all but the
+        /// early-game-only "Uzun vadeli yatırımcı". Read off the sample, like Description.</summary>
+        public int LastOfferableRound
+        {
+            get { return sample.LastOfferableRound; }
+        }
+
         /// <summary>Read LIVE off a sample instance, so it follows the Loc language.</summary>
         public string Description
         {

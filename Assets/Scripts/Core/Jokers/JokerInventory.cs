@@ -167,12 +167,52 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>True while any held joker unlocks the InvestorOnly powers ("Uzun vadeli
+        /// yatırımcı"). Asked centrally when the final round starts.</summary>
+        public bool UnlocksInvestorPowers
+        {
+            get
+            {
+                for (int i = 0; i < jokers.Count; i++)
+                {
+                    if (jokers[i].UnlocksInvestorPowers)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Spends the first unused second chance in the inventory and says whose it was, or null
+        /// when nobody has one left. Inventory order, like every other dispatch, so with two of
+        /// them the leftmost pays first.
+        ///
+        /// This is the ONLY way a retry is consumed, and the caller (GameSession, on a lost final
+        /// round) is the only thing that knows when asking is legal.
+        /// </summary>
+        internal Joker TryConsumeFinalRoundRetry()
+        {
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                if (jokers[i].ConsumeFinalRoundRetry())
+                {
+                    return jokers[i];
+                }
+            }
+            return null;
+        }
+
         /// <summary>False while selling this joker would let the player walk away from what they
-        /// borrowed through it: a credit joker is locked until the debt is back to zero. The UI
-        /// asks this so it can grey the sale out rather than silently refusing it.</summary>
+        /// borrowed through it: a credit joker is locked until the debt is back to zero. Some
+        /// jokers are locked outright ("Uzun vadeli yatırımcı" is an investment, not a trade). The
+        /// UI asks this so it can grey the sale out rather than silently refusing it.</summary>
         public bool CanSell(Joker joker)
         {
-            return joker != null && !(joker.GrantsMarketCredit && session.Debt > 0);
+            return joker != null
+                && !joker.NeverSellable
+                && !(joker.GrantsMarketCredit && session.Debt > 0);
         }
 
         /// <summary>Sells a joker for its SellValue, which is added to the run score/currency.

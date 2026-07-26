@@ -25,6 +25,13 @@ namespace ProjectBlock.Core
             get { return RarityTable.For(DefId); }
         }
 
+        /// <summary>True for a power no market stocks - only "Uzun vadeli yatırımcı" hands it over,
+        /// and only for the final round. Read off the sample, like Description.</summary>
+        public bool InvestorOnly
+        {
+            get { return sample.InvestorOnly; }
+        }
+
         private readonly Power sample;
         private readonly Func<Power> factory;
 
