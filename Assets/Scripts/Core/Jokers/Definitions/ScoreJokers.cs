@@ -1,4 +1,4 @@
-// PURPOSE: Two score jokers that react to a board/deck event rather than to the block
+﻿// PURPOSE: Two score jokers that react to a board/deck event rather than to the block
 // played: bereket (permanent growth) and Harcama bonusu (payout when the draw pile runs
 // out).
 //
@@ -31,7 +31,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Whenever a row and a column explode in the same turn, your score gains grow permanently.",
                 "Aynı turda satır ve sütun birlikte patlarsa kazandığın puan kalıcı olarak artar.");
-            BaseSellValue = 50;
         }
 
         public override string StatusText
@@ -68,7 +67,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "You gain points every time the draw pile runs out.",
                 "Çekme destesi her tükendiğinde puan kazanırsın.");
-            BaseSellValue = 40;
         }
 
         public override string StatusText
@@ -110,7 +108,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "The fewer cards your deck holds, the more points you score each turn.",
                 "Destendeki kart sayısı ne kadar az ise her tur o kadar fazla puan kazanırsın.");
-            BaseSellValue = 45;
         }
 
         public override string StatusText
@@ -157,7 +154,6 @@ namespace ProjectBlock.Core
                     + "- tıpkı blok koyarak tahtayı boşaltmak gibi temizlik bonusunu verir ve "
                     + "güçlerini şarj eder. Normalde blok koymalar arasındaki böyle bir temizlik "
                     + "sayılmaz.");
-            BaseSellValue = 55;
         }
 
         public override void OnAcquired(SessionContext ctx)
@@ -193,7 +189,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Placing a block scores points - one bonus for every cube you place.",
                 "Blok koymak puan kazandırır - koyduğun her küp için bonus.");
-            BaseSellValue = 40;
         }
 
         public override string StatusText
@@ -250,7 +245,6 @@ namespace ProjectBlock.Core
                 "Uzatmaya gitmeden bitirdiğin her raunt bir bonus biriktirir. Gittiğin ve sağ "
                     + "çıktığın ilk uzatmada biriken bonusun tamamını alırsın - sonra kasa "
                     + "yeniden dolmaya başlar.");
-            BaseSellValue = 55;
         }
 
         /// <summary>Bonus waiting to be cashed in.</summary>

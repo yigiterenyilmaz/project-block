@@ -1,4 +1,4 @@
-// PURPOSE: "Parazit" - in the market, bind ONE other joker to a single cube of a block in
+﻿// PURPOSE: "Parazit" - in the market, bind ONE other joker to a single cube of a block in
 // your deck. The bound joker keeps working but stops taking up an inventory slot; if that
 // cube is ever destroyed on the board, the joker is destroyed with it.
 //
@@ -48,7 +48,6 @@ namespace ProjectBlock.Core
                 "Markette bir jokeri destendeki bir bloğun küpüne takarsın. O joker slot "
                     + "işgal etmez. Konak küp temizliğe girmez ve başka joker/güçlerle kırılmaz "
                     + "- sadece senin tamamladığın bir satır onu (ve jokeri) yok eder.");
-            BaseSellValue = 70;
         }
 
         public bool HasBinding

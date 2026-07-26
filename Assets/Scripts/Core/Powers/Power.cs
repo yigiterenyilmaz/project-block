@@ -61,8 +61,8 @@ namespace ProjectBlock.Core
         /// <summary>Unique within the session; PowerInventory hands these out.</summary>
         public int InstanceId { get; internal set; }
 
-        /// <summary>What the market pays to buy this power back.</summary>
-        public int BaseSellValue { get; protected set; } = 30;
+        // What the market pays for a power is MarketConfig.PowerSellValue(rarity) - a fixed
+        // fraction of its buy price, not a per-power number. Ask PowerInventory.SellValueOf.
 
         /// <summary>False once spent. A clean sweep or a new round puts it back.</summary>
         public bool Charged { get; private set; }

@@ -1,4 +1,4 @@
-// PURPOSE: The jokers that bend the elemental block rules: midas, elmas kazma, Tutuştur,
+﻿// PURPOSE: The jokers that bend the elemental block rules: midas, elmas kazma, Tutuştur,
 // Yangın, Taşkın, Buzluk, Simya. They only work because the element system exists - every
 // one of them reads or rewrites cube kinds through GameBoard/CubeRules, never by hand.
 //
@@ -34,11 +34,10 @@ namespace ProjectBlock.Core
             : base("midas", "Midas")
         {
             SetDescription(
-                "Holding a gold block in hand (bonus hand included) also earns its bonus, "
-                    + "and every gold cube on the board is worth more.",
-                "Altın bloğu elinde tutmak da bonusu için yeterlidir (bonus el dahil), "
-                    + "ayrıca tahtadaki her altın küp daha çok puan verir.");
-            BaseSellValue = 60;
+                "Gold blocks pay their bonus in your hand too (bonus hand included), "
+                    + "and every gold cube is worth more.",
+                "Altın bloklar elindeyken de bonus verir (bonus el dahil) "
+                    + "ve her altın küp daha çok puan kazandırır.");
         }
 
         /// <summary>Permanently raises the board-side gold bonus (a live ScoringConfig buff).</summary>
@@ -101,7 +100,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "A clean sweep also shatters obsidian, which pays points.",
                 "Temizlik yapınca obsidyenler de patlar ve puan verir.");
-            BaseSellValue = 55;
         }
 
         public override void AfterCleanSweep(TurnContext turn)
@@ -134,7 +132,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "When one fire block explodes, ALL fire blocks on the board explode.",
                 "Bir ateş bloğu patlayınca alandaki TÜM ateş blokları patlar.");
-            BaseSellValue = 60;
         }
 
         public override void AfterLineExplosion(TurnContext turn)
@@ -230,7 +227,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Once per round: the blocks around fire blocks turn to fire too.",
                 "Raunt başına 1 kez: ateş bloklarının etrafındaki bloklar da ateş olur.");
-            BaseSellValue = 50;
         }
     }
 
@@ -243,7 +239,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Once per round: the blocks around water blocks turn to water too.",
                 "Raunt başına 1 kez: su bloklarının etrafındaki bloklar da su olur.");
-            BaseSellValue = 50;
         }
     }
 
@@ -264,7 +259,6 @@ namespace ProjectBlock.Core
                     + "and pays extra when exploded.",
                 "Duvara değen su blokları donar. Buz temizliği engellemez ve "
                     + "patlayınca ek puan verir.");
-            BaseSellValue = 60;
         }
 
         public override string StatusText
@@ -332,7 +326,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Elemental blocks in the market arrive with 2 elements at once.",
                 "Marketteki elementli bloklar aynı anda 2 elemente sahip gelir.");
-            BaseSellValue = 65;
         }
 
         public override BlockCard FilterMarketOffer(SessionContext ctx, BlockCard card)
@@ -405,7 +398,6 @@ namespace ProjectBlock.Core
                 "Oyun alanında 5 tur patlamadan duran elementsiz küpler ALTINA dönüşür. Altın "
                     + "durduğu her tur kira öder - ama asla kırılmaz ve temizliği engeller, yani "
                     + "yerleşmesine izin verdiğin her kiracı kalıcıdır.");
-            BaseSellValue = 65;
         }
 
         /// <summary>Cubes turned to gold so far this round, for the UI.</summary>

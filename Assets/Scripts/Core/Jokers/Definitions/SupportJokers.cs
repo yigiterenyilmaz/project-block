@@ -38,7 +38,6 @@ namespace ProjectBlock.Core
                     + "spent it stays ready and heals the moment something is.",
                 "Her 5 turda bir, hakkı bitmiş rastgele bir jokerine bir hak geri verir. "
                     + "Bitmiş joker yoksa hazır bekler ve biri biter bitmez iyileştirir.");
-            BaseSellValue = 55;
         }
 
         /// <summary>True when the clock is up and it is only waiting for something to heal.</summary>
@@ -144,7 +143,6 @@ namespace ProjectBlock.Core
                 "3 turda bir boşalmış sıradan güçlerini, 5 turda bir nadir güçlerini doldurur. "
                     + "Her doldurma damardan düşer: sıradan güç 1, nadir güç 2. Damar tükenince "
                     + "joker hiçbir şey yapmaz - ama ona verdiğin parayla satarsın.");
-            BaseSellValue = 60;
         }
 
         /// <summary>Capacity still in the seam.</summary>
@@ -169,17 +167,27 @@ namespace ProjectBlock.Core
             }
         }
 
-        /// <summary>A worked-out seam refunds the purchase price instead of its sell value - the
-        /// joker was a loan of fuel, not a purchase. A joker that was never bought (a starting
-        /// one, or a debug grant) has no price to refund and is sold normally.</summary>
-        public override long SellPriceScaled(int scoreScale)
+        /// <summary>
+        /// A worked-out seam refunds EXACTLY the purchase price instead of the market's formula -
+        /// the joker was a loan of fuel, not a purchase. A joker that was never bought (a starting
+        /// one, or a debug grant) has no price to refund and is sold normally.
+        ///
+        /// PurchasePrice is in the SCALED economy while this hook works in market units, so it is
+        /// brought back down; the caller scales the answer again.
+        /// </summary>
+        public override int OverrideSellValue(int marketValue)
         {
-            if (IsExhausted && PurchasePrice > 0)
+            if (!IsExhausted || PurchasePrice <= 0)
             {
-                return PurchasePrice;
+                return marketValue;
             }
-            return base.SellPriceScaled(scoreScale);
+            int scale = ScoreScaleForRefund;
+            return scale > 1 ? (int)(PurchasePrice / scale) : (int)PurchasePrice;
         }
+
+        /// <summary>The economy scale the purchase price was recorded in. A joker has no session
+        /// to ask, so the one number it needs is stamped on it when it is bought.</summary>
+        internal int ScoreScaleForRefund { get; set; } = 1;
 
         public override void OnRoundStarted(RoundContext ctx)
         {

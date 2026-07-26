@@ -340,6 +340,52 @@ namespace ProjectBlock.View
             supurgeAnimating = false;
         }
 
+        /// <summary>
+        /// "Enfeksiyon": the infected block detonates at the END of the turn, through
+        /// DestroyCubes rather than a line explosion - so its cubes appear in no exploded row
+        /// or column and the normal blast pass never sees them. They used to simply blink out
+        /// of existence. This blasts them in the same green the infection pips were pulsing,
+        /// so the detonation reads as the infection going off.
+        ///
+        /// Immediate rather than delayed (unlike the sweeper): the destruction already happened
+        /// during the turn, so the particles have to land as the cubes disappear, not after.
+        /// </summary>
+        private void TriggerInfectionBlast()
+        {
+            infectionBlastBuffer.Clear();
+            IReadOnlyList<Joker> jokers = session.Jokers.Jokers;
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                var enf = jokers[i] as EnfeksiyonJoker;
+                if (enf != null)
+                {
+                    infectionBlastBuffer.AddRange(enf.LastDetonatedCells);
+                }
+            }
+            if (infectionBlastBuffer.Count == 0)
+            {
+                return;
+            }
+            var infectionGreen = new Color(0.25f, 0.95f, 0.4f);
+            bool any = false;
+            RoundEngine round = session.CurrentRound;
+            for (int i = 0; i < infectionBlastBuffer.Count; i++)
+            {
+                // A cell can be off the board by now if this turn also eroded the arena.
+                if (round != null && !round.Board.IsInside(infectionBlastBuffer[i]))
+                {
+                    continue;
+                }
+                blastFx.EmitAt(boardView.CellToWorld(infectionBlastBuffer[i]), infectionGreen, 8);
+                any = true;
+            }
+            if (any)
+            {
+                sfx.Explode();
+                ShakeCamera(0.13f, 0.22f);
+            }
+        }
+
         /// <summary>Blast particles + shake + sound on the cells a board power just hit.</summary>
         private void PlayPowerBlast(IReadOnlyList<GridPos> cells)
         {

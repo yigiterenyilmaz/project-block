@@ -61,6 +61,20 @@ namespace ProjectBlock.Core
             return null;
         }
 
+        /// <summary>Save/load only - see JokerInventory.NextInstanceId.</summary>
+        internal int NextInstanceId
+        {
+            get { return nextInstanceId; }
+            set { nextInstanceId = value; }
+        }
+
+        /// <summary>Save/load only: puts a restored power straight into the inventory, without
+        /// running OnAcquired (see JokerInventory.AddRestored).</summary>
+        internal void AddRestored(Power power)
+        {
+            powers.Add(power);
+        }
+
         public Power Add(Power power)
         {
             if (power == null)
@@ -86,14 +100,26 @@ namespace ProjectBlock.Core
             return true;
         }
 
-        /// <summary>Sells a power for its base value, paid into the run currency.</summary>
+        /// <summary>What the market pays for this power right now, before the global ScoreScale:
+        /// a fixed fraction of its rarity's buy price. Powers earn no value of their own, so
+        /// unlike a joker this depends on nothing but the rarity.</summary>
+        public int SellValueOf(Power power)
+        {
+            if (power == null)
+            {
+                return 0;
+            }
+            return session.Config.Market.PowerSellValue(RarityTable.For(power.DefId));
+        }
+
+        /// <summary>Sells a power for its sell value, paid into the run currency.</summary>
         public int Sell(Power power)
         {
             if (power == null)
             {
                 return 0;
             }
-            int value = power.BaseSellValue * session.Config.Scoring.ScoreScale;
+            int value = SellValueOf(power) * session.Config.Scoring.ScoreScale;
             if (!Remove(power))
             {
                 return 0;

@@ -2,6 +2,7 @@
 // rarity weights and price multipliers, reroll and sell economics. All BALANCE
 // PLACEHOLDERS. Read live by GameSession when it stocks and prices the market.
 
+using System;
 using System.Collections.Generic;
 
 namespace ProjectBlock.Core
@@ -40,10 +41,12 @@ namespace ProjectBlock.Core
         public int PowerPrice = 50;
 
         /// <summary>Rarity price multipliers: a rare/legendary joker or power costs this many
-        /// times its base price (before the global ScoreScale). Balance placeholders.</summary>
-        public int CommonPriceMultiplier = 1;
-        public int RarePriceMultiplier = 2;
-        public int LegendaryPriceMultiplier = 3;
+        /// times its base price (before the global ScoreScale). Fractional by design - the
+        /// caller rounds the multiplied base price BEFORE applying ScoreScale, so a x1.5 rare
+        /// stays a round number in the scaled economy. Balance placeholders.</summary>
+        public double CommonPriceMultiplier = 1.0;
+        public double RarePriceMultiplier = 1.5;
+        public double LegendaryPriceMultiplier = 2.0;
 
         /// <summary>Relative shop-appearance weights per rarity: commoner items are far likelier
         /// to be offered, legendaries seldom. Balance placeholders.</summary>
@@ -52,7 +55,7 @@ namespace ProjectBlock.Core
         public int LegendaryWeight = 8;
 
         /// <summary>Price multiplier for a rarity tier.</summary>
-        public int PriceMultiplier(Rarity rarity)
+        public double PriceMultiplier(Rarity rarity)
         {
             switch (rarity)
             {
@@ -76,6 +79,39 @@ namespace ProjectBlock.Core
         /// <summary>Fraction of a card's buy price returned when it is sold. Balance
         /// placeholder; sell is always below buy.</summary>
         public double CardSellFraction = 0.5;
+
+        /// <summary>Fraction of a joker's / power's buy price returned when it is sold - the
+        /// SINGLE global sell rate for both (confirmed design 2026-07-25). Sell value used to be
+        /// a hand-written number per joker/power, which drifted ABOVE the flat buy price and made
+        /// buy-then-sell a money printer; deriving it from the buy price keeps sell < buy at every
+        /// rarity by construction. Earned value (kumbara accrual, "ihale" premium) is added on top
+        /// at full value - the cut applies to the base price only. Balance placeholder.</summary>
+        public double ContentSellFraction = 0.6;
+
+        /// <summary>What a joker of this rarity costs, before the global ScoreScale.</summary>
+        public int JokerBuyPrice(Rarity rarity)
+        {
+            return (int)Math.Round(JokerPrice * PriceMultiplier(rarity));
+        }
+
+        /// <summary>What a power of this rarity costs, before the global ScoreScale.</summary>
+        public int PowerBuyPrice(Rarity rarity)
+        {
+            return (int)Math.Round(PowerPrice * PriceMultiplier(rarity));
+        }
+
+        /// <summary>The base sell value of a joker of this rarity (accrual and auction premium
+        /// are added by JokerInventory), before the global ScoreScale.</summary>
+        public int JokerSellValue(Rarity rarity)
+        {
+            return (int)Math.Round(JokerBuyPrice(rarity) * ContentSellFraction);
+        }
+
+        /// <summary>The sell value of a power of this rarity, before the global ScoreScale.</summary>
+        public int PowerSellValue(Rarity rarity)
+        {
+            return (int)Math.Round(PowerBuyPrice(rarity) * ContentSellFraction);
+        }
 
         /// <summary>Market reroll cost = RerollBaseCost + RerollCostStep * rerolls-done-this-visit
         /// (before the global ScoreScale). One reroll refreshes EVERY offer at once; the price

@@ -1,4 +1,4 @@
-// PURPOSE: The three inflation powers. They are the only things in the game that resize the
+﻿// PURPOSE: The three inflation powers. They are the only things in the game that resize the
 // board WHILE a round is running, which is why RoundEngine grew ReshapeBoard /
 // ShrinkBoardPushingInward for them.
 //
@@ -105,7 +105,6 @@ namespace ProjectBlock.Core
                     + "when it ends, blocks are pushed back inward.",
                 "Oyun alanının genişliğini sağdan ve soldan birer artırır. "
                     + "3 tur sürer, bitince bloklar içeri ittirilir.");
-            BaseSellValue = 55;
         }
     }
 
@@ -120,7 +119,6 @@ namespace ProjectBlock.Core
                     + "when it ends, blocks are pushed back inward.",
                 "Oyun alanının yüksekliğini alttan ve üstten birer artırır. "
                     + "3 tur sürer, bitince bloklar içeri ittirilir.");
-            BaseSellValue = 55;
         }
     }
 
@@ -135,7 +133,6 @@ namespace ProjectBlock.Core
                     + "when it ends, blocks are pushed back inward.",
                 "Oyun alanını her yönden birer artırır. 3 tur sürer, "
                     + "bitince bloklar içeri ittirilir.");
-            BaseSellValue = 70;
         }
     }
 }

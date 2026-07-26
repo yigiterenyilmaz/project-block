@@ -1,4 +1,4 @@
-// PURPOSE: The three "kumbara" jokers. They do not score - they make THEMSELVES more
+﻿// PURPOSE: The three "kumbara" jokers. They do not score - they make THEMSELVES more
 // valuable, and the player cashes that in by selling them. Each one banks on a different
 // rhythm, so they reward different play:
 //   Domuz Kumbarası - per round survived   (slow, safe)
@@ -28,7 +28,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Its sell value grows after every round you complete.",
                 "Tamamladığın her raunt sonunda satış değeri artar.");
-            BaseSellValue = 20;
         }
 
         public override void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
@@ -51,7 +50,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Its sell value grows a little for every turn you hold it.",
                 "Elde tutulduğu her turda satış değeri biraz artar.");
-            BaseSellValue = 15;
         }
 
         public override void AfterTurnScored(TurnContext turn)
@@ -73,7 +71,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Every turn, every clean sweep and every completed round grows its sell value.",
                 "Her tur, her temizlik ve tamamladığın her raunt satış değerini artırır.");
-            BaseSellValue = 30;
         }
 
         public override void AfterTurnScored(TurnContext turn)

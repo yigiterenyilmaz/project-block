@@ -152,6 +152,74 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Greedy word wrap for the placeholder TextMesh labels (no auto-wrapping).</summary>
+        /// <summary>
+        /// A procedural "refresh" glyph: a ring of small squares with a gap on the right, and a
+        /// tapered arrowhead at the end of the sweep. Built from rects like every other sprite
+        /// in this project, so it needs no texture asset and no font that happens to carry the
+        /// arrow codepoint.
+        /// </summary>
+        public static void MakeRefreshIcon(Transform parent, string name, Vector2 center,
+            float radius, float thickness, Color color, int sortingOrder)
+        {
+            // Dense enough that the squares OVERLAP into a smooth ring: at 12 segments the gaps
+            // between them were wider than the segments, which is what made the old icon read as
+            // a lumpy letter rather than a circle.
+            const int Segments = 30;
+            const float StartDegrees = 400f;  // 40 degrees, one full turn on so the sweep is
+            const float EndDegrees = 90f;     // clockwise and FINISHES at the top of the ring
+            for (int i = 0; i < Segments; i++)
+            {
+                float degrees = Mathf.Lerp(StartDegrees, EndDegrees, i / (float)(Segments - 1));
+                float radians = degrees * Mathf.Deg2Rad;
+                Vector2 at = center
+                    + new Vector2(Mathf.Cos(radians), Mathf.Sin(radians)) * radius;
+                MakeRect(parent, name + "_arc" + i, at,
+                    new Vector2(thickness, thickness), color, sortingOrder);
+            }
+            // The arrowhead closes the ring at the TOP, which is the whole reason the sweep ends
+            // there: MakeRect cannot rotate, and at the top of a circle the tangent is exactly
+            // horizontal, so a triangle of axis-aligned bars really does point along the ring
+            // (clockwise) instead of off at an angle.
+            Vector2 tip = center + new Vector2(thickness * 1.9f, radius);
+            for (int i = 0; i < 3; i++)
+            {
+                // Vertical bars marching back from the tip, growing taller - a right-pointing
+                // triangle. The tip bar is one pixel of thickness, the last is the full head.
+                MakeRect(parent, name + "_head" + i,
+                    tip - new Vector2(thickness * 0.62f * i, 0f),
+                    new Vector2(thickness * 0.62f, thickness * (0.7f + i * 1.15f)),
+                    color, sortingOrder);
+            }
+        }
+
+        /// <summary>Word-wraps, then CLIPS to a line budget with a trailing ellipsis. Panels
+        /// here are fixed-size and TextMesh happily runs straight out the bottom of one, so
+        /// anything drawn inside a tile has to be clamped rather than trusted to fit.</summary>
+        public static string WrapText(string text, int maxCharsPerLine, int maxLines)
+        {
+            string wrapped = WrapText(text, maxCharsPerLine);
+            if (maxLines <= 0)
+            {
+                return wrapped;
+            }
+            string[] lines = wrapped.Split('\n');
+            if (lines.Length <= maxLines)
+            {
+                return wrapped;
+            }
+            var kept = new System.Text.StringBuilder();
+            for (int i = 0; i < maxLines; i++)
+            {
+                if (i > 0)
+                {
+                    kept.Append('\n');
+                }
+                kept.Append(lines[i]);
+            }
+            kept.Append('…');
+            return kept.ToString();
+        }
+
         public static string WrapText(string text, int maxCharsPerLine)
         {
             if (string.IsNullOrEmpty(text))

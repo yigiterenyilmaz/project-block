@@ -60,6 +60,17 @@ namespace ProjectBlock.View
             root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
         }
 
+        /// <summary>Shows or hides the whole strip. The menu layer hides it while no run is
+        /// on screen; a hidden strip also stops answering JokerIndexAt, because its panels
+        /// go inactive with it.</summary>
+        public void SetVisible(bool visible)
+        {
+            if (root != null)
+            {
+                root.gameObject.SetActive(visible);
+            }
+        }
+
         /// <summary>Redraws the strip. targetingInstanceId highlights the joker that is
         /// currently waiting for the player to pick a target.</summary>
         public void Refresh(GameSession session, int? targetingInstanceId)
@@ -235,7 +246,7 @@ namespace ProjectBlock.View
                 line.Append('\n');
             }
             line.Append(Loc.Pick("sell ", "satış "))
-                .Append(joker.SellPriceScaled(session.Config.Scoring.ScoreScale));
+                .Append(session.Jokers.SellValueOf(joker) * session.Config.Scoring.ScoreScale);
             if (inverted)
             {
                 line.Append(Loc.Pick("   (REVERSED)", "   (TERS)"));
@@ -267,9 +278,9 @@ namespace ProjectBlock.View
             background.raycastTarget = false;
 
             Image strip = MakeRarityStrip(rect);
-            Text title = MakeLabel(rect, "Title", new Vector2(10f, -8f), 20, NameColor,
+            Text title = MakeLabel(rect, "Title", new Vector2(10f, -8f), 22, NameColor,
                 FontStyle.Bold, PanelWidth - 20f, 24f);
-            Text body = MakeLabel(rect, "Body", new Vector2(10f, -34f), 17, BodyColor,
+            Text body = MakeLabel(rect, "Body", new Vector2(10f, -34f), 19, BodyColor,
                 FontStyle.Normal, PanelWidth - 20f, 52f);
 
             return new Panel

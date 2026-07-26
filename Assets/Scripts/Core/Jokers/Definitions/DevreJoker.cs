@@ -63,7 +63,6 @@ namespace ProjectBlock.Core
                 "Her raunt bir noktada oyun alanının bir kenarından diğerine kıvrımlı bir devre "
                     + "çizilir. Devrenin bütün karelerini doldurursan devre kırılır: o bloklar "
                     + "patlar ve ekstra puan alırsın. Raunt boyunca seni bekler.");
-            BaseSellValue = 55;
         }
 
         /// <summary>The circuit's cells IN ROUTE ORDER, for the UI to draw. Empty when nothing is

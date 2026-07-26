@@ -1,4 +1,4 @@
-// PURPOSE: The three powers that need machinery of their own: Kum saati (rewinds the
+﻿// PURPOSE: The three powers that need machinery of their own: Kum saati (rewinds the
 // board), Olta (fishes a marked card out of the piles) and Tılsım (turns ghost traces into
 // real play area).
 //
@@ -23,7 +23,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Rewinds the board 2 turns. The hand, the piles and the score stay put.",
                 "Oyun alanını 2 tur geriye sarar. El, deste ve ıskarta olduğu gibi kalır.");
-            BaseSellValue = 60;
         }
 
         public override string StatusText
@@ -78,7 +77,6 @@ namespace ProjectBlock.Core
                 "Raunt başına bir kart işaretlersin; kartı bonus eline çekersin. Çekme "
                     + "destesinden çekmek bedavadır (olta hazır kalır); ıskartadan çekersen "
                     + "olta bir sonraki temizliğe kadar kilitlenir.");
-            BaseSellValue = 55;
         }
 
         public override string StatusText
@@ -215,7 +213,6 @@ namespace ProjectBlock.Core
                 "Sadece uzatmada, raunt başına bir kez: oyun alanını temizler (puan yok, "
                     + "temizlik sayılmaz), puanını eşiğe çeker, desteyi karıp çekme destesine "
                     + "koyar, yeni bir el dağıtır ve oyun devam eder.");
-            BaseSellValue = 60;
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -265,7 +262,6 @@ namespace ProjectBlock.Core
                 "Overtime only: pulls your score to the threshold, sends you to the market, "
                     + "and is destroyed.",
                 "Sadece uzatmada: puanını eşiğe çeker, seni market fazına geçirir ve yok olur.");
-            BaseSellValue = 70;
         }
 
         public override string StatusText
@@ -313,7 +309,6 @@ namespace ProjectBlock.Core
                     + "into play area. Resets when the round ends.",
                 "Hayalet blokları patlatır ve harita dışında kapladıkları yeri "
                     + "oyun alanına katar. Raunt bitince sıfırlanır.");
-            BaseSellValue = 65;
         }
 
         /// <summary>Cells this power is currently granting to the board.</summary>
@@ -409,7 +404,6 @@ namespace ProjectBlock.Core
                 "Rastgele bir güç olarak görünür. KULLANINCA o gücü çalıştırır, SAĞ TIKLAYINCA başka "
                     + "bir rastgele güce atlar. Her iki durumda da şarjını harcar ve gelecek raunt "
                     + "dolar. Asla efsanevi bir güce dönüşmez.");
-            BaseSellValue = 55;
         }
 
         public override string Description
@@ -521,7 +515,6 @@ namespace ProjectBlock.Core
                     + "It shuffles in from the next round.",
                 "İstediğin şekil ve elementte özel bir blok tasarla ve destene ekle. Sonraki "
                     + "raunttan itibaren desteye karışır.");
-            BaseSellValue = 55;
         }
 
         /// <summary>Usable whenever the standard rules allow (the UI opens the designer then);
@@ -558,7 +551,6 @@ namespace ProjectBlock.Core
                     + "placement scores a bonus. Use again to switch back. Never runs out.",
                 "Tetris modunu aç/kapat: bloklar yukarıdan düşer ve döndürülebilir, her koyuş "
                     + "bonus puan verir. Kapatmak için tekrar kullan. Tükenmez.");
-            BaseSellValue = 50;
         }
 
         public override string StatusText
@@ -661,7 +653,6 @@ namespace ProjectBlock.Core
                     + "the round ends; make it and the payout multiplies.",
                 "İstersen 'şu kadar turda temizlerim' diye bahse girersin. Tutturamazsan raunt "
                     + "biter, tutturursan aradaki puanı katlayarak alırsın.");
-            BaseSellValue = 65;
         }
 
         public bool HasActiveBet
@@ -799,7 +790,6 @@ namespace ProjectBlock.Core
                     + "open a gap and play on. Destroys nothing, scores nothing.",
                 "Oyun alanı dolup koyacak yer kalmazsa iki satırın ya da iki sütunun yerini "
                     + "değiştirip oyuna devam edersin. Hiçbir küpü yok etmez, puan vermez.");
-            BaseSellValue = 70;
         }
 
         /// <summary>Usable only in the dead-end pause - see the class docs.</summary>

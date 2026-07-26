@@ -20,9 +20,37 @@ namespace ProjectBlock.View
         private static readonly Color CurrentNameColor = new Color(1f, 0.92f, 0.45f);
         private static readonly Color SampleColor = new Color(0.75f, 0.78f, 0.85f);
 
+        private static readonly Color HoverPanelColor = new Color(0.31f, 0.37f, 0.48f);
+
         private readonly List<Vector2> panelCenters = new List<Vector2>();
+        private readonly List<SpriteRenderer> panels = new List<SpriteRenderer>();
+        private readonly List<bool> panelIsCurrent = new List<bool>();
+        private int hovered = -1;
 
         public bool IsOpen { get; private set; }
+
+        /// <summary>Highlights the deck under the cursor. The picker is world-space, so it gets
+        /// its hover from the controller rather than from the canvas hit-test the menus use -
+        /// but it must still light up, or it is the one screen that feels dead.</summary>
+        public void SetHovered(Vector2 world)
+        {
+            int index = DeckAt(world);
+            if (index == hovered)
+            {
+                return;
+            }
+            hovered = index;
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i] == null)
+                {
+                    continue;
+                }
+                panels[i].color = i == hovered
+                    ? HoverPanelColor
+                    : panelIsCurrent[i] ? CurrentPanelColor : PanelColor;
+            }
+        }
 
         public void Show(IReadOnlyList<DeckDefinition> decks, DeckDefinition current)
         {
@@ -41,9 +69,10 @@ namespace ProjectBlock.View
                 bool isCurrent = deck == current;
                 var center = new Vector2(0f, startY - i * PanelSpacing);
                 panelCenters.Add(center);
-                ViewUtil.MakeRect(transform, "Panel_" + i, center,
+                panelIsCurrent.Add(isCurrent);
+                panels.Add(ViewUtil.MakeRect(transform, "Panel_" + i, center,
                     new Vector2(PanelWidth, PanelHeight),
-                    isCurrent ? CurrentPanelColor : PanelColor, 41);
+                    isCurrent ? CurrentPanelColor : PanelColor, 41));
                 ViewUtil.MakeText3D(transform, "Name_" + i,
                     center + new Vector2(-PanelWidth * 0.5f + 0.4f, 0f),
                     deck.Name + Loc.Pick("  (" + deck.Size + " cards)", "  (" + deck.Size + " kart)"),
@@ -62,7 +91,10 @@ namespace ProjectBlock.View
         public void Hide()
         {
             IsOpen = false;
+            hovered = -1;
             panelCenters.Clear();
+            panels.Clear();
+            panelIsCurrent.Clear();
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Destroy(transform.GetChild(i).gameObject);

@@ -14,6 +14,8 @@ public static class CoreTestMain
             Console.Out.Write(Baseline.RunAll());
             return 0;
         }
-        return JokerTests.RunAll();
+        int jokers = JokerTests.RunAll();
+        int saves = SaveTests.RunAll();
+        return jokers != 0 || saves != 0 ? 1 : 0;
     }
 }

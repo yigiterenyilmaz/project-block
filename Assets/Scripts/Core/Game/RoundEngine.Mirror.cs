@@ -404,7 +404,13 @@ namespace ProjectBlock.Core
             }
             if (mirroredColumnsThisTurn.Count > 0)
             {
-                breakdown.BaseLines += mirrorColumnBonus * mirroredColumnsThisTurn.Count;
+                // A BONUS, not a base line value - deliberately not breakdown.BaseLines. The
+                // sweep SWALLOWS the line score (emptying the board pays instead of the clear
+                // that emptied it), and matching a column in both worlds usually empties a small
+                // board, so putting it there meant the best turn in the game paid nothing for it.
+                // Bonuses land on top of base values, exactly like a joker's.
+                breakdown.AddFlat(mirrorColumnBonus * mirroredColumnsThisTurn.Count,
+                    "oteki_dunya");
                 report.MirroredColumns = mirroredColumnsThisTurn;
             }
         }

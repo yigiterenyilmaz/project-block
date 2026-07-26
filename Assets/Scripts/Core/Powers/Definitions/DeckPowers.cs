@@ -1,4 +1,4 @@
-// PURPOSE: Powers that act on the cards rather than the board: Cımbız, Klon, Büyüteç,
+﻿// PURPOSE: Powers that act on the cards rather than the board: Cımbız, Klon, Büyüteç,
 // Transfer, Hologram, Hızlı çekim şarjörü.
 //
 // None of them costs a turn (the central power rule), so they are all about setting up the
@@ -20,7 +20,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Rotates a held block of your choice (it does not need to be mechanical).",
                 "Elindeki seçtiğin bloğu çevirir (mekanik blok olması gerekmez).");
-            BaseSellValue = 35;
         }
 
         public override ActivationTargeting Targeting
@@ -53,7 +52,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Adds 2 copies of a held card of your choice to your bonus hand.",
                 "Elindeki seçtiğin kartın 2 kopyasını bonus eline ekler.");
-            BaseSellValue = 45;
         }
 
         public override ActivationTargeting Targeting
@@ -97,7 +95,6 @@ namespace ProjectBlock.Core
                     + "revealed (2, then 1, then none).",
                 "Çekme destesinin en üstteki iki kartını açığa çıkarır. Kart çektikçe biri daha "
                     + "az görünür (2, sonra 1, sonra hiç).");
-            BaseSellValue = 30;
         }
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
@@ -134,7 +131,6 @@ namespace ProjectBlock.Core
                     + "you see what you gave away.",
                 "Iskartadaki son kart ile çekme destesinin üstündeki kart yer "
                     + "değiştirir; verdiğin kartı görürsün.");
-            BaseSellValue = 35;
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -158,7 +154,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Moves a bonus-hand card into the discard, folding it back into the piles.",
                 "Bonus elindeki bir kartı ıskartaya çıkarıp desteye katar.");
-            BaseSellValue = 30;
         }
 
         public override ActivationTargeting Targeting
@@ -204,7 +199,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Instantly empties the draw pile and forces the discard to reshuffle in.",
                 "Çekme destesini anında bitirir ve ıskartanın karılmasını sağlar.");
-            BaseSellValue = 45;
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -252,7 +246,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "In the market, choose the cards that make up your next round's opening hand.",
                 "Market fazında sonraki rauntun başlangıç elini seçebilmeni sağlar.");
-            BaseSellValue = 55;
         }
 
         // Used from the market, not the in-round power path, so it never runs here.
@@ -278,7 +271,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Adds 2 copies of a random card from the draw pile to your bonus hand.",
                 "Çekme destesinden rastgele bir kartın 2 kopyasını bonus eline ekler.");
-            BaseSellValue = 40;
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -309,7 +301,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Adds 2 copies of a random card from the discard pile to your bonus hand.",
                 "Iskartadan rastgele bir kartın 2 kopyasını bonus eline ekler.");
-            BaseSellValue = 40;
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -347,7 +338,6 @@ namespace ProjectBlock.Core
                 "Elindeki bir kartı işaretler ve kopyasını bonus ele koyarsın. O raunt boyunca "
                     + "işaretli kart her ele çekildiğinde bir kopyası daha eklenir. Temizlik "
                     + "yaptığında yeniden işaretleyebilirsin.");
-            BaseSellValue = 55;
         }
 
         public override ActivationTargeting Targeting
@@ -432,7 +422,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Copies one card from the discard and one from the draw pile into your bonus hand.",
                 "Iskartadan bir kartın ve çekme elinden bir kartın kopyasını bonus ele koyar.");
-            BaseSellValue = 45;
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)

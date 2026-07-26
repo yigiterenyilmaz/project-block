@@ -97,12 +97,22 @@ namespace ProjectBlock.View
             scaler.referenceResolution = new Vector2(1920f, 1080f);
 
             infoText = MakeText(canvasGo.transform, "InfoText", new Vector2(0f, 1f),
-                new Vector2(16f, -16f), TextAnchor.UpperLeft, 22, Color.white);
+                new Vector2(16f, -16f), TextAnchor.UpperLeft, 24, Color.white);
+            // Score first, at the top centre; the message line sits under it.
+            totalText = MakeText(canvasGo.transform, "TotalText", new Vector2(0.5f, 1f),
+                new Vector2(0f, -14f), TextAnchor.UpperCenter, 34, new Color(1f, 0.86f, 0.42f));
             messageText = MakeText(canvasGo.transform, "MessageText", new Vector2(0.5f, 1f),
-                new Vector2(0f, -16f), TextAnchor.UpperCenter, 28, new Color(1f, 0.92f, 0.45f));
+                new Vector2(0f, -66f), TextAnchor.UpperCenter, 28, new Color(1f, 0.92f, 0.45f));
 
             jokerBar.Build(canvasGo.transform);
             powerBar.Build(canvasGo.transform);
+
+            // Built last so it starts on top of the bars and the HUD text; Show() also
+            // re-asserts that, so this ordering is a convenience rather than a dependency.
+            var menuGo = new GameObject("MenuScreenView");
+            menuGo.transform.SetParent(transform, false);
+            menu = menuGo.AddComponent<MenuScreenView>();
+            menu.Build(canvasGo.transform);
         }
 
         private static Text MakeText(Transform parent, string name, Vector2 anchor,

@@ -1,4 +1,4 @@
-// PURPOSE: "Meydan Okuma" - the dare joker. A few blocks into a round it marks one row or
+﻿// PURPOSE: "Meydan Okuma" - the dare joker. A few blocks into a round it marks one row or
 // column and challenges the player to clear it within a deadline for a bonus. Miss it and
 // it re-marks somewhere else for half the bonus; miss that and it halves again; miss the
 // third and it gives up for the round. Land any one of them and it is done for the round.
@@ -48,7 +48,6 @@ namespace ProjectBlock.Core
                 "Birkaç tur sonra işaretlediği bir satırı ya da sütunu süre dolmadan "
                     + "patlatman için bonus vaat eder. Tutturamazsan yer değiştirip bonusu "
                     + "yarıya böler, en fazla üç deneme; birini tutturursan o raunt biter.");
-            BaseSellValue = 55;
         }
 
         /// <summary>True once the event is over for the round (paid out or three misses).</summary>

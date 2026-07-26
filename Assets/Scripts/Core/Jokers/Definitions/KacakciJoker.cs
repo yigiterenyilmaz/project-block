@@ -49,7 +49,6 @@ namespace ProjectBlock.Core
                     + "çıkar. Defolu blok tahtaya tutunmaz, aşağı düşüp ekrandan çıkar ve turu "
                     + "boşa harcarsın; defolu joker patron rauntlarında ya da hiçbir zaman "
                     + "çalışmaz; defolu güç boş gelir ve dört kat yavaş dolar. Aldığın senin kalır.");
-            BaseSellValue = 45;
         }
 
         /// <summary>Free goods this visit are available while it is held (and not itself broken -

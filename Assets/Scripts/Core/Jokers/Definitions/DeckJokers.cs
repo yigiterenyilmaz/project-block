@@ -1,4 +1,4 @@
-// PURPOSE: Jokers that rewrite how the two piles work: Oryantasyon, Dezenformasyon,
+﻿// PURPOSE: Jokers that rewrite how the two piles work: Oryantasyon, Dezenformasyon,
 // İmitasyon, Fraksiyon. They are the deck-economy counterpart of the board jokers, and
 // they all lean on RoundDeck primitives rather than touching the piles by hand.
 //
@@ -29,7 +29,6 @@ namespace ProjectBlock.Core
                     + "being discarded. The pile's top card is always visible.",
                 "Kartlar ıskartaya değil, çekme destesinin rastgele bir yerine "
                     + "girer. Destenin en üstteki kartı hep görünür.");
-            BaseSellValue = 55;
             IsLegendary = true;
         }
 
@@ -85,7 +84,6 @@ namespace ProjectBlock.Core
                     + "birbirine karışmazlar. Her tur roller yer değiştirir - birinden çeker, "
                     + "diğerine atarsın, hangisinin hangisi olduğu her tur değişir - ve her tur "
                     + "sonunda her deste kendi içinde karılır. El +1.");
-            BaseSellValue = 60;
             IsLegendary = true;
         }
 
@@ -174,7 +172,6 @@ namespace ProjectBlock.Core
                     + "kalanlar ıskartaya gider. El sadece çekme destesinde olanı çeker - "
                     + "dolmak için karmaz; ıskarta yalnızca boş desteye kart oynadığında geri "
                     + "karılır.");
-            BaseSellValue = 60;
             IsLegendary = true;
         }
 
@@ -271,7 +268,6 @@ namespace ProjectBlock.Core
                     + "ıskartaya tıklayarak yarısını inceleyebilirsin. Sonraki bölünmeye kadar "
                     + "desteleri bir kez takas edebilirsin - takastan sonra ıskarta yine gizlenir.");
             ChargesPerRound = 0; // charges are per RESHUFFLE here, not per round
-            BaseSellValue = 65;
             IsLegendary = true;
         }
 

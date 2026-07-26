@@ -1,4 +1,4 @@
-// PURPOSE: The three "compare this block with the previous one" jokers: çığ (bigger),
+﻿// PURPOSE: The three "compare this block with the previous one" jokers: çığ (bigger),
 // dondurma (smaller), Siyam (identical shape). They share StreakJoker, which owns the
 // streak bookkeeping so each joker only answers one question: does this placement
 // continue the run?
@@ -93,7 +93,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Score bonus for placing a BIGGER block than last turn; grows as the streak lasts.",
                 "Her tur bir öncekinden BÜYÜK blok koyarsan puan bonusu; seri uzadıkça büyür.");
-            BaseSellValue = 40;
         }
 
         protected override bool Continues(BlockShape previous, BlockShape current)
@@ -111,7 +110,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Score bonus for placing a SMALLER block than last turn; grows as the streak lasts.",
                 "Her tur bir öncekinden KÜÇÜK blok koyarsan puan bonusu; seri uzadıkça büyür.");
-            BaseSellValue = 40;
         }
 
         protected override bool Continues(BlockShape previous, BlockShape current)
@@ -129,7 +127,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Score bonus for placing the SAME shape as last turn; grows as the streak lasts.",
                 "Her tur bir öncekiyle AYNI şekli koyarsan puan bonusu; seri uzadıkça büyür.");
-            BaseSellValue = 45;
             MinStreak = 2;          // no natural ceiling, so it pays from the first repeat
             PointsPerStreakStep = 25;
         }

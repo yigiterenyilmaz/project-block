@@ -507,8 +507,11 @@ public static class JokerTests
     {
         Section("overtime / win bonus wired through a round");
         // 3x3 board, all size-3 bars: every placement completes its row, explodes, and empties
-        // the board -> a clean sweep every turn. Threshold 60 is crossed on turn 1.
-        var session = NewSession(31, 3, 60, 24, 3);
+        // the board -> a clean sweep every turn. The threshold is set below what ONE sweep pays
+        // so turn 1 crosses it: a sweep swallows the line score, so that is the sweep bonus
+        // alone (50 logical) and nothing else.
+        const int Threshold = 40;
+        var session = NewSession(31, 3, Threshold, 24, 3);
         RoundEngine round = session.CurrentRound;
         ScoringConfig sc = session.Config.Scoring;
 
@@ -521,7 +524,7 @@ public static class JokerTests
         round.DecideAdvance(false); // continue -> overtime #1
 
         TurnReport r2 = PlayOneCard(round);
-        int expect1 = (int)Math.Round(60 * sc.OvertimeWinBonusBaseFraction);
+        int expect1 = (int)Math.Round(Threshold * sc.OvertimeWinBonusBaseFraction);
         Check(r2 != null && r2.CleanSweep, "overtime turn sweeps");
         Check(r2 != null && r2.OvertimeWinBonus == expect1,
             "overtime win #1 pays the base fraction of the threshold",
@@ -533,7 +536,7 @@ public static class JokerTests
         round.DecideAdvance(false); // continue -> overtime #2
 
         TurnReport r3 = PlayOneCard(round);
-        int expect2 = (int)Math.Round(60 *
+        int expect2 = (int)Math.Round(Threshold *
             (sc.OvertimeWinBonusBaseFraction + sc.OvertimeWinBonusStepFraction));
         Check(r3 != null && r3.OvertimeWinBonus == expect2,
             "overtime win #2 is one step higher",
@@ -756,12 +759,13 @@ public static class JokerTests
         var session = NewSession(17, 6, 40, 24, 1);
         var cimri = (CimriKumbaraJoker)session.Jokers.Add(new CimriKumbaraJoker());
         cimri.ValuePerTurn = 3;
-        int baseValue = cimri.SellValue;
+        int baseValue = session.Jokers.SellValueOf(cimri);
 
         int turns = PlayTurns(session, 4);
         Check(turns == 4, "played four turns", "got " + turns);
         Check(cimri.AccruedValue == 12, "banked 3 per turn", "got " + cimri.AccruedValue);
-        Check(cimri.SellValue == baseValue + 12, "sell value includes the accrual");
+        Check(session.Jokers.SellValueOf(cimri) == baseValue + 12,
+            "sell value includes the accrual");
 
         long before = session.TotalScore;
         int paid = session.Jokers.Sell(cimri);
@@ -1206,7 +1210,9 @@ public static class JokerTests
         Joker auctioned = session.Jokers.Find(firstTarget);
         Check(auctioned.AuctionPremium > 0, "the premium is on the joker",
             "premium " + auctioned.AuctionPremium);
-        Check(auctioned.SellValue > auctioned.BaseSellValue, "sell value went up");
+        Check(session.Jokers.SellValueOf(auctioned)
+            > session.Config.Market.JokerSellValue(RarityTable.For(auctioned.DefId)),
+            "sell value went up");
 
         session.Jokers.DispatchRoundStarted(session.CurrentRound);
         Check(session.Jokers.ActiveAuctionInstanceId == firstTarget,
@@ -3085,7 +3091,10 @@ public static class JokerTests
     }
 
     /// <summary>Plays four 1x1 cards along the bottom row of a 4-wide board, which completes
-    /// that row and nothing else. Returns the clearing turn's report.</summary>
+    /// that row and nothing else. Returns the clearing turn's report.
+    ///
+    /// An anchor cube is parked off the row first, so clearing it does NOT empty the board: a
+    /// clean sweep SWALLOWS the line score, and this helper exists to measure the line score.</summary>
     private static TurnReport FillBottomRow(GameSession session, BossRound boss)
     {
         if (boss != null)
@@ -3093,6 +3102,7 @@ public static class JokerTests
             session.CurrentRound.SetBoss(boss);
         }
         RoundEngine round = session.CurrentRound;
+        round.PlayFromHand(0, new GridPos(0, 2)); // the anchor: keeps the board non-empty
         TurnReport last = null;
         for (int x = 0; x < 4; x++)
         {
@@ -3273,8 +3283,8 @@ public static class JokerTests
             "a silenced power cannot be used");
         Check(session.Powers.CanBeginUse(commonPower.InstanceId),
             "the common power is still usable");
-        Check(rare.SellValue > 0, "a silenced joker keeps its sell value",
-            "value " + rare.SellValue);
+        Check(session.Jokers.SellValueOf(rare) > 0, "a silenced joker keeps its sell value",
+            "value " + session.Jokers.SellValueOf(rare));
 
         // Renovasyon (common, charged) still runs, so the gate is not blanket-blocking.
         Check(session.Jokers.CanActivate(common.InstanceId),
@@ -3331,7 +3341,7 @@ public static class JokerTests
         SpendEverythingAffordable(session);
         for (int i = 0; i < maxRerolls && session.Debt == 0; i++)
         {
-            if (!session.RerollMarket())
+            if (!session.RerollMarket(MarketOfferKind.Joker))
             {
                 return;
             }
@@ -3359,7 +3369,7 @@ public static class JokerTests
         int guard = 0;
         while (session.NextRerollCost <= session.TotalScore && guard++ < 30)
         {
-            session.RerollMarket();
+            session.RerollMarket(MarketOfferKind.Joker);
             SpendEverythingAffordable(session);
         }
         Check(session.Debt == 0, "everything so far was paid for outright",
@@ -3372,7 +3382,7 @@ public static class JokerTests
             cost + " vs " + score);
         Check(session.CanAfford(cost), "with credit it is affordable anyway");
         Check(session.CanAfford(cost + 100000000), "in fact any price is");
-        Check(session.RerollMarket(), "and it goes through");
+        Check(session.RerollMarket(MarketOfferKind.Joker), "and it goes through");
         Check(session.TotalScore == 0, "the player's own points went first",
             "score " + session.TotalScore);
         Check(session.Debt == cost - score, "and exactly the shortfall was booked as debt",
@@ -3396,7 +3406,7 @@ public static class JokerTests
         }
         Check(!boughtBroke, "an unaffordable offer is still refused");
         Check(!session.CanAfford(session.TotalScore + 1), "and it is not even reported affordable");
-        Check(!session.RerollMarket() || session.Debt == 0,
+        Check(!session.RerollMarket(MarketOfferKind.Joker) || session.Debt == 0,
             "a reroll it cannot pay for is refused rather than borrowed");
         Check(session.Debt == 0, "no debt appears out of nowhere", "debt " + session.Debt);
     }
@@ -3735,8 +3745,20 @@ public static class JokerTests
             "matched " + report.MirroredColumns.Count);
         Check(report.MirroredColumns[0] == column - round.Board.MinX,
             "and it is the column we set up", "" + report.MirroredColumns[0]);
-        Check(report.Score.BaseLines >= power.MirroredColumnBonus,
-            "the bonus is in the turn's score", "lines " + report.Score.BaseLines);
+        // A BONUS on top, not part of the base line score - the clean sweep this match caused
+        // swallows the line score, and it must not swallow the power's pay-off with it.
+        bool paid = false;
+        foreach (ScoreContribution c in report.Score.Contributions)
+        {
+            if (c.Source == "oteki_dunya" && c.Flat >= power.MirroredColumnBonus)
+            {
+                paid = true;
+            }
+        }
+        Check(paid, "the bonus is in the turn's score, as a bonus of its own",
+            "expected +" + power.MirroredColumnBonus);
+        Check(report.CleanSweep && report.Score.BaseLines == 0,
+            "even though the sweep swallowed the line score it was paid for");
     }
 
     private static void OtekiDunya_AStuckWorldSitsOutInsteadOfLosing()
@@ -4118,15 +4140,16 @@ public static class JokerTests
         Check(mine.CapacityLeft == 0, "the seam stayed at nothing - it never acted",
             "left " + mine.CapacityLeft);
 
-        // And it refunds the purchase price rather than its sell value.
+        // And it refunds the purchase price rather than the market's formula.
+        int normal = session.Jokers.SellValueOf(mine);
+        Check(normal > 0 && mine.OverrideSellValue(normal) == normal,
+            "with no purchase price it still sells normally", "" + normal);
         int scale = session.Config.Scoring.ScoreScale;
-        Check(mine.SellPriceScaled(scale) == (long)mine.SellValue * scale,
-            "with no purchase price it still sells normally",
-            "" + mine.SellPriceScaled(scale));
-        mine.PurchasePrice = 12345;
-        Check(mine.SellPriceScaled(scale) == 12345,
+        mine.ScoreScaleForRefund = scale;
+        mine.PurchasePrice = 500L * scale;
+        Check(session.Jokers.SellValueOf(mine) * scale == 500L * scale,
             "once bought, a worked-out seam refunds exactly what you paid",
-            "" + mine.SellPriceScaled(scale));
+            "" + session.Jokers.SellValueOf(mine));
     }
 
     private static void YerAlti_StillFullSellsNormally()
@@ -4135,12 +4158,14 @@ public static class JokerTests
         var session = NewSession(8106, 6, 1000000, 40, 1);
         var mine = (YerAltiKaynaklariJoker)session.Jokers.Add(new YerAltiKaynaklariJoker());
         session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        mine.ScoreScaleForRefund = session.Config.Scoring.ScoreScale;
         mine.PurchasePrice = 99999;
-        int scale = session.Config.Scoring.ScoreScale;
         Check(!mine.IsExhausted, "the seam still has fuel");
-        Check(mine.SellPriceScaled(scale) == (long)mine.SellValue * scale,
-            "so it sells at its sell value, not the refund",
-            "" + mine.SellPriceScaled(scale));
+        int normal = session.Config.Market.JokerSellValue(RarityTable.For(mine.DefId))
+            + mine.AccruedValue + mine.AuctionPremium;
+        Check(session.Jokers.SellValueOf(mine) == normal,
+            "so it sells at the market's price, not the refund",
+            session.Jokers.SellValueOf(mine) + " vs " + normal);
     }
 
     private static void Devre_TracesAMonotoneEdgeToEdgePath()
@@ -4421,7 +4446,7 @@ public static class JokerTests
         for (int i = 0; i < tries; i++)
         {
             session.AddCurrency(1000000);
-            if (!session.RerollMarket())
+            if (!session.RerollMarket(MarketOfferKind.Joker))
             {
                 break;
             }
@@ -6509,7 +6534,7 @@ public static class JokerTests
         Check(!session.Jokers.CanActivate(common.InstanceId), "nothing can be activated");
         Check(!session.Powers.CanUse(power.InstanceId, ActivationTarget.None),
             "and no power can be used");
-        Check(common.SellValue > 0, "they all keep their sell value");
+        Check(session.Jokers.SellValueOf(common) > 0, "they all keep their sell value");
 
         Check(round.ScoreThreshold < fullBar, "the bar really is lower",
             fullBar + " -> " + round.ScoreThreshold);
@@ -6616,22 +6641,25 @@ public static class JokerTests
         session.Jokers.DispatchRoundStarted(round);
 
         // Fill it the honest way first, with no boss in play.
-        int empty = bank.SellValue;
+        int empty = session.Jokers.SellValueOf(bank);
         PlayTurns(session, 6);
-        int filled = bank.SellValue;
+        int filled = session.Jokers.SellValueOf(bank);
         Check(filled > empty, "it fills up on an ordinary round", empty + " -> " + filled);
 
         // Now the boss arrives and the same hook starts running backwards.
         round.SetBoss(new TerslikBoss());
         PlayTurns(session, 3);
-        Check(bank.SellValue < filled, "under the boss the very same joker drains it",
-            filled + " -> " + bank.SellValue);
+        Check(session.Jokers.SellValueOf(bank) < filled,
+            "under the boss the very same joker drains it",
+            filled + " -> " + session.Jokers.SellValueOf(bank));
 
-        // An emptied bank cannot go into debt: sell value bottoms out at the base price.
+        // An emptied bank cannot go into debt: what it EARNED bottoms out at nothing, so its
+        // value bottoms out at the market's price for its rarity.
         PlayTurns(session, 80);
-        Check(bank.SellValue >= bank.BaseSellValue,
+        int floor = session.Config.Market.JokerSellValue(RarityTable.For(bank.DefId));
+        Check(bank.AccruedValue >= 0 && session.Jokers.SellValueOf(bank) >= floor,
             "and it stops at empty - a piggy bank never owes you money",
-            "value " + bank.SellValue + " base " + bank.BaseSellValue);
+            "value " + session.Jokers.SellValueOf(bank) + " floor " + floor);
     }
 
     private static void Terslik_NeverInvertsPowersOrTheBaseScore()
@@ -7332,7 +7360,10 @@ public static class JokerTests
     private static GameSession DriveOwnedToMarket(GameSession session)
     {
         // Restore placement scoring (default is 0 now) so greedy play reaches the market.
-        session.Config.Scoring.PointsPerCubePlaced = 1;
+        // Generous on purpose: this driver only exists to GET somewhere, and a clean sweep now
+        // swallows the line score, so a thin margin here would make unrelated tests fail
+        // whenever the scoring balance moves.
+        session.Config.Scoring.PointsPerCubePlaced = 20;
         int safety = 0;
         while (!RunIsOver(session) && safety++ < 400)
         {
@@ -7381,9 +7412,10 @@ public static class JokerTests
     {
         var config = new GameConfig();
         config.RngSeed = seed;
-        // Placement scores nothing by default; greedy play on the default 6x6 rarely clears a
-        // line, so this driver needs placement points to reach the threshold and the market.
-        config.Scoring.PointsPerCubePlaced = 1;
+        // Placement scores nothing by default; greedy play rarely clears a line, so this
+        // driver needs placement points to reach the threshold and the market. Generous on
+        // purpose - see DriveOwnedToMarket.
+        config.Scoring.PointsPerCubePlaced = 20;
         var session = new GameSession(config);
         int safety = 0;
         while (!RunIsOver(session) && safety++ < 400)
@@ -7476,7 +7508,8 @@ public static class JokerTests
         }
         foreach (Joker joker in session.Jokers.Jokers)
         {
-            sb.Append(joker.DefId).Append('=').Append(joker.SellValue).Append(';');
+            sb.Append(joker.DefId).Append('=')
+                .Append(session.Jokers.SellValueOf(joker)).Append(';');
         }
         sb.Append("total=").Append(session.TotalScore);
         return sb.ToString();

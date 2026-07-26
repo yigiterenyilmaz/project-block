@@ -58,6 +58,10 @@ namespace ProjectBlock.View
                 });
             }
             TriggerSupurgeBlast();
+            TriggerInfectionBlast();
+            // A resolved turn is the natural save point: the per-turn scratch state is at rest,
+            // which is exactly what the save format assumes (see RoundEngine.Save).
+            AutoSave();
         }
 
         /// <summary>Explosion sound + blast feedback for one turn. Deferred until after the
@@ -388,8 +392,84 @@ namespace ProjectBlock.View
             boardView.ShowCircuit(null);
         }
 
+        /// <summary>The prominent score line: the run total (which is also the market's money)
+        /// and, while a round is being played, how that round stands against its threshold.
+        /// Both numbers are in the scaled economy, so the threshold is lifted to match.</summary>
+        private void UpdateScoreHud()
+        {
+            if (totalText == null)
+            {
+                return;
+            }
+            if (session == null)
+            {
+                totalText.text = string.Empty;
+                return;
+            }
+            if (session.Phase != GamePhase.Round)
+            {
+                // The market panel is opaque and reaches the top of the screen, and it prints
+                // the balance itself - a HUD line here would just overprint its title.
+                totalText.text = string.Empty;
+                return;
+            }
+            var sb = new StringBuilder();
+            sb.Append(Loc.Pick("TOTAL ", "TOPLAM ")).Append(session.TotalScore);
+            RoundEngine round = session.CurrentRound;
+            if (round != null)
+            {
+                sb.Append(Loc.Pick("        round ", "        raunt "))
+                    .Append(round.RoundScore).Append(" / ")
+                    .Append(round.Config.ScoreThreshold * session.Config.Scoring.ScoreScale);
+            }
+            totalText.text = sb.ToString();
+        }
+
+        /// <summary>The HUD while the market is open. The round dump does NOT belong here: it
+        /// describes a round that has already finished (turn counter, board size, the erosion
+        /// clock, "right-click to rotate") and, because the canvas draws over world space, it
+        /// printed straight across the market panel. Only the run-level facts and the debug
+        /// keys survive, and the panel itself carries the prompts.</summary>
+        private void BuildMarketHud()
+        {
+            var sb = new StringBuilder();
+            sb.Append("Seed ").Append(lastSeedUsed)
+                .Append(Loc.Pick("   Deck: ", "   Deste: ")).Append(currentDeck.Name).Append('\n');
+            sb.Append(Loc.Pick("Round ", "Raunt ")).Append(session.RoundNumber)
+                .Append(" / ").Append(session.Config.TotalRounds)
+                .Append(Loc.Pick("  done", "  bitti")).Append('\n');
+            sb.Append(Loc.Pick("Cards ", "Kart ")).Append(session.OwnedCards.Count)
+                .Append(Loc.Pick("   Jokers ", "   Joker ")).Append(session.Jokers.Count)
+                .Append(Loc.Pick("   Powers ", "   Güç ")).Append(session.Powers.Count).Append('\n');
+            // "Kredi kartı": paying the debt down is a MARKET action, so its prompt belongs
+            // here and nowhere else - the round HUD only names the debt and its deadline.
+            if (session.Debt > 0)
+            {
+                sb.Append(Loc.Pick("DEBT ", "BORÇ ")).Append(session.Debt)
+                    .Append(Loc.Pick("   [O] pay", "   [O] öde")).Append('\n');
+            }
+            sb.Append(Loc.Pick(
+                "Debug - J: pick joker   P: pick power   D: choose deck   R: new run   L: türkçe",
+                "Debug - J: joker seç   P: güç seç   D: deste seç   R: yeni oyun   L: english"));
+            infoText.text = sb.ToString();
+            // "Kaçakçı": the free item is invisible unless the market says so.
+            messageText.text = session.CanSmuggle
+                ? Loc.Pick("SHIFT+click an offer: take it FREE (may be defective)",
+                    "Bir ürüne SHIFT+tık: BEDAVA al (defolu çıkabilir)")
+                : string.Empty;
+        }
+
         private void UpdateHud()
         {
+            UpdateScoreHud();
+            // The draw pile doubles as the SELL screen while shopping, which nothing on screen
+            // said. Set from the phase on every refresh, so it can never be left on in a round.
+            cardLayer.SetSellHint(session.Phase == GamePhase.Market);
+            if (session.Phase == GamePhase.Market)
+            {
+                BuildMarketHud();
+                return;
+            }
             RoundEngine round = session.CurrentRound;
             var sb = new StringBuilder();
             sb.Append("Seed ").Append(lastSeedUsed)
@@ -430,12 +510,14 @@ namespace ProjectBlock.View
                 sb.Append(Loc.Pick("  [threshold passed]", "  [eşik geçildi]"));
             }
             sb.Append('\n');
-            sb.Append(Loc.Pick("Total score ", "Toplam puan ")).Append(session.TotalScore);
-            // "Kredi kartı": the debt is the one number the player must not lose track of, so it
-            // sits next to the score it has to be paid out of, with the deadline spelled out.
+            // The run total is NOT repeated here - it has its own line at the top of the screen
+            // (UpdateScoreHud), because it is real UI rather than debug furniture. The DEBT is,
+            // though: "Kredi kartı" is the one number the player must not lose track of, and its
+            // deadline has to be spelled out. Paying is a MARKET action, so the [O] prompt lives
+            // in BuildMarketHud instead - this method returns early in the market.
             if (session.Debt > 0)
             {
-                sb.Append(Loc.Pick("   DEBT ", "   BORÇ ")).Append(session.Debt);
+                sb.Append(Loc.Pick("DEBT ", "BORÇ ")).Append(session.Debt);
                 int next = NextBossRound(session);
                 if (next > 0)
                 {
@@ -443,16 +525,12 @@ namespace ProjectBlock.View
                         .Append(next)
                         .Append(Loc.Pick(" or lose)", " bitmeden öde yoksa kaybedersin)"));
                 }
-                if (session.Phase == GamePhase.Market)
-                {
-                    sb.Append(Loc.Pick("   [O] pay", "   [O] öde"));
-                }
+                sb.Append('\n');
             }
             else if (session.CreditAvailable)
             {
-                sb.Append(Loc.Pick("   (credit open)", "   (kredi açık)"));
+                sb.Append(Loc.Pick("(credit open)", "(kredi açık)")).Append('\n');
             }
-            sb.Append('\n');
             sb.Append(Loc.Pick("Draw ", "Çekme ")).Append(round.Deck.DrawCount)
                 .Append(Loc.Pick("   Discard ", "   Iskarta ")).Append(round.Deck.DiscardCount)
                 .Append(Loc.Pick("   Removed ", "   Çıkan ")).Append(round.Deck.RemovedCount).Append('\n');
@@ -549,17 +627,8 @@ namespace ProjectBlock.View
                         + session.TotalScore
                         + Loc.Pick("\n[R] new run", "\n[R] yeni oyun");
                     break;
-                case GamePhase.Market:
-                    messageText.text = Loc.Pick(
-                            "Click a card to add it to your deck (price below it)\n[N] start round ",
-                            "Desteye katmak için karta tıkla (fiyatı altında)\n[N] raunt başlat: ")
-                        + (session.RoundNumber + 1)
-                        // "Kaçakçı": the free item is invisible unless the market says so.
-                        + (session.CanSmuggle
-                            ? Loc.Pick("\nSHIFT+click: take it FREE (may be defective)",
-                                "\nSHIFT+tık: BEDAVA al (defolu çıkabilir)")
-                            : string.Empty);
-                    break;
+                // GamePhase.Market never reaches here - BuildMarketHud handles it and returns,
+                // and the buy / next-round prompt is drawn inside the market panel instead.
                 default:
                     if (round.Status == RoundStatus.AwaitingAdvanceDecision)
                     {

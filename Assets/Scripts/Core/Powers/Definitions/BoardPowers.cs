@@ -1,4 +1,4 @@
-// PURPOSE: Powers that act on the board: Çaprazlama, Çerçeve, Bardağın boş tarafı, Mayın,
+﻿// PURPOSE: Powers that act on the board: Çaprazlama, Çerçeve, Bardağın boş tarafı, Mayın,
 // eko, Buldozer.
 // Every one of them destroys or rewrites cubes through RoundEngine, never through GameBoard
 // directly, so the destruction log, the countable tally and the clean-sweep pre-condition
@@ -25,7 +25,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Blows up the blocks in a plus-shaped area around a chosen centre.",
                 "Seçtiğin merkezden + şeklinde bir alandaki blokları patlatır.");
-            BaseSellValue = 35;
         }
 
         public override ActivationTargeting Targeting
@@ -73,7 +72,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Clears the blocks on the outermost ring of the board.",
                 "Oyun alanının en dış katmanındaki blokları temizler.");
-            BaseSellValue = 40;
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -116,7 +114,6 @@ namespace ProjectBlock.Core
                     + "Any row or column the new cubes complete explodes.",
                 "Oyun alanındaki dolu ve boş kareler yer değiştirir (yeni küpler elementsizdir). "
                     + "Yeni küplerin tamamladığı satır veya sütun patlar.");
-            BaseSellValue = 45;
         }
 
         /// <summary>Refused on an empty board: there would be nothing to invert away, and the
@@ -189,7 +186,6 @@ namespace ProjectBlock.Core
                     + "it on the same squares. Memory resets every round.",
                 "İlk kullanım (bedava) sonraki patlamayı hafızaya alır, tekrar kullandığında "
                     + "o patlamayı aynı karelerde tekrar eder. Hafıza her raunt sıfırlanır.");
-            BaseSellValue = 50;
         }
 
         public bool HasMemory
@@ -266,7 +262,6 @@ namespace ProjectBlock.Core
                 "Pops a chosen cube. Dropped on an empty cell it arms a mine that "
                     + "detonates the cube that lands on it.",
                 "Seçtiğin küpü patlatır. Boş kareye koyarsan üstüne küp geldiğinde patlar.");
-            BaseSellValue = 40;
         }
 
         public override ActivationTargeting Targeting
@@ -333,7 +328,6 @@ namespace ProjectBlock.Core
                     + "obsidian and gold. Pays no points and never counts as a clean sweep.",
                 "Rastgele seçilen ardışık 2 satırı ya da 2 sütunu siler. Obsidyeni ve altını "
                     + "bile ezer. Puan vermez, temizlik sayılmaz.");
-            BaseSellValue = 50;
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -434,7 +428,6 @@ namespace ProjectBlock.Core
                     + "desteden çekilen iki karttır - her dünyaya bir tane. Aynı sütunu iki "
                     + "dünyada birden patlatırsan büyük bonus alırsın. Rauntun eşiği yarı "
                     + "yarıya yükselir.");
-            BaseSellValue = 95;
         }
 
         public override string StatusText

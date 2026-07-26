@@ -95,6 +95,23 @@ namespace ProjectBlock.Core
         // ------------------------------------------------------------- acquire / remove
 
         /// <summary>Adds a joker and runs its OnAcquired. Charges start full.</summary>
+        /// <summary>Save/load only: the next instance id to hand out, so a restored run keeps
+        /// minting ids that cannot collide with the jokers it already holds.</summary>
+        internal int NextInstanceId
+        {
+            get { return nextInstanceId; }
+            set { nextInstanceId = value; }
+        }
+
+        /// <summary>Save/load only: puts a restored joker straight into the inventory.
+        /// Deliberately does NOT run OnAcquired - the permanent rule changes it makes ("Seri
+        /// tetik" granting +2 hand size) are already baked into the saved RoundRules, so
+        /// applying them again would compound them on every load.</summary>
+        internal void AddRestored(Joker joker)
+        {
+            jokers.Add(joker);
+        }
+
         public Joker Add(Joker joker)
         {
             if (joker == null)
@@ -265,7 +282,28 @@ namespace ProjectBlock.Core
                 && !(joker.GrantsMarketCredit && session.Debt > 0);
         }
 
-        /// <summary>Sells a joker for its SellValue, which is added to the run score/currency.
+        /// <summary>
+        /// What the market pays for this joker right now, before the global ScoreScale: a fixed
+        /// fraction of its rarity's buy price, plus everything the joker earned itself (kumbara
+        /// accrual and the "ihale" premium, both paid at full value).
+        ///
+        /// The joker gets the last word (Joker.OverrideSellValue), which all but one of them
+        /// declines - "Yer altı kaynakları" refunds exactly what you paid once its seam is spent,
+        /// and no rarity-derived formula can say that. THE one place a sale is priced.
+        /// </summary>
+        public int SellValueOf(Joker joker)
+        {
+            if (joker == null)
+            {
+                return 0;
+            }
+            int marketValue =
+                session.Config.Market.JokerSellValue(RarityTable.For(joker.DefId))
+                + joker.AccruedValue + joker.AuctionPremium;
+            return joker.OverrideSellValue(marketValue);
+        }
+
+        /// <summary>Sells a joker for its sell value, which is added to the run score/currency.
         /// Returns 0 and changes nothing when the sale is refused (see CanSell).
         /// EXTENSION POINT: the real market will call this; it works today for debugging.</summary>
         public int Sell(Joker joker)
@@ -274,9 +312,9 @@ namespace ProjectBlock.Core
             {
                 return 0;
             }
-            // The joker prices its own sale: normally SellValue scaled, but "Yer altı
-            // kaynakları" refunds what you paid once it is spent.
-            long value = joker.SellPriceScaled(session.Config.Scoring.ScoreScale);
+            // SellValueOf is the one place a sale is priced, and it already gave the joker its
+            // say ("Yer altı kaynakları" refunding what you paid once it is spent).
+            int value = SellValueOf(joker) * session.Config.Scoring.ScoreScale;
             if (!Remove(joker))
             {
                 return 0;

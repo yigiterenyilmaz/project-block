@@ -1,4 +1,4 @@
-// PURPOSE: The jokers wired into the run economy and the market: Damlaya Damlaya Göl Olur,
+﻿// PURPOSE: The jokers wired into the run economy and the market: Damlaya Damlaya Göl Olur,
 // ihale, Kara delik, Enfeksiyon.
 //
 // "Powerbank" lives here too, now that powers exist: it is the only joker that reaches into
@@ -29,7 +29,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Buy nothing at the market and the next round pays a score bonus every turn.",
                 "Marketten bir şey almazsan sonraki raunt her tur puan bonusu alırsın.");
-            BaseSellValue = 45;
         }
 
         public override string StatusText
@@ -73,7 +72,6 @@ namespace ProjectBlock.Core
                 "Once per round, recharges a spent power without waiting for a clean sweep.",
                 "Raunt başına 1 kez, harcanmış bir gücü temizlik beklemeden doldurur.");
             ChargesPerRound = 1;
-            BaseSellValue = 55;
         }
 
         public override string StatusText
@@ -140,7 +138,6 @@ namespace ProjectBlock.Core
                     + "No new auction opens until that joker is sold.",
                 "Her raunt başında rastgele bir jokere ek satış fiyatı biçer. "
                     + "O joker satılana kadar yeni ihale açılmaz.");
-            BaseSellValue = 40;
         }
 
         public override string StatusText
@@ -200,7 +197,6 @@ namespace ProjectBlock.Core
                     + "can be placed on a filled cell and swallows whatever lands on it.",
                 "Her temizlikte ıskartana 1x1 boşluk bloğu ekler. Boşluk bloğu "
                     + "dolu hücreye konabilir ve üstüne geleni yutar.");
-            BaseSellValue = 70;
         }
 
         public override string StatusText
@@ -316,6 +312,18 @@ namespace ProjectBlock.Core
         private readonly List<InfectedCell> markerCache = new List<InfectedCell>();
         private bool hasSpread;
 
+        /// <summary>Cells the detonation took on the most recent turn, for the view's blast.
+        /// The detonation happens in AfterTurnScored, so those cubes are in the destruction log
+        /// but in no exploded row or column - without this the view has no way to know they
+        /// died and the block just vanished. Mirrors RobotSupurgeJoker.LastSweptCells; the
+        /// list is reused, so the view copies what it needs.</summary>
+        private readonly List<GridPos> lastDetonated = new List<GridPos>();
+
+        public IReadOnlyList<GridPos> LastDetonatedCells
+        {
+            get { return lastDetonated; }
+        }
+
         public EnfeksiyonJoker()
             : base("enfeksiyon", "Enfeksiyon")
         {
@@ -327,7 +335,6 @@ namespace ProjectBlock.Core
                     + "patlar. İlk patlama enfeksiyonu bir kez 3x3 artı şeklinde yayar - "
                     + "daha fazla değil.");
             ChargesPerRound = 1;
-            BaseSellValue = 60;
         }
 
         /// <summary>The player points at the cube to infect.</summary>
@@ -389,6 +396,9 @@ namespace ProjectBlock.Core
 
         public override void AfterTurnScored(TurnContext turn)
         {
+            // Cleared every turn, before the early-out, so the view can never replay a blast
+            // from an earlier detonation.
+            lastDetonated.Clear();
             if (infected.Count == 0)
             {
                 return;
@@ -443,6 +453,7 @@ namespace ProjectBlock.Core
                 IReadOnlyList<GridPos> blown = turn.Round.DestroyCubes(blockCells, true);
                 if (blown.Count > 0)
                 {
+                    lastDetonated.AddRange(blown);
                     turn.AddFlatScore(blown.Count * PointsPerInfectedCube, DefId);
                     turn.Round.TryResolveCleanSweep();
                     if (!hasSpread)

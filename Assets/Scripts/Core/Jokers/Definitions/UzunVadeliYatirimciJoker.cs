@@ -47,7 +47,6 @@ namespace ProjectBlock.Core
                     + "Orada sana BİR ikinci şans verir - o raundu kaybedersen baştan tekrar "
                     + "oynarsın - ve başka hiçbir yolla alamayacağın iki gücü açar. Asla "
                     + "satılamaz, yani son raunda ulaşamazsan boşa para verdin.");
-            BaseSellValue = 0; // it can never be sold; this is here so nothing divides by it
         }
 
         /// <summary>True once the second chance has been spent.</summary>

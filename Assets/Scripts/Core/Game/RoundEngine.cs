@@ -817,6 +817,7 @@ namespace ProjectBlock.Core
             Hand = new Hand();
             Status = RoundStatus.InProgress;
             RefillHand();
+
             if (Loss == null)
             {
                 CheckForNoPlayableMove();
@@ -825,6 +826,26 @@ namespace ProjectBlock.Core
             {
                 Status = RoundStatus.Lost; // no event during construction, see StatusChanged docs
             }
+        }
+
+        /// <summary>Load-only constructor: wires the references and leaves every piece of round
+        /// state to RoundEngine.Load. Deliberately deals NO hand and runs no loss check - the
+        /// saved round already has both, and dealing here would consume rng draws that the
+        /// restored stream has not accounted for.</summary>
+        private RoundEngine(RoundConfig config, RoundRules rules, IRandomSource rng,
+            IScoreCalculator scorer, GameSession session, ITurnHooks hooks,
+            GameBoard board, RoundDeck deck)
+        {
+            Config = config;
+            Rules = rules;
+            this.rng = rng;
+            this.scorer = scorer;
+            this.session = session;
+            this.hooks = hooks ?? NoTurnHooks.Instance;
+            Board = board;
+            Deck = deck;
+            Hand = new Hand();
+            Status = RoundStatus.InProgress;
         }
     }
 }

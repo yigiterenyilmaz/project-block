@@ -9,7 +9,7 @@ using System.Collections.Generic;
 namespace ProjectBlock.Core
 {
     /// <summary>One full run of the game.</summary>
-    public sealed class GameSession
+    public sealed partial class GameSession
     {
         public GameConfig Config { get; }
         public GamePhase Phase { get; private set; }
@@ -297,6 +297,13 @@ namespace ProjectBlock.Core
                 Joker bought = Jokers.Add(offer.Joker.Create());
                 // Remembered so a joker may refund it later ("Yer altı kaynakları").
                 bought.PurchasePrice = offer.Price;
+                // "Yer altı kaynakları" refunds that price when its seam is spent, and it works
+                // in market units - so it needs to know the economy the price was recorded in.
+                var seam = bought as YerAltiKaynaklariJoker;
+                if (seam != null)
+                {
+                    seam.ScoreScaleForRefund = Config.Scoring.ScoreScale;
+                }
             }
             else if (offer.Kind == MarketOfferKind.Power)
             {
@@ -421,10 +428,18 @@ namespace ProjectBlock.Core
             }
         }
 
-        /// <summary>Refreshes EVERY market offer (blocks, jokers, powers) at once for an
-        /// escalating cost, spending TotalScore like a purchase. Returns false when not in the
-        /// market or the current reroll cost is unaffordable - the market is untouched then.</summary>
-        public bool RerollMarket()
+        /// <summary>
+        /// Refreshes ONE section of the market - the blocks, the jokers or the powers - for an
+        /// escalating cost, spending TotalScore like a purchase. Offers of the other kinds are
+        /// left exactly as they are, sold flags included.
+        ///
+        /// The price escalates on a SINGLE counter shared by all three sections, so rerolling
+        /// blocks also raises what the next joker reroll costs. That is deliberate: a per-section
+        /// counter would let a player refresh three shelves for the price of one.
+        ///
+        /// Returns false when the current reroll cost is unaffordable - the market is untouched.
+        /// </summary>
+        public bool RerollMarket(MarketOfferKind kind)
         {
             if (Phase != GamePhase.Market)
             {
@@ -437,8 +452,56 @@ namespace ProjectBlock.Core
             }
             Spend(cost);
             rerollCount++;
-            RestockMarket(rerollCount);
+            RestockSection(kind, rerollCount);
             return true;
+        }
+
+        /// <summary>Replaces just this kind's offers, keeping every other offer untouched. The
+        /// result is re-grouped into kind order so the market view's rows stay stable.</summary>
+        private void RestockSection(MarketOfferKind kind, int reroll)
+        {
+            MarketConfig market = Config.Market;
+            var fresh = new List<MarketOffer>();
+            if (kind == MarketOfferKind.Joker)
+            {
+                AddJokerOffers(market, fresh, reroll);
+            }
+            else if (kind == MarketOfferKind.Power)
+            {
+                AddPowerOffers(market, fresh, reroll);
+            }
+            else
+            {
+                AddBlockOffers(market, fresh, reroll);
+            }
+
+            var survivors = new List<MarketOffer>();
+            foreach (MarketOffer offer in Market.Offers)
+            {
+                if (offer.Kind != kind)
+                {
+                    survivors.Add(offer);
+                }
+            }
+            survivors.AddRange(fresh);
+            // Stable regroup by kind: blocks, then jokers, then powers.
+            var ordered = new List<MarketOffer>(survivors.Count);
+            AppendOfKind(ordered, survivors, MarketOfferKind.Block);
+            AppendOfKind(ordered, survivors, MarketOfferKind.Joker);
+            AppendOfKind(ordered, survivors, MarketOfferKind.Power);
+            Market.SetOffers(ordered);
+        }
+
+        private static void AppendOfKind(List<MarketOffer> into, List<MarketOffer> from,
+            MarketOfferKind kind)
+        {
+            for (int i = 0; i < from.Count; i++)
+            {
+                if (from[i].Kind == kind)
+                {
+                    into.Add(from[i]);
+                }
+            }
         }
 
         /// <summary>True if the player already owns a joker of this kind.</summary>
@@ -989,6 +1052,18 @@ namespace ProjectBlock.Core
         {
             MarketConfig market = Config.Market;
             var newOffers = new List<MarketOffer>();
+            AddBlockOffers(market, newOffers, reroll);
+            AddJokerOffers(market, newOffers, reroll);
+            AddPowerOffers(market, newOffers, reroll);
+            Market.SetOffers(newOffers);
+        }
+
+        /// <summary>Appends this visit's block offers. At reroll 0 the draws come from the MAIN
+        /// rng, which is what keeps a fresh market byte-identical to the base game; a paid
+        /// reroll uses a derived deterministic rng instead, so it never disturbs the stream that
+        /// shuffles decks and drives play.</summary>
+        private void AddBlockOffers(MarketConfig market, List<MarketOffer> newOffers, int reroll)
+        {
             IRandomSource blockRng = reroll == 0
                 ? rng
                 : new SeededRandom(unchecked(resolvedSeed * 374761393 + RoundNumber * 66037 + reroll * 21179));
@@ -1012,9 +1087,6 @@ namespace ProjectBlock.Core
                 newOffers.Add(new MarketOffer(card,
                     Discounted(market.BuyPrice(card) * Config.Scoring.ScoreScale)));
             }
-            AddJokerOffers(market, newOffers, reroll);
-            AddPowerOffers(market, newOffers, reroll);
-            Market.SetOffers(newOffers);
         }
 
         /// <summary>Rolls a block shape of at least <paramref name="minSize"/> cubes, re-rolling
@@ -1105,8 +1177,9 @@ namespace ProjectBlock.Core
                     }
                     legendaryTaken = true;
                 }
-                int price = market.JokerPrice * market.PriceMultiplier(def.Rarity)
-                    * Config.Scoring.ScoreScale;
+                // Rounded BEFORE the scale so a fractional rarity multiplier still yields a
+                // round price in the scaled economy (40 * 1.5 = 60 -> 600, not 599.99...).
+                int price = market.JokerBuyPrice(def.Rarity) * Config.Scoring.ScoreScale;
                 newOffers.Add(new MarketOffer(def, Discounted(price)));
                 taken++;
             }
@@ -1157,8 +1230,8 @@ namespace ProjectBlock.Core
             for (int i = 0; i < count; i++)
             {
                 PowerDefinition def = keyed[i].Value;
-                int price = market.PowerPrice * market.PriceMultiplier(def.Rarity)
-                    * Config.Scoring.ScoreScale;
+                // Rounded before the scale, as in AddJokerOffers.
+                int price = market.PowerBuyPrice(def.Rarity) * Config.Scoring.ScoreScale;
                 newOffers.Add(new MarketOffer(def, Discounted(price)));
             }
         }

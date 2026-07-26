@@ -38,7 +38,6 @@ namespace ProjectBlock.Core
                 "Markette puanın yetmese de her şeyi alabilirsin. Aldığın borç her raunt sonunda "
                     + "%10 bileşik faiz işler; borcunu kapatmadan bir patron raundu biterse oyunu "
                     + "kaybedersin. Borcun varken bu joker satılamaz.");
-            BaseSellValue = 45;
         }
 
         public override bool GrantsMarketCredit

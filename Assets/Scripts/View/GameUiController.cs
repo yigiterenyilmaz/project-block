@@ -77,8 +77,16 @@ namespace ProjectBlock.View
             new System.Collections.Generic.Dictionary<int, int>();
         private int comboStreak;
         private readonly List<InfectedCell> infectionBuffer = new List<InfectedCell>();
+
+        /// <summary>Cells an "Enfeksiyon" detonation took this turn, gathered for its blast.</summary>
+        private readonly List<GridPos> infectionBlastBuffer = new List<GridPos>();
         private Text infoText;
         private Text messageText;
+
+        /// <summary>The run's banked score - which is also the money the market spends. It gets
+        /// its own prominent line because it was previously only findable halfway down the
+        /// debug dump, and the market never showed it at all.</summary>
+        private Text totalText;
         private Camera cam;
         private Vector3 camBasePosition;
         private Coroutine shakeRoutine;
@@ -102,6 +110,10 @@ namespace ProjectBlock.View
         private int parazitCardId;
         private CubePickerView cubePicker;
         private bool sellCardsMode;
+
+        /// <summary>True while the deck overlay's scrollbar is being dragged. Held across frames
+        /// because every move rebuilds the overlay under the cursor.</summary>
+        private bool deckScrollDragging;
         private int lastSeedUsed;
 
         // Hover tooltip (world-space): a small panel rebuilt only when the target changes.
@@ -125,17 +137,18 @@ namespace ProjectBlock.View
 
         private void Start()
         {
-            // language before any text is built; persisted across sessions
-            Loc.Language = PlayerPrefs.GetString("language", "en") == "tr"
-                ? GameLanguage.Turkish
-                : GameLanguage.English;
+            // Preferences before any text is built, so the first labels come out in the right
+            // language. The volume needs SoundFx, so it is pushed in after BuildViews.
+            LoadSettings();
             cam = Camera.main;
             camBasePosition = cam.transform.position;
             // The bit-crush must sit on the AudioListener (the camera) to process the whole mix;
             // a filter on the SoundFx object's sources is not reliably called.
             bitCrush = cam.gameObject.AddComponent<BitCrushFilter>();
             BuildViews();
-            NewGame();
+            sfx.MasterVolume = masterVolume;
+            // The game now boots to the title menu; a run starts from there (see .Menus).
+            GoToTitle();
         }
 
         /// <summary>Flips EN/TR, persists the choice, and re-texts every open view.</summary>
@@ -144,7 +157,7 @@ namespace ProjectBlock.View
             Loc.Language = Loc.Language == GameLanguage.Turkish
                 ? GameLanguage.English
                 : GameLanguage.Turkish;
-            PlayerPrefs.SetString("language", Loc.Language == GameLanguage.Turkish ? "tr" : "en");
+            SaveSettings(); // language lives with the rest of the preferences
             // modals cache their labels; closing them is simpler than re-texting them
             grantPicker.Hide();
             deckSelect.Hide();
@@ -159,6 +172,18 @@ namespace ProjectBlock.View
             sellCardsMode = false;
             hileliPickMode = false;
             HideTooltip();
+            if (screen != AppScreen.Playing)
+            {
+                // No run to refresh - just re-text the menu. deckSelect was closed above, so a
+                // switch made during the deck pick lands back on the title; a PAUSED run must
+                // stay paused, or changing language would silently resume it.
+                if (screen == AppScreen.DeckSelect)
+                {
+                    screen = AppScreen.Title;
+                }
+                ShowCurrentMenu();
+                return;
+            }
             if (session != null && session.Phase == GamePhase.Market)
             {
                 marketView.Show(session);
@@ -173,6 +198,16 @@ namespace ProjectBlock.View
             config.RngSeed = lastSeedUsed;
             config.Deck = currentDeck;
             session = new GameSession(config);
+            // Both terminal phases raise the run-summary flag; Update opens the screen once
+            // nothing is animating (see .RunSummary).
+            runOverPending = false;
+            session.PhaseChanged += OnSessionPhaseChanged;
+            // A run can be over before the subscription exists: GameSession's constructor loses
+            // the round outright if the deck is smaller than the hand. Catch that case here.
+            if (session.Phase == GamePhase.GameOver || session.Phase == GamePhase.RunWon)
+            {
+                runOverPending = true;
+            }
             draggedCard = null;
             foxPickSlot = -1;
             sellCardsMode = false;
@@ -193,6 +228,9 @@ namespace ProjectBlock.View
             HideTooltip();
             Debug.Log("[project_block] New run, seed " + lastSeedUsed);
             StartRoundPresentation();
+            // Overwrite any older save immediately: a new run supersedes it the moment it
+            // starts, even if the player quits before finishing a single turn.
+            AutoSave();
         }
 
         /// <summary>Board + HUD refresh with the round-start shuffle-and-deal animation.</summary>
@@ -222,12 +260,27 @@ namespace ProjectBlock.View
 
         private void Update()
         {
+            Keyboard kb = Keyboard.current;
+            Mouse mouse = Mouse.current;
+            // The menu layer owns the whole frame whenever a run is not on screen, so no menu
+            // has to know about drags, targeting or the in-game modals (see .Menus).
+            if (screen != AppScreen.Playing)
+            {
+                HandleMenuInput(kb, mouse);
+                return;
+            }
             if (session == null || waterAnimating || supurgeAnimating)
             {
                 return; // input is locked while a board animation plays
             }
-            Keyboard kb = Keyboard.current;
-            Mouse mouse = Mouse.current;
+            // The run ended: this waits for the guard above to stop firing, so the last
+            // placement's blast finishes playing before the summary covers the board.
+            if (runOverPending)
+            {
+                runOverPending = false;
+                OpenRunSummary();
+                return;
+            }
             UpdateHover(mouse);
             if (kb != null && kb.rKey.wasPressedThisFrame)
             {
@@ -288,6 +341,43 @@ namespace ProjectBlock.View
                     sellCardsMode = false;
                     hileliPickMode = false;
                     deckOverlay.Hide();
+                    return;
+                }
+                // The wheel scrolls a deck too long to fit - the overlay re-lays itself out and
+                // remembers where it was, so selling from page 3 stays on page 3. A notch is
+                // 120 units, and a notch moving half a row is what makes it feel continuous
+                // rather than teleporting.
+                if (mouse != null)
+                {
+                    float deckScroll = mouse.scroll.ReadValue().y;
+                    if (Mathf.Abs(deckScroll) > 0.01f)
+                    {
+                        deckOverlay.Scroll(-deckScroll / 120f);
+                        return;
+                    }
+                }
+                // Dragging the scrollbar. Held across frames, so the drag survives the rebuild
+                // each move causes, and it swallows the click that started it - otherwise the
+                // press would fall through to "clicked nothing, close the overlay".
+                if (mouse != null && deckScrollDragging)
+                {
+                    if (mouse.leftButton.isPressed)
+                    {
+                        deckOverlay.ScrollToWorldY(
+                            cam.ScreenToWorldPoint(mouse.position.ReadValue()).y);
+                    }
+                    else
+                    {
+                        deckScrollDragging = false;
+                    }
+                    return;
+                }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame
+                    && deckOverlay.ScrollbarAt(cam.ScreenToWorldPoint(mouse.position.ReadValue())))
+                {
+                    deckScrollDragging = true;
+                    deckOverlay.ScrollToWorldY(
+                        cam.ScreenToWorldPoint(mouse.position.ReadValue()).y);
                     return;
                 }
                 if (mouse != null && mouse.leftButton.wasPressedThisFrame && hileliPickMode)
@@ -364,6 +454,13 @@ namespace ProjectBlock.View
                             UpdateHud();
                             return;
                         }
+                    }
+                    // A click INSIDE the panel that hit nothing is not a request to leave: the
+                    // overlay used to close on any miss, so reaching for the scrollbar or the
+                    // gap between two cards dismissed the whole screen.
+                    if (deckOverlay.PanelContains(cam.ScreenToWorldPoint(mouse.position.ReadValue())))
+                    {
+                        return;
                     }
                     sellCardsMode = false;
                     deckOverlay.Hide();
@@ -590,6 +687,15 @@ namespace ProjectBlock.View
                 {
                     return;
                 }
+            }
+            // THE LAST Escape handler: every modal above returns before reaching this, and
+            // HandleJokerInput has just consumed Escape if a joker/power was awaiting a target.
+            // So Escape only pauses when it would otherwise do nothing. Keep this last - the
+            // mirror-world block above returns on its own keys and never touches Escape.
+            if (kb != null && kb.escapeKey.wasPressedThisFrame)
+            {
+                OpenPauseMenu();
+                return;
             }
             switch (session.Phase)
             {

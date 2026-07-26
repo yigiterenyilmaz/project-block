@@ -1,0 +1,421 @@
+// PURPOSE: GameUiController's menu layer - the app-level screen state machine that sits
+// ABOVE a run, plus the title screen itself.
+//
+// THE ONE CENTRAL RULE: `screen` decides who owns input. While it is anything other than
+// AppScreen.Playing, Update hands the whole frame to HandleMenuInput and the game never
+// sees it - so no menu has to know about drags, targeting, or the eight in-game modals.
+//
+// Presentation and input routing only; rules never live here (see the View folder note).
+
+using System.Collections.Generic;
+using ProjectBlock.Core;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+namespace ProjectBlock.View
+{
+    partial class GameUiController
+    {
+        /// <summary>Where the app is, above and around a run. Members are added by the chunk
+        /// that needs them, so an unhandled screen is a compile error rather than a silent
+        /// dead branch.</summary>
+        private enum AppScreen
+        {
+            /// <summary>The title menu. No session exists yet (or the last one was left).</summary>
+            Title,
+
+            /// <summary>Picking the deck a new run will start with - reached from Play.</summary>
+            DeckSelect,
+
+            /// <summary>A run owns the screen; every other partial of this class applies.</summary>
+            Playing,
+
+            /// <summary>A run is on screen but suspended behind the pause menu. The run's own
+            /// state is untouched - nothing is ticking, because the game only advances on
+            /// input and the menu layer is eating all of it.</summary>
+            Paused,
+
+            /// <summary>Player preferences. Reachable from the title AND from a paused run, so
+            /// it remembers which one to go back to (settingsReturnTo).</summary>
+            Settings,
+
+            /// <summary>The controls / rules reading screen, reachable from the same two
+            /// places as Settings.</summary>
+            HowToPlay,
+
+            /// <summary>The run has ended - won or lost - and its summary is up. The session
+            /// is kept alive here because the summary is reading it.</summary>
+            RunOver
+        }
+
+        // Entry order per menu. Named so the dispatches below never index by a bare number.
+        private const int TitlePlay = 0;
+        private const int TitleContinue = 1;
+        private const int TitleHowToPlay = 2;
+        private const int TitleSettings = 3;
+        private const int TitleQuit = 4;
+
+        private const int PauseResume = 0;
+        private const int PauseRestart = 1;
+        private const int PauseHowToPlay = 2;
+        private const int PauseSettings = 3;
+        private const int PauseSaveAndQuit = 4;
+
+        private AppScreen screen = AppScreen.Title;
+        private MenuScreenView menu;
+
+        /// <summary>Leaves whatever was on screen and shows the title menu. Safe with a null
+        /// session, which is how the game now boots.</summary>
+        private void GoToTitle()
+        {
+            screen = AppScreen.Title;
+            deckSelect.Hide();
+            SetRunPresentationVisible(false);
+            // Handles a null session by turning the CRT, the hum and the bit-crush off, so a
+            // run LEFT in retro mode cannot leave the title screen green and buzzing.
+            SyncRetroPresentation();
+            ShowCurrentMenu();
+        }
+
+        /// <summary>(Re)draws whichever menu the current screen calls for. Also the re-text
+        /// path after a language switch.</summary>
+        private void ShowCurrentMenu()
+        {
+            switch (screen)
+            {
+                case AppScreen.DeckSelect:
+                    deckSelect.Show(DeckLibrary.All, currentDeck);
+                    break;
+                case AppScreen.Paused:
+                    ShowPauseMenu();
+                    break;
+                case AppScreen.Settings:
+                    ShowSettingsMenu();
+                    break;
+                case AppScreen.HowToPlay:
+                    ShowHowToPlay();
+                    break;
+                case AppScreen.RunOver:
+                    ShowRunSummary();
+                    break;
+                default:
+                    ShowTitleMenu();
+                    break;
+            }
+        }
+
+        private void ShowTitleMenu()
+        {
+            // A save this build cannot read counts as no save, so CONTINUE is never offered
+            // for a file that would only fail (see SaveFileStore.HasLoadableSave).
+            MenuEntry continueEntry = SaveFileStore.HasLoadableSave()
+                ? MenuEntry.Of(Loc.Pick("CONTINUE", "DEVAM ET"))
+                : MenuEntry.Locked(Loc.Pick("CONTINUE", "DEVAM ET"),
+                    Loc.Pick("no saved run", "kayıtlı oyun yok"));
+            var entries = new List<MenuEntry>
+            {
+                MenuEntry.Of(Loc.Pick("PLAY", "OYNA")),
+                continueEntry,
+                MenuEntry.Of(Loc.Pick("HOW TO PLAY", "NASIL OYNANIR")),
+                MenuEntry.Of(Loc.Pick("SETTINGS", "AYARLAR")),
+                MenuEntry.Of(Loc.Pick("QUIT", "ÇIKIŞ"))
+            };
+            // The subtitle names the language you would switch TO, like the debug HUD does.
+            menu.Show("PROJECT BLOCK", Loc.Pick("[L] türkçe", "[L] english"), entries);
+        }
+
+        /// <summary>Owns the frame whenever a run is not being played.</summary>
+        private void HandleMenuInput(Keyboard kb, Mouse mouse)
+        {
+            if (kb != null && kb.lKey.wasPressedThisFrame)
+            {
+                ToggleLanguage();
+                return;
+            }
+            if (screen == AppScreen.DeckSelect)
+            {
+                HandleTitleDeckSelect(kb, mouse);
+                return;
+            }
+            if (screen == AppScreen.Settings)
+            {
+                HandleSettingsInput(kb, mouse);
+                return;
+            }
+            if (screen == AppScreen.HowToPlay)
+            {
+                HandleHowToPlayInput(kb, mouse);
+                return;
+            }
+            // Escape closes the pause menu it opened.
+            if (screen == AppScreen.Paused && kb != null && kb.escapeKey.wasPressedThisFrame)
+            {
+                ResumeRun();
+                return;
+            }
+            int chosen = ReadMenuChoice(kb, mouse);
+            if (chosen < 0)
+            {
+                return;
+            }
+            switch (screen)
+            {
+                case AppScreen.Paused:
+                    ActivatePauseEntry(chosen);
+                    break;
+                case AppScreen.RunOver:
+                    ActivateSummaryEntry(chosen);
+                    break;
+                default:
+                    ActivateTitleEntry(chosen);
+                    break;
+            }
+        }
+
+        /// <summary>Mouse hover, arrow-key movement and "pick it" for any entry menu, shared by
+        /// every screen. Returns the chosen entry, or -1 when this frame chose nothing.</summary>
+        private int ReadMenuChoice(Keyboard kb, Mouse mouse)
+        {
+            if (mouse != null)
+            {
+                menu.UpdateHover(mouse.position.ReadValue());
+            }
+            if (kb != null)
+            {
+                if (kb.downArrowKey.wasPressedThisFrame)
+                {
+                    menu.MoveSelection(+1);
+                    return -1;
+                }
+                if (kb.upArrowKey.wasPressedThisFrame)
+                {
+                    menu.MoveSelection(-1);
+                    return -1;
+                }
+                if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)
+                {
+                    return menu.Activate();
+                }
+            }
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+            {
+                return menu.EntryAt(mouse.position.ReadValue());
+            }
+            return -1;
+        }
+
+        private void ActivateTitleEntry(int index)
+        {
+            switch (index)
+            {
+                case TitlePlay:
+                    // Confirmed flow: choosing a deck is part of starting a run.
+                    screen = AppScreen.DeckSelect;
+                    menu.Hide();
+                    deckSelect.Show(DeckLibrary.All, currentDeck);
+                    break;
+                case TitleContinue:
+                    ContinueSavedRun();
+                    break;
+                case TitleHowToPlay:
+                    OpenHowToPlay(AppScreen.Title);
+                    break;
+                case TitleSettings:
+                    OpenSettings(AppScreen.Title);
+                    break;
+                case TitleQuit:
+                    QuitGame();
+                    break;
+            }
+        }
+
+        /// <summary>The deck pick that starts a run. Clicking a deck starts it; Escape or a
+        /// click off the panels goes back to the title rather than stranding the player.</summary>
+        private void HandleTitleDeckSelect(Keyboard kb, Mouse mouse)
+        {
+            if (kb != null && kb.escapeKey.wasPressedThisFrame)
+            {
+                GoToTitle();
+                return;
+            }
+            if (mouse == null)
+            {
+                return;
+            }
+            Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+            deckSelect.SetHovered(world);
+            if (!mouse.leftButton.wasPressedThisFrame)
+            {
+                return;
+            }
+            int index = deckSelect.DeckAt(world);
+            if (index < 0)
+            {
+                GoToTitle();
+                return;
+            }
+            StartRunWithDeck(DeckLibrary.All[index]);
+        }
+
+        private void StartRunWithDeck(DeckDefinition deck)
+        {
+            currentDeck = deck;
+            Debug.Log("[project_block] Deck selected: " + currentDeck.Name);
+            deckSelect.Hide();
+            menu.Hide();
+            screen = AppScreen.Playing;
+            SetRunPresentationVisible(true);
+            NewGame();
+        }
+
+        // ------------------------------------------------------------------------ pause
+
+        /// <summary>Suspends the run behind the pause overlay. Nothing about the round is
+        /// touched: the game only advances on input, and the menu layer is now eating all of
+        /// it. Reached from the LAST Escape handler in Update, so every in-game modal and the
+        /// joker/power targeting cancel still get the key first.</summary>
+        private void OpenPauseMenu()
+        {
+            CancelDrag(); // a card held under the cursor must not stay stuck there
+            HideTooltip();
+            AutoSave(); // pausing is the most likely moment before someone closes the game
+            screen = AppScreen.Paused;
+            ShowPauseMenu();
+        }
+
+        private void ShowPauseMenu()
+        {
+            var entries = new List<MenuEntry>
+            {
+                MenuEntry.Of(Loc.Pick("RESUME", "DEVAM ET")),
+                MenuEntry.Of(Loc.Pick("RESTART RUN", "BAŞTAN BAŞLA"),
+                    Loc.Pick("this run is replaced by a new one",
+                        "bu oyunun yerini yeni bir oyun alır")),
+                MenuEntry.Of(Loc.Pick("HOW TO PLAY", "NASIL OYNANIR")),
+                MenuEntry.Of(Loc.Pick("SETTINGS", "AYARLAR")),
+                // Named for what it DOES, not for leaving: the old "ABANDON RUN" read as
+                // "throw the run away", which is exactly what it no longer means.
+                MenuEntry.Of(Loc.Pick("SAVE & QUIT", "KAYDET VE ÇIK"),
+                    Loc.Pick("your run is kept - CONTINUE picks it up",
+                        "oyunun kaydedilir - DEVAM ET ile sürdürürsün"))
+            };
+            // The run stays visible behind a translucent backdrop - the player is mid-round and
+            // is deciding about the board they can see.
+            menu.Show(Loc.Pick("PAUSED", "DURAKLATILDI"), DescribeRunProgress(), entries,
+                MenuSkin.OverlayBackdrop);
+        }
+
+        /// <summary>"Round 4 / 15     total score 1250" - context for a decision taken from a
+        /// menu, where the HUD may be covered.</summary>
+        private string DescribeRunProgress()
+        {
+            if (session == null)
+            {
+                return string.Empty;
+            }
+            return Loc.Pick("Round ", "Raunt ") + session.RoundNumber
+                + " / " + session.Config.TotalRounds
+                + Loc.Pick("     total score ", "     toplam puan ") + session.TotalScore;
+        }
+
+        private void ActivatePauseEntry(int index)
+        {
+            switch (index)
+            {
+                case PauseResume:
+                    ResumeRun();
+                    break;
+                case PauseRestart:
+                    RestartRun();
+                    break;
+                case PauseHowToPlay:
+                    OpenHowToPlay(AppScreen.Paused);
+                    break;
+                case PauseSettings:
+                    OpenSettings(AppScreen.Paused);
+                    break;
+                case PauseSaveAndQuit:
+                    SaveAndQuitRun();
+                    break;
+            }
+        }
+
+        private void ResumeRun()
+        {
+            menu.Hide();
+            screen = AppScreen.Playing;
+        }
+
+        /// <summary>Starts the run over. Confirmed choice: a restart rolls a FRESH seed (unless
+        /// one is pinned), matching what the R debug key has always done.</summary>
+        private void RestartRun()
+        {
+            menu.Hide();
+            screen = AppScreen.Playing;
+            SetRunPresentationVisible(true);
+            NewGame();
+        }
+
+        /// <summary>Writes the run down and goes back to the title, leaving it there to be picked
+        /// up with CONTINUE. Leaving a run is NOT a way to lose it - the only things that drop a
+        /// save are finishing the run and starting a different one.
+        ///
+        /// The save is taken BEFORE the session is released, and the session is released so the
+        /// title screen cannot show anything of the run - including a retro CRT left switched on.</summary>
+        private void SaveAndQuitRun()
+        {
+            Debug.Log("[project_block] Run saved and left at round "
+                + (session != null ? session.RoundNumber : 0));
+            AutoSave();
+            session = null;
+            GoToTitle();
+        }
+
+        /// <summary>Shows or hides everything that belongs to a run in progress. The persistent
+        /// views are toggled; the modal ones are simply closed, since a menu must never be
+        /// reached with a half-finished picker still armed.</summary>
+        private void SetRunPresentationVisible(bool visible)
+        {
+            boardView.gameObject.SetActive(visible);
+            cardLayer.gameObject.SetActive(visible);
+            flameStreak.gameObject.SetActive(visible);
+            blastFx.gameObject.SetActive(visible);
+            infoText.gameObject.SetActive(visible);
+            messageText.gameObject.SetActive(visible);
+            totalText.gameObject.SetActive(visible);
+            jokerBar.SetVisible(visible);
+            powerBar.SetVisible(visible);
+            if (visible)
+            {
+                return;
+            }
+            marketView.Hide();
+            deckOverlay.Hide();
+            grantPicker.Hide();
+            choicePicker.Hide();
+            batakBet.Hide();
+            blockDesigner.Hide();
+            cubePicker.Hide();
+            lineSwapPicker.Hide();
+            HideTooltip();
+            // Any half-armed flow dies with the run presentation.
+            ClearChoice();
+            parazitStep = ParazitStep.None;
+            pendingTargetJokerId = null;
+            pendingTargetPowerId = null;
+            pendingOltaMark = false;
+            foxPickSlot = -1;
+            sellCardsMode = false;
+            hileliPickMode = false;
+            draggedCard = null;
+            retroFallHand = -1;
+        }
+
+        private void QuitGame()
+        {
+            // A no-op inside the editor, so the log is the only feedback there.
+            Debug.Log("[project_block] Quit requested.");
+            Application.Quit();
+        }
+    }
+}

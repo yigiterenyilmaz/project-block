@@ -140,8 +140,18 @@ namespace ProjectBlock.Core
             get { return false; }
         }
 
-        /// <summary>Base price the market will buy this joker back for.</summary>
-        public int BaseSellValue { get; protected set; } = 25;
+        /// <summary>
+        /// Last word on what this joker sells for, given what the market's formula worked out.
+        /// Return <paramref name="marketValue"/> to accept it, which is what all but one joker does.
+        ///
+        /// It exists for "Yer altı kaynakları", which refunds EXACTLY what you paid once its seam is
+        /// spent - a promise no rarity-derived formula can express. Asked by
+        /// JokerInventory.SellValueOf, the one place a sale is priced.
+        /// </summary>
+        public virtual int OverrideSellValue(int marketValue)
+        {
+            return marketValue;
+        }
 
         /// <summary>Value the joker earned by itself (the three kumbara jokers).</summary>
         public int AccruedValue { get; private set; }
@@ -149,23 +159,14 @@ namespace ProjectBlock.Core
         /// <summary>Extra price put on this joker by "ihale". Written from outside.</summary>
         public int AuctionPremium { get; internal set; }
 
-        /// <summary>What the market pays for this joker right now.</summary>
-        public int SellValue
-        {
-            get { return BaseSellValue + AccruedValue + AuctionPremium; }
-        }
+        // The BASE sell value is NOT a field here: it is MarketConfig.JokerSellValue(rarity),
+        // a fixed fraction of the buy price, so sell can never drift above buy. Ask
+        // JokerInventory.SellValueOf(joker) for the whole number (base + the two fields above);
+        // a joker has no session, so it cannot answer that by itself.
 
         /// <summary>What the market charged for this joker, in the SCALED economy. 0 when it was
         /// never bought - a starting joker, or one granted by the debug picker.</summary>
         public long PurchasePrice { get; internal set; }
-
-        /// <summary>The price the market pays back, in the SCALED economy. Normally SellValue
-        /// lifted into that economy; a joker may name its own instead ("Yer altı kaynakları"
-        /// refunds exactly what you paid once it is spent). The ONE place a sale is priced.</summary>
-        public virtual long SellPriceScaled(int scoreScale)
-        {
-            return (long)SellValue * scoreScale;
-        }
 
         /// <summary>"Terslik" window: while it is open this joker's Accrue runs BACKWARDS, so a
         /// piggy bank leaks value instead of filling. Set by JokerInventory around joker dispatch,

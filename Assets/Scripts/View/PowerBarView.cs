@@ -58,6 +58,17 @@ namespace ProjectBlock.View
             root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
         }
 
+        /// <summary>Shows or hides the whole strip. The menu layer hides it while no run is
+        /// on screen; a hidden strip also stops answering PowerIndexAt, because its panels
+        /// go inactive with it.</summary>
+        public void SetVisible(bool visible)
+        {
+            if (root != null)
+            {
+                root.gameObject.SetActive(visible);
+            }
+        }
+
         /// <summary>Redraws the strip. targetingInstanceId highlights the power that is
         /// currently waiting for the player to pick a target.</summary>
         public void Refresh(GameSession session, int? targetingInstanceId)
@@ -215,7 +226,7 @@ namespace ProjectBlock.View
                 line.Append(Loc.Pick("empty (sweep refills)", "boş (temizlik doldurur)"));
             }
             line.Append('\n').Append(Loc.Pick("sell ", "satış "))
-                .Append(power.BaseSellValue * session.Config.Scoring.ScoreScale);
+                .Append(session.Powers.SellValueOf(power) * session.Config.Scoring.ScoreScale);
             if (silenced)
             {
                 line.Append(Loc.Pick("   (BOSS: off)", "   (PATRON: kapalı)"));
@@ -244,9 +255,9 @@ namespace ProjectBlock.View
             background.raycastTarget = false;
 
             Image strip = MakeRarityStrip(rect);
-            Text title = MakeLabel(rect, "Title", new Vector2(10f, -8f), 20, NameColor,
+            Text title = MakeLabel(rect, "Title", new Vector2(10f, -8f), 22, NameColor,
                 FontStyle.Bold, PanelWidth - 20f, 24f);
-            Text body = MakeLabel(rect, "Body", new Vector2(10f, -34f), 17, BodyColor,
+            Text body = MakeLabel(rect, "Body", new Vector2(10f, -34f), 19, BodyColor,
                 FontStyle.Normal, PanelWidth - 20f, 44f);
 
             return new Panel

@@ -1,4 +1,4 @@
-// PURPOSE: "Hazine" - the gamble joker. Two cells of the board are secretly marked at the
+﻿// PURPOSE: "Hazine" - the gamble joker. Two cells of the board are secretly marked at the
 // start of every round, one with treasure and one with dynamite. The player cannot see
 // which; they find out by exploding cubes on top of them.
 //
@@ -47,7 +47,6 @@ namespace ProjectBlock.Core
                 "Her raunt gizlice bir kareye hazine, bir kareye dinamit konur. Hazineyi "
                     + "patlatırsan ödül, dinamiti patlatırsan ceza alırsın - ikisine birden "
                     + "denk gelirsen birbirini götürür, birini bulmak diğerini kaldırır.");
-            BaseSellValue = 60;
         }
 
         public override string StatusText

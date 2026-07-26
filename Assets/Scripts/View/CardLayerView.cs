@@ -40,6 +40,21 @@ namespace ProjectBlock.View
         private Transform discardStackRoot;
         private CardVisual discardTopVisual;
         private TextMesh drawCountLabel;
+
+        /// <summary>Holds the count and the sell plate, and follows the stack's own offset so
+        /// both stay centred on the pile's visible top card however tall the pile is.</summary>
+        private Transform drawLabelRoot;
+
+        /// <summary>The "SELL CARDS" plate over the draw pile, shown in the market only.</summary>
+        private Transform sellHintRoot;
+        private TextMesh sellHintLabel;
+
+        private readonly SpriteRenderer[] drawPileHoverEdges = new SpriteRenderer[4];
+        private static readonly Color PileHoverColor = new Color(1f, 0.92f, 0.45f);
+
+        private static readonly Color SellHintBodyColor = new Color(0.20f, 0.24f, 0.34f);
+        private static readonly Color SellHintFrameColor = new Color(0.55f, 0.62f, 0.78f);
+        private static readonly Color SellHintTextColor = new Color(1f, 0.92f, 0.45f);
         private int discardTopId = -1;
         private CardVisual drawTopVisual;
         private int drawTopId = -1;
@@ -406,9 +421,93 @@ namespace ProjectBlock.View
             drawStackRoot.SetParent(drawPileRoot, false);
             discardStackRoot = MakePileRoot("Stack", Vector2.zero);
             discardStackRoot.SetParent(discardPileRoot, false);
-            drawCountLabel = ViewUtil.MakeText3D(drawPileRoot, "Count",
-                new Vector2(0f, CardVisual.BodyHeight * 0.5f + 0.34f), "0",
-                56, 0.07f, Color.white, 37, TextAnchor.MiddleCenter);
+            // The count and the sell prompt both ride ON the pile's face, in a root that follows
+            // the stack's offset - floating above it, they read as loose HUD text that happens
+            // to be nearby rather than as a label ON the thing you are meant to click.
+            // Orders 38+ clear the stack layers (3..35) and the discard's face-up top (36).
+            drawLabelRoot = MakePileRoot("Labels", Vector2.zero);
+            drawLabelRoot.SetParent(drawPileRoot, false);
+            drawCountLabel = ViewUtil.MakeText3D(drawLabelRoot, "Count",
+                new Vector2(0f, 0.42f), "0",
+                56, 0.075f, Color.white, 40, TextAnchor.MiddleCenter);
+            // Above the count, and only in the market: the deck pile is also the SELL screen,
+            // which nothing on screen said. A framed plate rather than loose text - floating
+            // words over the background read as a debug print, not as something to click.
+            sellHintRoot = MakePileRoot("SellHint", new Vector2(0f, -0.45f));
+            sellHintRoot.SetParent(drawLabelRoot, false);
+            var hintSize = new Vector2(1.72f, 0.44f);
+            ViewUtil.MakeRect(sellHintRoot, "Frame", Vector2.zero,
+                hintSize + new Vector2(0.10f, 0.10f), SellHintFrameColor, 38);
+            ViewUtil.MakeRect(sellHintRoot, "Body", Vector2.zero, hintSize, SellHintBodyColor, 39);
+            sellHintLabel = ViewUtil.MakeText3D(sellHintRoot, "Label", Vector2.zero,
+                Loc.Pick("SELL CARDS", "KART SAT"),
+                70, 0.027f, SellHintTextColor, 40, TextAnchor.MiddleCenter);
+            sellHintRoot.gameObject.SetActive(false);
+
+            // Hover outline, drawn OVER the stack so it reads whatever the pile's height.
+            for (int i = 0; i < drawPileHoverEdges.Length; i++)
+            {
+                drawPileHoverEdges[i] = ViewUtil.MakeRect(drawPileRoot, "Hover_" + i,
+                    Vector2.zero, Vector2.one, PileHoverColor, 41);
+                drawPileHoverEdges[i].enabled = false;
+            }
+        }
+
+        /// <summary>Outlines the draw pile while the pointer is over it - it is clickable in
+        /// every phase (deck list in a round, sell screen in the market) and nothing said so.
+        /// The outline is placed around the stack's CURRENT extent, so it fits a tall pile and
+        /// a nearly empty one alike.</summary>
+        public void SetDrawPileHovered(bool hovered)
+        {
+            if (drawPileHoverEdges[0] == null)
+            {
+                return;
+            }
+            if (!hovered)
+            {
+                for (int i = 0; i < drawPileHoverEdges.Length; i++)
+                {
+                    drawPileHoverEdges[i].enabled = false;
+                }
+                return;
+            }
+            Vector2 center = drawLabelRoot != null
+                ? (Vector2)drawLabelRoot.localPosition
+                : Vector2.zero;
+            var half = new Vector2(CardVisual.BodyWidth * 0.5f + 0.16f,
+                CardVisual.BodyHeight * 0.5f + 0.16f);
+            const float t = 0.07f;
+            PlaceEdge(drawPileHoverEdges[0], center + new Vector2(0f, half.y),
+                new Vector2(half.x * 2f + t, t));
+            PlaceEdge(drawPileHoverEdges[1], center - new Vector2(0f, half.y),
+                new Vector2(half.x * 2f + t, t));
+            PlaceEdge(drawPileHoverEdges[2], center - new Vector2(half.x, 0f),
+                new Vector2(t, half.y * 2f + t));
+            PlaceEdge(drawPileHoverEdges[3], center + new Vector2(half.x, 0f),
+                new Vector2(t, half.y * 2f + t));
+            for (int i = 0; i < drawPileHoverEdges.Length; i++)
+            {
+                drawPileHoverEdges[i].enabled = true;
+            }
+        }
+
+        private static void PlaceEdge(SpriteRenderer edge, Vector2 center, Vector2 size)
+        {
+            edge.transform.localPosition = new Vector3(center.x, center.y, 0f);
+            edge.transform.localScale = new Vector3(size.x, size.y, 1f);
+        }
+
+        /// <summary>Shows or hides the "click to sell" prompt over the draw pile. The controller
+        /// turns it on for the market phase only.</summary>
+        public void SetSellHint(bool visible)
+        {
+            if (sellHintRoot == null)
+            {
+                return;
+            }
+            // Re-texted on every toggle so a language switch mid-run is picked up.
+            sellHintLabel.text = Loc.Pick("SELL CARDS", "KART SAT");
+            sellHintRoot.gameObject.SetActive(visible);
         }
 
         private Transform MakePileRoot(string name, Vector2 position)
@@ -456,6 +555,10 @@ namespace ProjectBlock.View
         private void UpdatePiles(RoundEngine round)
         {
             drawCountLabel.text = round.Deck.DrawCount.ToString();
+            // The stack fans up-and-right one step per layer, so its visible middle moves as the
+            // pile shrinks. The labels ride along, or they would slide off a thinning pile.
+            float fan = (LayersFor(round.Deck.DrawCount) - 1) * StackOffset * 0.5f;
+            drawLabelRoot.localPosition = new Vector3(fan, fan, 0f);
             RebuildStack(drawStackRoot, round.Deck.DrawPile);
             RebuildStack(discardStackRoot, round.Deck.DiscardPile);
             UpdateDiscardTop(round);

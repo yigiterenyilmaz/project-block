@@ -70,7 +70,6 @@ namespace ProjectBlock.Core
                     + "Yeterince beslenirse BÜYÜR ve küp başına çok daha fazla öder - ama büyük "
                     + "yaratık daha çabuk açlıktan ölür ve küçüldüğünde çok daha pahalıya gelir. "
                     + "Açlıktan öldürürsen bu joker koşunun kalanı için biter.");
-            BaseSellValue = 70;
         }
 
         // ------------------------------------------------------------------ state, for the UI

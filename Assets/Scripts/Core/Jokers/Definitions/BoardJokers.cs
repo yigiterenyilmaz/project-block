@@ -1,4 +1,4 @@
-// PURPOSE: Jokers that reshape the board itself: Robot süpürge, Kayıt defteri,
+﻿// PURPOSE: Jokers that reshape the board itself: Robot süpürge, Kayıt defteri,
 // Kazı çalışması, Deprem. They are the first jokers that DESTROY cubes, so they
 // all obey the same two engine rules:
 //   - destruction goes through RoundEngine.DestroyCubes, which logs what died (kind +
@@ -48,7 +48,6 @@ namespace ProjectBlock.Core
                     + "its capacity and sends it on a short rest.",
                 "Her turdan sonra rastgele küp siler. Temizliği kendisi tetiklerse "
                     + "kapasitesi artar ve kısa süre dinlenir.");
-            BaseSellValue = 55;
         }
 
         public override string StatusText
@@ -120,7 +119,6 @@ namespace ProjectBlock.Core
                     + "While it is held, emptying the board does not count as one.",
                 "Patlatılan küpleri sayar; sayı alan büyüklüğüne ulaşınca temizlik "
                     + "tetikler. Bu joker dururken alanı boşaltmak temizlik sayılmaz.");
-            BaseSellValue = 60;
         }
 
         /// <summary>Overtime would otherwise leave no way to recycle the discard.</summary>
@@ -205,7 +203,6 @@ namespace ProjectBlock.Core
                 "A block that explodes whole in one go on the turn you place it is returned "
                     + "to your bonus hand.",
                 "Koyduğun turda tek seferde tümüyle patlayan blok bonus eline iade edilir.");
-            BaseSellValue = 50;
         }
 
         public override string StatusText
@@ -296,7 +293,6 @@ namespace ProjectBlock.Core
                     + "down a quarter of the cubes so you can play on. Pays no points.",
                 "Raunt başına bir kez: oyun alanı dolup koyacak yer kalmazsa deprem olur ve "
                     + "küplerin dörtte biri yıkılır, oyuna devam edersin. Puan vermez.");
-            BaseSellValue = 65;
         }
 
         public override string StatusText

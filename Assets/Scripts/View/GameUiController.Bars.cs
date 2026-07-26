@@ -1,4 +1,4 @@
-// PURPOSE: GameUiController bar & market interactions - using/selling jokers and powers
+﻿// PURPOSE: GameUiController bar & market interactions - using/selling jokers and powers
 // from the bars, the "Hileli zar" opening-hand pick, the Parazit attach flow, market
 // clicks and joker debug-key input.
 
@@ -114,7 +114,7 @@ namespace ProjectBlock.View
             return true;
         }
 
-        /// <summary>In the market, clicking a power panel sells it for its BaseSellValue.</summary>
+        /// <summary>In the market, clicking a power panel sells it for its sell value.</summary>
         private bool TrySellPowerFromBar(Mouse mouse)
         {
             int index = powerBar.PowerIndexAt(mouse.position.ReadValue());
@@ -231,6 +231,7 @@ namespace ProjectBlock.View
                     }
                     parazitTargetJoker = chosen.InstanceId;
                     parazitStep = ParazitStep.PickCard;
+                    deckOverlay.ResetScroll();
                     deckOverlay.Show(session.OwnedCards);
                     messageText.text = Loc.Pick(
                         "Parazit: pick a deck card   [Esc] cancel",
@@ -309,9 +310,10 @@ namespace ProjectBlock.View
                 return;
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
-            if (marketView.RerollButtonAt(world))
+            MarketOfferKind? rerollSection = marketView.RerollSectionAt(world);
+            if (rerollSection.HasValue)
             {
-                if (session.RerollMarket())
+                if (session.RerollMarket(rerollSection.Value))
                 {
                     sfx.Buy(); // reuse the buy "ka-ching" for the reroll
                     marketView.Show(session);
@@ -326,7 +328,11 @@ namespace ProjectBlock.View
                 if (cardLayer.IsDrawPileAt(world))
                 {
                     sellCardsMode = true;
-                    deckOverlay.Show(session.OwnedCards, c => session.Config.Market.SellValue(c));
+                    deckOverlay.ResetScroll(); // a fresh visit starts at the top of the deck
+                    // x ScoreScale: GameSession.SellCard pays in the scaled economy, and this
+                    // screen used to quote a tenth of what the card actually fetched.
+                    deckOverlay.Show(session.OwnedCards,
+                        c => session.Config.Market.SellValue(c) * session.Config.Scoring.ScoreScale);
                 }
                 return;
             }

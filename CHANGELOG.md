@@ -14,6 +14,10 @@ everything here is unreleased and balance numbers are still placeholders.
   what overtime is for. A turn that does not reach the bar banks every point as before.
 
 ### Fixed
+- **The dual-world matching-column bonus is no longer swallowed by the clean sweep it caused.**
+  Matching a column in both worlds usually empties a small board, and the sweep replaces the line
+  score — the bonus was being written into that line score, so the best turn in the game paid
+  nothing for it. It is a bonus on top now, like a joker's.
 - **A turn can no longer push the round score backwards.** Negative score from an end-of-turn
   effect was landing on the round score directly, where the existing zero-floor could not see it —
   so a big enough penalty could undo score the player had already banked. Now clamped centrally:
@@ -130,6 +134,26 @@ everything here is unreleased and balance numbers are still placeholders.
   boss round — what you earn during the boss round itself cannot save you. The HUD shows the
   debt next to the score, names the round you must pay by, and the run-over screen says which
   it was (`LossReason.DebtNotRepaid`, the only loss in the game that is not about the board).
+- **Menus** — the game no longer drops you straight into a run. It boots to a **title screen**
+  (Play → deck select → run), **Escape pauses** mid-round (resume / restart / how to play /
+  settings / save & quit), there is a **settings** screen (language, master volume, seed
+  random-or-pinned, turn logs — all persisted), a **how to play / controls** screen, and a real
+  **end-of-run summary** (final score, rounds survived, jokers, powers, bosses fought) instead
+  of the old one-line HUD message. Every screen is one reusable `MenuScreenView` on the existing
+  HUD canvas, mouse and keyboard drive the same selection, and all colours/metrics live in
+  `MenuSkin` so textures drop in later without touching layout code. **No debug tool was
+  removed** — every hotkey and the F2 grader work exactly as before.
+- **Save and continue** — a run can be saved at **any** point, mid-round included, and
+  **CONTINUE** on the title picks it up. It autosaves after every turn, when you pause, and on
+  quit, and leaving a run from the pause menu (**SAVE & QUIT**, formerly "abandon run") writes it
+  down rather than throwing it away — a save is only dropped when the run ends. Everything travels: board (holes
+  and eroded cells kept distinct), piles, hand and bonus hand, score, status, dynamite/fox/
+  rotation/freeze memories, the rewind history Kum Saati reaches into, the erosion clock, the
+  market shelf, the boss, and every joker and power with its own internal state. The random
+  stream is restored by **replaying its draw log**, so a loaded run continues bit-for-bit
+  identically — verified by a test that plays 60 further turns in lockstep — and the `baseline`
+  regression trace is untouched. Saves from an older build are refused rather than migrated
+  (`SaveGame.FormatVersion`).
 - **Boss rounds** — every third round (3, 6, 9, 12, 15) now draws a **boss** that bends the rules
   against you for that round only. A run never fights the same boss twice, the draw is
   deterministic from the run seed, and the HUD names the boss and describes what it is doing.

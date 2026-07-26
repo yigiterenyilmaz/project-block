@@ -1,4 +1,4 @@
-// PURPOSE: Jokers that act on the hand and the draw pile: Renovasyon, İade, Insider.
+﻿// PURPOSE: Jokers that act on the hand and the draw pile: Renovasyon, İade, Insider.
 // The first two are the game's first PLAYER-ACTIVATED jokers - they spend a per-round
 // charge and call an engine primitive; they consume no turn.
 //
@@ -26,7 +26,6 @@ namespace ProjectBlock.Core
                 "Raunt başına 2 kez tüm elini ıskartaya atıp yeni el çekersin. "
                     + "Tur harcamaz, uzatmada çalışmaz.");
             ChargesPerRound = 2;
-            BaseSellValue = 30;
         }
 
         /// <summary>See the file header: a free discard recycle would break overtime.</summary>
@@ -62,7 +61,6 @@ namespace ProjectBlock.Core
                 "Twice per round, return a single held block and draw a replacement. Costs no turn.",
                 "Raunt başına 2 kez elindeki tek bir bloğu iade edip yenisini çekersin. Tur harcamaz.");
             ChargesPerRound = 2;
-            BaseSellValue = 30;
         }
 
         /// <summary>The player picks which held block to send back.</summary>
@@ -108,7 +106,6 @@ namespace ProjectBlock.Core
             SetDescription(
                 "You see the top card of the draw pile.",
                 "Çekme destesinin en üstündeki kartı görürsün.");
-            BaseSellValue = 35;
         }
 
         public override void OnAcquired(SessionContext ctx)
@@ -147,7 +144,6 @@ namespace ProjectBlock.Core
                     + "your round-start hand size are discarded at random.",
                 "Elinde kalan bonus kartlar sonraki raunda taşınır. Raunt başındaki el "
                     + "büyüklüğünü aşan kartlar rastgele atılır.");
-            BaseSellValue = 55;
         }
 
         public override string StatusText
