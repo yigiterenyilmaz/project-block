@@ -113,7 +113,8 @@ namespace ProjectBlock.View
                 }
                 // The top band names the card's TYPE: its element(s), and/or "custom" for a
                 // player-designed block ("Karakter oluşturma"). Plain market/deck blocks get none.
-                if (card.Elements.Count > 0 || card.IsCustom || card.IsSmuggled)
+                if (card.Elements.Count > 0 || card.IsCustom || card.IsSmuggled
+                    || card.AntimatterOf.HasValue)
                 {
                     var elementLabels = new List<string>();
                     foreach (BlockElement element in card.Elements)
@@ -125,7 +126,10 @@ namespace ProjectBlock.View
                     // Smuggled goods are tagged above everything else, and a DEFECTIVE one says
                     // so outright: an ordinary-looking card that will not stay on the board has to
                     // be readable in the hand, or the player wastes the turn without knowing why.
-                    string bandText = card.FallsThrough
+                    string bandText = card.AntimatterOf.HasValue
+                        ? Loc.Pick("ANTI " + ViewUtil.KindLabel(card.AntimatterOf.Value),
+                            "ANTİ " + ViewUtil.KindLabel(card.AntimatterOf.Value))
+                        : card.FallsThrough
                         ? Loc.Pick("DEFECTIVE", "DEFOLU")
                         : card.IsSmuggled
                             ? Loc.Pick("smuggled", "kaçak")
@@ -137,7 +141,9 @@ namespace ProjectBlock.View
                     Track(ViewUtil.MakeRect(transform, "ElementBand", bandCenter,
                         new Vector2(BodyWidth - 0.1f, 0.22f), new Color(0.1f, 0.11f, 0.14f, 0.92f),
                         order + 2), order + 2);
-                    Color labelColor = card.FallsThrough
+                    Color labelColor = card.AntimatterOf.HasValue
+                        ? ViewUtil.CubeDisplayColor(new Cube(card.AntimatterOf.Value, -1))
+                        : card.FallsThrough
                         ? new Color(1f, 0.42f, 0.38f) // defective: a red warning
                         : card.IsSmuggled
                         ? new Color(1f, 0.72f, 0.35f) // sound smuggled goods: a milder amber

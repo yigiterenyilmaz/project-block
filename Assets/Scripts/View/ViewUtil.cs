@@ -89,6 +89,24 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Short display name of an element for card labels.</summary>
+        /// <summary>Short name of a CUBE kind, for a label that has to name what it acts on
+        /// ("Antimadde" saying which element it annihilates).</summary>
+        public static string KindLabel(CubeKind kind)
+        {
+            switch (kind)
+            {
+                case CubeKind.Fire: return ElementLabel(BlockElement.Fire);
+                case CubeKind.Water: return ElementLabel(BlockElement.Water);
+                case CubeKind.Obsidian: return ElementLabel(BlockElement.Obsidian);
+                case CubeKind.Gold: return ElementLabel(BlockElement.Gold);
+                case CubeKind.Transparent: return ElementLabel(BlockElement.Transparent);
+                case CubeKind.Dynamite: return ElementLabel(BlockElement.Dynamite);
+                case CubeKind.Ice: return Loc.Pick("ice", "buz");
+                case CubeKind.Gangrene: return Loc.Pick("rot", "kangren");
+                default: return Loc.Pick("plain", "sade");
+            }
+        }
+
         public static string ElementLabel(BlockElement element)
         {
             switch (element)
