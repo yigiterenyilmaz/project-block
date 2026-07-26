@@ -16,7 +16,6 @@ namespace ProjectBlock.Core
     public sealed class PowerInventory
     {
         private readonly List<Power> powers = new List<Power>();
-        private readonly List<Power> dispatchBuffer = new List<Power>();
         private readonly GameSession session;
         private readonly IRandomSource rng;
         private int nextInstanceId = 1;
@@ -311,10 +310,10 @@ namespace ProjectBlock.Core
         public RoundConfig FilterRoundConfig(RoundConfig config)
         {
             SessionContext ctx = SessionCtx();
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Power> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                config = dispatchBuffer[i].FilterRoundConfig(ctx, config);
+                config = batch[i].FilterRoundConfig(ctx, config);
             }
             return config;
         }
@@ -323,14 +322,14 @@ namespace ProjectBlock.Core
         public void DispatchRoundStarted(RoundEngine round)
         {
             RoundContext ctx = RoundCtx(round);
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Power> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                dispatchBuffer[i].Recharge();
+                batch[i].Recharge();
             }
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            for (int i = 0; i < batch.Count; i++)
             {
-                dispatchBuffer[i].OnRoundStarted(ctx);
+                batch[i].OnRoundStarted(ctx);
             }
             RaiseChanged();
         }
@@ -343,32 +342,32 @@ namespace ProjectBlock.Core
             // "Tükenmişlik": nothing refills a charge for the rest of the round, so even the
             // powers' own economy - the sweep - pays them nothing.
             bool blocked = turn.Round != null && turn.Round.PowerRechargeBlocked;
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Power> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                if (turn.Round != null && turn.Round.IsSilencedByBoss(dispatchBuffer[i]))
+                if (turn.Round != null && turn.Round.IsSilencedByBoss(batch[i]))
                 {
                     continue; // silenced by a boss round: no recharge, no hook
                 }
                 if (recharge && !blocked)
                 {
-                    dispatchBuffer[i].Recharge();
+                    batch[i].Recharge();
                 }
-                dispatchBuffer[i].AfterCleanSweep(turn);
+                batch[i].AfterCleanSweep(turn);
             }
             RaiseChanged();
         }
 
         public void DispatchAfterTurnScored(TurnContext turn)
         {
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Power> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                if (turn.Round != null && turn.Round.IsSilencedByBoss(dispatchBuffer[i]))
+                if (turn.Round != null && turn.Round.IsSilencedByBoss(batch[i]))
                 {
                     continue;
                 }
-                dispatchBuffer[i].AfterTurnScored(turn);
+                batch[i].AfterTurnScored(turn);
             }
             RaiseChanged();
         }
@@ -463,10 +462,14 @@ namespace ProjectBlock.Core
             return false;
         }
 
-        private void Snapshot()
+        /// <summary>A private copy of the inventory for ONE dispatch to walk. A fresh list rather
+        /// than a shared field, for the same reason as JokerInventory.Snapshot: dispatch nests -
+        /// an AfterTurnScored effect that empties the board raises the central clean sweep, which
+        /// dispatches DispatchCleanSweep through this same inventory - and a shared buffer would
+        /// be cleared and refilled underneath the outer walk.</summary>
+        private List<Power> Snapshot()
         {
-            dispatchBuffer.Clear();
-            dispatchBuffer.AddRange(powers);
+            return new List<Power>(powers);
         }
 
         private SessionContext SessionCtx()

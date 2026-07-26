@@ -22,7 +22,6 @@ namespace ProjectBlock.Core
     public sealed class JokerInventory : ITurnHooks
     {
         private readonly List<Joker> jokers = new List<Joker>();
-        private readonly List<Joker> dispatchBuffer = new List<Joker>();
         private readonly GameSession session;
         private readonly IRandomSource rng;
         private int nextInstanceId = 1;
@@ -94,7 +93,6 @@ namespace ProjectBlock.Core
 
         // ------------------------------------------------------------- acquire / remove
 
-        /// <summary>Adds a joker and runs its OnAcquired. Charges start full.</summary>
         /// <summary>Save/load only: the next instance id to hand out, so a restored run keeps
         /// minting ids that cannot collide with the jokers it already holds.</summary>
         internal int NextInstanceId
@@ -112,6 +110,7 @@ namespace ProjectBlock.Core
             jokers.Add(joker);
         }
 
+        /// <summary>Adds a joker and runs its OnAcquired. Charges start full.</summary>
         public Joker Add(Joker joker)
         {
             if (joker == null)
@@ -140,10 +139,10 @@ namespace ProjectBlock.Core
                 ActiveAuctionInstanceId = null;
             }
             SessionContext ctx = SessionCtx();
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                dispatchBuffer[i].OnJokerRemoved(ctx, joker);
+                batch[i].OnJokerRemoved(ctx, joker);
             }
             RaiseChanged();
             return true;
@@ -348,7 +347,7 @@ namespace ProjectBlock.Core
                 return 0;
             }
             session.AddCurrency(value);
-            return (int)value;
+            return value;
         }
 
         /// <summary>"ihale" uses this to put an extra price on a joker.</summary>
@@ -418,10 +417,10 @@ namespace ProjectBlock.Core
         public RoundConfig FilterRoundConfig(RoundConfig config)
         {
             SessionContext ctx = SessionCtx();
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                config = dispatchBuffer[i].FilterRoundConfig(ctx, config);
+                config = batch[i].FilterRoundConfig(ctx, config);
             }
             return config;
         }
@@ -430,16 +429,16 @@ namespace ProjectBlock.Core
         public void DispatchRoundStarted(RoundEngine round)
         {
             RoundContext ctx = RoundCtx(round);
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                dispatchBuffer[i].ResetCharges();
+                batch[i].ResetCharges();
             }
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            for (int i = 0; i < batch.Count; i++)
             {
-                if (!IsGated(dispatchBuffer[i], round))
+                if (!IsGated(batch[i], round))
                 {
-                    dispatchBuffer[i].OnRoundStarted(ctx);
+                    batch[i].OnRoundStarted(ctx);
                 }
             }
             RaiseChanged();
@@ -451,10 +450,10 @@ namespace ProjectBlock.Core
         public void DispatchOvertimeStarted(RoundEngine round)
         {
             RoundContext ctx = RoundCtx(round);
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                dispatchBuffer[i].OnOvertimeStarted(ctx);
+                batch[i].OnOvertimeStarted(ctx);
             }
             RaiseChanged();
         }
@@ -462,18 +461,18 @@ namespace ProjectBlock.Core
         public void DispatchRoundEnded(RoundEngine round, RoundOutcome outcome)
         {
             RoundContext ctx = RoundCtx(round);
-            Snapshot();
+            List<Joker> batch = Snapshot();
             // The piggy banks take their per-round cut here, so the "Terslik" window has to
             // reach this far too - otherwise the boss would leak the one payout that matters
             // most. No breakdown: the round is over, there is no turn score left to invert.
             bool inverted = BeginInversion(round, null);
             try
             {
-                for (int i = 0; i < dispatchBuffer.Count; i++)
+                for (int i = 0; i < batch.Count; i++)
                 {
                     // NOT gated on overtime: a round that ends in overtime must still pay out
                     // round-end effects, otherwise every overtime round silently loses them.
-                    dispatchBuffer[i].OnRoundEnded(ctx, outcome);
+                    batch[i].OnRoundEnded(ctx, outcome);
                 }
             }
             finally
@@ -486,10 +485,10 @@ namespace ProjectBlock.Core
         public void DispatchMarketEntered()
         {
             SessionContext ctx = SessionCtx();
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                dispatchBuffer[i].OnMarketEntered(ctx);
+                batch[i].OnMarketEntered(ctx);
             }
         }
 
@@ -497,10 +496,10 @@ namespace ProjectBlock.Core
         public BlockCard FilterMarketOffer(BlockCard card)
         {
             SessionContext ctx = SessionCtx();
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                card = dispatchBuffer[i].FilterMarketOffer(ctx, card) ?? card;
+                card = batch[i].FilterMarketOffer(ctx, card) ?? card;
             }
             return card;
         }
@@ -509,12 +508,12 @@ namespace ProjectBlock.Core
         public void DispatchPowerUsed(RoundEngine round, string powerId)
         {
             RoundContext ctx = RoundCtx(round);
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                if (!IsGated(dispatchBuffer[i], round))
+                if (!IsGated(batch[i], round))
                 {
-                    dispatchBuffer[i].OnPowerUsed(ctx, powerId);
+                    batch[i].OnPowerUsed(ctx, powerId);
                 }
             }
             RaiseChanged();
@@ -523,10 +522,10 @@ namespace ProjectBlock.Core
         public void DispatchMarketLeft(bool anythingPurchased)
         {
             SessionContext ctx = SessionCtx();
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                dispatchBuffer[i].OnMarketLeft(ctx, anythingPurchased);
+                batch[i].OnMarketLeft(ctx, anythingPurchased);
             }
         }
 
@@ -534,15 +533,15 @@ namespace ProjectBlock.Core
 
         public void AfterLineExplosion(TurnContext turn)
         {
-            Snapshot();
+            List<Joker> batch = Snapshot();
             bool inverted = BeginInversion(turn.Round, turn.Score);
             try
             {
-                for (int i = 0; i < dispatchBuffer.Count; i++)
+                for (int i = 0; i < batch.Count; i++)
                 {
-                    if (!IsGated(dispatchBuffer[i], turn.Round))
+                    if (!IsGated(batch[i], turn.Round))
                     {
-                        dispatchBuffer[i].AfterLineExplosion(turn);
+                        batch[i].AfterLineExplosion(turn);
                     }
                 }
             }
@@ -554,15 +553,15 @@ namespace ProjectBlock.Core
 
         public void AfterCleanSweep(TurnContext turn)
         {
-            Snapshot();
+            List<Joker> batch = Snapshot();
             bool inverted = BeginInversion(turn.Round, turn.Score);
             try
             {
-                for (int i = 0; i < dispatchBuffer.Count; i++)
+                for (int i = 0; i < batch.Count; i++)
                 {
-                    if (!IsGated(dispatchBuffer[i], turn.Round))
+                    if (!IsGated(batch[i], turn.Round))
                     {
-                        dispatchBuffer[i].AfterCleanSweep(turn);
+                        batch[i].AfterCleanSweep(turn);
                     }
                 }
             }
@@ -574,15 +573,15 @@ namespace ProjectBlock.Core
 
         public void ModifyScore(TurnContext turn)
         {
-            Snapshot();
+            List<Joker> batch = Snapshot();
             bool inverted = BeginInversion(turn.Round, turn.Score);
             try
             {
-                for (int i = 0; i < dispatchBuffer.Count; i++)
+                for (int i = 0; i < batch.Count; i++)
                 {
-                    if (!IsGated(dispatchBuffer[i], turn.Round))
+                    if (!IsGated(batch[i], turn.Round))
                     {
-                        dispatchBuffer[i].ModifyScore(turn);
+                        batch[i].ModifyScore(turn);
                     }
                 }
             }
@@ -594,15 +593,15 @@ namespace ProjectBlock.Core
 
         public void AfterTurnScored(TurnContext turn)
         {
-            Snapshot();
+            List<Joker> batch = Snapshot();
             bool inverted = BeginInversion(turn.Round, turn.Score);
             try
             {
-                for (int i = 0; i < dispatchBuffer.Count; i++)
+                for (int i = 0; i < batch.Count; i++)
                 {
-                    if (!IsGated(dispatchBuffer[i], turn.Round))
+                    if (!IsGated(batch[i], turn.Round))
                     {
-                        dispatchBuffer[i].AfterTurnScored(turn);
+                        batch[i].AfterTurnScored(turn);
                     }
                 }
             }
@@ -618,14 +617,14 @@ namespace ProjectBlock.Core
         /// each rescue, so a second joker only fires if the first did not save the round.</summary>
         public bool TryRescueFromDeadEnd(RoundContext ctx)
         {
-            Snapshot();
-            for (int i = 0; i < dispatchBuffer.Count; i++)
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
             {
-                if (IsGated(dispatchBuffer[i], ctx.Round))
+                if (IsGated(batch[i], ctx.Round))
                 {
                     continue;
                 }
-                if (dispatchBuffer[i].TryRescueFromDeadEnd(ctx))
+                if (batch[i].TryRescueFromDeadEnd(ctx))
                 {
                     RaiseChanged();
                     return true;
@@ -646,13 +645,23 @@ namespace ProjectBlock.Core
         /// bookkeeping share the same ScoreBreakdown, and they must not be inverted with it.
         /// The score arrives through the breakdown; the sell value through the joker itself,
         /// because Accrue never touches the breakdown.
+        ///
+        /// NESTING IS REAL, so the window is counted rather than flagged: a joker's
+        /// AfterTurnScored can empty the board and raise the central clean sweep, whose
+        /// AfterCleanSweep dispatch opens a second window inside the first. Only the OUTERMOST
+        /// EndInversion may close it - otherwise the inner one would switch inversion off while
+        /// the outer walk still had jokers to pay, and the rest of them would quietly pay
+        /// forwards in the middle of a "Terslik" round.
         /// </summary>
+        private int inversionDepth;
+
         private bool BeginInversion(RoundEngine round, ScoreBreakdown score)
         {
             if (round == null || !round.InvertsJokerScore)
             {
                 return false;
             }
+            inversionDepth++;
             if (score != null)
             {
                 score.InvertContributions = true;
@@ -669,6 +678,11 @@ namespace ProjectBlock.Core
             if (!opened)
             {
                 return;
+            }
+            inversionDepth--;
+            if (inversionDepth > 0)
+            {
+                return; // an outer window is still open - see BeginInversion
             }
             if (score != null)
             {
@@ -701,10 +715,18 @@ namespace ProjectBlock.Core
                 || (joker.Defect == SmuggledDefect.DeadInBossRounds && round.Config.IsBossRound);
         }
 
-        private void Snapshot()
+        /// <summary>
+        /// A private copy of the inventory for ONE dispatch to walk. Deliberately a fresh list
+        /// rather than a shared field: dispatch NESTS - a joker's AfterTurnScored can empty the
+        /// board ("Robot süpürge", "Kayıt defteri", "Enfeksiyon"), which raises the central clean
+        /// sweep, which dispatches AfterCleanSweep through this same inventory. A shared buffer
+        /// would be cleared and refilled underneath the outer walk, and the promise in the file
+        /// header - that a joker may remove another joker without corrupting the walk - would
+        /// only hold for the outermost one.
+        /// </summary>
+        private List<Joker> Snapshot()
         {
-            dispatchBuffer.Clear();
-            dispatchBuffer.AddRange(jokers);
+            return new List<Joker>(jokers);
         }
 
         private SessionContext SessionCtx()
