@@ -135,6 +135,9 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Threshold_IsACeilingForNormalPlay();
+        Threshold_OvertimeIsAllowedPastTheBar();
+        Threshold_ATurnUnderTheBarIsUntouched();
         Boss_AlacakaranlikBendsNoRuleAtAll();
         Boss_KarantinaSealsOutwardInAndCharges();
         Boss_KarantinaChargesOnlyTheCubesInside();
@@ -4290,6 +4293,86 @@ public static class JokerTests
             "and the circuit still counted as completed, even though the line ate its cells");
     }
 
+    private static void Threshold_IsACeilingForNormalPlay()
+    {
+        Section("threshold / normal play is capped at the bar, overtime is the only way past");
+        // A low bar and a fat per-cube payout, so one placement overshoots it wildly.
+        var session = NewSession(9000, 6, 50, 40, 4);
+        session.Config.Scoring.PointsPerCubePlaced = 400;
+        RoundEngine round = session.CurrentRound;
+        int scaledBar = round.ScoreThreshold * session.Config.Scoring.ScoreScale;
+
+        long runBefore = session.TotalScore;
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "a card was played");
+        Check(report.ThresholdJustPassed, "and it crossed the bar");
+        Check(report.Score.Total > scaledBar, "the turn EARNED far more than the bar",
+            report.Score.Total + " vs bar " + scaledBar);
+
+        Check(round.RoundScore == scaledBar, "but the round banked exactly the bar, no more",
+            round.RoundScore + " vs " + scaledBar);
+        Check(report.ScoreGained == scaledBar - 0, "the report says what was banked",
+            report.ScoreGained + " vs " + scaledBar);
+        Check(session.TotalScore - runBefore == scaledBar,
+            "and the RUN got the capped amount too - the money never outruns the meter",
+            (session.TotalScore - runBefore) + " vs " + scaledBar);
+        Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "the advance offer is up");
+    }
+
+    private static void Threshold_OvertimeIsAllowedPastTheBar()
+    {
+        Section("threshold / overtime scores past the bar, which is its whole point");
+        var session = NewSession(9001, 6, 50, 40, 4);
+        session.Config.Scoring.PointsPerCubePlaced = 400;
+        RoundEngine round = session.CurrentRound;
+        int scaledBar = round.ScoreThreshold * session.Config.Scoring.ScoreScale;
+
+        PlayOneCard(round);
+        Check(round.RoundScore == scaledBar, "capped at the bar on the crossing turn",
+            "" + round.RoundScore);
+        Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "the offer is up");
+
+        // Decline it: overtime begins, and NOW the score may climb past the bar.
+        round.DecideAdvance(false);
+        Check(round.Status == RoundStatus.InProgress, "overtime is running",
+            "status " + round.Status);
+        Check(round.ThresholdPassed, "and the threshold is marked passed");
+
+        int guard = 0;
+        while (round.Status == RoundStatus.InProgress && round.RoundScore <= scaledBar
+            && guard++ < 30)
+        {
+            if (PlayOneCard(round) == null) { break; }
+        }
+        Check(round.RoundScore > scaledBar,
+            "overtime carried the score past the bar - the cap is for normal play only",
+            round.RoundScore + " vs bar " + scaledBar);
+    }
+
+    private static void Threshold_ATurnUnderTheBarIsUntouched()
+    {
+        Section("threshold / a turn that does not reach the bar banks every point");
+        var session = NewSession(9002, 6, 1000000, 40, 3);
+        session.Config.Scoring.PointsPerCubePlaced = 10;
+        RoundEngine round = session.CurrentRound;
+
+        long runBefore = session.TotalScore;
+        int banked = 0;
+        for (int i = 0; i < 5; i++)
+        {
+            TurnReport report = PlayOneCard(round);
+            if (report == null) { break; }
+            Check(report.ScoreGained == report.Score.Total,
+                "turn " + (i + 1) + " banked exactly what it earned",
+                report.ScoreGained + " vs " + report.Score.Total);
+            banked += report.ScoreGained;
+        }
+        Check(round.RoundScore == banked, "the round holds the sum of them",
+            round.RoundScore + " vs " + banked);
+        Check(session.TotalScore - runBefore == banked, "and so does the run",
+            (session.TotalScore - runBefore) + " vs " + banked);
+    }
+
     private static void Boss_AlacakaranlikBendsNoRuleAtAll()
     {
         Section("boss / alacakaranlık hides the board and changes nothing else");
@@ -5550,10 +5633,19 @@ public static class JokerTests
                 {
                     return;
                 }
-                if (report.Score != null && report.ScoreGained != report.Score.Total)
+                // The breakdown says what the turn EARNED; the report says what was BANKED.
+                // They match on every turn but the one that crosses the threshold, where the
+                // round's score is capped at the bar and the excess is dropped.
+                bool cappedThisTurn = report.ThresholdJustPassed;
+                bool scoreMatches = report.Score == null
+                    || (cappedThisTurn
+                        ? report.ScoreGained <= report.Score.Total
+                        : report.ScoreGained == report.Score.Total);
+                if (!scoreMatches)
                 {
                     failure = "seed " + seed + ": ScoreGained " + report.ScoreGained
-                        + " != breakdown total " + report.Score.Total;
+                        + " != breakdown total " + report.Score.Total
+                        + (cappedThisTurn ? " (crossing turn)" : "");
                     localFailure = true;
                     return;
                 }

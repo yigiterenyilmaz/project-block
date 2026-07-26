@@ -76,6 +76,12 @@ dropped that way once each.
   numbered 1-15, and the board-size table (`DefaultRoundProgression.BoardSizeBands` — rounds
   1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9) is confirmed design, not a knob to tune. There is
   no victory condition wired yet; the run still only ends by losing.
+- **The threshold is a CEILING for normal play.** A round banks at most its own
+  `RoundEngine.ScoreThreshold`: the turn that crosses the bar takes the score TO it and drops
+  the excess, from the run currency too (`CapScoreAtThresholdOnCrossing`, called at BOTH
+  crossing points — in-turn step 9 and `AddScoreOutsideTurn`). Scoring past the bar is what
+  **overtime** is for, and the only way to it. So `TurnReport.ScoreGained` is what was BANKED
+  while `TurnReport.Score.Total` is what the turn EARNED; they differ only on the crossing turn.
 - **Board erosion is the anti-stalling clock.** Each band also names a `ShuffleErosion`: past
   `RoundRules.FreeDeckRecycles` (2), every time the draw pile runs DRY the arena loses a piece —
   the rim (1-5), a growing centre hole (6-11), or both (12-15). It is counted in

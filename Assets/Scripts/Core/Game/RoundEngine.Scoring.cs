@@ -65,10 +65,45 @@ namespace ProjectBlock.Core
                     DeclareLoss(LossReason.ForbiddenThreshold); // "Çıkmaz", between turns
                     return;
                 }
+                CapScoreAtThresholdOnCrossing();
                 ThresholdPassed = true;
                 Deck.ShuffleDiscardIntoDraw();
                 EnterOvertime();
                 SetStatus(RoundStatus.AwaitingAdvanceDecision);
+            }
+        }
+
+        /// <summary>
+        /// CONFIRMED RULE: a round's score is CAPPED at its own threshold. Reaching the bar is
+        /// the whole goal of normal play, so the turn that crosses it takes you TO it and no
+        /// further - a sweep that would have carried 600 past a 650 bar all the way to 1200
+        /// banks 650. The only way past the threshold is to decline the advance and play
+        /// OVERTIME for it.
+        ///
+        /// The excess is dropped from the run currency too, through the turn report the session
+        /// reads afterwards, so the money can never outrun the meter that earned it.
+        ///
+        /// Call this the moment the threshold is first reached, before ThresholdPassed is set.
+        /// </summary>
+        private void CapScoreAtThresholdOnCrossing()
+        {
+            int excess = RoundScore - ScaledThreshold;
+            if (excess <= 0)
+            {
+                return;
+            }
+            RoundScore = ScaledThreshold;
+            if (currentReport != null)
+            {
+                // The session banks report.ScoreGained after the turn resolves, so trimming it
+                // here is what keeps TotalScore honest - no separate refund needed.
+                currentReport.ScoreGained -= excess;
+                currentReport.RoundScoreAfter = RoundScore;
+            }
+            else if (session != null)
+            {
+                // Between turns there is no report to trim, so the currency is given back.
+                session.AddCurrency(-excess);
             }
         }
 

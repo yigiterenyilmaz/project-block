@@ -320,6 +320,9 @@ namespace ProjectBlock.Core
                 }
                 else
                 {
+                    // The bar is a CEILING for normal play: this turn takes you to it and no
+                    // further. Everything past it has to be earned in overtime.
+                    CapScoreAtThresholdOnCrossing();
                     ThresholdPassed = true;
                     report.ThresholdJustPassed = true;
                     Deck.ShuffleDiscardIntoDraw();

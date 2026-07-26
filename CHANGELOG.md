@@ -6,6 +6,13 @@ everything here is unreleased and balance numbers are still placeholders.
 
 ## Unreleased — `balance`
 
+### Changed
+- **A round's score is now capped at its own threshold.** The turn that crosses the bar takes
+  you *to* it and no further — a clean sweep that would have carried 600 past a 650 bar all the
+  way to 1200 now banks 650, and the run currency is capped with it, so the money can never
+  outrun the meter that earned it. **Overtime is the only way past the threshold**, which is
+  what overtime is for. A turn that does not reach the bar banks every point as before.
+
 ### Added
 - **Şifacı (joker)** — every 5 turns it gives **one use back** to a random **spent** joker. The
   clock does not run down while there is nothing to heal: if no joker is empty when it comes
