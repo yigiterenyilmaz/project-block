@@ -817,6 +817,17 @@ public static class JokerTests
             "got " + report.Score.BaseTargeted);
         Check(!round.Board.GetCube(new GridPos(0, 1)).HasValue,
             "the cube that survived the line went up with the block");
+
+        // The payout's cells go in a channel of their OWN. "Antimadde" bills the player per cube
+        // in ExtraExplodedCells, so a payout that wrote in there would be paid for by a joker
+        // that did not cause it - reachable, because erasing a target cube with a negative block
+        // mints an antimatter-of-Target card that sets off every armed block at once.
+        Check(report.TargetedExplodedCells.Count == 1,
+            "the payout's cells are reported in its own channel",
+            "" + report.TargetedExplodedCells.Count);
+        Check(report.ExtraExplodedCells.Count == 0,
+            "and NOT in the one Antimadde bills against",
+            "" + report.ExtraExplodedCells.Count);
     }
 
     private static void Targeted_PlainCubeFirstSpendsTheBlockForGood()
