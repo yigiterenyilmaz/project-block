@@ -37,6 +37,7 @@ namespace ProjectBlock.Core
             Register(() => new AlzheimerBoss());
             Register(() => new YuruyenMerdivenBoss());
             Register(() => new KarantinaBoss());
+            Register(() => new AlacakaranlikBoss());
         }
 
         /// <summary>All known bosses, in design order.</summary>

@@ -140,6 +140,7 @@ namespace ProjectBlock.View
             {
                 mirrorBoardView.Rebuild(round.MirrorBoard, MirrorBoardWorldSize, MirrorWorldCenter);
             }
+            mirrorBoardView.SetDarkness(round.BoardIsDark);
             mirrorBoardView.Refresh();
             mirrorBoardView.ClearPreview();
             RefreshMirrorHandVisuals(round);

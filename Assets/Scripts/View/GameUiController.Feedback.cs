@@ -76,6 +76,18 @@ namespace ProjectBlock.View
                 // that the placement's own CubesExploded count never saw.
                 sfx.Explode();
             }
+            // "Alacakaranlık": a blast is the one thing that shows the player anything, so it
+            // lights its own surroundings before the dark closes back over them.
+            if (boardView.IsDark)
+            {
+                var lit = new List<GridPos>();
+                foreach (DestroyedCube dead in report.DestroyedCubes)
+                {
+                    lit.Add(dead.Pos);
+                }
+                lit.AddRange(report.ExtraExplodedCells);
+                boardView.LightUpAround(lit);
+            }
             HandleBlastFeedback(round, report);
         }
 
@@ -228,6 +240,8 @@ namespace ProjectBlock.View
                 boardView.Rebuild(round.Board, mainSize, mainCenter);
                 lastMainBoardSize = mainSize;
             }
+            // "Alacakaranlık" - set BEFORE the refresh, so the very first paint is already dark.
+            boardView.SetDarkness(round.BoardIsDark);
             boardView.Refresh();
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
@@ -280,6 +294,14 @@ namespace ProjectBlock.View
                 {
                     infectionBuffer.AddRange(enf.InfectedCells);
                 }
+            }
+            // Every board marker is a map of the board, so none of them may show while blind.
+            if (session.CurrentRound != null && session.CurrentRound.BoardIsDark)
+            {
+                boardView.ShowInfections(null);
+                boardView.ShowCircuit(null);
+                boardView.ShowQuarantine(null, null);
+                return;
             }
             boardView.ShowInfections(infectionBuffer);
             RefreshCircuit();

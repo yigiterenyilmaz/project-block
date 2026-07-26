@@ -39,6 +39,19 @@ namespace ProjectBlock.View
         /// sickly wash over the cell, so the zone reads without hiding what stands in it.</summary>
         private static readonly Color QuarantineTint = new Color(0.75f, 0.72f, 0.20f);
 
+        /// <summary>"Alacakaranlık": what a cell looks like with the lights out. Barely above
+        /// the background, so the grid is still findable but tells you nothing.</summary>
+        private static readonly Color DarkCellColor = new Color(0.075f, 0.08f, 0.10f);
+
+        /// <summary>The preview under the cursor while blind. ONE neutral colour: it shows where
+        /// the block would land and refuses to say whether it fits, or the player could map the
+        /// whole board by waving the mouse over it.</summary>
+        private static readonly Color BlindPreviewColor = new Color(0.72f, 0.72f, 0.78f, 0.45f);
+
+        /// <summary>How long a blast keeps its surroundings lit, and how far the light reaches.</summary>
+        private const float LightSeconds = 1.1f;
+        private const int LightRadius = 2;
+
         private GameBoard board;
         private SpriteRenderer[,] cellRenderers;
         private SpriteRenderer[,] previewRenderers;
@@ -54,6 +67,13 @@ namespace ProjectBlock.View
         /// <summary>"Karantina"'s sealed rows and columns, in absolute board coordinates.</summary>
         private readonly List<int> quarantinedRows = new List<int>();
         private readonly List<int> quarantinedColumns = new List<int>();
+
+        /// <summary>"Alacakaranlık": the board is dark and the player is blind.</summary>
+        private bool dark;
+
+        /// <summary>Seconds of light left on each cell, indexed like cellRenderers. Only ever
+        /// non-zero while dark - an explosion writes into it and Update burns it down.</summary>
+        private float[,] litFor;
         private ParticleSystem ambient;
         private float ambientTimer;
         private bool animatingWater;
@@ -88,7 +108,13 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            if (!animatingWater)
+            if (dark)
+            {
+                // Blind: no idle animation may run, or a flickering fire would give away a
+                // cube the player is not allowed to see. Only the blast light moves.
+                BurnDownLight();
+            }
+            else if (!animatingWater)
             {
                 AnimateElementCubes(); // would fight the fall animation's cell painting
                 AnimateInfections();   // green pulse, applied on top of the base/element color
@@ -97,7 +123,10 @@ namespace ProjectBlock.View
             while (ambientTimer >= 0.12f)
             {
                 ambientTimer -= 0.12f;
-                EmitAmbientParticle();
+                if (!dark) // embers and drips would give away where the elements are
+                {
+                    EmitAmbientParticle();
+                }
             }
             float ghostAlpha = 0.28f + 0.1f * Mathf.Sin(Time.time * 2.5f);
             foreach (SpriteRenderer sprite in ghostSprites)
@@ -109,6 +138,52 @@ namespace ProjectBlock.View
                     sprite.color = color;
                 }
             }
+        }
+
+        /// <summary>Burns each lit cell's remaining time down and repaints it, so a blast's
+        /// light dims away instead of snapping off. Repaints only while something is still lit.</summary>
+        private void BurnDownLight()
+        {
+            if (litFor == null)
+            {
+                return;
+            }
+            bool anyLit = false;
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    if (litFor[x, y] <= 0f)
+                    {
+                        continue;
+                    }
+                    litFor[x, y] -= Time.deltaTime;
+                    if (litFor[x, y] < 0f)
+                    {
+                        litFor[x, y] = 0f;
+                    }
+                    anyLit = true;
+                }
+            }
+            if (anyLit)
+            {
+                Refresh();
+            }
+        }
+
+        /// <summary>How brightly a cell is lit right now, 0 (dark) to 1. Always 1 with the
+        /// lights on, so every caller can just multiply by it.</summary>
+        private float LightAt(int x, int y)
+        {
+            if (!dark)
+            {
+                return 1f;
+            }
+            if (litFor == null || x < 0 || x >= board.Width || y < 0 || y >= board.Height)
+            {
+                return 0f;
+            }
+            return Mathf.Clamp01(litFor[x, y] / LightSeconds);
         }
 
         /// <summary>Element cubes get simple idle animations: fire flickers, water waves,
@@ -266,6 +341,7 @@ namespace ProjectBlock.View
             cellRenderers = new SpriteRenderer[board.Width, board.Height];
             previewRenderers = new SpriteRenderer[board.Width, board.Height];
             kindCache = new CubeKind?[board.Width, board.Height];
+            litFor = new float[board.Width, board.Height];
             baseColorCache = new Color[board.Width, board.Height];
             for (int x = 0; x < board.Width; x++)
             {
@@ -324,6 +400,12 @@ namespace ProjectBlock.View
                     {
                         color = Color.Lerp(color, QuarantineTint, cube.HasValue ? 0.45f : 0.6f);
                     }
+                    // "Alacakaranlık": the truth is drowned in the dark and only a blast's
+                    // light brings any of it back, in proportion to how bright that light is.
+                    if (dark)
+                    {
+                        color = Color.Lerp(DarkCellColor, color, LightAt(x, y));
+                    }
                     cellRenderers[x, y].color = color;
                     kindCache[x, y] = cube.HasValue ? cube.Value.Kind : (CubeKind?)null;
                     baseColorCache[x, y] = color;
@@ -335,6 +417,19 @@ namespace ProjectBlock.View
         /// <summary>Ghost cubes hanging outside the grid render as faint traces.</summary>
         private void RefreshGhostTraces()
         {
+            if (dark)
+            {
+                // A ghost trace is a cube by another name; blind means blind.
+                foreach (SpriteRenderer sprite in ghostSprites)
+                {
+                    if (sprite != null)
+                    {
+                        Destroy(sprite.gameObject);
+                    }
+                }
+                ghostSprites.Clear();
+                return;
+            }
             foreach (SpriteRenderer sprite in ghostSprites)
             {
                 if (sprite != null)
@@ -435,6 +530,68 @@ namespace ProjectBlock.View
         /// arrives in order, so consecutive nodes are always neighbours and the chain reads as a
         /// line. Pass null or an empty list to clear it. Drawn ON TOP of the cells, because a
         /// circuit cell may be empty or full and the player has to see the route either way.</summary>
+        /// <summary>Turns the lights out, or back on ("Alacakaranlık").</summary>
+        public void SetDarkness(bool on)
+        {
+            if (dark == on)
+            {
+                return;
+            }
+            dark = on;
+            if (!dark && litFor != null)
+            {
+                System.Array.Clear(litFor, 0, litFor.Length);
+            }
+            Refresh();
+        }
+
+        /// <summary>True while the board is playing blind.</summary>
+        public bool IsDark
+        {
+            get { return dark; }
+        }
+
+        /// <summary>A blast lights its own surroundings for a moment. Only means anything while
+        /// dark; on a lit board there is nothing to reveal.</summary>
+        public void LightUpAround(IReadOnlyList<GridPos> cells)
+        {
+            if (!dark || board == null || litFor == null || cells == null)
+            {
+                return;
+            }
+            foreach (GridPos cell in cells)
+            {
+                int cx = cell.X - board.MinX;
+                int cy = cell.Y - board.MinY;
+                for (int x = cx - LightRadius; x <= cx + LightRadius; x++)
+                {
+                    for (int y = cy - LightRadius; y <= cy + LightRadius; y++)
+                    {
+                        if (x < 0 || x >= board.Width || y < 0 || y >= board.Height)
+                        {
+                            continue;
+                        }
+                        // Round light: the corners of the square stay dark, so a blast reads as
+                        // a glow rather than as a box.
+                        int dx = x - cx;
+                        int dy = y - cy;
+                        if (dx * dx + dy * dy > LightRadius * LightRadius)
+                        {
+                            continue;
+                        }
+                        // Nearer cells hold the light longer, so it fades from the edge inward.
+                        float share = 1f - Mathf.Sqrt(dx * dx + dy * dy) / (LightRadius + 1f);
+                        float seconds = LightSeconds * share;
+                        if (seconds > litFor[x, y])
+                        {
+                            litFor[x, y] = seconds;
+                        }
+                    }
+                }
+            }
+            Refresh();
+        }
+
         /// <summary>Marks "Karantina"'s sealed lines. Pass nulls to clear them.</summary>
         public void ShowQuarantine(IReadOnlyList<int> rows, IReadOnlyList<int> columns)
         {
@@ -530,7 +687,11 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            Color color = valid ? ValidPreviewColor : InvalidPreviewColor;
+            // Blind: ONE neutral colour. Showing valid/invalid would let the player map the
+            // whole board just by waving the cursor across it ("Alacakaranlık").
+            Color color = dark
+                ? BlindPreviewColor
+                : (valid ? ValidPreviewColor : InvalidPreviewColor);
             foreach (GridPos offset in shape.Cells)
             {
                 GridPos pos = origin + offset;
@@ -549,7 +710,9 @@ namespace ProjectBlock.View
                         CellToWorld(pos), cellSize * 0.92f, color, 2));
                 }
             }
-            if (!valid)
+            // The explosion preview is the biggest tell of all: it would announce exactly which
+            // lines are one cube from full. Blind means blind.
+            if (!valid || dark)
             {
                 return;
             }

@@ -191,6 +191,13 @@ namespace ProjectBlock.Core
             get { return Boss != null && Boss.BlocksPowerRecharge; }
         }
 
+        /// <summary>True while the board is in darkness and the player is playing blind
+        /// ("Alacakaranlık"). Read by the VIEW only - no rule in the engine depends on it.</summary>
+        public bool BoardIsDark
+        {
+            get { return Boss != null && Boss.HidesTheBoard; }
+        }
+
         /// <summary>"Çıkmaz": running out of room WINS this round, while a clean sweep or
         /// reaching the threshold LOSES it. Read live at the three places a round is decided.</summary>
         public bool RoundOutcomeInverted

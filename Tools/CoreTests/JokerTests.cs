@@ -135,6 +135,7 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Boss_AlacakaranlikBendsNoRuleAtAll();
         Boss_KarantinaSealsOutwardInAndCharges();
         Boss_KarantinaChargesOnlyTheCubesInside();
         Boss_KarantinaChangesNothingWithoutTheBoss();
@@ -4287,6 +4288,52 @@ public static class JokerTests
             "the same placement cleared a line", "rows " + report.ExplodedRows.Count);
         Check(joker.BrokenThisRound,
             "and the circuit still counted as completed, even though the line ate its cells");
+    }
+
+    private static void Boss_AlacakaranlikBendsNoRuleAtAll()
+    {
+        Section("boss / alacakaranlık hides the board and changes nothing else");
+        var dark = NewSession(8600, 6, 1000000, 40, 3);
+        RoundEngine round = dark.CurrentRound;
+        round.SetBoss(new AlacakaranlikBoss());
+        Check(round.BoardIsDark, "the round reports itself dark");
+
+        var lit = NewSession(8600, 6, 1000000, 40, 3);
+        Check(!lit.CurrentRound.BoardIsDark, "and an ordinary round does not");
+
+        // The whole point: with the same seed, the two rounds must play IDENTICALLY. The boss
+        // is a blindfold, not a rule - if any of these diverge, it is doing more than it should.
+        for (int turn = 0; turn < 10; turn++)
+        {
+            TurnReport a = PlayOneCard(round);
+            TurnReport b = PlayOneCard(lit.CurrentRound);
+            if (a == null || b == null)
+            {
+                Check(a == null && b == null, "both rounds ran out at the same turn",
+                    "turn " + turn);
+                break;
+            }
+            if (a.ScoreGained != b.ScoreGained
+                || a.CubesExploded != b.CubesExploded
+                || round.Board.OccupiedCount != lit.CurrentRound.Board.OccupiedCount)
+            {
+                Check(false, "the dark round diverged from the lit one on turn " + turn,
+                    a.ScoreGained + " vs " + b.ScoreGained);
+                return;
+            }
+        }
+        Check(round.RoundScore == lit.CurrentRound.RoundScore,
+            "ten turns later both rounds hold the same score",
+            round.RoundScore + " vs " + lit.CurrentRound.RoundScore);
+        Check(round.Board.OccupiedCount == lit.CurrentRound.Board.OccupiedCount,
+            "and the same board",
+            round.Board.OccupiedCount + " vs " + lit.CurrentRound.Board.OccupiedCount);
+        Check(round.Status == lit.CurrentRound.Status, "and the same status",
+            round.Status + " vs " + lit.CurrentRound.Status);
+
+        // Every OTHER boss leaves the lights on.
+        Check(!new VanilyaBoss().HidesTheBoard && !new KarantinaBoss().HidesTheBoard,
+            "no other boss hides the board");
     }
 
     private static void Boss_KarantinaSealsOutwardInAndCharges()

@@ -398,4 +398,39 @@ namespace ProjectBlock.Core
             cellsCarriedOff += turn.Round.EscalateBoards().Count;
         }
     }
+
+    /// <summary>
+    /// "Alacakaranlık" - the arena goes dark and the player plays blind. What they built is
+    /// still there, still scores, still blocks: they simply cannot see it.
+    ///
+    /// The only relief is an explosion. The blast lights its own surroundings for a moment and
+    /// the board sinks back into the dark, so the one way to see anything is to make something
+    /// happen - and the more you clear, the more you learn.
+    ///
+    /// This is the ONE boss that bends no rule at all. Every other query on BossRound exists
+    /// because the engine had to behave differently; this one exists because the SCREEN does.
+    /// The engine reads HidesTheBoard once, to hand it to the View, and nothing else.
+    /// </summary>
+    public sealed class AlacakaranlikBoss : BossRound
+    {
+        public AlacakaranlikBoss()
+            : base("alacakaranlik", "Alacakaranlık")
+        {
+            SetDescription(
+                "The board goes dark and you play blind. Only an explosion lights its own "
+                    + "surroundings, for a moment, before the dark closes back over them.",
+                "Oyun alanı karanlığa gömülür, körleme oynarsın. Sadece bir patlama kendi "
+                    + "etrafını bir anlığına aydınlatır, sonra karanlık üstünü tekrar örter.");
+        }
+
+        public override bool HidesTheBoard
+        {
+            get { return true; }
+        }
+
+        public override string StatusText
+        {
+            get { return Loc.Pick("playing blind", "körleme"); }
+        }
+    }
 }

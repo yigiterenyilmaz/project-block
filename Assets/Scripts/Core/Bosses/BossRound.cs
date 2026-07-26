@@ -151,6 +151,18 @@ namespace ProjectBlock.Core
             get { return false; }
         }
 
+        /// <summary>
+        /// True while the arena is in DARKNESS ("Alacakaranlık") and the player must play blind.
+        ///
+        /// The only boss whose entire effect is what the player can SEE. Not one rule bends -
+        /// the board, the placements and the scoring are all exactly as they always were - so
+        /// nothing in the engine reads this except to hand it to the View.
+        /// </summary>
+        public virtual bool HidesTheBoard
+        {
+            get { return false; }
+        }
+
         /// <summary>Rewrites the round's score threshold ("Taş ve sopa" asking for less because
         /// it took your whole inventory away). Read live, in logical (unscaled) points.</summary>
         public virtual int FilterScoreThreshold(int threshold)

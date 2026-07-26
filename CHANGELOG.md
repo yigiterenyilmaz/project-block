@@ -53,7 +53,7 @@ everything here is unreleased and balance numbers are still placeholders.
 - **Boss rounds** — every third round (3, 6, 9, 12, 15) now draws a **boss** that bends the rules
   against you for that round only. A run never fights the same boss twice, the draw is
   deterministic from the run seed, and the HUD names the boss and describes what it is doing.
-  All nineteen:
+  All twenty:
   - **Alıkoyma** — seizes a random card in your hand every turn (never your last one).
   - **Mapus** — seals one random empty cell per turn: nothing can be placed there, and the row
     and column through it cannot be completed either.
@@ -77,6 +77,13 @@ everything here is unreleased and balance numbers are still placeholders.
     vergisi and with board erosion, so cycling the deck on that round is expensive three ways.
   - **Taş ve sopa** — every joker and every power is switched off, whatever its rarity: just you
     and the board. In exchange the score threshold drops by a quarter.
+  - **Alacakaranlık** — the board goes **dark** and you play blind. What you built is still
+    there, still scores, still blocks — you simply cannot see it. Only an **explosion** lights
+    its own surroundings, for about a second, before the dark closes back over them. The
+    placement preview shows *where* a block would land but never *whether* it fits, or you could
+    map the whole board by waving the cursor across it; the explosion preview, the ghost traces,
+    the idle element animations and every boss marker are hidden for the same reason. It is the
+    one boss that bends **no rule at all** — a blindfold, not a rule change.
   - **Karantina** — every 4 turns two more of the **outermost** rows or columns are sealed off
     (a row and a column, two rows, or two columns) and the quarantine **works inward**, ring
     after ring. A cube that explodes inside a zone **loses exactly what it would have earned** —
