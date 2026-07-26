@@ -24,7 +24,9 @@ namespace ProjectBlock.Core
         // seven new bosses and three new jokers change the reflected field counts.
         // 5 (2026-07-26): the pattern jokers landed - the session writes what effects GRANTED
         // the purse, and every card writes the element it is the antimatter of.
-        public const int FormatVersion = 5;
+        // 6 (2026-07-26): a run is now 15 numbered rounds with a BOSS STAGE between every third
+        // one, so a save has to say which stage of its number it is on.
+        public const int FormatVersion = 6;
 
         private const string VersionKey = "version";
 

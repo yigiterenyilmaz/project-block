@@ -44,6 +44,9 @@ namespace ProjectBlock.Core
 
             w.Write("phase", (int)Phase);
             w.Write("round", RoundNumber);
+            // Which STAGE of that number: the round itself, or its boss. Without this a saved
+            // boss stage would reload as an ordinary round and the boss would be gone.
+            w.Write("bossStage", InBossStage);
             w.Write("total", TotalScore);
             w.Write("nextCardId", nextCardId);
             w.Write("purchased", purchasedThisMarket);
@@ -102,6 +105,7 @@ namespace ProjectBlock.Core
             var session = new GameSession(config, rng);
             session.Phase = (GamePhase)r.ReadInt("phase");
             session.RoundNumber = r.ReadInt("round");
+            session.InBossStage = r.ReadBool("bossStage");
             session.TotalScore = r.ReadLong("total");
             session.nextCardId = r.ReadInt("nextCardId");
             session.purchasedThisMarket = r.ReadBool("purchased");
