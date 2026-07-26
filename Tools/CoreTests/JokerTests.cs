@@ -98,6 +98,8 @@ public static class JokerTests
         Erosion_RealPlayRunsTheClockAndEndsTheRound();
         Progression_BoardSizeStepsWithTheRoundBands();
         RunLength_FifteenRoundsThenRunWon();
+        RunStructure_BossStagesSitBetweenNumberedRounds();
+        RunStructure_EveryStageOpensAMarket();
         BossRounds_FlaggedEveryThirdRound();
         Boss_DrawnOncePerRunAndOnlyOnFlaggedRounds();
         Boss_UfukAndKulePayForOneAxisOnly();
@@ -331,9 +333,25 @@ public static class JokerTests
             this.bossRounds = bossRounds;
         }
 
-        public RoundConfig GetRound(int roundNumber)
+        /// <summary>Every stage is the same size and bar here; bossRounds decides whether the
+        /// stages are FLAGGED as boss rounds, which is what a boss test needs.</summary>
+        public RoundConfig GetRound(int roundNumber, bool bossStage)
         {
-            return new RoundConfig(roundNumber, size, size, threshold, null, erosion, bossRounds);
+            return new RoundConfig(roundNumber, size, size, threshold, null, erosion,
+                bossRounds || bossStage);
+        }
+
+        /// <summary>
+        /// NEVER. A test session walks 1, 2, 3, ... with nothing in between, and flags its stages
+        /// as boss rounds directly through bossRounds when a test needs one.
+        ///
+        /// That keeps the two ideas apart: "this stage has a boss on it", which most boss tests
+        /// want, and "the run interleaves boss stages", which is the run STRUCTURE and is tested
+        /// against the real progression instead.
+        /// </summary>
+        public bool HasBossStageAfter(int roundNumber)
+        {
+            return false;
         }
     }
 
@@ -2795,8 +2813,8 @@ public static class JokerTests
         bool firstBand = true;
         for (int round = 1; round <= 5; round++)
         {
-            firstBand &= progression.GetRound(round).BoardWidth == 5
-                && progression.GetRound(round).BoardHeight == 5;
+            firstBand &= progression.GetRound(round, false).BoardWidth == 5
+                && progression.GetRound(round, false).BoardHeight == 5;
         }
         Check(firstBand, "rounds 1-5 are played on 5x5");
 
@@ -2828,9 +2846,9 @@ public static class JokerTests
         }
         Check(contiguous && covered == 15, "the bands tile rounds 1-15 exactly",
             "covered " + covered);
-        Check(progression.GetRound(6).BoardWidth == 7 && progression.GetRound(5).BoardWidth == 5,
+        Check(progression.GetRound(6, false).BoardWidth == 7 && progression.GetRound(5, false).BoardWidth == 5,
             "the step happens between round 5 and round 6");
-        Check(progression.GetRound(12).BoardWidth == 9 && progression.GetRound(11).BoardWidth == 7,
+        Check(progression.GetRound(12, false).BoardWidth == 9 && progression.GetRound(11, false).BoardWidth == 7,
             "and between round 11 and round 12");
 
         // The table is data: a variant curve only has to hand over different bands.
@@ -2841,7 +2859,7 @@ public static class JokerTests
         bool threwOnRoundZero = false;
         try
         {
-            new DefaultRoundProgression().GetRound(0);
+            new DefaultRoundProgression().GetRound(0, false);
         }
         catch (ArgumentException)
         {
@@ -3033,8 +3051,9 @@ public static class JokerTests
         replayConfig.Deck = new DeckDefinition("test", 30, new SizedShapeGenerator(1));
         var replay = new GameSession(replayConfig);
         replay.Config.Scoring.PointsPerCubePlaced = 1;
+        // Walk to the first BOSS STAGE - which is after round 3, not round 3 itself.
         int guard = 0;
-        while (replay.RoundNumber < 3 && !RunIsOver(replay) && guard++ < 200)
+        while (!replay.InBossStage && !RunIsOver(replay) && guard++ < 200)
         {
             if (replay.Phase == GamePhase.Market) { replay.LeaveMarket(); continue; }
             if (replay.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
@@ -7988,26 +8007,131 @@ public static class JokerTests
             "taxed " + boss.TaxedCards + " was " + taxedBefore);
     }
 
+    private static void RunStructure_BossStagesSitBetweenNumberedRounds()
+    {
+        Section("run structure / 1, 2, 3, BOSS, 4, 5, 6, BOSS ... 15, BOSS");
+        var config = new GameConfig();
+        config.RngSeed = 8800;
+        config.Deck = new DeckDefinition("test", 30, new SizedShapeGenerator(1));
+        config.Scoring.PointsPerCubePlaced = 100000; // one placement clears any bar
+        // Pin a harmless boss: this test is about the SHAPE of a run, not about surviving five
+        // random ones. A boss that inverts the win condition would end the walk early and tell us
+        // nothing about the structure.
+        config.ForcedBossDefId = "ufuk";
+        var session = new GameSession(config);
+
+        var walked = new List<string>();
+        int guard = 0;
+        while (!RunIsOver(session) && guard++ < 600)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                session.LeaveMarket();
+                continue;
+            }
+            RoundEngine round = session.CurrentRound;
+            if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                walked.Add(session.InBossStage ? "B" + session.RoundNumber
+                    : "" + session.RoundNumber);
+                round.DecideAdvance(true);
+                continue;
+            }
+            if (round.Status != RoundStatus.InProgress) { break; }
+            if (PlayTurns(session, 1) == 0) { break; }
+        }
+
+        Check(session.Phase == GamePhase.RunWon, "the run was won", "phase " + session.Phase);
+        Check(walked.Count == 20, "twenty stages were played - 15 rounds and 5 bosses",
+            "" + walked.Count);
+        string expected = "1,2,3,B3,4,5,6,B6,7,8,9,B9,10,11,12,B12,13,14,15,B15";
+        Check(string.Join(",", walked.ToArray()) == expected,
+            "in exactly that order - every boss sits between two numbered rounds",
+            string.Join(",", walked.ToArray()));
+    }
+
+    private static void RunStructure_EveryStageOpensAMarket()
+    {
+        Section("run structure / a market opens after every stage, boss stages included");
+        var config = new GameConfig();
+        config.RngSeed = 8801;
+        config.Deck = new DeckDefinition("test", 30, new SizedShapeGenerator(1));
+        config.Scoring.PointsPerCubePlaced = 100000;
+        config.ForcedBossDefId = "ufuk"; // see above: structure, not survival
+        var session = new GameSession(config);
+
+        int markets = 0;
+        int marketsAfterABoss = 0;
+        bool cameFromABoss = false;
+        int guard = 0;
+        while (!RunIsOver(session) && guard++ < 600)
+        {
+            if (session.Phase == GamePhase.Market)
+            {
+                markets++;
+                if (cameFromABoss) { marketsAfterABoss++; }
+                session.LeaveMarket();
+                continue;
+            }
+            RoundEngine round = session.CurrentRound;
+            if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                cameFromABoss = session.InBossStage;
+                round.DecideAdvance(true);
+                continue;
+            }
+            if (round.Status != RoundStatus.InProgress) { break; }
+            if (PlayTurns(session, 1) == 0) { break; }
+        }
+
+        // 20 stages, and the last one wins the run instead of opening a shop.
+        Check(markets == 19, "nineteen markets - one after every stage but the last",
+            "" + markets);
+        Check(marketsAfterABoss == 4,
+            "four of them followed a boss stage (the fifth boss ends the run)",
+            "" + marketsAfterABoss);
+    }
+
     private static void BossRounds_FlaggedEveryThirdRound()
     {
-        Section("boss rounds / every third round is flagged");
+        Section("boss rounds / a boss STAGE follows every third round");
         var progression = new DefaultRoundProgression();
-        var flagged = new List<int>();
+
+        // A NUMBERED round is never a boss round any more - the boss is its own stage after it.
+        bool anyNumberedRoundIsABoss = false;
+        var followed = new List<int>();
         for (int n = 1; n <= 15; n++)
         {
-            if (progression.GetRound(n).IsBossRound)
+            if (progression.GetRound(n, false).IsBossRound)
             {
-                flagged.Add(n);
+                anyNumberedRoundIsABoss = true;
+            }
+            if (progression.HasBossStageAfter(n))
+            {
+                followed.Add(n);
             }
         }
-        Check(flagged.Count == 5, "five boss rounds in a 15-round run", "count " + flagged.Count);
-        Check(flagged.Count == 5 && flagged[0] == 3 && flagged[1] == 6 && flagged[2] == 9
-            && flagged[3] == 12 && flagged[4] == 15, "they are rounds 3, 6, 9, 12 and 15",
-            string.Join(",", flagged));
-        Check(!progression.GetRound(1).IsBossRound && !progression.GetRound(2).IsBossRound,
-            "the opening rounds are ordinary");
+        Check(!anyNumberedRoundIsABoss,
+            "not one of the fifteen numbered rounds is itself a boss round");
+        Check(followed.Count == 5, "five boss stages in a run", "count " + followed.Count);
+        Check(followed.Count == 5 && followed[0] == 3 && followed[1] == 6 && followed[2] == 9
+            && followed[3] == 12 && followed[4] == 15,
+            "they follow rounds 3, 6, 9, 12 and 15", string.Join(",", followed));
+        Check(progression.GetRound(3, true).IsBossRound,
+            "and the stage AFTER round 3 is flagged as the boss round");
+
+        // A boss stage keeps its round's arena and raises the bar instead.
+        RoundConfig plain = progression.GetRound(3, false);
+        RoundConfig bossStage = progression.GetRound(3, true);
+        Check(bossStage.BoardWidth == plain.BoardWidth
+            && bossStage.BoardHeight == plain.BoardHeight,
+            "a boss stage is played on the same arena as the round it follows");
+        Check(bossStage.ScoreThreshold > plain.ScoreThreshold,
+            "with a higher bar - a boss is a wall, not a new place",
+            plain.ScoreThreshold + " -> " + bossStage.ScoreThreshold);
+
         progression.BossRoundInterval = 0;
-        Check(!progression.GetRound(3).IsBossRound, "interval 0 disables boss rounds");
+        Check(!progression.HasBossStageAfter(3), "interval 0 disables boss stages");
 
         // Anything that REBUILDS a RoundConfig must carry the flag across, or a boss round
         // silently stops being one the moment a power filters it.

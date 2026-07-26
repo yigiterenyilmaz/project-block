@@ -26,6 +26,7 @@ public static class SaveTests
         BoardErosionAndSealsRoundTrip();
         BoardInfectionDeadLinesRoundTrip();
         PressingPowerRoundTrips();
+        BossStageSurvivesASave();
         SmuggledCardRoundTrip();
         SessionDebtAndSmuggleFlagRoundTrip();
         CardTableSharesInstances();
@@ -275,6 +276,32 @@ public static class SaveTests
     /// <summary>"Hidrolik pres" holds a Cube?[] of what it swallowed - an array of nullable
     /// structs, the most awkward field shape any content type has. A fresh power holds null, so
     /// only a PRESSING one actually exercises it.</summary>
+    /// <summary>A run remembers WHICH STAGE of its number it is on. Without it a saved boss
+    /// stage reloads as an ordinary round and the boss is simply gone.</summary>
+    private static void BossStageSurvivesASave()
+    {
+        var config = NewConfig(4321);
+        config.Scoring.PointsPerCubePlaced = 100000; // one placement clears any bar
+        config.ForcedBossDefId = "ufuk";
+        var session = new GameSession(config);
+        int guard = 0;
+        while (!session.InBossStage && guard++ < 400)
+        {
+            if (session.Phase == GamePhase.Market) { session.LeaveMarket(); continue; }
+            if (!PlayOneTurn(session)) { break; }
+        }
+        Check(session.InBossStage, "walked into a boss stage");
+        Check(session.CurrentRound.Boss != null, "with a boss on it");
+        int number = session.RoundNumber;
+
+        var template = NewConfig(4321);
+        template.ForcedBossDefId = "ufuk";
+        GameSession back = SaveGame.Load(SaveGame.Save(session), template);
+        Check(back.InBossStage, "and it is still a boss stage after loading");
+        CheckEqual(number, back.RoundNumber, "with the same round number");
+        Check(back.CurrentRound.Boss != null, "and its boss came back");
+    }
+
     private static void PressingPowerRoundTrips()
     {
         var board = new GameBoard(5, 5);
