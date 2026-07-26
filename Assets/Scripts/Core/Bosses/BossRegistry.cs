@@ -45,6 +45,10 @@ namespace ProjectBlock.Core
             Register(() => new MerkezkacBoss());
             Register(() => new DortKutupBoss());
             Register(() => new KangrenBoss());
+            Register(() => new BilinmezlikBoss());
+            Register(() => new RehinPuanBoss());
+            Register(() => new BurokrasiBatagiBoss());
+            Register(() => new BulParayiBoss());
         }
 
         /// <summary>All known bosses, in design order.</summary>
