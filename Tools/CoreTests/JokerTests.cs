@@ -24,6 +24,9 @@ public static class JokerTests
         Streak_Dondurma_Decreasing();
         Streak_Siyam_SameShapeOnly();
         Streak_ResetsEachRound();
+        Targeted_TargetFirstPaysAndTakesTheWholeBlock();
+        Targeted_PlainCubeFirstSpendsTheBlockForGood();
+        Targeted_BonusSurvivesTheSweepItCauses();
         Mikrodalga_BridgesOneQuietTurnAtHalfRate();
         Mikrodalga_TwoQuietTurnsStillBreakTheStreak();
         Mikrodalga_ConsecutiveClearAfterABridgePaysInFull();
@@ -692,6 +695,92 @@ public static class JokerTests
 
         session.Jokers.DispatchRoundStarted(session.CurrentRound);
         Check(joker.Streak == 0, "round start clears the streak", "got " + joker.Streak);
+    }
+
+    // ---- "Hedefli" blocks. Every test lays a TWO-CUBE VERTICAL block whose target is the
+    // lower cube, then explodes one row or the other on purpose - so which of the block's cubes
+    // breaks first is chosen rather than hoped for.
+
+    private static void Targeted_TargetFirstPaysAndTakesTheWholeBlock()
+    {
+        Section("hedefli / the target goes first");
+        GameSession session = ComboSession(false);
+        RoundEngine round = session.CurrentRound;
+        PlayTargetedPair(session, round, 0);
+
+        // Row 0 holds the TARGET cube. Completing it breaks the target in the first explosion
+        // that reaches the block, so the block pays and the upper cube goes with it.
+        TurnReport report = ExplodeRow(session, round, 0);
+        Check(report.TargetedBlocksHit.Count == 1, "the block paid out",
+            "hits " + report.TargetedBlocksHit.Count);
+        // 25 for the aim + 1 for the one cube the payout took with it.
+        Check(report.Score.BaseTargeted == 26, "aim bonus plus the cubes it took",
+            "got " + report.Score.BaseTargeted);
+        Check(!round.Board.GetCube(new GridPos(0, 1)).HasValue,
+            "the cube that survived the line went up with the block");
+    }
+
+    private static void Targeted_PlainCubeFirstSpendsTheBlockForGood()
+    {
+        Section("hedefli / a plain cube goes first");
+        GameSession session = ComboSession(false);
+        RoundEngine round = session.CurrentRound;
+        PlayTargetedPair(session, round, 0);
+
+        // Row 1 holds the block's PLAIN cube, so the first explosion to reach the block misses.
+        TurnReport miss = ExplodeRow(session, round, 1);
+        Check(miss.TargetedBlocksHit.Count == 0 && miss.Score.BaseTargeted == 0,
+            "a plain cube first pays nothing", "got " + miss.Score.BaseTargeted);
+        Check(round.Board.GetCube(new GridPos(0, 0)).HasValue,
+            "the rest of the block is still standing - it is spent, not destroyed");
+
+        // And it stays spent: breaking the target later is now just an ordinary cube breaking.
+        TurnReport late = ExplodeRow(session, round, 0);
+        Check(late.TargetedBlocksHit.Count == 0 && late.Score.BaseTargeted == 0,
+            "the target pays nothing once the block has missed",
+            "got " + late.Score.BaseTargeted);
+    }
+
+    private static void Targeted_BonusSurvivesTheSweepItCauses()
+    {
+        Section("hedefli / the sweep does not swallow the bonus");
+        GameSession session = ComboSession(false);
+        RoundEngine round = session.CurrentRound;
+        PlayTargetedPair(session, round, 0);
+
+        TurnReport report = ExplodeRow(session, round, 0);
+        // The payout emptied the board, so this is a clean sweep - and a sweep REPLACES the line
+        // score. The aim bonus is not line score and must come through it intact.
+        Check(report.CleanSweep, "the payout emptied the board");
+        Check(report.Score.BaseLines == 0, "the sweep swallowed the line score as always");
+        Check(report.Score.BaseTargeted == 26, "but not the targeted bonus",
+            "got " + report.Score.BaseTargeted);
+    }
+
+    /// <summary>Plays a targeted 2-cube vertical block at (x,0)-(x,1), target on the LOWER cube.
+    /// It goes in through the bonus hand, which is a real turn like any other.</summary>
+    private static void PlayTargetedPair(GameSession session, RoundEngine round, int x)
+    {
+        BlockShape column = BlockShape.FromCells(
+            new List<GridPos> { new GridPos(0, 0), new GridPos(0, 1) });
+        BlockCard card = session.CreateCard(column, new[] { BlockElement.Targeted });
+        card.TargetCellIndex = 0; // FromCells sorts, so cell 0 is (0,0) - the lower cube
+        round.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
+        round.PlayFromBonus(0, new GridPos(x, 0));
+        Check(round.Board.GetCube(new GridPos(x, 0)).Value.Kind == CubeKind.Target,
+            "the lower cube landed as the target");
+        Check(round.Board.GetCube(new GridPos(x, 1)).Value.Kind == CubeKind.Normal,
+            "and the upper one is an ordinary cube");
+    }
+
+    /// <summary>Fills whatever is missing from a row and drops the last cube as a real turn.</summary>
+    private static TurnReport ExplodeRow(GameSession session, RoundEngine round, int y)
+    {
+        for (int x = 1; x < 4; x++)
+        {
+            PaintBoard(round, session, CubeKind.Normal, new GridPos(x, y));
+        }
+        return DropOneCube(round, new GridPos(4, y));
     }
 
     // ---- Mikrodalga. The joker itself does nothing but set two rule values, so every test
