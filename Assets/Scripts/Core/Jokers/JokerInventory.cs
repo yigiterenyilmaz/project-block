@@ -213,6 +213,34 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>
+        /// Books a haul against the smuggler the market just used, and RETIRES it if that was the
+        /// last sound item it had in it ("Kaçakçı" is caught after three).
+        ///
+        /// It has to live here rather than in GameSession because FindSmuggler is what decides
+        /// WHICH smuggler served - the session only knows that one did. The same search runs for
+        /// the roll and for this, and nothing changes in between, so it is always the same joker.
+        ///
+        /// Removal goes through Remove, not a quiet list edit, so OnRemoved runs and every other
+        /// joker hears about it ("İhale" re-auctions when the joker it locked leaves).
+        /// </summary>
+        internal void NoteSmuggled(bool defective)
+        {
+            var smuggler = FindSmuggler() as KacakciJoker;
+            if (smuggler == null)
+            {
+                return;
+            }
+            if (smuggler.NoteSmuggled(defective))
+            {
+                Remove(smuggler);
+            }
+            else
+            {
+                RaiseChanged(); // the hauls-left counter moved
+            }
+        }
+
         /// <summary>The working smuggler with the worst goods, or null. Inventory order breaks a
         /// tie, like every other walk.</summary>
         private Joker FindSmuggler()

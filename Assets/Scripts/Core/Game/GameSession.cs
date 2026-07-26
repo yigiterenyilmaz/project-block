@@ -438,6 +438,11 @@ namespace ProjectBlock.Core
             offer.Sold = true;
             smuggledThisMarket = true;
             purchasedThisMarket = true;
+            // The smuggler books the haul LAST, once the goods have actually changed hands - and
+            // it may well be its last: three sound items and it is caught and gone. Junk costs it
+            // nothing, so the same coin flip that decided what you got also decides how long it
+            // lasts.
+            Jokers.NoteSmuggled(defective);
             return true;
         }
 

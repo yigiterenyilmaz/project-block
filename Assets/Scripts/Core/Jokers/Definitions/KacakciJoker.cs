@@ -1,6 +1,12 @@
 // PURPOSE: "Kaçakçı" - one item per market visit, free. The catch is that free goods come off the
 // back of a lorry, and roughly half of them are defective.
 //
+// AND IT DOES NOT LAST. A smuggler who keeps delivering gets caught: after it has handed over
+// THREE SOUND items it is finished and leaves the inventory for good. Junk does not count against
+// it - only the hauls that were actually worth having - so the same defect roll that decides
+// whether you got anything also decides how long the smuggler lives. At a 50% defect rate that is
+// about six visits, and a run of good luck is what kills it.
+//
 // WHY IT HAS NO HOOKS. Smuggling is a SESSION rule, exactly like the market credit "Kredi kartı"
 // turns on: GameSession owns the taking (TrySmuggleOffer), the roll and the spoiling, and this
 // joker is only the switch that turns it on and names the odds. Its three answers:
@@ -36,6 +42,34 @@ namespace ProjectBlock.Core
         /// <summary>Recharge events a defective smuggled power needs instead of one.</summary>
         public int BrokenPowerRechargeCost = 4;
 
+        /// <summary>Sound items it can deliver before it is caught and gone. Junk does not count.
+        /// BALANCE PLACEHOLDER.</summary>
+        public int SoundGoodsAllowed = 3;
+
+        private int soundGoodsTaken;
+
+        /// <summary>Sound items delivered so far.</summary>
+        public int SoundGoodsTaken
+        {
+            get { return soundGoodsTaken; }
+        }
+
+        /// <summary>Sound hauls left before it is finished. Never below 0.</summary>
+        public int HaulsLeft
+        {
+            get
+            {
+                int left = SoundGoodsAllowed - soundGoodsTaken;
+                return left > 0 ? left : 0;
+            }
+        }
+
+        /// <summary>True once it has delivered everything it is going to.</summary>
+        public bool IsSpent
+        {
+            get { return soundGoodsTaken >= SoundGoodsAllowed; }
+        }
+
         public KacakciJoker()
             : base("kacakci", "Kaçakçı")
         {
@@ -44,18 +78,40 @@ namespace ProjectBlock.Core
                     + "half the time. A defective block falls straight through the board and off "
                     + "the screen, wasting the turn; a broken joker is dead in boss rounds or dead "
                     + "outright; a broken power arrives empty and fills four times slower. You "
-                    + "keep whatever you took.",
+                    + "keep whatever you took. After it has delivered THREE SOUND items it is "
+                    + "caught and gone - junk does not count against it.",
                 "Her market ziyaretinde BİR ürünü bedavaya al - ama kaçak malın yarısı defolu "
                     + "çıkar. Defolu blok tahtaya tutunmaz, aşağı düşüp ekrandan çıkar ve turu "
                     + "boşa harcarsın; defolu joker patron rauntlarında ya da hiçbir zaman "
-                    + "çalışmaz; defolu güç boş gelir ve dört kat yavaş dolar. Aldığın senin kalır.");
+                    + "çalışmaz; defolu güç boş gelir ve dört kat yavaş dolar. Aldığın senin kalır. "
+                    + "SAĞLAM üç mal teslim ettikten sonra yakalanır ve elinden gider - defolular "
+                    + "sayılmaz.");
         }
 
-        /// <summary>Free goods this visit are available while it is held (and not itself broken -
-        /// JokerInventory checks that, not this).</summary>
+        /// <summary>Free goods this visit are available while it is held, not itself broken
+        /// (JokerInventory checks that, not this) and not yet spent. The spent check is here as
+        /// well as in the removal, so a smuggler that has delivered its three can never hand over
+        /// a fourth even if something delayed it leaving.</summary>
         public override bool EnablesSmuggling
         {
-            get { return true; }
+            get { return !IsSpent; }
+        }
+
+        /// <summary>
+        /// Books a haul. Only SOUND goods wear the smuggler out - junk is its own punishment and
+        /// costs it nothing. Returns true when that was the last one it had in it, which is
+        /// JokerInventory's cue to take it out of the game.
+        ///
+        /// Called from JokerInventory.NoteSmuggled, which is the only thing that knows which
+        /// smuggler the market actually used.
+        /// </summary>
+        internal bool NoteSmuggled(bool defective)
+        {
+            if (!defective)
+            {
+                soundGoodsTaken++;
+            }
+            return IsSpent;
         }
 
         public override int SmuggleDefectChancePercent
@@ -72,8 +128,10 @@ namespace ProjectBlock.Core
         {
             get
             {
-                return Loc.Pick(DefectChancePercent + "% junk",
-                    "%" + DefectChancePercent + " defolu");
+                // Both numbers matter to the decision the player is about to make: how likely the
+                // goods are to be junk, and how many good ones it has left in it.
+                return Loc.Pick(DefectChancePercent + "% junk, " + HaulsLeft + " left",
+                    "%" + DefectChancePercent + " defolu, " + HaulsLeft + " kaldı");
             }
         }
     }

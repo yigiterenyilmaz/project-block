@@ -31,7 +31,8 @@ namespace ProjectBlock.Core
         // asleep; and the "Hedefli" block landed, so every card writes which cube is its target
         // and the round writes which targeted blocks still have their shot.
         // 8 (2026-07-26): "Kütleçekim merkezi" landed, so the board writes which way water falls.
-        public const int FormatVersion = 8;
+        // 9 (2026-07-26): "Kaçakçı" wears out, so it writes how many sound hauls it has left in it.
+        public const int FormatVersion = 9;
 
         private const string VersionKey = "version";
 
