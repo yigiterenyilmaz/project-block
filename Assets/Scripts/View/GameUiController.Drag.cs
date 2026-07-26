@@ -44,12 +44,21 @@ namespace ProjectBlock.View
             // Targeting mode: the next click picks the power's target - a hand/bonus card
             // or a board cell. Unlike jokers, hand-targeted powers may point at bonus
             // slots too (Hologram), so the full slot range is passed through.
+            if (workshopPowerId.HasValue)
+            {
+                if (mouse.leftButton.wasPressedThisFrame && HandleWorkshopClick(world))
+                {
+                    return;
+                }
+                return;
+            }
             if (pendingTargetPowerId.HasValue)
             {
                 Power aiming = session.Powers.Find(pendingTargetPowerId.Value);
                 // Live blast preview while aiming a board-targeting power (Çaprazlama).
                 if (aiming != null && !pendingOltaMark
-                    && aiming.Targeting == ActivationTargeting.BoardCell)
+                    && (aiming.Targeting == ActivationTargeting.BoardCell
+                        || aiming.Targeting == ActivationTargeting.BoardArea))
                 {
                     GridPos hoverCell;
                     if (boardView.TryWorldToCell(world, out hoverCell))
@@ -85,9 +94,11 @@ namespace ProjectBlock.View
                         }
                         return;
                     }
-                    if (power.Targeting == ActivationTargeting.BoardCell)
+                    if (power.Targeting == ActivationTargeting.BoardCell
+                        || power.Targeting == ActivationTargeting.BoardArea)
                     {
-                        // Either world: the board you clicked is the world you meant.
+                        // Either world: the board you clicked is the world you meant. A 2x2 press
+                        // aims the same way - only its preview is bigger.
                         ActivationTarget cellTarget;
                         if (!TryBoardTargetAt(world, out cellTarget))
                         {

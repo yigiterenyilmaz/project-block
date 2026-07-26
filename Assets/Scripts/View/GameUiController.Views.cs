@@ -84,6 +84,10 @@ namespace ProjectBlock.View
             cubeGo.transform.SetParent(transform, false);
             cubePicker = cubeGo.AddComponent<CubePickerView>();
 
+            var weldGo = new GameObject("WeldPicker");
+            weldGo.transform.SetParent(transform, false);
+            weldPicker = weldGo.AddComponent<WeldPickerView>();
+
             tooltipRoot = new GameObject("Tooltip");
             tooltipRoot.transform.SetParent(transform, false);
             tooltipRoot.SetActive(false);

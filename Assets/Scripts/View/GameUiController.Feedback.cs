@@ -589,6 +589,37 @@ namespace ProjectBlock.View
                     + ": " + what + Loc.Pick("\n[Esc] cancel", "\n[Esc] vazgeç");
                 return;
             }
+            // A workshop power's pick has steps, and a player who does not know which step they
+            // are on is just clicking. Say it.
+            if (workshopPowerId.HasValue)
+            {
+                Power shop = session.Powers.Find(workshopPowerId.Value);
+                string step;
+                if (shop != null && shop.Targeting == ActivationTargeting.CellAndHandCard)
+                {
+                    step = workshopDonorCell.HasValue
+                        ? Loc.Pick("now pick the card that takes the element",
+                            "şimdi elementi alacak kartı seç")
+                        : Loc.Pick("pick the cube whose element you want",
+                            "elementini alacağın küpü seç");
+                }
+                else if (shop != null && shop.Targeting == ActivationTargeting.TwoHandCards)
+                {
+                    step = workshopFirstCard < 0
+                        ? Loc.Pick("pick the FIRST block to weld",
+                            "lehimlenecek BİRİNCİ bloğu seç")
+                        : Loc.Pick("now pick the SECOND block",
+                            "şimdi İKİNCİ bloğu seç");
+                }
+                else
+                {
+                    step = Loc.Pick("pick the block to cut",
+                        "kesilecek bloğu seç");
+                }
+                messageText.text = (shop != null ? shop.DisplayName : "Power") + ": " + step
+                    + Loc.Pick("\n[Esc] cancel", "\n[Esc] vazgeç");
+                return;
+            }
             if (pendingTargetPowerId.HasValue)
             {
                 Power targeting = session.Powers.Find(pendingTargetPowerId.Value);

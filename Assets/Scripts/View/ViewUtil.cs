@@ -84,6 +84,9 @@ namespace ProjectBlock.View
                 // "Kangren" rot: a sickly grey-green, so a rotten cube is never mistaken for a
                 // healthy one however full the board is.
                 case CubeKind.Gangrene: return new Color(0.38f, 0.44f, 0.28f);
+                // "Hidrolik pres": a hard industrial slate, so four cubes squeezed into one never
+                // reads as an ordinary block.
+                case CubeKind.Compressed: return new Color(0.30f, 0.34f, 0.42f);
                 default: return ColorForCard(cube.SourceCardId);
             }
         }
@@ -103,6 +106,7 @@ namespace ProjectBlock.View
                 case CubeKind.Dynamite: return ElementLabel(BlockElement.Dynamite);
                 case CubeKind.Ice: return Loc.Pick("ice", "buz");
                 case CubeKind.Gangrene: return Loc.Pick("rot", "kangren");
+                case CubeKind.Compressed: return Loc.Pick("pressed", "pres");
                 default: return Loc.Pick("plain", "sade");
             }
         }

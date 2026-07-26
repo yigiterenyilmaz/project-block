@@ -137,6 +137,13 @@ namespace ProjectBlock.View
             pendingTargetJokerId = null;
             pendingTargetPowerId = null;
             pendingOltaMark = false;
+            // The workshop powers' own pick, and whichever modal it had open.
+            workshopPowerId = null;
+            workshopFirstCard = -1;
+            SecondWorkshopCard = -1;
+            workshopDonorCell = null;
+            cubePicker.Hide();
+            weldPicker.Hide();
             boardView.ClearPreview();
             UpdateHud();
             jokerBar.Refresh(session, null);
@@ -232,6 +239,15 @@ namespace ProjectBlock.View
                 Debug.Log("[project_block] " + power.DisplayName + " cannot be used right now.");
                 return;
             }
+            // The workshop powers ask for more than one thing, so they get their own little
+            // state machine rather than the single pending click.
+            if (power.Targeting == ActivationTargeting.CardCubes
+                || power.Targeting == ActivationTargeting.TwoHandCards
+                || power.Targeting == ActivationTargeting.CellAndHandCard)
+            {
+                BeginWorkshopTargeting(power);
+                return;
+            }
             if (power.Targeting != ActivationTargeting.None)
             {
                 pendingTargetPowerId = power.InstanceId;
@@ -241,6 +257,132 @@ namespace ProjectBlock.View
             }
             RunPowerActivation(power, AimedAtChosenWorld(ActivationTarget.None));
         }
+
+        /// <summary>Starts a workshop power's pick. All three begin the same way - waiting for
+        /// a click on the board or the hand - and diverge in HandleWorkshopClick.</summary>
+        private void BeginWorkshopTargeting(Power power)
+        {
+            workshopPowerId = power.InstanceId;
+            workshopFirstCard = -1;
+            workshopDonorCell = null;
+            pendingTargetPowerId = power.InstanceId; // so the bar and the hint light up
+            UpdateHud();
+            powerBar.Refresh(session, pendingTargetPowerId);
+        }
+
+        /// <summary>
+        /// One click of a workshop power's pick. Returns true when it consumed the click.
+        ///
+        /// Neşter:    hand card  -> cube picker (multi) -> CUT
+        /// Lehimleme: hand card  -> hand card          -> weld picker
+        /// Gen nakli: board cube -> hand card
+        /// </summary>
+        private bool HandleWorkshopClick(Vector2 world)
+        {
+            if (!workshopPowerId.HasValue || session == null)
+            {
+                return false;
+            }
+            Power power = session.Powers.Find(workshopPowerId.Value);
+            RoundEngine round = session.CurrentRound;
+            if (power == null || round == null)
+            {
+                CancelTargeting();
+                return true;
+            }
+
+            // A picker is open: the click belongs to it.
+            if (cubePicker.IsMultiPick)
+            {
+                if (cubePicker.ConfirmAt(world))
+                {
+                    ActivationTarget target = ActivationTarget.CardCubes(workshopFirstCard,
+                        cubePicker.PickedCells);
+                    cubePicker.Hide();
+                    RunPowerActivation(power, target);
+                    workshopPowerId = null;
+                    return true;
+                }
+                cubePicker.Toggle(cubePicker.CellAt(world));
+                return true;
+            }
+            if (weldPicker.IsOpen)
+            {
+                GridPos? offset = weldPicker.OfferAt(world);
+                if (!offset.HasValue)
+                {
+                    return true; // a miss inside the modal is just a miss
+                }
+                int second = SecondWorkshopCard;
+                ActivationTarget target = ActivationTarget.TwoCards(workshopFirstCard, second,
+                    offset.Value);
+                weldPicker.Hide();
+                RunPowerActivation(power, target);
+                workshopPowerId = null;
+                return true;
+            }
+
+            // "Gen nakli" wants the board cube first.
+            if (power.Targeting == ActivationTargeting.CellAndHandCard
+                && !workshopDonorCell.HasValue)
+            {
+                ActivationTarget cellTarget;
+                if (!TryBoardTargetAt(world, out cellTarget) || !cellTarget.Cell.HasValue)
+                {
+                    CancelTargeting();
+                    return true;
+                }
+                workshopDonorCell = cellTarget.Cell;
+                UpdateHud();
+                return true;
+            }
+
+            // Everything else is waiting for a hand card.
+            CardVisual hit = cardLayer.CardAt(world);
+            if (hit == null || hit.SlotIndex < 0 || hit.SlotIndex >= round.Hand.Count)
+            {
+                CancelTargeting();
+                return true;
+            }
+            if (power.Targeting == ActivationTargeting.CellAndHandCard)
+            {
+                ActivationTarget target = ActivationTarget.CellAndCard(workshopDonorCell.Value,
+                    hit.SlotIndex);
+                RunPowerActivation(power, target);
+                workshopPowerId = null;
+                return true;
+            }
+            if (power.Targeting == ActivationTargeting.CardCubes)
+            {
+                workshopFirstCard = hit.SlotIndex;
+                cubePicker.ShowMulti(round.EffectiveShape(round.Hand[hit.SlotIndex]),
+                    Loc.Pick("Neşter: pick the cubes for the FIRST piece   [Esc] cancel",
+                        "Neşter: BİRİNCİ parçaya girecek küpleri seç   [Esc] iptal"),
+                    Loc.Pick("CUT", "KES"));
+                return true;
+            }
+            // "Lehimleme": first card, then second, then where it goes.
+            if (workshopFirstCard < 0)
+            {
+                workshopFirstCard = hit.SlotIndex;
+                UpdateHud();
+                return true;
+            }
+            if (hit.SlotIndex == workshopFirstCard)
+            {
+                return true; // the same card twice is not two cards
+            }
+            SecondWorkshopCard = hit.SlotIndex;
+            weldPicker.Show(round.EffectiveShape(round.Hand[workshopFirstCard]),
+                round.EffectiveShape(round.Hand[hit.SlotIndex]),
+                Loc.Pick("Lehimleme: pick where the second block goes   [Esc] cancel",
+                    "Lehimleme: ikinci bloğun nereye geleceğini seç   [Esc] iptal"));
+            return true;
+        }
+
+        /// <summary>The second hand slot a weld is using. Its own field so the flow above reads
+        /// as the three straight lines it is.</summary>
+        private int SecondWorkshopCard { get; set; } = -1;
 
         private void RunPowerActivation(Power power, ActivationTarget target)
         {

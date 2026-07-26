@@ -109,6 +109,19 @@ namespace ProjectBlock.View
         private int parazitTargetJoker;
         private int parazitCardId;
         private CubePickerView cubePicker;
+        private WeldPickerView weldPicker;
+
+        // ---- the workshop powers' multi-step targeting ("Neşter", "Lehimleme", "Gen nakli") ----
+
+        /// <summary>Which power is mid-way through picking, and what it has collected so far.
+        /// All three are cleared by CancelTargeting, so Escape always gets the player out.</summary>
+        private int? workshopPowerId;
+
+        /// <summary>"Neşter"/"Lehimleme": the hand slot picked first.</summary>
+        private int workshopFirstCard = -1;
+
+        /// <summary>"Gen nakli": the board cube whose element is being moved.</summary>
+        private GridPos? workshopDonorCell;
         private bool sellCardsMode;
 
         /// <summary>True while the deck overlay's scrollbar is being dragged. Held across frames
