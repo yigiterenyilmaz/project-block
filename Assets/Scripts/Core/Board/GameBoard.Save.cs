@@ -24,6 +24,10 @@ namespace ProjectBlock.Core
             w.Write(key + ".width", Width);
             w.Write(key + ".height", Height);
             w.Write(key + ".ignoreElements", IgnoreElements);
+            // "Kütleçekim merkezi": which way water falls on this arena. Round-scoped state that
+            // nothing else can rebuild - a reload would otherwise stand the gravity back up.
+            w.Write(key + ".flowX", WaterFlow.X);
+            w.Write(key + ".flowY", WaterFlow.Y);
 
             // One row per line, as a run of 0/1 - compact and readable in a text editor.
             for (int iy = 0; iy < Height; iy++)
@@ -86,6 +90,7 @@ namespace ProjectBlock.Core
             int width = r.ReadInt(key + ".width");
             int height = r.ReadInt(key + ".height");
             bool ignoreElements = r.ReadBool(key + ".ignoreElements");
+            var flow = new GridPos(r.ReadInt(key + ".flowX"), r.ReadInt(key + ".flowY"));
 
             var mask = new bool[width, height];
             var deadMask = new bool[width, height];
@@ -113,6 +118,7 @@ namespace ProjectBlock.Core
             var board = new GameBoard(minX, minY, width, height, mask, deadMask,
                 playableCount, deadCount);
             board.IgnoreElements = ignoreElements;
+            board.SetWaterFlow(flow);
 
             int cubeCount = r.ReadInt(key + ".cubes.count");
             for (int i = 0; i < cubeCount; i++)

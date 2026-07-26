@@ -166,6 +166,7 @@ namespace ProjectBlock.Core
         public void BeginExternalCapture()
         {
             externalDestructionLog.Clear();
+            externalWaterFrames.Clear();
         }
 
         /// <summary>Cells destroyed by between-turn effects since the last BeginExternalCapture

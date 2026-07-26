@@ -30,7 +30,8 @@ namespace ProjectBlock.Core
         // bridge allowance and its discount and the round writes how long the streak has been
         // asleep; and the "Hedefli" block landed, so every card writes which cube is its target
         // and the round writes which targeted blocks still have their shot.
-        public const int FormatVersion = 7;
+        // 8 (2026-07-26): "Kütleçekim merkezi" landed, so the board writes which way water falls.
+        public const int FormatVersion = 8;
 
         private const string VersionKey = "version";
 

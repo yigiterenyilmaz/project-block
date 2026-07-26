@@ -36,6 +36,11 @@ namespace ProjectBlock.Core
 
         /// <summary>Needs a 2x2 patch of board, named by its bottom-left cell ("Hidrolik pres").
         /// Distinct from BoardCell so the UI knows to preview four cells, not one.</summary>
-        BoardArea = 7
+        BoardArea = 7,
+
+        /// <summary>Needs one of the four SIDES ("Kütleçekim merkezi" choosing which way water
+        /// falls). Target carries the one-cell step in Offset; the UI asks with a small picker
+        /// rather than a click on the board, because a direction is not a place.</summary>
+        Direction = 8
     }
 }

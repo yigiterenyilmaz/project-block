@@ -50,6 +50,7 @@ namespace ProjectBlock.Core
             Register(() => new LehimlemePower());
             Register(() => new GenNakliPower());
             Register(() => new HidrolikPresPower());
+            Register(() => new KutlecekimMerkeziPower());
         }
 
         /// <summary>All known powers, in design order.</summary>

@@ -468,6 +468,12 @@ namespace ProjectBlock.Core
         /// reach a TurnReport, so the View reads this to play the explosion FX on them.</summary>
         private readonly List<GridPos> externalDestructionLog = new List<GridPos>();
 
+        /// <summary>Water moves a BETWEEN-TURN effect caused ("Kütleçekim merkezi" turning the
+        /// arena's gravity). Like the destruction log above, these never reach a TurnReport, so
+        /// the View reads them here to animate the flow.</summary>
+        private readonly List<IReadOnlyList<WaterMove>> externalWaterFrames =
+            new List<IReadOnlyList<WaterMove>>();
+
         /// <summary>Board state as it stood at the START of recent turns, newest last.
         /// "Kum saati" rewinds into this. Only a few turns are kept - the power reaches two
         /// back and nothing needs more.</summary>

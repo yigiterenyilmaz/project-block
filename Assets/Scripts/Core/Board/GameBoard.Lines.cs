@@ -15,34 +15,58 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
-        /// WATER RULE (confirmed 2026-07-18): water simply DROPS straight down until it
-        /// rests, one cell per pass. Each pass's moves are appended to fallFrames (when
-        /// given) so the UI can show the fall step by step. Afterwards any fire touching
-        /// water turns to obsidian (the water persists). Returns true if anything changed.
+        /// WATER RULE (confirmed 2026-07-18): water simply DROPS until it rests, one cell per
+        /// pass. Which way "down" is comes from WaterFlow - normally straight down, but the
+        /// "Kütleçekim merkezi" power turns the arena's gravity to any of the four sides for the
+        /// rest of the round. Each pass's moves are appended to fallFrames (when given) so the UI
+        /// can show the fall step by step. Afterwards any fire touching water turns to obsidian
+        /// (the water persists). Returns true if anything changed.
         /// </summary>
         public bool SettleWaterAndReact(List<IReadOnlyList<WaterMove>> fallFrames)
         {
             bool anyChange = false;
             bool moved = true;
-            int guard = Height + 2;
+            int dx = WaterFlow.X;
+            int dy = WaterFlow.Y;
+            // Enough passes for water to cross the whole arena the long way, whichever way it
+            // is flowing, plus slack.
+            int guard = Width + Height + 2;
+            // Walk the cells in the order the flow DRAINS them - the ones nearest the destination
+            // edge first - so one pass shifts a whole column (or row) by one cell instead of
+            // leaving the cube behind waiting for the next pass. For the default downward flow
+            // this is exactly the old bottom-up scan.
+            int xFrom = dx > 0 ? Width - 1 : 0;
+            int xEnd = dx > 0 ? -1 : Width;
+            int xStep = dx > 0 ? -1 : 1;
+            int yFrom = dy > 0 ? Height - 1 : 0;
+            int yEnd = dy > 0 ? -1 : Height;
+            int yStep = dy > 0 ? -1 : 1;
             while (moved && guard-- > 0)
             {
                 moved = false;
                 List<WaterMove> frame = null;
-                for (int y = 1; y < Height; y++)
+                for (int y = yFrom; y != yEnd; y += yStep)
                 {
-                    for (int x = 0; x < Width; x++)
+                    for (int x = xFrom; x != xEnd; x += xStep)
                     {
                         Cube? cube = cells[x, y];
                         if (!cube.HasValue || cube.Value.Kind != CubeKind.Water)
                         {
                             continue;
                         }
-                        if (cells[x, y - 1].HasValue)
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx < 0 || nx >= Width || ny < 0 || ny >= Height)
+                        {
+                            continue; // the edge of the arena holds it
+                        }
+                        // Play area only: a hole in the bounding box is not somewhere water can
+                        // go, however empty it looks.
+                        if (!IsInside(new GridPos(nx + MinX, ny + MinY)) || cells[nx, ny].HasValue)
                         {
                             continue;
                         }
-                        cells[x, y - 1] = cube;
+                        cells[nx, ny] = cube;
                         cells[x, y] = null;
                         moved = true;
                         anyChange = true;
@@ -52,7 +76,8 @@ namespace ProjectBlock.Core
                             {
                                 frame = new List<WaterMove>();
                             }
-                            frame.Add(new WaterMove(new GridPos(x + MinX, y + MinY), new GridPos(x + MinX, y - 1 + MinY)));
+                            frame.Add(new WaterMove(new GridPos(x + MinX, y + MinY),
+                                new GridPos(nx + MinX, ny + MinY)));
                         }
                     }
                 }

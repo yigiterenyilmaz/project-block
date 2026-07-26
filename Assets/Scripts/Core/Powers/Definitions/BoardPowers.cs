@@ -13,6 +13,73 @@ using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
+    /// <summary>
+    /// "Kütleçekim merkezi" - the arena's gravity turns. Water stops falling downward and falls
+    /// towards whichever of the four sides you choose, for the rest of the round.
+    ///
+    /// Everything else on the board is unmoved: this is not a way to rearrange your blocks, it is
+    /// a way to aim your WATER. That is what makes it a puzzle piece rather than a broom - water
+    /// is the one thing on the board that travels after it has been placed, and this decides
+    /// where it travels to. Pull it sideways and a water block laid on the left edge fills the
+    /// gap on the right; pull it upward and water climbs into the hole a clear just opened.
+    ///
+    /// The water already standing on the board obeys the new pull AT ONCE (RoundEngine
+    /// .SetWaterFlow), so spending the charge always does something you can see, and any line the
+    /// flow completes explodes under the ordinary between-turn rules.
+    ///
+    /// ROUND-SCOPED, because the direction lives on the BOARD and the board is built fresh every
+    /// round. A clean sweep recharges it like any other power, so a round with sweeps in it is a
+    /// round where the gravity can be re-aimed several times.
+    /// </summary>
+    public sealed class KutlecekimMerkeziPower : Power
+    {
+        public KutlecekimMerkeziPower()
+            : base("kutlecekim_merkezi", "Kütleçekim Merkezi")
+        {
+            SetDescription(
+                "Choose a side: water falls THAT way for the rest of the round instead of down. "
+                    + "The water already on the board flows there at once, and any line it "
+                    + "completes explodes. Nothing else moves.",
+                "Bir yön seç: su o raunt boyunca aşağı yerine O YÖNE akar. Alandaki su hemen o "
+                    + "yöne akar ve tamamladığı satır ya da sütun patlar. Başka hiçbir şey "
+                    + "yerinden oynamaz.");
+        }
+
+        public override ActivationTargeting Targeting
+        {
+            get { return ActivationTargeting.Direction; }
+        }
+
+        public override string StatusText
+        {
+            get { return null; }
+        }
+
+        /// <summary>Only the four sides, and never a no-op: a direction has to be exactly one
+        /// cell along one axis.</summary>
+        public override bool CanRun(RoundContext ctx, ActivationTarget target)
+        {
+            if (!target.Offset.HasValue)
+            {
+                return false;
+            }
+            GridPos step = target.Offset.Value;
+            int ax = step.X < 0 ? -step.X : step.X;
+            int ay = step.Y < 0 ? -step.Y : step.Y;
+            return ax + ay == 1;
+        }
+
+        public override bool Run(RoundContext ctx, ActivationTarget target)
+        {
+            if (!CanRun(ctx, target))
+            {
+                return false;
+            }
+            ctx.Round.SetWaterFlow(target.Offset.Value);
+            return true;
+        }
+    }
+
     /// <summary>"Çaprazlama" - blows up a plus-shaped area around a chosen cell.</summary>
     public sealed class CaprazlamaPower : Power
     {

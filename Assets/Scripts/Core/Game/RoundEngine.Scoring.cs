@@ -606,6 +606,33 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
+        /// "Kütleçekim merkezi": turns the arena's gravity, and makes the water already standing
+        /// on it obey the new pull AT ONCE - the flow is the whole point of the power, so it must
+        /// be visible the moment the charge is spent rather than waiting for the next placement.
+        ///
+        /// Written to the world the activation was aimed at, so a power pointed at the mirror
+        /// ("Öteki dünya") turns the mirror's gravity and not the main world's. Any line the flow
+        /// happens to complete explodes under the ordinary between-turn rules, which is also what
+        /// gives "Genel temizlik" its say.
+        /// </summary>
+        internal void SetWaterFlow(GridPos direction)
+        {
+            Board.SetWaterFlow(direction);
+            externalWaterFrames.Clear();
+            Board.SettleWaterAndReact(externalWaterFrames);
+            // Water MOVED; nothing died. Re-baseline or the diff reads a flow as a killing.
+            ResyncSnapshot();
+            ResolveFullLinesOutsideTurn();
+        }
+
+        /// <summary>Water moves the last power caused, for the View to animate. Empty otherwise;
+        /// cleared by BeginExternalCapture like the destruction log it sits beside.</summary>
+        public IReadOnlyList<IReadOnlyList<WaterMove>> ExternalWaterFrames
+        {
+            get { return externalWaterFrames; }
+        }
+
+        /// <summary>
         /// A boss REARRANGED the board rather than destroying anything ("Snake" sliding its body
         /// along, one cell in at the head and one out at the tail). Re-baselines the destruction
         /// diff so the cubes that MOVED are never mistaken for cubes that died - the same

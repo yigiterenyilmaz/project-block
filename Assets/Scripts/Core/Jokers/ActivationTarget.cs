@@ -53,6 +53,14 @@ namespace ProjectBlock.Core
                 picked);
         }
 
+        /// <summary>"Kütleçekim merkezi": one of the four sides, as a one-cell step. It rides in
+        /// Offset because a direction is exactly that shape of value - a relative step - and
+        /// giving it a field of its own would only be the same thing under another name.</summary>
+        public static ActivationTarget Direction(GridPos step)
+        {
+            return new ActivationTarget(null, null, null, null, null, false, null, step, null);
+        }
+
         /// <summary>"Lehimleme": two cards and where the second sits against the first.</summary>
         public static ActivationTarget TwoCards(int first, int second, GridPos offset)
         {

@@ -114,6 +114,25 @@ namespace ProjectBlock.Core
         /// inflation power cannot accidentally hand the elements back mid-round.</summary>
         internal bool IgnoreElements { get; set; }
 
+        /// <summary>
+        /// Which way water falls on this arena, as a one-cell step. (0,-1) - straight down - on
+        /// every ordinary board; the "Kütleçekim merkezi" power turns it to any of the four
+        /// sides for the rest of the round.
+        ///
+        /// It lives on the BOARD rather than in RoundRules because it is a property of the arena,
+        /// and the arena is rebuilt every round - which is exactly the round-scoping the power
+        /// wants. Carried across CreateResized and CreateClone, so an inflation power cannot
+        /// quietly stand the gravity back up and the mirror world inherits the same pull.
+        /// </summary>
+        public GridPos WaterFlow { get; private set; } = new GridPos(0, -1);
+
+        /// <summary>Turns the arena's gravity. Only ever called through RoundEngine.SetWaterFlow,
+        /// which also makes the water already on the board obey it at once.</summary>
+        internal void SetWaterFlow(GridPos direction)
+        {
+            WaterFlow = direction;
+        }
+
         public int Width { get; }
         public int Height { get; }
         public int OccupiedCount { get; private set; }
@@ -249,6 +268,7 @@ namespace ProjectBlock.Core
             var board = new GameBoard(newMinX, newMinY, newWidth, newHeight, mask, deadMask,
                 count, deadCount);
             board.IgnoreElements = source.IgnoreElements;
+            board.WaterFlow = source.WaterFlow;
             for (int sx = 0; sx < source.Width; sx++)
             {
                 for (int sy = 0; sy < source.Height; sy++)
@@ -325,6 +345,7 @@ namespace ProjectBlock.Core
                 clone.outsideCubes[ghost.Key] = ghost.Value;
             }
             clone.IgnoreElements = source.IgnoreElements;
+            clone.WaterFlow = source.WaterFlow;
             return clone;
         }
 
