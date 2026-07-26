@@ -49,6 +49,7 @@ namespace ProjectBlock.Core
             Register(() => new RehinPuanBoss());
             Register(() => new BurokrasiBatagiBoss());
             Register(() => new BulParayiBoss());
+            Register(() => new MayinEsegiBoss());
         }
 
         /// <summary>All known bosses, in design order.</summary>
