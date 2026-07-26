@@ -39,6 +39,18 @@ namespace ProjectBlock.Core
             cards.Insert(index, card);
         }
 
+        /// <summary>Rewrites the ORDER of the hand, keeping exactly the cards it already holds
+        /// ("Şaşırtmaca" mixing the face-down cards up between turns). The caller is trusted to
+        /// pass a permutation of the current contents.</summary>
+        internal void SetOrder(IReadOnlyList<BlockCard> ordered)
+        {
+            cards.Clear();
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                cards.Add(ordered[i]);
+            }
+        }
+
         internal BlockCard RemoveAt(int index)
         {
             BlockCard card = cards[index];

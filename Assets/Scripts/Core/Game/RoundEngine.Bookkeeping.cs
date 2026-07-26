@@ -401,6 +401,10 @@ namespace ProjectBlock.Core
             {
                 return false; // frozen cards cannot be played, so they are not a way out
             }
+            if (IsLockedByBoss(card))
+            {
+                return false; // nor is a card the boss has locked behind another one
+            }
             bool ghost = Has(card, BlockElement.Ghost);
             bool negative = Has(card, BlockElement.Negative);
             BlockShape shape = EffectiveShape(card);

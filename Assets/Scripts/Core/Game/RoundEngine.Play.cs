@@ -199,6 +199,11 @@ namespace ProjectBlock.Core
             {
                 throw new InvalidOperationException("Card " + card.Id + " is frozen.");
             }
+            if (IsLockedByBoss(card))
+            {
+                throw new InvalidOperationException(
+                    "Card " + card.Id + " is locked - another card has been turned over.");
+            }
             if (!CanPlaceCard(card, origin))
             {
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");

@@ -235,6 +235,64 @@ namespace ProjectBlock.Core
             get { return Boss != null && Boss.HidesTheBoard; }
         }
 
+        /// <summary>True while the hand is dealt face down ("Şaşırtmaca"). Read by the VIEW; the
+        /// RULE that goes with it is IsLockedByBoss.</summary>
+        public bool HandIsFaceDown
+        {
+            get { return Boss != null && Boss.HidesHandCards; }
+        }
+
+        /// <summary>True while the boss forbids playing this held card ("Şaşırtmaca" locking
+        /// every card but the one the player turned over). Asked live at the two places that
+        /// matter - playing a card and counting it as a way out - so a locked card is neither
+        /// playable nor an escape from a dead end.</summary>
+        public bool IsLockedByBoss(BlockCard card)
+        {
+            return Boss != null && card != null && Boss.LocksHandCard(card);
+        }
+
+        /// <summary>
+        /// Turns a face-down held card over ("Şaşırtmaca"), committing the player to it: the rest
+        /// of the hand locks behind it. Returns false when there is nothing to reveal.
+        ///
+        /// The dead-end check runs straight afterwards, which is what makes the commitment safe:
+        /// if the card the player turned over fits nowhere, the boss's own TryEscapeDeadEnd lifts
+        /// the lock again rather than letting its rule end the round.
+        /// </summary>
+        public bool RevealHandCard(int handIndex)
+        {
+            if (Boss == null || Status != RoundStatus.InProgress
+                || handIndex < 0 || handIndex >= Hand.Count)
+            {
+                return false;
+            }
+            if (!Boss.RevealHandCard(Hand[handIndex]))
+            {
+                return false;
+            }
+            CheckForNoPlayableMove();
+            return true;
+        }
+
+        /// <summary>Mixes the hand's ORDER up, keeping every card in it ("Şaşırtmaca" re-dealing
+        /// its face-down cards). Nothing is drawn or discarded - only the slots change.</summary>
+        internal void ShuffleHandOrder(IRandomSource shuffleRng)
+        {
+            if (shuffleRng == null || Hand.Count < 2)
+            {
+                return;
+            }
+            var order = new List<BlockCard>(Hand.Cards);
+            for (int i = order.Count - 1; i > 0; i--)
+            {
+                int j = shuffleRng.NextInt(0, i + 1);
+                BlockCard swap = order[i];
+                order[i] = order[j];
+                order[j] = swap;
+            }
+            Hand.SetOrder(order);
+        }
+
         /// <summary>"Çıkmaz": running out of room WINS this round, while a clean sweep or
         /// reaching the threshold LOSES it. Read live at the three places a round is decided.</summary>
         public bool RoundOutcomeInverted
@@ -269,6 +327,42 @@ namespace ProjectBlock.Core
             }
             shell.Protect(instanceId);
             return true;
+        }
+
+        /// <summary>
+        /// "Tamagotchi": hands a held card to the boss. Costs no turn - it is not a placement -
+        /// and the hand tops itself back up, so feeding the pet is a tax on the DECK and never on
+        /// the tempo. Returns false when there is no pet, nothing it wants, or that card is not
+        /// on its list.
+        /// </summary>
+        public bool FeedPet(int handIndex)
+        {
+            var pet = Boss as TamagotchiBoss;
+            if (pet == null || Status != RoundStatus.InProgress)
+            {
+                return false;
+            }
+            return pet.TryFeed(this, handIndex);
+        }
+
+        /// <summary>Takes a held card OUT OF THE ROUND (it joins no pile) and tops the hand back
+        /// up. The boss's half of FeedPet: the pet decides whether the card is food, and this is
+        /// what eating it does. The card is untouched in GameSession.OwnedCards, so it is back in
+        /// the deck next round.</summary>
+        internal void FeedCardToBoss(int handIndex)
+        {
+            if (handIndex < 0 || handIndex >= Hand.Count)
+            {
+                return;
+            }
+            Deck.RemoveFromRound(Hand.RemoveAt(handIndex));
+            RefillHand();
+            if (Loss != null)
+            {
+                SetStatus(RoundStatus.Lost);
+                return;
+            }
+            CheckForNoPlayableMove();
         }
 
         /// <summary>Forbids placement on one empty cell ("Mapus"). Board mutations go through
@@ -775,6 +869,11 @@ namespace ProjectBlock.Core
         private bool boardCleanBeforeExplosion;
         private int cubesDestroyedThisTurn;
         private bool pendingAdvanceOffer;
+
+        /// <summary>Set when a boss's own win condition has been met ("Matruşka", "Snake"). The
+        /// status is settled at turn step 10 like every other outcome, so nothing later in the
+        /// turn can overwrite it. Round state, so it is saved.</summary>
+        private bool bossWonTheRound;
 
         /// <summary>Set when a BETWEEN-TURN destruction (a power/joker between placements)
         /// emptied a board that was not already empty. "Genel temizlik" turns these into real

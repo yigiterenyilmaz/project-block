@@ -216,6 +216,35 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
+        /// True while the hand is dealt FACE DOWN ("Şaşırtmaca"). Like HidesTheBoard this is a
+        /// fact about the SCREEN - it is the companion query LocksHandCard that bends a rule.
+        /// </summary>
+        public virtual bool HidesHandCards
+        {
+            get { return false; }
+        }
+
+        /// <summary>
+        /// True if this held card may not be played right now ("Şaşırtmaca" locking every card
+        /// but the one the player turned over). Asked live wherever a card is played or counted
+        /// as a way out, so the placement, the dead-end check and the UI can never disagree.
+        ///
+        /// A boss that answers true for EVERY card would lock the round, so one that locks must
+        /// also answer TryEscapeDeadEnd - see RoundEngine.CheckForNoPlayableMove.
+        /// </summary>
+        public virtual bool LocksHandCard(BlockCard card)
+        {
+            return false;
+        }
+
+        /// <summary>The player turned a face-down card over ("Şaşırtmaca"). Returns true if the
+        /// reveal took - false when there is nothing to reveal or the moment has passed.</summary>
+        public virtual bool RevealHandCard(BlockCard card)
+        {
+            return false;
+        }
+
+        /// <summary>
         /// True while the arena is in DARKNESS ("Alacakaranlık") and the player must play blind.
         ///
         /// The only boss whose entire effect is what the player can SEE. Not one rule bends -
