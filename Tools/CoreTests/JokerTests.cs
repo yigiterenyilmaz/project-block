@@ -4321,15 +4321,18 @@ public static class JokerTests
                 return;
             }
         }
-        Check(joker.GoldThisRound == 0, "nothing has ripened yet",
-            "gold " + joker.GoldThisRound);
+        Check(round.Board.GetCube(spot).Value.Kind == CubeKind.Normal,
+            "our cube has not ripened yet",
+            round.Board.GetCube(spot).Value.Kind.ToString());
 
         PlayTurns(session, 1);
         Cube? ripened = round.Board.GetCube(spot);
         Check(ripened.HasValue && ripened.Value.Kind == CubeKind.Gold,
-            "and on the tenth turn it is GOLD",
+            "and on the fifth turn it is GOLD",
             ripened.HasValue ? ripened.Value.Kind.ToString() : "gone");
-        Check(joker.GoldThisRound == 1, "the joker counted it", "" + joker.GoldThisRound);
+        // Not "exactly one": the blocks the driver itself played are tenants too, and on a
+        // five-turn wait they ripen inside the same window. That is the joker working.
+        Check(joker.GoldThisRound >= 1, "the joker counted it", "" + joker.GoldThisRound);
         Check(ripened.Value.SourceCardId == 9950, "and it is still the same cube");
     }
 
@@ -4379,13 +4382,14 @@ public static class JokerTests
         Check(cube.HasValue && cube.Value.Kind == CubeKind.Normal,
             "the new tenant is still plain three turns later - it did not inherit the clock",
             cube.HasValue ? cube.Value.Kind.ToString() : "gone");
-        Check(joker.GoldThisRound == 0, "and nothing has ripened", "" + joker.GoldThisRound);
+        Check(cube.Value.SourceCardId == 9961, "and it is the NEW tenant sitting there",
+            "" + cube.Value.SourceCardId);
 
         // Give it the full wait and it ripens on its own account.
         PlayTurns(session, joker.TurnsToRipen);
         cube = round.Board.GetCube(spot);
         Check(cube.HasValue && cube.Value.Kind == CubeKind.Gold,
-            "given the full ten turns of its own, it ripens",
+            "given a full wait of its own, it ripens",
             cube.HasValue ? cube.Value.Kind.ToString() : "gone");
     }
 

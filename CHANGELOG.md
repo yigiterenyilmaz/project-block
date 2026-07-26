@@ -14,7 +14,7 @@ everything here is unreleased and balance numbers are still placeholders.
   what overtime is for. A turn that does not reach the bar banks every point as before.
 
 ### Added
-- **Kiracı (joker)** — an **elementless** block that survives **10 turns** on the board turns to
+- **Kiracı (joker)** — an **elementless** block that survives **5 turns** on the board turns to
   **GOLD**. Only plain cubes qualify; anything that already has an element is not a tenant.
   Read the trade before taking it: gold pays rent every turn it stands there, but gold also
   **never breaks** and **blocks a clean sweep**, so every tenant you let settle is a permanent

@@ -381,7 +381,7 @@ namespace ProjectBlock.Core
     public sealed class KiraciJoker : Joker
     {
         /// <summary>Turns a plain cube must survive, in one spot, before it turns to gold.</summary>
-        public int TurnsToRipen = 10;
+        public int TurnsToRipen = 5;
 
         /// <summary>Cell -> turns its current tenant has held it.</summary>
         private readonly Dictionary<GridPos, int> tenancy = new Dictionary<GridPos, int>();
@@ -399,10 +399,10 @@ namespace ProjectBlock.Core
             : base("kiraci", "Kiracı")
         {
             SetDescription(
-                "A plain block that survives 10 turns on the board turns to GOLD. Gold pays rent "
+                "A plain block that survives 5 turns on the board turns to GOLD. Gold pays rent "
                     + "every turn - but it never breaks and it blocks a clean sweep, so every "
                     + "tenant you let settle is there for good.",
-                "Oyun alanında 10 tur patlamadan duran elementsiz küpler ALTINA dönüşür. Altın "
+                "Oyun alanında 5 tur patlamadan duran elementsiz küpler ALTINA dönüşür. Altın "
                     + "durduğu her tur kira öder - ama asla kırılmaz ve temizliği engeller, yani "
                     + "yerleşmesine izin verdiğin her kiracı kalıcıdır.");
             BaseSellValue = 65;
