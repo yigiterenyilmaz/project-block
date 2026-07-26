@@ -21,15 +21,16 @@ everything here is unreleased and balance numbers are still placeholders.
 
 ### Added
 - **Kaçakçı (joker)** — **one market item per visit, free** (SHIFT+click an offer) — but smuggled
-  goods are **defective about half the time**, and you keep whatever you took. A junk **block** is a
-  broken-up shape spanning 6x6: it does not fit a 5x5 arena *at all*, and on a bigger one it needs
-  four exact cells right across the board, so a hand slot holding it is a slot you do not have that
-  round — for the rest of the run. A broken **joker** is either dead in every **boss round** or dead
+  goods are **defective about half the time**, and you keep whatever you took. A defective **block**
+  looks completely ordinary and **will not stay on the board**: you place it legally, the cubes let
+  go and **fall through the arena and off the screen**, and nothing lands — no score, no line, no
+  sweep, the turn simply gone. It stays in your deck for the run, so it costs you that turn again
+  every time it comes back round. A broken **joker** is either dead in every **boss round** or dead
   outright, and it still takes up its slot. A broken **power** arrives **empty** and fills at a
-  quarter of the rate, for good. The defect is visible immediately — on the card's band, the joker's
-  status line, the power's meter — because hidden state reads as a bug and the gamble is in the
-  taking, not the finding out. Smuggling counts as having shopped, so a joker that pays you for
-  leaving the market empty-handed is not fooled by walking out with stolen stock.
+  quarter of the rate, for good. The defect is visible immediately — a red DEFOLU band on the card,
+  the joker's status line, the power's meter — because hidden state reads as a bug and the gamble is
+  in the taking, not the finding out. Smuggling counts as having shopped, so a joker that pays you
+  for leaving the market empty-handed is not fooled by walking out with stolen stock.
 - **Uzun Vadeli Yatırımcı (joker)** — a bet on the whole run. It is stocked **only in the first
   five markets**, does nothing for the twelve rounds after that, and pays out in exactly one
   place: the **final round**. There it is an **extra life** — lose that round and you play it
