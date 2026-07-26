@@ -38,6 +38,13 @@ namespace ProjectBlock.Core
             Register(() => new YuruyenMerdivenBoss());
             Register(() => new KarantinaBoss());
             Register(() => new AlacakaranlikBoss());
+            Register(() => new EnflasyonBoss());
+            Register(() => new HiclikBoss());
+            Register(() => new SaatciBoss());
+            Register(() => new KitlikBoss());
+            Register(() => new MerkezkacBoss());
+            Register(() => new DortKutupBoss());
+            Register(() => new KangrenBoss());
         }
 
         /// <summary>All known bosses, in design order.</summary>
