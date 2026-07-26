@@ -331,9 +331,16 @@ namespace ProjectBlock.View
                 return;
             }
             MarketOffer offer = session.Market.Offers[offerIndex];
-            if (session.TryBuyOffer(offerIndex))
+            // "Kaçakçı": hold SHIFT to take the offer for free instead of paying for it. One per
+            // market visit, and the goods may be junk - which is why it is a deliberate modifier
+            // and not the default click.
+            Keyboard keys = Keyboard.current;
+            bool smuggling = session.CanSmuggle && keys != null
+                && (keys.leftShiftKey.isPressed || keys.rightShiftKey.isPressed);
+            if (smuggling ? session.TrySmuggleOffer(offerIndex) : session.TryBuyOffer(offerIndex))
             {
-                Debug.Log("[project_block] Bought " + offer + " for " + offer.Price);
+                Debug.Log("[project_block] " + (smuggling ? "Smuggled " : "Bought ") + offer
+                    + " for " + (smuggling ? 0 : offer.Price));
                 sfx.Buy();
                 if (offer.Kind == MarketOfferKind.Joker)
                 {

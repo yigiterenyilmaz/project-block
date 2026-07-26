@@ -201,9 +201,24 @@ namespace ProjectBlock.View
             panel.Title.text = hotkey + joker.DisplayName;
 
             var line = new System.Text.StringBuilder();
+            // "Kaçakçı": the joker itself does not know it came off a lorry, so the bar has to
+            // say so - a joker that silently does nothing reads as a bug.
+            if (joker.Defect == SmuggledDefect.NeverWorks)
+            {
+                line.Append(Loc.Pick("DEFECTIVE: dead", "DEFOLU: hiç çalışmaz"));
+            }
+            else if (joker.Defect == SmuggledDefect.DeadInBossRounds)
+            {
+                line.Append(Loc.Pick("DEFECTIVE: off in boss rounds",
+                    "DEFOLU: patron rauntlarında kapalı"));
+            }
             string status = joker.StatusText;
             if (!string.IsNullOrEmpty(status))
             {
+                if (line.Length > 0)
+                {
+                    line.Append("   ");
+                }
                 line.Append(status);
             }
             if (joker.ChargesPerRound > 0)

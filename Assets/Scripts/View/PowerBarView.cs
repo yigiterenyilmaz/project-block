@@ -199,9 +199,21 @@ namespace ProjectBlock.View
             {
                 line.Append(status).Append("   ");
             }
-            line.Append(power.Charged
-                ? Loc.Pick("charged", "dolu")
-                : Loc.Pick("empty (sweep refills)", "boş (temizlik doldurur)"));
+            if (power.Charged)
+            {
+                line.Append(Loc.Pick("charged", "dolu"));
+            }
+            else if (power.RechargeCost > 1)
+            {
+                // "Kaçakçı" defective goods: say how far off a charge it is, or the meter looks
+                // stuck for four sweeps running.
+                line.Append(Loc.Pick("DEFECTIVE: ", "DEFOLU: "))
+                    .Append(power.RechargeProgress).Append('/').Append(power.RechargeCost);
+            }
+            else
+            {
+                line.Append(Loc.Pick("empty (sweep refills)", "boş (temizlik doldurur)"));
+            }
             line.Append('\n').Append(Loc.Pick("sell ", "satış "))
                 .Append(power.BaseSellValue * session.Config.Scoring.ScoreScale);
             if (silenced)

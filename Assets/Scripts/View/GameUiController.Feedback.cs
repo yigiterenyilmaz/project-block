@@ -524,7 +524,12 @@ namespace ProjectBlock.View
                     messageText.text = Loc.Pick(
                             "Click a card to add it to your deck (price below it)\n[N] start round ",
                             "Desteye katmak için karta tıkla (fiyatı altında)\n[N] raunt başlat: ")
-                        + (session.RoundNumber + 1);
+                        + (session.RoundNumber + 1)
+                        // "Kaçakçı": the free item is invisible unless the market says so.
+                        + (session.CanSmuggle
+                            ? Loc.Pick("\nSHIFT+click: take it FREE (may be defective)",
+                                "\nSHIFT+tık: BEDAVA al (defolu çıkabilir)")
+                            : string.Empty);
                     break;
                 default:
                     if (round.Status == RoundStatus.AwaitingAdvanceDecision)
