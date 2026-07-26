@@ -25,6 +25,7 @@ public static class SaveTests
         BoardRoundTrip();
         BoardErosionAndSealsRoundTrip();
         BoardInfectionDeadLinesRoundTrip();
+        PressingPowerRoundTrips();
         SmuggledCardRoundTrip();
         SessionDebtAndSmuggleFlagRoundTrip();
         CardTableSharesInstances();
@@ -271,6 +272,32 @@ public static class SaveTests
 
     /// <summary>"Kangren" dead lines: a line the rot took whole can never explode again, and that
     /// has to survive a reload or a loaded board silently becomes completable.</summary>
+    /// <summary>"Hidrolik pres" holds a Cube?[] of what it swallowed - an array of nullable
+    /// structs, the most awkward field shape any content type has. A fresh power holds null, so
+    /// only a PRESSING one actually exercises it.</summary>
+    private static void PressingPowerRoundTrips()
+    {
+        var board = new GameBoard(5, 5);
+        board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Fire, 41));
+        board.SetCubeAt(new GridPos(2, 2), new Cube(CubeKind.Gold, 42));
+
+        var power = new HidrolikPresPower();
+        typeof(HidrolikPresPower)
+            .GetField("swallowed", System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic)
+            .SetValue(power, board.Compress(new GridPos(1, 1)));
+        typeof(HidrolikPresPower)
+            .GetField("turnsLeft", System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic)
+            .SetValue(power, 3);
+        Check(power.IsPressing, "the press is holding before saving");
+
+        var fresh = new HidrolikPresPower();
+        RoundTripContent(power, fresh, "hidrolik pres");
+        Check(fresh.IsPressing, "and it is still holding after loading");
+        CheckEqual(power.TurnsLeft, fresh.TurnsLeft, "with the same countdown");
+    }
+
     private static void BoardInfectionDeadLinesRoundTrip()
     {
         var board = new GameBoard(5, 5);

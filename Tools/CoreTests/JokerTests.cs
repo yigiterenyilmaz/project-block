@@ -135,6 +135,16 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Nester_CutsABlockInTwo();
+        Nester_RefusesACutThatWouldNotHoldTogether();
+        Lehimleme_WeldsTwoCardsIntoOne();
+        Lehimleme_RefusesAJoinThatDoesNotTouch();
+        GenNakli_MovesAnElementAndGivesItBack();
+        GenNakli_RefusesAPlainCubeOrABusyCard();
+        Pres_SqueezesFourCellsIntoOne();
+        Pres_ShovesCubesOffTheEdgeWhenItOpens();
+        Pres_WillNotBudgeObsidianAndDetonatesWhenStuck();
+        Pres_OpensByItselfAfterFourTurns();
         Bilinmezlik_HoldsFullLinesUntilItFires();
         Bilinmezlik_ADryStreakEventuallyFiresByItself();
         RehinPuan_HoldsTheLineScoreUntilTheNextClear();
@@ -4517,6 +4527,287 @@ public static class JokerTests
         // board - which is the only way a board-reshaping boss can be tested at all.
         config.ForcedBossDefId = bossDefId;
         return new GameSession(config);
+    }
+
+    /// <summary>Puts a specific card in hand slot 0 and returns it, so a workshop test does not
+    /// have to fish for the shape it needs.</summary>
+    private static BlockCard PutInHand(GameSession session, RoundEngine round, BlockShape shape,
+        IEnumerable<BlockElement> elements = null)
+    {
+        BlockCard card = session.CreateCard(shape, elements);
+        round.Hand.Insert(0, card);
+        return card;
+    }
+
+    private static void Nester_CutsABlockInTwo()
+    {
+        Section("neşter / cuts one block into two, and both halves have to hold together");
+        var session = NewSession(9400, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (NesterPower)session.Powers.Add(new NesterPower());
+        session.Powers.DispatchRoundStarted(round);
+
+        // A bar of four, cut into two and two.
+        BlockCard bar = PutInHand(session, round, Bar(4));
+        int deckBefore = session.OwnedCards.Count;
+        var firstHalf = new List<GridPos> { new GridPos(0, 0), new GridPos(1, 0) };
+        Check(session.Powers.TryUse(power.InstanceId,
+                ActivationTarget.CardCubes(0, firstHalf)),
+            "the cut went through");
+
+        Check(round.BonusHand.Count == 2, "two pieces arrived in the bonus hand",
+            "" + round.BonusHand.Count);
+        Check(round.BonusHand[0].Card.Shape.Size == 2
+                && round.BonusHand[1].Card.Shape.Size == 2,
+            "each of them is half the block");
+        bool wholeStillInHand = false;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.Hand[i].Id == bar.Id) { wholeStillInHand = true; }
+        }
+        Check(!wholeStillInHand, "and the card that was cut is gone from the hand");
+        Check(session.OwnedCards.Count == deckBefore,
+            "the deck the player OWNS is untouched - the cut is round-scoped",
+            deckBefore + " -> " + session.OwnedCards.Count);
+    }
+
+    private static void Nester_RefusesACutThatWouldNotHoldTogether()
+    {
+        Section("neşter / it refuses a cut that leaves a piece in loose bits");
+        var session = NewSession(9401, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (NesterPower)session.Powers.Add(new NesterPower());
+        session.Powers.DispatchRoundStarted(round);
+        PutInHand(session, round, Bar(4));
+
+        // Taking the two ENDS would leave the middle pair as the other half - fine - but the
+        // ends themselves are not touching, so the first piece is two loose cubes.
+        var ends = new List<GridPos> { new GridPos(0, 0), new GridPos(3, 0) };
+        Check(!session.Powers.CanUse(power.InstanceId, ActivationTarget.CardCubes(0, ends)),
+            "the two ends are not one piece, so the cut is refused");
+
+        // Everything, or nothing, is not a cut either.
+        var everything = new List<GridPos>(Bar(4).Cells);
+        Check(!session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.CardCubes(0, everything)),
+            "taking the whole card is not a cut");
+        Check(!session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.CardCubes(0, new List<GridPos>())),
+            "and neither is taking none of it");
+
+        // A single cube has nothing to cut.
+        PutInHand(session, round, Bar(1));
+        Check(!session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.CardCubes(0, new List<GridPos> { new GridPos(0, 0) })),
+            "a one-cube block cannot be cut in two");
+    }
+
+    private static void Lehimleme_WeldsTwoCardsIntoOne()
+    {
+        Section("lehimleme / welds two cards into one where you put them");
+        var session = NewSession(9402, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (LehimlemePower)session.Powers.Add(new LehimlemePower());
+        session.Powers.DispatchRoundStarted(round);
+
+        PutInHand(session, round, Bar(2));
+        PutInHand(session, round, Bar(2));
+        int deckBefore = session.OwnedCards.Count;
+
+        // Put the second bar directly above the first: a 2x2.
+        Check(session.Powers.TryUse(power.InstanceId,
+                ActivationTarget.TwoCards(0, 1, new GridPos(0, 1))),
+            "the weld went through");
+        Check(round.BonusHand.Count == 1, "one card came out", "" + round.BonusHand.Count);
+        BlockShape welded = round.BonusHand[0].Card.Shape;
+        Check(welded.Size == 4, "made of all four cubes", "" + welded.Size);
+        Check(welded.Width == 2 && welded.Height == 2, "and it is the 2x2 we asked for",
+            welded.Width + "x" + welded.Height);
+        Check(session.OwnedCards.Count == deckBefore,
+            "the owned deck is untouched - the weld is round-scoped");
+    }
+
+    private static void Lehimleme_RefusesAJoinThatDoesNotTouch()
+    {
+        Section("lehimleme / the two halves must touch and must not overlap");
+        var session = NewSession(9403, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (LehimlemePower)session.Powers.Add(new LehimlemePower());
+        session.Powers.DispatchRoundStarted(round);
+        PutInHand(session, round, Bar(2));
+        PutInHand(session, round, Bar(2));
+
+        Check(!session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.TwoCards(0, 1, new GridPos(0, 3))),
+            "a join floating three cells away is refused");
+        Check(!session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.TwoCards(0, 1, new GridPos(0, 0))),
+            "and one laid straight on top of the other is refused");
+        Check(!session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.TwoCards(0, 0, new GridPos(0, 1))),
+            "and a card cannot be welded to itself");
+    }
+
+    private static void GenNakli_MovesAnElementAndGivesItBack()
+    {
+        Section("gen nakli / the element moves to the card, and goes home when it is discarded");
+        var session = NewSession(9404, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (GenNakliPower)session.Powers.Add(new GenNakliPower());
+        session.Powers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+
+        var donor = new GridPos(2, 2);
+        round.Board.SetCubeAt(donor, new Cube(CubeKind.Fire, 9405));
+        BlockCard plain = PutInHand(session, round, Bar(1));
+        Check(!round.CardHasElement(plain, BlockElement.Fire), "the card starts plain");
+
+        Check(session.Powers.TryUse(power.InstanceId,
+                ActivationTarget.CellAndCard(donor, 0)), "the transplant went through");
+        Check(round.CardHasElement(plain, BlockElement.Fire),
+            "the card carries fire now - and every rule that asks sees it");
+        Check(round.Board.GetCube(donor).Value.Kind == CubeKind.Normal,
+            "while the cube it came from went plain",
+            "" + round.Board.GetCube(donor).Value.Kind);
+        Check(plain.Elements.Count == 0,
+            "the CARD itself was never changed - the gene is round-scoped bookkeeping");
+
+        // Play it: reaching the discard ends the loan, both ways.
+        int index = -1;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.Hand[i].Id == plain.Id) { index = i; }
+        }
+        Check(index >= 0, "the card is still in hand");
+        round.PlayFromHand(index, new GridPos(0, 0));
+        Check(!round.CardHasElement(plain, BlockElement.Fire),
+            "once discarded the card is plain again");
+        Check(round.Board.GetCube(donor).Value.Kind == CubeKind.Fire,
+            "and the cube on the board has its element back",
+            "" + round.Board.GetCube(donor).Value.Kind);
+    }
+
+    private static void GenNakli_RefusesAPlainCubeOrABusyCard()
+    {
+        Section("gen nakli / nothing to take, or nowhere to put it");
+        var session = NewSession(9406, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (GenNakliPower)session.Powers.Add(new GenNakliPower());
+        session.Powers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+
+        var plainCube = new GridPos(1, 1);
+        round.Board.SetCubeAt(plainCube, new Cube(CubeKind.Normal, 9407));
+        PutInHand(session, round, Bar(1));
+        Check(!session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.CellAndCard(plainCube, 0)),
+            "a plain cube has no gene to give");
+        Check(!session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.CellAndCard(new GridPos(4, 4), 0)),
+            "and an empty cell has nothing at all");
+
+        var fire = new GridPos(2, 2);
+        round.Board.SetCubeAt(fire, new Cube(CubeKind.Fire, 9408));
+        PutInHand(session, round, Bar(1), new List<BlockElement> { BlockElement.Gold });
+        Check(!session.Powers.CanUse(power.InstanceId, ActivationTarget.CellAndCard(fire, 0)),
+            "and a card that already carries an element has no room for another");
+    }
+
+    private static void Pres_SqueezesFourCellsIntoOne()
+    {
+        Section("hidrolik pres / four cells become one, and three come free");
+        var board = new GameBoard(5, 5);
+        board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Fire, 9500));
+        board.SetCubeAt(new GridPos(2, 1), new Cube(CubeKind.Normal, 9500));
+        board.SetCubeAt(new GridPos(1, 2), new Cube(CubeKind.Normal, 9500));
+        // (2,2) deliberately left empty: the press swallows the picture, holes and all.
+
+        Cube?[] swallowed = board.Compress(new GridPos(1, 1));
+        Check(swallowed != null, "the patch was squeezed");
+        Check(board.GetCube(new GridPos(1, 1)).Value.Kind == CubeKind.Compressed,
+            "a compressed cube stands on the anchor");
+        Check(!board.GetCube(new GridPos(2, 1)).HasValue
+                && !board.GetCube(new GridPos(1, 2)).HasValue,
+            "and the other three cells came free");
+        Check(board.OccupiedCount == 1, "one cube where there were three",
+            "" + board.OccupiedCount);
+
+        // Letting go on an empty board restores exactly the picture it swallowed.
+        PressExpansion result = board.Expand(new GridPos(1, 1), swallowed);
+        Check(result != null && !result.Detonated, "it opened without detonating");
+        Check(board.GetCube(new GridPos(1, 1)).Value.Kind == CubeKind.Fire,
+            "the fire cube is back where it was");
+        Check(board.GetCube(new GridPos(2, 1)).HasValue
+                && board.GetCube(new GridPos(1, 2)).HasValue,
+            "and so are the other two");
+        Check(!board.GetCube(new GridPos(2, 2)).HasValue,
+            "while the cell that was empty is empty again");
+    }
+
+    private static void Pres_ShovesCubesOffTheEdgeWhenItOpens()
+    {
+        Section("hidrolik pres / it shoves what is in the way, and the rim goes over the edge");
+        var board = new GameBoard(5, 5);
+        board.SetCubeAt(new GridPos(3, 0), new Cube(CubeKind.Normal, 9501));
+        Cube?[] swallowed = board.Compress(new GridPos(3, 0));
+        Check(swallowed != null, "squeezed in the bottom-right corner");
+
+        // Fill the cells it wants back, all the way to the wall.
+        board.SetCubeAt(new GridPos(4, 0), new Cube(CubeKind.Normal, 9502));
+        board.SetCubeAt(new GridPos(3, 1), new Cube(CubeKind.Normal, 9502));
+        board.SetCubeAt(new GridPos(4, 1), new Cube(CubeKind.Normal, 9502));
+
+        PressExpansion result = board.Expand(new GridPos(3, 0), swallowed);
+        Check(result != null && !result.Detonated, "it opened");
+        Check(result.CubesPushedOff > 0, "and shoved cubes off the board",
+            "" + result.CubesPushedOff);
+        Check(board.GetCube(new GridPos(3, 0)).HasValue, "the press has its cells back");
+    }
+
+    private static void Pres_WillNotBudgeObsidianAndDetonatesWhenStuck()
+    {
+        Section("hidrolik pres / obsidian will not budge, and a stuck press detonates");
+        var board = new GameBoard(5, 5);
+        board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 9503));
+        Cube?[] swallowed = board.Compress(new GridPos(0, 0));
+
+        // Wall every cell it wants with stone. Nothing can move, in any direction.
+        board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Obsidian, 9504));
+        board.SetCubeAt(new GridPos(0, 1), new Cube(CubeKind.Gold, 9504));
+        board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Obsidian, 9504));
+
+        PressExpansion result = board.Expand(new GridPos(0, 0), swallowed);
+        Check(result != null && result.Detonated, "with nowhere to go it detonated");
+        Check(result.CubesPushedOff == 0, "shoving nothing off the board",
+            "" + result.CubesPushedOff);
+        Check(!board.GetCube(new GridPos(1, 0)).HasValue
+                && !board.GetCube(new GridPos(0, 1)).HasValue,
+            "and it took the stone around it with it - the only thing in the game that can");
+        Check(!board.GetCube(new GridPos(0, 0)).HasValue, "the press itself is gone too");
+    }
+
+    private static void Pres_OpensByItselfAfterFourTurns()
+    {
+        Section("hidrolik pres / it counts down and lets go on its own");
+        var session = NewSession(9505, 7, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (HidrolikPresPower)session.Powers.Add(new HidrolikPresPower());
+        session.Powers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Normal, 9506));
+
+        Check(session.Powers.TryUse(power.InstanceId,
+                new ActivationTarget(null, new GridPos(1, 1))), "the press came down");
+        Check(power.IsPressing, "and it is holding");
+        Check(round.Board.GetCube(new GridPos(1, 1)).Value.Kind == CubeKind.Compressed,
+            "a compressed cube is on the board");
+
+        PlayTurns(session, power.TurnsCompressed - 1);
+        Check(power.IsPressing, "still holding after three turns", "" + power.TurnsLeft);
+        PlayTurns(session, 1);
+        Check(!power.IsPressing, "and it let go on the fourth", "" + power.TurnsLeft);
+        Check(round.Board.CellsOfKind(CubeKind.Compressed).Count == 0,
+            "no compressed cube is left on the board");
     }
 
     private static void Bilinmezlik_HoldsFullLinesUntilItFires()
