@@ -160,6 +160,8 @@ public static class JokerTests
         Sasirtmaca_OneCommitmentPerTurnAndTheLockLifts();
         Matruska_SplitsOnTheLadderAndWinsOnTheLastDoll();
         Matruska_ADollLessLineLosesTheRound();
+        Matruska_TheDollCheckSurvivesAnInflatedBoard();
+        Snake_TheCutCheckSurvivesAnInflatedBoard();
         Snake_EatsWhatStopsItAndGrows();
         Snake_ShrinksOnAnExplosionAndDyingWinsTheRound();
         Istilaci_TakesTheMarkedColumnAndBills();
@@ -5329,6 +5331,73 @@ public static class JokerTests
         DropOneCube(round, new GridPos(4, victim));
         Check(round.Loss == LossReason.LineWithoutDoll,
             "clearing a doll-less line loses the round", "" + round.Loss);
+    }
+
+    // Both bosses below judge an exploding line against something that remembers ABSOLUTE cells,
+    // while TurnReport.ExplodedRows/Columns are 0-based ARRAY INDICES. The two are the same
+    // number only while the board's origin sits at 0,0 - so both tests INFLATE the arena first,
+    // which pushes the origin negative, and then play a move that must still be read correctly.
+
+    private static void Matruska_TheDollCheckSurvivesAnInflatedBoard()
+    {
+        Section("matruşka / the doll check reads absolute rows, not array indices");
+        var session = NewBossSession(9712, 5, 1000000, "matruska", 60, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (MatruskaBoss)round.Boss;
+        PlayAt(round, new GridPos(0, 0));
+        Check(boss.DollCount == 1, "one doll is on the board", "" + boss.DollCount);
+
+        Check(round.ReshapeBoard(1, 1, 1, 1), "the arena was inflated on every side");
+        Check(round.Board.MinY == -1 && round.Board.MinX == -1,
+            "so the origin really moved into negative space",
+            round.Board.MinX + "," + round.Board.MinY);
+
+        // Clear the row the doll is standing in. That is the ONE legal kind of clear on this
+        // round, so it must not be read as a doll-less line.
+        int dollRow = boss.DollCells[0].Y;
+        FillRowLeavingOneGap(session, round, dollRow);
+        Check(round.Loss != LossReason.LineWithoutDoll,
+            "clearing the doll's own row is legal on an inflated board too", "" + round.Loss);
+    }
+
+    private static void Snake_TheCutCheckSurvivesAnInflatedBoard()
+    {
+        Section("snake / the cut check reads absolute rows, not array indices");
+        var session = NewBossSession(9723, 5, 1000000, "snake", 60, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (SnakeBoss)round.Boss;
+        Check(round.ReshapeBoard(1, 1, 1, 1), "the arena was inflated on every side");
+        Check(round.Board.MinY == -1, "the origin moved", "" + round.Board.MinY);
+
+        int headRow = boss.Body[0].Y;
+        Check(boss.SegmentsCut == 0, "nothing has been cut off it yet");
+        FillRowLeavingOneGap(session, round, headRow);
+        // Length alone would not prove it - the slide afterwards can eat and grow it back - so
+        // the cut counter is what is checked.
+        Check(boss.SegmentsCut > 0, "the explosion still cut a segment off the tail",
+            "" + boss.SegmentsCut);
+    }
+
+    /// <summary>Paints every empty cell of a row but the last, then drops a cube in the gap, so
+    /// the row completes on a real turn. Works in ABSOLUTE coordinates, so it is safe on an
+    /// inflated board.</summary>
+    private static void FillRowLeavingOneGap(GameSession session, RoundEngine round, int y)
+    {
+        var open = new List<GridPos>();
+        for (int x = round.Board.MinX; x < round.Board.MinX + round.Board.Width; x++)
+        {
+            var cell = new GridPos(x, y);
+            if (round.Board.IsInside(cell) && !round.Board.GetCube(cell).HasValue)
+            {
+                open.Add(cell);
+            }
+        }
+        Check(open.Count > 0, "the row has room to be completed", "" + open.Count);
+        for (int i = 0; i < open.Count - 1; i++)
+        {
+            PaintBoard(round, session, CubeKind.Normal, open[i]);
+        }
+        DropOneCube(round, open[open.Count - 1]);
     }
 
     private static void Snake_EatsWhatStopsItAndGrows()
