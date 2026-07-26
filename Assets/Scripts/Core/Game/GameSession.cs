@@ -316,6 +316,120 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        // ------------------------------------------------------------------- smuggling
+
+        /// <summary>
+        /// "Kaçakçı" is a SESSION rule, not joker state - the same division as the market credit.
+        /// The joker is only the switch; the taking, the roll and the spoiling all live here, so
+        /// nothing else in the game has to know what smuggling is.
+        /// </summary>
+        private bool smuggledThisMarket;
+
+        /// <summary>True while a free item is still there for the taking this market visit.</summary>
+        public bool CanSmuggle
+        {
+            get
+            {
+                return Phase == GamePhase.Market && !smuggledThisMarket && Jokers.EnablesSmuggling;
+            }
+        }
+
+        /// <summary>
+        /// Takes one market offer for FREE ("Kaçakçı"), once per market visit. The goods may be
+        /// defective: a block becomes junk, a joker comes broken, a power comes empty and slow.
+        /// Returns false and changes nothing when there is nothing to smuggle with, the free item
+        /// is already spent this visit, the offer is sold, or there is no slot for it.
+        ///
+        /// Deliberately NOT free of consequence beyond the goods: it counts as having bought
+        /// something, so a joker that pays for leaving the market empty-handed is not fooled by
+        /// walking out with stolen stock.
+        /// </summary>
+        public bool TrySmuggleOffer(int offerIndex)
+        {
+            if (Phase != GamePhase.Market)
+            {
+                throw new InvalidOperationException("Not in the market phase.");
+            }
+            if (offerIndex < 0 || offerIndex >= Market.Offers.Count)
+            {
+                throw new ArgumentOutOfRangeException("offerIndex");
+            }
+            if (!CanSmuggle)
+            {
+                return false;
+            }
+            MarketOffer offer = Market.Offers[offerIndex];
+            if (offer.Sold)
+            {
+                return false;
+            }
+            // One roll for the whole transaction, before anything is handed over, so every kind of
+            // goods reads the same coin flip.
+            bool defective = rng.NextInt(0, 100) < Jokers.SmuggleDefectChancePercent;
+            if (offer.Kind == MarketOfferKind.Joker)
+            {
+                if (!CanAcquireJoker(offer.Joker))
+                {
+                    return false;
+                }
+                Joker taken = Jokers.Add(offer.Joker.Create());
+                taken.PurchasePrice = 0; // nothing was paid, so nothing can be refunded
+                if (defective)
+                {
+                    // Two ways for a joker to be broken; the coin decides which.
+                    taken.Defect = rng.NextInt(0, 2) == 0
+                        ? SmuggledDefect.DeadInBossRounds
+                        : SmuggledDefect.NeverWorks;
+                }
+            }
+            else if (offer.Kind == MarketOfferKind.Power)
+            {
+                if (!CanAcquirePower(offer.Power))
+                {
+                    return false;
+                }
+                Power taken = Powers.Add(offer.Power.Create());
+                if (defective)
+                {
+                    // After Add, which charges it: broken goods arrive empty.
+                    taken.MakeSmuggled(Jokers.SmuggledPowerRechargeCost);
+                }
+            }
+            else
+            {
+                BlockCard card = defective ? MakeJunkCard() : offer.Card;
+                card.IsSmuggled = true;
+                ownedCards.Add(card);
+            }
+            offer.Sold = true;
+            smuggledThisMarket = true;
+            purchasedThisMarket = true;
+            return true;
+        }
+
+        /// <summary>
+        /// Mints the junk block a defective smuggled card turns into: four cubes in the corners of
+        /// a 6x6 box. It is nonsense by construction - too wide for a 5x5 round to hold at all, and
+        /// on a bigger board it needs four exact cells spread right across the arena, so in
+        /// practice only a nearly empty one. It stays in the deck for the run, and a hand slot
+        /// holding it is a slot the player does not have that round.
+        ///
+        /// EXTENSION POINT: if junk should be gradeable ("slightly bent" vs "worthless"), this is
+        /// the one place that decides what junk looks like.
+        /// </summary>
+        private BlockCard MakeJunkCard()
+        {
+            const int span = 5; // 0..5 inclusive -> a 6x6 bounding box
+            var corners = new List<GridPos>
+            {
+                new GridPos(0, 0),
+                new GridPos(span, 0),
+                new GridPos(0, span),
+                new GridPos(span, span)
+            };
+            return new BlockCard(nextCardId++, BlockShape.FromCells(corners));
+        }
+
         /// <summary>Cost of the NEXT market reroll, in the scaled run economy. Escalates with
         /// each reroll this visit and resets when the market is re-entered.</summary>
         public long NextRerollCost
@@ -850,6 +964,7 @@ namespace ProjectBlock.Core
                 rerollCount = 0; // a fresh reroll price each market visit
                 RestockMarket();
                 purchasedThisMarket = false;
+                smuggledThisMarket = false; // one free item per VISIT, not per run
                 SetPhase(GamePhase.Market);
                 Jokers.DispatchMarketEntered();
             }
