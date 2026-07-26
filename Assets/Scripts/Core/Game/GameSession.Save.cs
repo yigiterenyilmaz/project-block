@@ -49,6 +49,14 @@ namespace ProjectBlock.Core
             w.Write("purchased", purchasedThisMarket);
             w.Write("discount", PendingMarketDiscount);
             w.Write("rerolls", rerollCount);
+            // "Kredi kartı" and "Kaçakçı" are RUN state: an unsaved debt would be forgiven by
+            // reloading, and an unsaved smuggle would hand out a second free item per visit.
+            w.Write("debt", Debt);
+            w.Write("takenByEffects", CurrencyTakenByEffects);
+            w.Write("smuggled", smuggledThisMarket);
+            // "Uzun vadeli yatırımcı": the joker remembers its spent second chance itself, but the
+            // count the HUD shows lives here.
+            w.Write("finalReplays", FinalRoundReplays);
 
             w.Write("openingHand.has", pendingOpeningHand != null);
             if (pendingOpeningHand != null)
@@ -98,6 +106,10 @@ namespace ProjectBlock.Core
             session.purchasedThisMarket = r.ReadBool("purchased");
             session.PendingMarketDiscount = r.ReadDouble("discount");
             session.rerollCount = r.ReadInt("rerolls");
+            session.Debt = r.ReadLong("debt");
+            session.CurrencyTakenByEffects = r.ReadLong("takenByEffects");
+            session.smuggledThisMarket = r.ReadBool("smuggled");
+            session.FinalRoundReplays = r.ReadInt("finalReplays");
 
             if (r.ReadBool("openingHand.has"))
             {

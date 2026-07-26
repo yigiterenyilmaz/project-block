@@ -18,7 +18,11 @@ namespace ProjectBlock.Core
         // buy price), so every joker and power writes one field fewer.
         // 3 (2026-07-25): Enfeksiyon gained LastDetonatedCells for its break animation, so it
         // writes one field more.
-        public const int FormatVersion = 3;
+        // 4 (2026-07-26): the boss/joker wave landed - the session writes its debt, the currency
+        // effects took, the market's free-item flag and the final-round replay count; the board
+        // writes the lines "Kangren" killed; every card writes its two "Kaçakçı" flags; and the
+        // seven new bosses and three new jokers change the reflected field counts.
+        public const int FormatVersion = 4;
 
         private const string VersionKey = "version";
 

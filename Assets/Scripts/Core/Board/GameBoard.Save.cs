@@ -63,6 +63,20 @@ namespace ProjectBlock.Core
                 index++;
             }
             CoreSerializers.WritePosList(w, key + ".sealed", sealedCells);
+
+            // "Kangren" dead lines. Exactly the argument the two masks make above: a line the rot
+            // took whole can never explode again, so restoring the cubes without it would change
+            // which lines are still completable.
+            w.Write(key + ".rotRows.count", infectionDeadRows.Count);
+            for (int i = 0; i < infectionDeadRows.Count; i++)
+            {
+                w.Write(key + ".rotRows." + i, infectionDeadRows[i]);
+            }
+            w.Write(key + ".rotCols.count", infectionDeadColumns.Count);
+            for (int i = 0; i < infectionDeadColumns.Count; i++)
+            {
+                w.Write(key + ".rotCols." + i, infectionDeadColumns[i]);
+            }
         }
 
         internal static GameBoard Load(SaveReader r, string key)
@@ -116,6 +130,17 @@ namespace ProjectBlock.Core
                 board.outsideCubes[at] = CoreSerializers.ReadCube(r, key + ".outside." + i);
             }
             board.sealedCells.AddRange(CoreSerializers.ReadPosList(r, key + ".sealed"));
+
+            int rotRows = r.ReadInt(key + ".rotRows.count");
+            for (int i = 0; i < rotRows; i++)
+            {
+                board.infectionDeadRows.Add(r.ReadInt(key + ".rotRows." + i));
+            }
+            int rotCols = r.ReadInt(key + ".rotCols.count");
+            for (int i = 0; i < rotCols; i++)
+            {
+                board.infectionDeadColumns.Add(r.ReadInt(key + ".rotCols." + i));
+            }
             return board;
         }
 

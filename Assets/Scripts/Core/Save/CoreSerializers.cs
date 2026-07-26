@@ -73,6 +73,10 @@ namespace ProjectBlock.Core
         {
             w.Write(key + ".id", card.Id);
             w.Write(key + ".custom", card.IsCustom);
+            // "Kaçakçı": smuggled goods, and whether they were the defective kind. Without these a
+            // reload would quietly turn a card that falls through the board into a healthy one.
+            w.Write(key + ".smuggled", card.IsSmuggled);
+            w.Write(key + ".falls", card.FallsThrough);
             WriteShape(w, key + ".shape", card.Shape);
             IReadOnlyList<BlockElement> elements = card.Elements;
             w.Write(key + ".elements.count", elements.Count);
@@ -100,6 +104,8 @@ namespace ProjectBlock.Core
         {
             int id = r.ReadInt(key + ".id");
             bool custom = r.ReadBool(key + ".custom");
+            bool smuggled = r.ReadBool(key + ".smuggled");
+            bool falls = r.ReadBool(key + ".falls");
             BlockShape shape = ReadShape(r, key + ".shape");
             int elementCount = r.ReadInt(key + ".elements.count");
             var elements = new List<BlockElement>(elementCount);
@@ -110,7 +116,7 @@ namespace ProjectBlock.Core
             bool perCube = r.ReadBool(key + ".percube");
             if (!perCube)
             {
-                return new BlockCard(id, shape, elements, custom);
+                return Smuggling(new BlockCard(id, shape, elements, custom), smuggled, falls);
             }
             int cubes = r.ReadInt(key + ".percube.count");
             var layout = new List<BlockElement?>(cubes);
@@ -121,7 +127,17 @@ namespace ProjectBlock.Core
             }
             // Designed() recomputes the distinct element set from the layout, which is exactly
             // what was written above, so the card comes back identical.
-            return BlockCard.Designed(id, shape, layout);
+            return Smuggling(BlockCard.Designed(id, shape, layout), smuggled, falls);
+        }
+
+        /// <summary>Puts the "Kaçakçı" flags back on a rebuilt card. They are set rather than
+        /// constructed because they are stamped AFTER a card exists, exactly as the market does it.
+        /// </summary>
+        private static BlockCard Smuggling(BlockCard card, bool smuggled, bool falls)
+        {
+            card.IsSmuggled = smuggled;
+            card.FallsThrough = falls;
+            return card;
         }
 
         // ---------------------------------------------------------------------- Cube
