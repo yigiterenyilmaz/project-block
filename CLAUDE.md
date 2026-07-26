@@ -30,6 +30,9 @@ dropped that way once each.
      the next round. Bends are **queries** the engine asks live (`IgnoresBlockElements`,
      `BlocksPowerRecharge`, `DisablesJoker/Power`, `BlocksPlacementOn`, `ScoreLineExplosion`,
      `ScoreCleanSweep`, `OnlyCleanSweepsScore`, `FilterScoreThreshold`, `InvertsJokerScore`).
+     The ONE exception that cannot be a query is `FilterRoundConfig`: the board is built once, and
+     "Dört kutup" has to change its SIZE, so a boss is **drawn before the engine exists** and gets
+     to reshape the round first (via `RoundConfig.WithBoard`, never a hand-written `new`).
      The score bosses rewrite **base values only** — a joker's own bonuses always land on top.
      Read the round's bar from `RoundEngine.ScoreThreshold`, never `Config.ScoreThreshold`:
      a boss may ask for less and the two must never disagree.
@@ -44,9 +47,17 @@ dropped that way once each.
      that breakdown and must never be caught by the window. A turn's `Total` floors at 0, so an
      inverted joker can empty a turn but never push the round score backwards.
   3. **The boss moves last** — after the player's own end-of-turn effects, but BEFORE the
-     threshold and dead-end checks, so what it does can genuinely decide the round.
+     threshold and dead-end checks, so what it does can genuinely decide the round. That order is
+     load-bearing twice over: a boss that ends the round on a condition ("Saatçi" running out of
+     turns) must read `RoundEngine.ThresholdReached`, not `ThresholdPassed`, or it kills a round
+     won on the buzzer; and a boss that restricts WHERE you may play gets `TryEscapeDeadEnd`,
+     asked before the dead end is declared, so its own rule can never lock the round ("Dört kutup"
+     turns to the next quarter and bills the player for the turn they could not use).
   Beware: bosses make frozen cards and sealed cells routine, so any driver that plays a card
-  must skip `IsFrozen` cards and ask the board (never a raw `card.Has(...)`) where a block fits.
+  must skip `IsFrozen` cards and ask the board (never a raw `card.Has(...)`) where a block fits —
+  and must look for origins with **`RoundEngine.EffectiveShape(card)`, never `card.Shape`**, because
+  a card's shape is no longer fixed for the round ("Kıtlık" fattens every card that comes back from
+  the discard, round-scoped, through the same store the fox reshape writes to).
 
 ## Layout
 
@@ -85,10 +96,11 @@ dropped that way once each.
 - **A TURN IS NEVER WORTH LESS THAN NOTHING.** Negative score is real ("Terslik" inverting every
   joker, "Besleme" billing you for a starving creature) but it may only eat what the turn earned.
   Two guards, and both are needed: `ScoreBreakdown.Total` floors at 0 for score settled before
-  finalization, and turn step 8.6 clamps `RoundScore` back to where the turn started for
-  everything added AFTER it (`AddLateTurnScore` writes to `RoundScore` directly and the `Total`
-  floor cannot see it). `report.ScoreGained` is re-derived from the clamped delta, so the run
-  currency follows.
+  finalization, and `RoundEngine.ClampTurnScoreFloor` puts `RoundScore` back to where the turn
+  started for everything added AFTER it (`AddLateTurnScore` writes to `RoundScore` directly and the
+  `Total` floor cannot see it). `report.ScoreGained` is re-derived from the clamped delta, so the
+  run currency follows. It runs at turn step 8.6 **and again after every late write**, because some
+  land after that step — the dead-end check is later than 8.6, and "Dört kutup" bills you there.
 - **Board erosion is the anti-stalling clock.** Each band also names a `ShuffleErosion`: past
   `RoundRules.FreeDeckRecycles` (2), every time the draw pile runs DRY the arena loses a piece —
   the rim (1-5), a growing centre hole (6-11), or both (12-15). It is counted in

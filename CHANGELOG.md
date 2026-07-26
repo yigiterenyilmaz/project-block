@@ -20,6 +20,28 @@ everything here is unreleased and balance numbers are still placeholders.
   a turn may be worth nothing, never less.
 
 ### Added
+- **Seven new boss rounds**, bringing the roster to 27:
+  - **Enflasyon** — the score threshold climbs **3% with every turn you take**, compounding. Ten
+    turns in the bar is a third higher, twenty in it is nearly double. It destroys nothing and pays
+    nothing differently: the whole pressure is the clock.
+  - **Hiçlik** — at the end of every turn you **lose score for every cube left standing**. Gold is
+    not exempt: it pays its bonus *and* its rent, so leaving one lying around is a decision.
+  - **Dört Kutup** — the arena is squared off (5x5 becomes **6x6**, 7x7 becomes 8x8) and cut into
+    four. Only **one quarter takes blocks**, and it turns **clockwise every turn** — so a line only
+    completes when the cells it is missing all sit in the live quarter. A quarter with no room turns
+    early and **bills you** for the turn you could not use; it never ends the round on its own.
+  - **Saatçi** — a **hard turn limit**. Reach the bar inside it or lose the round. Reaching it on
+    the very last turn is a win, not a loss.
+  - **Kıtlık** — every card that comes back from the discard **grows by one cube**, somewhere at
+    random but always in one piece. **Round-scoped**: your run deck is its old self next round.
+  - **Merkezkaç Kuvveti** — at the end of every turn every cube is **flung one cell further from
+    the middle**, and whatever goes over the edge is gone for **nothing** — no score, no clean-sweep
+    credit. The only still point is the exact centre of an odd board.
+  - **Kangren** — the rot takes one more cell every turn, growing outward from one random origin,
+    and **every rotten cube costs score while it stands**. Rotten cubes still explode, so three of
+    them in a row of five still leave a line you can finish. But a row or column the rot takes
+    **WHOLE dies for the round** — it can never explode again — and the infection **jumps to the
+    board's nearest edge line** and turns every cube standing there, which can kill that line too.
 - **Kaçakçı (joker)** — **one market item per visit, free** (SHIFT+click an offer) — but smuggled
   goods are **defective about half the time**, and you keep whatever you took. A defective **block**
   looks completely ordinary and **will not stay on the board**: you place it legally, the cubes let
