@@ -82,6 +82,13 @@ dropped that way once each.
   crossing points — in-turn step 9 and `AddScoreOutsideTurn`). Scoring past the bar is what
   **overtime** is for, and the only way to it. So `TurnReport.ScoreGained` is what was BANKED
   while `TurnReport.Score.Total` is what the turn EARNED; they differ only on the crossing turn.
+- **A TURN IS NEVER WORTH LESS THAN NOTHING.** Negative score is real ("Terslik" inverting every
+  joker, "Besleme" billing you for a starving creature) but it may only eat what the turn earned.
+  Two guards, and both are needed: `ScoreBreakdown.Total` floors at 0 for score settled before
+  finalization, and turn step 8.6 clamps `RoundScore` back to where the turn started for
+  everything added AFTER it (`AddLateTurnScore` writes to `RoundScore` directly and the `Total`
+  floor cannot see it). `report.ScoreGained` is re-derived from the clamped delta, so the run
+  currency follows.
 - **Board erosion is the anti-stalling clock.** Each band also names a `ShuffleErosion`: past
   `RoundRules.FreeDeckRecycles` (2), every time the draw pile runs DRY the arena loses a piece —
   the rim (1-5), a growing centre hole (6-11), or both (12-15). It is counted in

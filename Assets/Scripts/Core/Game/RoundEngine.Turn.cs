@@ -14,6 +14,10 @@ namespace ProjectBlock.Core
         {
             TurnNumber++;
             int shufflesBeforeTurn = Deck.ShuffleCount;
+            // Where the round score stood before this turn. A turn may end up worth NOTHING
+            // (an inverted joker, a starving creature's bill) but it may never push the round
+            // score backwards - see the clamp at step 8.6.
+            int roundScoreBeforeTurn = RoundScore;
 
             // Remember the board as it stands BEFORE this placement, so "Kum saati" can
             // rewind into it later. Oldest entries fall off the front.
@@ -308,6 +312,19 @@ namespace ProjectBlock.Core
             // dead-end checks below, so a line the squeeze completes still scores this turn and
             // an erosion that leaves nowhere to play can genuinely end the round.
             ApplyPendingBoardErosion();
+
+            // 8.6 A TURN IS NEVER WORTH LESS THAN NOTHING. Negative score is real - "Terslik"
+            //     inverts every joker, "Besleme" bills you for a starving creature - but it can
+            //     only ever eat what this turn earned, never bite into the round. The floor on
+            //     ScoreBreakdown.Total covers the score that is settled before finalization;
+            //     this covers everything added AFTER it, which lands on RoundScore directly.
+            if (RoundScore < roundScoreBeforeTurn)
+            {
+                RoundScore = roundScoreBeforeTurn;
+            }
+            // The session banks ScoreGained, so it has to say what the round actually took.
+            report.ScoreGained = RoundScore - roundScoreBeforeTurn;
+            report.RoundScoreAfter = RoundScore;
 
             // 9. threshold check (first pass only)
             if (!ThresholdPassed && RoundScore >= ScaledThreshold)
