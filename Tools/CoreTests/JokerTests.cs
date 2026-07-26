@@ -135,6 +135,16 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Simetri_TheBoardKnowsItsOwnSymmetry();
+        Simetri_SleepsFiveTurnsAndAgainAfterEverySweep();
+        Simetri_PaysOneAxisAndTriplesForBoth();
+        Barut_ChargesDynamiteThatSurvives();
+        Barut_PaysEveryChargeWhenItGoesUp();
+        Antimadde_OnlyFitsAPerfectOverlay();
+        Antimadde_AnnihilatesEveryCubeOfThatElement();
+        Antimadde_MintsFromANegativeErasureAndRots();
+        Eforsuz_PaysOnAPowerFreeRound();
+        Eforsuz_DoublesForAPowerFreeOvertime();
         Enflasyon_RaisesTheBarEveryTurn();
         Enflasyon_CannotInflatePastWhatFits();
         Hiclik_BillsForEveryCubeStanding();
@@ -4499,6 +4509,343 @@ public static class JokerTests
         return new GameSession(config);
     }
 
+    private static void Simetri_TheBoardKnowsItsOwnSymmetry()
+    {
+        Section("simetri / the board's own mirror check");
+        var board = new GameBoard(5, 5);
+        Check(board.IsMirroredLeftRight() && board.IsMirroredTopBottom(),
+            "an empty board is symmetric on both axes (which is why the joker sleeps)");
+
+        board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 1));
+        Check(!board.IsMirroredLeftRight(), "one lonely corner breaks left-right");
+        Check(!board.IsMirroredTopBottom(), "and top-bottom");
+
+        board.SetCubeAt(new GridPos(4, 0), new Cube(CubeKind.Normal, 1));
+        Check(board.IsMirroredLeftRight(), "its mirror image restores left-right");
+        Check(!board.IsMirroredTopBottom(), "but the bottom row alone is not top-bottom");
+
+        board.SetCubeAt(new GridPos(0, 4), new Cube(CubeKind.Normal, 1));
+        board.SetCubeAt(new GridPos(4, 4), new Cube(CubeKind.Normal, 1));
+        Check(board.IsMirroredLeftRight() && board.IsMirroredTopBottom(),
+            "four corners are symmetric on both");
+
+        // Occupancy, not kind: a fire cube facing a plain one is still a mirror image.
+        board.DestroyCubeForced(new GridPos(4, 4));
+        board.SetCubeAt(new GridPos(4, 4), new Cube(CubeKind.Fire, 2));
+        Check(board.IsMirroredLeftRight() && board.IsMirroredTopBottom(),
+            "and it is judged on occupancy, not on what kind of cube sits there");
+    }
+
+    private static void Simetri_SleepsFiveTurnsAndAgainAfterEverySweep()
+    {
+        Section("simetri / it wakes on the 5th turn, and a sweep sends it back to sleep");
+        var joker = new SimetriJoker();
+        joker.OnRoundStarted(null);
+        Check(!joker.IsAwake, "asleep at round start");
+
+        for (int i = 0; i < joker.WakesOnTurn - 1; i++)
+        {
+            joker.AfterTurnScored(FakeTurn(Bar(1), new ScoreBreakdown()));
+        }
+        Check(!joker.IsAwake, "still asleep on turn 4", "" + joker.TurnsSinceReset);
+        joker.AfterTurnScored(FakeTurn(Bar(1), new ScoreBreakdown()));
+        Check(joker.IsAwake, "awake on turn 5", "" + joker.TurnsSinceReset);
+
+        joker.AfterCleanSweep(FakeTurn(Bar(1), new ScoreBreakdown()));
+        Check(!joker.IsAwake, "and a clean sweep puts it straight back to sleep - which is what "
+            + "stops the empty board it left behind from paying", "" + joker.TurnsSinceReset);
+        for (int i = 0; i < joker.WakesOnTurn; i++)
+        {
+            joker.AfterTurnScored(FakeTurn(Bar(1), new ScoreBreakdown()));
+        }
+        Check(joker.IsAwake, "five turns later it is back");
+    }
+
+    private static void Simetri_PaysOneAxisAndTriplesForBoth()
+    {
+        Section("simetri / a real turn: one axis pays, both axes pay triple");
+        // A 7x7 board: a line needs seven cubes, so the five waking turns cannot complete one
+        // and sweep the joker back to sleep before the test gets to it.
+        var session = NewSession(7200, 7, 1000000, 40, 1);
+        var joker = (SimetriJoker)session.Jokers.Add(new SimetriJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        PlayTurns(session, joker.WakesOnTurn);
+        Check(joker.IsAwake, "awake after five real turns", "" + joker.TurnsSinceReset);
+
+        // Leave the board one cube short of a left-right mirror, and place that cube.
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 7201));
+        TurnReport report = PlayAt(round, new GridPos(6, 0));
+        Check(report != null, "the single cube went down at the mirror position");
+        Check(FlatFrom(report.Score, joker.DefId) == joker.OneAxisBonus,
+            "and one axis paid the single bonus",
+            "" + FlatFrom(report.Score, joker.DefId));
+
+        // Now the four corners: both axes at once.
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 7202));
+        round.Board.SetCubeAt(new GridPos(0, 6), new Cube(CubeKind.Normal, 7202));
+        round.Board.SetCubeAt(new GridPos(6, 6), new Cube(CubeKind.Normal, 7202));
+        TurnReport both = PlayAt(round, new GridPos(6, 0));
+        Check(both != null, "the fourth corner went down");
+        Check(FlatFrom(both.Score, joker.DefId)
+                == joker.OneAxisBonus * joker.BothAxesMultiplier,
+            "and both axes paid TRIPLE", "" + FlatFrom(both.Score, joker.DefId));
+
+        // A lopsided board pays nothing at all.
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 7203));
+        TurnReport lopsided = PlayAt(round, new GridPos(3, 2));
+        Check(lopsided != null && FlatFrom(lopsided.Score, joker.DefId) == 0,
+            "a lopsided board pays nothing");
+    }
+
+    private static void Barut_ChargesDynamiteThatSurvives()
+    {
+        Section("barut tedarikçisi / dynamite banks a charge for every turn it survives");
+        var session = NewSession(7205, 5, 1000000, 40, 1);
+        var joker = (BarutTedarikcisiJoker)session.Jokers.Add(new BarutTedarikcisiJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+        Check(joker.TotalCharges == 0, "nothing banked yet");
+
+        // Two dynamite cubes of one block, standing out of the way in the top row.
+        round.Board.SetCubeAt(new GridPos(0, 4), new Cube(CubeKind.Dynamite, 7300));
+        round.Board.SetCubeAt(new GridPos(1, 4), new Cube(CubeKind.Dynamite, 7300));
+        PlayTurns(session, 3);
+        Check(joker.TotalCharges == 3, "three turns standing, three charges",
+            "" + joker.TotalCharges);
+
+        // A board with no dynamite banks nothing.
+        var plain = NewSession(7206, 5, 1000000, 40, 1);
+        var quiet = (BarutTedarikcisiJoker)plain.Jokers.Add(new BarutTedarikcisiJoker());
+        plain.Jokers.DispatchRoundStarted(plain.CurrentRound);
+        PlayTurns(plain, 4);
+        Check(quiet.TotalCharges == 0, "and a board without dynamite banks nothing",
+            "" + quiet.TotalCharges);
+    }
+
+    private static void Barut_PaysEveryChargeWhenItGoesUp()
+    {
+        Section("barut tedarikçisi / and pays every charge when the block finally goes up");
+        var session = NewSession(7207, 5, 1000000, 40, 1);
+        var joker = (BarutTedarikcisiJoker)session.Jokers.Add(new BarutTedarikcisiJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+
+        // Two dynamite cubes in the bottom row, left to mature.
+        round.Board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Dynamite, 7400));
+        round.Board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Dynamite, 7400));
+        PlayTurns(session, 2);
+        int charges = joker.TotalCharges;
+        Check(charges == 2, "two charges banked", "" + charges);
+
+        // Now complete that row so both go up in a real line clear.
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Dynamite, 7400));
+        round.Board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Dynamite, 7400));
+        round.Board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Normal, 7401));
+        round.Board.SetCubeAt(new GridPos(3, 0), new Cube(CubeKind.Normal, 7401));
+        TurnReport report = PlayAt(round, new GridPos(4, 0));
+        Check(report != null && report.ExplodedRows.Count > 0, "the row exploded");
+        // A block pays what it had BANKED: the turn it goes up is a turn it did not survive.
+        int expected = 2 * charges * joker.BonusPerChargePerCube;
+        Check(FlatFrom(report.Score, joker.DefId) == expected,
+            "and both cubes paid every charge they had banked",
+            FlatFrom(report.Score, joker.DefId) + " vs " + expected);
+        Check(joker.TotalCharges == 0, "nothing is left charged", "" + joker.TotalCharges);
+    }
+
+    private static void Antimadde_OnlyFitsAPerfectOverlay()
+    {
+        Section("antimadde / the card goes nowhere but a perfect overlay of its own element");
+        var session = NewSession(7208, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Fire, 7500));
+        round.Board.SetCubeAt(new GridPos(2, 1), new Cube(CubeKind.Fire, 7500));
+        round.Board.SetCubeAt(new GridPos(3, 1), new Cube(CubeKind.Normal, 7501));
+
+        BlockCard anti = session.CreateCard(Bar(2), null);
+        anti.AntimatterOf = CubeKind.Fire;
+
+        Check(round.CanPlaceCard(anti, new GridPos(1, 1)),
+            "it fits exactly over the two fire cubes");
+        Check(!round.CanPlaceCard(anti, new GridPos(2, 1)),
+            "but not half on fire and half on a plain cube");
+        Check(!round.CanPlaceCard(anti, new GridPos(0, 0)), "nor over empty space");
+        Check(!round.CanPlaceCard(anti, new GridPos(4, 1)), "nor hanging off the board");
+        Check(round.GetValidOrigins(anti.Shape).Count > 0,
+            "(the origin list is about the SHAPE, so the card's own check is what gates it)");
+    }
+
+    private static void Antimadde_AnnihilatesEveryCubeOfThatElement()
+    {
+        Section("antimadde / a perfect fit annihilates every cube of that element");
+        var session = NewSession(7209, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        ClearBoard(round.Board);
+        // Two fire cubes to cover, two MORE fire cubes elsewhere, and a plain cube as a control.
+        round.Board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Fire, 7600));
+        round.Board.SetCubeAt(new GridPos(2, 1), new Cube(CubeKind.Fire, 7600));
+        round.Board.SetCubeAt(new GridPos(0, 4), new Cube(CubeKind.Fire, 7601));
+        round.Board.SetCubeAt(new GridPos(4, 4), new Cube(CubeKind.Fire, 7601));
+        round.Board.SetCubeAt(new GridPos(3, 3), new Cube(CubeKind.Normal, 7602));
+
+        BlockCard anti = session.CreateCard(Bar(2), null);
+        anti.AntimatterOf = CubeKind.Fire;
+        round.AddBonusCard(anti, BonusPlayOutcome.ExpireFromRound);
+
+        TurnReport report = round.PlayFromBonus(round.BonusHand.Count - 1, new GridPos(1, 1));
+        Check(report != null, "the antimatter went down");
+        Check(report.AnnihilatedKind == CubeKind.Fire, "and named what it annihilated",
+            "" + report.AnnihilatedKind);
+        Check(round.Board.CellsOfKind(CubeKind.Fire).Count == 0,
+            "every fire cube is gone, not just the covered ones",
+            "" + round.Board.CellsOfKind(CubeKind.Fire).Count);
+        Check(round.Board.GetCube(new GridPos(3, 3)).HasValue,
+            "the plain cube is untouched - only its own element is annihilated");
+        Check(report.PlacedCells.Count == 0, "and nothing was placed - it is a key, not a block",
+            "" + report.PlacedCells.Count);
+    }
+
+    private static void Antimadde_MintsFromANegativeErasureAndRots()
+    {
+        Section("antimadde / a negative erasure mints it, and holding it rots the pay-off");
+        var session = NewSession(7210, 5, 1000000, 40, 1);
+        var joker = (AntimaddeJoker)session.Jokers.Add(new AntimaddeJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Fire, 7700));
+        round.Board.SetCubeAt(new GridPos(2, 1), new Cube(CubeKind.Fire, 7700));
+
+        // A negative block erases them both - the joker is dispatched by the turn itself.
+        BlockCard negative = session.CreateCard(Bar(2),
+            new List<BlockElement> { BlockElement.Negative });
+        round.AddBonusCard(negative, BonusPlayOutcome.ExpireFromRound);
+        TurnReport report = round.PlayFromBonus(round.BonusHand.Count - 1, new GridPos(1, 1));
+        Check(report != null, "the negative block went down");
+        Check(joker.HasCard, "and the antimatter arrived");
+
+        BlockCard anti = null;
+        for (int i = 0; i < round.BonusHand.Count; i++)
+        {
+            if (round.BonusHand[i].Card.AntimatterOf.HasValue)
+            {
+                anti = round.BonusHand[i].Card;
+            }
+        }
+        Check(anti != null, "it is in the bonus hand");
+        Check(anti.AntimatterOf == CubeKind.Fire, "as the antimatter of FIRE",
+            "" + anti.AntimatterOf);
+        Check(anti.Shape.Size == 2, "shaped like the two cubes that were erased",
+            "" + anti.Shape.Size);
+
+        int fresh = joker.CurrentBonusPerCube;
+        Check(fresh == joker.BonusPerCube, "it starts at full value", "" + fresh);
+        PlayTurns(session, 2);
+        Check(joker.CurrentBonusPerCube < fresh, "holding it costs value",
+            fresh + " -> " + joker.CurrentBonusPerCube);
+
+        PlayTurns(session, 6);
+        Check(!joker.HasCard, "and it decays to nothing within five turns");
+        bool stillThere = false;
+        for (int i = 0; i < round.BonusHand.Count; i++)
+        {
+            if (round.BonusHand[i].Card.Id == anti.Id) { stillThere = true; }
+        }
+        Check(!stillThere, "the card left the bonus hand with it");
+    }
+
+    private static void Eforsuz_PaysOnAPowerFreeRound()
+    {
+        Section("eforsuz galibiyet / a power-free round pays as you walk into the market");
+        var session = NewSession(7211, 5, 1000000, 40, 1);
+        var joker = (EforsuzGalibiyetJoker)session.Jokers.Add(new EforsuzGalibiyetJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        Check(joker.StillClean, "the round starts clean");
+
+        long before = session.TotalScore;
+        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
+        session.Jokers.DispatchMarketEntered();
+        Check(joker.LastPaid == joker.Bonus, "it paid the bonus", "" + joker.LastPaid);
+        Check(session.TotalScore > before, "and it landed in the purse",
+            before + " -> " + session.TotalScore);
+
+        // A power anywhere in the round forfeits it.
+        session.Jokers.DispatchRoundStarted(round);
+        Check(joker.StillClean, "a new round starts clean again");
+        session.Powers.Add(new CimbizPower());
+        session.Jokers.DispatchPowerUsed(round, "cimbiz");
+        Check(!joker.StillClean, "using a power marks the round");
+        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
+        session.Jokers.DispatchMarketEntered();
+        Check(joker.LastPaid == 0, "so the market pays nothing", "" + joker.LastPaid);
+    }
+
+    private static void Eforsuz_DoublesForAPowerFreeOvertime()
+    {
+        Section("eforsuz galibiyet / surviving an overtime without a power pays double");
+        var session = NewSession(7212, 5, 30, 40, 1);
+        session.Config.Scoring.PointsPerCubePlaced = 200;
+        var joker = (EforsuzGalibiyetJoker)session.Jokers.Add(new EforsuzGalibiyetJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        PlayOneCard(round);
+        Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "the offer is up");
+        round.DecideAdvance(false); // declining IS going into overtime
+        Check(round.ContinueCount > 0, "we are in overtime");
+
+        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
+        session.Jokers.DispatchMarketEntered();
+        Check(joker.LastPaid == joker.Bonus * joker.OvertimeMultiplier,
+            "a power-free overtime pays double", "" + joker.LastPaid);
+    }
+
+    /// <summary>Empties a board cell by cell, whatever is standing on it. Deliberately NOT through
+    /// the engine: it is scene-setting, not play, and must not fire a sweep.</summary>
+    private static void ClearBoard(GameBoard board)
+    {
+        foreach (GridPos cell in AllPlayableCells(board))
+        {
+            if (board.GetCube(cell).HasValue)
+            {
+                board.DestroyCubeForced(cell);
+            }
+        }
+    }
+
+    /// <summary>Plays the first hand card that legally fits AT THAT EXACT CELL, so a test can
+    /// decide where the turn lands. Null when nothing in hand fits there.</summary>
+    private static TurnReport PlayAt(RoundEngine round, GridPos origin)
+    {
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (!round.IsFrozen(round.Hand[i].Id) && round.CanPlaceCard(round.Hand[i], origin))
+            {
+                return round.PlayFromHand(i, origin);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Total flat score one source contributed to a breakdown.</summary>
+    private static int FlatFrom(ScoreBreakdown score, string source)
+    {
+        int total = 0;
+        foreach (ScoreContribution c in score.Contributions)
+        {
+            if (c.Source == source) { total += c.Flat; }
+        }
+        return total;
+    }
+
     private static void Enflasyon_RaisesTheBarEveryTurn()
     {
         Section("enflasyon / the bar climbs 3% per turn, compounding");
@@ -7191,14 +7538,17 @@ public static class JokerTests
                 }
             }
 
-            // The books must balance: every point in TotalScore came from a turn or a sale,
-            // minus whatever an EFFECT took back (a boss charging the purse, an overtime cap
-            // clawing back farmed score). The fuzz never enters the market, so nothing is spent.
-            long expected = expectedTotal + saleIncome - session.CurrencyTakenByEffects;
+            // The books must balance: every point in TotalScore came from a turn, a sale or an
+            // effect that GRANTED money ("Eforsuz galibiyet" paying at the market door), minus
+            // whatever an EFFECT took back (a boss charging the purse, an overtime cap clawing
+            // back farmed score). The fuzz never enters the market, so nothing is spent.
+            long expected = expectedTotal + saleIncome
+                + session.CurrencyGrantedByEffects - session.CurrencyTakenByEffects;
             if (failure == null && session.TotalScore != expected)
             {
                 failure = "seed " + seed + ": TotalScore " + session.TotalScore
                     + " != turns " + expectedTotal + " + sales " + saleIncome
+                    + " + granted " + session.CurrencyGrantedByEffects
                     + " - taken " + session.CurrencyTakenByEffects;
             }
             runs++;
