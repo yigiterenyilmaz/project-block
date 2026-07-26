@@ -13,7 +13,22 @@ everything here is unreleased and balance numbers are still placeholders.
   outrun the meter that earned it. **Overtime is the only way past the threshold**, which is
   what overtime is for. A turn that does not reach the bar banks every point as before.
 
+### Fixed
+- **A turn can no longer push the round score backwards.** Negative score from an end-of-turn
+  effect was landing on the round score directly, where the existing zero-floor could not see it —
+  so a big enough penalty could undo score the player had already banked. Now clamped centrally:
+  a turn may be worth nothing, never less.
+
 ### Added
+- **Besleme (joker)** — marks a patch of the board in the first round after you take it, and puts
+  something **alive** in it. Every cube you explode inside the patch **feeds** it; a turn with
+  none **starves** it. Fed enough it **GROWS** outward (1x1 → 2x2 → 3x3) and pays far more per
+  cube — but a bigger creature needs more food for the next step, runs out of patience **faster**,
+  and costs far more when it **shrinks**. Starve it all the way down and it **dies**, sending a
+  big bill and leaving the joker **inert for the rest of the run** — feeding it as hard as you can
+  is a trap, and knowing what size you can sustain is the whole skill. It lives across rounds (it
+  is coordinates, not a cube) and the patch is drawn on the board so you can see what you are
+  keeping alive.
 - **Kiracı (joker)** — an **elementless** block that survives **5 turns** on the board turns to
   **GOLD**. Only plain cubes qualify; anything that already has an element is not a tenant.
   Read the trade before taking it: gold pays rent every turn it stands there, but gold also
