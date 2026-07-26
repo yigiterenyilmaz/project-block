@@ -48,7 +48,7 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>The card turned over this turn, or 0. The View draws this one face up.</summary>
-        public int RevealedCardId
+        public override int RevealedHandCardId
         {
             get { return revealedCardId; }
         }

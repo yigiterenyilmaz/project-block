@@ -215,6 +215,21 @@ namespace ProjectBlock.View
                         {
                             return;
                         }
+                        // "Şaşırtmaca": while the hand is face down a click is not a pick-up, it
+                        // is the COMMITMENT - the card turns over and the rest of the hand locks
+                        // behind it. Dragging only begins once a card is showing its face.
+                        if (picked != null && round.HandIsFaceDown
+                            && round.RevealedHandCardId != picked.Id)
+                        {
+                            if (round.RevealedHandCardId == 0
+                                && hit.SlotIndex >= 0 && hit.SlotIndex < round.Hand.Count
+                                && round.RevealHandCard(hit.SlotIndex))
+                            {
+                                sfx.Place();
+                                RefreshAll(null);
+                            }
+                            return; // a locked card is never picked up
+                        }
                         draggedCard = hit;
                         draggedCard.SetSortingBoost(10);
                         draggedCard.SetAlpha(0.55f);

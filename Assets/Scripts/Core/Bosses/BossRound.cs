@@ -244,6 +244,14 @@ namespace ProjectBlock.Core
             return false;
         }
 
+        /// <summary>Id of the card that has been turned over, or 0. The View draws that one face
+        /// up and the rest face down, so what the screen shows and what LocksHandCard allows are
+        /// answered from the same place.</summary>
+        public virtual int RevealedHandCardId
+        {
+            get { return 0; }
+        }
+
         /// <summary>
         /// True while the arena is in DARKNESS ("Alacakaranlık") and the player must play blind.
         ///

@@ -242,6 +242,13 @@ namespace ProjectBlock.Core
             get { return Boss != null && Boss.HidesHandCards; }
         }
 
+        /// <summary>The held card the player has turned over ("Şaşırtmaca"), or 0 while the whole
+        /// hand is still face down. The View draws that one face up.</summary>
+        public int RevealedHandCardId
+        {
+            get { return Boss != null ? Boss.RevealedHandCardId : 0; }
+        }
+
         /// <summary>True while the boss forbids playing this held card ("Şaşırtmaca" locking
         /// every card but the one the player turned over). Asked live at the two places that
         /// matter - playing a card and counting it as a way out - so a locked card is neither

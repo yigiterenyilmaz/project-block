@@ -792,6 +792,13 @@ namespace ProjectBlock.View
                             Debug.Log("[project_block] Debug bonus card: " + bonus);
                             RefreshAll(null);
                         }
+                        else if (kb != null && kb.fKey.wasPressedThisFrame)
+                        {
+                            // "Tamagotchi": F feeds the pet the card under the cursor. Hovering
+                            // rather than a mode, so it never has to be turned off again, and
+                            // the player picks WHICH copy of a shape they part with.
+                            TryFeedPetUnderCursor(round, mouse);
+                        }
                         else if (TryUseJokerFromBar(mouse))
                         {
                             // clicking a joker in the top bar uses it (like the 1-9 keys)

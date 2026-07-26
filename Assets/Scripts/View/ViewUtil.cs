@@ -93,6 +93,9 @@ namespace ProjectBlock.View
                 // "Hedefli": the block's one marked cube. The rest of the block keeps its card
                 // colour, so the target stands out from its own siblings as well as the board.
                 case CubeKind.Target: return ElementColor(BlockElement.Targeted);
+                // "Snake": a deep scaly green that reads as one continuous animal across
+                // however many cells it is lying on.
+                case CubeKind.Snake: return new Color(0.18f, 0.55f, 0.28f);
                 default: return ColorForCard(cube.SourceCardId);
             }
         }
@@ -114,6 +117,7 @@ namespace ProjectBlock.View
                 case CubeKind.Gangrene: return Loc.Pick("rot", "kangren");
                 case CubeKind.Compressed: return Loc.Pick("pressed", "pres");
                 case CubeKind.Target: return Loc.Pick("target", "hedef");
+                case CubeKind.Snake: return Loc.Pick("snake", "yılan");
                 default: return Loc.Pick("plain", "sade");
             }
         }

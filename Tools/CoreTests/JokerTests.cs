@@ -5147,7 +5147,7 @@ public static class JokerTests
         var boss = (SasirtmacaBoss)round.Boss;
 
         Check(round.HandIsFaceDown, "the hand is dealt face down");
-        Check(boss.RevealedCardId == 0, "and nothing is turned over yet");
+        Check(boss.RevealedHandCardId == 0, "and nothing is turned over yet");
         for (int i = 0; i < round.Hand.Count; i++)
         {
             Check(!round.IsLockedByBoss(round.Hand[i]),
@@ -5156,7 +5156,7 @@ public static class JokerTests
 
         int chosen = round.Hand[1].Id;
         Check(round.RevealHandCard(1), "turning one over takes");
-        Check(boss.RevealedCardId == chosen, "it is the card that was picked");
+        Check(boss.RevealedHandCardId == chosen, "it is the card that was picked");
         Check(round.IsLockedByBoss(round.Hand[0]) && round.IsLockedByBoss(round.Hand[2]),
             "and the rest of the hand locks behind it");
         Check(!round.RevealHandCard(0), "a second commitment is refused");
@@ -5174,7 +5174,7 @@ public static class JokerTests
         Check(refused, "a locked card cannot be played");
 
         PlayAt(round, new GridPos(0, 0));
-        Check(boss.RevealedCardId == 0, "the turn clears the commitment");
+        Check(boss.RevealedHandCardId == 0, "the turn clears the commitment");
         Check(boss.HandBeforeMix.Count > 0, "and the hand it mixed is remembered for the reveal");
     }
 

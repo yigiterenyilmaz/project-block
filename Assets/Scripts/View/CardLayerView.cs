@@ -202,6 +202,76 @@ namespace ProjectBlock.View
             Destroy(visual.gameObject);
         }
 
+        /// <summary>
+        /// "Şaşırtmaca": lays the hand the player WAS holding face up in front of them for a
+        /// beat, then takes it away again. The real hand has already been mixed and dealt face
+        /// down behind this, which is the whole point of showing it - the player learns what they
+        /// are holding and never where any of it went.
+        /// </summary>
+        public void ShowRevealBeat(IReadOnlyList<BlockCard> cards, float seconds)
+        {
+            if (cards == null || cards.Count == 0)
+            {
+                return;
+            }
+            for (int i = 0; i < cards.Count; i++)
+            {
+                Vector2 pos = SlotPosition(i, cards.Count) + new Vector2(0f, RevealBeatLift);
+                CardVisual visual = CardVisual.Create(transform, "Reveal_" + i, cards[i],
+                    true, false, pos, FxOrder);
+                StartCoroutine(HoldThenVanish(visual, seconds));
+            }
+        }
+
+        /// <summary>How far above the hand row the reveal beat sits, so it never covers the
+        /// face-down cards it is telling you about.</summary>
+        private const float RevealBeatLift = 1.25f;
+
+        private readonly List<CardVisual> petDemandVisuals = new List<CardVisual>();
+
+        /// <summary>Where "Tamagotchi" lays out what it wants: over the discard pile, clear of
+        /// the hand row so the player can compare the two at a glance.</summary>
+        private static readonly Vector2 PetDemandOrigin = new Vector2(-6.0f, -1.5f);
+        private const float PetDemandSpacing = 1.0f;
+
+        /// <summary>
+        /// "Tamagotchi": shows the shapes the pet is still owed, as small face-up cards. They are
+        /// drawn from throwaway BlockCards because a demand is a SHAPE and nothing else - what a
+        /// card is made of never matters to the pet, and showing an element would imply it did.
+        /// </summary>
+        public void ShowPetDemands(IReadOnlyList<BlockShape> shapes)
+        {
+            for (int i = petDemandVisuals.Count - 1; i >= 0; i--)
+            {
+                if (petDemandVisuals[i] != null)
+                {
+                    Destroy(petDemandVisuals[i].gameObject);
+                }
+            }
+            petDemandVisuals.Clear();
+            if (shapes == null)
+            {
+                return;
+            }
+            for (int i = 0; i < shapes.Count; i++)
+            {
+                var pos = new Vector2(PetDemandOrigin.x, PetDemandOrigin.y - i * PetDemandSpacing);
+                CardVisual visual = CardVisual.Create(transform, "PetWants_" + i,
+                    new BlockCard(-1 - i, shapes[i]), true, false, pos, FxOrder);
+                visual.transform.localScale = new Vector3(0.55f, 0.55f, 1f);
+                petDemandVisuals.Add(visual);
+            }
+        }
+
+        private IEnumerator HoldThenVanish(CardVisual visual, float seconds)
+        {
+            yield return new WaitForSeconds(seconds);
+            if (visual != null)
+            {
+                yield return VanishAndDestroy(visual);
+            }
+        }
+
         private void SyncInternal(RoundEngine round, TurnReport report, bool animate)
         {
             BuildPilesIfNeeded();
@@ -270,12 +340,24 @@ namespace ProjectBlock.View
                 int slot = entry.Value;
                 Vector2 slotPos = SlotPosition(slot, totalCount);
                 CardVisual visual;
+                // "Şaşırtmaca" deals the HAND face down - the bonus hand is never part of the
+                // shell game - and turning one card over shows that one and only that one.
+                bool faceUp = slot >= handCount || !round.HandIsFaceDown
+                    || round.RevealedHandCardId == id;
+                if (heldVisuals.TryGetValue(id, out visual) && visual != null
+                    && visual.FaceUp != faceUp)
+                {
+                    // It flipped: the cached visual is the wrong side up, so it is rebuilt in
+                    // place rather than slid around.
+                    Destroy(visual.gameObject);
+                    heldVisuals.Remove(id);
+                }
                 if (!heldVisuals.TryGetValue(id, out visual))
                 {
                     BlockCard card = slot < handCount
                         ? round.Hand[slot]
                         : round.BonusHand[slot - handCount].Card;
-                    visual = CardVisual.Create(transform, "Card_" + id, card, true,
+                    visual = CardVisual.Create(transform, "Card_" + id, card, faceUp,
                         bonusIds.Contains(id), animate ? DrawPilePos : slotPos, HeldCardOrder,
                         round.EffectiveShape(card));
                     heldVisuals[id] = visual;

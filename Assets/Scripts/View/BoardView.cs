@@ -35,6 +35,15 @@ namespace ProjectBlock.View
         /// cell and a full one, since the route crosses both.</summary>
         private static readonly Color CircuitColor = new Color(0.35f, 1f, 0.75f, 0.85f);
 
+        /// <summary>"Matruşka"'s dolls, drawn as a pip ON a cube rather than as a cube. A warm
+        /// lacquer red, because a doll is a thing sitting on the board and not a piece of it.</summary>
+        private static readonly Color DollColor = new Color(0.95f, 0.35f, 0.30f, 0.95f);
+
+        /// <summary>"İstilacı"'s marked column: the demolition wash. Deliberately its own colour -
+        /// a marked column is neither sealed (a seal lifts next turn) nor eaten (that is
+        /// permanent); it is a place with a deadline on it.</summary>
+        private static readonly Color DoomedColumnTint = new Color(0.85f, 0.45f, 0.12f);
+
         /// <summary>"Karantina": a cube exploded in here costs what it would have earned. A
         /// sickly wash over the cell, so the zone reads without hiding what stands in it.</summary>
         private static readonly Color QuarantineTint = new Color(0.75f, 0.72f, 0.20f);
@@ -67,6 +76,12 @@ namespace ProjectBlock.View
 
         /// <summary>Nodes of "Devre"'s traced circuit, redrawn whenever the route changes.</summary>
         private readonly List<GameObject> circuitMarkers = new List<GameObject>();
+
+        /// <summary>"Matruşka"'s dolls, redrawn whenever one splits or moves.</summary>
+        private readonly List<GameObject> dollMarkers = new List<GameObject>();
+
+        /// <summary>"İstilacı"'s marked column, or null when nothing is marked.</summary>
+        private int? doomedColumn;
 
         /// <summary>"Karantina"'s sealed rows and columns, in absolute board coordinates.</summary>
         private readonly List<int> quarantinedRows = new List<int>();
@@ -431,6 +446,13 @@ namespace ProjectBlock.View
                     {
                         color = Color.Lerp(color, CreatureTint, cube.HasValue ? 0.5f : 0.72f);
                     }
+                    // "İstilacı": the column with a demolition date on it. Washed rather than
+                    // hidden - the player has to be able to see exactly what they are about to
+                    // lose and decide whether to keep building there anyway.
+                    if (doomedColumn.HasValue && gp.X == doomedColumn.Value)
+                    {
+                        color = Color.Lerp(color, DoomedColumnTint, cube.HasValue ? 0.45f : 0.6f);
+                    }
                     // "Alacakaranlık": the truth is drowned in the dark and only a blast's
                     // light brings any of it back, in proportion to how bright that light is.
                     if (dark)
@@ -658,6 +680,46 @@ namespace ProjectBlock.View
         private bool IsQuarantined(GridPos cell)
         {
             return quarantinedRows.Contains(cell.Y) || quarantinedColumns.Contains(cell.X);
+        }
+
+        /// <summary>Marks "İstilacı"'s doomed column. Pass null to clear it.</summary>
+        public void ShowDoomedColumn(int? column)
+        {
+            doomedColumn = column;
+        }
+
+        /// <summary>
+        /// Draws "Matruşka"'s dolls as pips sitting ON their host cubes. Sized by how many splits
+        /// each has left, so a nearly-spent doll is visibly a small one - which is the only way
+        /// the player can tell how much of the ladder is behind them.
+        /// </summary>
+        public void ShowDolls(IReadOnlyList<GridPos> cells, IReadOnlyList<int> sizes)
+        {
+            for (int i = dollMarkers.Count - 1; i >= 0; i--)
+            {
+                if (dollMarkers[i] != null)
+                {
+                    Destroy(dollMarkers[i]);
+                }
+            }
+            dollMarkers.Clear();
+            if (board == null || cells == null)
+            {
+                return;
+            }
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (!board.IsInside(cells[i]))
+                {
+                    continue;
+                }
+                int left = sizes != null && i < sizes.Count ? sizes[i] : 1;
+                if (left < 1) { left = 1; }
+                float scale = cellSize * (0.22f + 0.09f * Mathf.Min(left, 4));
+                SpriteRenderer pip = ViewUtil.MakeRect(transform, "Doll_" + i,
+                    CellToWorld(cells[i]), new Vector2(scale, scale), DollColor, 6);
+                dollMarkers.Add(pip.gameObject);
+            }
         }
 
         public void ShowCircuit(IReadOnlyList<GridPos> cells)

@@ -33,6 +33,11 @@ namespace ProjectBlock.View
         /// <summary>Id of the shown BlockCard, or -1 for face-down/effect cards.</summary>
         public int CardId { get; private set; }
 
+        /// <summary>Whether this card is showing its face. Held visuals are cached and reused, so
+        /// the hand layer compares this to decide when a card has to be rebuilt - which is what
+        /// makes "Şaşırtmaca" turning one card over actually flip it on screen.</summary>
+        public bool FaceUp { get; private set; }
+
         /// <summary>Index in the hand row (hand cards first, then bonus). -1 when not held.</summary>
         public int SlotIndex = -1;
 
@@ -71,6 +76,7 @@ namespace ProjectBlock.View
             go.transform.localPosition = new Vector3(position.x, position.y, 0f);
             var visual = go.AddComponent<CardVisual>();
             visual.CardId = card != null && faceUp ? card.Id : -1;
+            visual.FaceUp = faceUp;
             visual.HomePosition = position;
             visual.BuildSprites(card, faceUp, bonusTint, sortingOrder, displayShape);
             return visual;

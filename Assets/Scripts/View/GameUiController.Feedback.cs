@@ -59,9 +59,73 @@ namespace ProjectBlock.View
             }
             TriggerSupurgeBlast();
             TriggerInfectionBlast();
+            ShowShellGameReveal(round);
             // A resolved turn is the natural save point: the per-turn scratch state is at rest,
             // which is exactly what the save format assumes (see RoundEngine.Save).
             AutoSave();
+        }
+
+        /// <summary>
+        /// "Şaşırtmaca": after the turn, the hand the player was holding is laid face up in
+        /// front of them for a beat. The engine has already mixed it and dealt it face down, so
+        /// this is the one moment they get to see what they have - never where it is.
+        /// </summary>
+        private void ShowShellGameReveal(RoundEngine round)
+        {
+            var boss = round.Boss as SasirtmacaBoss;
+            if (boss == null || boss.HandBeforeMix.Count == 0)
+            {
+                return;
+            }
+            // The ids are of cards that are still held (the mix reorders, it never removes), so
+            // they are looked up in the hand itself.
+            var shown = new List<BlockCard>();
+            foreach (int id in boss.HandBeforeMix)
+            {
+                for (int i = 0; i < round.Hand.Count; i++)
+                {
+                    if (round.Hand[i].Id == id)
+                    {
+                        shown.Add(round.Hand[i]);
+                        break;
+                    }
+                }
+            }
+            cardLayer.ShowRevealBeat(shown, ShellGameRevealSeconds);
+        }
+
+        private const float ShellGameRevealSeconds = 1.1f;
+
+        /// <summary>
+        /// "Tamagotchi": hands the pet whatever hand card the cursor is over. Costs no turn, so
+        /// it is a key rather than a mode - and it says why when the pet turns a card down, since
+        /// "nothing happened" is indistinguishable from a bug.
+        /// </summary>
+        private void TryFeedPetUnderCursor(RoundEngine round, Mouse mouse)
+        {
+            var pet = round.Boss as TamagotchiBoss;
+            if (pet == null || mouse == null)
+            {
+                return;
+            }
+            Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+            CardVisual hit = cardLayer.CardAt(world);
+            if (hit == null || hit.SlotIndex < 0 || hit.SlotIndex >= round.Hand.Count)
+            {
+                messageText.text = Loc.Pick("Point at a card in your hand to feed it.",
+                    "Beslemek için elindeki bir kartı işaret et.");
+                return;
+            }
+            if (!round.FeedPet(hit.SlotIndex))
+            {
+                messageText.text = Loc.Pick("It does not want that shape.",
+                    "O şekli istemiyor.");
+                return;
+            }
+            sfx.Vanish();
+            FloatingTextFx.Spawn(transform, world, Loc.Pick("FED", "YEDİ"),
+                new Color(0.6f, 0.9f, 0.5f), 54, 0.05f);
+            RefreshAll(null);
         }
 
         /// <summary>Explosion sound + blast feedback for one turn. Deferred until after the
@@ -311,6 +375,9 @@ namespace ProjectBlock.View
             RefreshMirrorWorld();
             RefreshInfections();
             cardLayer.Sync(round, report);
+            // "Tamagotchi" lays out what it is still owed, next to the hand it has to come from.
+            var pet = round.Boss as TamagotchiBoss;
+            cardLayer.ShowPetDemands(pet != null ? pet.Demands : null);
             flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
@@ -365,12 +432,45 @@ namespace ProjectBlock.View
                 boardView.ShowCircuit(null);
                 boardView.ShowQuarantine(null, null);
                 boardView.ShowCreature(null);
+                boardView.ShowDolls(null, null);
+                boardView.ShowDoomedColumn(null);
                 return;
             }
             boardView.ShowInfections(infectionBuffer);
             RefreshCircuit();
             RefreshQuarantine();
             RefreshCreature();
+            RefreshBossBoardMarks();
+        }
+
+        /// <summary>Hands the board view what the new bosses have put ON it: "Matruşka"'s dolls
+        /// and "İstilacı"'s marked column. Both are marks on the arena rather than cubes in it,
+        /// so neither belongs in the cube pass.</summary>
+        private void RefreshBossBoardMarks()
+        {
+            RoundEngine round = session.CurrentRound;
+            BossRound boss = round != null ? round.Boss : null;
+
+            var dolls = boss as MatruskaBoss;
+            if (dolls != null)
+            {
+                IReadOnlyList<GridPos> cells = dolls.DollCells;
+                var sizes = new List<int>(cells.Count);
+                for (int i = 0; i < cells.Count; i++)
+                {
+                    sizes.Add(dolls.GenerationsLeftAt(cells[i]));
+                }
+                boardView.ShowDolls(cells, sizes);
+            }
+            else
+            {
+                boardView.ShowDolls(null, null);
+            }
+
+            var invader = boss as IstilaciBoss;
+            boardView.ShowDoomedColumn(invader != null && invader.HasMark
+                ? invader.MarkedColumn
+                : (int?)null);
         }
 
         /// <summary>Hands "Besleme"'s creature patch to the board view. A pet you cannot see is
@@ -771,6 +871,18 @@ namespace ProjectBlock.View
                 case LossReason.DebtNotRepaid:
                     return Loc.Pick("a boss round ended with your market debt still open",
                         "patron raundu bitti, market borcun hâlâ açıktı");
+                case LossReason.OutOfTurns:
+                    return Loc.Pick("the turn limit ran out (Saatçi)",
+                        "tur sınırı doldu (Saatçi)");
+                case LossReason.NoRoomForDoll:
+                    return Loc.Pick("a doll split with no cube left to sit on (Matruşka)",
+                        "bebek bölündü ama oturacak küp kalmadı (Matruşka)");
+                case LossReason.LineWithoutDoll:
+                    return Loc.Pick("you exploded a line with no doll in it (Matruşka)",
+                        "içinde bebek olmayan bir sıra patlattın (Matruşka)");
+                case LossReason.PetWentHungry:
+                    return Loc.Pick("the deck ran dry with the pet still unfed (Tamagotchi)",
+                        "deste bitti, Tamagotchi hâlâ açtı");
                 default:
                     return Loc.Pick("unknown", "bilinmiyor");
             }
