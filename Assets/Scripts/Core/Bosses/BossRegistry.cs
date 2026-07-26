@@ -50,6 +50,11 @@ namespace ProjectBlock.Core
             Register(() => new BurokrasiBatagiBoss());
             Register(() => new BulParayiBoss());
             Register(() => new MayinEsegiBoss());
+            Register(() => new SasirtmacaBoss());
+            Register(() => new MatruskaBoss());
+            Register(() => new SnakeBoss());
+            Register(() => new IstilaciBoss());
+            Register(() => new TamagotchiBoss());
         }
 
         /// <summary>All known bosses, in design order.</summary>
