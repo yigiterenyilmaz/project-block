@@ -58,6 +58,7 @@ namespace ProjectBlock.Core
             { "kiraci", Rarity.Rare },
             { "besleme", Rarity.Legendary },
             { "savunmaci", Rarity.Rare },
+            { "uzun_vadeli_yatirimci", Rarity.Rare },
             { "cimbiz", Rarity.Common },
             { "caprazlama", Rarity.Common },
             { "eko", Rarity.Rare },
