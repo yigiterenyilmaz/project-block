@@ -135,6 +135,16 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Bilinmezlik_HoldsFullLinesUntilItFires();
+        Bilinmezlik_ADryStreakEventuallyFiresByItself();
+        RehinPuan_HoldsTheLineScoreUntilTheNextClear();
+        RehinPuan_BreakingTheChainBurnsIt();
+        Burokrasi_OnlyTheTaskPays();
+        Burokrasi_PaysForATaskAndFinesAMissedDeadline();
+        BulParayi_TakesOneUnlessYouGuessIt();
+        BulParayi_AGoodGuessSavesIt();
+        BulParayi_TheGuessMustComeBeforeTheFirstTurn();
+        BulParayi_OnlyEverTheFirstBossOfARun();
         Simetri_TheBoardKnowsItsOwnSymmetry();
         Simetri_SleepsFiveTurnsAndAgainAfterEverySweep();
         Simetri_PaysOneAxisAndTriplesForBoth();
@@ -4507,6 +4517,253 @@ public static class JokerTests
         // board - which is the only way a board-reshaping boss can be tested at all.
         config.ForcedBossDefId = bossDefId;
         return new GameSession(config);
+    }
+
+    private static void Bilinmezlik_HoldsFullLinesUntilItFires()
+    {
+        Section("bilinmezlik / a full line sits there until the boss lets it go off");
+        var session = NewBossSession(8100, 5, 1000000, "bilinmezlik", 40, 1);
+        var boss = (BilinmezlikBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+
+        // Pin it shut, then fill the bottom row: the line must NOT clear. The boss rolls for the
+        // coming turn at round start, so the knobs have to be set BEFORE that roll is redone.
+        boss.FirePercent = 0;
+        boss.MaxTurnsWithoutFiring = 1000;
+        boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+        Check(boss.SuppressesLineExplosions, "the magazine is shut");
+        ClearBoard(round.Board);
+        for (int x = 0; x < 4; x++)
+        {
+            round.Board.SetCubeAt(new GridPos(x, 0), new Cube(CubeKind.Normal, 8101));
+        }
+        TurnReport held = PlayAt(round, new GridPos(4, 0));
+        Check(held != null, "the row was completed");
+        Check(held.ExplodedRows.Count == 0, "and it did NOT explode",
+            "rows " + held.ExplodedRows.Count);
+        Check(round.Board.OccupiedCount == 5, "the full row is still standing",
+            "" + round.Board.OccupiedCount);
+        Check(held.Score.BaseLines == 0, "and it paid nothing", "" + held.Score.BaseLines);
+
+        // Now let it fire. The roll that decides a turn happens at the END of the one before, so
+        // nudge that roll before playing - which is exactly the order the engine uses.
+        boss.FirePercent = 100;
+        boss.AfterTurnScored(FakeTurn(Bar(1), new ScoreBreakdown()));
+        Check(!boss.SuppressesLineExplosions, "the next turn will fire");
+        TurnReport fired = PlayOneCard(round);
+        Check(fired != null, "another turn resolved");
+        Check(fired.ExplodedRows.Count > 0, "and the held line finally went off",
+            "rows " + fired.ExplodedRows.Count);
+    }
+
+    private static void Bilinmezlik_ADryStreakEventuallyFiresByItself()
+    {
+        Section("bilinmezlik / a cold streak cannot run forever");
+        var boss = new BilinmezlikBoss();
+        boss.FirePercent = 0; // the coin never comes up heads
+        boss.MaxTurnsWithoutFiring = 3;
+        boss.OnRoundStarted(new RoundContext(null, new SeededRandom(9), null));
+        Check(boss.SuppressesLineExplosions, "it starts shut");
+
+        for (int i = 0; i < 3; i++)
+        {
+            boss.AfterTurnScored(FakeTurn(Bar(1), new ScoreBreakdown()));
+        }
+        Check(!boss.SuppressesLineExplosions,
+            "three cold turns and it fires anyway - a dry spell is tension, not a loss");
+    }
+
+    private static void RehinPuan_HoldsTheLineScoreUntilTheNextClear()
+    {
+        Section("rehin puan / the line score is held, then released by the next clear");
+        var session = NewBossSession(8102, 5, 1000000, "rehin_puan", 40, 1);
+        var boss = (RehinPuanBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+
+        TurnReport first = ClearABottomRow(round, 8103);
+        Check(first != null && first.ExplodedRows.Count > 0, "a row cleared");
+        Check(first.Score.BaseLines == 0, "and it paid nothing on the spot",
+            "" + first.Score.BaseLines);
+        Check(boss.Held > 0, "the score is being held", "" + boss.Held);
+        int hostage = boss.Held;
+
+        // Clear again immediately: the hostage is released.
+        TurnReport second = ClearABottomRow(round, 8104);
+        Check(second != null && second.ExplodedRows.Count > 0, "a second row cleared");
+        Check(FlatFrom(second.Score, boss.DefId) == hostage,
+            "and the held score was released in full",
+            FlatFrom(second.Score, boss.DefId) + " vs " + hostage);
+        Check(boss.Held > 0, "while THIS turn's line is the new hostage", "" + boss.Held);
+    }
+
+    private static void RehinPuan_BreakingTheChainBurnsIt()
+    {
+        Section("rehin puan / a turn without a clear burns what was held");
+        var session = NewBossSession(8105, 5, 1000000, "rehin_puan", 40, 1);
+        var boss = (RehinPuanBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+
+        ClearABottomRow(round, 8106);
+        int hostage = boss.Held;
+        Check(hostage > 0, "something is held", "" + hostage);
+
+        // A quiet turn: nothing clears.
+        ClearBoard(round.Board);
+        TurnReport quiet = PlayOneCard(round);
+        Check(quiet != null && quiet.ExplodedRows.Count == 0
+            && quiet.ExplodedColumns.Count == 0, "a turn cleared nothing");
+        Check(boss.Held == 0, "the hostage is gone", "" + boss.Held);
+        Check(boss.Burned == hostage, "and it burned, not paid",
+            boss.Burned + " vs " + hostage);
+        Check(FlatFrom(quiet.Score, boss.DefId) == 0, "nothing was released");
+    }
+
+    private static void Burokrasi_OnlyTheTaskPays()
+    {
+        Section("bürokrasi bataklığı / nothing scores by itself any more");
+        var session = NewBossSession(8107, 5, 1000000, "burokrasi_batagi", 40, 1);
+        var boss = (BurokrasiBatagiBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+        session.Config.Scoring.PointsPerCubePlaced = 500;
+
+        // A plain placement, worth 500 a cube under ordinary rules.
+        ClearBoard(round.Board);
+        TurnReport report = PlayOneCard(round);
+        Check(report != null, "a turn resolved");
+        Check(report.Score.BaseTotal == 0,
+            "and every base value was wiped - placement included",
+            "base " + report.Score.BaseTotal);
+
+        // Even a cleared row pays nothing by itself.
+        boss.RewardPerTask = 0; // so any score seen must be base score
+        TurnReport cleared = ClearABottomRow(round, 8108);
+        Check(cleared != null && cleared.ExplodedRows.Count > 0, "a row cleared");
+        Check(cleared.Score.BaseTotal == 0, "and it still paid nothing",
+            "base " + cleared.Score.BaseTotal);
+    }
+
+    private static void Burokrasi_PaysForATaskAndFinesAMissedDeadline()
+    {
+        Section("bürokrasi bataklığı / finishing a task pays, a missed deadline fines");
+        var session = NewBossSession(8109, 5, 1000000, "burokrasi_batagi", 40, 1);
+        var boss = (BurokrasiBatagiBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+
+        // Force the "clear a row" task with a comfortable deadline, then clear a row.
+        SetTask(boss, BurokrasiBatagiBoss.TaskKind.ClearARow, 5);
+        TurnReport done = ClearABottomRow(round, 8110);
+        Check(done != null && done.ExplodedRows.Count > 0, "a row cleared");
+        Check(boss.Completed == 1, "the task was signed off", "" + boss.Completed);
+        Check(FlatFrom(done.Score, boss.DefId) == boss.RewardPerTask,
+            "and it paid the reward", "" + FlatFrom(done.Score, boss.DefId));
+
+        // Now force a "clear a column" task with a one-turn deadline and do not do it.
+        SetTask(boss, BurokrasiBatagiBoss.TaskKind.ClearAColumn, 1);
+        int failedBefore = boss.Failed;
+        ClearBoard(round.Board);
+        TurnReport missed = PlayOneCard(round);
+        Check(missed != null, "a turn passed");
+        Check(boss.Failed == failedBefore + 1, "the deadline ran out and it was recorded",
+            "" + boss.Failed);
+        Check(round.RoundScore >= 0, "the fine never takes the round below zero",
+            "" + round.RoundScore);
+    }
+
+    /// <summary>Puts a specific task in play, so a test does not have to fish for one.</summary>
+    private static void SetTask(BurokrasiBatagiBoss boss, BurokrasiBatagiBoss.TaskKind kind,
+        int turns)
+    {
+        typeof(BurokrasiBatagiBoss)
+            .GetField("task", System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic)
+            .SetValue(boss, kind);
+        typeof(BurokrasiBatagiBoss)
+            .GetField("turnsLeft", System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic)
+            .SetValue(boss, turns);
+    }
+
+    private static void BulParayi_TakesOneUnlessYouGuessIt()
+    {
+        Section("bul parayı al karayı / a blind guess saves one thing, or does not");
+        // Guess WRONG: two jokers, protect the one it did not pick.
+        var session = NewBossSession(8111, 5, 1000000, "bul_parayi", 40, 1);
+        Joker a = session.Jokers.Add(new RenovasyonJoker());
+        Joker b = session.Jokers.Add(new IadeJoker());
+        RoundEngine round = session.CurrentRound;
+        round.Boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+        var boss = (BulParayiBoss)round.Boss;
+        Check(boss.AwaitingChoice, "it is waiting for the guess");
+
+        Joker victim = round.IsSilencedByBoss(a) ? a : b;
+        Joker other = victim == a ? b : a;
+        Check(round.IsSilencedByBoss(victim), "one of them is switched off before the guess");
+
+        Check(round.ChooseBossProtection(other.InstanceId), "the wrong one is protected");
+        Check(round.IsSilencedByBoss(victim), "so the victim stays switched off");
+        Check(!round.IsSilencedByBoss(other), "and the other one was never in danger");
+        Check(!round.ChooseBossProtection(victim.InstanceId),
+            "and there is no second guess");
+    }
+
+    private static void BulParayi_AGoodGuessSavesIt()
+    {
+        Section("bul parayı al karayı / guessing right saves it outright");
+        var session = NewBossSession(8112, 5, 1000000, "bul_parayi", 40, 1);
+        Joker a = session.Jokers.Add(new RenovasyonJoker());
+        Joker b = session.Jokers.Add(new IadeJoker());
+        RoundEngine round = session.CurrentRound;
+        round.Boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+        var boss = (BulParayiBoss)round.Boss;
+
+        Joker victim = round.IsSilencedByBoss(a) ? a : b;
+        Check(round.ChooseBossProtection(victim.InstanceId), "the right one is protected");
+        Check(boss.Saved, "the boss says it was saved");
+        Check(!round.IsSilencedByBoss(a) && !round.IsSilencedByBoss(b),
+            "and nothing is switched off any more");
+    }
+
+    private static void BulParayi_TheGuessMustComeBeforeTheFirstTurn()
+    {
+        Section("bul parayı al karayı / you cannot wait and read the answer off the screen");
+        var session = NewBossSession(8113, 5, 1000000, "bul_parayi", 40, 1);
+        Joker a = session.Jokers.Add(new RenovasyonJoker());
+        session.Jokers.Add(new IadeJoker());
+        RoundEngine round = session.CurrentRound;
+        round.Boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+
+        PlayOneCard(round);
+        Check(!round.ChooseBossProtection(a.InstanceId),
+            "after a turn has resolved the guess is refused - a silenced joker is visibly "
+                + "silent, so waiting would be reading the answer rather than guessing");
+    }
+
+    private static void BulParayi_OnlyEverTheFirstBossOfARun()
+    {
+        Section("bul parayı al karayı / it can only ever be a run's first boss");
+        BossDefinition def = BossRegistry.Get("bul_parayi");
+        Check(def != null, "the boss is registered");
+        Check(def.OnlyOnFirstBossRound, "and it is flagged first-boss-only");
+
+        int flagged = 0;
+        foreach (BossDefinition other in BossRegistry.All)
+        {
+            if (other.OnlyOnFirstBossRound) { flagged++; }
+        }
+        Check(flagged == 1, "it is the only boss with that restriction", "" + flagged);
+    }
+
+    /// <summary>Fills the bottom row but for one cell and plays into the gap, so a real line
+    /// clear resolves. Returns the report, or null if nothing in hand fitted.</summary>
+    private static TurnReport ClearABottomRow(RoundEngine round, int fillerCardId)
+    {
+        ClearBoard(round.Board);
+        int row = round.Board.MinY;
+        for (int x = round.Board.MinX + 1; x < round.Board.MinX + round.Board.Width; x++)
+        {
+            round.Board.SetCubeAt(new GridPos(x, row), new Cube(CubeKind.Normal, fillerCardId));
+        }
+        return PlayAt(round, new GridPos(round.Board.MinX, row));
     }
 
     private static void Simetri_TheBoardKnowsItsOwnSymmetry()
