@@ -53,6 +53,7 @@ namespace ProjectBlock.Core
             // reloading, and an unsaved smuggle would hand out a second free item per visit.
             w.Write("debt", Debt);
             w.Write("takenByEffects", CurrencyTakenByEffects);
+            w.Write("grantedByEffects", CurrencyGrantedByEffects);
             w.Write("smuggled", smuggledThisMarket);
             // "Uzun vadeli yatırımcı": the joker remembers its spent second chance itself, but the
             // count the HUD shows lives here.
@@ -108,6 +109,7 @@ namespace ProjectBlock.Core
             session.rerollCount = r.ReadInt("rerolls");
             session.Debt = r.ReadLong("debt");
             session.CurrencyTakenByEffects = r.ReadLong("takenByEffects");
+            session.CurrencyGrantedByEffects = r.ReadLong("grantedByEffects");
             session.smuggledThisMarket = r.ReadBool("smuggled");
             session.FinalRoundReplays = r.ReadInt("finalReplays");
 

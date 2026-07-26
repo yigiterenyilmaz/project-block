@@ -22,7 +22,9 @@ namespace ProjectBlock.Core
         // effects took, the market's free-item flag and the final-round replay count; the board
         // writes the lines "Kangren" killed; every card writes its two "Kaçakçı" flags; and the
         // seven new bosses and three new jokers change the reflected field counts.
-        public const int FormatVersion = 4;
+        // 5 (2026-07-26): the pattern jokers landed - the session writes what effects GRANTED
+        // the purse, and every card writes the element it is the antimatter of.
+        public const int FormatVersion = 5;
 
         private const string VersionKey = "version";
 
