@@ -1,6 +1,8 @@
 // PURPOSE: What a player-activated joker/power was pointed at - an optional hand
 // index, board cell, or a pair of rows/columns to swap. Built via the factories.
 
+using System.Collections.Generic;
+
 namespace ProjectBlock.Core
 {
     /// <summary>Which way a line runs, for effects that act on whole rows or columns.</summary>
@@ -32,6 +34,38 @@ namespace ProjectBlock.Core
         /// target rather than passed alongside it so every existing call site keeps working.</summary>
         public readonly bool OnMirrorWorld;
 
+        /// <summary>The OTHER card in hand ("Lehimleme" solders two together).</summary>
+        public readonly int? SecondHandIndex;
+
+        /// <summary>Where the second card sits relative to the first, in shape coordinates
+        /// ("Lehimleme"). Also the anchor offset of a picked sub-shape.</summary>
+        public readonly GridPos? Offset;
+
+        /// <summary>A set of SHAPE OFFSETS rather than board cells - the cubes the player picked
+        /// out of a card in hand ("Neşter" choosing where to cut). Null unless that is the
+        /// targeting mode.</summary>
+        public readonly IReadOnlyList<GridPos> CellSet;
+
+        /// <summary>"Neşter": a card and the cubes picked out of it.</summary>
+        public static ActivationTarget CardCubes(int handIndex, IReadOnlyList<GridPos> picked)
+        {
+            return new ActivationTarget(handIndex, null, null, null, null, false, null, null,
+                picked);
+        }
+
+        /// <summary>"Lehimleme": two cards and where the second sits against the first.</summary>
+        public static ActivationTarget TwoCards(int first, int second, GridPos offset)
+        {
+            return new ActivationTarget(first, null, null, null, null, false, second, offset,
+                null);
+        }
+
+        /// <summary>"Gen nakli": a cube on the board and the card that takes its element.</summary>
+        public static ActivationTarget CellAndCard(GridPos cell, int handIndex)
+        {
+            return new ActivationTarget(handIndex, cell);
+        }
+
         public ActivationTarget(int? handIndex, GridPos? cell)
             : this(handIndex, cell, null, null, null)
         {
@@ -45,6 +79,13 @@ namespace ProjectBlock.Core
 
         public ActivationTarget(int? handIndex, GridPos? cell, LineAxis? axis,
             int? lineA, int? lineB, bool onMirrorWorld)
+            : this(handIndex, cell, axis, lineA, lineB, onMirrorWorld, null, null, null)
+        {
+        }
+
+        public ActivationTarget(int? handIndex, GridPos? cell, LineAxis? axis,
+            int? lineA, int? lineB, bool onMirrorWorld, int? secondHandIndex, GridPos? offset,
+            IReadOnlyList<GridPos> cellSet)
         {
             HandIndex = handIndex;
             Cell = cell;
@@ -52,12 +93,16 @@ namespace ProjectBlock.Core
             LineA = lineA;
             LineB = lineB;
             OnMirrorWorld = onMirrorWorld;
+            SecondHandIndex = secondHandIndex;
+            Offset = offset;
+            CellSet = cellSet;
         }
 
         /// <summary>The same target, aimed at the other world.</summary>
         public ActivationTarget OnWorld(bool mirror)
         {
-            return new ActivationTarget(HandIndex, Cell, Axis, LineA, LineB, mirror);
+            return new ActivationTarget(HandIndex, Cell, Axis, LineA, LineB, mirror,
+                SecondHandIndex, Offset, CellSet);
         }
 
         public static readonly ActivationTarget None = new ActivationTarget(null, null);

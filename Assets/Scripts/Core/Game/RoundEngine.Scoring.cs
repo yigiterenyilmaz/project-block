@@ -14,12 +14,109 @@ namespace ProjectBlock.Core
         /// why every disposal in this class goes through here.</summary>
         private void DisposeCard(BlockCard card)
         {
+            // "Gen nakli" is a LOAN: reaching a pile is where it ends, so the card goes plain
+            // again and the cube it borrowed from gets its element back. Here, because this is
+            // THE way a card leaves play - every disposal in the engine comes through it.
+            ReturnBorrowedGene(card.Id);
             if (Rules.PlayedCardsReturnToDrawPile)
             {
                 Deck.InsertRandomIntoDraw(card);
                 return;
             }
             Deck.Discard(card);
+        }
+
+        /// <summary>Takes a hand card out of the ROUND entirely - not to the discard, where it
+        /// would come back this round ("Neşter" cutting it up, "Lehimleme" welding it into
+        /// something else). It is still in the deck the player owns, so next round it is back.
+        /// </summary>
+        internal bool TakeCardOutOfRound(int handIndex)
+        {
+            if (handIndex < 0 || handIndex >= Hand.Count)
+            {
+                return false;
+            }
+            BlockCard card = Hand[handIndex];
+            Hand.RemoveAt(handIndex);
+            Deck.RemoveFromRound(card);
+            return true;
+        }
+
+        /// <summary>
+        /// "Gen nakli": moves an element off a cube and onto a card, and remembers how to undo it.
+        /// The cube goes plain; the card carries the element until it reaches the discard, at
+        /// which point BOTH go back to what they were (see ReturnBorrowedGenes).
+        /// </summary>
+        internal bool TransplantElement(GridPos cell, BlockCard card, BlockElement gene)
+        {
+            Cube? cube = Board.GetCube(cell);
+            if (card == null || !cube.HasValue || borrowedGenes.ContainsKey(card.Id))
+            {
+                return false;
+            }
+            borrowedGenes[card.Id] = new BorrowedGene(cell, cube.Value.Kind, gene);
+            Board.SetCubeAt(cell, new Cube(CubeKind.Normal, cube.Value.SourceCardId));
+            cardElements[card.Id] = gene;
+            return true;
+        }
+
+        /// <summary>The element a card is carrying on loan, or null. Read by CardHasElement, so
+        /// every rule that asks what a block is made of sees the borrowed gene too.</summary>
+        internal BlockElement? BorrowedElementOf(int cardId)
+        {
+            BlockElement gene;
+            return cardElements.TryGetValue(cardId, out gene) ? gene : (BlockElement?)null;
+        }
+
+        /// <summary>Gives a borrowed gene back when its card hits the discard: the card is plain
+        /// again, and the cube it came from gets its element back IF it is still standing.</summary>
+        internal void ReturnBorrowedGene(int cardId)
+        {
+            BorrowedGene loan;
+            if (!borrowedGenes.TryGetValue(cardId, out loan))
+            {
+                return;
+            }
+            borrowedGenes.Remove(cardId);
+            cardElements.Remove(cardId);
+            Cube? cube = Board.GetCube(loan.Cell);
+            if (cube.HasValue && cube.Value.Kind == CubeKind.Normal)
+            {
+                Board.SetCubeAt(loan.Cell, new Cube(loan.Kind, cube.Value.SourceCardId));
+            }
+        }
+
+        /// <summary>"Hidrolik pres" letting go. Reports the cells it changed as LIFTED - nothing
+        /// was destroyed in the scoring sense - and re-checks the lines, because an expansion can
+        /// complete one exactly as a board-reshaping power can.</summary>
+        internal PressExpansion ReleasePress(GridPos anchor, Cube?[] swallowed)
+        {
+            PressExpansion result = MainBoard.Expand(anchor, swallowed);
+            if (result == null)
+            {
+                return null;
+            }
+            ResyncSnapshot();
+            if (currentReport != null && result.DetonatedCells.Count > 0)
+            {
+                currentReport.AddLiftedCells(result.DetonatedCells);
+            }
+            // An expansion can fill a line. Same path a deflating inflation power uses.
+            LineExplosionResult lines = LineExplosionsSuppressed
+                ? LineExplosionResult.None
+                : MainBoard.ResolveFullLines(Rules.RetroMode);
+            if (lines.LineCount > 0)
+            {
+                AddScoreOutsideTurn(PriceLines(BuildLineScore(lines, lines.ExplodedCells.Count,
+                    false)));
+                if (currentReport != null)
+                {
+                    currentReport.AddExtraExplodedCells(lines.ExplodedCells);
+                }
+                ResyncSnapshot();
+                TryResolveCleanSweep();
+            }
+            return result;
         }
 
         /// <summary>True while that card id is sitting in the bonus hand ("Antimadde" checking

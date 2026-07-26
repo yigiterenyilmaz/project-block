@@ -187,9 +187,17 @@ namespace ProjectBlock.Core
         /// <summary>Does this card carry that element RIGHT NOW? The one place the engine asks,
         /// so a boss that suppresses elements suppresses ALL of them consistently - placement,
         /// rotation, the no-move check and the cube kinds alike.</summary>
+        private bool HasBorrowed(BlockCard card, BlockElement element)
+        {
+            BlockElement? gene = BorrowedElementOf(card.Id);
+            return gene.HasValue && gene.Value == element;
+        }
+
         private bool Has(BlockCard card, BlockElement element)
         {
-            return !ElementsIgnored && card.Has(element);
+            // A borrowed gene ("Gen nakli") counts exactly like a printed element, so every rule
+            // that asks what a block is made of - placement, fire chains, dynamite - sees it.
+            return !ElementsIgnored && (card.Has(element) || HasBorrowed(card, element));
         }
 
         /// <summary>Public form of the above, for the UI: it must not offer a rotation or a
@@ -305,6 +313,30 @@ namespace ProjectBlock.Core
 
         /// <summary>Fox reshape choices and mechanical rotation steps, per card id.</summary>
         private readonly Dictionary<int, BlockShape> foxShapes = new Dictionary<int, BlockShape>();
+
+        /// <summary>"Gen nakli": elements cards are carrying on loan, by card id. Round-scoped, so
+        /// the deck the player owns is never touched.</summary>
+        private readonly Dictionary<int, BlockElement> cardElements =
+            new Dictionary<int, BlockElement>();
+
+        /// <summary>Where each borrowed gene came from, so it can be given back.</summary>
+        private readonly Dictionary<int, BorrowedGene> borrowedGenes =
+            new Dictionary<int, BorrowedGene>();
+
+        /// <summary>One loaned element: the cube it came off and what that cube was.</summary>
+        private readonly struct BorrowedGene
+        {
+            public readonly GridPos Cell;
+            public readonly CubeKind Kind;
+            public readonly BlockElement Element;
+
+            public BorrowedGene(GridPos cell, CubeKind kind, BlockElement element)
+            {
+                Cell = cell;
+                Kind = kind;
+                Element = element;
+            }
+        }
         private readonly Dictionary<int, int> rotations = new Dictionary<int, int>();
 
         /// <summary>Cubes each card put on the board, so "the whole block went at once"

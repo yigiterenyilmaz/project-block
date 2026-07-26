@@ -38,7 +38,13 @@ namespace ProjectBlock.Core
         /// it fills a cell, blocks a clean sweep and breaks with a completed line - but it costs
         /// score every turn it stands, and a line the infection takes ENTIRELY dies for good
         /// (GameBoard.InfectFullLines).</summary>
-        Gangrene = 11
+        Gangrene = 11,
+
+        /// <summary>A 2x2 patch squeezed into one cell by "Hidrolik pres". An ordinary
+        /// destructible cube in every respect - it fills a cell, blocks a sweep, breaks with a
+        /// line - except that the power pays four cubes' worth when it goes, and that it wants
+        /// its three cells back four turns later (GameBoard.Press).</summary>
+        Compressed = 12
     }
 
     /// <summary>A cube occupying one board cell.</summary>

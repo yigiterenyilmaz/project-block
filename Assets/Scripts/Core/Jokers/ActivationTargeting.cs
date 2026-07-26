@@ -19,6 +19,23 @@ namespace ProjectBlock.Core
         /// <summary>Needs TWO whole lines - two rows or two columns - to exchange
         /// ("Kentsel Dönüşüm"). The UI puts arrows beside every row and above every column
         /// and waits for two picks on the same axis.</summary>
-        LineSwap = 3
+        LineSwap = 3,
+
+        /// <summary>Needs a card in hand AND a subset of ITS OWN cubes ("Neşter": the player
+        /// clicks the cubes that go into the first half). Target carries HandIndex + CellSet, the
+        /// set holding SHAPE OFFSETS rather than board cells.</summary>
+        CardCubes = 4,
+
+        /// <summary>Needs TWO cards in hand and where the second sits against the first
+        /// ("Lehimleme"). Target carries HandIndex + SecondHandIndex + Offset.</summary>
+        TwoHandCards = 5,
+
+        /// <summary>Needs a board cell AND a card in hand ("Gen nakli" moving an element from one
+        /// to the other). Target carries both Cell and HandIndex, which it already could.</summary>
+        CellAndHandCard = 6,
+
+        /// <summary>Needs a 2x2 patch of board, named by its bottom-left cell ("Hidrolik pres").
+        /// Distinct from BoardCell so the UI knows to preview four cells, not one.</summary>
+        BoardArea = 7
     }
 }
