@@ -709,6 +709,27 @@ namespace ProjectBlock.Core
         /// </summary>
         public long CurrencyTakenByEffects { get; private set; }
 
+        /// <summary>
+        /// Run currency GRANTED by an effect rather than earned by a turn or a sale - "Eforsuz
+        /// galibiyet" paying you at the market door for a round you never touched a power in.
+        /// Book-keeping only: it exists so the books can be balanced (the fuzz suite proves
+        /// TotalScore against it), and nothing in the rules reads it.
+        /// </summary>
+        public long CurrencyGrantedByEffects { get; private set; }
+
+        /// <summary>Pays a joker's bounty straight into the run currency, from outside any turn.
+        /// THE way an effect hands the player money, so the ledger always knows where it came
+        /// from - a plain AddCurrency would look like a sale.</summary>
+        public void GrantCurrency(long amount)
+        {
+            if (amount <= 0)
+            {
+                return;
+            }
+            TotalScore += amount;
+            CurrencyGrantedByEffects += amount;
+        }
+
         /// <summary>Adds run currency (a joker sale today; market refunds later).</summary>
         public void AddCurrency(long amount)
         {

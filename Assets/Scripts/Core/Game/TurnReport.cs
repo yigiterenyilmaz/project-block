@@ -63,6 +63,10 @@ namespace ProjectBlock.Core
         /// <summary>The mirror world's half of the same thing ("Öteki dünya").</summary>
         public IReadOnlyList<GridPos> MirrorFellThroughCells { get; internal set; }
 
+        /// <summary>The cube kind an "Antimadde" card annihilated this turn, or null on every
+        /// ordinary turn. The cells themselves are in ExtraExplodedCells, like any late clear.</summary>
+        public CubeKind? AnnihilatedKind { get; internal set; }
+
         /// <summary>True if this turn emptied the board ("temizlik").</summary>
         public bool CleanSweep { get; internal set; }
 

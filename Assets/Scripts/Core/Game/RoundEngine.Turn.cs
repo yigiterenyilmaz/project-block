@@ -70,13 +70,30 @@ namespace ProjectBlock.Core
             {
                 report.FellThroughCells = CellsCovered(EffectiveShape(card), origin);
             }
-            bool negative = !mainWorldSitsOut && !fallsThrough && Has(card, BlockElement.Negative);
-            if (!mainWorldSitsOut && !fallsThrough && !negative)
+            // "Antimadde": the card is a key, not a block. CanPlaceCard has already guaranteed it
+            // covers nothing but cubes of its own kind, so reaching here IS the perfect fit - every
+            // cube of that kind on the board is annihilated and nothing is placed. Through
+            // DestroyCubes, so the destruction log, the sweep pre-condition and the tally all stay
+            // correct; the joker that minted the card pays the bonus from AfterTurnScored.
+            bool antimatter = !mainWorldSitsOut && !fallsThrough && card.AntimatterOf.HasValue;
+            if (antimatter)
+            {
+                report.AnnihilatedKind = card.AntimatterOf;
+                var doomed = Board.CellsOfKind(card.AntimatterOf.Value);
+                if (doomed.Count > 0)
+                {
+                    report.AddExtraExplodedCells(DestroyCubes(doomed, true));
+                }
+            }
+            bool negative = !mainWorldSitsOut && !fallsThrough && !antimatter
+                && Has(card, BlockElement.Negative);
+            if (!mainWorldSitsOut && !fallsThrough && !antimatter && !negative)
             {
                 report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
                     Has(card, BlockElement.Ghost));
             }
-            if (!mainWorldSitsOut && !fallsThrough && Has(card, BlockElement.Dynamite))
+            if (!mainWorldSitsOut && !fallsThrough && !antimatter
+                && Has(card, BlockElement.Dynamite))
             {
                 var state = new DynamiteState();
                 state.FullSize = report.PlacedCells.Count;

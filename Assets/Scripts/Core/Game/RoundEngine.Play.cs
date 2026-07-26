@@ -19,8 +19,37 @@ namespace ProjectBlock.Core
         /// may hang off the board). UI and play methods both use this.</summary>
         public bool CanPlaceCard(BlockCard card, GridPos origin)
         {
+            // "Antimadde": it is not a block, it is a key. It only goes where every one of its
+            // cubes covers a cube of the kind it annihilates - nothing hanging off, nothing over
+            // an empty cell, nothing over the wrong kind. Refusing it everywhere else is what
+            // makes "cuk oturtmak" the whole puzzle, and it keeps the UI, the origin list and the
+            // dead-end check agreeing without a single extra check anywhere.
+            if (card.AntimatterOf.HasValue)
+            {
+                return AntimatterFits(card, origin);
+            }
             return Board.CanPlace(EffectiveShape(card), origin, Has(card, BlockElement.Ghost),
                 Has(card, BlockElement.Negative));
+        }
+
+        /// <summary>True when every cube of an antimatter card would land on a cube of its kind.</summary>
+        private bool AntimatterFits(BlockCard card, GridPos origin)
+        {
+            CubeKind kind = card.AntimatterOf.Value;
+            foreach (GridPos offset in EffectiveShape(card).Cells)
+            {
+                GridPos pos = origin + offset;
+                if (!Board.IsInside(pos))
+                {
+                    return false;
+                }
+                Cube? occupant = Board.GetCube(pos);
+                if (!occupant.HasValue || occupant.Value.Kind != kind)
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         /// <summary>The shape this card currently places: fox reshapes replace the base

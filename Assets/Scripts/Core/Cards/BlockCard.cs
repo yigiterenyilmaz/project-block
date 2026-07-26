@@ -72,6 +72,18 @@ namespace ProjectBlock.Core
         /// </summary>
         public bool FallsThrough { get; internal set; }
 
+        /// <summary>
+        /// The cube kind this card is the ANTIMATTER of ("Antimadde"), or null for every ordinary
+        /// card. Such a card places nothing: it may only be dropped where EVERY one of its cubes
+        /// lands on a cube of that kind, and doing so annihilates every cube of that kind on the
+        /// board.
+        ///
+        /// Read in two places, both central: RoundEngine.CanPlaceCard refuses it anywhere else, and
+        /// the turn resolver does the annihilating instead of a placement. The joker that made it
+        /// pays for it and lets it rot; the rule itself is the engine's.
+        /// </summary>
+        public CubeKind? AntimatterOf { get; internal set; }
+
         public BlockCard(int id, BlockShape shape)
             : this(id, shape, null, false)
         {

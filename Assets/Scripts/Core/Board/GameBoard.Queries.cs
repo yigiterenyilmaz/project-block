@@ -354,6 +354,69 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>
+        /// Is the board a mirror image of itself across the vertical middle ("Simetri")? Judged on
+        /// OCCUPANCY only - a cell holds a cube or it does not - so a fire cube facing a plain one
+        /// still reads as symmetric. Kind-aware symmetry would be nearly impossible to build on
+        /// purpose, and this joker is about the SHAPE you leave behind.
+        ///
+        /// Cells that are not play area (a hole, an eroded cell) are skipped on both sides: a board
+        /// the erosion clock has chewed is judged on what is left of it.
+        /// </summary>
+        public bool IsMirroredLeftRight()
+        {
+            for (int x = 0; x < Width / 2; x++)
+            {
+                int mirrored = Width - 1 - x;
+                for (int y = 0; y < Height; y++)
+                {
+                    if (!ColumnPairComparable(x, mirrored, y))
+                    {
+                        continue;
+                    }
+                    if (cells[x, y].HasValue != cells[mirrored, y].HasValue)
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        /// <summary>The horizontal-axis twin of IsMirroredLeftRight: top against bottom.</summary>
+        public bool IsMirroredTopBottom()
+        {
+            for (int y = 0; y < Height / 2; y++)
+            {
+                int mirrored = Height - 1 - y;
+                for (int x = 0; x < Width; x++)
+                {
+                    if (!RowPairComparable(x, y, mirrored))
+                    {
+                        continue;
+                    }
+                    if (cells[x, y].HasValue != cells[x, mirrored].HasValue)
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        /// <summary>Both halves have to be real play area for the comparison to mean anything.</summary>
+        private bool ColumnPairComparable(int x, int mirroredX, int y)
+        {
+            return playable[x, y] && !dead[x, y]
+                && playable[mirroredX, y] && !dead[mirroredX, y];
+        }
+
+        private bool RowPairComparable(int x, int y, int mirroredY)
+        {
+            return playable[x, y] && !dead[x, y]
+                && playable[x, mirroredY] && !dead[x, mirroredY];
+        }
+
         /// <summary>Legal-origin check with optional ghost overhang.</summary>
         public bool AnyPlacementExists(BlockShape shape, bool allowOutside)
         {

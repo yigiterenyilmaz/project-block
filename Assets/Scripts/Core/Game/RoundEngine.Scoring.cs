@@ -22,6 +22,36 @@ namespace ProjectBlock.Core
             Deck.Discard(card);
         }
 
+        /// <summary>True while that card id is sitting in the bonus hand ("Antimadde" checking
+        /// whether the antimatter it minted is still there to rot).</summary>
+        internal bool BonusHandHolds(int cardId)
+        {
+            for (int i = 0; i < bonusHand.Count; i++)
+            {
+                if (bonusHand[i].Card.Id == cardId)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Takes a bonus card off the table entirely - not to the discard, not to the
+        /// deck, gone ("Antimadde" decaying to nothing). Returns false when it was not there.
+        /// </summary>
+        internal bool RemoveBonusCard(int cardId)
+        {
+            for (int i = 0; i < bonusHand.Count; i++)
+            {
+                if (bonusHand[i].Card.Id == cardId)
+                {
+                    bonusHand.RemoveAt(i);
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /// <summary>"Hologram": moves a bonus-hand card into the discard, folding it back
         /// into the round's pile economy instead of letting it expire unused.</summary>
         internal bool MoveBonusCardToDiscard(int bonusIndex)
