@@ -40,7 +40,11 @@ namespace ProjectBlock.Core
         /// everything else reads RoundConfig.IsBossRound, and GameSession draws the boss itself.</summary>
         public int BossRoundInterval = 3;
 
-        public RoundConfig GetRound(int roundNumber)
+        /// <summary>
+        /// The setup for one STAGE. A boss stage keeps the arena of the round it follows - same
+        /// board, same erosion - and raises the bar instead: a boss is a wall, not a new place.
+        /// </summary>
+        public RoundConfig GetRound(int roundNumber, bool bossStage)
         {
             if (roundNumber < 1)
             {
@@ -48,16 +52,25 @@ namespace ProjectBlock.Core
             }
             BoardSizeBand band = BandFor(roundNumber);
             double rawThreshold = BaseThreshold * Math.Pow(ThresholdGrowthFactor, roundNumber - 1);
+            if (bossStage)
+            {
+                rawThreshold *= BossThresholdFactor;
+            }
             int threshold = (int)(Math.Ceiling(rawThreshold / 5.0) * 5.0);
             return new RoundConfig(roundNumber, band.Size, band.Size, threshold, null,
-                band.Erosion, IsBossRound(roundNumber));
+                band.Erosion, bossStage);
         }
 
-        /// <summary>Whether a round is a boss round, without building its whole config.</summary>
-        public bool IsBossRound(int roundNumber)
+        /// <summary>True when a BOSS STAGE follows that numbered round - after 3, 6, 9, 12 and
+        /// 15. The boss is its own stage between two numbered rounds, not one of them.</summary>
+        public bool HasBossStageAfter(int roundNumber)
         {
             return BossRoundInterval > 0 && roundNumber % BossRoundInterval == 0;
         }
+
+        /// <summary>What a boss stage's threshold is worth relative to the round it follows. A
+        /// boss stage is a WALL: same arena, a much higher bar. Balance placeholder.</summary>
+        public double BossThresholdFactor = 1.5;
 
         /// <summary>Board edge length for a round.</summary>
         public int BoardSizeFor(int roundNumber)

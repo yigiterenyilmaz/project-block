@@ -14,14 +14,39 @@ namespace ProjectBlock.Core
         public GameConfig Config { get; }
         public GamePhase Phase { get; private set; }
 
-        /// <summary>1-based number of the current (or just lost) round.</summary>
+        /// <summary>1-based number of the current NUMBERED round. A boss stage carries the
+        /// number of the round it follows, so 3 covers both "round 3" and "round 3's boss".</summary>
         public int RoundNumber { get; private set; }
 
-        /// <summary>True while the LAST round of the run is being played. Advancing out of it
-        /// wins the run (GamePhase.RunWon) instead of opening a market.</summary>
+        /// <summary>
+        /// True while the BOSS STAGE of the current round number is being played.
+        ///
+        /// A run is a sequence of STAGES: round 1, 2, 3, then round 3's BOSS, then 4, 5, 6, then
+        /// round 6's boss, and so on - 15 numbered rounds and 5 boss stages, 20 in all. The boss
+        /// is its own stage between two numbered rounds; it is not one of them.
+        /// </summary>
+        public bool InBossStage { get; private set; }
+
+        /// <summary>True when a boss stage follows the round now being played.</summary>
+        public bool BossStageFollowsThisRound
+        {
+            get { return Config.Progression.HasBossStageAfter(RoundNumber); }
+        }
+
+        /// <summary>True while the LAST stage of the run is being played. Advancing out of it
+        /// wins the run (GamePhase.RunWon) instead of opening a market. That is the boss stage
+        /// after the last numbered round - a run ends on a boss, never on an ordinary round.</summary>
         public bool IsFinalRound
         {
-            get { return RoundNumber >= Config.TotalRounds; }
+            get
+            {
+                if (RoundNumber < Config.TotalRounds)
+                {
+                    return false;
+                }
+                // The last numbered round only ends the run if nothing follows it.
+                return InBossStage || !BossStageFollowsThisRound;
+            }
         }
 
         /// <summary>Run-wide score, doubling as market currency (confirmed design).</summary>
@@ -642,7 +667,17 @@ namespace ProjectBlock.Core
             Jokers.DispatchMarketLeft(purchasedThisMarket);
             PendingMarketDiscount = 0.0; // spent on this visit, never carried to the next
             rerollCount = 0;
-            RoundNumber++;
+            // The next STAGE, which is the boss of the round just played when one follows it, and
+            // otherwise the next numbered round. A boss stage keeps its round's number.
+            if (!InBossStage && BossStageFollowsThisRound)
+            {
+                InBossStage = true;
+            }
+            else
+            {
+                InBossStage = false;
+                RoundNumber++;
+            }
             StartRound();
         }
 
@@ -841,7 +876,7 @@ namespace ProjectBlock.Core
         /// bossesFought.</summary>
         private void StartRound(string replayBossDefId = null)
         {
-            RoundConfig roundConfig = Config.Progression.GetRound(RoundNumber);
+            RoundConfig roundConfig = Config.Progression.GetRound(RoundNumber, InBossStage);
             roundConfig = Jokers.FilterRoundConfig(roundConfig);
             roundConfig = Powers.FilterRoundConfig(roundConfig);
             // The boss is DRAWN before the engine exists, because it may reshape the round itself
