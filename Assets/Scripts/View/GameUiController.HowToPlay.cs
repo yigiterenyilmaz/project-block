@@ -227,7 +227,8 @@ namespace ProjectBlock.View
                     "   Click the draw pile to look through your collection.",
                     "",
                     "   Debug: [R] new run  [D] deck  [S] redraw  [B] bonus card",
-                    "          [J] grant joker  [P] grant power  [K] sell the last joker"
+                    "          [J] grant joker  [P] grant power  [K] sell the last joker",
+                    "          [G] start a boss stage now (pick one, or draw at random)"
                 }
             };
         }
@@ -341,7 +342,8 @@ namespace ProjectBlock.View
                     "   Çekme destesine tıklayarak bütün kartlarına bakabilirsin.",
                     "",
                     "   Debug: [R] yeni oyun  [D] deste  [S] eli yenile  [B] bonus kart",
-                    "          [J] joker ver  [P] güç ver  [K] son jokeri sat"
+                    "          [J] joker ver  [P] güç ver  [K] son jokeri sat",
+                    "          [G] hemen patron sahnesi başlat (seç ya da rastgele çek)"
                 }
             };
         }

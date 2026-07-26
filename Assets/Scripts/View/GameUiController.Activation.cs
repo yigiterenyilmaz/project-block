@@ -107,11 +107,56 @@ namespace ProjectBlock.View
             return new GridPos(packed / 10 - 1, packed % 10 - 1);
         }
 
-        private void ResolveChoice(int index)
+        /// <summary>
+        /// DEBUG: lists every boss so one can be started on the spot. There are far more of them
+        /// than fit a single modal, so the list PAGES - the last two rows are "more" (which wraps)
+        /// and a normal random draw.
+        /// </summary>
+        private void OpenBossPicker()
+        {
+            pendingChoice = ChoiceKind.BossStage;
+            pendingChoiceValues.Clear();
+            var labels = new List<string>();
+            IReadOnlyList<BossDefinition> all = BossRegistry.All;
+            int pages = (all.Count + BossPickerPageSize - 1) / BossPickerPageSize;
+            if (pages < 1)
+            {
+                pages = 1;
+            }
+            bossPickerPage = ((bossPickerPage % pages) + pages) % pages;
+            int first = bossPickerPage * BossPickerPageSize;
+            for (int i = first; i < all.Count && i < first + BossPickerPageSize; i++)
+            {
+                pendingChoiceValues.Add(i); // the registry index; -1 and -2 are the two commands
+                labels.Add(all[i].DisplayName);
+            }
+            if (all.Count > BossPickerPageSize)
+            {
+                pendingChoiceValues.Add(BossPickerMore);
+                labels.Add(Loc.Pick("more...  (" + (bossPickerPage + 1) + "/" + pages + ")",
+                    "devamı...  (" + (bossPickerPage + 1) + "/" + pages + ")"));
+            }
+            pendingChoiceValues.Add(BossPickerRandom);
+            labels.Add(Loc.Pick("RANDOM (draw one normally)", "RASTGELE (normal çekim)"));
+            choicePicker.Show(Loc.Pick("DEBUG: start a boss stage",
+                "DEBUG: patron sahnesi başlat"), labels);
+        }
+
+        private const int BossPickerPageSize = 10;
+        private const int BossPickerMore = -2;
+        private const int BossPickerRandom = -1;
+
+        /// <summary>Settles a picker row. Returns false when the picker was RE-OPENED instead of
+        /// answered (the boss list turning a page), so the caller keeps the choice pending.</summary>
+        private bool ResolveChoice(int index)
         {
             if (index < 0 || index >= pendingChoiceValues.Count)
             {
-                return;
+                return true;
+            }
+            if (pendingChoice == ChoiceKind.BossStage)
+            {
+                return ResolveBossPick(pendingChoiceValues[index]);
             }
             var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
             if (pendingChoice == ChoiceKind.PowerbankTarget)
@@ -135,6 +180,32 @@ namespace ProjectBlock.View
                 }
             }
             RefreshAll(null);
+            return true;
+        }
+
+        /// <summary>One row of the DEBUG boss picker: turn the page, or start a boss stage.</summary>
+        private bool ResolveBossPick(int value)
+        {
+            if (value == BossPickerMore)
+            {
+                bossPickerPage++;
+                OpenBossPicker(); // wraps at the last page
+                return false;     // still pending - the picker is open again
+            }
+            IReadOnlyList<BossDefinition> all = BossRegistry.All;
+            string defId = value >= 0 && value < all.Count ? all[value].DefId : null;
+            if (!session.DebugStartBossStage(defId))
+            {
+                return true;
+            }
+            BossRound started = session.ActiveBoss;
+            Debug.Log("[project_block] Debug boss stage: "
+                + (started != null ? started.ToString() : "none"));
+            marketView.Hide(); // the jump can be made from the market as well as mid-round
+            StartRoundPresentation();
+            messageText.text = Loc.Pick("DEBUG boss stage: ", "DEBUG patron sahnesi: ")
+                + (started != null ? started.DisplayName : Loc.Pick("none", "yok"));
+            return true;
         }
 
         private void ClearChoice()

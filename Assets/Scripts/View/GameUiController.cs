@@ -62,7 +62,11 @@ namespace ProjectBlock.View
         // harmless if the Full Screen Pass feature/material is not wired yet (see docs/crt-edge-bend.md).
         private static readonly int CrtBendId = Shader.PropertyToID("_CrtBend");
 
-        private enum ChoiceKind { None, PowerbankTarget, GravityDirection }
+        private enum ChoiceKind { None, PowerbankTarget, GravityDirection, BossStage }
+
+        /// <summary>Which page of the DEBUG boss picker is showing. There are far more bosses
+        /// than fit one modal, so the list pages and wraps.</summary>
+        private int bossPickerPage;
         private ChoiceKind pendingChoice;
         private int pendingChoiceJokerId;
         private readonly List<int> pendingChoiceValues = new List<int>();
@@ -311,6 +315,15 @@ namespace ProjectBlock.View
                 ToggleLanguage();
                 return;
             }
+            // debug: jump straight to a boss stage. Here rather than with the in-round debug keys
+            // because the market is the natural place to reach for it, and it works from both.
+            if (kb != null && kb.gKey.wasPressedThisFrame && session != null
+                && (session.Phase == GamePhase.Round || session.Phase == GamePhase.Market))
+            {
+                bossPickerPage = 0;
+                OpenBossPicker();
+                return;
+            }
             // The dead-end rescue owns input while the round is paused on it.
             if (lineSwapPicker.IsOpen)
             {
@@ -543,11 +556,12 @@ namespace ProjectBlock.View
                     Vector2 pickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
                     int idx = choicePicker.OptionAt(pickWorld);
                     choicePicker.Hide();
-                    if (idx >= 0)
+                    // ResolveChoice answers false when it re-opened the picker itself (the debug
+                    // boss list pages), in which case the pending choice has to survive.
+                    if (idx < 0 || ResolveChoice(idx))
                     {
-                        ResolveChoice(idx);
+                        ClearChoice();
                     }
-                    ClearChoice();
                 }
                 return;
             }
