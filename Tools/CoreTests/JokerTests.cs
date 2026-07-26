@@ -145,6 +145,10 @@ public static class JokerTests
         Pres_ShovesCubesOffTheEdgeWhenItOpens();
         Pres_WillNotBudgeObsidianAndDetonatesWhenStuck();
         Pres_OpensByItselfAfterFourTurns();
+        MayinEsegi_ArmsAMineAndShufflesItAway();
+        MayinEsegi_TheCubesAreUntouchedByAShuffle();
+        MayinEsegi_SettingItOffCostsAndMovesIt();
+        MayinEsegi_AQuietTurnJustRunsTheClockDown();
         Bilinmezlik_HoldsFullLinesUntilItFires();
         Bilinmezlik_ADryStreakEventuallyFiresByItself();
         RehinPuan_HoldsTheLineScoreUntilTheNextClear();
@@ -4808,6 +4812,131 @@ public static class JokerTests
         Check(!power.IsPressing, "and it let go on the fourth", "" + power.TurnsLeft);
         Check(round.Board.CellsOfKind(CubeKind.Compressed).Count == 0,
             "no compressed cube is left on the board");
+    }
+
+    private static void MayinEsegi_ArmsAMineAndShufflesItAway()
+    {
+        Section("mayın eşeği / the mine travels with its cover, and the cubes never move");
+        var session = NewBossSession(9600, 5, 1000000, "mayin_esegi", 40, 1);
+        var boss = (MayinEsegiBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+
+        Check(boss.Armed, "a mine is armed");
+        Check(round.Board.IsInside(boss.MineCell), "on a real cell of the arena",
+            boss.MineCell.X + "," + boss.MineCell.Y);
+        Check(boss.ShuffleCount == 1, "and it was revealed and shuffled once",
+            "" + boss.ShuffleCount);
+        Check(boss.TurnsLeft == boss.TurnsPerShuffle, "with a full clock",
+            "" + boss.TurnsLeft);
+
+        // The path is the truth: it starts where the mine was put and ends where it is now.
+        IReadOnlyList<GridPos> path = boss.ShufflePath;
+        Check(path.Count > 1, "the cover really danced", "hops " + path.Count);
+        GridPos last = path[path.Count - 1];
+        Check(last.X == boss.MineCell.X && last.Y == boss.MineCell.Y,
+            "and the mine is exactly where its cover stopped - following it WORKS",
+            last.X + "," + last.Y + " vs " + boss.MineCell.X + "," + boss.MineCell.Y);
+        bool everMoved = false;
+        for (int i = 1; i < path.Count; i++)
+        {
+            if (path[i].X != path[0].X || path[i].Y != path[0].Y) { everMoved = true; }
+        }
+        Check(everMoved, "the mine genuinely left the cell it was shown on");
+    }
+
+    private static void MayinEsegi_TheCubesAreUntouchedByAShuffle()
+    {
+        Section("mayın eşeği / a shuffle moves the mine and NOTHING else");
+        var session = NewBossSession(9601, 5, 1000000, "mayin_esegi", 40, 1);
+        var boss = (MayinEsegiBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Fire, 9602));
+        round.Board.SetCubeAt(new GridPos(3, 2), new Cube(CubeKind.Gold, 9603));
+
+        int shufflesBefore = boss.ShuffleCount;
+        // Run the clock out so it reveals and shuffles again.
+        for (int i = 0; i < boss.TurnsPerShuffle; i++)
+        {
+            boss.AfterTurnScored(FakeTurnFor(session, round));
+        }
+        Check(boss.ShuffleCount == shufflesBefore + 1, "it shuffled again after ten turns",
+            "" + boss.ShuffleCount);
+        Check(boss.TurnsLeft == boss.TurnsPerShuffle, "and the clock went back to full",
+            "" + boss.TurnsLeft);
+
+        Check(round.Board.GetCube(new GridPos(1, 1)).Value.Kind == CubeKind.Fire,
+            "the fire cube is exactly where it was");
+        Check(round.Board.GetCube(new GridPos(3, 2)).Value.Kind == CubeKind.Gold,
+            "and so is the gold one - a shuffle moves the mine and nothing else");
+        Check(round.Board.OccupiedCount == 2, "with nothing added or lost",
+            "" + round.Board.OccupiedCount);
+    }
+
+    private static void MayinEsegi_SettingItOffCostsAndMovesIt()
+    {
+        Section("mayın eşeği / setting it off is expensive, and hands you a fresh one");
+        var session = NewBossSession(9604, 5, 1000000, "mayin_esegi", 40, 1);
+        var boss = (MayinEsegiBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+        session.Config.Scoring.PointsPerCubePlaced = 400;
+        ClearBoard(round.Board);
+
+        // Bank something first, so the penalty has score to bite into.
+        PlayOneCard(round);
+        int shufflesBefore = boss.ShuffleCount;
+        int detonationsBefore = boss.Detonations;
+
+        // Blow up whatever cell the mine is on, by hand, through a real turn's destruction log.
+        GridPos mine = boss.MineCell;
+        ClearBoard(round.Board);
+        for (int x = round.Board.MinX; x < round.Board.MinX + round.Board.Width; x++)
+        {
+            var cell = new GridPos(x, mine.Y);
+            if (x != round.Board.MinX)
+            {
+                round.Board.SetCubeAt(cell, new Cube(CubeKind.Normal, 9605));
+            }
+        }
+        TurnReport report = PlayAt(round, new GridPos(round.Board.MinX, mine.Y));
+        Check(report != null && report.ExplodedRows.Count > 0,
+            "the mine's row was blown up");
+
+        Check(boss.Detonations == detonationsBefore + 1, "the mine went off",
+            "" + boss.Detonations);
+        Check(boss.ShuffleCount > shufflesBefore,
+            "and a fresh one was armed, revealed and shuffled", "" + boss.ShuffleCount);
+        Check(boss.TurnsLeft == boss.TurnsPerShuffle, "with a full clock again",
+            "" + boss.TurnsLeft);
+        Check(round.RoundScore >= 0, "the penalty never takes the round below zero",
+            "" + round.RoundScore);
+    }
+
+    private static void MayinEsegi_AQuietTurnJustRunsTheClockDown()
+    {
+        Section("mayın eşeği / a turn that misses the mine only costs a turn");
+        var session = NewBossSession(9606, 5, 1000000, "mayin_esegi", 40, 1);
+        var boss = (MayinEsegiBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+        int before = boss.TurnsLeft;
+        int shufflesBefore = boss.ShuffleCount;
+
+        PlayOneCard(round);
+        Check(boss.Detonations == 0, "nothing went off", "" + boss.Detonations);
+        Check(boss.TurnsLeft == before - 1, "the clock moved by one",
+            before + " -> " + boss.TurnsLeft);
+        Check(boss.ShuffleCount == shufflesBefore, "and nothing was shuffled",
+            "" + boss.ShuffleCount);
+    }
+
+    /// <summary>A turn context over a live round with an empty report - for driving a boss's
+    /// end-of-turn hook without resolving a real placement.</summary>
+    private static TurnContext FakeTurnFor(GameSession session, RoundEngine round)
+    {
+        var report = new TurnReport();
+        var score = new ScoreBreakdown();
+        report.Score = score;
+        return new TurnContext(session, new SeededRandom(7), round, report, score);
     }
 
     private static void Bilinmezlik_HoldsFullLinesUntilItFires()
