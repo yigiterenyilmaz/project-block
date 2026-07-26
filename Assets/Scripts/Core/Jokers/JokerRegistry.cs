@@ -60,6 +60,7 @@ namespace ProjectBlock.Core
             Register(() => new YerAltiKaynaklariJoker());
             Register(() => new KiraciJoker());
             Register(() => new BeslemeJoker());
+            Register(() => new SavunmaciJoker());
         }
 
         /// <summary>All known jokers, in design order.</summary>

@@ -210,4 +210,96 @@ namespace ProjectBlock.Core
             }
         }
     }
+
+    /// <summary>
+    /// "Savunmacı" - it pays you for playing it safe, but only once you finally do not.
+    ///
+    /// Every round you finish WITHOUT going into overtime banks a stack. Then, the moment you do
+    /// go into overtime and come out of it alive, the whole bank pays out at once and starts
+    /// filling again. So the joker rewards discipline and then rewards the one moment you break
+    /// it - bank patiently, cash in deliberately, repeat.
+    ///
+    /// "Going into overtime" is the player DECLINING the advance offer and playing on, which is
+    /// the only thing RoundEngine.ContinueCount counts. Deliberately not ThresholdPassed: that
+    /// turns true the instant the bar is crossed, on every round the player ever completes, so it
+    /// cannot tell a safe round from a greedy one.
+    ///
+    /// "Coming out alive" is a clean sweep landed while in overtime - the only thing that raises
+    /// the advance offer again, so it IS what finishing an overtime means. Failing one loses the
+    /// round, and the run with it, so there is nothing to pay.
+    ///
+    /// The bank is RUN-scoped: it survives round changes, which is the whole point of saving.
+    ///
+    /// All numbers are BALANCE PLACEHOLDERS.
+    /// </summary>
+    public sealed class SavunmaciJoker : Joker
+    {
+        /// <summary>Banked per round finished without going into overtime.</summary>
+        public int BonusPerSafeRound = 45;
+
+        private int banked;
+        private int cashedOut;
+
+        public SavunmaciJoker()
+            : base("savunmaci", "Savunmacı")
+        {
+            SetDescription(
+                "Every round you finish WITHOUT going into overtime banks a bonus. The first "
+                    + "overtime you go into and come out of alive pays the whole bank at once - "
+                    + "then it starts filling again.",
+                "Uzatmaya gitmeden bitirdiğin her raunt bir bonus biriktirir. Gittiğin ve sağ "
+                    + "çıktığın ilk uzatmada biriken bonusun tamamını alırsın - sonra kasa "
+                    + "yeniden dolmaya başlar.");
+            BaseSellValue = 55;
+        }
+
+        /// <summary>Bonus waiting to be cashed in.</summary>
+        public int Banked
+        {
+            get { return banked; }
+        }
+
+        /// <summary>Times the bank has paid out this run.</summary>
+        public int CashedOut
+        {
+            get { return cashedOut; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return banked > 0
+                    ? Loc.Pick("banked " + banked, "kasada " + banked)
+                    : Loc.Pick("empty", "kasa boş");
+            }
+        }
+
+        /// <summary>Banks a stack for a round survived without ever declining the advance offer.
+        /// A LOST round banks nothing - there is no run left to spend it in anyway.</summary>
+        public override void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
+        {
+            if (outcome != RoundOutcome.Advanced || ctx.Round == null)
+            {
+                return;
+            }
+            if (ctx.Round.ContinueCount == 0)
+            {
+                banked += BonusPerSafeRound;
+            }
+        }
+
+        /// <summary>The pay-off: a sweep while genuinely in an overtime the player chose. That
+        /// sweep is what raises the offer, so surviving to it IS finishing the overtime.</summary>
+        public override void AfterCleanSweep(TurnContext turn)
+        {
+            if (banked <= 0 || turn.Round == null || turn.Round.ContinueCount == 0)
+            {
+                return;
+            }
+            turn.AddFlatScore(banked, DefId);
+            banked = 0;
+            cashedOut++;
+        }
+    }
 }
