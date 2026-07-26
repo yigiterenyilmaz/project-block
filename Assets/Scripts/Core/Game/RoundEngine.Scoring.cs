@@ -605,6 +605,20 @@ namespace ProjectBlock.Core
             return spread;
         }
 
+        /// <summary>
+        /// A boss REARRANGED the board rather than destroying anything ("Snake" sliding its body
+        /// along, one cell in at the head and one out at the tail). Re-baselines the destruction
+        /// diff so the cubes that MOVED are never mistaken for cubes that died - the same
+        /// treatment the water settle and "Alzheimer"'s forgetting already get.
+        ///
+        /// Call it after the rearrangement and before anything that destroys for real, or the
+        /// next diff will bill this turn for cubes that simply walked away.
+        /// </summary>
+        internal void NoteBoardRearranged()
+        {
+            ResyncSnapshot();
+        }
+
         /// <summary>Gangrene cubes standing on the main board right now.</summary>
         internal int CountGangrene()
         {
@@ -619,6 +633,52 @@ namespace ProjectBlock.Core
             if (Loss == null)
             {
                 Loss = reason;
+            }
+        }
+
+        /// <summary>
+        /// Ends the round as WON on a boss's OWN terms rather than at the score bar ("Matruşka"
+        /// cracking the last doll, "Snake" killing the snake). Three things follow from that, and
+        /// each is deliberate:
+        ///
+        ///  - the round banks EXACTLY its threshold and not a point more. The bar is a ceiling
+        ///    for normal play and beating the boss is not overtime, so the payout is the bar.
+        ///  - there is NO advance offer. ThresholdPassed is set here, which is also what stops
+        ///    the turn resolver's own threshold check from opening overtime behind our back: a
+        ///    boss beaten on its own terms hands you the market, not another lap.
+        ///  - A LOSS OUTRANKS IT. A boss whose round can be lost by a careless move (exploding a
+        ///    doll-less line) settles that first, so the same turn cannot both kill and crown.
+        ///
+        /// Inside a turn this only ARMS the win - the status is set at step 10 with every other
+        /// outcome, so nothing later in the turn can overwrite it.
+        /// </summary>
+        internal void DeclareRoundWon()
+        {
+            if (Loss != null || Status == RoundStatus.Advanced || Status == RoundStatus.Lost)
+            {
+                return;
+            }
+            int owed = ScaledThreshold - RoundScore;
+            if (owed > 0)
+            {
+                RoundScore += owed;
+                if (currentReport != null)
+                {
+                    // The session banks report.ScoreGained when the turn resolves, so keeping it
+                    // in step is what pays the player. (Step 8.6 re-derives the same number.)
+                    currentReport.ScoreGained = RoundScore - turnStartRoundScore;
+                    currentReport.RoundScoreAfter = RoundScore;
+                }
+                else if (session != null)
+                {
+                    session.AddCurrency(owed);
+                }
+            }
+            ThresholdPassed = true;
+            bossWonTheRound = true;
+            if (currentReport == null)
+            {
+                SetStatus(RoundStatus.Advanced);
             }
         }
 

@@ -409,7 +409,14 @@ namespace ProjectBlock.Core
             }
 
             // 10./11. status update - see file header for why the offer outranks the loss.
-            if (pendingAdvanceOffer)
+            // A boss beaten on its own terms comes FIRST: it already banked the threshold and
+            // set ThresholdPassed, so there is no offer to make and no overtime to enter, and
+            // DeclareRoundWon refused to fire at all if the same turn had lost the round.
+            if (bossWonTheRound)
+            {
+                SetStatus(RoundStatus.Advanced);
+            }
+            else if (pendingAdvanceOffer)
             {
                 SetStatus(RoundStatus.AwaitingAdvanceDecision);
             }

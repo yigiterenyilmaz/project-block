@@ -42,6 +42,17 @@ namespace ProjectBlock.Core
 
         /// <summary>"Saatçi": the round had a hard turn limit and the bar was not reached
         /// inside it.</summary>
-        OutOfTurns = 8
+        OutOfTurns = 8,
+
+        /// <summary>"Matruşka": a doll split and there was no cube left on the arena for the
+        /// halves to sit on. The dolls have overrun the board.</summary>
+        NoRoomForDoll = 9,
+
+        /// <summary>"Matruşka": a row or column was exploded with no doll standing in it. On that
+        /// round the dolls are the only legitimate target.</summary>
+        LineWithoutDoll = 10,
+
+        /// <summary>"Tamagotchi": the draw pile ran dry with the pet's demands still unfed.</summary>
+        PetWentHungry = 11
     }
 }

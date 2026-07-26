@@ -39,6 +39,7 @@ namespace ProjectBlock.Core
             w.Write(key + ".hasLoss", Loss.HasValue);
             w.Write(key + ".loss", Loss.HasValue ? (int)Loss.Value : 0);
             w.Write(key + ".pendingOffer", pendingAdvanceOffer);
+            w.Write(key + ".bossWon", bossWonTheRound);
             w.Write(key + ".combo", comboCount);
             w.Write(key + ".comboBlank", comboBlankTurns);
             w.Write(key + ".powersUsed", PowersUsedThisTurn);
@@ -126,6 +127,7 @@ namespace ProjectBlock.Core
             var lossReason = (LossReason)r.ReadInt(key + ".loss");
             round.Loss = hasLoss ? lossReason : (LossReason?)null;
             round.pendingAdvanceOffer = r.ReadBool(key + ".pendingOffer");
+            round.bossWonTheRound = r.ReadBool(key + ".bossWon");
             round.comboCount = r.ReadInt(key + ".combo");
             round.comboBlankTurns = r.ReadInt(key + ".comboBlank");
             round.PowersUsedThisTurn = r.ReadInt(key + ".powersUsed");
