@@ -56,10 +56,21 @@ namespace ProjectBlock.Core
         /// marker so the UI can tag it "custom"; it does not change any rule.</summary>
         public bool IsCustom { get; }
 
-        /// <summary>True for junk that came off the back of a lorry ("Kaçakçı" handing over
-        /// defective goods). Purely an identity marker so the UI can tag it - a junk card needs no
-        /// special rule, because its defect IS its shape.</summary>
+        /// <summary>True for goods that came off the back of a lorry ("Kaçakçı"), sound or not.
+        /// Purely an identity marker so the UI can tag it; it changes no rule by itself.</summary>
         public bool IsSmuggled { get; internal set; }
+
+        /// <summary>
+        /// True for a DEFECTIVE smuggled card: an ordinary-looking block that will not stay on the
+        /// board. You place it legally, and it falls straight through the arena and out of the
+        /// frame - so nothing lands, nothing scores and nothing explodes, and the turn is gone.
+        ///
+        /// It is read in ONE place, at the top of the turn resolver (and its mirror twin), which
+        /// simply never lets the placement happen. The card is discarded normally, so unlike a
+        /// shape that cannot be placed it never jams a hand slot: it costs you the turn you wasted
+        /// on it, every time it comes round again.
+        /// </summary>
+        public bool FallsThrough { get; internal set; }
 
         public BlockCard(int id, BlockShape shape)
             : this(id, shape, null, false)

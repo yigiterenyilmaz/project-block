@@ -53,6 +53,16 @@ namespace ProjectBlock.Core
             liftedCells.AddRange(cells);
         }
 
+        /// <summary>Cells a DEFECTIVE SMUGGLED card ("Kaçakçı") passed through on its way out: it
+        /// was placed legally and then fell straight through the arena and off the screen. Nothing
+        /// landed there, so this is separate from PlacedCells and from every destruction list - it
+        /// exists so the View can drop the cubes through the board, and for nothing else. Empty on
+        /// every ordinary turn.</summary>
+        public IReadOnlyList<GridPos> FellThroughCells { get; internal set; }
+
+        /// <summary>The mirror world's half of the same thing ("Öteki dünya").</summary>
+        public IReadOnlyList<GridPos> MirrorFellThroughCells { get; internal set; }
+
         /// <summary>True if this turn emptied the board ("temizlik").</summary>
         public bool CleanSweep { get; internal set; }
 
@@ -142,6 +152,8 @@ namespace ProjectBlock.Core
         internal TurnReport()
         {
             PlacedCells = Array.Empty<GridPos>();
+            FellThroughCells = Array.Empty<GridPos>();
+            MirrorFellThroughCells = Array.Empty<GridPos>();
             ExplodedRows = Array.Empty<int>();
             ExplodedColumns = Array.Empty<int>();
             WaterFallFrames = Array.Empty<IReadOnlyList<WaterMove>>();

@@ -59,13 +59,23 @@ namespace ProjectBlock.Core
             // left to put anything, and the mirror world is playing this turn alone. Everything
             // that belongs to the main card is skipped; the rest of the turn runs unchanged.
             bool mainWorldSitsOut = card == null;
-            bool negative = !mainWorldSitsOut && Has(card, BlockElement.Negative);
-            if (!mainWorldSitsOut && !negative)
+            // A DEFECTIVE SMUGGLED card ("Kaçakçı") will not stay on the board: it drops through
+            // the arena and out of the frame. Checked before anything else touches the board, so
+            // NOTHING lands - no cubes, no element, no dynamite to track, no line to complete.
+            // The cells it passed through are recorded for the UI to animate the fall, and for
+            // nothing else.
+            bool fallsThrough = !mainWorldSitsOut && card.FallsThrough;
+            if (fallsThrough)
+            {
+                report.FellThroughCells = CellsCovered(EffectiveShape(card), origin);
+            }
+            bool negative = !mainWorldSitsOut && !fallsThrough && Has(card, BlockElement.Negative);
+            if (!mainWorldSitsOut && !fallsThrough && !negative)
             {
                 report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
                     Has(card, BlockElement.Ghost));
             }
-            if (!mainWorldSitsOut && Has(card, BlockElement.Dynamite))
+            if (!mainWorldSitsOut && !fallsThrough && Has(card, BlockElement.Dynamite))
             {
                 var state = new DynamiteState();
                 state.FullSize = report.PlacedCells.Count;

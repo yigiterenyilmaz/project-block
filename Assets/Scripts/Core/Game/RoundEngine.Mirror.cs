@@ -245,7 +245,14 @@ namespace ProjectBlock.Core
             }
             BlockCard card = stagedMirrorCard;
             IReadOnlyList<GridPos> placed;
-            if (Has(card, BlockElement.Negative))
+            if (card.FallsThrough)
+            {
+                // Defective smuggled goods fall through the mirror arena exactly as they do
+                // through the main one: nothing lands, and only the UI hears about it.
+                report.MirrorFellThroughCells = MirrorCellsCovered(card, stagedMirrorOrigin);
+                placed = NoCells;
+            }
+            else if (Has(card, BlockElement.Negative))
             {
                 // A negative block erases what it covers here too; it scores through the normal
                 // mirror explosion path below rather than the main world's placement score.
@@ -275,6 +282,21 @@ namespace ProjectBlock.Core
             report.MirrorCard = card;
             ClearStagedMirrorPlay();
             return placed;
+        }
+
+        /// <summary>CellsCovered against the MIRROR board - the main one's bounds may differ.</summary>
+        private List<GridPos> MirrorCellsCovered(BlockCard card, GridPos origin)
+        {
+            var covered = new List<GridPos>();
+            foreach (GridPos offset in EffectiveShape(card).Cells)
+            {
+                GridPos cell = origin + offset;
+                if (MirrorBoard != null && MirrorBoard.IsInside(cell))
+                {
+                    covered.Add(cell);
+                }
+            }
+            return covered;
         }
 
         private void RemoveFromMirrorHand(BlockCard card)

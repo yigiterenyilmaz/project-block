@@ -43,6 +43,24 @@ namespace ProjectBlock.Core
             return shape;
         }
 
+        /// <summary>The board cells a shape at that origin would occupy, in shape order. Only the
+        /// cells that are real play area, so a caller never has to filter. Used for a placement
+        /// that is never going to happen: a defective smuggled card falling through the arena.
+        /// </summary>
+        internal List<GridPos> CellsCovered(BlockShape shape, GridPos origin)
+        {
+            var covered = new List<GridPos>(shape.Size);
+            foreach (GridPos offset in shape.Cells)
+            {
+                GridPos cell = origin + offset;
+                if (Board.IsInside(cell))
+                {
+                    covered.Add(cell);
+                }
+            }
+            return covered;
+        }
+
         /// <summary>MECHANICAL RULE: rotates the block 90° clockwise (right-click in the
         /// UI). Only mechanical blocks rotate; the orientation persists for the round.</summary>
         public void RotateCard(int handIndex)

@@ -397,37 +397,16 @@ namespace ProjectBlock.Core
             }
             else
             {
-                BlockCard card = defective ? MakeJunkCard() : offer.Card;
-                card.IsSmuggled = true;
-                ownedCards.Add(card);
+                // The block itself is exactly what was on the shelf - an ordinary card. A
+                // DEFECTIVE one simply will not stay on the board: see BlockCard.FallsThrough.
+                offer.Card.IsSmuggled = true;
+                offer.Card.FallsThrough = defective;
+                ownedCards.Add(offer.Card);
             }
             offer.Sold = true;
             smuggledThisMarket = true;
             purchasedThisMarket = true;
             return true;
-        }
-
-        /// <summary>
-        /// Mints the junk block a defective smuggled card turns into: four cubes in the corners of
-        /// a 6x6 box. It is nonsense by construction - too wide for a 5x5 round to hold at all, and
-        /// on a bigger board it needs four exact cells spread right across the arena, so in
-        /// practice only a nearly empty one. It stays in the deck for the run, and a hand slot
-        /// holding it is a slot the player does not have that round.
-        ///
-        /// EXTENSION POINT: if junk should be gradeable ("slightly bent" vs "worthless"), this is
-        /// the one place that decides what junk looks like.
-        /// </summary>
-        private BlockCard MakeJunkCard()
-        {
-            const int span = 5; // 0..5 inclusive -> a 6x6 bounding box
-            var corners = new List<GridPos>
-            {
-                new GridPos(0, 0),
-                new GridPos(span, 0),
-                new GridPos(0, span),
-                new GridPos(span, span)
-            };
-            return new BlockCard(nextCardId++, BlockShape.FromCells(corners));
         }
 
         /// <summary>Cost of the NEXT market reroll, in the scaled run economy. Escalates with

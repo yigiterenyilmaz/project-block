@@ -12,9 +12,10 @@
 // charge events. Nothing is added, removed or undone.
 //
 // WHAT DEFECTIVE MEANS, per kind of goods:
-//   BLOCK    -> junk: a huge, broken-up shape that does not fit a 5x5 board at all and needs the
-//               arena nearly empty on a bigger one. It stays in your deck for the run, and a hand
-//               slot holding it is a slot you do not have that round.
+//   BLOCK    -> it looks completely ordinary, and it will not stay on the board: you place it
+//               legally, it drops straight through the arena and off the screen, and nothing
+//               lands. No score, no line, no sweep - the turn is simply gone. It is in your deck
+//               for the run, so it costs you that turn again every time it comes back round.
 //   JOKER    -> either dead in every BOSS round, or dead outright. You keep it either way.
 //   POWER    -> it arrives EMPTY and fills at a quarter of the rate.
 //
@@ -40,13 +41,14 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Take ONE market item per visit for free - but smuggled goods are defective about "
-                    + "half the time. A junk block will not fit any small board, a broken joker is "
-                    + "dead in boss rounds or dead outright, and a broken power arrives empty and "
-                    + "fills four times slower. You keep whatever you took.",
+                    + "half the time. A defective block falls straight through the board and off "
+                    + "the screen, wasting the turn; a broken joker is dead in boss rounds or dead "
+                    + "outright; a broken power arrives empty and fills four times slower. You "
+                    + "keep whatever you took.",
                 "Her market ziyaretinde BİR ürünü bedavaya al - ama kaçak malın yarısı defolu "
-                    + "çıkar. Defolu blok küçük tahtaya hiç sığmaz, defolu joker patron "
-                    + "rauntlarında ya da hiçbir zaman çalışmaz, defolu güç boş gelir ve dört kat "
-                    + "yavaş dolar. Aldığın senin kalır.");
+                    + "çıkar. Defolu blok tahtaya tutunmaz, aşağı düşüp ekrandan çıkar ve turu "
+                    + "boşa harcarsın; defolu joker patron rauntlarında ya da hiçbir zaman "
+                    + "çalışmaz; defolu güç boş gelir ve dört kat yavaş dolar. Aldığın senin kalır.");
             BaseSellValue = 45;
         }
 
