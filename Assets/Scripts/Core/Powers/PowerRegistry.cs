@@ -46,6 +46,10 @@ namespace ProjectBlock.Core
             Register(() => new RetroPower());
             Register(() => new BatakPower());
             Register(() => new KentselDonusumPower());
+            Register(() => new NesterPower());
+            Register(() => new LehimlemePower());
+            Register(() => new GenNakliPower());
+            Register(() => new HidrolikPresPower());
         }
 
         /// <summary>All known powers, in design order.</summary>
