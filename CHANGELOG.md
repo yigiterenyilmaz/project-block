@@ -41,6 +41,26 @@ everything here is unreleased and balance numbers are still placeholders.
   - **Eforsuz Galibiyet** — finish a round without using a single **power** and the market pays you
     a bonus as you walk in. Do it on a round you took into **overtime** and came out of alive and it
     pays **double**. One power anywhere in the round forfeits it.
+- **Four more boss rounds**, bringing the roster to 31:
+  - **Bilinmezlik** — a full line does **not** explode. It sits there, complete, taking up room,
+    while you keep filling what is left. Then on a turn you cannot predict the rule comes back for
+    ONE turn and **everything that is full goes at once**. The arena is a magazine you load and
+    cannot fire; running out of room before the moment comes is an ordinary dead end, and the boss
+    will not save you from its own rule. A cold streak is capped so it can never be a slow loss.
+  - **Rehin Puan** — what a line clear earns is **held**, not paid. Clear again on the very next
+    turn and it is released; fail to and it **burns**. A chain pays out one turn behind itself, so
+    the last clear of any chain is always lost — stopping is what costs you. Only the line score is
+    held; placement, combo, gold and every joker bonus pay as usual.
+  - **Bürokrasi Bataklığı** — nothing scores by itself any more. The **only** income is the task you
+    are handed (clear a row, clear a column, clear nothing for N turns, use no power for N turns,
+    play only one side of your hand), and every task has a **deadline**. Miss one and you are fined
+    and handed the next. The tasks come in two shapes — *do* something under time pressure, and
+    *do not* do something you were probably about to — so the round can invert your plan twice.
+  - **Bul Parayı Al Karayı** — it quietly picks one of your **jokers or powers** to switch off for
+    the round, and you pick one to protect, **blind**. Guess right and you save it; guess wrong and
+    it is gone. The guess must come **before your first turn**: a silenced joker is visibly silent,
+    so waiting would be reading the answer rather than guessing. A coin flip is an introduction
+    rather than a wall, so it may only ever be drawn as a run's **first** boss.
 - **Seven new boss rounds**, bringing the roster to 27:
   - **Enflasyon** — the score threshold climbs **3% with every turn you take**, compounding. Ten
     turns in the bar is a third higher, twenty in it is nearly double. It destroys nothing and pays
