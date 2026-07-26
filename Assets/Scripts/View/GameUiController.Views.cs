@@ -84,6 +84,10 @@ namespace ProjectBlock.View
             cubeGo.transform.SetParent(transform, false);
             cubePicker = cubeGo.AddComponent<CubePickerView>();
 
+            var mineGo = new GameObject("MineShuffle");
+            mineGo.transform.SetParent(transform, false);
+            mineShuffle = mineGo.AddComponent<MineShuffleView>();
+
             var weldGo = new GameObject("WeldPicker");
             weldGo.transform.SetParent(transform, false);
             weldPicker = weldGo.AddComponent<WeldPickerView>();

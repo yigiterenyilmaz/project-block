@@ -207,6 +207,27 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>
+        /// Runs the "Mayın eşeği" dance when the boss says a new one has happened. The path is the
+        /// BOSS's, computed off the round rng, so what the player follows really is where the mine
+        /// went - the View never invents a shuffle of its own.
+        /// </summary>
+        private void PlayMineShuffleIfDue(RoundEngine round)
+        {
+            var mine = round != null ? round.Boss as MayinEsegiBoss : null;
+            if (mine == null)
+            {
+                lastMineShuffle = 0;
+                return;
+            }
+            if (mine.ShuffleCount == lastMineShuffle || !mine.Armed)
+            {
+                return;
+            }
+            lastMineShuffle = mine.ShuffleCount;
+            mineShuffle.Play(boardView, round.MainBoard, mine.ShufflePath);
+        }
+
         /// <summary>Very small camera shake for explosions (slightly bigger on clean sweeps).</summary>
         private void ShakeCamera(float amplitude, float duration)
         {
@@ -264,6 +285,7 @@ namespace ProjectBlock.View
         private void RefreshAll(TurnReport report)
         {
             RoundEngine round = session.CurrentRound;
+            PlayMineShuffleIfDue(round);
             // "Öteki dünya" shrinks the main board and lifts it, to make room for the mirror
             // below. With one world these are the values the board always had.
             float mainSize = MainBoardWorldSize;

@@ -110,6 +110,11 @@ namespace ProjectBlock.View
         private int parazitCardId;
         private CubePickerView cubePicker;
         private WeldPickerView weldPicker;
+        private MineShuffleView mineShuffle;
+
+        /// <summary>The last shuffle "Mayın eşeği" announced. Watched so the dance runs once per
+        /// shuffle - never twice, never missed.</summary>
+        private int lastMineShuffle;
 
         // ---- the workshop powers' multi-step targeting ("Neşter", "Lehimleme", "Gen nakli") ----
 
