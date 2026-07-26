@@ -20,6 +20,14 @@ everything here is unreleased and balance numbers are still placeholders.
   a turn may be worth nothing, never less.
 
 ### Added
+- **Savunmacı (joker)** — pays you for playing it safe, but only once you finally do not. Every
+  round you finish **without going into overtime** banks a bonus. Then the first overtime you do
+  go into and **come out of alive** pays the **whole bank at once** — and the bank starts filling
+  again, so it is an engine you can run over and over, not a one-shot. "Going into overtime" is
+  you **declining** the advance offer and playing on; simply crossing the bar and taking the offer
+  is a safe round. "Coming out alive" is landing the **clean sweep** that raises the offer again,
+  which is the only way an overtime ends without losing the run. Reading a round as safe-or-greedy
+  is the whole decision: bank patiently, then pick the round where you cash in.
 - **Besleme (joker)** — marks a patch of the board in the first round after you take it, and puts
   something **alive** in it. Every cube you explode inside the patch **feeds** it; a turn with
   none **starves** it. Fed enough it **GROWS** outward (1x1 → 2x2 → 3x3) and pays far more per
