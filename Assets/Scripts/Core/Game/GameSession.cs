@@ -930,6 +930,36 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
+        /// DEBUG: abandons whatever stage is in progress and starts the BOSS STAGE of the current
+        /// round number right now, so a boss can be looked at without playing three rounds to
+        /// reach it. <paramref name="bossDefId"/> pins a specific boss; null draws one normally.
+        ///
+        /// It goes through the REAL path - StartRound with the stage flagged - so everything a
+        /// boss stage normally does still happens: the arena is the one its round would have, the
+        /// bar is raised, and a boss that reshapes the round ("Dört kutup") still gets to.
+        ///
+        /// A pinned boss deliberately does NOT join bossesFought: pinning is for looking at one
+        /// boss, and it must not eat that boss out of the run's no-repeat pool. The round it
+        /// interrupts is simply dropped - no round-end effects settle for it - which is the same
+        /// treatment a replayed final round gets.
+        /// </summary>
+        public bool DebugStartBossStage(string bossDefId)
+        {
+            if (Phase != GamePhase.Round && Phase != GamePhase.Market)
+            {
+                return false;
+            }
+            if (CurrentRound != null)
+            {
+                CurrentRound.TurnResolved -= OnTurnResolved;
+                CurrentRound.StatusChanged -= OnRoundStatusChanged;
+            }
+            InBossStage = true;
+            StartRound(bossDefId);
+            return true;
+        }
+
+        /// <summary>
         /// Hands over the InvestorOnly powers for the FINAL round, when a held joker unlocks them
         /// ("Uzun vadeli yatırımcı"). They arrive charged, outside the normal slot limit - they are
         /// a loan for one round, not stock the player had to make room for - and never twice: a
