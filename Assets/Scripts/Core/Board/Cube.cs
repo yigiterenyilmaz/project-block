@@ -50,7 +50,14 @@ namespace ProjectBlock.Core
         /// respect - it fills a cell, blocks a sweep, breaks with a line - and it is the block's
         /// TRIGGER: whether it is in the first explosion to touch the block decides whether that
         /// block pays out or goes quiet (RoundEngine.Targeted).</summary>
-        Target = 13
+        Target = 13,
+
+        /// <summary>A segment of the "Snake" boss. It fills its cell like any other cube, so it
+        /// completes rows and columns and they explode - but the explosion cannot break it, and
+        /// it does not block a clean sweep either. The ONLY thing that shortens the snake is the
+        /// boss's own rule (one segment off the tail per exploding line it stood in), which goes
+        /// through the forced destruction path.</summary>
+        Snake = 14
     }
 
     /// <summary>A cube occupying one board cell.</summary>
@@ -99,7 +106,9 @@ namespace ProjectBlock.Core
                 && cube.Kind != CubeKind.Obsidian
                 && cube.Kind != CubeKind.Gold
                 && cube.Kind != CubeKind.Ice
-                && cube.Kind != CubeKind.Void;
+                && cube.Kind != CubeKind.Void
+                // A snake you cannot break must not be a sweep you can never have.
+                && cube.Kind != CubeKind.Snake;
         }
 
         /// <summary>Can a LINE EXPLOSION destroy this cube? Obsidian and gold never break, and
@@ -110,7 +119,9 @@ namespace ProjectBlock.Core
         {
             return cube.Kind != CubeKind.Obsidian
                 && cube.Kind != CubeKind.Gold
-                && cube.Kind != CubeKind.Void;
+                && cube.Kind != CubeKind.Void
+                // The snake is cut down by its own boss's rule, never by a line.
+                && cube.Kind != CubeKind.Snake;
         }
 
         /// <summary>Can an EXTERNAL effect (a joker or power) destroy this cube? Same as
