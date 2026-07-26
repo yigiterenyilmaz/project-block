@@ -393,7 +393,7 @@ namespace ProjectBlock.Core
                     columnCubes++;
                 }
             }
-            int scoredCubes = System.Math.Max(0, cubesExploded - deadCubes);
+            int scoredCubes = Math.Max(0, cubesExploded - deadCubes);
             return new LineExplosionScore(scoredRows, explosion.Columns.Count, scoredCubes,
                 rowCubes, columnCubes);
         }

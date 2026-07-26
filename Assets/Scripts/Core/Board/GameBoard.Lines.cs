@@ -493,10 +493,10 @@ namespace ProjectBlock.Core
             }
             order.Sort((a, b) =>
             {
-                int da = System.Math.Max(System.Math.Abs(a.X * 2 - centreX2),
-                    System.Math.Abs(a.Y * 2 - centreY2));
-                int db = System.Math.Max(System.Math.Abs(b.X * 2 - centreX2),
-                    System.Math.Abs(b.Y * 2 - centreY2));
+                int da = Math.Max(Math.Abs(a.X * 2 - centreX2),
+                    Math.Abs(a.Y * 2 - centreY2));
+                int db = Math.Max(Math.Abs(b.X * 2 - centreX2),
+                    Math.Abs(b.Y * 2 - centreY2));
                 if (da != db)
                 {
                     return db.CompareTo(da); // furthest first
@@ -512,8 +512,8 @@ namespace ProjectBlock.Core
                 {
                     continue; // already moved away by an earlier step
                 }
-                int dx = System.Math.Sign(from.X * 2 - centreX2);
-                int dy = System.Math.Sign(from.Y * 2 - centreY2);
+                int dx = Math.Sign(from.X * 2 - centreX2);
+                int dy = Math.Sign(from.Y * 2 - centreY2);
                 if (dx == 0 && dy == 0)
                 {
                     continue; // dead centre of an odd board: nothing to fling it away from

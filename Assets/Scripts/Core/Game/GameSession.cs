@@ -202,7 +202,7 @@ namespace ProjectBlock.Core
             {
                 return price;
             }
-            int cut = (int)System.Math.Round(price * (1.0 - PendingMarketDiscount));
+            int cut = (int)Math.Round(price * (1.0 - PendingMarketDiscount));
             return cut < 1 ? 1 : cut;
         }
 

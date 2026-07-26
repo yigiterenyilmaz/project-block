@@ -23,8 +23,8 @@ namespace ProjectBlock.Core
             get
             {
                 // "Öteki dünya": while a joker or power is being pointed at the mirror world,
-                // Board IS the mirror. One indirection here is what lets all 39 jokers and 30
-                // powers act on either world without one of them knowing a second world exists -
+                // Board IS the mirror. One indirection here is what lets every joker and every
+                // power act on either world without one of them knowing a second world exists -
                 // they ask the round for "the board" exactly as they always did.
                 //
                 // The window is opened ONLY around an activation (see JokerInventory /
@@ -96,7 +96,7 @@ namespace ProjectBlock.Core
                 {
                     // "Öteki dünya" doubles your board and raises the bar to match. Rounded UP,
                     // so opening the second world always costs something.
-                    threshold = (int)System.Math.Ceiling(threshold * MirrorThresholdFactor);
+                    threshold = (int)Math.Ceiling(threshold * MirrorThresholdFactor);
                 }
                 return threshold;
             }

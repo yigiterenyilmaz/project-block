@@ -29,12 +29,13 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
-                batch.Add(new DestroyedCube(entry.Key, entry.Value));
+                var dead = new DestroyedCube(entry.Key, entry.Value);
+                batch.Add(dead);
                 if (currentReport == null)
                 {
                     continue;
                 }
-                destroyedThisTurn.Add(new DestroyedCube(entry.Key, entry.Value));
+                destroyedThisTurn.Add(dead);
                 int cardId = entry.Value.SourceCardId;
                 if (touchedCards == null)
                 {
@@ -280,23 +281,10 @@ namespace ProjectBlock.Core
         /// <summary>Base lose condition: no held block (hand or bonus) fits the board.</summary>
         private void CheckForNoPlayableMove()
         {
-            for (int i = 0; i < Hand.Count; i++)
-            {
-                if (CanPlayCardAnywhere(Hand[i]))
-                {
-                    return;
-                }
-            }
-            foreach (BonusSlot slot in bonusHand)
-            {
-                if (CanPlayCardAnywhere(slot.Card))
-                {
-                    return;
-                }
-            }
-            // "Öteki dünya": neither world can end the round on its own. A world with nowhere to
-            // play sits the turn out, so the round is only lost when BOTH are stuck.
-            if (MirrorHasAnyMove)
+            // Hand, bonus hand, then the mirror - "Öteki dünya" means neither world can end the
+            // round on its own, so a world with nowhere to play merely sits the turn out and the
+            // round is only lost when BOTH are stuck. All of that is HasAnyPlayableMove.
+            if (HasAnyPlayableMove())
             {
                 return;
             }
