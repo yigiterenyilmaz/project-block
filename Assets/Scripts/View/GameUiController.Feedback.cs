@@ -301,11 +301,30 @@ namespace ProjectBlock.View
                 boardView.ShowInfections(null);
                 boardView.ShowCircuit(null);
                 boardView.ShowQuarantine(null, null);
+                boardView.ShowCreature(null);
                 return;
             }
             boardView.ShowInfections(infectionBuffer);
             RefreshCircuit();
             RefreshQuarantine();
+            RefreshCreature();
+        }
+
+        /// <summary>Hands "Besleme"'s creature patch to the board view. A pet you cannot see is
+        /// a pet you cannot feed.</summary>
+        private void RefreshCreature()
+        {
+            IReadOnlyList<Joker> jokers = session.Jokers.Jokers;
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                var pet = jokers[i] as BeslemeJoker;
+                if (pet != null && pet.IsAlive)
+                {
+                    boardView.ShowCreature(pet.Region);
+                    return;
+                }
+            }
+            boardView.ShowCreature(null);
         }
 
         /// <summary>Hands "Karantina"'s sealed lines to the board view, which washes them.</summary>

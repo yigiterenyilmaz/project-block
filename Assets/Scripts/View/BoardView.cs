@@ -39,6 +39,10 @@ namespace ProjectBlock.View
         /// sickly wash over the cell, so the zone reads without hiding what stands in it.</summary>
         private static readonly Color QuarantineTint = new Color(0.75f, 0.72f, 0.20f);
 
+        /// <summary>"Besleme": the patch its creature lives in. A warm living pink, distinct from
+        /// the quarantine's sickly yellow - one is a thing you feed, the other a thing you avoid.</summary>
+        private static readonly Color CreatureTint = new Color(0.85f, 0.35f, 0.55f);
+
         /// <summary>"Alacakaranlık": what a cell looks like with the lights out. Barely above
         /// the background, so the grid is still findable but tells you nothing.</summary>
         private static readonly Color DarkCellColor = new Color(0.075f, 0.08f, 0.10f);
@@ -67,6 +71,9 @@ namespace ProjectBlock.View
         /// <summary>"Karantina"'s sealed rows and columns, in absolute board coordinates.</summary>
         private readonly List<int> quarantinedRows = new List<int>();
         private readonly List<int> quarantinedColumns = new List<int>();
+
+        /// <summary>"Besleme"'s creature patch, in absolute board coordinates.</summary>
+        private readonly List<GridPos> creatureCells = new List<GridPos>();
 
         /// <summary>"Alacakaranlık": the board is dark and the player is blind.</summary>
         private bool dark;
@@ -400,6 +407,12 @@ namespace ProjectBlock.View
                     {
                         color = Color.Lerp(color, QuarantineTint, cube.HasValue ? 0.45f : 0.6f);
                     }
+                    // "Besleme"'s creature: the patch you have to keep feeding, so it has to be
+                    // unmistakable whether there is a cube standing on it or not.
+                    if (IsCreature(gp))
+                    {
+                        color = Color.Lerp(color, CreatureTint, cube.HasValue ? 0.5f : 0.72f);
+                    }
                     // "Alacakaranlık": the truth is drowned in the dark and only a blast's
                     // light brings any of it back, in proportion to how bright that light is.
                     if (dark)
@@ -590,6 +603,28 @@ namespace ProjectBlock.View
                 }
             }
             Refresh();
+        }
+
+        /// <summary>Marks where "Besleme"'s creature lives. Pass null to clear it.</summary>
+        public void ShowCreature(IReadOnlyList<GridPos> cells)
+        {
+            creatureCells.Clear();
+            if (cells != null)
+            {
+                creatureCells.AddRange(cells);
+            }
+        }
+
+        private bool IsCreature(GridPos cell)
+        {
+            for (int i = 0; i < creatureCells.Count; i++)
+            {
+                if (creatureCells[i].X == cell.X && creatureCells[i].Y == cell.Y)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>Marks "Karantina"'s sealed lines. Pass nulls to clear them.</summary>
