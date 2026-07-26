@@ -121,10 +121,19 @@ namespace ProjectBlock.Core
             IReadOnlyList<GridPos> shapeCells = shape.Cells;
             bool perCube = !IgnoreElements && card.HasPerCubeElements
                 && shapeCells.Count == card.Shape.Cells.Count;
+            // "Hedefli": exactly one cube of the block is stamped as its TARGET, whatever else
+            // the card is made of. Read off the shape actually being placed, so a rotation or a
+            // reshape marks the cube the player was shown rather than a stale coordinate. Under
+            // "Vanilya" the element is not there at all, so neither is the mark.
+            int targetIndex = IgnoreElements || !card.Has(BlockElement.Targeted)
+                ? -1
+                : card.TargetIndexIn(shape);
             for (int ci = 0; ci < shapeCells.Count; ci++)
             {
                 GridPos offset = shapeCells[ci];
-                CubeKind kind = perCube ? CubeRules.KindForElement(card.CellElement(ci)) : cardKind;
+                CubeKind kind = ci == targetIndex
+                    ? CubeKind.Target
+                    : (perCube ? CubeRules.KindForElement(card.CellElement(ci)) : cardKind);
                 GridPos pos = origin + offset;
                 if (IsInside(pos))
                 {

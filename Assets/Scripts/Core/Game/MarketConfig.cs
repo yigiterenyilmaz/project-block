@@ -151,7 +151,8 @@ namespace ProjectBlock.Core
             BlockElement.Dynamite,
             BlockElement.Mechanical,
             BlockElement.Fox,
-            BlockElement.Negative
+            BlockElement.Negative,
+            BlockElement.Targeted
         };
     }
 }

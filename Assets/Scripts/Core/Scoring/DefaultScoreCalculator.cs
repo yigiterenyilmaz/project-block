@@ -46,6 +46,11 @@ namespace ProjectBlock.Core
             return (comboCount - 1) * config.ComboBonusPerStep;
         }
 
+        public int ScoreTargetedBlock()
+        {
+            return config.TargetedBlockBonus;
+        }
+
         public int ScoreGoldBonus(int goldCubesOnBoard)
         {
             return goldCubesOnBoard * config.GoldPointsPerCubePerTurn;

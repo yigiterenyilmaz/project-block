@@ -11,18 +11,26 @@ namespace ProjectBlock.Core
     {
         /// <summary>Diffs the board against the snapshot and records everything that vanished,
         /// then re-snapshots. Called after every destruction so that jokers see the cube KIND
-        /// and SOURCE CARD, both of which the board itself no longer holds.</summary>
+        /// and SOURCE CARD, both of which the board itself no longer holds.
+        ///
+        /// It is also THE place a destruction is noticed at all, whatever caused it, which is why
+        /// the "Hedefli" rule is settled from here: the batch below is every cube that just went,
+        /// from a line, a fire chain, a joker, a power or a boss alike.</summary>
         private void LogDestruction()
         {
-            if (currentReport == null)
-            {
-                ResyncSnapshot();
-                return;
-            }
+            // The batch is gathered even between turns (currentReport == null), where none of the
+            // report bookkeeping below applies: a targeted block can be broken by a power used
+            // outside a placement, and it has to pay there too.
+            var batch = new List<DestroyedCube>();
             List<int> touchedCards = null;
             foreach (KeyValuePair<GridPos, Cube> entry in boardSnapshot)
             {
                 if (Board.GetCube(entry.Key).HasValue)
+                {
+                    continue;
+                }
+                batch.Add(new DestroyedCube(entry.Key, entry.Value));
+                if (currentReport == null)
                 {
                     continue;
                 }
@@ -36,6 +44,12 @@ namespace ProjectBlock.Core
                 {
                     touchedCards.Add(cardId);
                 }
+            }
+            if (currentReport == null)
+            {
+                ResyncSnapshot();
+                ResolveTargetedBlocks(batch);
+                return;
             }
             if (touchedCards != null)
             {
@@ -56,7 +70,11 @@ namespace ProjectBlock.Core
                     }
                 }
             }
+            // Re-baselined BEFORE the targeted payout, because that payout destroys more cubes
+            // and re-enters here: it must diff against the board as it stands now, not as it
+            // stood before this batch.
             ResyncSnapshot();
+            ResolveTargetedBlocks(batch);
         }
 
         /// <summary>Re-reads the board into the snapshot WITHOUT logging. Used after water

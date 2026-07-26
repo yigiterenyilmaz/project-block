@@ -84,6 +84,30 @@ namespace ProjectBlock.Core
         /// </summary>
         public CubeKind? AntimatterOf { get; internal set; }
 
+        /// <summary>
+        /// Which cube of a "Hedefli" block is its TARGET - an index into the cell list of the
+        /// shape being placed - or -1 on every ordinary card. Rolled once when the card is minted
+        /// and never re-rolled, so a targeted block always shows the player the same cube.
+        ///
+        /// Deliberately an index into the EFFECTIVE shape rather than a fixed offset: a block that
+        /// rotates (mechanical, or anything at all in retro mode) or is reshaped (fox, "Kıtlık")
+        /// re-sorts its cells, and an index cannot fall out of the list the way a remembered
+        /// coordinate can fall off the block. The card preview reads the same index off the same
+        /// shape, so what the player sees marked is always what lands marked.
+        /// </summary>
+        public int TargetCellIndex { get; internal set; } = -1;
+
+        /// <summary>The target's index within <paramref name="shape"/>, or -1 when this card has
+        /// no target. Clamped into range, so a reshape can never leave it pointing at nothing.</summary>
+        public int TargetIndexIn(BlockShape shape)
+        {
+            if (TargetCellIndex < 0 || shape == null || shape.Cells.Count == 0)
+            {
+                return -1;
+            }
+            return TargetCellIndex < shape.Cells.Count ? TargetCellIndex : shape.Cells.Count - 1;
+        }
+
         public BlockCard(int id, BlockShape shape)
             : this(id, shape, null, false)
         {

@@ -40,6 +40,13 @@ namespace ProjectBlock.Core
         /// <summary>Score per cube destroyed by a line explosion.</summary>
         public int PointsPerCubeExploded = 1;
 
+        /// <summary>"Hedefli": flat bonus for breaking a targeted block's TARGET cube in the
+        /// first explosion that touches it. Flat rather than per-cube on purpose - what is being
+        /// paid for is the aim, and a big block is already easier to hit. The cubes the payout
+        /// then takes with it are priced as an ordinary explosion on top. Logical (small); the
+        /// global ScoreScale lifts it like every other score.</summary>
+        public int TargetedBlockBonus = 25;
+
         /// <summary>Extra score per line beyond the first when several explode at once.</summary>
         public int MultiLineBonusPerExtraLine = 10;
 

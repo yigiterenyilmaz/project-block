@@ -72,6 +72,26 @@ namespace ProjectBlock.Core
         /// ordinary turn. The cells themselves are in ExtraExplodedCells, like any late clear.</summary>
         public CubeKind? AnnihilatedKind { get; internal set; }
 
+        private readonly List<int> targetedBlocksHit = new List<int>();
+
+        /// <summary>Card ids of "Hedefli" blocks whose TARGET was broken first this turn, so the
+        /// block paid out and went up whole. Empty on every ordinary turn; the cells it took are
+        /// in ExtraExplodedCells like any other late clear.</summary>
+        public IReadOnlyList<int> TargetedBlocksHit
+        {
+            get { return targetedBlocksHit; }
+        }
+
+        /// <summary>What those hits were worth in total, in logical points. The View pops it over
+        /// the target cell; the score itself is already in the breakdown.</summary>
+        public int TargetedBonus { get; private set; }
+
+        internal void NoteTargetedBlockHit(int cardId, int bonus)
+        {
+            targetedBlocksHit.Add(cardId);
+            TargetedBonus += bonus;
+        }
+
         /// <summary>True if this turn emptied the board ("temizlik").</summary>
         public bool CleanSweep { get; internal set; }
 

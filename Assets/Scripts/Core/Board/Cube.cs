@@ -44,7 +44,13 @@ namespace ProjectBlock.Core
         /// destructible cube in every respect - it fills a cell, blocks a sweep, breaks with a
         /// line - except that the power pays four cubes' worth when it goes, and that it wants
         /// its three cells back four turns later (GameBoard.Press).</summary>
-        Compressed = 12
+        Compressed = 12,
+
+        /// <summary>The marked cube of a "Hedefli" block. An ordinary destructible cube in every
+        /// respect - it fills a cell, blocks a sweep, breaks with a line - and it is the block's
+        /// TRIGGER: whether it is in the first explosion to touch the block decides whether that
+        /// block pays out or goes quiet (RoundEngine.Targeted).</summary>
+        Target = 13
     }
 
     /// <summary>A cube occupying one board cell.</summary>

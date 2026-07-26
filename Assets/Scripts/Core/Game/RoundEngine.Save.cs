@@ -48,6 +48,17 @@ namespace ProjectBlock.Core
             w.Write(key + ".drawEmptyReported", drawPileReportedEmpty);
             w.Write(key + ".cleanSampleLocked", cleanSampleLocked);
 
+            // "Hedefli": which targeted blocks still have their shot. Round-scoped state that
+            // nothing else can rebuild - a reload would otherwise re-arm a block that had
+            // already missed, or disarm one that had not been touched yet.
+            w.Write(key + ".armedTargets.count", armedTargetCards.Count);
+            int armedIndex = 0;
+            foreach (int cardId in armedTargetCards)
+            {
+                w.Write(key + ".armedTargets." + armedIndex, cardId);
+                armedIndex++;
+            }
+
             WriteDynamite(w, key + ".dynamite");
             WriteIntMap(w, key + ".rotations", rotations);
             WriteIntMap(w, key + ".placedSize", cardPlacedSize);
@@ -123,6 +134,12 @@ namespace ProjectBlock.Core
             round.SuppressNaturalSweep = r.ReadBool(key + ".suppressSweep");
             round.drawPileReportedEmpty = r.ReadBool(key + ".drawEmptyReported");
             round.cleanSampleLocked = r.ReadBool(key + ".cleanSampleLocked");
+
+            int armedCount = r.ReadInt(key + ".armedTargets.count");
+            for (int i = 0; i < armedCount; i++)
+            {
+                round.armedTargetCards.Add(r.ReadInt(key + ".armedTargets." + i));
+            }
 
             round.ReadDynamite(r, key + ".dynamite");
             ReadIntMap(r, key + ".rotations", round.rotations);

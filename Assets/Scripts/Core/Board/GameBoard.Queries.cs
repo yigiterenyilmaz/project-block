@@ -236,6 +236,26 @@ namespace ProjectBlock.Core
             return count;
         }
 
+        /// <summary>Where this card's cubes are standing right now ("Hedefli" taking the rest of
+        /// a block with the target). Play area only: a ghost trace hanging outside the grid takes
+        /// no part in explosions, so it takes no part in this either.</summary>
+        public List<GridPos> CellsOfCard(int cardId)
+        {
+            var found = new List<GridPos>();
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    Cube? cube = cells[x, y];
+                    if (cube.HasValue && cube.Value.SourceCardId == cardId)
+                    {
+                        found.Add(new GridPos(x + MinX, y + MinY));
+                    }
+                }
+            }
+            return found;
+        }
+
         /// <summary>Number of cubes of a kind on the board (gold bonus...).</summary>
         public int CountCubesOfKind(CubeKind kind)
         {

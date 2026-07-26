@@ -1145,10 +1145,25 @@ namespace ProjectBlock.Core
                     : null;
                 var card = new BlockCard(nextCardId++, shape, elements);
                 card = Jokers.FilterMarketOffer(card); // "Simya" adds a second element here
+                // "Hedefli": which cube is the target is rolled ONCE, here, and never again -
+                // the card shows the player the same cube for the rest of the run. After the
+                // joker filter, because that hands back a rebuilt card.
+                AssignTargetCube(card, blockRng);
                 // priced AFTER the filter so a joker-added element is surcharged too, and
                 // lifted into the scaled economy so prices track the bigger score numbers
                 newOffers.Add(new MarketOffer(card,
                     Discounted(market.BuyPrice(card) * Config.Scoring.ScoreScale)));
+            }
+        }
+
+        /// <summary>Marks one cube of a "Hedefli" block as its target. A no-op for every other
+        /// card, so it costs the rng stream nothing unless a targeted block was actually
+        /// rolled.</summary>
+        private static void AssignTargetCube(BlockCard card, IRandomSource cardRng)
+        {
+            if (card != null && card.Has(BlockElement.Targeted) && card.Shape.Cells.Count > 0)
+            {
+                card.TargetCellIndex = cardRng.NextInt(0, card.Shape.Cells.Count);
             }
         }
 

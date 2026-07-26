@@ -28,7 +28,8 @@ namespace ProjectBlock.Core
         // one, so a save has to say which stage of its number it is on.
         // 7 (2026-07-26): the combo can now be bridged ("Mikrodalga"), so the rules write the
         // bridge allowance and its discount and the round writes how long the streak has been
-        // asleep.
+        // asleep; and the "Hedefli" block landed, so every card writes which cube is its target
+        // and the round writes which targeted blocks still have their shot.
         public const int FormatVersion = 7;
 
         private const string VersionKey = "version";

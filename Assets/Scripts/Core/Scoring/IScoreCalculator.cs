@@ -23,6 +23,10 @@ namespace ProjectBlock.Core
         /// <summary>Per-turn bonus for gold cubes sitting on the board.</summary>
         int ScoreGoldBonus(int goldCubesOnBoard);
 
+        /// <summary>Flat bonus for breaking a "Hedefli" block's target cube first
+        /// (ScoringConfig.TargetedBlockBonus).</summary>
+        int ScoreTargetedBlock();
+
         /// <summary>Multiplier applied to the regular base score of a turn played in overtime
         /// (1.0 before the threshold). See ScoringConfig.OvertimeRegularScoreFactor.</summary>
         double OvertimeRegularScoreFactor { get; }

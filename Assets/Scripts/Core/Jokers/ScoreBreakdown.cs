@@ -28,6 +28,13 @@ namespace ProjectBlock.Core
         /// <summary>Per-turn payout of the gold cubes sitting on the board.</summary>
         public int BaseGold { get; internal set; }
 
+        /// <summary>What "Hedefli" blocks paid this turn: the aim bonus plus the explosion the
+        /// payout set off. A field of its own rather than part of BaseLines, because a clean
+        /// sweep SWALLOWS the line score - and a targeted block usually goes off on the turn that
+        /// empties a small board, so folding it in would mean the best turn in the game paid
+        /// nothing for it. (The dual-world column bonus was fixed the same way.)</summary>
+        public int BaseTargeted { get; internal set; }
+
         /// <summary>Bonus for winning an overtime this turn (0 otherwise). Unlike the regular
         /// base fields it is NOT scaled by RegularScoreFactor - overtime taxes the
         /// regular play, not the win reward - but it IS subject to joker multipliers, so
@@ -66,7 +73,7 @@ namespace ProjectBlock.Core
         /// <summary>Everything before jokers touched it.</summary>
         public int BaseTotal
         {
-            get { return BasePlacement + BaseLines + BaseSweep + BaseCombo + BaseGold; }
+            get { return BasePlacement + BaseLines + BaseSweep + BaseCombo + BaseGold + BaseTargeted; }
         }
 
         /// <summary>
@@ -150,6 +157,7 @@ namespace ProjectBlock.Core
             BaseLines = 0;
             BaseCombo = 0;
             BaseGold = 0;
+            BaseTargeted = 0;
         }
 
         /// <summary>Wipes every base value there is ("Bürokrasi bataklığı": the only income is the
@@ -169,6 +177,7 @@ namespace ProjectBlock.Core
             BaseSweep = 0;
             BaseCombo = 0;
             BaseGold = 0;
+            BaseTargeted = 0;
             BaseOvertimeBonus = 0;
             RegularScoreFactor = 1.0;
             ScoreScale = 1;

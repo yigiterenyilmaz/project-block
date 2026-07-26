@@ -50,7 +50,14 @@ namespace ProjectBlock.Core
         /// them. Nothing is left behind - the negative block goes with what it deleted, so
         /// the cells end up empty. Indestructible cubes (obsidian, gold) refuse it, which is
         /// what stops it from being a universal solvent.</summary>
-        Negative = 11
+        Negative = 11,
+
+        /// <summary>"Hedefli": one marked cube of the block is its TARGET (BlockCard
+        /// .TargetCellIndex, stamped onto the board as CubeKind.Target). Break the target in the
+        /// first explosion that touches the block and it pays a bonus and takes the whole block
+        /// with it; break anything else first and the block is spent - it stands there as
+        /// ordinary cubes for the rest of its stay. See RoundEngine.Targeted.</summary>
+        Targeted = 12
 
         // Mirror ("ayna") and PiggyBank ("kumbara") were cut from the design 2026-07-18.
     }

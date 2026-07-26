@@ -91,6 +91,9 @@ namespace ProjectBlock.Core
             {
                 report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
                     Has(card, BlockElement.Ghost));
+                // "Hedefli": the block's one shot is live from the moment it lands until the
+                // first of its cubes breaks (see RoundEngine.Targeted).
+                ArmTargetedBlock(card);
             }
             if (!mainWorldSitsOut && !fallsThrough && !antimatter
                 && Has(card, BlockElement.Dynamite))
