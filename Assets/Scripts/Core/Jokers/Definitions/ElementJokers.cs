@@ -359,4 +359,165 @@ namespace ProjectBlock.Core
             return new BlockCard(card.Id, card.Shape, elements);
         }
     }
+
+    /// <summary>
+    /// "Kiracı" - a plain cube that sits still long enough starts paying rent. Any ELEMENTLESS
+    /// cube that survives TurnsToRipen turns on the board turns to GOLD.
+    ///
+    /// Only plain cubes qualify: something that already has an element is not a tenant.
+    ///
+    /// Read the trade before taking this joker. Gold pays every turn it stands there, but gold
+    /// also NEVER breaks and BLOCKS a clean sweep, so every cube that ripens is a permanent
+    /// fixture on your board. Left alone long enough this joker slowly bricks the arena it is
+    /// paying you for.
+    ///
+    /// Tenancy is tracked per CELL, and a cell whose occupant changes starts over. Cubes hardly
+    /// ever move, but the ones that do - a retro row collapse, an inflation squeeze, a line swap,
+    /// the escalator boss - reset their tenant's clock, which is the honest reading anyway: that
+    /// cube stopped sitting still.
+    ///
+    /// All numbers are BALANCE PLACEHOLDERS.
+    /// </summary>
+    public sealed class KiraciJoker : Joker
+    {
+        /// <summary>Turns a plain cube must survive, in one spot, before it turns to gold.</summary>
+        public int TurnsToRipen = 10;
+
+        /// <summary>Cell -> turns its current tenant has held it.</summary>
+        private readonly Dictionary<GridPos, int> tenancy = new Dictionary<GridPos, int>();
+
+        /// <summary>Cell -> the card the tracked tenant came from, so a cell that changed hands
+        /// is not credited with the previous cube's time.</summary>
+        private readonly Dictionary<GridPos, int> tenantCard = new Dictionary<GridPos, int>();
+
+        private readonly List<GridPos> ripened = new List<GridPos>();
+        private readonly List<GridPos> stale = new List<GridPos>();
+
+        private int goldThisRound;
+
+        public KiraciJoker()
+            : base("kiraci", "Kiracı")
+        {
+            SetDescription(
+                "A plain block that survives 10 turns on the board turns to GOLD. Gold pays rent "
+                    + "every turn - but it never breaks and it blocks a clean sweep, so every "
+                    + "tenant you let settle is there for good.",
+                "Oyun alanında 10 tur patlamadan duran elementsiz küpler ALTINA dönüşür. Altın "
+                    + "durduğu her tur kira öder - ama asla kırılmaz ve temizliği engeller, yani "
+                    + "yerleşmesine izin verdiğin her kiracı kalıcıdır.");
+            BaseSellValue = 65;
+        }
+
+        /// <summary>Cubes turned to gold so far this round, for the UI.</summary>
+        public int GoldThisRound
+        {
+            get { return goldThisRound; }
+        }
+
+        /// <summary>Turns the longest-standing tenant still has to wait, or 0 when none is
+        /// tracked. Lets the UI say how close the next payday is.</summary>
+        public int TurnsToNextGold
+        {
+            get
+            {
+                int best = 0;
+                foreach (KeyValuePair<GridPos, int> entry in tenancy)
+                {
+                    if (entry.Value > best)
+                    {
+                        best = entry.Value;
+                    }
+                }
+                return best > 0 ? TurnsToRipen - best : 0;
+            }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                if (goldThisRound > 0)
+                {
+                    return goldThisRound + Loc.Pick(" gold", " altın");
+                }
+                int wait = TurnsToNextGold;
+                return wait > 0
+                    ? wait + Loc.Pick("t to gold", "t sonra altın")
+                    : Loc.Pick("no tenants", "kiracı yok");
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            // A new round is a new board, so no tenancy carries over.
+            tenancy.Clear();
+            tenantCard.Clear();
+            goldThisRound = 0;
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            GameBoard board = turn.Round.Board;
+            ripened.Clear();
+            stale.Clear();
+
+            // Age every plain cube that is still where it was, and start the clock on new ones.
+            List<GridPos> occupied = board.GetOccupiedCells();
+            var seen = new HashSet<GridPos>();
+            for (int i = 0; i < occupied.Count; i++)
+            {
+                GridPos cell = occupied[i];
+                Cube? cube = board.GetCube(cell);
+                if (!cube.HasValue || cube.Value.Kind != CubeKind.Normal)
+                {
+                    continue; // only a PLAIN cube can be a tenant
+                }
+                seen.Add(cell);
+                int cardId = cube.Value.SourceCardId;
+                int heldBy;
+                int turns;
+                if (tenantCard.TryGetValue(cell, out heldBy) && heldBy == cardId
+                    && tenancy.TryGetValue(cell, out turns))
+                {
+                    turns++;
+                }
+                else
+                {
+                    // A fresh tenant, or the cell changed hands: the clock starts over.
+                    turns = 1;
+                    tenantCard[cell] = cardId;
+                }
+                tenancy[cell] = turns;
+                if (turns >= TurnsToRipen)
+                {
+                    ripened.Add(cell);
+                }
+            }
+
+            // Drop the cells that no longer hold a plain cube - exploded, lifted, or retyped.
+            foreach (KeyValuePair<GridPos, int> entry in tenancy)
+            {
+                if (!seen.Contains(entry.Key))
+                {
+                    stale.Add(entry.Key);
+                }
+            }
+            for (int i = 0; i < stale.Count; i++)
+            {
+                tenancy.Remove(stale[i]);
+                tenantCard.Remove(stale[i]);
+            }
+
+            // Rent day. A ripened cube stops being a tenant because it stops being plain.
+            for (int i = 0; i < ripened.Count; i++)
+            {
+                if (board.SetCubeKind(ripened[i], CubeKind.Gold))
+                {
+                    goldThisRound++;
+                }
+                tenancy.Remove(ripened[i]);
+                tenantCard.Remove(ripened[i]);
+            }
+        }
+    }
 }

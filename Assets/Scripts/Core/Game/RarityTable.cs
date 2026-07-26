@@ -55,6 +55,7 @@ namespace ProjectBlock.Core
             { "devre", Rarity.Rare },
             { "sifaci", Rarity.Rare },
             { "yer_alti_kaynaklari", Rarity.Rare },
+            { "kiraci", Rarity.Rare },
             { "cimbiz", Rarity.Common },
             { "caprazlama", Rarity.Common },
             { "eko", Rarity.Rare },

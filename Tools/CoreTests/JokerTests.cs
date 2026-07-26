@@ -135,6 +135,10 @@ public static class JokerTests
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        Kiraci_RipensAPlainCubeIntoGold();
+        Kiraci_OnlyPlainCubesAreTenants();
+        Kiraci_AnInterruptedTenancyStartsOver();
+        Kiraci_TheGoldItMakesIsRealGold();
         Threshold_IsACeilingForNormalPlay();
         Threshold_OvertimeIsAllowedPastTheBar();
         Threshold_ATurnUnderTheBarIsUntouched();
@@ -4291,6 +4295,123 @@ public static class JokerTests
             "the same placement cleared a line", "rows " + report.ExplodedRows.Count);
         Check(joker.BrokenThisRound,
             "and the circuit still counted as completed, even though the line ate its cells");
+    }
+
+    private static void Kiraci_RipensAPlainCubeIntoGold()
+    {
+        Section("kiracı / a plain cube that sits still long enough turns to gold");
+        var session = NewSession(9100, 7, 1000000, 40, 1);
+        var joker = (KiraciJoker)session.Jokers.Add(new KiraciJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        // One plain cube, parked well away from anything that could complete a line.
+        var spot = new GridPos(round.Board.MinX + 3, round.Board.MinY + 3);
+        round.Board.SetCubeAt(spot, new Cube(CubeKind.Normal, 9950));
+        Check(round.Board.GetCube(spot).Value.Kind == CubeKind.Normal, "it starts plain");
+
+        // It must survive the whole wait before anything happens.
+        for (int i = 1; i < joker.TurnsToRipen; i++)
+        {
+            PlayTurns(session, 1);
+            if (round.Board.GetCube(spot).HasValue
+                && round.Board.GetCube(spot).Value.Kind == CubeKind.Gold)
+            {
+                Check(false, "it ripened early, on turn " + i);
+                return;
+            }
+        }
+        Check(joker.GoldThisRound == 0, "nothing has ripened yet",
+            "gold " + joker.GoldThisRound);
+
+        PlayTurns(session, 1);
+        Cube? ripened = round.Board.GetCube(spot);
+        Check(ripened.HasValue && ripened.Value.Kind == CubeKind.Gold,
+            "and on the tenth turn it is GOLD",
+            ripened.HasValue ? ripened.Value.Kind.ToString() : "gone");
+        Check(joker.GoldThisRound == 1, "the joker counted it", "" + joker.GoldThisRound);
+        Check(ripened.Value.SourceCardId == 9950, "and it is still the same cube");
+    }
+
+    private static void Kiraci_OnlyPlainCubesAreTenants()
+    {
+        Section("kiracı / a cube that already has an element is not a tenant");
+        var session = NewSession(9101, 7, 1000000, 40, 1);
+        var joker = (KiraciJoker)session.Jokers.Add(new KiraciJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        var fire = new GridPos(round.Board.MinX + 2, round.Board.MinY + 3);
+        var water = new GridPos(round.Board.MinX + 4, round.Board.MinY + 3);
+        var stone = new GridPos(round.Board.MinX + 3, round.Board.MinY + 4);
+        round.Board.SetCubeAt(fire, new Cube(CubeKind.Fire, 9951));
+        round.Board.SetCubeAt(water, new Cube(CubeKind.Water, 9952));
+        round.Board.SetCubeAt(stone, new Cube(CubeKind.Obsidian, 9953));
+
+        PlayTurns(session, joker.TurnsToRipen + 3);
+        bool anyGold = false;
+        foreach (GridPos cell in new[] { fire, water, stone })
+        {
+            Cube? cube = round.Board.GetCube(cell);
+            if (cube.HasValue && cube.Value.Kind == CubeKind.Gold) { anyGold = true; }
+        }
+        Check(!anyGold, "none of the elemental cubes turned to gold");
+    }
+
+    private static void Kiraci_AnInterruptedTenancyStartsOver()
+    {
+        Section("kiracı / a cell that changes hands starts the clock again");
+        var session = NewSession(9102, 7, 1000000, 40, 1);
+        var joker = (KiraciJoker)session.Jokers.Add(new KiraciJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        var spot = new GridPos(round.Board.MinX + 3, round.Board.MinY + 3);
+        round.Board.SetCubeAt(spot, new Cube(CubeKind.Normal, 9960));
+        PlayTurns(session, joker.TurnsToRipen - 2);
+        Check(joker.GoldThisRound == 0, "two turns short of payday");
+
+        // Evict the tenant and move a DIFFERENT cube in. The new one may not inherit the wait.
+        round.Board.DestroyCube(spot);
+        round.Board.SetCubeAt(spot, new Cube(CubeKind.Normal, 9961));
+        PlayTurns(session, 3);
+        Cube? cube = round.Board.GetCube(spot);
+        Check(cube.HasValue && cube.Value.Kind == CubeKind.Normal,
+            "the new tenant is still plain three turns later - it did not inherit the clock",
+            cube.HasValue ? cube.Value.Kind.ToString() : "gone");
+        Check(joker.GoldThisRound == 0, "and nothing has ripened", "" + joker.GoldThisRound);
+
+        // Give it the full wait and it ripens on its own account.
+        PlayTurns(session, joker.TurnsToRipen);
+        cube = round.Board.GetCube(spot);
+        Check(cube.HasValue && cube.Value.Kind == CubeKind.Gold,
+            "given the full ten turns of its own, it ripens",
+            cube.HasValue ? cube.Value.Kind.ToString() : "gone");
+    }
+
+    private static void Kiraci_TheGoldItMakesIsRealGold()
+    {
+        Section("kiracı / what it makes is real gold, with all of gold's teeth");
+        var session = NewSession(9103, 5, 1000000, 40, 1);
+        var joker = (KiraciJoker)session.Jokers.Add(new KiraciJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        var spot = new GridPos(round.Board.MinX + 2, round.Board.MinY + 2);
+        round.Board.SetCubeAt(spot, new Cube(CubeKind.Normal, 9970));
+        PlayTurns(session, joker.TurnsToRipen + 1);
+        Cube? gold = round.Board.GetCube(spot);
+        if (!gold.HasValue || gold.Value.Kind != CubeKind.Gold)
+        {
+            Check(false, "the cube did not ripen in this setup - skipped");
+            return;
+        }
+        Check(true, "the cube is gold");
+        Check(!CubeRules.IsDestructible(gold.Value),
+            "gold NEVER breaks - a line explosion cannot shift it");
+        Check(!CubeRules.CountsForCleanSweep(gold.Value),
+            "and it does not stand in the way of a clean sweep");
+        Check(!round.Board.DestroyCube(spot), "nothing external can destroy it either");
     }
 
     private static void Threshold_IsACeilingForNormalPlay()

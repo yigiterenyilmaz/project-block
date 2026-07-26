@@ -14,6 +14,13 @@ everything here is unreleased and balance numbers are still placeholders.
   what overtime is for. A turn that does not reach the bar banks every point as before.
 
 ### Added
+- **Kiracı (joker)** — an **elementless** block that survives **10 turns** on the board turns to
+  **GOLD**. Only plain cubes qualify; anything that already has an element is not a tenant.
+  Read the trade before taking it: gold pays rent every turn it stands there, but gold also
+  **never breaks** and **blocks a clean sweep**, so every tenant you let settle is a permanent
+  fixture. Left alone long enough this joker slowly bricks the arena it is paying you for.
+  Tenancy is per cell, so a cube that gets moved (a retro collapse, an inflation squeeze, a line
+  swap, the escalator boss) starts its clock over — it stopped sitting still.
 - **Şifacı (joker)** — every 5 turns it gives **one use back** to a random **spent** joker. The
   clock does not run down while there is nothing to heal: if no joker is empty when it comes
   due, it stays ready and heals the moment one empties, then sleeps again. So the wait is a
