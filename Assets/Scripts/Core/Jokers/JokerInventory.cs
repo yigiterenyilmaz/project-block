@@ -167,6 +167,56 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>True while any held joker lets the player smuggle goods out of the market
+        /// ("Kaçakçı"). A BROKEN smuggler smuggles nothing - IsGated covers dispatch, and this
+        /// covers the market, where there is no round to gate against.</summary>
+        public bool EnablesSmuggling
+        {
+            get { return FindSmuggler() != null; }
+        }
+
+        /// <summary>Chance in percent that smuggled goods are defective - the WORST (highest) any
+        /// working smuggler names, because the goods come off one lorry. 0 when none is held.</summary>
+        public int SmuggleDefectChancePercent
+        {
+            get
+            {
+                Joker smuggler = FindSmuggler();
+                return smuggler != null ? smuggler.SmuggleDefectChancePercent : 0;
+            }
+        }
+
+        /// <summary>Recharge events a defective smuggled power needs, from the same joker.</summary>
+        public int SmuggledPowerRechargeCost
+        {
+            get
+            {
+                Joker smuggler = FindSmuggler();
+                return smuggler != null ? smuggler.SmuggledPowerRechargeCost : 1;
+            }
+        }
+
+        /// <summary>The working smuggler with the worst goods, or null. Inventory order breaks a
+        /// tie, like every other walk.</summary>
+        private Joker FindSmuggler()
+        {
+            Joker worst = null;
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                if (!jokers[i].EnablesSmuggling
+                    || jokers[i].Defect == SmuggledDefect.NeverWorks)
+                {
+                    continue;
+                }
+                if (worst == null
+                    || jokers[i].SmuggleDefectChancePercent > worst.SmuggleDefectChancePercent)
+                {
+                    worst = jokers[i];
+                }
+            }
+            return worst;
+        }
+
         /// <summary>True while any held joker unlocks the InvestorOnly powers ("Uzun vadeli
         /// yatırımcı"). Asked centrally when the final round starts.</summary>
         public bool UnlocksInvestorPowers
@@ -569,12 +619,20 @@ namespace ProjectBlock.Core
         /// "Oburluk"). Both are checked HERE so no joker ever tests for either.</summary>
         private static bool IsGated(Joker joker, RoundEngine round)
         {
+            // A joker that never worked is gated everywhere, round or no round: smuggled goods do
+            // not wait for a round to be broken.
+            if (joker.Defect == SmuggledDefect.NeverWorks)
+            {
+                return true;
+            }
             if (round == null)
             {
                 return false;
             }
             return (joker.DisabledInOvertime && round.ThresholdPassed)
-                || round.IsSilencedByBoss(joker);
+                || round.IsSilencedByBoss(joker)
+                // "Kaçakçı"'s other defect: quiet in exactly the rounds you bought it for.
+                || (joker.Defect == SmuggledDefect.DeadInBossRounds && round.Config.IsBossRound);
         }
 
         private void Snapshot()

@@ -56,6 +56,11 @@ namespace ProjectBlock.Core
         /// marker so the UI can tag it "custom"; it does not change any rule.</summary>
         public bool IsCustom { get; }
 
+        /// <summary>True for junk that came off the back of a lorry ("Kaçakçı" handing over
+        /// defective goods). Purely an identity marker so the UI can tag it - a junk card needs no
+        /// special rule, because its defect IS its shape.</summary>
+        public bool IsSmuggled { get; internal set; }
+
         public BlockCard(int id, BlockShape shape)
             : this(id, shape, null, false)
         {

@@ -68,6 +68,40 @@ namespace ProjectBlock.Core
             get { return 0; }
         }
 
+        /// <summary>True while this joker lets the player walk out of the market with goods they
+        /// did not pay for ("Kaçakçı"). Like the credit joker, smuggling is a SESSION rule and this
+        /// is only the switch: GameSession does the taking and the rolling, and asks the inventory
+        /// rather than any particular joker.</summary>
+        public virtual bool EnablesSmuggling
+        {
+            get { return false; }
+        }
+
+        /// <summary>Chance in percent that smuggled goods turn out to be defective. Only
+        /// meaningful on a joker that enables smuggling. Balance placeholder.</summary>
+        public virtual int SmuggleDefectChancePercent
+        {
+            get { return 0; }
+        }
+
+        /// <summary>How many recharge events a smuggled DEFECTIVE power needs instead of one.
+        /// Only meaningful on a joker that enables smuggling. Balance placeholder.</summary>
+        public virtual int SmuggledPowerRechargeCost
+        {
+            get { return 1; }
+        }
+
+        /// <summary>
+        /// What is wrong with this joker, when it was smuggled ("Kaçakçı") and came out defective.
+        /// None for everything that was paid for. Written once by GameSession when the goods are
+        /// taken, and never cleared.
+        ///
+        /// It is CENTRAL, like the boss silencing it borrows: JokerInventory.IsGated is the one
+        /// place that reads it, so a broken joker is simply never dispatched. Nothing is added or
+        /// removed, and no joker anywhere has to ask whether it is the broken one.
+        /// </summary>
+        public SmuggledDefect Defect { get; internal set; }
+
         /// <summary>Last round whose market may stock this joker kind ("Uzun vadeli yatırımcı" is
         /// an EARLY-game bet, so it is only ever offered in the first markets). Unlimited by
         /// default. Read by GameSession.AddJokerOffers off the catalogue's sample instance; the

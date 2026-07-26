@@ -67,9 +67,45 @@ namespace ProjectBlock.Core
         /// <summary>False once spent. A clean sweep or a new round puts it back.</summary>
         public bool Charged { get; private set; }
 
+        /// <summary>
+        /// How many recharge events this power needs to fill: 1 for everything that was paid for,
+        /// more for a defective smuggled one ("Kaçakçı"), which fills at a fraction of the rate.
+        /// Central, so it holds for EVERY way a power refills - a clean sweep, a new round, a
+        /// joker handing out charges - and no power has to know it is the broken one.
+        /// </summary>
+        public int RechargeCost { get; private set; } = 1;
+
+        /// <summary>Recharge events banked toward the next charge. Only ever above 0 on a
+        /// defective power.</summary>
+        public int RechargeProgress { get; private set; }
+
+        /// <summary>Turns this into defective smuggled goods: it needs <paramref name="cost"/>
+        /// recharge events from now on, and arrives EMPTY rather than charged - the wait starts
+        /// immediately, which is the whole of the defect.</summary>
+        internal void MakeSmuggled(int cost)
+        {
+            RechargeCost = cost < 1 ? 1 : cost;
+            RechargeProgress = 0;
+            Charged = false;
+        }
+
         internal void Recharge()
         {
-            Charged = true;
+            if (Charged)
+            {
+                return;
+            }
+            if (RechargeCost <= 1)
+            {
+                Charged = true;
+                return;
+            }
+            RechargeProgress++;
+            if (RechargeProgress >= RechargeCost)
+            {
+                RechargeProgress = 0;
+                Charged = true;
+            }
         }
 
         internal void Spend()
