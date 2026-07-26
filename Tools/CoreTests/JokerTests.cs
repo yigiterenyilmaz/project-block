@@ -214,6 +214,8 @@ public static class JokerTests
         Kacakci_ABrokenSmugglerSmugglesNothing();
         Kacakci_ABrokenPowerArrivesEmptyAndFillsSlowly();
         Kacakci_TheSmuggledItemStillCountsAsBuying();
+        Kacakci_ThreeSoundHaulsAndItIsGone();
+        Kacakci_JunkDoesNotWearItOut();
         Yatirimci_IsOnlyStockedByTheEarlyMarkets();
         Yatirimci_CanNeverBeSold();
         Yatirimci_ReplaysTheLostFinalRound();
@@ -6623,6 +6625,56 @@ public static class JokerTests
         session.LeaveMarket();
         Check(AdvanceToMarket(session, 400), "reached the next market");
         Check(session.CanSmuggle, "the next visit has its own free item");
+    }
+
+    private static void Kacakci_ThreeSoundHaulsAndItIsGone()
+    {
+        Section("kaçakçı / three sound hauls and it is caught");
+        KacakciJoker smuggler;
+        // 0% defect, so every haul is a sound one and the counter moves every visit.
+        GameSession session = NewSmugglingSession(4530, 0, out smuggler);
+        Check(smuggler.HaulsLeft == 3, "it starts with three in it", "" + smuggler.HaulsLeft);
+
+        for (int haul = 1; haul <= 3; haul++)
+        {
+            Check(session.CanSmuggle, "haul " + haul + ": a free item is on offer");
+            int index = FirstOfferOfKind(session, MarketOfferKind.Block);
+            Check(index >= 0 && session.TrySmuggleOffer(index), "haul " + haul + ": taken");
+            if (haul < 3)
+            {
+                Check(smuggler.HaulsLeft == 3 - haul, "haul " + haul + ": the counter moved",
+                    "" + smuggler.HaulsLeft);
+                Check(session.OwnsJoker("kacakci"), "haul " + haul + ": still held");
+                session.LeaveMarket();
+                Check(AdvanceToMarket(session, 400), "reached market " + (haul + 1));
+            }
+        }
+        // The third sound item is the one that finishes it.
+        Check(smuggler.IsSpent, "it has nothing left in it");
+        Check(!session.OwnsJoker("kacakci"), "and it is gone from the inventory");
+        Check(!session.CanSmuggle, "so there is nothing left to smuggle with");
+    }
+
+    private static void Kacakci_JunkDoesNotWearItOut()
+    {
+        Section("kaçakçı / junk costs it nothing");
+        KacakciJoker smuggler;
+        // 100% defect: every haul is junk, so the counter must never move.
+        GameSession session = NewSmugglingSession(4531, 100, out smuggler);
+
+        for (int visit = 0; visit < 4; visit++)
+        {
+            int index = FirstOfferOfKind(session, MarketOfferKind.Block);
+            Check(index >= 0 && session.TrySmuggleOffer(index), "visit " + visit + ": took junk");
+            Check(smuggler.HaulsLeft == 3, "visit " + visit + ": still three good ones in it",
+                "" + smuggler.HaulsLeft);
+            Check(session.OwnsJoker("kacakci"), "visit " + visit + ": still held");
+            session.LeaveMarket();
+            if (!AdvanceToMarket(session, 400))
+            {
+                break;
+            }
+        }
     }
 
     private static void Kacakci_SoundGoodsAreJustGoods()
