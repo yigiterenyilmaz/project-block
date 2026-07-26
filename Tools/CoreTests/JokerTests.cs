@@ -108,6 +108,7 @@ public static class JokerTests
         Progression_BoardSizeStepsWithTheRoundBands();
         RunLength_FifteenRoundsThenRunWon();
         RunStructure_BossStagesSitBetweenNumberedRounds();
+        DebugStartBossStage_JumpsStraightToABossStage();
         RunStructure_EveryStageOpensAMarket();
         BossRounds_FlaggedEveryThirdRound();
         Boss_DrawnOncePerRunAndOnlyOnFlaggedRounds();
@@ -8759,6 +8760,42 @@ public static class JokerTests
         Check(string.Join(",", walked.ToArray()) == expected,
             "in exactly that order - every boss sits between two numbered rounds",
             string.Join(",", walked.ToArray()));
+    }
+
+    private static void DebugStartBossStage_JumpsStraightToABossStage()
+    {
+        Section("debug / jumping straight to a boss stage");
+        var config = new GameConfig();
+        config.RngSeed = 9900;
+        config.Deck = new DeckDefinition("test", 40, new SizedShapeGenerator(1));
+        var session = new GameSession(config); // round 1 of a real run
+
+        Check(!session.InBossStage && session.ActiveBoss == null,
+            "round 1 is an ordinary round with no boss");
+        int ordinaryBar = session.CurrentRound.Config.ScoreThreshold;
+
+        // Off-cadence on purpose: round 1 has no boss stage after it, and the debug jump has to
+        // work anyway - that is the whole point of it.
+        Check(session.DebugStartBossStage("saatci"), "the jump took");
+        Check(session.InBossStage, "the stage is a boss stage now");
+        Check(session.CurrentRound.Config.IsBossRound, "and the round config says so");
+        Check(session.ActiveBoss != null && session.ActiveBoss.DefId == "saatci",
+            "the pinned boss is the one running",
+            session.ActiveBoss != null ? session.ActiveBoss.DefId : "none");
+        Check(session.RoundNumber == 1, "it is round 1's boss stage, not round 2's",
+            "" + session.RoundNumber);
+        Check(session.CurrentRound.Config.ScoreThreshold > ordinaryBar,
+            "the real path ran, so the bar is raised like any boss stage",
+            ordinaryBar + " -> " + session.CurrentRound.Config.ScoreThreshold);
+        Check(session.BossesFought.Count == 0,
+            "a PINNED boss does not eat the run's no-repeat pool",
+            "" + session.BossesFought.Count);
+
+        // A null id means the ordinary draw, which does spend one out of the pool.
+        Check(session.DebugStartBossStage(null), "a second jump, drawing normally");
+        Check(session.ActiveBoss != null, "a boss was drawn");
+        Check(session.BossesFought.Count == 1, "and a DRAWN boss does join the pool",
+            "" + session.BossesFought.Count);
     }
 
     private static void RunStructure_EveryStageOpensAMarket()
