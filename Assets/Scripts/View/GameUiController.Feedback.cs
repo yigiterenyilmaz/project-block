@@ -380,6 +380,12 @@ namespace ProjectBlock.View
                 }
                 sb.Append(']');
             }
+            // "Uzun vadeli yatırımcı" restarts the final round silently, so say why the board
+            // just went blank - otherwise the do-over looks like a bug.
+            if (session.FinalRoundReplays > 0)
+            {
+                sb.Append(Loc.Pick("  [REPLAY]", "  [TEKRAR]"));
+            }
             sb.Append(Loc.Pick("   Turn ", "   Tur ")).Append(round.TurnNumber).Append('\n');
             if (round.Boss != null)
             {
