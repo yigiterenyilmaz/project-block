@@ -14,11 +14,67 @@ namespace ProjectBlock.View
 {
     partial class GameUiController
     {
+        /// <summary>
+        /// Every card face the view has ever seen this session, by id.
+        ///
+        /// The owned deck is NOT enough to answer "what did this cube come from". A bonus card
+        /// never joins it (a debug-dealt block, a "Kara delik" void block, a cloned card), and
+        /// a card that HAS been played has already left the hand while its cubes stand there
+        /// for the rest of the round. So faces are remembered as they go past instead of
+        /// looked up after the fact.
+        /// </summary>
+        private readonly Dictionary<int, BlockCard> cardFaces = new Dictionary<int, BlockCard>();
+
+        /// <summary>Files away every card currently visible - hand, bonus hand and owned deck -
+        /// so a cube placed from any of them can still find its face later. Called on every
+        /// refresh, which is the last moment a card is guaranteed to still be somewhere.</summary>
+        private void RememberCardFaces(RoundEngine round)
+        {
+            if (session != null)
+            {
+                IReadOnlyList<BlockCard> owned = session.OwnedCards;
+                for (int i = 0; i < owned.Count; i++)
+                {
+                    cardFaces[owned[i].Id] = owned[i];
+                }
+            }
+            if (round != null)
+            {
+                for (int i = 0; i < round.Hand.Count; i++)
+                {
+                    cardFaces[round.Hand[i].Id] = round.Hand[i];
+                }
+                // The BONUS hand is a separate list, not part of Hand - and it is where every
+                // card that never joins the deck lives: a debug-dealt block, a "Kara delik"
+                // void block, a clone. Miss it and exactly those blocks lose their face the
+                // moment they are placed.
+                IReadOnlyList<BonusSlot> bonus = round.BonusHand;
+                for (int i = 0; i < bonus.Count; i++)
+                {
+                    cardFaces[bonus[i].Card.Id] = bonus[i].Card;
+                }
+            }
+        }
+
+        /// <summary>The card with this id, or null. Cubes with no card behind them (rot,
+        /// snakes, mines) answer null, which every caller treats as "no card face".</summary>
+        private BlockCard FindOwnedCard(int cardId)
+        {
+            BlockCard card;
+            return cardFaces.TryGetValue(cardId, out card) ? card : null;
+        }
+
         private void BuildViews()
         {
             var boardGo = new GameObject("BoardView");
             boardGo.transform.SetParent(transform, false);
             boardView = boardGo.AddComponent<BoardView>();
+            // Lets a placed cube keep the face of the card that placed it (see CardLookup).
+            boardView.CardLookup = FindOwnedCard;
+
+            var galleryGo = new GameObject("BlockGallery");
+            galleryGo.transform.SetParent(transform, false);
+            blockGallery = galleryGo.AddComponent<BlockGalleryView>();
 
             var cardsGo = new GameObject("CardLayer");
             cardsGo.transform.SetParent(transform, false);
@@ -91,6 +147,10 @@ namespace ProjectBlock.View
             var weldGo = new GameObject("WeldPicker");
             weldGo.transform.SetParent(transform, false);
             weldPicker = weldGo.AddComponent<WeldPickerView>();
+
+            var animLabGo = new GameObject("AnimationLab");
+            animLabGo.transform.SetParent(transform, false);
+            animLab = animLabGo.AddComponent<AnimationLabView>();
 
             tooltipRoot = new GameObject("Tooltip");
             tooltipRoot.transform.SetParent(transform, false);

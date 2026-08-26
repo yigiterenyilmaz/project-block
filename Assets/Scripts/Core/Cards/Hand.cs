@@ -1,6 +1,6 @@
 // PURPOSE: The cards currently held by the player. The hand has NO capacity of its
 // own on purpose: the target size lives in RoundRules.HandSize and is read live each
-// refill, so future jokers ("Seri tetik", "İmitasyon", "Dezenformasyon") can change
+// refill, so future jokers ("Seri tetik", "İmitasyon", "Konfüzyon") can change
 // hand size mid-round by mutating the shared RoundRules instance.
 
 using System.Collections.Generic;

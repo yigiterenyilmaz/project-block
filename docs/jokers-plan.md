@@ -60,7 +60,7 @@ Verilen kararlar:
    tahtaya bir hücre eklemek eklendiği satırları öldürürdü. `ResolveFullLines` ve
    `PredictExplosions` aynı kuralı okuyor.
 4. **Tetikleyici `RoundDeck.ShuffleCount` DEĞİL.** O sayaç kuralın ve jokerlerin emrettiği
-   karmaları da sayıyor (eşik ödülü, el yenileme, Dezenformasyon her tur). "Kartlar bitti"nin
+   karmaları da sayıyor (eşik ödülü, el yenileme, Konfüzyon her tur). "Kartlar bitti"nin
    tek gerçek yeri `DrawWithRules` — erozyon oradan sayılıyor (`DeckRecycleCount`).
 5. **Erozyon turun sonunda, kancalardan sonra uygulanıyor** (adım 8.5): çekme döngüsünün
    ortasında tahtayı yeniden şekillendirmek yerleşimin altındaki zemini kaydırırdı. Eşik ve
@@ -93,11 +93,32 @@ Buldozer gücünün 2 sıralık bandı 5x5'te alanın %40'ı (9x9'da %22); Meyda
 `max(3, satırdaki boş kare)` süresinde ilk bantta taban değer baskın; enflasyon güçlerinin
 +1'i 5x5'te göreli olarak çok daha büyük.
 
-## Güncel — kadro 53 joker / 36 güç / 37 patron (2026-07-26)
+## Güncel — kadro 52 joker / 36 güç / 37 patron (2026-08-10)
 
 Aşağıdaki bölümler ilk 31–35 jokerlik tasarım listesinin tarihçesi; sayıları oradan okuma.
 Kayıtlı içerik sayısı her zaman registry'lerden gelir (`JokerRegistry`, `PowerRegistry`,
-`BossRegistry`). Bu turda eklenenler:
+`BossRegistry`).
+
+Bu turda kadrodan çıkanlar / adı değişenler:
+
+- **Savunmacı (joker) kaldırıldı** — uzatmaya girmeden bitirilen rauntları biriktirip ilk sağ
+  çıkılan uzatmada ödeyen joker. Kadro 53 → 52. Uzatmayı aynı şekilde okuyan
+  "Eforsuz galibiyet" duruyor, `RoundEngine.ContinueCount` okuması onun yorumuna taşındı.
+- **Kiracı → Metamorfoz** — kural aynı (5 tur duran elementsiz blok ALTINA döner), sadece kira
+  mecazı bırakıldı. `DefId` de değişti (`kiraci` → `metamorfoz`), bu yüzden
+  `SaveGame.FormatVersion` 10'a çıktı ve eski kayıtlar artık teklif edilmiyor.
+- **Dezenformasyon → Konfüzyon** — kural aynı (çekme destesi asla birleşmeyen iki yarıya
+  bölünür, roller her tur yer değiştirir, el +1), sadece adı değişti. `DefId` de değişti
+  (`dezenformasyon` → `konfuzyon`), bu yüzden `SaveGame.FormatVersion` 11'e çıktı.
+- **Oryantasyon → Baba Ocağı** — kural aynı (oynanan kartlar ıskartaya değil çekme destesinin
+  rastgele bir yerine gömülür, destenin üstü hep görünür), sadece adı değişti. `DefId` de
+  değişti (`oryantasyon` → `baba_ocagi`), aynı 11'inci sürümün içinde.
+- **Damlaya Damlaya Göl Olur → Kapalı Ekonomi** — kural aynı (marketten bir şey almazsan
+  sonraki raunt her tur puan bonusu), atasözü yerine ne yaptığını söyleyen bir ad. `DefId` de
+  değişti (`damlaya` → `kapali_ekonomi`), aynı 11'inci sürümün içinde. Belgenin eski
+  bölümlerindeki adlar da güncellendi.
+
+Bu turda eklenenler:
 
 - **Mikrodalga (joker)** — kombo serisi **bir sessiz turu** affeder (`RoundRules.ComboBridgeTurns`);
   arayı kapatan tur kombo bonusunun `ComboBridgedScorePercent` kadarını öder. İki sessiz tur seriyi
@@ -149,11 +170,11 @@ küp) sorabilen bir panel gerekiyor, o da enes'in `MarketView` dosyasında.
 
 ### Sonradan eklenen 4 deste jokeri (hepsi yazıldı)
 
-- **Oryantasyon** — oynanan kartlar ıskarta yerine çekme destesinin rastgele bir yerine
+- **Baba Ocağı** — oynanan kartlar ıskarta yerine çekme destesinin rastgele bir yerine
   gömülür, destenin üstü hep görünür. `RoundRules.PlayedCardsReturnToDrawPile` + motorda
   tek bir `DisposeCard` çıkışı. **Dikkat:** ıskarta boş kaldığı için deste pratikte
   tükenmiyor, yani deste-bitti kaybını neredeyse kaldırıyor.
-- **Dezenformasyon** — her tur sonunda desteler yer değiştirir, sonra birleşip karılır ve
+- **Konfüzyon** — her tur sonunda desteler yer değiştirir, sonra birleşip karılır ve
   ikiye bölünür. El +1. **Dikkat:** ıskarta bir tur atlayarak çekme kaynağı olduğu için
   uzatmanın "ıskarta geri dönmez" baskısı yumuşuyor.
 - **İmitasyon** — el boyutu ıskartadaki kart sayısına eşit (en az 1). Tur sonunda elde
@@ -287,7 +308,7 @@ Doğrulama: enes'in motorunun oyun izi joker katmanı eklendikten sonra **birebi
 | Kentsel Dönüşüm | L | — |
 | Robot süpürge | L | — |
 | Buzluk | XL | element küpleri |
-| Damlaya Damlaya Göl Olur | XL | market |
+| Kapalı Ekonomi | XL | market |
 | Parazit | XL | market, karta takma |
 | Powerbank | XL | güçler |
 | Simya | XL | element küpleri, market |
@@ -345,11 +366,11 @@ onaylaman ya da değiştirmen yeterli.
 
 **Önerilen hüküm:** Üçü birlikte tutulabilsin, her joker KENDİ streak'ini bağımsız saysın (envanterde birbirini dışlamak yok, zaten aynı turda en fazla biri ilerler). Boyut = küp sayısı (Shape.Size). Eşit boyutlu yerleştirme çığ ve dondurma streak'lerini SIFIRLAR (duraklatmaz) — yoksa Siyam turları bedava koruma olur. Siyam için 'aynı şekil' = normalize şeklin birebir aynısı (CanonicalKey eşitliği); döndürülmüş/aynalanmış hali AYNI SAYILMAZ (temel oyunda rotasyon yok). Bonus elden oynanan kart da bir tur olduğu için üç streak'e de dahildir.
 
-### 2.7 bereket, çığ, dondurma, Siyam, Damlaya Damlaya Göl Olur, Batak
+### 2.7 bereket, çığ, dondurma, Siyam, Kapalı Ekonomi, Batak
 
-**Çakışma:** No defined stacking/ordering for score bonuses: bereket permanently raises turn score, streak jokers add conditional bonuses, Damlaya adds a next-round bonus, and Batak pays a multiple of points earned between bet and sweep. Unresolved: do bonus points count toward the threshold (RoundScore) and TotalScore/market currency; does Batak's payout compound on the other bonuses; can Batak's payout feed itself.
+**Çakışma:** No defined stacking/ordering for score bonuses: bereket permanently raises turn score, streak jokers add conditional bonuses, Kapalı Ekonomi adds a next-round bonus, and Batak pays a multiple of points earned between bet and sweep. Unresolved: do bonus points count toward the threshold (RoundScore) and TotalScore/market currency; does Batak's payout compound on the other bonuses; can Batak's payout feed itself.
 
-**Önerilen hüküm:** Tek puan boru hattı tanımla: 1) taban skor (bereket'in kalıcı artışı doğrudan ScoringConfig değerlerine işlenir), 2) koşullu tur bonusları (çığ/dondurma/Siyam/Damlaya) TOPLAMA olarak eklenir, çarpan yok, 3) tur puanının tamamı hem RoundScore'a (eşiğe) hem TotalScore'a (market parasına) sayılır — bonus puan 'ikinci sınıf' değildir, 4) Batak ödemesi bet-temizlik arasında birikmiş NİHAİ puanlar (tüm joker bonusları dahil) üzerinden temizlik anında hesaplanır, üste eklenir; ödemenin kendisi yeni bir Batak hesabına girmez ama eşiğe ve TotalScore'a sayılır. Damlaya bonusu 'sonraki raundun ilk turunda' tek seferde verilsin.
+**Önerilen hüküm:** Tek puan boru hattı tanımla: 1) taban skor (bereket'in kalıcı artışı doğrudan ScoringConfig değerlerine işlenir), 2) koşullu tur bonusları (çığ/dondurma/Siyam/Kapalı Ekonomi) TOPLAMA olarak eklenir, çarpan yok, 3) tur puanının tamamı hem RoundScore'a (eşiğe) hem TotalScore'a (market parasına) sayılır — bonus puan 'ikinci sınıf' değildir, 4) Batak ödemesi bet-temizlik arasında birikmiş NİHAİ puanlar (tüm joker bonusları dahil) üzerinden temizlik anında hesaplanır, üste eklenir; ödemenin kendisi yeni bir Batak hesabına girmez ama eşiğe ve TotalScore'a sayılır. Kapalı Ekonomi bonusu 'sonraki raundun ilk turunda' tek seferde verilsin.
 
 ### 2.8 Seri tetik
 
@@ -396,15 +417,15 @@ onaylaman ya da değiştirmen yeterli.
 - PhaseChanged (GameSession, Action<GamePhase>) — EXISTS. Market enter/leave are derivable from it, but jokers get explicit OnMarketEntered/OnMarketLeft dispatches for clarity.
 - RoundStarted — MUST ADD (GameSession dispatch, right after constructing the RoundEngine in StartRound). Consumers: charge reset (Renovasyon, İade, Taşkın, Yangın, Powerbank), ihale (picks its auction target via ctx.Rng), Batak (opens the bet window), Enfeksiyon/Buldozer/Robot süpürge counters reset.
 - ModifyRoundConfig — MUST ADD (GameSession, called BEFORE constructing RoundEngine: roundConfig = jokers.FilterRoundConfig(progression.GetRound(n))). Consumer: Kentsel Dönüşüm (permanent extra board space). This is a filter hook, not an event — it must run before the board exists.
-- RoundEnded(outcome: Advanced|Lost) — MUST ADD (GameSession dispatch from OnRoundStatusChanged). Consumers: Domuz Kumbarası, Altın Kumbara (value accrual), Kentsel Dönüşüm (arms its next-round bonus), Damlaya Damlaya (arms 'watch the market' state).
+- RoundEnded(outcome: Advanced|Lost) — MUST ADD (GameSession dispatch from OnRoundStatusChanged). Consumers: Domuz Kumbarası, Altın Kumbara (value accrual), Kentsel Dönüşüm (arms its next-round bonus), Kapalı Ekonomi (arms 'watch the market' state).
 - AfterLineExplosion (in-turn hook, new step 2b of ResolvePlacement) — MUST ADD. Runs after Board.ResolveFullLines, before the sweep check; receives TurnContext and may destroy more cubes via ctx.ExplodeCubes. Consumers: Tutuştur (fire chain), Enfeksiyon (spread/detonate), Buldozer (every-4th-turn wipe, scoreless), Kayıt defteri (cube counter + forced sweep via ctx.RequestSweepCheck).
 - AfterCleanSweep (in-turn hook, inside step 3 when the sweep fires) — MUST ADD. Consumers: elmas kazma (explode obsidians for points), Kara delik (inject void block into discard), Altın Kumbara (accrue), Batak (payout), Robot süpürge (sweep-credit bonus), Kayıt defteri ('natural sweep no longer counts' interacts here).
-- ModifyScore (in-turn hook, step 5, via ScoreBreakdown) — MUST ADD. Consumers: çığ, dondurma, Siyam (streak bonuses; need TurnContext.PreviousReport), midas (gold-in-hand bonus), Damlaya Damlaya (next-round bonus), Batak partial payouts. bereket needs NO hook here — it permanently mutates ScoringConfig from AfterTurnScored (plus-shape detection = an exploded row AND column that intersect, readable from the in-progress report).
+- ModifyScore (in-turn hook, step 5, via ScoreBreakdown) — MUST ADD. Consumers: çığ, dondurma, Siyam (streak bonuses; need TurnContext.PreviousReport), midas (gold-in-hand bonus), Kapalı Ekonomi (next-round bonus), Batak partial payouts. bereket needs NO hook here — it permanently mutates ScoringConfig from AfterTurnScored (plus-shape detection = an exploded row AND column that intersect, readable from the in-progress report).
 - AfterTurnScored (in-turn hook, after refill/threshold, before the final status update and TurnResolved) — MUST ADD. Consumers: Seri tetik (discard unused hand + redraw; overtime-disabled), Robot süpürge (random cube pop + cooldown), Cimri Kumbara (per-turn accrual), Harcama bonusu (reads report.DrawPileEmptiedThisTurn), Buldozer/Enfeksiyon turn counters, Batak (turn-limit check → ctx.DeclareLoss).
 - OnCubesDestroyed(IReadOnlyList<DestroyedCube>) (in-turn hook, raised for EVERY batch of destroyed cubes: line clears, joker/power explosions, void blocks) — MUST ADD, and requires a GameBoard change: explosions must report the Cube VALUE (Kind + SourceCardId), not just GridPos. Consumers: Kazı çalışması (detect a card fully exploded in one shot → ctx.AddBonusCard), Parazit (host-cube death → queued joker removal), Buzluk (ice explosion bonus), Kayıt defteri counter.
 - DrawPileEmptiedThisTurn — MUST ADD as a TurnReport flag set inside DrawWithRules (covers empty-then-reshuffled-same-turn). Consumer: Harcama bonusu.
 - JokerAcquired / JokerSold / JokerRemoved — MUST ADD on JokerInventory (dispatch to other jokers + C# events for UI). Consumers: ihale ('no new auction until the auctioned joker sells'), Domuz Kumbarası (the future sell mechanic), Parazit cleanup.
-- MarketEntered / ItemPurchased / MarketLeft(anythingPurchased) / MarketOffersGenerating — RESERVED NOW as virtual no-op hooks on Joker, dispatched when the real market replaces MarketStub. Consumers: Damlaya Damlaya (purchase tracking), Simya (offer generation filter), Parazit (attachment is a market-phase action).
+- MarketEntered / ItemPurchased / MarketLeft(anythingPurchased) / MarketOffersGenerating — RESERVED NOW as virtual no-op hooks on Joker, dispatched when the real market replaces MarketStub. Consumers: Kapalı Ekonomi (purchase tracking), Simya (offer generation filter), Parazit (attachment is a market-phase action).
 - PowerUsed — RESERVED (empty virtual hook now, dispatched when powers ship). Consumer: Powerbank (refill one power use, 1 charge/round).
 - NOT needed as events: threshold pass and overtime entry are readable from TurnReport.ThresholdJustPassed / Engine.ThresholdPassed inside existing hooks; Insider is a pure UI flag (RoundRules.RevealTopDrawCard) with no event at all.
 
@@ -469,7 +490,7 @@ namespace ProjectBlock.Core
         public virtual void OnRoundStarted(RoundContext ctx) { }      // called AFTER ResetCharges
         public virtual void OnRoundEnded(RoundContext ctx, RoundOutcome outcome) { }
         public virtual void OnMarketEntered(SessionContext ctx) { }               // reserved
-        public virtual void OnMarketLeft(SessionContext ctx, bool anythingPurchased) { } // Damlaya
+        public virtual void OnMarketLeft(SessionContext ctx, bool anythingPurchased) { } // Kapalı Ekonomi
         public virtual void OnPowerUsed(RoundContext ctx, string powerId) { }     // reserved: Powerbank
 
         // ---- in-turn hooks (see RoundEngine resolution order; TurnContext CAN mutate the turn) ----
@@ -1169,7 +1190,7 @@ Parazit ships last, but nothing in v1 blocks it because the two hard prerequisit
 
 **Yaşam döngüsü:** Continuous: whenever a water cube occupies a wall cell (placed there, or converted there e.g. by Taşkın) it freezes; the check runs inside every turn's resolution before the sweep check (step 3). No per-round reset. Overtime: designer silent — assume always active. Adversarial edge: freezing alone can leave ONLY ice on the board — the sweep guard (requires a same-turn line explosion, RoundEngine step 3) means that turn is NOT a temizlik, but every later turn with any line explosion re-qualifies as temizlik while only ice remains, enabling repeated sweeps (and in overtime, repeated card-removal/offer cycles).
 
-### Damlaya Damlaya Göl Olur — `XL`
+### Kapalı Ekonomi — `XL`
 
 **Bekleyen alt sistem:** market
 
@@ -1540,7 +1561,7 @@ yazılacak jokerlerin soruları bloklayıcıdır.
 - Buz, dolu satır/sütun patlamasında normal küpler gibi patlıyor (satırın dolu sayılmasına dahil) ve sadece ekstra puan veriyor — doğru mu? Ekstra puanın miktarı/formülü ne?
 - Tahtada sadece buz kaldıktan sonra oyuncu satır patlattığı HER tur yeniden temizlik tetiklenebilir (uzatmada her biri kart sildirip yeni teklif açar) — bu art arda temizlik zinciri istediğin bir davranış mı?
 
-### Damlaya Damlaya Göl Olur
+### Kapalı Ekonomi
 
 - Bonus tam olarak ne: sonraki raunt başında yatan sabit puan mı, yoksa o raunt boyunca kazanılan puanlara uygulanan bir çarpan mı? Eşiğe (ScoreThreshold) sayılıyor mu?
 - Sabit puansa ve raunt başında veriliyorsa, düşük eşikli bir rauntta tek başına eşiği geçebilir — bu durumda ilerleme teklifi daha ilk blok konmadan mı gelmeli?

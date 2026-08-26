@@ -40,7 +40,6 @@ namespace ProjectBlock.Core
             Register(() => new IkinciSansPower());
             Register(() => new TotemPower());
             Register(() => new BukulmePower());
-            Register(() => new HileliZarPower());
             Register(() => new HalusinasyonPower());
             Register(() => new KarakterOlusturmaPower());
             Register(() => new RetroPower());

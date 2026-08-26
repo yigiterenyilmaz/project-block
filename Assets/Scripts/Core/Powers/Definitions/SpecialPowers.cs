@@ -376,8 +376,8 @@ namespace ProjectBlock.Core
     /// <summary>"Halüsinasyon" - a power with no fixed identity: it appears as a random power
     /// and, whenever used, instantly recharges and morphs into a DIFFERENT random one. It only
     /// ever becomes an instant, self-contained power (one clean Run) - never a legendary /
-    /// reality-bending one, never one that needs special routing (Olta's marking, Hileli zar's
-    /// market picker, Eko's arm-and-replay), and never one that carries state across turns
+    /// reality-bending one, never one that needs special routing (Olta's marking, Eko's
+    /// arm-and-replay), and never one that carries state across turns
     /// (inflation, Bükülme). Everything the current form needs - its targeting, preview, run
     /// and can-run - is delegated to that inner power, so from the engine's side it behaves
     /// exactly like whatever it currently is.</summary>

@@ -319,7 +319,7 @@ namespace ProjectBlock.View
                     }
                     else
                     {
-                        // "Oryantasyon" buries played cards into the DRAW pile, not the
+                        // "Baba Ocağı" buries played cards into the DRAW pile, not the
                         // discard, so the card flies to whichever pile actually received it.
                         Vector2 playedTarget = round.Rules.PlayedCardsReturnToDrawPile
                             ? DrawPilePos
@@ -390,6 +390,73 @@ namespace ProjectBlock.View
             }
 
             UpdatePiles(round);
+        }
+
+        /// <summary>One of this layer's own flourishes, for the animation lab to fire on
+        /// demand (see PlayDebugAnimation).</summary>
+        public enum DebugAnim
+        {
+            ShuffleSelf,
+            ShuffleFromDiscard,
+            PilePulseDraw,
+            PilePulseDiscard,
+            DealOne,
+            DiscardOne,
+            BurnOne,
+            VanishOne
+        }
+
+        /// <summary>
+        /// DEBUG SEAM for the animation lab (F3): plays one of the flourishes above on demand,
+        /// on a throwaway card visual where one is needed.
+        ///
+        /// It exists so the lab drives THESE routines rather than a copy of them - when the
+        /// shuffle or the discard flight is retimed, the lab shows the new timing for free.
+        /// Nothing here reads or changes game state; <paramref name="round"/> is only used to
+        /// name a real card so the visual looks like the ones in play.
+        /// </summary>
+        public void PlayDebugAnimation(DebugAnim which, RoundEngine round)
+        {
+            BuildPilesIfNeeded();
+            BlockCard sample = round != null && round.Hand.Count > 0 ? round.Hand[0] : null;
+            switch (which)
+            {
+                case DebugAnim.ShuffleSelf:
+                    PlayShuffleFx(false);
+                    break;
+                case DebugAnim.ShuffleFromDiscard:
+                    PlayShuffleFx(true);
+                    break;
+                case DebugAnim.PilePulseDraw:
+                    StartCoroutine(PilePulse(drawPileRoot));
+                    break;
+                case DebugAnim.PilePulseDiscard:
+                    StartCoroutine(PilePulse(discardPileRoot));
+                    break;
+                case DebugAnim.DealOne:
+                    DebugFly(sample, false, DrawPilePos, SlotPosition(0, 1), DealDuration);
+                    break;
+                case DebugAnim.DiscardOne:
+                    DebugFly(sample, true, SlotPosition(0, 1), DiscardPilePos, DiscardDuration);
+                    break;
+                case DebugAnim.BurnOne:
+                    DebugFly(sample, true, DrawPilePos, DiscardPilePos, DiscardDuration);
+                    break;
+                case DebugAnim.VanishOne:
+                    StartCoroutine(VanishAndDestroy(CardVisual.Create(transform, "LabVanish",
+                        sample, true, true, SlotPosition(0, 1), FxOrder)));
+                    break;
+            }
+        }
+
+        /// <summary>Throwaway card that flies one leg and destroys itself - the same primitive
+        /// every deal, discard and burn in Sync uses.</summary>
+        private void DebugFly(BlockCard card, bool faceUp, Vector2 from, Vector2 to,
+            float duration)
+        {
+            CardVisual fx = CardVisual.Create(transform, "LabFly", card, faceUp, false,
+                from, FxOrder);
+            fx.FlyToAndDestroy(to, duration);
         }
 
         /// <summary>True if a world point is on the draw pile (used to open the deck overlay).</summary>
@@ -722,7 +789,7 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Shows the top of the DRAW pile face-up when a rule reveals it -
-        /// "Insider"/"Oryantasyon" (RevealTopDrawCard) or "Büyüteç" (RevealedDrawCount).
+        /// "Insider"/"Baba Ocağı" (RevealTopDrawCard) or "Büyüteç" (RevealedDrawCount).
         /// Gated, because the draw pile is face-down by default and must not leak.</summary>
         private void UpdateDrawTop(RoundEngine round)
         {

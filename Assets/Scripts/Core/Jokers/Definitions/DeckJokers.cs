@@ -1,13 +1,13 @@
-﻿// PURPOSE: Jokers that rewrite how the two piles work: Oryantasyon, Dezenformasyon,
+﻿// PURPOSE: Jokers that rewrite how the two piles work: Baba Ocağı, Konfüzyon,
 // İmitasyon, Fraksiyon. They are the deck-economy counterpart of the board jokers, and
 // they all lean on RoundDeck primitives rather than touching the piles by hand.
 //
 // WHY THESE ARE DANGEROUS TO BALANCE: the loss conditions of the game are deck-based
 // (the hand must always refill; in overtime an empty draw pile ends the run). Every joker
 // here moves cards between the piles, so each one either softens or sharpens those losses:
-//   Oryantasyon  - the discard stays empty and cards keep coming back: the deck effectively
+//   Baba Ocağı  - the discard stays empty and cards keep coming back: the deck effectively
 //                  never runs out, which nearly removes the deck-out loss.
-//   Dezenformasyon - the discard becomes a live draw source every other turn, so overtime
+//   Konfüzyon - the discard becomes a live draw source every other turn, so overtime
 //                  loses its "the discard never comes back" bite.
 //   İmitasyon    - hand size tracks the discard, so it can demand more cards than the draw
 //                  pile holds. That is a real way to lose, hence MaxHandSize.
@@ -17,12 +17,12 @@
 
 namespace ProjectBlock.Core
 {
-    /// <summary>"Oryantasyon" - played cards are buried at a random depth in the draw pile
+    /// <summary>"Baba Ocağı" - played cards are buried at a random depth in the draw pile
     /// instead of going to the discard, and the top of the draw pile is always visible.</summary>
-    public sealed class OryantasyonJoker : Joker
+    public sealed class BabaOcagiJoker : Joker
     {
-        public OryantasyonJoker()
-            : base("oryantasyon", "Oryantasyon")
+        public BabaOcagiJoker()
+            : base("baba_ocagi", "Baba Ocağı")
         {
             SetDescription(
                 "Played cards are buried at a random depth of the draw pile instead of "
@@ -57,13 +57,13 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Dezenformasyon" - once the round's opening hand is dealt, the draw pile is
+    /// <summary>"Konfüzyon" - once the round's opening hand is dealt, the draw pile is
     /// split into two equal, individually-kept halves: one is the draw pile, the other the
     /// discard. The two halves are never poured together. Each turn their ROLES swap: the pile
     /// you drew from this turn becomes the one you discard into next turn, and vice versa - so
     /// played cards always land in the CURRENT discard and draws come from the CURRENT draw
     /// pile, even as those roles flip every turn. Hand size +1.</summary>
-    public sealed class DezenformasyonJoker : Joker
+    public sealed class KonfuzyonJoker : Joker
     {
         public int ExtraHandSize = 1;
 
@@ -72,8 +72,8 @@ namespace ProjectBlock.Core
         /// <summary>Turns played with this joker; the parity is the current draw/discard flow.</summary>
         public int TurnsSeen { get; private set; }
 
-        public DezenformasyonJoker()
-            : base("dezenformasyon", "Dezenformasyon")
+        public KonfuzyonJoker()
+            : base("konfuzyon", "Konfüzyon")
         {
             SetDescription(
                 "After the opening hand is dealt, the draw pile is split into two equal piles "

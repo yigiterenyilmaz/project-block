@@ -10,7 +10,7 @@ namespace ProjectBlock.Core
     partial class RoundEngine
     {
         /// <summary>THE way a card leaves play into a pile. Normally the discard; with
-        /// "Oryantasyon" it is buried at a random depth in the draw pile instead, which is
+        /// "Baba Ocağı" it is buried at a random depth in the draw pile instead, which is
         /// why every disposal in this class goes through here.</summary>
         private void DisposeCard(BlockCard card)
         {

@@ -172,7 +172,7 @@ namespace ProjectBlock.Core
         private int nextCardId = 1;
 
         /// <summary>True if the player bought anything during the current market visit.
-        /// "Damlaya damlaya" reads it when the market is left.</summary>
+        /// "Kapalı Ekonomi" reads it when the market is left.</summary>
         private bool purchasedThisMarket;
 
         /// <summary>Fraction knocked off every price in the NEXT market visit, 0 = none.
@@ -238,6 +238,22 @@ namespace ProjectBlock.Core
             pendingOpeningHand = cardIds != null ? new List<int>(cardIds) : null;
         }
 
+        /// <summary>"Hileli zar": deals the next round's opening hand and spends that joker's
+        /// once-per-market pick. False when the id is not a held "Hileli zar" or it has already
+        /// dealt in this market - the UI asks for the pick, but WHETHER it may be made is a
+        /// session rule, like every other market rule.</summary>
+        public bool TryPickOpeningHand(int jokerInstanceId, IEnumerable<int> cardIds)
+        {
+            var zar = Jokers.Find(jokerInstanceId) as HileliZarJoker;
+            if (zar == null || !zar.CanPickOpeningHand)
+            {
+                return false;
+            }
+            SetPendingOpeningHand(cardIds);
+            zar.NotePicked();
+            return true;
+        }
+
         /// <summary>Takes and clears the preset opening hand (the round engine calls this once).</summary>
         internal IReadOnlyList<int> TakePendingOpeningHand()
         {
@@ -289,6 +305,26 @@ namespace ProjectBlock.Core
                 throw new InvalidOperationException("Bonus cards can only be added during a round.");
             }
             BlockCard card = CreateRandomCard();
+            CurrentRound.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
+            return card;
+        }
+
+        /// <summary>
+        /// DEBUG helper: puts a bonus card of a CHOSEN element into the current round's hand,
+        /// so a block type can be tested without waiting for the market to offer one. Like
+        /// DebugAddRandomBonusCard the card is round-scoped and never joins the owned deck.
+        /// A "Hedefli" card gets its target cube stamped here, exactly as the market does it,
+        /// or it would arrive unmarked and behave like a plain block.
+        /// </summary>
+        public BlockCard DebugAddElementCard(BlockElement element)
+        {
+            if (Phase != GamePhase.Round)
+            {
+                throw new InvalidOperationException("Bonus cards can only be added during a round.");
+            }
+            BlockShape shape = Config.Deck.ShapeGenerator.NextShape(rng);
+            var card = new BlockCard(nextCardId++, shape, new[] { element });
+            AssignTargetCube(card, rng);
             CurrentRound.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
             return card;
         }

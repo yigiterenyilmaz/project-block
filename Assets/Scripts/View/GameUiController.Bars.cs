@@ -139,24 +139,26 @@ namespace ProjectBlock.View
             return true;
         }
 
-        /// <summary>In the market, clicking a charged "Hileli zar" power opens the opening-hand
-        /// picker instead of selling it. Returns true if it handled the click.</summary>
+        /// <summary>In the market, clicking a "Hileli zar" joker that still has this market's
+        /// pick opens the opening-hand picker instead of selling it - the same interception
+        /// Parazit does, so once the pick is spent the click sells the joker as usual.
+        /// Returns true if it handled the click.</summary>
         private bool TryHileliZarFromBar(Mouse mouse)
         {
-            int index = powerBar.PowerIndexAt(mouse.position.ReadValue());
-            if (index < 0 || index >= session.Powers.Count)
+            int index = jokerBar.JokerIndexAt(mouse.position.ReadValue());
+            if (index < 0 || index >= session.Jokers.Count)
             {
                 return false;
             }
-            Power power = session.Powers.Powers[index];
-            if (power.DefId != "hileli_zar" || !power.Charged)
+            var zar = session.Jokers.Jokers[index] as HileliZarJoker;
+            if (zar == null || !zar.CanPickOpeningHand)
             {
                 return false;
             }
             hileliPickMode = true;
             hileliSelection.Clear();
             hileliTarget = Mathf.Max(1, session.Config.Rules.HandSize);
-            hileliPowerId = power.InstanceId;
+            hileliJokerId = zar.InstanceId;
             ShowHileliPicker();
             messageText.text = Loc.Pick(
                 "Hileli Zar: pick " + hileliTarget + " cards for next round's opening hand",
@@ -175,11 +177,10 @@ namespace ProjectBlock.View
 
         private void ConfirmHileliZar()
         {
-            session.SetPendingOpeningHand(hileliSelection);
-            session.Powers.Spend(hileliPowerId);
+            session.TryPickOpeningHand(hileliJokerId, hileliSelection);
             hileliPickMode = false;
             deckOverlay.Hide();
-            powerBar.Refresh(session, null);
+            jokerBar.Refresh(session, null);
             sfx.Buy();
             Debug.Log("[project_block] Hileli Zar opening hand set: " + hileliSelection.Count + " cards");
             UpdateHud();
@@ -297,11 +298,11 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            if (TrySellJokerFromBar(mouse))
+            if (TryHileliZarFromBar(mouse))
             {
                 return;
             }
-            if (TryHileliZarFromBar(mouse))
+            if (TrySellJokerFromBar(mouse))
             {
                 return;
             }

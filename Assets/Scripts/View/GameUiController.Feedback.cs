@@ -181,92 +181,319 @@ namespace ProjectBlock.View
             }
             comboStreak++;
             EmitBlastParticles(round, report);
-            // shake grows with the combo streak
-            float shakeAmplitude = report.DynamiteTriggered ? 0.22f : report.CleanSweep ? 0.16f : 0.09f;
-            shakeAmplitude *= 1f + 0.25f * Mathf.Min(comboStreak - 1, 5);
-            ShakeCamera(shakeAmplitude, 0.2f);
+            ShakeForBlast(report.DynamiteTriggered, report.CleanSweep, comboStreak);
             if (report.DynamiteTriggered)
             {
-                FloatingTextFx.Spawn(transform, new Vector2(0f, 3.4f),
-                    Loc.Pick("DYNAMITE!", "DİNAMİT!"), new Color(0.95f, 0.3f, 0.2f), 72, 0.09f);
+                FlashDynamite();
+                SpawnDynamitePopup();
             }
             // The popup shows the SCORING combo (consecutive line-clearing turns), which is
             // what actually pays out - not the destruction-only comboStreak that drives shake.
             if (report.ComboCount >= 2)
             {
-                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
-                    Loc.Pick("COMBO x", "KOMBO x") + report.ComboCount + "!",
-                    new Color(1f, 0.6f, 0.2f), 64, 0.08f);
+                SpawnComboPopup(report.ComboCount);
             }
             if (report.CleanSweep)
             {
-                FloatingTextFx.Spawn(transform, new Vector2(0f, 1.4f),
-                    Loc.Pick("CLEAN SWEEP!", "TEMİZLİK!"), new Color(1f, 0.85f, 0.3f), 80, 0.1f);
+                SpawnSweepPopup();
             }
-            // "Hedefli": the aim paid off. Shown in the block's own lime, so the popup and the
-            // cube the player was aiming at are obviously the same thing.
             if (report.TargetedBlocksHit.Count > 0)
             {
-                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.0f),
-                    Loc.Pick("TARGET HIT!", "HEDEF VURULDU!"),
-                    ViewUtil.ElementColor(BlockElement.Targeted), 68, 0.09f);
+                SpawnTargetPopup();
             }
+        }
+
+        // ---- the blast's condition-driven decisions, each in one place ----
+        //
+        // Split out of HandleBlastFeedback so the ANIMATION LAB (F3) can fire them with a
+        // chosen combo streak instead of the one the round happens to be on. The lab drives
+        // these very methods, so retuning an amplitude or a popup colour here is visible there
+        // immediately - a copy in the lab would have drifted the first time one changed.
+
+        /// <summary>Camera shake for a blast. A dynamite board-clear shakes hardest, a clean
+        /// sweep next, an ordinary line clear least - and all three grow with the destruction
+        /// streak, up to five turns deep.
+        ///
+        /// A blast is an IMPACT, so this one is deliberately front-loaded: it peaks higher than
+        /// an even shake of the same energy and is gone in well under a fifth of a second, which
+        /// is what makes it land with the ray instead of wobbling on behind it.</summary>
+        private void ShakeForBlast(bool dynamite, bool sweep, int streak)
+        {
+            float amplitude = dynamite ? 0.3f : sweep ? 0.22f : 0.13f;
+            amplitude *= 1f + 0.25f * Mathf.Min(Mathf.Max(streak, 1) - 1, 5);
+            ShakeCamera(amplitude, 0.14f, 2.4f);
+        }
+
+        /// <summary>A dynamite board clear takes every destructible cube there is, so the whole
+        /// arena strikes - in dynamite's own red, which is also the popup's - and then the smoke
+        /// rolls in over the screen. Nothing drew this before: its cubes go through DestroyCubes
+        /// rather than a line explosion, so they appear in no exploded row or column and simply
+        /// blinked out of existence.</summary>
+        private void FlashDynamite()
+        {
+            FlashBoard(ViewUtil.ElementColor(BlockElement.Dynamite));
+            PlayDynamiteSmoke();
+        }
+
+        /// <summary>The smoke a board clear leaves hanging over everything for a moment. Its own
+        /// method so the animation lab can fire it alone.</summary>
+        private void PlayDynamiteSmoke()
+        {
+            SmokeFx.Cover(transform, CameraWorldRect());
+        }
+
+        /// <summary>The world rectangle the camera can currently see - what a full-screen effect
+        /// has to cover. Read live rather than cached: the shake moves the camera.</summary>
+        private Rect CameraWorldRect()
+        {
+            if (cam == null)
+            {
+                return new Rect(0f, 0f, 0f, 0f);
+            }
+            float halfHeight = cam.orthographicSize;
+            float halfWidth = halfHeight * cam.aspect;
+            Vector3 at = camBasePosition;
+            return new Rect(at.x - halfWidth, at.y - halfHeight,
+                halfWidth * 2f, halfHeight * 2f);
+        }
+
+        private void SpawnDynamitePopup()
+        {
+            FloatingTextFx.Spawn(transform, new Vector2(0f, 3.4f),
+                Loc.Pick("DYNAMITE!", "DİNAMİT!"), new Color(0.95f, 0.3f, 0.2f), 72, 0.09f);
+        }
+
+        private void SpawnComboPopup(int comboCount)
+        {
+            FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
+                Loc.Pick("COMBO x", "KOMBO x") + comboCount + "!",
+                new Color(1f, 0.6f, 0.2f), 64, 0.08f);
+        }
+
+        private void SpawnSweepPopup()
+        {
+            FloatingTextFx.Spawn(transform, new Vector2(0f, 1.4f),
+                Loc.Pick("CLEAN SWEEP!", "TEMİZLİK!"), new Color(1f, 0.85f, 0.3f), 80, 0.1f);
+        }
+
+        /// <summary>"Hedefli": the aim paid off. Shown in the block's own lime, so the popup and
+        /// the cube the player was aiming at are obviously the same thing.</summary>
+        private void SpawnTargetPopup()
+        {
+            FloatingTextFx.Spawn(transform, new Vector2(0f, 2.0f),
+                Loc.Pick("TARGET HIT!", "HEDEF VURULDU!"),
+                ViewUtil.ElementColor(BlockElement.Targeted), 68, 0.09f);
         }
 
         private void EmitBlastParticles(RoundEngine round, TurnReport report)
         {
-            var blastColor = new Color(1f, 0.72f, 0.35f);
+            // A cleared LINE gets the ray (see FlashLine); everything else below is a loose
+            // handful of cells, which has no direction to fire along and so just puffs.
+            // MIND THE COORDINATES: ExplodedRows/Columns are 0-BASED ARRAY INDICES, while a
+            // GridPos is absolute - the board's origin can sit anywhere once something has
+            // inflated it, so MinX/MinY go back on here.
             foreach (int y in report.ExplodedRows)
             {
-                for (int x = 0; x < round.Board.Width; x++)
-                {
-                    blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), blastColor, 4);
-                }
+                FlashLine(round.Board, round.Board.MinY + y, true);
             }
             foreach (int x in report.ExplodedColumns)
             {
-                for (int y = 0; y < round.Board.Height; y++)
-                {
-                    blastFx.EmitAt(boardView.CellToWorld(new GridPos(x, y)), blastColor, 4);
-                }
+                FlashLine(round.Board, round.Board.MinX + x, false);
             }
             // Late board-reshape clears (inflation deflate, board powers) blast their exact
             // absolute cells - ExplodedRows/Columns never covered them. The board has already
             // been rebuilt to its new size by RefreshAll, so CellToWorld maps these correctly.
-            foreach (GridPos cell in report.ExtraExplodedCells)
-            {
-                blastFx.EmitAt(boardView.CellToWorld(cell), blastColor, 4);
-            }
+            FlashCells(report.ExtraExplodedCells, BlastColor, 4);
             // A "Hedefli" payout keeps its cells in a list of its own (so "Antimadde" cannot be
-            // billed for them), but on screen it is the same late clear as any other.
-            foreach (GridPos cell in report.TargetedExplodedCells)
-            {
-                blastFx.EmitAt(boardView.CellToWorld(cell), blastColor, 4);
-            }
+            // billed for them). It goes off in the lime that belongs to nothing else on the
+            // board, so the cube the player was aiming at is what they see break.
+            FlashCells(report.TargetedExplodedCells,
+                ViewUtil.ElementColor(BlockElement.Targeted), 4);
             // Cells a BOSS lifted off rather than destroyed ("Alzheimer" forgetting a card,
-            // "Yürüyen merdiven" carrying a row away). A pale, cold puff instead of the warm
-            // explosion, because nothing blew up and nothing was earned.
-            if (report.LiftedCells.Count > 0)
-            {
-                var faded = new Color(0.62f, 0.68f, 0.82f, 0.9f);
-                foreach (GridPos cell in report.LiftedCells)
-                {
-                    blastFx.EmitAt(boardView.CellToWorld(cell), faded, 3);
-                }
-            }
+            // "Yürüyen merdiven" carrying a row away). Pale and COLD - it never strikes bright,
+            // because nothing blew up and nothing was earned.
+            FlashCells(report.LiftedCells, LiftedColor, 3, cold: true);
             // "Kaçakçı" defective goods: the cubes showed up and then let go. They fall through
             // the arena and off the bottom of the screen - nothing landed, so there is nothing to
             // blast, only something to drop.
             DropFellThroughCubes(report);
             if (report.CleanSweep)
             {
-                var gold = new Color(1f, 0.85f, 0.3f);
-                for (int i = 0; i < 70; i++)
+                EmitSweepConfetti();
+            }
+        }
+
+        /// <summary>The warm orange every blast is drawn in.</summary>
+        private static readonly Color BlastColor = new Color(1f, 0.72f, 0.35f);
+
+        /// <summary>Cells a boss carried away rather than broke: cold and pale, so a lift can
+        /// never be mistaken for something the player earned.</summary>
+        private static readonly Color LiftedColor = new Color(0.62f, 0.68f, 0.82f, 0.9f);
+
+        /// <summary>
+        /// ONE cleared line: the ray out of its middle. <paramref name="line"/> is an ABSOLUTE
+        /// row or column coordinate, like a GridPos - the two callers that hold a 0-based report
+        /// index add the board's origin back before calling.
+        ///
+        /// The line's extent is taken from its outermost cells that are really play area, so a
+        /// ray fired along an irregular board (Kentsel Dönüşüm's bolted-on cells, a "Dört kutup"
+        /// quarter) stops where the board does instead of shooting off into a hole.
+        /// </summary>
+        private void FlashLine(GameBoard board, int line, bool row)
+        {
+            if (board == null || boardView == null || boardView.Board == null)
+            {
+                return;
+            }
+            var cells = new List<Vector2>();
+            int count = row ? board.Width : board.Height;
+            for (int i = 0; i < count; i++)
+            {
+                GridPos pos = row
+                    ? new GridPos(board.MinX + i, line)
+                    : new GridPos(line, board.MinY + i);
+                if (board.IsInside(pos))
                 {
-                    var pos = new Vector2(Random.Range(-3.2f, 3.2f), Random.Range(-2.2f, 4f));
-                    blastFx.EmitAt(pos, gold, 2);
+                    cells.Add(boardView.CellToWorld(pos));
                 }
             }
+            if (cells.Count == 0)
+            {
+                return;
+            }
+            float[] times = CellFlashFx.RayTimes(cells.Count);
+            CellFlashFx.Play(transform, cells, times, boardView.CellWorldSize,
+                row ? CellFlashFx.Pinch.AcrossRow : CellFlashFx.Pinch.AcrossColumn,
+                CellFlashFx.Palette.Hot(BlastColor));
+            StartCoroutine(BurstParticles(cells, times, BlastColor, 4));
+        }
+
+        /// <summary>
+        /// EVERY destruction that is not a line: a late board-reshape clear, a "Hedefli" payout,
+        /// a power blast, the sweeper, an infection going off, cubes a boss lifted away. They
+        /// strike in the same language a cleared line does - the squares themselves going off -
+        /// only rippling out from the middle of the group instead of along an axis, and in the
+        /// colour that destruction already owns.
+        ///
+        /// Cells outside the board are dropped: a turn that also eroded the arena can name a
+        /// cell that is no longer there. Returns whether anything was drawn, which is what the
+        /// callers that also make a sound or shake the camera decide on.
+        /// </summary>
+        private bool FlashCells(IReadOnlyList<GridPos> cells, Color tone, int particlesPerCell,
+            bool cold = false)
+        {
+            if (cells == null || cells.Count == 0 || boardView == null || boardView.Board == null)
+            {
+                return false;
+            }
+            var world = new List<Vector2>(cells.Count);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (boardView.Board.IsInside(cells[i]))
+                {
+                    world.Add(boardView.CellToWorld(cells[i]));
+                }
+            }
+            if (world.Count == 0)
+            {
+                return false;
+            }
+            float[] times = CellFlashFx.BurstTimes(world);
+            CellFlashFx.Play(transform, world, times, boardView.CellWorldSize,
+                CellFlashFx.Pinch.Uniform,
+                cold ? CellFlashFx.Palette.Cold(tone) : CellFlashFx.Palette.Hot(tone));
+            StartCoroutine(BurstParticles(world, times, tone, particlesPerCell));
+            return true;
+        }
+
+        /// <summary>
+        /// The cubes' own particles going off UNDER the travelling wave instead of all on one
+        /// frame, so the destruction visibly runs in a direction. This is what gives a blast its
+        /// tactility, and the ray in particular its two visible tips.
+        ///
+        /// The schedule is the flash's own, handed in rather than recomputed, so the sparks can
+        /// never drift out of step with the squares. World positions are taken up front: the
+        /// wave outlives the frame it started on, and a board that rebuilds under it (an
+        /// inflation power resolving late) must not drag the sparks somewhere else.
+        /// </summary>
+        private IEnumerator BurstParticles(List<Vector2> cells, float[] times, Color tone,
+            int perCell)
+        {
+            var due = new List<KeyValuePair<float, Vector2>>(cells.Count);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                due.Add(new KeyValuePair<float, Vector2>(times[i], cells[i]));
+            }
+            due.Sort(delegate (KeyValuePair<float, Vector2> a, KeyValuePair<float, Vector2> b)
+            {
+                return a.Key.CompareTo(b.Key);
+            });
+            // The last cells to go are the ones the wave is standing on as it hits the far end -
+            // the loudest moment of the flash - so they throw a hotter, heavier spark.
+            Color tipTone = Color.Lerp(tone, Color.white, 0.55f);
+            float elapsed = 0f;
+            int next = 0;
+            while (next < due.Count)
+            {
+                while (next < due.Count && due[next].Key <= elapsed)
+                {
+                    bool tip = next >= due.Count - 2;
+                    blastFx.EmitAt(due[next].Value, tip ? tipTone : tone,
+                        tip ? perCell + 3 : perCell);
+                    next++;
+                }
+                yield return null;
+                elapsed += Time.deltaTime;
+            }
+        }
+
+        /// <summary>
+        /// The clean-sweep celebration: the WHOLE arena strikes gold, rippling out from its
+        /// centre, and then the gold shower rains over it. The board flash is the same one a
+        /// blast uses - it is the emptied board itself going off, one square at a time - and it
+        /// is gold rather than the blast's orange so that it layers legibly over the ray that
+        /// just cleared the last line, instead of doubling it.
+        ///
+        /// Its own method so the animation lab can fire it alone (see ShakeForBlast).
+        /// </summary>
+        private void EmitSweepConfetti()
+        {
+            var gold = new Color(1f, 0.85f, 0.3f);
+            FlashBoard(gold);
+            for (int i = 0; i < 70; i++)
+            {
+                var pos = new Vector2(Random.Range(-3.2f, 3.2f), Random.Range(-2.2f, 4f));
+                blastFx.EmitAt(pos, gold, 2);
+            }
+        }
+
+        /// <summary>
+        /// THE WHOLE ARENA going off at once, rippling out from its centre - for the two events
+        /// that are about the board rather than about some cells on it: a clean sweep and a
+        /// dynamite board clear. No particles of their own; both already bring their own shower.
+        /// </summary>
+        private void FlashBoard(Color tone)
+        {
+            GameBoard board = boardView != null ? boardView.Board : null;
+            if (board == null)
+            {
+                return;
+            }
+            var cells = new List<Vector2>(board.Width * board.Height);
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    var pos = new GridPos(board.MinX + x, board.MinY + y);
+                    if (board.IsInside(pos))
+                    {
+                        cells.Add(boardView.CellToWorld(pos));
+                    }
+                }
+            }
+            CellFlashFx.Play(transform, cells, CellFlashFx.BurstTimes(cells),
+                boardView.CellWorldSize, CellFlashFx.Pinch.Uniform,
+                CellFlashFx.Palette.Hot(tone));
         }
 
         /// <summary>Drops the cubes of a card that would not stay on the board, in both worlds.
@@ -315,24 +542,33 @@ namespace ProjectBlock.View
             mineShuffle.Play(boardView, round.MainBoard, mine.ShufflePath);
         }
 
-        /// <summary>Very small camera shake for explosions (slightly bigger on clean sweeps).</summary>
+        /// <summary>Very small camera shake for explosions (slightly bigger on clean sweeps).
+        /// Fades out evenly, which is what a rumble wants.</summary>
         private void ShakeCamera(float amplitude, float duration)
+        {
+            ShakeCamera(amplitude, duration, 1f);
+        }
+
+        /// <summary>As above, with the shape of the decay: 1 is the even fade, and anything
+        /// higher front-loads the energy so the shake HITS and is gone - an impact rather than a
+        /// rumble. Only a blast asks for that (see ShakeForBlast).</summary>
+        private void ShakeCamera(float amplitude, float duration, float sharpness)
         {
             if (shakeRoutine != null)
             {
                 StopCoroutine(shakeRoutine);
                 cam.transform.position = camBasePosition;
             }
-            shakeRoutine = StartCoroutine(ShakeRoutine(amplitude, duration));
+            shakeRoutine = StartCoroutine(ShakeRoutine(amplitude, duration, sharpness));
         }
 
-        private IEnumerator ShakeRoutine(float amplitude, float duration)
+        private IEnumerator ShakeRoutine(float amplitude, float duration, float sharpness)
         {
             float time = 0f;
             while (time < duration)
             {
                 time += Time.deltaTime;
-                float falloff = 1f - Mathf.Clamp01(time / duration);
+                float falloff = Mathf.Pow(1f - Mathf.Clamp01(time / duration), sharpness);
                 Vector2 offset = Random.insideUnitCircle * (amplitude * falloff);
                 cam.transform.position = camBasePosition + new Vector3(offset.x, offset.y, 0f);
                 yield return null;
@@ -372,6 +608,7 @@ namespace ProjectBlock.View
         private void RefreshAll(TurnReport report)
         {
             RoundEngine round = session.CurrentRound;
+            RememberCardFaces(round);
             PlayMineShuffleIfDue(round);
             // "Öteki dünya" shrinks the main board and lifts it, to make room for the mirror
             // below. With one world these are the values the board always had.
@@ -600,8 +837,10 @@ namespace ProjectBlock.View
                     .Append(Loc.Pick("   [O] pay", "   [O] öde")).Append('\n');
             }
             sb.Append(Loc.Pick(
-                "Debug - J: pick joker   P: pick power   D: choose deck   R: new run   L: türkçe",
-                "Debug - J: joker seç   P: güç seç   D: deste seç   R: yeni oyun   L: english"));
+                "Debug - J: pick joker   P: pick power   D: choose deck   R: new run   L: türkçe"
+                    + "   F3: animations",
+                "Debug - J: joker seç   P: güç seç   D: deste seç   R: yeni oyun   L: english"
+                    + "   F3: animasyonlar"));
             infoText.text = sb.ToString();
             // "Kaçakçı": the free item is invisible unless the market says so.
             messageText.text = session.CanSmuggle
@@ -736,8 +975,11 @@ namespace ProjectBlock.View
                 "Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run   L: türkçe\n",
                 "Debug - S: eli yenile   B: bonus kart   D: deste seç   R: yeni oyun   L: english\n"));
             sb.Append(Loc.Pick(
-                "Debug - J: pick joker   P: pick power   K: sell last joker   O: pay debt   W/M: two worlds",
-                "Debug - J: joker seç   P: güç seç   K: son jokeri sat   O: borç öde   W/M: iki dünya"));
+                "Debug - J: pick joker   P: pick power   K: sell last joker   O: pay debt   W/M: two worlds\n",
+                "Debug - J: joker seç   P: güç seç   K: son jokeri sat   O: borç öde   W/M: iki dünya\n"));
+            sb.Append(Loc.Pick(
+                "Debug - F3: animation lab   G: boss stage",
+                "Debug - F3: animasyon labı   G: patron aşaması"));
             infoText.text = sb.ToString();
 
             if (pendingTargetJokerId.HasValue)

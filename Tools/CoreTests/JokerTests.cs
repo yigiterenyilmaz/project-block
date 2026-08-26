@@ -44,6 +44,7 @@ public static class JokerTests
         Market_StocksAndSellsJokers();
         Market_NeverOffersOwnedJokers();
         Market_RefusesJokerWhenSlotsFull();
+        HileliZar_DealsTheOpeningHandOncePerMarket();
         Overtime_GatedJokerIsSkipped();
         HarcamaBonusu_PaysWhenDrawPileEmpties();
         FullRun_WithEveryJoker_IsDeterministic();
@@ -59,12 +60,12 @@ public static class JokerTests
         Spread_ConvertsOneRingOnly();
         Buzluk_FreezesAtWallsAndDoesNotBlockSweep();
         Simya_GivesOfferedElementalBlocksASecondElement();
-        Damlaya_PaysWhenNothingWasBought();
+        KapaliEkonomi_PaysWhenNothingWasBought();
         Ihale_LocksUntilTheAuctionedJokerLeaves();
         KaraDelik_VoidBlockSwallowsWhatLandsOnIt();
         Enfeksiyon_SpreadsThenDetonates();
-        Oryantasyon_BuriesPlayedCardsInTheDrawPile();
-        Dezenformasyon_SplitsAndSwapsThePilesEachTurn();
+        BabaOcagi_BuriesPlayedCardsInTheDrawPile();
+        Konfuzyon_SplitsAndSwapsThePilesEachTurn();
         Imitasyon_HandTracksTheDiscardPile();
         Fraksiyon_SplitsAtRoundStartAndAllowsOneSwap();
         Parazit_FreesASlotAndDiesWithItsHostCube();
@@ -226,19 +227,15 @@ public static class JokerTests
         Yatirimci_TheVoidedAttemptIsUnbanked();
         Yatirimci_TheReplayIsTheSameFight();
         Yatirimci_UnlocksTheExclusivePowers();
-        Savunmaci_BanksSafeRoundsAndNotGreedyOnes();
-        Savunmaci_AnOvertimeRoundBanksNothing();
-        Savunmaci_PaysTheBankOnASurvivedOvertime();
-        Savunmaci_TheBankRefillsAfterPaying();
         Besleme_MarksAPatchAndFeedsOnExplosions();
         Besleme_GrowsWhenFedAndCostsMoreEachStep();
         Besleme_StarvesAndFinallyDies();
         Besleme_ItsBillNeverPushesTheRoundBackwards();
         Besleme_TheCreatureSurvivesARoundChange();
-        Kiraci_RipensAPlainCubeIntoGold();
-        Kiraci_OnlyPlainCubesAreTenants();
-        Kiraci_AnInterruptedTenancyStartsOver();
-        Kiraci_TheGoldItMakesIsRealGold();
+        Metamorfoz_RipensAPlainCubeIntoGold();
+        Metamorfoz_OnlyPlainCubesChange();
+        Metamorfoz_AnInterruptedClockStartsOver();
+        Metamorfoz_TheGoldItMakesIsRealGold();
         Threshold_IsACeilingForNormalPlay();
         Threshold_OvertimeIsAllowedPastTheBar();
         Threshold_ATurnUnderTheBarIsUntouched();
@@ -1506,11 +1503,11 @@ public static class JokerTests
         Check(doubled.Id == fire.Id, "the offer keeps its card id");
     }
 
-    private static void Damlaya_PaysWhenNothingWasBought()
+    private static void KapaliEkonomi_PaysWhenNothingWasBought()
     {
-        Section("damlaya / saving pays");
+        Section("kapali_ekonomi / saving pays");
         var session = NewSession(101, 6, 40, 24, 1);
-        var joker = (DamlayaJoker)session.Jokers.Add(new DamlayaJoker());
+        var joker = (KapaliEkonomiJoker)session.Jokers.Add(new KapaliEkonomiJoker());
         joker.PointsPerTurnWhenSaving = 8;
         var ctx = new SessionContext(session, session.Rng);
 
@@ -1616,11 +1613,11 @@ public static class JokerTests
             beforeDetonation + " -> " + round.Board.OccupiedCount);
     }
 
-    private static void Oryantasyon_BuriesPlayedCardsInTheDrawPile()
+    private static void BabaOcagi_BuriesPlayedCardsInTheDrawPile()
     {
-        Section("oryantasyon / cards go back into the draw pile");
+        Section("baba_ocagi / cards go back into the draw pile");
         var session = NewSession(211, 8, 1000000, 30, 1);
-        var joker = (OryantasyonJoker)session.Jokers.Add(new OryantasyonJoker());
+        var joker = (BabaOcagiJoker)session.Jokers.Add(new BabaOcagiJoker());
         RoundEngine round = session.CurrentRound;
 
         Check(session.Config.Rules.PlayedCardsReturnToDrawPile, "the rule flag is on");
@@ -1639,12 +1636,12 @@ public static class JokerTests
         Check(!session.Config.Rules.RevealTopDrawCard, "removal hides the top card again");
     }
 
-    private static void Dezenformasyon_SplitsAndSwapsThePilesEachTurn()
+    private static void Konfuzyon_SplitsAndSwapsThePilesEachTurn()
     {
-        Section("dezenformasyon / deck split into two piles at round start");
+        Section("konfuzyon / deck split into two piles at round start");
         var session = NewSession(223, 8, 1000000, 30, 1);
         int baseHand = session.Config.Rules.HandSize;
-        var joker = (DezenformasyonJoker)session.Jokers.Add(new DezenformasyonJoker());
+        var joker = (KonfuzyonJoker)session.Jokers.Add(new KonfuzyonJoker());
         Check(session.Config.Rules.HandSize == baseHand + 1, "hand size grew by one",
             "hand " + session.Config.Rules.HandSize);
 
@@ -3599,7 +3596,7 @@ public static class JokerTests
         Section("boss / anarsi silences rare and legendary");
         var session = NewSession(5170, 6, 1000000, 40, 1);
         RoundEngine round = session.CurrentRound;
-        // renovasyon is common, seri_tetik is rare, oryantasyon is legendary (RarityTable).
+        // renovasyon is common, seri_tetik is rare, baba_ocagi is legendary (RarityTable).
         Joker common = session.Jokers.Add(new RenovasyonJoker());
         Joker rare = session.Jokers.Add(new SeriTetikJoker());
         Power commonPower = session.Powers.Add(new CimbizPower());
@@ -7124,132 +7121,6 @@ public static class JokerTests
             "" + exclusive);
     }
 
-    private static void Savunmaci_BanksSafeRoundsAndNotGreedyOnes()
-    {
-        Section("savunmacı / a round finished without overtime banks, a greedy one does not");
-        var session = NewSession(9300, 5, 1000000, 40, 1);
-        var joker = (SavunmaciJoker)session.Jokers.Add(new SavunmaciJoker());
-        RoundEngine round = session.CurrentRound;
-        session.Jokers.DispatchRoundStarted(round);
-        Check(joker.Banked == 0, "the bank starts empty");
-
-        // A round that ended WITHOUT the player ever declining the offer.
-        Check(round.ContinueCount == 0, "no offer was declined this round");
-        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
-        Check(joker.Banked == joker.BonusPerSafeRound, "so it banked a stack",
-            "" + joker.Banked);
-
-        // A LOST round banks nothing.
-        int before = joker.Banked;
-        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Lost);
-        Check(joker.Banked == before, "a lost round banks nothing",
-            before + " -> " + joker.Banked);
-    }
-
-    private static void Savunmaci_AnOvertimeRoundBanksNothing()
-    {
-        Section("savunmacı / a round the player went into overtime on banks nothing");
-        var session = NewSession(9301, 5, 30, 40, 1);
-        session.Config.Scoring.PointsPerCubePlaced = 200; // one placement clears the low bar
-        var joker = (SavunmaciJoker)session.Jokers.Add(new SavunmaciJoker());
-        RoundEngine round = session.CurrentRound;
-        session.Jokers.DispatchRoundStarted(round);
-
-        PlayOneCard(round);
-        Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "the offer is up",
-            "status " + round.Status);
-        round.DecideAdvance(false); // decline it: THIS is going into overtime
-        Check(round.ContinueCount > 0, "the round is now flagged as an overtime round",
-            "continues " + round.ContinueCount);
-
-        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
-        Check(joker.Banked == 0, "so it banked nothing for that round", "" + joker.Banked);
-    }
-
-    private static void Savunmaci_PaysTheBankOnASurvivedOvertime()
-    {
-        Section("savunmacı / finishing an overtime cashes the whole bank in");
-        var session = NewSession(9302, 4, 30, 40, 1);
-        session.Config.Scoring.PointsPerCubePlaced = 200;
-        var joker = (SavunmaciJoker)session.Jokers.Add(new SavunmaciJoker());
-        RoundEngine round = session.CurrentRound;
-        session.Jokers.DispatchRoundStarted(round);
-
-        // Pretend four safe rounds already went by.
-        for (int i = 0; i < 4; i++)
-        {
-            session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
-        }
-        int bank = joker.Banked;
-        Check(bank == 4 * joker.BonusPerSafeRound, "four safe rounds are banked", "" + bank);
-
-        // Cross the bar, decline, and then sweep the board - which is what finishing an
-        // overtime actually is.
-        PlayOneCard(round);
-        Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "the offer is up");
-        round.DecideAdvance(false);
-        Check(round.ContinueCount > 0, "in overtime now");
-
-        GridPos gap = ArmASweep(round);
-        int cashedBefore = joker.CashedOut;
-        TurnReport report = null;
-        for (int i = 0; i < round.Hand.Count && report == null; i++)
-        {
-            if (round.CanPlaceCard(round.Hand[i], gap) && !round.IsFrozen(round.Hand[i].Id))
-            {
-                report = round.PlayFromHand(i, gap);
-            }
-        }
-        Check(report != null, "a card closed the row");
-        Check(report.CleanSweep, "which swept the board - the overtime is finished",
-            "sweep " + report.CleanSweep);
-        Check(joker.CashedOut == cashedBefore + 1, "the bank paid out",
-            "cashed " + joker.CashedOut);
-        Check(joker.Banked == 0, "and it is empty again", "" + joker.Banked);
-
-        bool paidUs = false;
-        foreach (ScoreContribution c in report.Score.Contributions)
-        {
-            if (c.Source == joker.DefId && c.Flat == bank) { paidUs = true; }
-        }
-        Check(paidUs, "for exactly what had been banked", "expected " + bank);
-    }
-
-    private static void Savunmaci_TheBankRefillsAfterPaying()
-    {
-        Section("savunmacı / after paying, the bank fills again");
-        var session = NewSession(9303, 5, 1000000, 40, 1);
-        var joker = (SavunmaciJoker)session.Jokers.Add(new SavunmaciJoker());
-        RoundEngine round = session.CurrentRound;
-        session.Jokers.DispatchRoundStarted(round);
-
-        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
-        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
-        Check(joker.Banked == 2 * joker.BonusPerSafeRound, "two rounds banked",
-            "" + joker.Banked);
-
-        // A sweep OUTSIDE an overtime must not touch the bank.
-        GridPos gap = ArmASweep(round);
-        TurnReport report = null;
-        for (int i = 0; i < round.Hand.Count && report == null; i++)
-        {
-            if (round.CanPlaceCard(round.Hand[i], gap) && !round.IsFrozen(round.Hand[i].Id))
-            {
-                report = round.PlayFromHand(i, gap);
-            }
-        }
-        Check(report != null && report.CleanSweep, "a sweep landed outside overtime");
-        Check(joker.Banked == 2 * joker.BonusPerSafeRound,
-            "and the bank is untouched - only an OVERTIME sweep cashes it",
-            "" + joker.Banked);
-        Check(joker.CashedOut == 0, "nothing was cashed out", "" + joker.CashedOut);
-
-        // And the bank keeps growing across further safe rounds.
-        session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
-        Check(joker.Banked == 3 * joker.BonusPerSafeRound, "a third safe round banked too",
-            "" + joker.Banked);
-    }
-
     private static void Besleme_MarksAPatchAndFeedsOnExplosions()
     {
         Section("besleme / marks a patch, and cubes exploded in it are food");
@@ -7373,11 +7244,11 @@ public static class JokerTests
         Check(samePlace, "in exactly the same cells - it was never re-marked");
     }
 
-    private static void Kiraci_RipensAPlainCubeIntoGold()
+    private static void Metamorfoz_RipensAPlainCubeIntoGold()
     {
-        Section("kiracı / a plain cube that sits still long enough turns to gold");
+        Section("metamorfoz / a plain cube that sits still long enough turns to gold");
         var session = NewSession(9100, 7, 1000000, 40, 1);
-        var joker = (KiraciJoker)session.Jokers.Add(new KiraciJoker());
+        var joker = (MetamorfozJoker)session.Jokers.Add(new MetamorfozJoker());
         RoundEngine round = session.CurrentRound;
         session.Jokers.DispatchRoundStarted(round);
 
@@ -7406,17 +7277,17 @@ public static class JokerTests
         Check(ripened.HasValue && ripened.Value.Kind == CubeKind.Gold,
             "and on the fifth turn it is GOLD",
             ripened.HasValue ? ripened.Value.Kind.ToString() : "gone");
-        // Not "exactly one": the blocks the driver itself played are tenants too, and on a
-        // five-turn wait they ripen inside the same window. That is the joker working.
+        // Not "exactly one": the blocks the driver itself played are on the clock too, and on
+        // a five-turn wait they ripen inside the same window. That is the joker working.
         Check(joker.GoldThisRound >= 1, "the joker counted it", "" + joker.GoldThisRound);
         Check(ripened.Value.SourceCardId == 9950, "and it is still the same cube");
     }
 
-    private static void Kiraci_OnlyPlainCubesAreTenants()
+    private static void Metamorfoz_OnlyPlainCubesChange()
     {
-        Section("kiracı / a cube that already has an element is not a tenant");
+        Section("metamorfoz / a cube that already has an element never changes");
         var session = NewSession(9101, 7, 1000000, 40, 1);
-        var joker = (KiraciJoker)session.Jokers.Add(new KiraciJoker());
+        var joker = (MetamorfozJoker)session.Jokers.Add(new MetamorfozJoker());
         RoundEngine round = session.CurrentRound;
         session.Jokers.DispatchRoundStarted(round);
 
@@ -7437,11 +7308,11 @@ public static class JokerTests
         Check(!anyGold, "none of the elemental cubes turned to gold");
     }
 
-    private static void Kiraci_AnInterruptedTenancyStartsOver()
+    private static void Metamorfoz_AnInterruptedClockStartsOver()
     {
-        Section("kiracı / a cell that changes hands starts the clock again");
+        Section("metamorfoz / a cell that changes hands starts the clock again");
         var session = NewSession(9102, 7, 1000000, 40, 1);
-        var joker = (KiraciJoker)session.Jokers.Add(new KiraciJoker());
+        var joker = (MetamorfozJoker)session.Jokers.Add(new MetamorfozJoker());
         RoundEngine round = session.CurrentRound;
         session.Jokers.DispatchRoundStarted(round);
 
@@ -7450,15 +7321,15 @@ public static class JokerTests
         PlayTurns(session, joker.TurnsToRipen - 2);
         Check(joker.GoldThisRound == 0, "two turns short of payday");
 
-        // Evict the tenant and move a DIFFERENT cube in. The new one may not inherit the wait.
+        // Clear the cell and move a DIFFERENT cube in. The new one may not inherit the wait.
         round.Board.DestroyCube(spot);
         round.Board.SetCubeAt(spot, new Cube(CubeKind.Normal, 9961));
         PlayTurns(session, 3);
         Cube? cube = round.Board.GetCube(spot);
         Check(cube.HasValue && cube.Value.Kind == CubeKind.Normal,
-            "the new tenant is still plain three turns later - it did not inherit the clock",
+            "the new cube is still plain three turns later - it did not inherit the clock",
             cube.HasValue ? cube.Value.Kind.ToString() : "gone");
-        Check(cube.Value.SourceCardId == 9961, "and it is the NEW tenant sitting there",
+        Check(cube.Value.SourceCardId == 9961, "and it is the NEW cube sitting there",
             "" + cube.Value.SourceCardId);
 
         // Give it the full wait and it ripens on its own account.
@@ -7469,11 +7340,11 @@ public static class JokerTests
             cube.HasValue ? cube.Value.Kind.ToString() : "gone");
     }
 
-    private static void Kiraci_TheGoldItMakesIsRealGold()
+    private static void Metamorfoz_TheGoldItMakesIsRealGold()
     {
-        Section("kiracı / what it makes is real gold, with all of gold's teeth");
+        Section("metamorfoz / what it makes is real gold, with all of gold's teeth");
         var session = NewSession(9103, 5, 1000000, 40, 1);
-        var joker = (KiraciJoker)session.Jokers.Add(new KiraciJoker());
+        var joker = (MetamorfozJoker)session.Jokers.Add(new MetamorfozJoker());
         RoundEngine round = session.CurrentRound;
         session.Jokers.DispatchRoundStarted(round);
 
@@ -9282,6 +9153,61 @@ public static class JokerTests
             }
         }
         return session;
+    }
+
+    private static void HileliZar_DealsTheOpeningHandOncePerMarket()
+    {
+        Section("hileli zar / dealing the next opening hand");
+        var config = new GameConfig();
+        config.RngSeed = 909;
+        var session = new GameSession(config);
+        var zar = (HileliZarJoker)session.Jokers.Add(new HileliZarJoker());
+        session = DriveOwnedToMarket(session);
+        if (session.Phase != GamePhase.Market)
+        {
+            Check(false, "reached the market", "phase " + session.Phase);
+            return;
+        }
+        Check(zar.CanPickOpeningHand, "a market arms the pick");
+
+        // The LAST cards of the owned deck: the ones a fair shuffle is unlikely to hand out,
+        // so finding them all in the opening hand can only be the pick's doing.
+        int handSize = session.Config.Rules.HandSize;
+        var wanted = new List<int>();
+        for (int i = session.OwnedCards.Count - handSize; i < session.OwnedCards.Count; i++)
+        {
+            wanted.Add(session.OwnedCards[i].Id);
+        }
+        Check(session.TryPickOpeningHand(zar.InstanceId, wanted), "the pick goes through");
+        Check(!zar.CanPickOpeningHand, "and it is spent for this market");
+        Check(!session.TryPickOpeningHand(zar.InstanceId, wanted),
+            "a second pick in the same market is refused");
+        Check(!session.TryPickOpeningHand(zar.InstanceId + 1000, wanted),
+            "and an id that is not a held Hileli zar is refused too");
+
+        session.LeaveMarket();
+        RoundEngine round = session.CurrentRound;
+        int dealt = 0;
+        for (int i = 0; i < wanted.Count; i++)
+        {
+            for (int j = 0; j < round.Hand.Cards.Count; j++)
+            {
+                if (round.Hand.Cards[j].Id == wanted[i])
+                {
+                    dealt++;
+                    break;
+                }
+            }
+        }
+        Check(dealt == wanted.Count, "every chosen card is in the opening hand",
+            dealt + " of " + wanted.Count);
+
+        // The NEXT market arms it again - once per visit, not once per run.
+        session = DriveOwnedToMarket(session);
+        if (session.Phase == GamePhase.Market)
+        {
+            Check(zar.CanPickOpeningHand, "the next market arms it again");
+        }
     }
 
     private static void Market_RefusesJokerWhenSlotsFull()

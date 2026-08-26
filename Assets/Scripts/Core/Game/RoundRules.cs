@@ -39,7 +39,7 @@ namespace ProjectBlock.Core
         public int ComboBridgedScorePercent = 100;
 
         /// <summary>Pure UI flag: show the top card of the draw pile face-up ("Insider",
-        /// "Oryantasyon"). The core never reads it - the draw order is unchanged either way.</summary>
+        /// "Baba Ocağı"). The core never reads it - the draw order is unchanged either way.</summary>
         public bool RevealTopDrawCard = false;
 
         /// <summary>Pure UI flag: how many cards of the discard pile the player may inspect
@@ -55,7 +55,7 @@ namespace ProjectBlock.Core
         /// it once per drawn card down to 0. Insider uses RevealTopDrawCard for the single case.</summary>
         public int RevealedDrawCount = 0;
 
-        /// <summary>"Oryantasyon": a card that would go to the discard is buried at a random
+        /// <summary>"Baba Ocağı": a card that would go to the discard is buried at a random
         /// depth in the DRAW pile instead. The discard therefore stays nearly empty, which
         /// also means the deck effectively never runs out.</summary>
         public bool PlayedCardsReturnToDrawPile = false;

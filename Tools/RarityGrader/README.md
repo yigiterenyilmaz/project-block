@@ -12,7 +12,7 @@ or shop odds (that wiring comes later).
 | `rare` | 🔴 red | notably stronger / more situational |
 | `legendary` | 🟡 yellow | the pile-rewriters (one held at a time in-game) |
 
-The four jokers already flagged `IsLegendary` in code (Oryantasyon, Dezenformasyon,
+The four jokers already flagged `IsLegendary` in code (Baba Ocağı, Konfüzyon,
 İmitasyon, Fraksiyon) start pre-seeded as **legendary**.
 
 ## How to grade — in the game (editor)

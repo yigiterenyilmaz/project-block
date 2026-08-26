@@ -104,7 +104,7 @@ namespace ProjectBlock.View
         private bool hileliPickMode;
         private readonly List<int> hileliSelection = new List<int>();
         private int hileliTarget;
-        private int hileliPowerId;
+        private int hileliJokerId;
 
         // "Parazit": market-phase attach flow (joker -> owned card -> cube).
         private enum ParazitStep { None, PickJoker, PickCard, PickCube }
@@ -215,6 +215,9 @@ namespace ProjectBlock.View
 
         public void NewGame()
         {
+            // A new session starts its card ids over from the beginning, so last run's faces
+            // would answer for this run's cubes if they were left in the cache.
+            cardFaces.Clear();
             lastSeedUsed = seed != 0 ? seed : System.Environment.TickCount;
             var config = new GameConfig();
             config.RngSeed = lastSeedUsed;
@@ -289,6 +292,32 @@ namespace ProjectBlock.View
             if (screen != AppScreen.Playing)
             {
                 HandleMenuInput(kb, mouse);
+                return;
+            }
+            // The ANIMATION LAB owns the whole frame while it is open, and it is handled BEFORE
+            // the board-animation lock below on purpose: the lab exists to fire exactly those
+            // animations, so a panel that stopped taking clicks while one played would be
+            // unusable (see .AnimationLab).
+            if (AnimLabOpen)
+            {
+                HandleAnimationLabInput(kb, mouse);
+                return;
+            }
+            if (kb != null && kb.f3Key.wasPressedThisFrame && session != null)
+            {
+                OpenAnimationLab();
+                return;
+            }
+            // The BLOCK GALLERY (F4) covers the screen, so like the lab it owns the frame while
+            // it is open - a click falling through to the board would place a hidden block.
+            if (GalleryOpen)
+            {
+                HandleBlockGalleryInput(kb, mouse);
+                return;
+            }
+            if (kb != null && kb.f4Key.wasPressedThisFrame)
+            {
+                OpenBlockGallery();
                 return;
             }
             if (session == null || waterAnimating || supurgeAnimating)

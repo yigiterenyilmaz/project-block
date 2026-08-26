@@ -6,7 +6,88 @@ everything here is unreleased and balance numbers are still placeholders.
 
 ## Unreleased — `balance`
 
+### Removed
+- **"Savunmacı" (joker) is cut.** The bank-safe-rounds-then-cash-them-on-one-overtime joker is
+  gone from the roster; the catalogue is **52 jokers** now. "Eforsuz galibiyet" still reads
+  overtime the same way it did, so nothing else changes.
+
 ### Changed
+- **Destruction has ONE language now, and it travels.** Every blast in the game used to be the
+  same thing: a puff of particles on every affected cell, all on the same frame, with no
+  direction in it. Now the cells themselves go off — `CellFlashFx` strikes a square bright and
+  over-size, cools it back down into the grid through the blast's own colour, then pinches it to
+  a bar and blinks it out in steps, ~0.17s per cell. What travels is *which cells are in which
+  beat*, so a blast reads as something that happened in a direction:
+  - a cleared **line** fires a RAY — the wave leaves the MIDDLE of the row or column and reaches
+    both ends at the same instant, the struck squares closing the gaps the grid leaves so the
+    line reads solid for an instant, and the pinch flattens ACROSS the line so what is left is a
+    bar lying along it;
+  - a loose handful — a **power blast**, the **sweeper**, an **infection** going off, a
+    **"Hedefli"** payout, a late board-reshape clear — ripples out from the middle of the group;
+  - a **clean sweep** strikes the whole arena in gold behind the ray that cleared it, and a
+    **dynamite** board clear strikes it in dynamite's own red;
+  - cubes a boss **lifted away** ("Alzheimer", "Yürüyen merdiven") use the same shape in a cold
+    pale palette that never flashes bright — nothing broke and nothing was earned.
+
+  It is drawn in flat hard-edged squares on the same white sprite as everything else, because
+  that is what this board is made of: there are no gradients or glows anywhere in it, and a cube
+  already expresses itself by changing colour. The particles are still there, but they now fire
+  on the flash's own schedule so the sparks land under the travelling wave — the outermost cells
+  throwing a hotter, heavier one, since that is where the wave hits the wall. The blast shake is
+  front-loaded to match (higher peak, gone in 0.14s), so the punch arrives with the flash instead
+  of wobbling on behind it. Watch it all on F3 → *patlama + sarsıntı*.
+- **A dynamite board clear used to draw nothing at all.** Its cubes go through `DestroyCubes`
+  rather than a line explosion, so they appear in no exploded row or column and the blast pass
+  never saw them: they simply blinked out of existence. The arena now strikes red as they go —
+  and then **SMOKE rolls in over the whole screen** (`SmokeFx`), hangs for a beat, lifts and
+  thins out, so for about a second you cannot see the board at all. It is a bank of flat
+  overlapping squares in three greys, not a soft texture, and it draws over the cards but under
+  the popups, so "DYNAMITE!" still reads through it. F3 → *dinamit: alan ışığı + duman*, or
+  *dinamit dumanı* to watch the smoke on its own.
+- **Fixed: blast particles landed on the wrong cells on a board whose origin had moved.** The
+  line-explosion puff walked the board with 0-based indices, where `TurnReport.ExplodedRows` /
+  `ExplodedColumns` are 0-based but a `GridPos` is absolute, so once anything had inflated the
+  arena (`Kentsel Dönüşüm`, `Tılsım`, a "Dört kutup" quarter) the sparks appeared offset from the
+  line that actually exploded. The flash path adds `MinX`/`MinY` back.
+- **The overtime fire is rebuilt.** Same trigger, same escalation with overtime depth, same
+  `SetState(level, rect)` — but it now looks like fire. It was one emitter of untextured
+  particles (so, hard white squares) rising straight up off an evenly-lit rim; it is now three
+  additive layers over a soft radial texture: a low smouldering **glow** the flames stand in,
+  buoyant **tongues** that accelerate upward, curl through a noise field, pinch to a tip and
+  sway together on a shared wind, and a few **embers** that escape past the tips as stretched,
+  twinkling sparks. Emission clusters on hot spots that wander the border and breathe, so the
+  fire licks in moving tongues instead of an even ribbon, and a global flicker (two
+  incommensurate sines plus an occasional flare) modulates all three rates at once. Deeper
+  overtime now also means taller flames, more embers, faster flicker and a whiter-hot core, not
+  just more of the same. Watch it on F3 → *uzatma alevi*.
+- **Water FLOWS now.** A falling water cube used to be repainted from cell to cell, one box at a
+  time; it is now a sprite that slides along its whole path in one continuous motion, so a
+  five-cell drop reads as a fall rather than as five jumps. It accelerates from rest, stretches
+  along the pull while it travels, and squashes with a small spray where it lands. Core is
+  untouched — the same frame list drives it, only rebuilt into one path per cube — so
+  "Kütleçekim merkezi" turns the whole thing sideways for free. Watch it on F3 → *su akışı*.
+- **"Hileli Zar" is a JOKER now, not a power.** Same effect and same `DefId` (`hileli_zar`, so it
+  keeps its **common** grade): in the market, deal yourself the cards that make up the next
+  round's opening hand. It is now **once per market visit** — which is what its single charge
+  already amounted to, since it never ran in-round and refilled at every round start — and it no
+  longer takes up a power slot to sit there waiting for the shop. Click it in the joker bar to
+  open the picker; once the pick is spent, clicking it sells it as usual. The catalogue is
+  **53 jokers and 35 powers** now.
+- **"Kiracı" is now "Metamorfoz".** Same joker, same rule — a plain block that survives 5 turns
+  on the board turns to GOLD — but the rent metaphor is dropped: it is a transformation, not a
+  tenancy. The `DefId` changed with it (`kiraci` → `metamorfoz`).
+- **"Dezenformasyon" is now "Konfüzyon".** Same legendary deck joker, same rule — the draw pile
+  splits into two halves that never merge and swap roles every turn, hand +1 — only the name
+  changed. The `DefId` changed with it (`dezenformasyon` → `konfuzyon`).
+- **"Oryantasyon" is now "Baba Ocağı".** Same legendary deck joker, same rule — played cards are
+  buried at a random depth of the draw pile instead of being discarded and the top card stays
+  visible — only the name changed. The `DefId` changed with it (`oryantasyon` → `baba_ocagi`).
+- **"Damlaya Damlaya Göl Olur" is now "Kapalı Ekonomi".** Same joker, same rule — buy nothing at
+  the market and the next round pays a score bonus every turn — only the name changed, from the
+  proverb to what it does. The `DefId` changed with it (`damlaya` → `kapali_ekonomi`).
+- **Saves written before this are refused.** `SaveGame.FormatVersion` is **12**: a DefId an
+  older save owns may no longer exist in the registry — or may have moved to the other
+  catalogue, as "Hileli zar" did.
 - **A boss is now its own STAGE between two rounds, not one of the rounds.** A run is
   1, 2, 3, *boss of 3*, 4, 5, 6, *boss of 6*, ... 15, *boss of 15* — **fifteen numbered rounds and
   five boss stages, twenty in all**. Before this, round 3 *was* the boss round, so five of your
@@ -44,6 +125,14 @@ everything here is unreleased and balance numbers are still placeholders.
   rule and is unchanged.)
 
 ### Added
+- **Animation lab (F3, dev tool).** A catalogue of every animation in the game — card flights and
+  shuffles, the water fall, blasts and camera shake, the score popups, the bar and market flights,
+  the overtime flame, the mine dance, plus the full turn sequences — each playable on demand, with
+  knobs for the conditions that change how they look: combo streak (which drives shake amplitude),
+  sweep count (which drives the bling's pitch), overtime level, blast size, element colour, board
+  darkness, the retro skin, and a **0.1x–2x time scale** for watching one frame by frame. Loop an
+  entry and it replays while you retune it. It drives the real animation code rather than a copy,
+  so a retimed animation shows its new timing there immediately, and it touches no game rules.
 - **Kütleçekim Merkezi (power)** — the arena's gravity turns. Pick a side and **water falls that
   way** instead of down, for the rest of the round. Nothing else on the board moves: this is not a
   broom, it is a way to **aim your water** — the one thing on the board that keeps travelling

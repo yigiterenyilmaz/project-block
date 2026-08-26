@@ -82,14 +82,14 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Buries a card at a random depth in the draw pile instead of discarding it
-        /// ("Oryantasyon"). The card can come back up at any time, which is the point.</summary>
+        /// ("Baba Ocağı"). The card can come back up at any time, which is the point.</summary>
         public void InsertRandomIntoDraw(BlockCard card)
         {
             drawPile.Insert(rng.NextInt(0, drawPile.Count + 1), card);
         }
 
         /// <summary>Shuffles each pile WITHIN ITSELF - the draw pile and the discard pile are
-        /// reordered separately and never poured together ("Dezenformasyon" does this at the end
+        /// reordered separately and never poured together ("Konfüzyon" does this at the end
         /// of every turn, so neither pile's order is predictable and a card you discarded is
         /// somewhere inside its pile rather than on top). Not a discard->draw reshuffle, so it
         /// does not bump ShuffleCount.</summary>
@@ -100,7 +100,7 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Swaps the two piles wholesale: what you drew from becomes what you
-        /// discard to and vice versa ("Dezenformasyon", "Fraksiyon").</summary>
+        /// discard to and vice versa ("Konfüzyon", "Fraksiyon").</summary>
         public void SwapPiles()
         {
             swapBuffer.Clear();
@@ -113,7 +113,7 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Pours both piles together, shuffles, and deals them back out as two
-        /// halves ("Dezenformasyon" every turn, "Fraksiyon" on every reshuffle). Counts as a
+        /// halves ("Konfüzyon" every turn, "Fraksiyon" on every reshuffle). Counts as a
         /// shuffle, so observers animate it.</summary>
         public void MergeAndSplitHalves()
         {
@@ -153,7 +153,7 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Moves the bottom half of the draw pile into the discard WITHOUT mixing
-        /// the piles or reshuffling ("Dezenformasyon" round-start split). The draw pile keeps
+        /// the piles or reshuffling ("Konfüzyon" round-start split). The draw pile keeps
         /// the larger half when the count is odd, so the two piles differ by at most one.</summary>
         public void SplitDrawIntoDiscard()
         {

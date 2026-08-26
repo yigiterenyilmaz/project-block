@@ -399,9 +399,8 @@ namespace ProjectBlock.Core
             }
         }
 
-        /// <summary>Spends a specific power's charge by instance id ("Hileli zar", which is
-        /// driven from the market UI rather than the in-round use path). False if unknown or
-        /// already spent.</summary>
+        /// <summary>Spends a specific power's charge by instance id, for a power driven from
+        /// outside the ordinary in-round use path. False if unknown or already spent.</summary>
         public bool Spend(int instanceId)
         {
             Power power = Find(instanceId);

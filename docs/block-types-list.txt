@@ -1,0 +1,38 @@
+*PROJECT BLOCK - BLOK TÜRÜ LİSTESİ*
+12 blok türü, enum (tasarım) sırasıyla; 11'i markette çıkar, boşluk sadece jokerden gelir
+
+1. *ATEŞ*
+Bloğun bir küpü patlayınca bloğun tamamı onunla birlikte patlar. "Tutuştur" jokeri varken bir ateş bloğunun patlaması alandaki BÜTÜN ateş bloklarını patlatır.
+
+2. *SU*
+Her tur boşluğa doğru akar - normalde aşağı, "Kütleçekim merkezi" gücü o raunt boyunca yönü değiştirir. Değdiği ateş küplerini obsidyene çevirir, kendisi kalır. Koyduğun turda satır ya da sütun tamamlıyorsa akmadan yerinde patlar; sadece patlama olmayan turda düşer ve düştüğü yerde tamamladığı satır tekrar kontrol edilir. "Buzluk" jokeri varken duvara değen su donar.
+
+3. *OBSİDYEN*
+Yok edilemez - ne satır patlaması ne joker ne güç kırar - ama temizlik kontrolüne girmez, yani sadece obsidyen kalan alan temizlenmiş sayılır. "Elmas kazma" jokeri temizlikte onları da patlatıp puana çevirir.
+
+4. *ALTIN*
+Yok edilemez ve temizliği bozmaz; üstelik alanda durduğu her tur küp sayısıyla orantılı bonus öder. "Midas" jokeri elde tutulanı da ödüllendirir ve küp başına daha çok verir. Kalıcıdır: alanı sürekli daraltır.
+
+5. *CAM*
+Üstüne başka bir blok konabilir; gelen küp camın yerini alır. Dolu tahtada sana yer açan tek sıradan blok türü.
+
+6. *HAYALET*
+Oyun alanının dışına taşacak şekilde konabilir; tek şart en az bir küpünün içeride kalması. Dışarıda kalan küpler hayalet iz olarak durur, "Tılsım" gücü onları patlatıp kapladıkları yeri oyun alanına katar.
+
+7. *TNT*
+Koyduğun turda blok tek seferde tümüyle patlarsa alandaki yok edilebilir bütün küpler temizlenir. Sonraki turlara sarkan bir TNT bloğu artık sadece normal patlar - fitili o tur yanar.
+
+8. *ÇARK*
+Eldeyken sağ tıkla 90 derece döner, istediğin kadar. Yerleşim kontrolleri döndürülmüş hâlini de sayar, yani çark bloğu varken tahta erken kilitlenmez.
+
+9. *TİLKİ*
+Eldeyken sağ tıkla destende bulunan herhangi bir şekle bürünür ve dilediğin kadar fikir değiştirirsin. Aldığı şekil koyana kadar geçerlidir.
+
+10. *BOŞLUK*
+Sadece "Kara delik" jokerinden gelen 1x1 tuzak; markette satılmaz ve destene katılmaz. Dolu kareye de konabilir, üstüne gelen küpü yutar ve kendisi de onunla gider. Patlamalar kırmaz, temizliği de bozmaz.
+
+11. *NEGATİF*
+Anti-blok: mevcut küplerin ÜSTÜNE konur ve onları siler. Geriye hiçbir şey bırakmaz - kareler tamamen boşalır - ve sildiği her küp için puan öder. Obsidyen ile altın kabul etmez, evrensel çözücü olmasını engelleyen şey budur.
+
+12. *HEDEFLİ*
+Bloğun işaretli tek küpü hedeftir. Bloğa ulaşan İLK patlamada hedef de giderse bonus verir ve blok tümüyle havaya uçar; önce başka bir küpü giderse blok o oynanış için tükenir ve sıradan küpler olarak durmaya devam eder. İşaret döndürsen de şekil değiştirsen de sana gösterilen küpte kalır.

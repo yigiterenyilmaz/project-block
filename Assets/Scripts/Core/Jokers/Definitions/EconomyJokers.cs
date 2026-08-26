@@ -1,4 +1,4 @@
-﻿// PURPOSE: The jokers wired into the run economy and the market: Damlaya Damlaya Göl Olur,
+﻿// PURPOSE: The jokers wired into the run economy and the market: Kapalı Ekonomi,
 // ihale, Kara delik, Enfeksiyon.
 //
 // "Powerbank" lives here too, now that powers exist: it is the only joker that reaches into
@@ -10,10 +10,10 @@ using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>"Damlaya Damlaya Göl Olur" - skip the market and the next round pays for it.
+    /// <summary>"Kapalı Ekonomi" - skip the market and the next round pays for it.
     /// The bonus lands on every turn of that round, so it counts toward the threshold and
     /// cannot hand the player a free advance offer before a single block is placed.</summary>
-    public sealed class DamlayaJoker : Joker
+    public sealed class KapaliEkonomiJoker : Joker
     {
         public int PointsPerTurnWhenSaving = 8;
 
@@ -23,8 +23,8 @@ namespace ProjectBlock.Core
         /// <summary>Bonus active during the current round (frozen at round start).</summary>
         public int ActiveBonus { get; private set; }
 
-        public DamlayaJoker()
-            : base("damlaya", "Damlaya Damlaya Göl Olur")
+        public KapaliEkonomiJoker()
+            : base("kapali_ekonomi", "Kapalı Ekonomi")
         {
             SetDescription(
                 "Buy nothing at the market and the next round pays a score bonus every turn.",

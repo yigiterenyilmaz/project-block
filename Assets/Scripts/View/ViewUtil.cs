@@ -1,7 +1,21 @@
-// PURPOSE: Tiny helpers for the placeholder UI (runtime-generated sprites, card colors).
+// PURPOSE: Tiny helpers for the placeholder UI (runtime-generated sprites, card colors) and
+// the PAINTED BLOCK TILES a cube is drawn on.
 // NOTE FOR AGENTS: everything under Assets/Scripts/View is intentionally disposable
 // debug presentation. Game rules NEVER live here - they belong to ProjectBlock.Core.
+//
+// THE TILE TABLE. A cube is no longer a flat white square: it is a painted tile out of
+// Assets/Resources/Art/Blocks, looked up by CubeKind on the board and by BlockElement in the
+// hand (the two disagree - "Çark" is an element with no cube kind of its own). Everything the
+// art has no tile for falls back to the DEFAULT tile, which is near-white and therefore takes
+// the colour that kind always had - so an unpainted kind still reads as a tile, and painting
+// one later is a single line here. If a tile file is missing entirely the fallback is the old
+// flat WhiteSprite, so a stripped build degrades instead of rendering nothing.
+//
+// A tile carries its own paint, so a cube that HAS one is drawn WHITE (HasOwnTile) and the
+// colour channel is left free for washes and animation. A cube on the default tile is drawn
+// in its own colour as before.
 
+using System.Collections.Generic;
 using ProjectBlock.Core;
 using UnityEngine;
 
@@ -26,6 +40,343 @@ namespace ProjectBlock.View
                     whiteSprite = Sprite.Create(tex, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
                 }
                 return whiteSprite;
+            }
+        }
+
+        // ---- painted block tiles ------------------------------------------------------
+
+        private const string TileFolder = "Art/Blocks/";
+        private static readonly Dictionary<string, Sprite> tileCache =
+            new Dictionary<string, Sprite>();
+
+        /// <summary>Loads a tile out of Resources once. Null (not an exception) when the art
+        /// is not there, which is what every caller treats as "fall back to a flat square".</summary>
+        private static Sprite Tile(string fileName)
+        {
+            Sprite tile;
+            if (!tileCache.TryGetValue(fileName, out tile))
+            {
+                tile = Resources.Load<Sprite>(TileFolder + fileName);
+                tileCache[fileName] = tile;
+            }
+            return tile;
+        }
+
+        /// <summary>Whether a tile file loaded, by file name. For the diagnostics in the F4
+        /// gallery: some tiles (the targeted block's BODY) belong to no cube kind and no
+        /// element, so nothing else on that screen would reveal a failed import.</summary>
+        public static bool HasTile(string fileName)
+        {
+            return Tile(fileName) != null;
+        }
+
+        /// <summary>The tile every cube without one of its own is drawn on.</summary>
+        public static Sprite DefaultTile
+        {
+            get { return Tile("block_default"); }
+        }
+
+        /// <summary>False when the tile art is missing altogether and the whole game is back on
+        /// flat squares. Callers that size a cube differently on a tile ask this.</summary>
+        public static bool ArtLoaded
+        {
+            get { return DefaultTile != null; }
+        }
+
+        /// <summary>The tile file for a cube kind, or null when that kind has no art of its
+        /// own. Kept separate from CubeTile so callers can ask whether the paint is the tile's
+        /// (draw white) or the cube's (draw its colour).</summary>
+        private static Sprite OwnTile(CubeKind kind)
+        {
+            switch (kind)
+            {
+                case CubeKind.Fire: return Tile("block_fire");
+                case CubeKind.Water: return Tile("block_water");
+                case CubeKind.Obsidian: return Tile("block_obsidian");
+                case CubeKind.Gold: return Tile("block_gold");
+                case CubeKind.Transparent: return Tile("block_glass");
+                case CubeKind.Dynamite: return Tile("block_dynamite");
+                case CubeKind.Target: return Tile("block_target");
+                case CubeKind.Void: return Tile("block_void");
+                default: return null;
+            }
+        }
+
+        /// <summary>Same table for the HAND, where a card knows its element and not a cube
+        /// kind. "Çark" lives only here: it rotates in the hand and lands as plain cubes.</summary>
+        private static Sprite OwnTile(BlockElement element)
+        {
+            switch (element)
+            {
+                case BlockElement.Fire: return Tile("block_fire");
+                case BlockElement.Water: return Tile("block_water");
+                case BlockElement.Obsidian: return Tile("block_obsidian");
+                case BlockElement.Gold: return Tile("block_gold");
+                case BlockElement.Transparent: return Tile("block_glass");
+                case BlockElement.Dynamite: return Tile("block_dynamite");
+                case BlockElement.Mechanical: return Tile("block_mechanical");
+                case BlockElement.Fox: return Tile("block_fox");
+                case BlockElement.Negative: return Tile("block_negative");
+                case BlockElement.Targeted: return Tile("block_target");
+                case BlockElement.Ghost: return Tile("block_ghost");
+                default: return null;
+            }
+        }
+
+        /// <summary>True when this kind is drawn on its own painted tile - so it must be
+        /// tinted WHITE and its colour left to washes and idle animation.</summary>
+        public static bool HasOwnTile(CubeKind kind)
+        {
+            return OwnTile(kind) != null;
+        }
+
+        /// <summary>The sprite a board cube of this kind is drawn on: its own tile, the
+        /// default tile, or the flat white square if no art loaded at all.</summary>
+        public static Sprite CubeTile(CubeKind kind)
+        {
+            Sprite own = OwnTile(kind);
+            if (own != null)
+            {
+                return own;
+            }
+            return DefaultTile != null ? DefaultTile : WhiteSprite;
+        }
+
+        /// <summary>
+        /// The tile for a cube that knows which CARD put it there.
+        ///
+        /// Needed because a cube kind is not the whole story: "Çark" and "Tilki" have no kind
+        /// of their own and land as plain cubes, and a "Hedefli" block's ordinary cubes are
+        /// plain too - only its one marked cube is CubeKind.Target. Left on kind alone all of
+        /// those would dissolve into anonymous default tiles the moment they were placed, which
+        /// reads as the art having failed to apply. The card is looked up from the cube's
+        /// SourceCardId by the view; Core knows nothing about it.
+        ///
+        /// Kind still wins: a gear block's cube that water turned to obsidian is obsidian.
+        /// </summary>
+        public static Sprite CubeTile(CubeKind kind, BlockCard sourceCard)
+        {
+            Sprite own = OwnTile(kind);
+            if (own != null)
+            {
+                return own;
+            }
+            if (sourceCard != null)
+            {
+                // A targeted block's plain cubes get its body tile - the marked one came back
+                // as CubeKind.Target above and is already wearing the bullseye.
+                if (sourceCard.Has(BlockElement.Targeted))
+                {
+                    Sprite body = Tile("block_target_body");
+                    if (body != null)
+                    {
+                        return body;
+                    }
+                }
+                for (int i = 0; i < sourceCard.Elements.Count; i++)
+                {
+                    Sprite fromCard = OwnTile(sourceCard.Elements[i]);
+                    if (fromCard != null)
+                    {
+                        return fromCard;
+                    }
+                }
+            }
+            return DefaultTile != null ? DefaultTile : WhiteSprite;
+        }
+
+        // ---- the tiles that MOVE ------------------------------------------------------
+        //
+        // Three blocks animate by distorting themselves rather than by changing colour, and all
+        // three are the same shader (Resources/Shaders/BlockWarp) under different knobs. The
+        // material is chosen by the TILE rather than by cube kind or element, which is what
+        // lets the board and the hand agree without either of them knowing the rule: whatever
+        // face a cube ended up wearing, it moves the way that face moves.
+
+        private static Shader warpShader;
+        private static Material waterMaterial;
+        private static Material fireMaterial;
+        private static Material ghostMaterial;
+        private static Material voidMaterial;
+        private static bool warpShaderMissing;
+
+        private static Shader WarpShader
+        {
+            get
+            {
+                if (warpShader == null && !warpShaderMissing)
+                {
+                    // Shader.Find works in the editor; the Resources copy is what survives into
+                    // a build without an Always Included Shaders entry.
+                    warpShader = Shader.Find("ProjectBlock/BlockWarp");
+                    if (warpShader == null)
+                    {
+                        warpShader = Resources.Load<Shader>("Shaders/BlockWarp");
+                    }
+                    warpShaderMissing = warpShader == null;
+                }
+                return warpShader;
+            }
+        }
+
+        private static Material MakeWarpMaterial(float amplitude, float frequency, float speed,
+            float edgeHold, float drift, float swirl)
+        {
+            if (WarpShader == null)
+            {
+                return null; // no shader, no distortion: the tile still draws, just still
+            }
+            var material = new Material(WarpShader);
+            material.SetFloat("_WarpAmp", amplitude);
+            material.SetFloat("_WarpFreq", frequency);
+            material.SetFloat("_WarpSpeed", speed);
+            material.SetFloat("_EdgeHold", edgeHold);
+            material.SetFloat("_WarpDrift", drift);
+            material.SetFloat("_Swirl", swirl);
+            return material;
+        }
+
+        /// <summary>The material a tile animates itself with, or null for the ordinary sprite
+        /// material. Null is a complete answer - most tiles do not move.</summary>
+        public static Material TileMaterial(Sprite tile)
+        {
+            if (tile == null)
+            {
+                return null;
+            }
+            if (tile == Tile("block_water"))
+            {
+                // Only the inside swirls; the frame and the rounded corners are furniture.
+                // Big and slow rather than fine and fast: a low frequency at a high amplitude
+                // is what rolls in blobs, where the reverse only ripples.
+                if (waterMaterial == null)
+                {
+                    waterMaterial = MakeWarpMaterial(0.036f, 3.8f, 0.55f, 1f, 0.35f, 0f);
+                }
+                return waterMaterial;
+            }
+            if (tile == Tile("block_fire"))
+            {
+                // The same rolling flow as the water, at roughly half the speed - lava is
+                // heavy. Border held: the block's frame is not on fire, its middle is.
+                if (fireMaterial == null)
+                {
+                    fireMaterial = MakeWarpMaterial(0.030f, 3.4f, 0.26f, 1f, 0f, 0f);
+                }
+                return fireMaterial;
+            }
+            if (tile == Tile("block_ghost"))
+            {
+                // No border to respect: a ghost that held a crisp edge would not be one. Slower
+                // and wider than the water, so it billows rather than ripples.
+                if (ghostMaterial == null)
+                {
+                    ghostMaterial = MakeWarpMaterial(0.045f, 3.2f, 0.42f, 0f, 0f, 0f);
+                }
+                return ghostMaterial;
+            }
+            if (tile == Tile("block_void"))
+            {
+                // A hole turns instead of flowing: a slow stir about the centre, dying off well
+                // before the rim, with only a breath of warp on top of it.
+                if (voidMaterial == null)
+                {
+                    voidMaterial = MakeWarpMaterial(0.008f, 4f, 0.3f, 1f, 0f, 0.55f);
+                }
+                return voidMaterial;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The material a still tile uses: the built-in sprite material every SpriteRenderer
+        /// starts life with, CAPTURED from one rather than built.
+        ///
+        /// It must be that exact shared asset. A `new Material(Shader.Find("Sprites/Default"))`
+        /// looks identical and is not: one instance handed to every cell means one _MainTex for
+        /// every cell, so the whole board ends up wearing whichever tile was assigned last.
+        /// Unity's own sprite material is the one the renderer feeds each sprite's texture into
+        /// per instance. Kept here so a cube that STOPS moving (water turned to obsidian) can be
+        /// put back on it.
+        /// </summary>
+        public static Material PlainSpriteMaterial
+        {
+            get { return plainSpriteMaterial; }
+        }
+
+        private static Material plainSpriteMaterial;
+
+        /// <summary>True when a tile carries its OWN paint and must be drawn white. False for
+        /// the near-white default tile and the flat square, which are there to be tinted the
+        /// colour the cube always had. One rule, asked of the tile that was actually chosen -
+        /// so no caller has to re-derive how the choice was made.</summary>
+        public static bool CarriesOwnPaint(Sprite tile)
+        {
+            return tile != null && tile != WhiteSprite && tile != DefaultTile;
+        }
+
+        /// <summary>The sprite a hand-card cube of this element is drawn on.</summary>
+        public static Sprite CubeTile(BlockElement element)
+        {
+            Sprite own = OwnTile(element);
+            if (own != null)
+            {
+                return own;
+            }
+            return DefaultTile != null ? DefaultTile : WhiteSprite;
+        }
+
+        /// <summary>What COLOUR to draw a cube in, given the tile it ended up on: white when
+        /// the tile carries its own paint (the art speaks for itself), its usual colour when
+        /// the tile is there to be tinted. The Parazit host tint survives either way - which
+        /// cube carries the passenger has to stay visible on a painted board too.</summary>
+        public static Color CubeTileColor(Cube cube, Sprite tile)
+        {
+            if (!CarriesOwnPaint(tile))
+            {
+                return CubeDisplayColor(cube);
+            }
+            return cube.Protected
+                ? Color.Lerp(Color.white, new Color(0.85f, 0.2f, 0.85f), 0.4f)
+                : Color.white;
+        }
+
+        /// <summary>Hand-card equivalent: white on a tile that paints itself, the given flat
+        /// colour on one that wants tinting.</summary>
+        public static Color CubeTileColor(Sprite tile, Color flatColor)
+        {
+            return CarriesOwnPaint(tile) ? Color.white : flatColor;
+        }
+
+        /// <summary>
+        /// Puts a tile on a renderer and sizes it so the BLOCK BODY covers worldSize.
+        ///
+        /// The body, not the image. Every tile's .meta sets pixelsPerUnit to the body's pixel
+        /// size and the pivot to the body's centre, so one world unit is always one block. For
+        /// most tiles the body IS the whole canvas and the two are the same number - but the
+        /// fox is drawn with tufts of fur breaking the square, and art like that must hang OVER
+        /// its cell rather than be shrunk to fit inside it. That is why the scale here is
+        /// simply worldSize and the sprite's own import settings carry the difference: put the
+        /// overhang in the .meta and every call site gets it right without knowing.
+        /// </summary>
+        public static void ApplyTile(SpriteRenderer renderer, Sprite tile, float worldSize)
+        {
+            if (renderer == null)
+            {
+                return;
+            }
+            renderer.sprite = tile != null ? tile : WhiteSprite;
+            renderer.transform.localScale = new Vector3(worldSize, worldSize, 1f);
+            // The material goes with the tile, both ways round: a cell that was water and is
+            // now obsidian has to be put BACK on the plain material or it keeps swirling.
+            Material material = TileMaterial(tile);
+            if (material != null)
+            {
+                renderer.sharedMaterial = material;
+            }
+            else if (PlainSpriteMaterial != null)
+            {
+                renderer.sharedMaterial = PlainSpriteMaterial;
             }
         }
 
@@ -332,6 +683,13 @@ namespace ProjectBlock.View
             go.transform.localPosition = new Vector3(position.x, position.y, 0f);
             go.transform.localScale = new Vector3(size.x, size.y, 1f);
             var renderer = go.AddComponent<SpriteRenderer>();
+            if (plainSpriteMaterial == null)
+            {
+                // Every sprite in the game is born here, so this is where the genuine built-in
+                // sprite material can be taken from - see PlainSpriteMaterial for why it cannot
+                // just be constructed.
+                plainSpriteMaterial = renderer.sharedMaterial;
+            }
             renderer.sprite = WhiteSprite;
             renderer.color = color;
             renderer.sortingOrder = sortingOrder;

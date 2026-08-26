@@ -682,7 +682,7 @@ namespace ProjectBlock.Core
 
         /// <summary>Times the DRAW PILE RAN DRY this round and the discard was poured back into
         /// it. Deliberately not RoundDeck.ShuffleCount: that also counts the reshuffles the rules
-        /// and the jokers order (the threshold recycle, a hand redraw, "Dezenformasyon" every
+        /// and the jokers order (the threshold recycle, a hand redraw, "Konfüzyon" every
         /// single turn), and none of those mean "you have run out of cards".</summary>
         public int DeckRecycleCount { get; private set; }
 

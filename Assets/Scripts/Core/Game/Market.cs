@@ -2,7 +2,7 @@
 // offers; GameSession restocks it on every market entry and reroll. The buy/sell and
 // pricing rules live in GameSession/MarketConfig, not here.
 // EXTENSION POINTS:
-//  - Per-round pricing events ("ihale", "Damlaya damlaya"): market state lives here,
+//  - Per-round pricing events ("ihale", "Kapalı Ekonomi"): market state lives here,
 //    rules in GameSession/MarketConfig.
 
 using System.Collections.Generic;

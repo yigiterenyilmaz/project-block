@@ -69,6 +69,12 @@ namespace ProjectBlock.View
         private const float LightSeconds = 1.1f;
         private const int LightRadius = 2;
 
+        /// <summary>How much of its cell a CUBE covers, and how much an EMPTY one does. A
+        /// painted tile brings its own frame and wants to sit nearly edge to edge; an empty
+        /// cell stays inset so the grid keeps reading as holes between blocks.</summary>
+        private const float CubeFill = 0.98f;
+        private const float EmptyFill = 0.92f;
+
         private GameBoard board;
         private SpriteRenderer[,] cellRenderers;
         private SpriteRenderer[,] previewRenderers;
@@ -107,6 +113,36 @@ namespace ProjectBlock.View
         private ParticleSystem ambient;
         private float ambientTimer;
         private bool animatingWater;
+
+        /// <summary>Seconds one cell of fall takes. Core's frames are discrete cell steps; this
+        /// is what turns them back into a SPEED, so a cube crossing several cells slides through
+        /// them in one motion instead of appearing in each in turn.</summary>
+        private const float WaterCellSeconds = 0.085f;
+
+        /// <summary>How long a drop spends getting up to speed, in cell-times.</summary>
+        private const float WaterAccelCells = 0.55f;
+
+        /// <summary>What the acceleration costs the whole fall: starting from rest, a drop is
+        /// always this far behind the frame schedule, so the routine has to outlive it.</summary>
+        private const float WaterAccelTailSeconds = WaterAccelCells * 0.5f * WaterCellSeconds;
+
+        /// <summary>How long the squash of a landing lasts.</summary>
+        private const float WaterSplashSeconds = 0.16f;
+
+        /// <summary>One falling water cube: the cells it passes through, the frame each of its
+        /// steps happens on, and the sprite that carries it between them.</summary>
+        private sealed class WaterDrop
+        {
+            public readonly List<GridPos> Cells = new List<GridPos>();
+            public readonly List<int> StepFrames = new List<int>();
+            public SpriteRenderer Sprite;
+            public int Landed;             // cells covered as of its last settle
+            public float SplashAt = -1f;   // when that settle happened, or -1
+        }
+
+        /// <summary>Every cell a running fall covers, blanked for its duration so the settled
+        /// board underneath cannot show through the cubes still travelling.</summary>
+        private readonly HashSet<GridPos> waterHiddenCells = new HashSet<GridPos>();
 
         private void Awake()
         {
@@ -227,6 +263,14 @@ namespace ProjectBlock.View
                 {
                     CubeKind? kind = kindCache[x, y];
                     if (!kind.HasValue || kind.Value == CubeKind.Normal)
+                    {
+                        continue;
+                    }
+                    // A kind with its own painted tile is left ALONE here: these colour lerps
+                    // were written for flat squares and would only wash the art out. Their idle
+                    // animations belong to the tile (fire smoulders, water swirls) and are
+                    // coming separately - until then the paint speaks for itself.
+                    if (ViewUtil.HasOwnTile(kind.Value))
                     {
                         continue;
                     }
@@ -356,6 +400,7 @@ namespace ProjectBlock.View
         {
             StopAllCoroutines();
             animatingWater = false;
+            waterHiddenCells.Clear(); // the drop sprites go with the children below
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Destroy(transform.GetChild(i).gameObject);
@@ -390,9 +435,10 @@ namespace ProjectBlock.View
                 {
                     Vector2 pos = CellToWorld(new GridPos(board.MinX + x, board.MinY + y));
                     cellRenderers[x, y] = ViewUtil.MakeCell(
-                        transform, "Cell_" + x + "_" + y, pos, cellSize * 0.92f, EmptyColor, 1);
+                        transform, "Cell_" + x + "_" + y, pos, cellSize * EmptyFill, EmptyColor, 1);
                     previewRenderers[x, y] = ViewUtil.MakeCell(
-                        transform, "Preview_" + x + "_" + y, pos, cellSize * 0.92f, ValidPreviewColor, 2);
+                        transform, "Preview_" + x + "_" + y, pos, cellSize * EmptyFill,
+                        ValidPreviewColor, 2);
                     previewRenderers[x, y].enabled = false;
                     // Holes in an irregular board (Kentsel Dönüşüm / Tılsım) are not play
                     // area: hide their cell so they read as a gap, not an empty cell you can
@@ -404,6 +450,37 @@ namespace ProjectBlock.View
             Refresh();
         }
 
+        /// <summary>
+        /// How a placed cube finds the CARD that put it there, by SourceCardId. Set by the
+        /// controller from the session's owned cards; null-safe, and null is the honest answer
+        /// for a cube no card placed (rot, a snake, a mine).
+        ///
+        /// Presentation only. It exists because several block types have no cube kind of their
+        /// own - a gear or a fox lands as plain cubes, and a targeted block's unmarked cubes
+        /// are plain too - so without it those blocks would lose their face the instant they
+        /// touched the board. Core stays unaware.
+        /// </summary>
+        public System.Func<int, BlockCard> CardLookup;
+
+        /// <summary>Cubes on the last repaint whose card could NOT be found, and the id of one
+        /// of them. Diagnostic only, read by the F4 gallery: a block type that loses its face
+        /// when placed looks exactly like a block type nobody painted, and these two numbers
+        /// are what tell those apart.</summary>
+        public int UnresolvedCubes { get; private set; }
+
+        public int UnresolvedExampleId { get; private set; }
+
+        private BlockCard CardOf(Cube cube)
+        {
+            BlockCard card = CardLookup != null ? CardLookup(cube.SourceCardId) : null;
+            if (card == null)
+            {
+                UnresolvedCubes++;
+                UnresolvedExampleId = cube.SourceCardId;
+            }
+            return card;
+        }
+
         /// <summary>Repaints occupancy colors from the board state.</summary>
         public void Refresh()
         {
@@ -411,6 +488,12 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // Which way the water inside a water tile leans. A property of the BOARD (the
+            // "Kütleçekim merkezi" power turns it for the round), so it is a shader global
+            // rather than something every cube carries: one board, one pull.
+            Shader.SetGlobalVector("_BlockFlowDir",
+                new Vector4(board.WaterFlow.X, board.WaterFlow.Y, 0f, 0f));
+            UnresolvedCubes = 0;
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -421,8 +504,11 @@ namespace ProjectBlock.View
                         kindCache[x, y] = null;
                         if (board.IsDead(gp))
                         {
-                            // eaten by erosion: shown as scar tissue, not as a gap
+                            // eaten by erosion: shown as scar tissue, not as a gap. Flat, and
+                            // explicitly so - the cell may have been carrying a painted tile
+                            // the moment before the erosion ate it.
                             cellRenderers[x, y].enabled = true;
+                            ViewUtil.ApplyTile(cellRenderers[x, y], null, cellSize * EmptyFill);
                             cellRenderers[x, y].color = DeadColor;
                             baseColorCache[x, y] = DeadColor;
                             continue;
@@ -433,8 +519,21 @@ namespace ProjectBlock.View
                     }
                     cellRenderers[x, y].enabled = true;
                     Cube? cube = board.GetCube(gp);
+                    // A CUBE is a painted tile and fills its cell; an EMPTY cell stays the flat
+                    // inset square it always was, so the grid still reads as holes waiting to be
+                    // filled rather than as pale blocks.
+                    Sprite tile = null;
+                    if (cube.HasValue)
+                    {
+                        tile = ViewUtil.CubeTile(cube.Value.Kind, CardOf(cube.Value));
+                        ViewUtil.ApplyTile(cellRenderers[x, y], tile, cellSize * CubeFill);
+                    }
+                    else
+                    {
+                        ViewUtil.ApplyTile(cellRenderers[x, y], null, cellSize * EmptyFill);
+                    }
                     Color color = cube.HasValue
-                        ? ViewUtil.CubeDisplayColor(cube.Value)
+                        ? ViewUtil.CubeTileColor(cube.Value, tile)
                         : (board.IsSealed(gp) ? SealedColor : EmptyColor);
                     // "Karantina" washes its sealed lines without hiding what stands in them.
                     if (IsQuarantined(gp))
@@ -473,6 +572,10 @@ namespace ProjectBlock.View
                 }
             }
             RefreshGhostTraces();
+            if (animatingWater)
+            {
+                HideWaterCells();
+            }
         }
 
         /// <summary>Ghost cubes hanging outside the grid render as faint traces.</summary>
@@ -993,8 +1096,15 @@ namespace ProjectBlock.View
             outsidePreviewSprites.Clear();
         }
 
-        /// <summary>Replays the water fall frames as discrete cell steps, then restores
-        /// the true board state and invokes onDone (the controller unlocks input).</summary>
+        /// <summary>Replays the water fall frames, then restores the true board state and
+        /// invokes onDone (the controller unlocks input).
+        ///
+        /// Core hands the fall over as DISCRETE cell steps, but water must not read as a cube
+        /// teleporting one box at a time: the frames are rebuilt into per-cube paths and each
+        /// cube is a sprite that SLIDES along its own, so a five-cell drop is one continuous
+        /// motion rather than five repaints. The grid cells underneath are blanked for the
+        /// duration - the board has already settled, so they would otherwise show the cubes
+        /// standing at their destinations while the sprites are still travelling.</summary>
         public void PlayWaterAnimation(IReadOnlyList<IReadOnlyList<WaterMove>> frames,
             System.Action onDone)
         {
@@ -1004,51 +1114,53 @@ namespace ProjectBlock.View
         private IEnumerator WaterFallRoutine(IReadOnlyList<IReadOnlyList<WaterMove>> frames,
             System.Action onDone)
         {
+            if (frames.Count == 0)
+            {
+                // Routine: the turn's fall is split around the boom, so one half is often
+                // empty. Nothing to play, and the caller must not be made to wait for it.
+                if (onDone != null)
+                {
+                    onDone();
+                }
+                yield break;
+            }
             animatingWater = true;
-            const float tickSeconds = 0.09f;
+            List<WaterDrop> drops = BuildWaterDrops(frames);
             Color waterColor = ViewUtil.ElementColor(BlockElement.Water);
-            // hide the fallen cubes at their final cells so they can visibly arrive
-            var finalCells = new HashSet<GridPos>();
-            foreach (IReadOnlyList<WaterMove> frame in frames)
+            waterHiddenCells.Clear();
+            foreach (WaterDrop drop in drops)
             {
-                foreach (WaterMove move in frame)
+                foreach (GridPos cell in drop.Cells)
                 {
-                    finalCells.Remove(move.From);
-                    finalCells.Add(move.To);
+                    waterHiddenCells.Add(cell);
+                }
+                drop.Sprite = ViewUtil.MakeCell(transform, "WaterDrop",
+                    CellToWorld(drop.Cells[0]), cellSize * CubeFill, waterColor, 2);
+                // A drop in flight is the cube that left the cell, so it carries the same tile.
+                ViewUtil.ApplyTile(drop.Sprite, ViewUtil.CubeTile(CubeKind.Water),
+                    cellSize * CubeFill);
+            }
+            HideWaterCells();
+            float total = frames.Count * WaterCellSeconds + WaterAccelTailSeconds
+                + WaterSplashSeconds;
+            float elapsed = 0f;
+            while (elapsed < total)
+            {
+                elapsed += Time.deltaTime;
+                foreach (WaterDrop drop in drops)
+                {
+                    StepWaterDrop(drop, elapsed, waterColor);
+                }
+                yield return null;
+            }
+            foreach (WaterDrop drop in drops)
+            {
+                if (drop.Sprite != null)
+                {
+                    Destroy(drop.Sprite.gameObject);
                 }
             }
-            foreach (GridPos pos in finalCells)
-            {
-                PaintCell(pos, EmptyColor);
-            }
-            var current = new HashSet<GridPos>();
-            var previous = new HashSet<GridPos>();
-            foreach (IReadOnlyList<WaterMove> frame in frames)
-            {
-                bool introduced = false;
-                foreach (WaterMove move in frame)
-                {
-                    if (current.Add(move.From))
-                    {
-                        introduced = true;
-                    }
-                }
-                if (introduced)
-                {
-                    PaintWaterState(current, previous, waterColor);
-                    yield return new WaitForSeconds(tickSeconds);
-                }
-                foreach (WaterMove move in frame)
-                {
-                    current.Remove(move.From);
-                }
-                foreach (WaterMove move in frame)
-                {
-                    current.Add(move.To);
-                }
-                PaintWaterState(current, previous, waterColor);
-                yield return new WaitForSeconds(tickSeconds);
-            }
+            waterHiddenCells.Clear();
             animatingWater = false;
             Refresh();
             if (onDone != null)
@@ -1057,24 +1169,184 @@ namespace ProjectBlock.View
             }
         }
 
-        private void PaintWaterState(HashSet<GridPos> current, HashSet<GridPos> previous,
-            Color waterColor)
+        /// <summary>Rebuilds the frame list into one path per water cube: which cells it passes
+        /// through, and which frame each of its steps happens on. A cube waiting for the cell
+        /// ahead to empty has a GAP between two of its steps, which is why a step carries its
+        /// own frame number instead of being counted off from the first one.</summary>
+        private static List<WaterDrop> BuildWaterDrops(
+            IReadOnlyList<IReadOnlyList<WaterMove>> frames)
         {
-            foreach (GridPos pos in previous)
+            var drops = new List<WaterDrop>();
+            var occupant = new Dictionary<GridPos, WaterDrop>();
+            var moving = new List<WaterDrop>();
+            for (int f = 0; f < frames.Count; f++)
             {
-                if (!current.Contains(pos))
+                IReadOnlyList<WaterMove> frame = frames[f];
+                moving.Clear();
+                for (int i = 0; i < frame.Count; i++)
                 {
-                    PaintCell(pos, EmptyColor);
+                    WaterDrop drop;
+                    if (!occupant.TryGetValue(frame[i].From, out drop))
+                    {
+                        drop = new WaterDrop();
+                        drop.Cells.Add(frame[i].From);
+                        drops.Add(drop);
+                    }
+                    moving.Add(drop);
+                }
+                // Vacate first, THEN fill: a cube may move into the cell another one is leaving
+                // on this very frame, and the two must not be mistaken for each other.
+                for (int i = 0; i < frame.Count; i++)
+                {
+                    occupant.Remove(frame[i].From);
+                }
+                for (int i = 0; i < frame.Count; i++)
+                {
+                    moving[i].Cells.Add(frame[i].To);
+                    moving[i].StepFrames.Add(f);
+                    occupant[frame[i].To] = moving[i];
                 }
             }
-            foreach (GridPos pos in current)
+            return drops;
+        }
+
+        /// <summary>Places one drop for the current time: how far along its path it has got,
+        /// the stretch its speed gives it, and the squash of the landing it just made.</summary>
+        private void StepWaterDrop(WaterDrop drop, float elapsed, Color waterColor)
+        {
+            if (drop.Sprite == null)
             {
-                PaintCell(pos, waterColor);
+                return;
             }
-            previous.Clear();
-            foreach (GridPos pos in current)
+            int steps = drop.StepFrames.Count;
+            float travelled = steps; // cells covered from Cells[0]
+            float speed = 0f;
+            bool atRest = true;
+            int step = 0;
+            while (step < steps)
             {
-                previous.Add(pos);
+                // One RUN: the steps this drop takes back to back, without waiting in between.
+                int runStart = step;
+                while (step + 1 < steps && drop.StepFrames[step + 1] == drop.StepFrames[step] + 1)
+                {
+                    step++;
+                }
+                int runLength = step - runStart + 1;
+                float cellTimes = (elapsed - drop.StepFrames[runStart] * WaterCellSeconds)
+                    / WaterCellSeconds;
+                if (cellTimes <= 0f)
+                {
+                    travelled = runStart; // still waiting for this run to start
+                    break;
+                }
+                float covered = WaterProfile(cellTimes);
+                if (covered < runLength)
+                {
+                    travelled = runStart + covered;
+                    speed = Mathf.Clamp01(cellTimes / WaterAccelCells);
+                    atRest = false;
+                    break;
+                }
+                travelled = runStart + runLength;
+                step++;
+            }
+
+            if (atRest && (int)travelled > drop.Landed)
+            {
+                drop.Landed = (int)travelled;
+                drop.SplashAt = elapsed;
+                SplashWater(CellToWorld(drop.Cells[drop.Landed]),
+                    StepDirection(drop, drop.Landed - 1));
+            }
+
+            int index = Mathf.Clamp((int)travelled, 0, drop.Cells.Count - 1);
+            float frac = travelled - index;
+            Vector2 world = CellToWorld(drop.Cells[index]);
+            if (frac > 0f && index + 1 < drop.Cells.Count)
+            {
+                world = Vector2.Lerp(world, CellToWorld(drop.Cells[index + 1]), frac);
+            }
+            drop.Sprite.transform.localPosition = new Vector3(world.x, world.y, 0f);
+
+            // Stretched along the flow while it is moving, squashed across it when it lands -
+            // the two cues that read as "falling" and "arrived" now that nothing snaps.
+            float along = 1f + 0.25f * speed;
+            float across = 1f - 0.12f * speed;
+            float sinceSplash = elapsed - drop.SplashAt;
+            if (drop.SplashAt >= 0f && sinceSplash < WaterSplashSeconds)
+            {
+                float bump = Mathf.Sin(sinceSplash / WaterSplashSeconds * Mathf.PI) * 0.3f;
+                along = 1f - bump;
+                across = 1f + bump * 0.75f;
+            }
+            float size = cellSize * CubeFill;
+            GridPos flow = StepDirection(drop, Mathf.Min(index, steps - 1));
+            drop.Sprite.transform.localScale = flow.X != 0
+                ? new Vector3(size * along, size * across, 1f)
+                : new Vector3(size * across, size * along, 1f);
+
+            // The same wave the resting water cubes carry, so a drop in flight still looks
+            // like the cube it is about to become again - unless it is on the painted tile,
+            // which carries its own water and only wants to be left white.
+            drop.Sprite.color = ViewUtil.HasOwnTile(CubeKind.Water)
+                ? Color.white
+                : Color.Lerp(waterColor, new Color(0.2f, 0.42f, 0.9f),
+                    0.3f + 0.3f * Mathf.Sin(Time.time * 2.2f + drop.Cells[index].X * 0.9f));
+        }
+
+        /// <summary>Cells covered after so many cell-times of falling: a brief acceleration from
+        /// rest, then a constant one cell per cell-time. Deliberately one-sided - a drop only
+        /// ever LAGS behind the schedule the frames describe and never runs ahead of it, which
+        /// is what keeps it from sliding into the drop in front of it.</summary>
+        private static float WaterProfile(float cellTimes)
+        {
+            if (cellTimes < WaterAccelCells)
+            {
+                return cellTimes * cellTimes / (2f * WaterAccelCells);
+            }
+            return cellTimes - WaterAccelCells * 0.5f;
+        }
+
+        /// <summary>Which way the drop's step number `step` went (the last one it took, for a
+        /// drop standing still). Falls back to the arena's own pull for a pathless drop.</summary>
+        private GridPos StepDirection(WaterDrop drop, int step)
+        {
+            int to = Mathf.Clamp(step + 1, 1, drop.Cells.Count - 1);
+            if (drop.Cells.Count < 2)
+            {
+                return board != null ? board.WaterFlow : new GridPos(0, -1);
+            }
+            return new GridPos(drop.Cells[to].X - drop.Cells[to - 1].X,
+                drop.Cells[to].Y - drop.Cells[to - 1].Y);
+        }
+
+        /// <summary>The little spray a drop throws off where it lands, back the way it came.
+        /// Silent while blind: a splash would say where the water is.</summary>
+        private void SplashWater(Vector2 world, GridPos flow)
+        {
+            if (dark)
+            {
+                return;
+            }
+            var back = new Vector2(-flow.X, -flow.Y);
+            var sideways = new Vector2(-back.y, back.x);
+            for (int i = 0; i < 3; i++)
+            {
+                EmitAmbient(world, new Color(0.55f, 0.75f, 1f),
+                    back * Random.Range(0.5f, 1.1f) + sideways * Random.Range(-0.5f, 0.5f),
+                    0.055f);
+            }
+        }
+
+        /// <summary>Blanks the cells the falling cubes are standing in or heading for. Called
+        /// again from Refresh while a fall is running, because a repaint in the middle of one
+        /// (a blast lighting the dark, say) would put the settled cubes back under the drops
+        /// that are still on their way to them.</summary>
+        private void HideWaterCells()
+        {
+            foreach (GridPos cell in waterHiddenCells)
+            {
+                PaintCell(cell, EmptyColor);
             }
         }
 

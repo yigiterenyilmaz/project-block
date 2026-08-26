@@ -605,11 +605,7 @@ namespace ProjectBlock.View
         {
             supurgeAnimating = true;
             yield return new WaitForSeconds(0.28f);
-            var color = new Color(0.7f, 0.85f, 1f);
-            for (int i = 0; i < cells.Count; i++)
-            {
-                blastFx.EmitAt(boardView.CellToWorld(cells[i]), color, 6);
-            }
+            FlashCells(cells, new Color(0.7f, 0.85f, 1f), 6);
             sfx.Explode();
             ShakeCamera(0.14f, 0.22f);
             supurgeAnimating = false;
@@ -641,44 +637,19 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            var infectionGreen = new Color(0.25f, 0.95f, 0.4f);
-            bool any = false;
-            RoundEngine round = session.CurrentRound;
-            for (int i = 0; i < infectionBlastBuffer.Count; i++)
-            {
-                // A cell can be off the board by now if this turn also eroded the arena.
-                if (round != null && !round.Board.IsInside(infectionBlastBuffer[i]))
-                {
-                    continue;
-                }
-                blastFx.EmitAt(boardView.CellToWorld(infectionBlastBuffer[i]), infectionGreen, 8);
-                any = true;
-            }
-            if (any)
+            // Cells off the board by now (a turn that also eroded the arena) are dropped by
+            // FlashCells, which is also what "any" comes from.
+            if (FlashCells(infectionBlastBuffer, new Color(0.25f, 0.95f, 0.4f), 8))
             {
                 sfx.Explode();
                 ShakeCamera(0.13f, 0.22f);
             }
         }
 
-        /// <summary>Blast particles + shake + sound on the cells a board power just hit.</summary>
+        /// <summary>The struck cells + particles + shake + sound a board power just hit.</summary>
         private void PlayPowerBlast(IReadOnlyList<GridPos> cells)
         {
-            if (cells == null || cells.Count == 0)
-            {
-                return;
-            }
-            var blastColor = new Color(1f, 0.72f, 0.35f);
-            bool any = false;
-            for (int i = 0; i < cells.Count; i++)
-            {
-                if (session.CurrentRound != null && session.CurrentRound.Board.IsInside(cells[i]))
-                {
-                    blastFx.EmitAt(boardView.CellToWorld(cells[i]), blastColor, 5);
-                    any = true;
-                }
-            }
-            if (any)
+            if (FlashCells(cells, BlastColor, 5))
             {
                 sfx.Explode();
                 ShakeCamera(0.12f, 0.2f);

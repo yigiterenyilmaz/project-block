@@ -32,7 +32,16 @@ namespace ProjectBlock.Core
         // and the round writes which targeted blocks still have their shot.
         // 8 (2026-07-26): "Kütleçekim merkezi" landed, so the board writes which way water falls.
         // 9 (2026-07-26): "Kaçakçı" wears out, so it writes how many sound hauls it has left in it.
-        public const int FormatVersion = 9;
+        // 10 (2026-08-10): "Savunmacı" was cut and "Kiracı" became "Metamorfoz", so a DefId an
+        // older save owns may no longer exist in the registry.
+        // 11 (2026-08-12): three jokers were renamed - "Dezenformasyon" -> "Konfüzyon",
+        // "Oryantasyon" -> "Baba Ocağı", "Damlaya Damlaya Göl Olur" -> "Kapalı Ekonomi" - so
+        // their DefIds (dezenformasyon -> konfuzyon, oryantasyon -> baba_ocagi, damlaya ->
+        // kapali_ekonomi) are no longer in the registry for an older save to find.
+        // 12 (2026-08-17): "Hileli zar" moved from the powers to the jokers, keeping its DefId,
+        // so an older save's owned POWER "hileli_zar" no longer resolves - and a new one owns a
+        // joker of that id with a field the power never had.
+        public const int FormatVersion = 12;
 
         private const string VersionKey = "version";
 

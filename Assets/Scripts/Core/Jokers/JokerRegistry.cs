@@ -40,12 +40,12 @@ namespace ProjectBlock.Core
             Register(() => new TaskinJoker());
             Register(() => new BuzlukJoker());
             Register(() => new SimyaJoker());
-            Register(() => new DamlayaJoker());
+            Register(() => new KapaliEkonomiJoker());
             Register(() => new IhaleJoker());
             Register(() => new KaraDelikJoker());
             Register(() => new EnfeksiyonJoker());
-            Register(() => new OryantasyonJoker());
-            Register(() => new DezenformasyonJoker());
+            Register(() => new BabaOcagiJoker());
+            Register(() => new KonfuzyonJoker());
             Register(() => new ImitasyonJoker());
             Register(() => new FraksiyonJoker());
             Register(() => new ParazitJoker());
@@ -58,9 +58,8 @@ namespace ProjectBlock.Core
             Register(() => new DevreJoker());
             Register(() => new SifaciJoker());
             Register(() => new YerAltiKaynaklariJoker());
-            Register(() => new KiraciJoker());
+            Register(() => new MetamorfozJoker());
             Register(() => new BeslemeJoker());
-            Register(() => new SavunmaciJoker());
             Register(() => new UzunVadeliYatirimciJoker());
             Register(() => new KacakciJoker());
             Register(() => new SimetriJoker());
@@ -68,6 +67,7 @@ namespace ProjectBlock.Core
             Register(() => new AntimaddeJoker());
             Register(() => new EforsuzGalibiyetJoker());
             Register(() => new MikrodalgaJoker());
+            Register(() => new HileliZarJoker());
         }
 
         /// <summary>All known jokers, in design order.</summary>

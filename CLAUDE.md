@@ -97,7 +97,14 @@ dropped that way once each.
   `ContentStateSerializer.cs` walks joker/power/boss fields by reflection so new content
   saves itself. See **Saving** below.
 - `Assets/Scripts/View/` — disposable debug UI (runtime-generated sprites + HUD).
-  Never put rules here.
+  Never put rules here. **Destruction has one shared language**: `CellFlashFx` strikes the
+  board's own squares bright, cools them back into the grid and pinches them out, and what
+  TRAVELS is which cells are in which beat — out from the middle of a cleared LINE (the ray) or
+  out from the middle of a loose group (a power, the sweeper, an infection, a lift). Every
+  blast goes through `FlashLine` / `FlashCells` / `FlashBoard` and passes its OWN colour, so a
+  green detonation still reads as the infection. It is drawn in flat hard-edged squares on the
+  same white sprite as everything else: this board has no gradients or glows anywhere, and a
+  soft texture is what would look imported.
 - `Assets/Scripts/View/Menus/` — the menu layer (title, pause, settings, how to play, run
   summary). Unlike the rest of View this is NOT disposable: it is the real UI shell, built
   on the HUD canvas. Every screen is `MenuScreenView` with different content — do not
@@ -179,7 +186,7 @@ Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.
 
-The roster now stands at **53 jokers, 36 powers and 37 bosses** (registry counts); of the
+The roster now stands at **53 jokers, 35 powers and 37 bosses** (registry counts); of the
 originally planned powers only "Dolly" is left, set aside by the designer.
 See `docs/jokers-plan.md`.
 
@@ -254,3 +261,18 @@ A/C on offers, N leaves market, S redraws the hand, R restarts, F feeds the card
 cursor to a "Tamagotchi" boss. Joker debug keys:
 J grants the next joker from the registry, K sells the last one, 1-9 activate (a joker
 that needs a target then waits for a click, Esc cancels).
+
+**F3 opens the ANIMATION LAB** — a catalogue of every animation in the game, each playable on
+demand, with knobs for the conditions that modulate them (combo streak, sweep count, overtime
+level, board darkness, and a 0.1x-2x time scale for watching one frame by frame). It lives in
+`View/AnimationLabView.cs` + `GameUiController.AnimationLab.cs` and is the way to work on an
+animation without having to reach the game state that normally triggers it.
+
+The rule it follows: **it drives the real animation code, never a copy.** An entry calls the
+same method the game calls and only fabricates the ARGUMENTS, so a retimed animation shows its
+new timing there for free. That is why `CardLayerView.PlayDebugAnimation` and the small
+`FlashLine` / `FlashCells` / `FlashDynamite` / `ShakeForBlast` / `Spawn*Popup` /
+`EmitSweepConfetti` seams in `GameUiController.Feedback.cs` exist — the lab and the game both
+go through them. Add an animation: add one line to
+`BuildAnimCatalogue`. Nothing the lab does touches Core (`TurnReport` cannot even be
+fabricated), and what it paints STAYS until the RESET entry or closing the lab resyncs.

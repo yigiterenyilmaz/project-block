@@ -1,0 +1,162 @@
+﻿*PROJECT BLOCK - JOKER LIST*
+53 jokers, in registry (design) order
+
+1. *Renovasyon*
+Raunt başına 2 kez tüm elini ıskartaya atıp yeni el çekersin. Tur harcamaz, uzatmada çalışmaz.
+
+2. *İade*
+Raunt başına 2 kez elindeki tek bir bloğu iade edip yenisini çekersin. Tur harcamaz.
+
+3. *Insider*
+Çekme destesinin en üstündeki kartı görürsün.
+
+4. *Çığ*
+Her tur bir öncekinden BÜYÜK blok koyarsan puan bonusu; seri uzadıkça büyür.
+
+5. *Dondurma*
+Her tur bir öncekinden KÜÇÜK blok koyarsan puan bonusu; seri uzadıkça büyür.
+
+6. *Siyam*
+Her tur bir öncekiyle AYNI şekli koyarsan puan bonusu; seri uzadıkça büyür.
+
+7. *Bereket*
+Aynı turda satır ve sütun birlikte patlarsa kazandığın puan kalıcı olarak artar.
+
+8. *Harcama Bonusu*
+Çekme destesi her tükendiğinde puan kazanırsın.
+
+9. *Domuz Kumbarası*
+Tamamladığın her raunt sonunda satış değeri artar.
+
+10. *Cimri Kumbara*
+Elde tutulduğu her turda satış değeri biraz artar.
+
+11. *Altın Kumbara*
+Her tur, her temizlik ve tamamladığın her raunt satış değerini artırır.
+
+12. *Seri Tetik*
+El boyutu +2, ama her tur sonunda kullanılmayan kartlar ıskartaya gidip yenileri gelir. Uzatmada çalışmaz.
+
+13. *Kazı Çalışması*
+Koyduğun turda tek seferde tümüyle patlayan blok bonus eline iade edilir.
+
+14. *Robot Süpürge*
+Her turdan sonra rastgele küp siler. Temizliği kendisi tetiklerse kapasitesi artar ve kısa süre dinlenir.
+
+15. *Kayıt Defteri*
+Patlatılan küpleri sayar; sayı alan büyüklüğüne ulaşınca temizlik tetikler. Bu joker dururken alanı boşaltmak temizlik sayılmaz.
+
+16. *Deprem*
+Raunt başına bir kez: oyun alanı dolup koyacak yer kalmazsa deprem olur ve küplerin dörtte biri yıkılır, oyuna devam edersin. Puan vermez.
+
+17. *Hazine*
+Her raunt gizlice bir kareye hazine, bir kareye dinamit konur. Hazineyi patlatırsan ödül, dinamiti patlatırsan ceza alırsın - ikisine birden denk gelirsen birbirini götürür, birini bulmak diğerini kaldırır.
+
+18. *Meydan Okuma*
+Birkaç tur sonra işaretlediği bir satırı ya da sütunu süre dolmadan patlatman için bonus vaat eder. Tutturamazsan yer değiştirip bonusu yarıya böler, en fazla üç deneme; birini tutturursan o raunt biter.
+
+19. *Midas*
+Altın bloklar elindeyken de bonus verir (bonus el dahil) ve her altın küp daha çok puan kazandırır.
+
+20. *Elmas Kazma*
+Temizlik yapınca obsidyenler de patlar ve puan verir.
+
+21. *Tutuştur*
+Bir ateş bloğu patlayınca alandaki TÜM ateş blokları patlar.
+
+22. *Yangın*
+Raunt başına 1 kez: ateş bloklarının etrafındaki bloklar da ateş olur.
+
+23. *Taşkın*
+Raunt başına 1 kez: su bloklarının etrafındaki bloklar da su olur.
+
+24. *Buzluk*
+Duvara değen su blokları donar. Buz temizliği engellemez ve patlayınca ek puan verir.
+
+25. *Simya*
+Marketteki elementli bloklar aynı anda 2 elemente sahip gelir.
+
+26. *Kapalı Ekonomi*
+Marketten bir şey almazsan sonraki raunt her tur puan bonusu alırsın.
+
+27. *İhale*
+Her raunt başında rastgele bir jokere ek satış fiyatı biçer. O joker satılana kadar yeni ihale açılmaz.
+
+28. *Kara Delik*
+Her temizlikte ıskartana 1x1 boşluk bloğu ekler. Boşluk bloğu dolu hücreye konabilir ve üstüne geleni yutar.
+
+29. *Enfeksiyon*
+Bir küpü enfekte edersin. Aynı blok o karede 3 tur durursa blok tümüyle patlar. İlk patlama enfeksiyonu bir kez 3x3 artı şeklinde yayar - daha fazla değil.
+
+30. *Baba Ocağı*
+Kartlar ıskartaya değil, çekme destesinin rastgele bir yerine girer. Destenin en üstteki kartı hep görünür.
+
+31. *Konfüzyon*
+Açılış eli dağıtıldıktan sonra çekme destesi iki eşit desteye bölünür, asla birbirine karışmazlar. Her tur roller yer değiştirir - birinden çeker, diğerine atarsın, hangisinin hangisi olduğu her tur değişir - ve her tur sonunda her deste kendi içinde karılır. El +1.
+
+32. *İmitasyon*
+El boyutun ıskartadaki kart sayısına eşittir (en az 1); tur sonunda elde kalanlar ıskartaya gider. El sadece çekme destesinde olanı çeker - dolmak için karmaz; ıskarta yalnızca boş desteye kart oynadığında geri karılır.
+
+33. *Fraksiyon*
+Raunt başında ve deste bitince desteler karılıp ikiye bölünür; sonra ıskartaya tıklayarak yarısını inceleyebilirsin. Sonraki bölünmeye kadar desteleri bir kez takas edebilirsin - takastan sonra ıskarta yine gizlenir.
+
+34. *Parazit*
+Markette bir jokeri destendeki bir bloğun küpüne takarsın. O joker slot işgal etmez. Konak küp temizliğe girmez ve başka joker/güçlerle kırılmaz - sadece senin tamamladığın bir satır onu (ve jokeri) yok eder.
+
+35. *Powerbank*
+Raunt başına 1 kez, harcanmış bir gücü temizlik beklemeden doldurur.
+
+36. *Tutumluluk*
+Destendeki kart sayısı ne kadar az ise her tur o kadar fazla puan kazanırsın.
+
+37. *Genel Temizlik*
+Jokerler ve güçler tarafından tetiklenen temizlikler de gerçek temizlik sayılır - tıpkı blok koyarak tahtayı boşaltmak gibi temizlik bonusunu verir ve güçlerini şarj eder. Normalde blok koymalar arasındaki böyle bir temizlik sayılmaz.
+
+38. *Hafıza*
+Elinde kalan bonus kartlar sonraki raunda taşınır. Raunt başındaki el büyüklüğünü aşan kartlar rastgele atılır.
+
+39. *Kolay Para*
+Blok koymak puan kazandırır - koyduğun her küp için bonus.
+
+40. *Kredi Kartı*
+Markette puanın yetmese de her şeyi alabilirsin. Aldığın borç her raunt sonunda %10 bileşik faiz işler; borcunu kapatmadan bir patron raundu biterse oyunu kaybedersin. Borcun varken bu joker satılamaz.
+
+41. *Devre*
+Her raunt bir noktada oyun alanının bir kenarından diğerine kıvrımlı bir devre çizilir. Devrenin bütün karelerini doldurursan devre kırılır: o bloklar patlar ve ekstra puan alırsın. Raunt boyunca seni bekler.
+
+42. *Şifacı*
+Her 5 turda bir, hakkı bitmiş rastgele bir jokerine bir hak geri verir. Bitmiş joker yoksa hazır bekler ve biri biter bitmez iyileştirir.
+
+43. *Yer Altı Kaynakları*
+3 turda bir boşalmış sıradan güçlerini, 5 turda bir nadir güçlerini doldurur. Her doldurma damardan düşer: sıradan güç 1, nadir güç 2. Damar tükenince joker hiçbir şey yapmaz - ama ona verdiğin parayla satarsın.
+
+44. *Metamorfoz*
+Oyun alanında 5 tur patlamadan duran elementsiz bloklar ALTINA dönüşür - ama altın asla kırılmaz ve temizliği engeller, yani dönüşen her blok kalıcıdır.
+
+45. *Besleme*
+Oyun alanında bir bölgeyi işaretler ve içine canlı bir şey koyar. O bölgede patlattığın her küp onu besler; hiç patlatmadığın tur onu aç bırakır. Yeterince beslenirse BÜYÜR ve küp başına çok daha fazla öder - ama büyük yaratık daha çabuk açlıktan ölür ve küçüldüğünde çok daha pahalıya gelir. Açlıktan öldürürsen bu joker koşunun kalanı için biter.
+
+46. *Uzun Vadeli Yatırımcı*
+Sadece koşunun ilk marketlerinde satılır ve son raunda kadar hiçbir şey yapmaz. Orada sana BİR ikinci şans verir - o raundu kaybedersen baştan tekrar oynarsın - ve başka hiçbir yolla alamayacağın iki gücü açar. Asla satılamaz, yani son raunda ulaşamazsan boşa para verdin.
+
+47. *Kaçakçı*
+Her market ziyaretinde BİR ürünü bedavaya al - ama kaçak malın yarısı defolu çıkar. Defolu blok tahtaya tutunmaz, aşağı düşüp ekrandan çıkar ve turu boşa harcarsın; defolu joker patron rauntlarında ya da hiçbir zaman çalışmaz; defolu güç boş gelir ve dört kat yavaş dolar. Aldığın senin kalır. SAĞLAM üç mal teslim ettikten sonra yakalanır ve elinden gider - defolular sayılmaz.
+
+48. *Simetri*
+Tahtayı ortadan simetrik bırakırsan puan verir; İKİ eksende birden simetrikse üç katını verir. 5. turda uyanır - ve her temizlik onu 5 tur daha uykuya yatırır, yani boş tahta hiçbir zaman sayılmaz.
+
+49. *Barut Tedarikçisi*
+Tahtadaki bir dinamit bloğu patlamadan durduğu her tur güç kazanır ve sonunda patladığında hepsinin karşılığını öder. Cephane sabırdır.
+
+50. *Antimadde*
+NEGATİF blok elementli küpleri sildiğinde antimaddesi eline gelir: sildiğin şeklin aynısı bir kart. Onu tahtada o elementten başka hiçbir şeye değmeyecek şekilde CUK oturtursan tahtadaki o elementin TÜM küpleri havaya uçar. Elinde bozulur - her tur getirisi azalır, 5 turda yok olur.
+
+51. *Eforsuz Galibiyet*
+Bir raundu tek bir güç kullanmadan bitir, markete girerken bonus alırsın. Aynısını UZATMAYA gidip sağ çıktığın bir raunttta yaparsan iki katını verir. Raundun herhangi bir yerinde bir güç kullanmak hakkını yakar.
+
+52. *Mikrodalga*
+Kombon araya giren BİR turu affeder - arasında bir tur bulunan iki patlama da kombodan sayılır. Seriyi geri alan tur kombo bonusunun yarısını öder; hiç bozulmayan seri tam ödemeye devam eder.
+
+53. *Hileli Zar*
+Market fazında sonraki rauntun başlangıç elini seçebilmeni sağlar. Her markette bir kez.
+

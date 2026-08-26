@@ -463,7 +463,8 @@ namespace ProjectBlock.Core
     /// forfeits everything.
     ///
     /// "Going into overtime" is RoundEngine.ContinueCount, the only thing that counts the player
-    /// DECLINING the advance offer, exactly as "Savunmacı" reads it.
+    /// DECLINING the advance offer. Deliberately not ThresholdPassed, which turns true on every
+    /// round the player ever completes and so cannot tell a safe round from a greedy one.
     /// </summary>
     public sealed class EforsuzGalibiyetJoker : Joker
     {

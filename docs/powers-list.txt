@@ -1,0 +1,107 @@
+*PROJECT BLOCK - POWER LIST*
+35 powers, in registry (design) order
+
+1. *Cımbız*
+Elindeki seçtiğin bloğu çevirir (mekanik blok olması gerekmez).
+
+2. *Çaprazlama*
+Seçtiğin merkezden + şeklinde bir alandaki blokları patlatır.
+
+3. *Eko*
+İlk kullanım (bedava) sonraki patlamayı hafızaya alır, tekrar kullandığında o patlamayı aynı karelerde tekrar eder. Hafıza her raunt sıfırlanır.
+
+4. *Çerçeve*
+Oyun alanının en dış katmanındaki blokları temizler.
+
+5. *Buldozer*
+Rastgele seçilen ardışık 2 satırı ya da 2 sütunu siler. Obsidyeni ve altını bile ezer. Puan vermez, temizlik sayılmaz.
+
+6. *Öteki Dünya*
+Oyun alanını klonlar ve kopyasını altına açar. Bundan sonra bir tur, aynı desteden çekilen iki karttır - her dünyaya bir tane. Aynı sütunu iki dünyada birden patlatırsan büyük bonus alırsın. Rauntun eşiği yarı yarıya yükselir.
+
+7. *Klon*
+Elindeki seçtiğin kartın 2 kopyasını bonus eline ekler.
+
+8. *Büyüteç*
+Çekme destesinin en üstteki iki kartını açığa çıkarır. Kart çektikçe biri daha az görünür (2, sonra 1, sonra hiç).
+
+9. *Transfer*
+Iskartadaki son kart ile çekme destesinin üstündeki kart yer değiştirir; verdiğin kartı görürsün.
+
+10. *Mayın*
+Seçtiğin küpü patlatır. Boş kareye koyarsan üstüne küp geldiğinde patlar.
+
+11. *Hologram*
+Bonus elindeki bir kartı ıskartaya çıkarıp desteye katar.
+
+12. *Hızlı Çekim Şarjörü*
+Çekme destesini anında bitirir ve ıskartanın karılmasını sağlar.
+
+13. *Bardağın Boş Tarafı*
+Oyun alanındaki dolu ve boş kareler yer değiştirir (yeni küpler elementsizdir). Yeni küplerin tamamladığı satır veya sütun patlar.
+
+14. *Kum Saati*
+Oyun alanını 2 tur geriye sarar. El, deste ve ıskarta olduğu gibi kalır.
+
+15. *Olta*
+Raunt başına bir kart işaretlersin; kartı bonus eline çekersin. Çekme destesinden çekmek bedavadır (olta hazır kalır); ıskartadan çekersen olta bir sonraki temizliğe kadar kilitlenir.
+
+16. *Tılsım*
+Hayalet blokları patlatır ve harita dışında kapladıkları yeri oyun alanına katar. Raunt bitince sıfırlanır.
+
+17. *Yatay Enflasyon*
+Oyun alanının genişliğini sağdan ve soldan birer artırır. 3 tur sürer, bitince bloklar içeri ittirilir.
+
+18. *Dikey Enflasyon*
+Oyun alanının yüksekliğini alttan ve üstten birer artırır. 3 tur sürer, bitince bloklar içeri ittirilir.
+
+19. *Hiper Enflasyon*
+Oyun alanını her yönden birer artırır. 3 tur sürer, bitince bloklar içeri ittirilir.
+
+20. *Aşırma*
+Çekme destesinden rastgele bir kartın 2 kopyasını bonus eline ekler.
+
+21. *Yedekleme*
+Iskartadan rastgele bir kartın 2 kopyasını bonus eline ekler.
+
+22. *Soğuk Füzyon*
+Iskartadan bir kartın ve çekme elinden bir kartın kopyasını bonus ele koyar.
+
+23. *İkinci Şans*
+Sadece uzatmada, raunt başına bir kez: oyun alanını temizler (puan yok, temizlik sayılmaz), puanını eşiğe çeker, desteyi karıp çekme destesine koyar, yeni bir el dağıtır ve oyun devam eder.
+
+24. *Totem*
+Sadece uzatmada: puanını eşiğe çeker, seni market fazına geçirir ve yok olur.
+
+25. *Bükülme*
+Elindeki bir kartı işaretler ve kopyasını bonus ele koyarsın. O raunt boyunca işaretli kart her ele çekildiğinde bir kopyası daha eklenir. Temizlik yaptığında yeniden işaretleyebilirsin.
+
+26. *Halüsinasyon*
+Rastgele bir güç olarak görünür. KULLANINCA o gücü çalıştırır, SAĞ TIKLAYINCA başka bir rastgele güce atlar. Her iki durumda da şarjını harcar ve gelecek raunt dolar. Asla efsanevi bir güce dönüşmez.
+
+27. *Karakter Oluşturma*
+İstediğin şekil ve elementte özel bir blok tasarla ve destene ekle. Sonraki raunttan itibaren desteye karışır.
+
+28. *Retro*
+Tetris modunu aç/kapat: bloklar yukarıdan düşer ve döndürülebilir, her koyuş bonus puan verir. Kapatmak için tekrar kullan. Tükenmez.
+
+29. *Batak*
+İstersen 'şu kadar turda temizlerim' diye bahse girersin. Tutturamazsan raunt biter, tutturursan aradaki puanı katlayarak alırsın.
+
+30. *Kentsel Dönüşüm*
+Oyun alanı dolup koyacak yer kalmazsa iki satırın ya da iki sütunun yerini değiştirip oyuna devam edersin. Hiçbir küpü yok etmez, puan vermez.
+
+31. *Neşter*
+Elindeki bir bloğu ikiye kes - ilk parçaya hangi küplerin gireceğini sen seçersin. İki parça da kendi içinde bitişik olmak zorunda. Bonus kart olarak gelirler ve raunt boyunca kalırlar; blok bir sonraki raunt destende yine bütün.
+
+32. *Lehimleme*
+Elindeki iki kartı tek karta lehimle - ikincisinin birinciye nereden yapışacağına sen karar verirsin. Sadece o raunt için; iki blok da bir sonraki raunt destende yine ayrı.
+
+33. *Gen Nakli*
+Tahtadaki bir küpün elementini elindeki bir karta aktar - küp elementsiz kalır, kart elementli olur. Bu bir ÖDÜNÇ: kart ıskartaya çıkınca ikisi de eski hâline döner.
+
+34. *Hidrolik Pres*
+Oyun alanından 2x2'lik bir parçayı 4 tur boyunca TEK kareye sıkıştırır - anında üç kare yer. Sıkışıkken o küpü patlatırsan dört küp değerinde puan verir. 5. turda açılır: önündekileri dışarı ittirir ve kenardan taşan küpler puan getirir. Obsidyen ve altın itilemez, o yüzden diğer yöne açılır - hiç açılamazsa patlar ve onları da götürür, ama puan vermez.
+
+35. *Kütleçekim Merkezi*
+Bir yön seç: su o raunt boyunca aşağı yerine O YÖNE akar. Alandaki su hemen o yöne akar ve tamamladığı satır ya da sütun patlar. Başka hiçbir şey yerinden oynamaz.

@@ -16,6 +16,12 @@ namespace ProjectBlock.View
         public const float BodyWidth = 1.35f;
         public const float BodyHeight = 1.8f;
 
+        /// <summary>How much of its slot a mini cube covers, on a painted tile and on the old
+        /// flat square. Mirrors BoardView's CubeFill/EmptyFill: a tile has its own frame and
+        /// wants the room, a flat square wants the gap around it.</summary>
+        private const float MiniTileFill = 0.98f;
+        private const float MiniFlatFill = 0.9f;
+
         private static readonly Color FaceColor = new Color(0.88f, 0.86f, 0.80f);
         private static readonly Color BonusFaceColor = new Color(0.62f, 0.80f, 0.78f);
         private static readonly Color BackInnerColor = new Color(0.15f, 0.19f, 0.31f);
@@ -95,11 +101,16 @@ namespace ProjectBlock.View
                 // skipped when picking the block's body colour - otherwise a plain targeted card
                 // would be lime from edge to edge and the mark would be invisible.
                 Color miniColor = ViewUtil.ColorForCard(card.Id);
+                // The element also decides which painted TILE the mini cubes are drawn on, so
+                // it is remembered and not just turned into a colour. "Çark" and "Tilki" have
+                // no cube kind of their own and are only ever seen here, in the hand.
+                BlockElement? miniElement = null;
                 for (int i = 0; i < card.Elements.Count; i++)
                 {
                     if (card.Elements[i] != BlockElement.Targeted)
                     {
                         miniColor = ViewUtil.ElementColor(card.Elements[i]);
+                        miniElement = card.Elements[i];
                         break;
                     }
                 }
@@ -118,20 +129,36 @@ namespace ProjectBlock.View
                 {
                     GridPos cell = miniCells[i];
                     Color cubeColor = miniColor;
+                    BlockElement? cubeElement = miniElement;
                     if (perCube)
                     {
                         BlockElement? e = card.CellElement(i);
                         cubeColor = e.HasValue
                             ? ViewUtil.ElementColor(e.Value)
                             : ViewUtil.ColorForCard(card.Id);
+                        cubeElement = e;
                     }
                     if (i == targetCell)
                     {
                         cubeColor = ViewUtil.ElementColor(BlockElement.Targeted);
                     }
-                    Track(ViewUtil.MakeCell(transform, "Mini",
+                    // The tile: the bullseye for the marked cube, this cube's own element if it
+                    // has one, otherwise whatever the CARD says - which is how a targeted
+                    // block's plain cubes get its body tile instead of a default one.
+                    Sprite miniTile = i == targetCell
+                        ? ViewUtil.CubeTile(CubeKind.Target)
+                        : cubeElement.HasValue && perCube
+                            ? ViewUtil.CubeTile(cubeElement.Value)
+                            : ViewUtil.CubeTile(CubeKind.Normal, card);
+                    Color miniTint = ViewUtil.CubeTileColor(miniTile, cubeColor);
+                    SpriteRenderer miniCube = ViewUtil.MakeCell(transform, "Mini",
                         bottomLeft + new Vector2(cell.X * mini, cell.Y * mini),
-                        mini * 0.9f, cubeColor, order + 1), order + 1);
+                        mini * MiniFlatFill, miniTint, order + 1);
+                    // A painted tile brings its own frame and fills more of its cell than the
+                    // inset flat square ever did.
+                    ViewUtil.ApplyTile(miniCube, miniTile,
+                        mini * (ViewUtil.ArtLoaded ? MiniTileFill : MiniFlatFill));
+                    Track(miniCube, order + 1);
                 }
                 // The top band names the card's TYPE: its element(s), and/or "custom" for a
                 // player-designed block ("Karakter oluşturma"). Plain market/deck blocks get none.
