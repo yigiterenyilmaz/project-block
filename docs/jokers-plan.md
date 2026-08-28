@@ -16,9 +16,9 @@ tablo (`DefaultRoundProgression.BoardSizeBands`, satırlar `BoardSizeBand` tipin
 
 | round | oyun alanı | kaç round |
 | ----- | ---------- | --------- |
-| 1–5   | 5x5        | 5         |
-| 6–11  | 7x7        | 6         |
-| 12–15 | 9x9        | 4         |
+| 1–5   | 7x7        | 5         |
+| 6–11  | 9x9        | 6         |
+| 12–15 | 11x11      | 4         |
 
 Bantlar 1–15'i boşluksuz ve üst üste binmeden döşüyor (5+6+4 = 15); test bunu tek tek
 doğruluyor. Tablonun ötesindeki bir round (16+) son bandın boyutunda kalır — run uzunluğu
@@ -40,9 +40,9 @@ round bandına bağlı — aynı tablo hem boyutu hem erozyonu veriyor (`BoardSi
 
 | round | alan | erozyon (`ShuffleErosion`) | ne oluyor |
 | ----- | ---- | -------------------------- | --------- |
-| 1–5   | 5x5  | `FromOutside`              | her erozyonda bir satır + bir sütun kenardan gider: 5x5 → 4x4 → 3x3 → 2x2 |
-| 6–11  | 7x7  | `FromCenter`               | ortada NxN delik: 1x1, 2x2, 3x3 … kümülatif |
-| 12–15 | 9x9  | `Both`                     | aynı erozyonda hem kenar hem orta |
+| 1–5   | 7x7  | `FromOutside`              | her erozyonda bir satır + bir sütun kenardan gider: 7x7 → 6x6 → 5x5 → 4x4 |
+| 6–11  | 9x9  | `FromCenter`               | ortada NxN delik: 1x1, 2x2, 3x3 … kümülatif |
+| 12–15 | 11x11 | `Both`                    | aynı erozyonda hem kenar hem orta |
 
 Verilen kararlar:
 

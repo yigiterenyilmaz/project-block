@@ -3092,26 +3092,26 @@ public static class JokerTests
         bool firstBand = true;
         for (int round = 1; round <= 5; round++)
         {
-            firstBand &= progression.GetRound(round, false).BoardWidth == 5
-                && progression.GetRound(round, false).BoardHeight == 5;
+            firstBand &= progression.GetRound(round, false).BoardWidth == 7
+                && progression.GetRound(round, false).BoardHeight == 7;
         }
-        Check(firstBand, "rounds 1-5 are played on 5x5");
+        Check(firstBand, "rounds 1-5 are played on 7x7");
 
         bool secondBand = true;
         for (int round = 6; round <= 11; round++)
         {
-            secondBand &= progression.BoardSizeFor(round) == 7;
+            secondBand &= progression.BoardSizeFor(round) == 9;
         }
-        Check(secondBand, "rounds 6-11 are played on 7x7");
+        Check(secondBand, "rounds 6-11 are played on 9x9");
 
         bool thirdBand = true;
         for (int round = 12; round <= 15; round++)
         {
-            thirdBand &= progression.BoardSizeFor(round) == 9;
+            thirdBand &= progression.BoardSizeFor(round) == 11;
         }
-        Check(thirdBand, "rounds 12-15 are played on 9x9");
+        Check(thirdBand, "rounds 12-15 are played on 11x11");
 
-        Check(progression.BoardSizeFor(16) == 9 && progression.BoardSizeFor(40) == 9,
+        Check(progression.BoardSizeFor(16) == 11 && progression.BoardSizeFor(40) == 11,
             "a round past the table keeps the last band's size");
         // The run is 15 rounds numbered 1-15, so the bands must tile it exactly: start at 1,
         // end at 15, and leave no gap or overlap in between.
@@ -3125,9 +3125,9 @@ public static class JokerTests
         }
         Check(contiguous && covered == 15, "the bands tile rounds 1-15 exactly",
             "covered " + covered);
-        Check(progression.GetRound(6, false).BoardWidth == 7 && progression.GetRound(5, false).BoardWidth == 5,
+        Check(progression.GetRound(6, false).BoardWidth == 9 && progression.GetRound(5, false).BoardWidth == 7,
             "the step happens between round 5 and round 6");
-        Check(progression.GetRound(12, false).BoardWidth == 9 && progression.GetRound(11, false).BoardWidth == 7,
+        Check(progression.GetRound(12, false).BoardWidth == 11 && progression.GetRound(11, false).BoardWidth == 9,
             "and between round 11 and round 12");
 
         // The table is data: a variant curve only has to hand over different bands.

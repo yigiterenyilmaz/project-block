@@ -2,7 +2,7 @@
 // threshold grows geometrically, and every third round is flagged as a boss round.
 //
 // CONFIRMED DESIGN: the board-size table. A run is 15 rounds, numbered 1-15, and the table
-// covers exactly that: rounds 1-5 on 5x5, 6-11 on 7x7, 12-15 on 9x9. A round past the table
+// covers exactly that: rounds 1-5 on 7x7, 6-11 on 9x9, 12-15 on 11x11. A round past the table
 // keeps the last band's size, so nothing breaks if the run length ever grows.
 //
 // Each band also names the erosion that punishes a stalling round (ShuffleErosion): the small
@@ -27,9 +27,9 @@ namespace ProjectBlock.Core
         /// together they cover the whole 15-round run.</summary>
         public BoardSizeBand[] BoardSizeBands =
         {
-            new BoardSizeBand(1, 5, 5, ShuffleErosion.FromOutside),
-            new BoardSizeBand(6, 11, 7, ShuffleErosion.FromCenter),
-            new BoardSizeBand(12, 15, 9, ShuffleErosion.Both)
+            new BoardSizeBand(1, 5, 7, ShuffleErosion.FromOutside),
+            new BoardSizeBand(6, 11, 9, ShuffleErosion.FromCenter),
+            new BoardSizeBand(12, 15, 11, ShuffleErosion.Both)
         };
 
         public int BaseThreshold = 60;

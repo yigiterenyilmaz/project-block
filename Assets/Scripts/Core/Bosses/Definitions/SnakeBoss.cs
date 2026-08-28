@@ -94,7 +94,7 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>How long the snake starts on this arena. The design number is 20, which is
-        /// most of a 5x5 board and all of the fun of a 9x9 one, so it is scaled down for the
+        /// most of a 7x7 board and all of the fun of an 11x11 one, so it is scaled down for the
         /// smaller bands: a snake has to leave the player somewhere to play.</summary>
         private int StartingLength(GameBoard board)
         {

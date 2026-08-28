@@ -18,7 +18,7 @@ namespace ProjectBlock.Core
 
         /// <summary>The rim goes: one row and one column of the outer edge per erosion, taking
         /// alternating sides (top+right, then bottom+left, ...) so the arena stays centred.
-        /// 5x5 becomes 4x4, then 3x3, then 2x2.</summary>
+        /// 7x7 becomes 6x6, then 5x5, then 4x4.</summary>
         FromOutside = 1,
 
         /// <summary>The middle goes: a square hole in the centre of the board, 1x1 on the first

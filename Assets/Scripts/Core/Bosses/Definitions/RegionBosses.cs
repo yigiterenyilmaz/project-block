@@ -6,7 +6,7 @@
 // THREE THINGS MAKE IT WORK, and each reuses machinery that was already there:
 //
 //  1. AN EVEN BOARD. Four equal quadrants need an even edge, so this is the one boss that reshapes
-//     the round: 5x5 becomes 6x6, 7x7 becomes 8x8, 9x9 becomes 10x10. That happens through
+//     the round: 7x7 becomes 8x8, 9x9 becomes 10x10, 11x11 becomes 12x12. That happens through
 //     BossRound.FilterRoundConfig, before the engine builds the board, via RoundConfig.WithBoard -
 //     never a hand-written new RoundConfig.
 //
