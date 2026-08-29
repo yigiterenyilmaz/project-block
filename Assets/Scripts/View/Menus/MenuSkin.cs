@@ -44,6 +44,18 @@ namespace ProjectBlock.View
         /// Deliberately still legible - a hidden entry teaches the player nothing.</summary>
         public static Color ButtonDisabled = new Color(0.10f, 0.11f, 0.13f, 0.85f);
 
+        // TINTS, for when ButtonSprite is loaded. The three colours above FILL a flat
+        // rectangle; over a sprite the same field MULTIPLIES the painted plate instead, and a
+        // 0.13 grey multiplied into art that is already dark navy comes out black. So art gets
+        // its own set. Normal sits well below white on purpose: Image.color is packed into a
+        // Color32 vertex colour and cannot brighten past 1, so leaving headroom here is the
+        // only way the hover has anywhere to go.
+        public static Color ButtonTint = new Color(0.72f, 0.76f, 0.86f, 1f);
+
+        public static Color ButtonTintHover = new Color(1f, 0.97f, 0.90f, 1f);
+
+        public static Color ButtonTintDisabled = new Color(0.42f, 0.44f, 0.50f, 0.85f);
+
         public static Color Label = new Color(0.90f, 0.93f, 0.97f);
         public static Color LabelSelected = new Color(1f, 0.98f, 0.90f);
         public static Color LabelDisabled = new Color(0.42f, 0.45f, 0.50f);
@@ -53,9 +65,29 @@ namespace ProjectBlock.View
 
         // ------------------------------------------------------------------- sprites
 
-        // EXTENSION POINT - ART: leave these null until real art lands.
+        // EXTENSION POINT - ART: a null Sprite still means "just use the colour", so a build
+        // with the art stripped renders every menu exactly as it did before.
         public static Sprite BackdropSprite;
-        public static Sprite ButtonSprite;
+
+
+        /// <summary>The painted button plate, loaded once out of Resources.
+        ///
+        /// IT IS 9-SLICED, and the numbers below are why the frame does not warp. The border is
+        /// set in the importer at 88 px sideways and 137 px top and bottom on an 859x304
+        /// texture, which is exactly the plate's corner curvature - so only the flat middle
+        /// stretches out to ButtonWidth and the frame keeps the thickness it was drawn with.
+        ///
+        /// Its import PPU is 400 against the canvas's default 100, so the texture is exactly
+        /// 76 canvas units tall - ButtonHeight - and is drawn at its natural vertical scale
+        /// rather than squashed. That also sets a FLOOR on ButtonHeight: the two vertical
+        /// borders come to 68.5 units, and below that Unity starts overlapping them.</summary>
+        public static Sprite ButtonSprite
+        {
+            get
+            {
+                return ViewUtil.UiSprite("button_plate");
+            }
+        }
 
         // ------------------------------------------------------------------- metrics
 
