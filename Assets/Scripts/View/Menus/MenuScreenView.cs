@@ -100,13 +100,29 @@ namespace ProjectBlock.View
         /// <summary>Draws a menu over an opaque backdrop, replacing whatever was on screen.</summary>
         public void Show(string title, string subtitle, IReadOnlyList<MenuEntry> entries)
         {
-            Show(title, subtitle, entries, MenuSkin.Backdrop);
+            Show(title, subtitle, entries, MenuSkin.Backdrop, false);
+        }
+
+        /// <summary>As above, but the title WAVES - see MenuTitleWave. Only the game's own name
+        /// on the title screen asks for this; a heading that says what screen you are on should
+        /// hold still.</summary>
+        public void Show(string title, string subtitle, IReadOnlyList<MenuEntry> entries,
+            bool waveTitle)
+        {
+            Show(title, subtitle, entries, MenuSkin.Backdrop, waveTitle);
         }
 
         /// <summary>As above, with an explicit backdrop - a menu opened over a live run passes
         /// MenuSkin.OverlayBackdrop so the board stays readable behind it.</summary>
         public void Show(string title, string subtitle, IReadOnlyList<MenuEntry> entries,
             Color backdropColor)
+        {
+            Show(title, subtitle, entries, backdropColor, false);
+        }
+
+        /// <summary>The full form; the three above are all shorthands for it.</summary>
+        public void Show(string title, string subtitle, IReadOnlyList<MenuEntry> entries,
+            Color backdropColor, bool waveTitle)
         {
             if (root == null)
             {
@@ -133,15 +149,23 @@ namespace ProjectBlock.View
             float header = TitleHeight + (hasSubtitle ? SubtitleHeight : 0f);
             float y = (header + MenuSkin.HeaderGap + buttons) * 0.5f;
 
-            MakeText(root, "Title", new Vector2(0f, y - TitleHeight * 0.5f),
-                new Vector2(MenuSkin.ButtonWidth * 2f, TitleHeight), title,
-                MenuSkin.TitleFontSize, MenuSkin.Title);
+            Vector2 titleCenter = new Vector2(0f, y - TitleHeight * 0.5f);
+            if (waveTitle)
+            {
+                MakeWaveTitle(root, titleCenter, title);
+            }
+            else
+            {
+                MakeText(root, "Title", titleCenter,
+                    new Vector2(MenuSkin.ButtonWidth * 2f, TitleHeight), title,
+                    MenuSkin.TitleFontSize, MenuSkin.Title, true);
+            }
             y -= TitleHeight;
             if (hasSubtitle)
             {
                 MakeText(root, "Subtitle", new Vector2(0f, y - SubtitleHeight * 0.5f),
                     new Vector2(MenuSkin.ButtonWidth * 2f, SubtitleHeight), subtitle,
-                    MenuSkin.SubtitleFontSize, MenuSkin.Subtitle);
+                    MenuSkin.SubtitleFontSize, MenuSkin.Subtitle, false);
                 y -= SubtitleHeight;
             }
             y -= MenuSkin.HeaderGap;
@@ -190,12 +214,12 @@ namespace ProjectBlock.View
 
             MakeText(root, "Title", new Vector2(0f, y - TitleHeight * 0.5f),
                 new Vector2(BodyWidth, TitleHeight), title,
-                MenuSkin.TitleFontSize, MenuSkin.Title);
+                MenuSkin.TitleFontSize, MenuSkin.Title, true);
             y -= TitleHeight + gap;
 
             Text text = MakeText(root, "Body", new Vector2(0f, y - bodyHeight * 0.5f),
                 new Vector2(BodyWidth, bodyHeight), body,
-                MenuSkin.BodyFontSize, MenuSkin.Label);
+                MenuSkin.BodyFontSize, MenuSkin.Label, false);
             text.alignment = TextAnchor.UpperLeft;
             y -= bodyHeight;
 
@@ -203,7 +227,7 @@ namespace ProjectBlock.View
             {
                 MakeText(root, "Hint", new Vector2(0f, y - hintHeight * 0.5f),
                     new Vector2(BodyWidth, hintHeight), hint,
-                    MenuSkin.SubtitleFontSize, MenuSkin.Subtitle);
+                    MenuSkin.SubtitleFontSize, MenuSkin.Subtitle, false);
                 y -= hintHeight;
             }
             y -= gap;
@@ -306,14 +330,43 @@ namespace ProjectBlock.View
             {
                 Row row = rows[i];
                 bool highlighted = row.Enabled && i == Selected;
-                row.Background.color = !row.Enabled
-                    ? MenuSkin.ButtonDisabled
-                    : highlighted ? MenuSkin.ButtonHover : MenuSkin.Button;
+                row.Background.color = BackgroundColor(row.Enabled, highlighted);
                 row.Label.color = !row.Enabled
                     ? MenuSkin.LabelDisabled
                     : highlighted ? MenuSkin.LabelSelected : MenuSkin.Label;
                 row.Accent.enabled = highlighted;
             }
+        }
+
+        /// <summary>Where the highlight bar sits, and how tall it is, ON ART. Against a flat
+        /// rectangle it can hug the very edge; the painted plate has a raised frame about 12
+        /// units thick that curves further in towards the ends, so on art the bar moves inside
+        /// the sunken panel and shortens. At its flat-colour 58 tall its tips would have run
+        /// out over the bevel, which is the one place a straight bar reads as a mistake.</summary>
+        private const float AccentInsetArt = 22f;
+
+        private const float AccentHeightArt = 40f;
+
+        /// <summary>How far under the label a note sits ON ART. The plate's sunken panel reaches
+        /// only 26 units from the centre to its own edge, and at the flat-colour -20 a note's
+        /// descenders sat out on the bottom bevel.</summary>
+        private const float NoteOffsetArt = -15f;
+
+        /// <summary>The colour a row's background is drawn in. With art loaded this is a TINT
+        /// multiplied into the painted plate rather than a fill, so the two sets are not
+        /// interchangeable - see MenuSkin.ButtonTint.</summary>
+        private static Color BackgroundColor(bool enabled, bool highlighted)
+        {
+            bool art = MenuSkin.ButtonSprite != null;
+            if (!enabled)
+            {
+                return art ? MenuSkin.ButtonTintDisabled : MenuSkin.ButtonDisabled;
+            }
+            if (highlighted)
+            {
+                return art ? MenuSkin.ButtonTintHover : MenuSkin.ButtonHover;
+            }
+            return art ? MenuSkin.ButtonTint : MenuSkin.Button;
         }
 
         private Row MakeRow(MenuEntry entry, Vector2 center)
@@ -322,11 +375,15 @@ namespace ProjectBlock.View
             row.Enabled = entry.Enabled;
             row.Background = MakeImage(root, "Entry_" + entry.Label, center,
                 new Vector2(MenuSkin.ButtonWidth, MenuSkin.ButtonHeight),
-                MenuSkin.Button, MenuSkin.ButtonSprite);
+                BackgroundColor(entry.Enabled, false), MenuSkin.ButtonSprite);
             row.Root = row.Background.gameObject;
+            bool art = MenuSkin.ButtonSprite != null;
+            float accentInset = art ? AccentInsetArt : MenuSkin.AccentWidth * 0.5f;
+            float accentHeight = art ? AccentHeightArt : MenuSkin.ButtonHeight - 18f;
             row.Accent = MakeImage(row.Root.transform, "Accent",
-                new Vector2(-MenuSkin.ButtonWidth * 0.5f + MenuSkin.AccentWidth, 0f),
-                new Vector2(MenuSkin.AccentWidth, MenuSkin.ButtonHeight - 18f),
+                new Vector2(-MenuSkin.ButtonWidth * 0.5f + accentInset
+                    + MenuSkin.AccentWidth * 0.5f, 0f),
+                new Vector2(MenuSkin.AccentWidth, accentHeight),
                 MenuSkin.Accent, null);
             row.Accent.enabled = false; // switched on for the highlighted row only
 
@@ -335,12 +392,13 @@ namespace ProjectBlock.View
             float labelOffset = hasNote ? 12f : 0f;
             row.Label = MakeText(row.Root.transform, "Label", new Vector2(0f, labelOffset),
                 new Vector2(MenuSkin.ButtonWidth, MenuSkin.ButtonHeight * 0.6f), entry.Label,
-                MenuSkin.LabelFontSize, MenuSkin.Label);
+                MenuSkin.LabelFontSize, MenuSkin.Label, true);
             if (hasNote)
             {
-                MakeText(row.Root.transform, "Note", new Vector2(0f, -20f),
+                MakeText(row.Root.transform, "Note",
+                    new Vector2(0f, art ? NoteOffsetArt : -20f),
                     new Vector2(MenuSkin.ButtonWidth, MenuSkin.ButtonHeight * 0.4f), entry.Note,
-                    MenuSkin.NoteFontSize, MenuSkin.Note);
+                    MenuSkin.NoteFontSize, MenuSkin.Note, false);
             }
             return row;
         }
@@ -364,6 +422,64 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>The title as ONE TEXT PER LETTER, so each can be lifted on its own.
+        ///
+        /// Laid out on the font's own ADVANCE WIDTHS rather than by measuring each letter's
+        /// preferred width. Two reasons, and the second is the one that bites: a Text asked how
+        /// wide " " is answers nothing, because the legacy text generator trims whitespace at
+        /// the end of a line - so the gap in a two-word name would close up. Advances also
+        /// reproduce ordinary text layout exactly, since flowing text is placed by the same
+        /// numbers, and the waving title therefore sits at the width the still one had.
+        ///
+        /// The space gets a letter slot of its own with no glyph in it. That is what carries
+        /// the bump ACROSS the gap instead of teleporting it to the second word.</summary>
+        private static void MakeWaveTitle(Transform parent, Vector2 center, string title)
+        {
+            var go = new GameObject("Title");
+            go.transform.SetParent(parent, false);
+            RectTransform rect = go.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = center;
+            rect.sizeDelta = new Vector2(MenuSkin.ButtonWidth * 2f, TitleHeight);
+
+            Font font = ViewUtil.UiFontBold;
+            // A dynamic font knows nothing about a character until it is asked to draw it, and
+            // an unrequested glyph reports an advance of zero - every letter would stack on the
+            // same spot.
+            font.RequestCharactersInTexture(title, MenuSkin.TitleFontSize, FontStyle.Normal);
+
+            var advances = new float[title.Length];
+            float total = 0f;
+            for (int i = 0; i < title.Length; i++)
+            {
+                CharacterInfo info;
+                advances[i] = font.GetCharacterInfo(title[i], out info,
+                    MenuSkin.TitleFontSize, FontStyle.Normal)
+                    ? info.advance
+                    : MenuSkin.TitleFontSize * 0.5f;
+                total += advances[i];
+            }
+
+            var letters = new RectTransform[title.Length];
+            float x = -total * 0.5f;
+            for (int i = 0; i < title.Length; i++)
+            {
+                Text letter = MakeText(rect, "L" + i,
+                    new Vector2(x + advances[i] * 0.5f, 0f),
+                    new Vector2(advances[i], TitleHeight), title[i].ToString(),
+                    MenuSkin.TitleFontSize, MenuSkin.Title, true);
+                // A glyph may paint wider than the advance it is placed on (Fredoka's Q and J
+                // both do); without this the box would clip its own letter.
+                letter.horizontalOverflow = HorizontalWrapMode.Overflow;
+                letter.verticalOverflow = VerticalWrapMode.Overflow;
+                letters[i] = letter.rectTransform;
+                x += advances[i];
+            }
+            go.AddComponent<MenuTitleWave>().Setup(letters);
+        }
+
         private static Image MakeImage(Transform parent, string name, Vector2 center,
             Vector2 size, Color color, Sprite sprite)
         {
@@ -372,6 +488,12 @@ namespace ProjectBlock.View
             Image image = go.AddComponent<Image>();
             image.color = color;
             image.sprite = sprite; // null = flat colour (see MenuSkin)
+            // A sprite that carries an importer border is asking to keep its frame and stretch
+            // only its middle. Simple would scale the whole bitmap and round the corners off
+            // by the same 6:1 the button is wider than the art.
+            image.type = sprite != null && sprite.border.sqrMagnitude > 0f
+                ? Image.Type.Sliced
+                : Image.Type.Simple;
             image.raycastTarget = false;
             RectTransform rect = go.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -382,13 +504,17 @@ namespace ProjectBlock.View
             return image;
         }
 
+        /// <summary>`bold` picks the FACE, not a style flag: Fredoka Bold is its own cut, and
+        /// asking a dynamic font to embolden the SemiBold on top of it gives Unity's synthetic
+        /// smear instead. Headings and button labels are bold, everything read at length is
+        /// not - a whole how-to-play page set in Bold is a wall.</summary>
         private static Text MakeText(Transform parent, string name, Vector2 center,
-            Vector2 size, string content, int fontSize, Color color)
+            Vector2 size, string content, int fontSize, Color color, bool bold)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             Text text = go.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.font = bold ? ViewUtil.UiFontBold : ViewUtil.UiFont;
             text.fontSize = fontSize;
             text.alignment = TextAnchor.MiddleCenter;
             text.color = color;
