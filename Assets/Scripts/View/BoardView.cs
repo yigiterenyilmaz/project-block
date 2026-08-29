@@ -13,6 +13,12 @@ namespace ProjectBlock.View
     public sealed class BoardView : MonoBehaviour
     {
         private static readonly Color BackgroundColor = new Color(0.10f, 0.11f, 0.13f);
+
+        /// <summary>How far the background plate overhangs the grid, TOTAL across both sides -
+        /// so the visible edge of the arena is half of this outside WorldRect, which reports the
+        /// cell area only. Named because effects that sit ON the arena's edge need it:
+        /// FlameStreakView plants its flames on the visible corner, not on the grid corner.</summary>
+        public const float BorderOverhang = 0.15f;
         private static readonly Color EmptyColor = new Color(0.17f, 0.18f, 0.22f);
 
         /// <summary>A cell shuffle erosion ATE. Deliberately not hidden like an ordinary hole:
@@ -418,7 +424,8 @@ namespace ProjectBlock.View
             background.transform.SetParent(transform, false);
             background.transform.localPosition = new Vector3(center.x, center.y, 0f);
             background.transform.localScale = new Vector3(
-                board.Width * cellSize + 0.15f, board.Height * cellSize + 0.15f, 1f);
+                board.Width * cellSize + BorderOverhang,
+                board.Height * cellSize + BorderOverhang, 1f);
             var bgRenderer = background.AddComponent<SpriteRenderer>();
             bgRenderer.sprite = ViewUtil.WhiteSprite;
             bgRenderer.color = BackgroundColor;

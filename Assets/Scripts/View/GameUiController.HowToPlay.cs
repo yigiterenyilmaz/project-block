@@ -228,7 +228,8 @@ namespace ProjectBlock.View
                     "",
                     "   Debug: [R] new run  [D] deck  [S] redraw  [B] bonus card",
                     "          [J] grant joker  [P] grant power  [K] sell the last joker",
-                    "          [G] start a boss stage now (pick one, or draw at random)"
+                    "          [G] start a boss stage now (pick one, or draw at random)",
+                    "          [Y] overtime fire on/off, without reaching overtime"
                 }
             };
         }
@@ -343,7 +344,8 @@ namespace ProjectBlock.View
                     "",
                     "   Debug: [R] yeni oyun  [D] deste  [S] eli yenile  [B] bonus kart",
                     "          [J] joker ver  [P] güç ver  [K] son jokeri sat",
-                    "          [G] hemen patron sahnesi başlat (seç ya da rastgele çek)"
+                    "          [G] hemen patron sahnesi başlat (seç ya da rastgele çek)",
+                    "          [Y] uzatma ateşini aç/kapat (uzatmaya girmeden)"
                 }
             };
         }
