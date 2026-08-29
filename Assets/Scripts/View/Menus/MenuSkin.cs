@@ -19,8 +19,14 @@ namespace ProjectBlock.View
         // ------------------------------------------------------------------ colours
 
         /// <summary>Fills the whole screen behind a menu. Near-opaque: the title screen
-        /// must not show the leftovers of a run behind it.</summary>
-        public static Color Backdrop = new Color(0.04f, 0.05f, 0.08f, 0.97f);
+        /// must not show the leftovers of a run behind it.
+        ///
+        /// Lifted from an all but black (0.04, 0.05, 0.08) by a flat 1.45x. MULTIPLIED rather
+        /// than lightened towards white, which keeps the channel ratios and so the colour stays
+        /// the same blue instead of drifting grey - the trap this project has hit before, in
+        /// BackdropView. It does not want to go much further: the button plate is dark navy
+        /// itself, and past about 1.9x the two stop separating and the buttons sink into it.</summary>
+        public static Color Backdrop = new Color(0.058f, 0.0725f, 0.116f, 0.97f);
 
         /// <summary>Backdrop for a menu opened OVER a live run (pause, and the screens reached
         /// from it). Translucent on purpose - the player is mid-round and wants to see the
