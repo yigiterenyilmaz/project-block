@@ -366,6 +366,7 @@ namespace ProjectBlock.View
                 row ? CellFlashFx.Pinch.AcrossRow : CellFlashFx.Pinch.AcrossColumn,
                 CellFlashFx.Palette.Hot(BlastColor));
             StartCoroutine(BurstParticles(cells, times, BlastColor, 4));
+            lineBurst.Play(cells, boardView.CellWorldSize, row);
         }
 
         /// <summary>
@@ -630,7 +631,7 @@ namespace ProjectBlock.View
             // "Tamagotchi" lays out what it is still owed, next to the hand it has to come from.
             var pet = round.Boss as TamagotchiBoss;
             cardLayer.ShowPetDemands(pet != null ? pet.Demands : null);
-            flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
+            RefreshFlames(round.ContinueCount);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
             powerBar.Refresh(session, pendingTargetPowerId);

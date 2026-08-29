@@ -57,6 +57,7 @@ namespace ProjectBlock.View
         private const float RetroFallInterval = 0.55f;
         private const float RetroSoftDropInterval = 0.06f;
         private CrtOverlayView crt;
+        private BackdropView backdrop;
         private BitCrushFilter bitCrush;
         // Global the CrtEdgeBend fullscreen shader reads (0 = off, 1 = on). Driven by RetroMode;
         // harmless if the Full Screen Pass feature/material is not wired yet (see docs/crt-edge-bend.md).
@@ -73,6 +74,13 @@ namespace ProjectBlock.View
         private DeckDefinition currentDeck = DeckLibrary.Classic;
         private SoundFx sfx;
         private FlameStreakView flameStreak;
+        private LineBurstView lineBurst;
+
+        /// <summary>Debug: overtime level the fire is FORCED to, or -1 for "follow the round".
+        /// Held here rather than pushed straight at the view because the fire is re-stated from
+        /// several places (round start, every turn, continuing) - an override written directly
+        /// into FlameStreakView would be wiped by the next one of those.</summary>
+        private int debugFlameLevel = -1;
         private BlastFxView blastFx;
         private LineSwapPickerView lineSwapPicker;
 
@@ -173,6 +181,25 @@ namespace ProjectBlock.View
             GoToTitle();
         }
 
+        /// <summary>Pushes the fire's state, letting the debug override win when one is set.
+        /// Every in-game caller goes through here; the ANIMATION LAB deliberately does not, since
+        /// driving the view directly is its whole job.</summary>
+        private void RefreshFlames(int overtimeLevel)
+        {
+            flameStreak.SetState(
+                debugFlameLevel >= 0 ? debugFlameLevel : overtimeLevel, boardView.WorldRect);
+        }
+
+        /// <summary>Debug: light the fire at full heat, or hand it back to the round.</summary>
+        private void ToggleDebugFlames()
+        {
+            debugFlameLevel = debugFlameLevel >= 0 ? -1 : FlameStreakView.MaxLevel;
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            RefreshFlames(round != null ? round.ContinueCount : 0);
+            Debug.Log("[block_bonk] Debug flames: "
+                + (debugFlameLevel >= 0 ? "ON (level " + debugFlameLevel + ")" : "off"));
+        }
+
         /// <summary>Flips EN/TR, persists the choice, and re-texts every open view.</summary>
         private void ToggleLanguage()
         {
@@ -271,7 +298,7 @@ namespace ProjectBlock.View
             {
                 boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
             }
-            flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
+            RefreshFlames(round.ContinueCount);
             boardView.Refresh();
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
@@ -342,6 +369,13 @@ namespace ProjectBlock.View
             if (kb != null && kb.lKey.wasPressedThisFrame)
             {
                 ToggleLanguage();
+                return;
+            }
+            // debug: light the overtime fire without having to reach overtime. Ungated on
+            // purpose - the point is to see it whenever, including from the market.
+            if (kb != null && kb.yKey.wasPressedThisFrame && session != null)
+            {
+                ToggleDebugFlames();
                 return;
             }
             // debug: jump straight to a boss stage. Here rather than with the in-round debug keys
@@ -805,7 +839,7 @@ namespace ProjectBlock.View
                             round.DecideAdvance(false);
                             // the overtime fire ignites the moment the player chooses to
                             // continue, not on their next placement
-                            flameStreak.SetState(round.ContinueCount, boardView.WorldRect);
+                            RefreshFlames(round.ContinueCount);
                             if (round.Status == RoundStatus.InProgress)
                             {
                                 sfx.Shuffle();

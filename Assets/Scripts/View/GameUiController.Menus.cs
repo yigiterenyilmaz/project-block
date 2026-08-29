@@ -121,7 +121,9 @@ namespace ProjectBlock.View
                 MenuEntry.Of(Loc.Pick("QUIT", "ÇIKIŞ"))
             };
             // The subtitle names the language you would switch TO, like the debug HUD does.
-            menu.Show("PROJECT BLOCK", Loc.Pick("[L] türkçe", "[L] english"), entries);
+            // The game's own name, so it waves - see MenuTitleWave. It is NOT run
+            // through Loc: a title is a title in both languages.
+            menu.Show("BLOCK BONK", Loc.Pick("[L] türkçe", "[L] english"), entries, true);
         }
 
         /// <summary>Owns the frame whenever a run is not being played.</summary>

@@ -66,6 +66,13 @@ namespace ProjectBlock.View
 
         private void BuildViews()
         {
+            // First, so every other view is built on top of it: the backdrop is the surface the
+            // game sits on, not an effect laid over it. It parents itself to the camera.
+            var backdropGo = new GameObject("Backdrop");
+            backdropGo.transform.SetParent(transform, false);
+            backdrop = backdropGo.AddComponent<BackdropView>();
+            backdrop.Build(cam);
+
             var boardGo = new GameObject("BoardView");
             boardGo.transform.SetParent(transform, false);
             boardView = boardGo.AddComponent<BoardView>();
@@ -99,6 +106,10 @@ namespace ProjectBlock.View
             var flamesGo = new GameObject("FlameStreak");
             flamesGo.transform.SetParent(transform, false);
             flameStreak = flamesGo.AddComponent<FlameStreakView>();
+
+            var lineBurstGo = new GameObject("LineBurst");
+            lineBurstGo.transform.SetParent(transform, false);
+            lineBurst = lineBurstGo.AddComponent<LineBurstView>();
 
             var blastGo = new GameObject("BlastFx");
             blastGo.transform.SetParent(transform, false);
@@ -189,7 +200,7 @@ namespace ProjectBlock.View
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             Text text = go.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.font = ViewUtil.UiFont;
             text.fontSize = fontSize;
             text.alignment = alignment;
             text.color = color;
