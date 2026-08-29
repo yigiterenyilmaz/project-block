@@ -43,6 +43,106 @@ namespace ProjectBlock.View
             }
         }
 
+        // ---- painted UI plates ---------------------------------------------------------
+
+        private const string UiFolder = "Art/Ui/";
+        private const string DeckFolder = "Art/Decks/";
+        private static readonly Dictionary<string, Sprite> uiCache =
+            new Dictionary<string, Sprite>();
+
+        /// <summary>Loads a painted UI plate out of Resources once. Null (not an exception)
+        /// when the art is not there, which every caller treats as "draw a flat rectangle" -
+        /// the same bargain the block tiles make.</summary>
+        public static Sprite UiSprite(string fileName)
+        {
+            return CachedSprite(UiFolder + fileName);
+        }
+
+        /// <summary>The emblem for a starting deck, on the same terms: null when the art is
+        /// missing, and the deck picker then draws sample shapes as it always did.</summary>
+        public static Sprite DeckIcon(string fileName)
+        {
+            return CachedSprite(DeckFolder + fileName);
+        }
+
+        /// <summary>Keyed on the FULL path, so two folders can never collide on a file name.
+        /// A miss is cached too - a missing asset must not be re-looked-up every frame.</summary>
+        private static Sprite CachedSprite(string path)
+        {
+            Sprite sprite;
+            if (!uiCache.TryGetValue(path, out sprite))
+            {
+                sprite = Resources.Load<Sprite>(path);
+                uiCache[path] = sprite;
+            }
+            return sprite;
+        }
+
+        // ---- fonts ---------------------------------------------------------------------
+
+        // THE GAME IS SET IN FREDOKA, and the copies under Assets/Resources/Fonts are PATCHED.
+        // Upstream Fredoka has no Turkish letters - it ships Latin-1 plus ten stray Extended-A
+        // glyphs, so it can draw "kayitli" but not "kayItli": I, g, G, s, S with their Turkish
+        // marks are all missing, and half the joker names came out with holes in them. The
+        // marks themselves (uni0306 breve, uni0327 cedilla, uni0307 dot) were already drawn by
+        // the type designer, so Tools/FontPatch/add_turkish_glyphs.py only assembles the five
+        // composites and adds the cmap entries. Nothing in them is hand-drawn. Re-run that
+        // script if the font is ever updated - a fresh download will be broken again.
+
+        private const string FontFolder = "Fonts/";
+        private static Font uiFont;
+        private static Font uiFontBold;
+        private static bool fontsLoaded;
+
+        /// <summary>The face for everything that is not a button or a heading (Fredoka
+        /// SemiBold). Never null: with the fonts stripped this falls back to Unity's built-in
+        /// face, so a build without the art still reads.</summary>
+        public static Font UiFont
+        {
+            get
+            {
+                LoadFonts();
+                return uiFont;
+            }
+        }
+
+        /// <summary>Fredoka Bold - buttons, headings, and the title line of a tooltip.</summary>
+        public static Font UiFontBold
+        {
+            get
+            {
+                LoadFonts();
+                return uiFontBold;
+            }
+        }
+
+        /// <summary>The face for a legacy FontStyle. Callers that ask for Bold get the REAL
+        /// bold cut and should then leave `fontStyle` alone: a dynamic font told to be bold
+        /// on top of it gets Unity's synthetic smear, which is not the same shape.</summary>
+        public static Font UiFontFor(FontStyle style)
+        {
+            return style == FontStyle.Bold ? UiFontBold : UiFont;
+        }
+
+        private static void LoadFonts()
+        {
+            if (fontsLoaded)
+            {
+                return;
+            }
+            fontsLoaded = true;
+            uiFont = Resources.Load<Font>(FontFolder + "Fredoka-SemiBold");
+            uiFontBold = Resources.Load<Font>(FontFolder + "Fredoka-Bold");
+            if (uiFont == null)
+            {
+                uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            }
+            if (uiFontBold == null)
+            {
+                uiFontBold = uiFont;
+            }
+        }
+
         // ---- painted block tiles ------------------------------------------------------
 
         private const string TileFolder = "Art/Blocks/";
@@ -661,7 +761,7 @@ namespace ProjectBlock.View
             go.transform.SetParent(parent, false);
             go.transform.localPosition = new Vector3(position.x, position.y, 0f);
             var textMesh = go.AddComponent<TextMesh>();
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font font = UiFont;
             textMesh.font = font;
             textMesh.fontSize = fontSize;
             textMesh.characterSize = characterSize;
@@ -691,6 +791,52 @@ namespace ProjectBlock.View
                 plainSpriteMaterial = renderer.sharedMaterial;
             }
             renderer.sprite = WhiteSprite;
+            renderer.color = color;
+            renderer.sortingOrder = sortingOrder;
+            return renderer;
+        }
+
+        /// <summary>A PAINTED panel: the rectangle MakeRect draws, but on a 9-SLICED sprite, so
+        /// the frame keeps the thickness it was drawn with while only the middle stretches out
+        /// to `size`. Falls back to MakeRect's flat rectangle when the art is missing, and the
+        /// two are interchangeable from the caller's side - only the colour means something
+        /// different, since over a sprite it MULTIPLIES the paint instead of filling.
+        ///
+        /// The size goes on the RENDERER, never on the transform: MakeRect sizes a 1x1 sprite
+        /// by localScale, and scaling a sliced sprite would take its border along and undo the
+        /// whole point of slicing it.</summary>
+        public static SpriteRenderer MakePlate(Transform parent, string name, Vector2 position,
+            Vector2 size, Color color, int sortingOrder, Sprite plate)
+        {
+            if (plate == null)
+            {
+                return MakeRect(parent, name, position, size, color, sortingOrder);
+            }
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(position.x, position.y, 0f);
+            var renderer = go.AddComponent<SpriteRenderer>();
+            renderer.sprite = plate;
+            renderer.drawMode = SpriteDrawMode.Sliced;
+            renderer.size = size;
+            renderer.color = color;
+            renderer.sortingOrder = sortingOrder;
+            return renderer;
+        }
+
+        /// <summary>A sprite drawn at a world SIZE, square. The icons under Art/Decks are
+        /// authored square and imported at a PPU equal to their own pixel side, so one sprite
+        /// unit is one world unit and the scale here IS the size - redrawing an icon at another
+        /// resolution changes nothing at the call site.</summary>
+        public static SpriteRenderer MakeIcon(Transform parent, string name, Vector2 position,
+            float size, Color color, int sortingOrder, Sprite sprite)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(position.x, position.y, 0f);
+            go.transform.localScale = new Vector3(size, size, 1f);
+            var renderer = go.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
             renderer.color = color;
             renderer.sortingOrder = sortingOrder;
             return renderer;

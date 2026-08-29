@@ -315,9 +315,9 @@ namespace ProjectBlock.View
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             Text text = go.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // The real bold cut, not fontStyle - see ViewUtil.UiFontFor.
+            text.font = ViewUtil.UiFontFor(style);
             text.fontSize = fontSize;
-            text.fontStyle = style;
             text.color = color;
             text.alignment = TextAnchor.UpperLeft;
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
