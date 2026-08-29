@@ -32,7 +32,7 @@ namespace ProjectBlock.View
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning("[project_block] Autosave failed: " + e.Message);
+                Debug.LogWarning("[block_bonk] Autosave failed: " + e.Message);
             }
         }
 
@@ -51,7 +51,7 @@ namespace ProjectBlock.View
             string text = SaveFileStore.Read();
             if (!SaveGame.CanLoad(text))
             {
-                Debug.Log("[project_block] No loadable save.");
+                Debug.Log("[block_bonk] No loadable save.");
                 DiscardSave();
                 GoToTitle();
                 return;
@@ -66,7 +66,7 @@ namespace ProjectBlock.View
             }
             catch (SaveFormatException e)
             {
-                Debug.LogWarning("[project_block] The save could not be loaded: " + e.Message);
+                Debug.LogWarning("[block_bonk] The save could not be loaded: " + e.Message);
                 DiscardSave();
                 GoToTitle();
                 return;
@@ -87,7 +87,7 @@ namespace ProjectBlock.View
             {
                 marketView.Show(session);
             }
-            Debug.Log("[project_block] Continued a saved run at round " + session.RoundNumber);
+            Debug.Log("[block_bonk] Continued a saved run at round " + session.RoundNumber);
         }
 
         /// <summary>Last chance to write the run down. Covers quitting from the market or

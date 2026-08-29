@@ -87,7 +87,7 @@ namespace ProjectBlock.View
                             && markHit.SlotIndex < round.Hand.Count
                             && session.Powers.TryMarkOlta(powerId, markHit.SlotIndex))
                         {
-                            Debug.Log("[project_block] Olta marked "
+                            Debug.Log("[block_bonk] Olta marked "
                                 + round.Hand[markHit.SlotIndex] + ".");
                             powerBar.PulsePower(powerId);
                             powerBar.Refresh(session, null); // shows the new mark state

@@ -100,7 +100,7 @@ namespace ProjectBlock.View
                 return true;
             }
             long paid = session.Jokers.Sell(joker);
-            Debug.Log("[project_block] Sold joker " + joker.DisplayName + " for " + paid);
+            Debug.Log("[block_bonk] Sold joker " + joker.DisplayName + " for " + paid);
             sfx.Buy();
             if (panelScreen.HasValue)
             {
@@ -125,7 +125,7 @@ namespace ProjectBlock.View
             Power power = session.Powers.Powers[index];
             Vector2? panelScreen = powerBar.PanelScreenCenter(index);
             int paid = session.Powers.Sell(power);
-            Debug.Log("[project_block] Sold power " + power.DisplayName + " for " + paid);
+            Debug.Log("[block_bonk] Sold power " + power.DisplayName + " for " + paid);
             sfx.Buy();
             if (panelScreen.HasValue)
             {
@@ -182,7 +182,7 @@ namespace ProjectBlock.View
             deckOverlay.Hide();
             jokerBar.Refresh(session, null);
             sfx.Buy();
-            Debug.Log("[project_block] Hileli Zar opening hand set: " + hileliSelection.Count + " cards");
+            Debug.Log("[block_bonk] Hileli Zar opening hand set: " + hileliSelection.Count + " cards");
             UpdateHud();
         }
 
@@ -262,7 +262,7 @@ namespace ProjectBlock.View
                         return;
                     }
                     bool ok = session.TryAttachJokerToCard(parazitTargetJoker, parazitCardId, cellIndex);
-                    Debug.Log("[project_block] Parazit attach " + (ok ? "succeeded" : "failed"));
+                    Debug.Log("[block_bonk] Parazit attach " + (ok ? "succeeded" : "failed"));
                     if (ok)
                     {
                         sfx.Buy();
@@ -346,7 +346,7 @@ namespace ProjectBlock.View
                 && (keys.leftShiftKey.isPressed || keys.rightShiftKey.isPressed);
             if (smuggling ? session.TrySmuggleOffer(offerIndex) : session.TryBuyOffer(offerIndex))
             {
-                Debug.Log("[project_block] " + (smuggling ? "Smuggled " : "Bought ") + offer
+                Debug.Log("[block_bonk] " + (smuggling ? "Smuggled " : "Bought ") + offer
                     + " for " + (smuggling ? 0 : offer.Price));
                 sfx.Buy();
                 if (offer.Kind == MarketOfferKind.Joker)
@@ -380,7 +380,7 @@ namespace ProjectBlock.View
             }
             else
             {
-                Debug.Log("[project_block] Cannot buy offer " + offerIndex + " (sold or too expensive).");
+                Debug.Log("[block_bonk] Cannot buy offer " + offerIndex + " (sold or too expensive).");
             }
         }
 
@@ -413,7 +413,7 @@ namespace ProjectBlock.View
             {
                 Joker last = session.Jokers.Jokers[session.Jokers.Count - 1];
                 int paid = session.Jokers.Sell(last);
-                Debug.Log("[project_block] Joker sold: " + last.DisplayName + " for " + paid);
+                Debug.Log("[block_bonk] Joker sold: " + last.DisplayName + " for " + paid);
                 pendingTargetJokerId = null;
                 RefreshAll(null);
                 return true;

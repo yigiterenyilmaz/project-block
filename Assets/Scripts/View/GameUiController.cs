@@ -251,7 +251,7 @@ namespace ProjectBlock.View
             ClearChoice();
             marketView.Hide();
             HideTooltip();
-            Debug.Log("[project_block] New run, seed " + lastSeedUsed);
+            Debug.Log("[block_bonk] New run, seed " + lastSeedUsed);
             StartRoundPresentation();
             // Overwrite any older save immediately: a new run supersedes it the moment it
             // starts, even if the player quits before finishing a single turn.
@@ -386,7 +386,7 @@ namespace ProjectBlock.View
                     if (deckIndex >= 0)
                     {
                         currentDeck = DeckLibrary.All[deckIndex];
-                        Debug.Log("[project_block] Deck selected: " + currentDeck.Name);
+                        Debug.Log("[block_bonk] Deck selected: " + currentDeck.Name);
                         NewGame();
                     }
                 }
@@ -480,7 +480,7 @@ namespace ProjectBlock.View
                         {
                             pickRound.SetFoxShape(foxPickSlot, picked);
                             cardLayer.ForgetCard(foxCard.Id);
-                            Debug.Log("[project_block] Fox reshaped to " + picked);
+                            Debug.Log("[block_bonk] Fox reshaped to " + picked);
                         }
                         foxPickSlot = -1;
                         deckOverlay.Hide();
@@ -495,7 +495,7 @@ namespace ProjectBlock.View
                         {
                             deckOverlay.PlaySellFx(card); // before the rebuild eats the visual
                             long paid = session.SellCard(card);
-                            Debug.Log("[project_block] Sold card " + card + " for " + paid);
+                            Debug.Log("[block_bonk] Sold card " + card + " for " + paid);
                             if (paid > 0)
                             {
                                 sfx.Buy();
@@ -563,7 +563,7 @@ namespace ProjectBlock.View
                         batakBet.Hide();
                         if (session.PlaceBatakBet(batakBetPowerId, bet))
                         {
-                            Debug.Log("[project_block] Batak bet " + bet + " turns.");
+                            Debug.Log("[block_bonk] Batak bet " + bet + " turns.");
                             powerBar.PulsePower(batakBetPowerId);
                             RefreshAll(null);
                         }
@@ -693,11 +693,11 @@ namespace ProjectBlock.View
                             if (session.CanAcquirePower(def))
                             {
                                 Power granted = session.Powers.Add(def.Create());
-                                Debug.Log("[project_block] Power granted: " + granted.DisplayName);
+                                Debug.Log("[block_bonk] Power granted: " + granted.DisplayName);
                             }
                             else
                             {
-                                Debug.Log("[project_block] Cannot grant " + def.DisplayName
+                                Debug.Log("[block_bonk] Cannot grant " + def.DisplayName
                                     + " (already owned or no slot).");
                             }
                         }
@@ -707,11 +707,11 @@ namespace ProjectBlock.View
                             if (session.CanAcquireJoker(def))
                             {
                                 Joker granted = session.Jokers.Add(def.Create());
-                                Debug.Log("[project_block] Joker granted: " + granted.DisplayName);
+                                Debug.Log("[block_bonk] Joker granted: " + granted.DisplayName);
                             }
                             else
                             {
-                                Debug.Log("[project_block] Cannot grant " + def.DisplayName
+                                Debug.Log("[block_bonk] Cannot grant " + def.DisplayName
                                     + " (duplicate, no slot, or a legendary is already held).");
                             }
                         }
@@ -832,7 +832,7 @@ namespace ProjectBlock.View
                         {
                             // debug: random bonus card to test the bonus hand
                             BlockCard bonus = session.DebugAddRandomBonusCard();
-                            Debug.Log("[project_block] Debug bonus card: " + bonus);
+                            Debug.Log("[block_bonk] Debug bonus card: " + bonus);
                             RefreshAll(null);
                         }
                         else if (kb != null && kb.fKey.wasPressedThisFrame)

@@ -77,7 +77,7 @@ namespace ProjectBlock.View
                 return;
             }
             BlockCard card = session.DebugAddElementCard(element);
-            Debug.Log("[project_block] Debug block dealt: " + card);
+            Debug.Log("[block_bonk] Debug block dealt: " + card);
             blockGallery.SetStatus(Loc.Pick(
                 "dealt " + ViewUtil.ElementLabel(element) + " to your hand",
                 ViewUtil.ElementLabel(element) + " eline verildi"));

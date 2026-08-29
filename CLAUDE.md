@@ -1,4 +1,4 @@
-# project_block
+# Block Bonk
 
 A Block Blast–style grid game with Balatro-style roguelike structure (rounds with
 score thresholds, a deck of block cards, market between rounds). Jokers are in

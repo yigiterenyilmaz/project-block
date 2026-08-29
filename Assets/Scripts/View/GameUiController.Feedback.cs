@@ -1154,7 +1154,7 @@ namespace ProjectBlock.View
         private static void LogTurn(TurnReport report)
         {
             string sweep = report.CleanSweep ? ", CLEAN SWEEP" : string.Empty;
-            Debug.Log("[project_block] Turn " + report.TurnNumber + ": " + report.Card
+            Debug.Log("[block_bonk] Turn " + report.TurnNumber + ": " + report.Card
                 + " at " + report.Origin + " -> +" + report.ScoreGained + " ("
                 + (report.ExplodedRows.Count + report.ExplodedColumns.Count) + " lines, "
                 + report.CubesExploded + " cubes" + sweep + "), status " + report.StatusAfter);

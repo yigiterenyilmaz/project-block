@@ -58,7 +58,7 @@ namespace ProjectBlock.View
             }
             catch (Exception e)
             {
-                Debug.LogWarning("[project_block] Could not read the save: " + e.Message);
+                Debug.LogWarning("[block_bonk] Could not read the save: " + e.Message);
                 return null;
             }
         }
@@ -81,7 +81,7 @@ namespace ProjectBlock.View
             catch (Exception e)
             {
                 // A failed autosave must never take the run down with it.
-                Debug.LogWarning("[project_block] Could not write the save: " + e.Message);
+                Debug.LogWarning("[block_bonk] Could not write the save: " + e.Message);
             }
         }
 
@@ -96,7 +96,7 @@ namespace ProjectBlock.View
             }
             catch (Exception e)
             {
-                Debug.LogWarning("[project_block] Could not delete the save: " + e.Message);
+                Debug.LogWarning("[block_bonk] Could not delete the save: " + e.Message);
             }
         }
     }

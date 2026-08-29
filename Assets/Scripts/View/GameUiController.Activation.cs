@@ -20,7 +20,7 @@ namespace ProjectBlock.View
         {
             if (!session.Jokers.CanActivate(joker.InstanceId))
             {
-                Debug.Log("[project_block] " + joker.DisplayName + " cannot be used right now.");
+                Debug.Log("[block_bonk] " + joker.DisplayName + " cannot be used right now.");
                 return;
             }
             // One joker asks the player for a value first, via a modal picker (Batak is now a
@@ -164,7 +164,7 @@ namespace ProjectBlock.View
                 var powerbank = session.Jokers.Find(pendingChoiceJokerId) as PowerbankJoker;
                 if (powerbank != null && powerbank.RechargeChosen(ctx, pendingChoiceValues[index]))
                 {
-                    Debug.Log("[project_block] Powerbank recharged power #" + pendingChoiceValues[index]);
+                    Debug.Log("[block_bonk] Powerbank recharged power #" + pendingChoiceValues[index]);
                     jokerBar.PulseJoker(pendingChoiceJokerId);
                 }
             }
@@ -199,7 +199,7 @@ namespace ProjectBlock.View
                 return true;
             }
             BossRound started = session.ActiveBoss;
-            Debug.Log("[project_block] Debug boss stage: "
+            Debug.Log("[block_bonk] Debug boss stage: "
                 + (started != null ? started.ToString() : "none"));
             marketView.Hide(); // the jump can be made from the market as well as mid-round
             StartRoundPresentation();
@@ -242,7 +242,7 @@ namespace ProjectBlock.View
             if (made)
             {
                 powerBar.PulsePower(designerPowerId);
-                Debug.Log("[project_block] Karakter oluşturma: baked a " + cells.Count
+                Debug.Log("[block_bonk] Karakter oluşturma: baked a " + cells.Count
                     + "-cube block into the deck.");
             }
             powerBar.Refresh(session, null);
@@ -281,11 +281,11 @@ namespace ProjectBlock.View
             }
             if (!session.Jokers.TryActivate(joker.InstanceId, target))
             {
-                Debug.Log("[project_block] " + joker.DisplayName + " could not be used.");
+                Debug.Log("[block_bonk] " + joker.DisplayName + " could not be used.");
                 RefreshAll(null);
                 return;
             }
-            Debug.Log("[project_block] Joker used: " + joker.DisplayName);
+            Debug.Log("[block_bonk] Joker used: " + joker.DisplayName);
             jokerBar.PulseJoker(joker.InstanceId);
             // The whole-hand redraw has its own animation; a single-card swap flies the
             // returned card out and deals its replacement; everything else just re-syncs.
@@ -332,7 +332,7 @@ namespace ProjectBlock.View
             {
                 if (!session.Powers.CanBeginUse(power.InstanceId))
                 {
-                    Debug.Log("[project_block] " + power.DisplayName + " cannot be used right now.");
+                    Debug.Log("[block_bonk] " + power.DisplayName + " cannot be used right now.");
                     return;
                 }
                 designerPowerId = power.InstanceId;
@@ -345,7 +345,7 @@ namespace ProjectBlock.View
             {
                 if (!session.Powers.CanBeginUse(power.InstanceId))
                 {
-                    Debug.Log("[project_block] " + power.DisplayName + " cannot be used right now.");
+                    Debug.Log("[block_bonk] " + power.DisplayName + " cannot be used right now.");
                     return;
                 }
                 OpenBatakPicker(batak);
@@ -353,7 +353,7 @@ namespace ProjectBlock.View
             }
             if (!session.Powers.CanBeginUse(power.InstanceId))
             {
-                Debug.Log("[project_block] " + power.DisplayName + " cannot be used right now.");
+                Debug.Log("[block_bonk] " + power.DisplayName + " cannot be used right now.");
                 return;
             }
             // The workshop powers ask for more than one thing, so they get their own little
@@ -532,7 +532,7 @@ namespace ProjectBlock.View
             }
             if (!session.Powers.TryUse(power.InstanceId, target))
             {
-                Debug.Log("[project_block] " + power.DisplayName + " could not be used.");
+                Debug.Log("[block_bonk] " + power.DisplayName + " could not be used.");
                 boardView.ClearPreview();
                 RefreshAll(null);
                 // Retro only refuses when turning OFF with a dirty dead zone - tell the player.
@@ -551,7 +551,7 @@ namespace ProjectBlock.View
             {
                 blastCells = new List<GridPos>(round.ExternalDestructionLog);
             }
-            Debug.Log("[project_block] Power used: " + power.DisplayName);
+            Debug.Log("[block_bonk] Power used: " + power.DisplayName);
             powerBar.PulsePower(power.InstanceId);
             if (targetCardId >= 0)
             {

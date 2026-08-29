@@ -260,7 +260,7 @@ namespace ProjectBlock.View
         private void StartRunWithDeck(DeckDefinition deck)
         {
             currentDeck = deck;
-            Debug.Log("[project_block] Deck selected: " + currentDeck.Name);
+            Debug.Log("[block_bonk] Deck selected: " + currentDeck.Name);
             deckSelect.Hide();
             menu.Hide();
             screen = AppScreen.Playing;
@@ -364,7 +364,7 @@ namespace ProjectBlock.View
         /// title screen cannot show anything of the run - including a retro CRT left switched on.</summary>
         private void SaveAndQuitRun()
         {
-            Debug.Log("[project_block] Run saved and left at round "
+            Debug.Log("[block_bonk] Run saved and left at round "
                 + (session != null ? session.RoundNumber : 0));
             AutoSave();
             session = null;
@@ -414,7 +414,7 @@ namespace ProjectBlock.View
         private void QuitGame()
         {
             // A no-op inside the editor, so the log is the only feedback there.
-            Debug.Log("[project_block] Quit requested.");
+            Debug.Log("[block_bonk] Quit requested.");
             Application.Quit();
         }
     }
