@@ -80,7 +80,7 @@ namespace ProjectBlock.View
             /// #000000, which reads as a hole rather than a surface.
             ///
             /// The hue is ~198 degrees, and that number is not free. The board's own colours sit
-            /// at 220-228 (BoardView.BackgroundColor / EmptyColor), so a backdrop that wanders
+            /// at 220-228 (BoardSurfaceView.Style.Surface / BoardView's EmptyColor), so a backdrop that wanders
             /// too far toward green throws them out of family - at a true turquoise of ~186 the
             /// board visibly reads PURPLE against it. 198 is turquoise enough to be obvious and
             /// still close enough to the board to belong with it. If this is ever pushed further

@@ -362,7 +362,7 @@ namespace ProjectBlock.View
         {
             var knobs = new List<AnimationLabView.Knob>
             {
-                new AnimationLabView.Knob("combo streak", "kombo serisi", animCombo.ToString()),
+                new AnimationLabView.Knob("combo streak", "kombo serisi", ComboKnobLabel()),
                 new AnimationLabView.Knob("sweep count", "temizlik sayısı", animSweeps.ToString()),
                 new AnimationLabView.Knob("overtime level", "uzatma seviyesi", animOvertime.ToString()),
                 new AnimationLabView.Knob("cells", "hücre", AnimCellCounts[animCellsIndex].ToString()),
@@ -482,10 +482,10 @@ namespace ProjectBlock.View
             AddAnim("mine shuffle dance (Mayın eşeği)", "mayın dansı (Mayın eşeği)", AnimMineDance);
 
             AddAnimHeader("blasts + shake", "patlama + sarsıntı");
-            AddAnim("line clear ray: row", "satır ışını",
-                delegate { FlashLine(AnimBoard(), AnimMiddleRow(), true); });
-            AddAnim("line clear ray: column", "sütun ışını",
-                delegate { FlashLine(AnimBoard(), AnimMiddleColumn(), false); });
+            AddAnim("line clear ray: row (combo knob)", "satır ışını (kombo ayarı)",
+                delegate { FlashLineAtKnob(AnimBoard(), AnimMiddleRow(), true); });
+            AddAnim("line clear ray: column (combo knob)", "sütun ışını (kombo ayarı)",
+                delegate { FlashLineAtKnob(AnimBoard(), AnimMiddleColumn(), false); });
             AddAnim("line clear ray: plus (row + column)", "artı ışını (satır + sütun)",
                 AnimPlusBlast);
             AddAnim("blast: N cells (cells knob)", "patlama: N hücre (hücre ayarı)",
@@ -910,12 +910,34 @@ namespace ProjectBlock.View
             mineShuffle.Play(boardView, board, path);
         }
 
+        /// <summary>The combo knob's reading, and WHICH tier it will actually DRAW when the two
+        /// differ. Tier 3 has no sheet yet, so knob 3 through 6 all fall back to tier 2 - five
+        /// settings that play the same burst with nothing on screen saying why, which is exactly
+        /// how you end up unable to tell whether a newly installed sheet is the one you are
+        /// watching. Reads "3 -> 2" in that case and a plain number when nothing is standing in.</summary>
+        private string ComboKnobLabel()
+        {
+            int asked = Mathf.Clamp(animCombo, 1, LineBurstView.MaxTier);
+            int drawn = LineBurstView.EffectiveTier(asked);
+            return drawn == asked ? animCombo.ToString() : animCombo + " → " + drawn;
+        }
+
+        /// <summary>FlashLine at the tier the COMBO KNOB is on. The lab has no streak of its
+        /// own to be at a tier of, so the knob stands in for one - which also makes it the way
+        /// to look at a tier whose art has just landed. Clamped to the tiers that exist, so the
+        /// knob's 0 and its 4-6 both still land on something drawn.</summary>
+        private void FlashLineAtKnob(GameBoard board, int line, bool row)
+        {
+            activeLineTier = Mathf.Clamp(animCombo, 1, LineBurstView.MaxTier);
+            FlashLine(board, line, row);
+        }
+
         /// <summary>Both rays at once, which is how a turn that completes a row and a column at
         /// the same time reads: two waves leaving the same middle at the same instant.</summary>
         private void AnimPlusBlast()
         {
-            FlashLine(AnimBoard(), AnimMiddleRow(), true);
-            FlashLine(AnimBoard(), AnimMiddleColumn(), false);
+            FlashLineAtKnob(AnimBoard(), AnimMiddleRow(), true);
+            FlashLineAtKnob(AnimBoard(), AnimMiddleColumn(), false);
         }
 
         private void AnimFallingCubes()
@@ -1026,7 +1048,7 @@ namespace ProjectBlock.View
 
         private void AnimTurnLineClear()
         {
-            FlashLine(AnimBoard(), AnimMiddleRow(), true);
+            FlashLineAtKnob(AnimBoard(), AnimMiddleRow(), true);
             sfx.Explode();
             ShakeForBlast(false, false, animCombo);
             if (animCombo >= 2)
@@ -1039,7 +1061,7 @@ namespace ProjectBlock.View
         {
             sfx.CleanSweep(1f + 0.12f * Mathf.Min(animSweeps - 1, 8));
             sfx.Flame();
-            FlashLine(AnimBoard(), AnimMiddleRow(), true);
+            FlashLineAtKnob(AnimBoard(), AnimMiddleRow(), true);
             EmitSweepConfetti();
             ShakeForBlast(false, true, animCombo);
             SpawnSweepPopup();
@@ -1071,7 +1093,7 @@ namespace ProjectBlock.View
             }
             boardView.PlayWaterAnimation(pre, delegate
             {
-                FlashLine(AnimBoard(), AnimMiddleRow(), true);
+                FlashLineAtKnob(AnimBoard(), AnimMiddleRow(), true);
                 sfx.Explode();
                 ShakeForBlast(false, false, animCombo);
                 boardView.PlayWaterAnimation(post, null);

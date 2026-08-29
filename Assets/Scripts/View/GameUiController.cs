@@ -76,11 +76,21 @@ namespace ProjectBlock.View
         private FlameStreakView flameStreak;
         private LineBurstView lineBurst;
 
-        /// <summary>Debug: overtime level the fire is FORCED to, or -1 for "follow the round".
-        /// Held here rather than pushed straight at the view because the fire is re-stated from
-        /// several places (round start, every turn, continuing) - an override written directly
-        /// into FlameStreakView would be wiped by the next one of those.</summary>
-        private int debugFlameLevel = -1;
+        /// <summary>The overtime pressure wave and the screen closing in around it. The fire
+        /// they replaced is still in the project, switched off - see the note in RefreshFlames.
+        /// The pressure system drives the vignette AND the board's own squeeze itself, so all
+        /// three land on one beat.</summary>
+        private OvertimePressureView overtimePressure;
+
+        private OvertimeVignetteView overtimeVignette;
+
+        /// <summary>The turn overtime began on, and how many have been played since. The pulse
+        /// speeds up on TURNS rather than on continues, so it has to be counted here - Core has
+        /// no reason to know how many turns a round has spent past its bar.</summary>
+        private int overtimeStartTurn = -1;
+
+        private int overtimeTurns;
+
         private BlastFxView blastFx;
         private LineSwapPickerView lineSwapPicker;
 
@@ -186,18 +196,52 @@ namespace ProjectBlock.View
         /// driving the view directly is its whole job.</summary>
         private void RefreshFlames(int overtimeLevel)
         {
-            flameStreak.SetState(
-                debugFlameLevel >= 0 ? debugFlameLevel : overtimeLevel, boardView.WorldRect);
+            // THE FIRE IS OFF and the HEARTBEAT is on. The fire was not deleted - every part of
+            // it is still here and still fed the level below, so going back to it is four bools:
+            //     FlameStreakView.Style.DrawFlames    - the painted corner fires
+            //     FlameStreakView.Style.DrawEmbers    - the sparks rising off them
+            //     FlameStreakView.Style.DrawDrift     - the embers drawn in from the top corners
+            //     BoardLineGlowView.Style.Enabled     - the glow on the board's grid
+            // Turning those on and OvertimePulseView/OvertimeVignetteView off swaps the looks.
+            int level = overtimeLevel;
+            flameStreak.SetState(level, boardView.WorldRect);
+            boardView.SetOvertimeGlow(level);
+
+            // The look that is actually ON: pressure pushing in from the arena's edge, the board
+            // answering it, and the screen closing in a step per continue. One call - the
+            // pressure system owns the clock and drives the other two off it.
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            overtimePressure.SetState(level > 0, level, overtimeTurns, boardView.WorldRect,
+                boardView.CellWorldSize,
+                round != null ? round.Board.Width : 0,
+                round != null ? round.Board.Height : 0);
         }
 
         /// <summary>Debug: light the fire at full heat, or hand it back to the round.</summary>
-        private void ToggleDebugFlames()
+        /// <summary>Debug: takes the round into overtime FOR REAL, and one step deeper on every
+        /// press. It is not a preview - the hand is reshuffled, cards leave at the escalating
+        /// price and the round is genuinely past its bar, because a look that is only ever seen
+        /// over a board in a state it could not actually be in is not being tested at all.
+        ///
+        /// Everything after the call is what the C key already does when a player continues, so
+        /// the two paths cannot present the same event differently.</summary>
+        private void DebugEnterOvertime()
         {
-            debugFlameLevel = debugFlameLevel >= 0 ? -1 : FlameStreakView.MaxLevel;
             RoundEngine round = session != null ? session.CurrentRound : null;
-            RefreshFlames(round != null ? round.ContinueCount : 0);
-            Debug.Log("[block_bonk] Debug flames: "
-                + (debugFlameLevel >= 0 ? "ON (level " + debugFlameLevel + ")" : "off"));
+            if (round == null || !round.DebugEnterOvertime())
+            {
+                Debug.Log("[block_bonk] Debug overtime: the round cannot be pushed from here.");
+                return;
+            }
+            RefreshFlames(round.ContinueCount);
+            if (round.Status == RoundStatus.InProgress)
+            {
+                sfx.Shuffle();
+                cardLayer.AnimateRedraw(round);
+            }
+            RefreshAll(null);
+            Debug.Log("[block_bonk] Debug overtime: continue #" + round.ContinueCount
+                + ", " + round.Hand.Count + " in hand.");
         }
 
         /// <summary>Flips EN/TR, persists the choice, and re-texts every open view.</summary>
@@ -289,6 +333,9 @@ namespace ProjectBlock.View
         private void StartRoundPresentation()
         {
             comboStreak = 0;
+            lineBurstTier = 1;
+            overtimeStartTurn = -1;
+            overtimeTurns = 0;
             retroFallHand = -1; // no piece is mid-fall across a round boundary
             // Keep the CRT in sync at every round start - crucially, a restart (R) or a deck
             // change builds a fresh session with retro OFF, so this turns the overlay back off.
@@ -371,11 +418,12 @@ namespace ProjectBlock.View
                 ToggleLanguage();
                 return;
             }
-            // debug: light the overtime fire without having to reach overtime. Ungated on
-            // purpose - the point is to see it whenever, including from the market.
-            if (kb != null && kb.yKey.wasPressedThisFrame && session != null)
+            // debug: go into overtime for real, without having to reach the bar. Only in a
+            // ROUND now - it takes an actual continue, which the market has nothing to do with.
+            if (kb != null && kb.yKey.wasPressedThisFrame && session != null
+                && session.Phase == GamePhase.Round)
             {
-                ToggleDebugFlames();
+                DebugEnterOvertime();
                 return;
             }
             // debug: jump straight to a boss stage. Here rather than with the in-round debug keys

@@ -142,6 +142,27 @@ namespace ProjectBlock.View
             /// a leftover rather than as part of the same fire.</summary>
             public static bool TopCorners = false;
 
+            /// <summary>Whether the painted flames are drawn AT ALL. Off for now while the fire
+            /// is being reconsidered - and off is all it is: every layer the flames feed keeps
+            /// running, because none of them depends on these sprites existing. The embers take
+            /// the corner positions from the arena rect (see below, not from the placed flames),
+            /// and the corner drift and the board's line glow key off the heat and the rect.
+            /// So the arena still knows it is in overtime with this false; it just has no fire
+            /// standing on it. One line to bring the fire back.</summary>
+            public static bool DrawFlames = false;
+
+            /// <summary>Whether the fire throws EMBERS. Off alongside DrawFlames and for the
+            /// same reason - embers rising off a fire that is not being drawn have nothing to
+            /// have come from. Kept as its own switch rather than folded into DrawFlames
+            /// because the two are worth being able to try apart.</summary>
+            public static bool DrawEmbers = false;
+
+            /// <summary>Whether the embers are drawn IN from the arena's top corners. The third
+            /// of the four switches that make up the overtime look; the fourth is
+            /// BoardLineGlowView.Style.Enabled. They are listed together in
+            /// GameUiController.RefreshFlames, which is the one place all four are driven from.</summary>
+            public static bool DrawDrift = false;
+
             /// <summary>Flames per EDGE - not per world unit - at the first overtime level and
             /// at full heat. BOTH ZERO: the ring was tried at several densities and lost to two
             /// large flames. The machinery is left reachable rather than deleted because this
@@ -318,6 +339,10 @@ namespace ProjectBlock.View
         /// because only this knows where the flames ended up.</summary>
         private FlameEmbersView embers;
 
+        /// <summary>The embers drawn in from the top corners. Owned here for the same reason
+        /// the rising ones are: only this knows whether the fire is lit and how hot.</summary>
+        private FlameDriftView drift;
+
         /// <summary>Reused so telling the embers where the fire is costs no allocation.</summary>
         private readonly List<Vector2> emberSources = new List<Vector2>();
         private Flame[] flames = new Flame[0];
@@ -464,6 +489,7 @@ namespace ProjectBlock.View
             {
                 HideFrom(0);
                 Embers.SetState(null, 0f, 0f, 0f);
+                Drift.SetState(area, 0f);
                 return;
             }
 
@@ -553,11 +579,27 @@ namespace ProjectBlock.View
             }
 
             // The embers are thrown from the corner flames, so they are told where those ended
-            // up rather than working it out again.
+            // up rather than working it out again. An empty source list is how the ember layer
+            // is put out - the same call the round-not-in-overtime path makes.
             emberSources.Clear();
-            emberSources.Add(new Vector2(area.xMin - lip, area.yMin - lip));
-            emberSources.Add(new Vector2(area.xMax + lip, area.yMin - lip));
+            if (Style.DrawEmbers)
+            {
+                emberSources.Add(new Vector2(area.xMin - lip, area.yMin - lip));
+                emberSources.Add(new Vector2(area.xMax + lip, area.yMin - lip));
+            }
             Embers.SetState(emberSources, cornerHeight * ContentWidth, cornerHeight, heat);
+            // The drift takes the ARENA, not the flame feet: it comes off the TOP corners and
+            // runs inward, which is the whole difference between it and the rising embers.
+            // Zero heat is how it is put out - the same call the not-in-overtime path makes.
+            Drift.SetState(area, Style.DrawDrift ? heat : 0f);
+
+            if (!Style.DrawFlames)
+            {
+                // Hidden rather than never placed: the placement above is what works out the
+                // corner heights the ember layer is sized from, so it still has to run. The
+                // sprites are simply dropped at the end.
+                n = 0;
+            }
 
             HideFrom(n);
             live = n;
@@ -576,6 +618,22 @@ namespace ProjectBlock.View
                     embers = go.AddComponent<FlameEmbersView>();
                 }
                 return embers;
+            }
+        }
+
+        /// <summary>The drift layer, made on first use. Its own object so its sprites are not
+        /// mixed in with the flame pool.</summary>
+        private FlameDriftView Drift
+        {
+            get
+            {
+                if (drift == null)
+                {
+                    var go = new GameObject("Drift");
+                    go.transform.SetParent(transform, false);
+                    drift = go.AddComponent<FlameDriftView>();
+                }
+                return drift;
             }
         }
 

@@ -381,6 +381,7 @@ namespace ProjectBlock.View
             boardView.gameObject.SetActive(visible);
             cardLayer.gameObject.SetActive(visible);
             flameStreak.gameObject.SetActive(visible);
+            overtimePressure.gameObject.SetActive(visible);
             blastFx.gameObject.SetActive(visible);
             infoText.gameObject.SetActive(visible);
             messageText.gameObject.SetActive(visible);
@@ -391,6 +392,14 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // The overtime look does not stop on its own: it is driven from RefreshFlames, and
+            // nothing calls that on the way out of a run - so leaving a round mid-overtime left
+            // the board pulsing behind the title menu. Deactivating the object above is not
+            // enough by itself either, because the vignette hangs off the CAMERA rather than
+            // off it, and the board would stay squeezed wherever the last pulse left it.
+            overtimePressure.Stop();
+            overtimeStartTurn = -1;
+            overtimeTurns = 0;
             marketView.Hide();
             deckOverlay.Hide();
             grantPicker.Hide();

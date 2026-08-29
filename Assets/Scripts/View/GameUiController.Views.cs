@@ -107,6 +107,16 @@ namespace ProjectBlock.View
             flamesGo.transform.SetParent(transform, false);
             flameStreak = flamesGo.AddComponent<FlameStreakView>();
 
+            var vignetteGo = new GameObject("OvertimeVignette");
+            vignetteGo.transform.SetParent(transform, false);
+            overtimeVignette = vignetteGo.AddComponent<OvertimeVignetteView>();
+            overtimeVignette.Build(cam, BoardCenter);
+
+            var pressureGo = new GameObject("OvertimePressure");
+            pressureGo.transform.SetParent(transform, false);
+            overtimePressure = pressureGo.AddComponent<OvertimePressureView>();
+            overtimePressure.Build(boardView, overtimeVignette);
+
             var lineBurstGo = new GameObject("LineBurst");
             lineBurstGo.transform.SetParent(transform, false);
             lineBurst = lineBurstGo.AddComponent<LineBurstView>();

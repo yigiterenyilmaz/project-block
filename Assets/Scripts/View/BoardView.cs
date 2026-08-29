@@ -12,14 +12,36 @@ namespace ProjectBlock.View
     /// <summary>Debug renderer for the play grid.</summary>
     public sealed class BoardView : MonoBehaviour
     {
-        private static readonly Color BackgroundColor = new Color(0.10f, 0.11f, 0.13f);
+
+        /// <summary>Seconds per pulse at the first overtime level and at the deepest. It speeds
+        /// up as the round runs on, which is the part that reads as pressure - but not far.
+        /// These were 1.30 and 0.42 first: 0.42s is 2.4Hz, and a large area of the screen
+        /// swinging that fast is genuinely unpleasant to sit in front of. At 2.4 the deepest
+        /// pulse is a slow breath, which is what a clock running out should feel like anyway.</summary>
+        private const float OvertimePulseSlow = 4.60f;
+
+        private const float OvertimePulseFast = 2.40f;
+
+        // THE OVERTIME EFFECT ONLY ADDS LIGHT. It used to tint this plate as well, which is what
+        // the lines are cut out of - and that was wrong for a reason worth keeping written down:
+        // the plate shows through a gap of cellSize * (1 - EmptyFill) between two empty cells and
+        // cellSize * (1 - CubeFill) between two filled ones, and at 0.92 against 0.98 the first
+        // is EIGHT TIMES the second. Tinting it therefore lit a band whose width depended on what
+        // was on the board, so the arena visibly changed the moment the first block landed.
+        //
+        // BoardLineGlowView draws the whole effect now, on its own fixed-width filament over the
+        // top. Nothing here re-colours geometry that the board's own contents can resize.
+
+        /// <summary>Overtime levels over which the pulse reaches its deepest. Matches
+        /// FlameStreakView's own full-heat level so the fire and the lines escalate together.</summary>
+        private const int OvertimeFullLevel = 6;
 
         /// <summary>How far the background plate overhangs the grid, TOTAL across both sides -
         /// so the visible edge of the arena is half of this outside WorldRect, which reports the
         /// cell area only. Named because effects that sit ON the arena's edge need it:
         /// FlameStreakView plants its flames on the visible corner, not on the grid corner.</summary>
         public const float BorderOverhang = 0.15f;
-        private static readonly Color EmptyColor = new Color(0.17f, 0.18f, 0.22f);
+        private static readonly Color EmptyColor = new Color(0.112f, 0.121f, 0.147f);
 
         /// <summary>A cell shuffle erosion ATE. Deliberately not hidden like an ordinary hole:
         /// the player has to see what the stalling cost them, and that its row/column is dead.</summary>
@@ -79,7 +101,7 @@ namespace ProjectBlock.View
         /// painted tile brings its own frame and wants to sit nearly edge to edge; an empty
         /// cell stays inset so the grid keeps reading as holes between blocks.</summary>
         private const float CubeFill = 0.98f;
-        private const float EmptyFill = 0.92f;
+        private const float EmptyFill = 0.82f;
 
         private GameBoard board;
         private SpriteRenderer[,] cellRenderers;
@@ -174,8 +196,102 @@ namespace ProjectBlock.View
             ambientRenderer.sortingOrder = 3;
         }
 
+        /// <summary>Sets the arena's lines burning. 0 puts them back to the plain grid; higher
+        /// levels pulse faster and further. Pushed from the same place the fire is, so the two
+        /// can never disagree about whether the round is in overtime.</summary>
+        public void SetOvertimeGlow(int level)
+        {
+            if (level == overtimeLevel)
+            {
+                return;
+            }
+            overtimeLevel = Mathf.Max(0, level);
+            overtimeClock = 0f;
+            if (overtimeLevel == 0)
+            {
+                LineGlow.SetGlow(0, 0f);
+            }
+        }
+
+        /// <summary>The pulse itself. Kept out of the blind-mode branch below on purpose: a round
+        /// played in the dark still has a threshold to be past, and the grid is not a cube.</summary>
+        private void PulseOvertimeLines()
+        {
+            if (overtimeLevel <= 0)
+            {
+                return;
+            }
+            float depth = Mathf.Clamp01(overtimeLevel / (float)OvertimeFullLevel);
+            float period = Mathf.Lerp(OvertimePulseSlow, OvertimePulseFast, depth);
+            overtimeClock += Time.deltaTime;
+            // Cosine rather than a sawtooth: the lines have to swell and settle, and a linear
+            // ramp back to dark reads as a strobe.
+            float wave = 0.5f - 0.5f * Mathf.Cos(overtimeClock / period * 2f * Mathf.PI);
+            LineGlow.SetGlow(overtimeLevel, wave);
+        }
+
+        /// <summary>The board's PHYSICAL answer to the overtime pressure: a squeeze and a knock.
+        /// Both are tiny by design - the player must never be able to say the arena got smaller,
+        /// only feel that something pressed on it.
+        ///
+        /// Scaled about the BOARD'S OWN CENTRE, not this transform's origin. Everything here is
+        /// laid out in local space around `center`, so a plain scale would swing the whole arena
+        /// towards the origin instead of squeezing it where it stands; the offset undoes that.</summary>
+        public void SetPressure(float squeeze, Vector2 knock)
+        {
+            float s = 1f - Mathf.Clamp(squeeze, 0f, 0.25f);
+            transform.localScale = new Vector3(s, s, 1f);
+            transform.localPosition = new Vector3(
+                pressureCentre.x * (1f - s) + knock.x,
+                pressureCentre.y * (1f - s) + knock.y, 0f);
+        }
+
+        /// <summary>Where the arena stands, kept for SetPressure to squeeze about.</summary>
+        private Vector2 pressureCentre;
+
+        /// <summary>The glow layer, made on first use AND whenever it has gone. It is a child of
+        /// this transform like everything else here, so Rebuild takes it - and a replacement is
+        /// no use until it has been given the board's geometry again, which is why that is
+        /// cached above and handed straight back here. Without this the pulse dies the first
+        /// time the board is rebuilt and never returns.</summary>
+        /// <summary>The surface layer, made on first use. Kept out of the rebuild sweep for the
+        /// same reason the glow is - see the loop in Rebuild.</summary>
+        private BoardSurfaceView Surface
+        {
+            get
+            {
+                if (surface == null)
+                {
+                    var go = new GameObject("Surface");
+                    go.transform.SetParent(transform, false);
+                    surface = go.AddComponent<BoardSurfaceView>();
+                }
+                return surface;
+            }
+        }
+
+        private BoardLineGlowView LineGlow
+        {
+            get
+            {
+                if (lineGlow == null)
+                {
+                    var go = new GameObject("LineGlow");
+                    go.transform.SetParent(transform, false);
+                    lineGlow = go.AddComponent<BoardLineGlowView>();
+                    if (glowCellsWide > 0 && glowCellsHigh > 0)
+                    {
+                        lineGlow.Build(glowCenter, glowCellsWide, glowCellsHigh, glowCellSize,
+                            BorderOverhang);
+                    }
+                }
+                return lineGlow;
+            }
+        }
+
         private void Update()
         {
+            PulseOvertimeLines();
             if (board == null || kindCache == null)
             {
                 return;
@@ -369,6 +485,37 @@ namespace ProjectBlock.View
         /// <summary>Wash over a line "Kangren" took whole - it can never explode again.</summary>
         public Color RotDeadLineColor = new Color(0.24f, 0.20f, 0.16f);
 
+        /// <summary>0 when the round is inside its threshold. Otherwise the overtime level,
+        /// which sets both how fast the lines pulse and how far they get.</summary>
+        private int overtimeLevel;
+
+        private float overtimeClock;
+
+        /// <summary>The soft light over the lines - the whole overtime effect. Made on first
+        /// use, and remade whenever Rebuild has taken it: see the LineGlow property.</summary>
+        private BoardLineGlowView lineGlow;
+
+        /// <summary>The generated plate the cells sit in. Like the glow, it outlives a rebuild:
+        /// its texture costs real time to make and depends only on the cell COUNT.</summary>
+        private BoardSurfaceView surface;
+
+        /// <summary>The geometry the glow was last built for, kept so a REMADE one can be given
+        /// it back. Rebuild destroys the glow along with every other child of this transform,
+        /// and Destroy only takes effect at the end of the frame - so the Build call inside
+        /// Rebuild lands on the object that is already on its way out, and the replacement the
+        /// getter makes next frame has never been built at all. That is what silently killed the
+        /// pulse the first time a block was placed: lastMainBoardSize starts at -1, so the first
+        /// turn always rebuilds, and from then on SetGlow was talking to a component with no
+        /// sprite. Cells is 0 until the first real build, which is what makes this safe to read
+        /// before there is a board.</summary>
+        private Vector2 glowCenter;
+
+        private int glowCellsWide;
+
+        private int glowCellsHigh;
+
+        private float glowCellSize;
+
         private float cellSize = 1f;
 
         /// <summary>Edge length of one cell in world units, so an effect outside the board (a
@@ -407,9 +554,20 @@ namespace ProjectBlock.View
             StopAllCoroutines();
             animatingWater = false;
             waterHiddenCells.Clear(); // the drop sprites go with the children below
+            // EXCEPT the overtime glow, which outlives a rebuild. It is not part of the board's
+            // contents: it is a light over them, its texture costs real time to generate, and
+            // sweeping it up with everything else meant the overtime effect was torn down and
+            // rebuilt every time a block landed - which is precisely what the visible hitch was.
+            Transform keepGlow = lineGlow != null ? lineGlow.transform : null;
+            Transform keepSurface = surface != null ? surface.transform : null;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
-                Destroy(transform.GetChild(i).gameObject);
+                Transform child = transform.GetChild(i);
+                if (child == keepGlow || child == keepSurface)
+                {
+                    continue;
+                }
+                Destroy(child.gameObject);
             }
             ghostSprites.Clear();
             outsidePreviewSprites.Clear();
@@ -420,16 +578,15 @@ namespace ProjectBlock.View
             cellSize = Mathf.Min(maxWorldSize / board.Width, maxWorldSize / board.Height);
             bottomLeft = center - new Vector2(board.Width, board.Height) * (cellSize * 0.5f);
 
-            var background = new GameObject("Background");
-            background.transform.SetParent(transform, false);
-            background.transform.localPosition = new Vector3(center.x, center.y, 0f);
-            background.transform.localScale = new Vector3(
-                board.Width * cellSize + BorderOverhang,
-                board.Height * cellSize + BorderOverhang, 1f);
-            var bgRenderer = background.AddComponent<SpriteRenderer>();
-            bgRenderer.sprite = ViewUtil.WhiteSprite;
-            bgRenderer.color = BackgroundColor;
-            bgRenderer.sortingOrder = 0;
+            // The board's surface is GENERATED - a plate with a bevelled frame and a recess per
+            // cell - rather than the flat rectangle this used to be. See BoardSurfaceView.
+            Surface.Build(center, board.Width, board.Height, cellSize, BorderOverhang);
+            pressureCentre = center;
+            glowCenter = center;
+            glowCellsWide = board.Width;
+            glowCellsHigh = board.Height;
+            glowCellSize = cellSize;
+            LineGlow.Build(center, board.Width, board.Height, cellSize, BorderOverhang);
 
             cellRenderers = new SpriteRenderer[board.Width, board.Height];
             previewRenderers = new SpriteRenderer[board.Width, board.Height];

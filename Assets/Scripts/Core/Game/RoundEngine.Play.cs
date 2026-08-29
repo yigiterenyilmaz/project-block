@@ -293,6 +293,41 @@ namespace ProjectBlock.Core
             CheckForNoPlayableMove();
         }
 
+        /// <summary>DEBUG ONLY - the view's overtime key. Pushes the round over its own bar and
+        /// takes the continue, so a debug overtime is a REAL one: the score is capped at the
+        /// threshold, ThresholdPassed goes up (which is what gates jokers and powers), the
+        /// discard is shuffled back, the hand is reshuffled, cards leave at the escalating price
+        /// and a fresh hand is drawn. Pressing it again continues again, which is how the
+        /// escalation is seen.
+        ///
+        /// It goes through the ORDINARY paths - AddScoreOutsideTurn, then DecideAdvance - rather
+        /// than writing the fields itself, so a debug overtime can never drift from a real one.
+        /// Returns false when the round is in no state to be pushed.</summary>
+        public bool DebugEnterOvertime()
+        {
+            if (Status == RoundStatus.Lost || Status == RoundStatus.Advanced)
+            {
+                return false;
+            }
+            if (Status == RoundStatus.InProgress && !ThresholdPassed)
+            {
+                int shortfall = ScaledThreshold - RoundScore;
+                if (shortfall > 0)
+                {
+                    // AddScoreOutsideTurn multiplies by the scale, so the shortfall is divided
+                    // back out - rounded UP, or it could land a point short of the bar.
+                    int scale = scorer.ScoreScale < 1 ? 1 : scorer.ScoreScale;
+                    AddScoreOutsideTurn((shortfall + scale - 1) / scale);
+                }
+            }
+            if (Status != RoundStatus.AwaitingAdvanceDecision)
+            {
+                return false;
+            }
+            DecideAdvance(false);
+            return true;
+        }
+
         /// <summary>Adds a card to the bonus hand. Base game: unused. Future powers
         /// (Klon, Dolly, Olta, Kara delik...) and tests are the callers.</summary>
         public void AddBonusCard(BlockCard card, BonusPlayOutcome outcomeOnPlay)

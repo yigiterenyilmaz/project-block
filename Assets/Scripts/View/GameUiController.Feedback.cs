@@ -171,6 +171,26 @@ namespace ProjectBlock.View
         /// <summary>Particles, shake, combo popups and the sweep celebration for one turn.</summary>
         private void HandleBlastFeedback(RoundEngine round, TurnReport report)
         {
+            // Settled BEFORE anything is drawn: EmitBlastParticles reads the tier below, and on
+            // a turn that cleared nothing it still runs (a boss lift has a puff to draw).
+            // Turns played PAST the bar, which is what the heartbeat's rate follows. Counted from
+            // the turn overtime began on rather than incremented, so it cannot drift if a turn
+            // ever resolves twice.
+            if (round.ThresholdPassed)
+            {
+                if (overtimeStartTurn < 0)
+                {
+                    overtimeStartTurn = report.TurnNumber;
+                }
+                overtimeTurns = Mathf.Max(0, report.TurnNumber - overtimeStartTurn);
+            }
+
+            bool clearedALine = report.ExplodedRows.Count > 0 || report.ExplodedColumns.Count > 0;
+            activeLineTier = lineBurstTier;
+            lineBurstTier = clearedALine
+                ? Mathf.Min(lineBurstTier + 1, LineBurstView.MaxTier)
+                : Mathf.Max(lineBurstTier - 1, 1);
+
             if (report.CubesExploded == 0 && LateExplodedCount(report) == 0)
             {
                 comboStreak = 0;
@@ -323,8 +343,42 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>The warm orange every blast is drawn in.</summary>
+        /// <summary>The warm orange every blast is drawn in. Still the colour of everything
+        /// that is not a cleared LINE - loose cells, a targeted payout, a late reshape - which
+        /// have no streak of their own to be at a tier of.</summary>
         private static readonly Color BlastColor = new Color(1f, 0.72f, 0.35f);
+
+        /// <summary>A cleared line's colour, by streak tier, indexed from 1. The SQUARES and the
+        /// burst over them are two halves of one thing, so this table is read through
+        /// LineBurstView.EffectiveTier: while tier 3 has no art the third clear in a row shows
+        /// tier 2's burst, and it has to show tier 2's flash with it. Fill in a colour here at
+        /// the same time as the sheet, not before.</summary>
+        private static readonly Color[] LineBlastColors =
+        {
+            default(Color),
+            new Color(1f, 0.72f, 0.35f),      // 1 - the ordinary clear, the warm orange
+            new Color(0.72f, 0.38f, 1f),      // 2 - a clear straight after another: purple
+            new Color(0.30f, 0.95f, 0.85f)    // 3 - PROVISIONAL, no sheet drawn yet
+        };
+
+        /// <summary>The streak tier the NEXT cleared line plays at, 1-based.
+        ///
+        /// The rule, which is not a plain reset: a turn that clears plays at this tier and then
+        /// raises it; a turn that clears NOTHING lowers it by one. So three clears in a row run
+        /// 1, 2, 3 and stay at 3 however long the run goes on, while a single missed turn after
+        /// that drops you to 2 rather than all the way back - you have to miss twice to be at 1
+        /// again. Losing a streak gradually is the point: one bad placement should cost a step,
+        /// not the whole ladder.
+        ///
+        /// It lives here rather than in Core because nothing about it is a rule - no score, no
+        /// legality, only which of three drawings to play. `report.ComboCount` is the SCORING
+        /// combo and does reset outright; the two are deliberately not the same number.</summary>
+        private int lineBurstTier = 1;
+
+        /// <summary>The tier THIS turn's lines are drawn at - lineBurstTier as it stood when the
+        /// turn was classified, held because EmitBlastParticles walks several lines and the
+        /// counter has already moved on by then. The animation lab writes it directly.</summary>
+        private int activeLineTier = 1;
 
         /// <summary>Cells a boss carried away rather than broke: cold and pale, so a lift can
         /// never be mistaken for something the player earned.</summary>
@@ -361,12 +415,16 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // The squares and the burst take the SAME tier, through the same fallback, so the
+            // two can never disagree about which streak the player is on.
+            int tier = LineBurstView.EffectiveTier(activeLineTier);
+            Color tone = LineBlastColors[tier];
             float[] times = CellFlashFx.RayTimes(cells.Count);
             CellFlashFx.Play(transform, cells, times, boardView.CellWorldSize,
                 row ? CellFlashFx.Pinch.AcrossRow : CellFlashFx.Pinch.AcrossColumn,
-                CellFlashFx.Palette.Hot(BlastColor));
-            StartCoroutine(BurstParticles(cells, times, BlastColor, 4));
-            lineBurst.Play(cells, boardView.CellWorldSize, row);
+                CellFlashFx.Palette.Hot(tone));
+            StartCoroutine(BurstParticles(cells, times, tone, 4));
+            lineBurst.Play(cells, boardView.CellWorldSize, row, activeLineTier);
         }
 
         /// <summary>

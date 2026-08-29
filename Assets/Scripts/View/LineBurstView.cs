@@ -11,132 +11,201 @@
 // CellFlashFx remains the thing that says a line died - this is the flourish on top of it, and
 // the board still reads correctly with this file deleted.
 //
-// HOW IT IS SIZED, and why there is one sheet rather than three. BoardView fits every arena
-// into a FIXED box (maxBoardWorldSize, 6.5 units): a 7x7 and an 11x11 are the same size on
-// screen and only their CELLS differ - 0.93 units against 0.59. A line is therefore ALWAYS 6.5
-// long, so a burst that spans one is the same size on every board and needs neither per-size
-// art nor per-size numbers. Thickness is a plain world figure for the same reason: tying it to
-// the cell would make the explosion shrink on the boards where it has more line to cover.
+// ONE BURST PER TIER, and WHICH tier is the streak's business, not this file's: the caller
+// passes one and gets that art. A tier whose sheet is not drawn yet falls back to the highest
+// one that is, and it falls back WHOLE - GameUiController.Feedback asks EffectiveTier too and
+// colours the squares from the same answer, so a missing tier never pairs one tier's debris
+// with another tier's flash.
 //
-// IT IS STRETCHED, and the amount was chosen rather than accepted. The art is 1.878:1, so
-// spanning 6.5 units at its own proportions would stand 3.46 units across - over half the
+// BURSTS ARE POOLED, because a single placement can clear a row AND a column at once. With one
+// renderer the second Play overwrote the first and half of every plus-shaped clear went unseen.
+// Each live burst now owns its renderer and its own clock, and a spent one is handed back out.
+//
+// HOW IT IS SIZED, and why one sheet covers every arena. BoardView fits every board into a
+// FIXED box (maxBoardWorldSize, 6.5 units): a 7x7 and an 11x11 are the same size on screen and
+// only their CELLS differ - 0.93 units against 0.59. A line is therefore ALWAYS 6.5 long, so a
+// burst that spans one is the same size on every board and needs neither per-size art nor
+// per-size numbers. Thickness is a plain world figure for the same reason: tying it to the cell
+// would make the explosion shrink on the boards where it has more line to cover.
+//
+// IT IS STRETCHED, and the amount was chosen rather than accepted. The art is about 1.9:1, so
+// spanning 6.5 units at its own proportions would stand ~3.5 units across - over half the
 // arena, with the burst hiding the board it is going off on. Thickness is the dial that trades
 // one against the other: at 2.0 the stretch reaches 1.73x and the debris reads as rectangles,
-// which is the one distortion a game about square blocks cannot afford; at 3.0 it is honest
-// but enormous. 2.6 costs 1.33x, which the chunks carry, and clears the line by about a cell.
+// which is the one distortion a game about square blocks cannot afford; at 3.0 it is honest but
+// enormous. 2.6 costs 1.33x, which the chunks carry, and clears the line by about a cell.
 //
-// It used to be a CHAIN of cell-sized bursts staggered out from the middle. That reads as
-// three explosions rather than one - a line coming apart in pieces - and the line already has
+// It used to be a CHAIN of cell-sized bursts staggered out from the middle. That reads as three
+// explosions rather than one - a line coming apart in pieces - and the line already has
 // something saying it travels: CellFlashFx.RayTimes, underneath, in the squares themselves.
 //
-// THE SHEET IS REPACKED. The frames arrived laid out 4/3/3 with the last three broken into
-// loose sparks, which no grid can address; Tools has no part in this, it was repacked once into
-// a clean 5x2 and that is what ships. Slicing happens at runtime, as with the flame, so no
-// meta ever has to describe ten rectangles.
+// THE SHEETS ARE REPACKED, each into whatever grid suits it - tier 1 into a 5x2 and tier 2 into
+// a 3x3 - because they do not arrive tidy: tier 1 came laid out 4/3/3 with its trailing frames
+// broken into loose sparks, which no grid can address. Slicing happens at runtime, as with the
+// flame, so no meta ever has to describe the rectangles, and a tier's cell aspect is read off its
+// own sheet - which is what lets tier 2 be a 2.61:1 drawing next to tier 1's 1.88:1 and still
+// come out the same thickness on the board.
 
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace ProjectBlock.View
 {
-    /// <summary>The explosion along a cleared line. Fire and forget: Play, then it runs
-    /// itself out.</summary>
+    /// <summary>The explosion along a cleared line. Fire and forget: Play, then it runs itself
+    /// out.</summary>
     public sealed class LineBurstView : MonoBehaviour
     {
         // =================================================================== TUNING
         /// <summary>Everything that decides how the burst READS, in one place.</summary>
         public static class Style
         {
-            /// <summary>Frames per second. The whole thing has to be OVER inside a second - a
-            /// line clear is not an event the player waits through - and 10 frames at 22 comes
-            /// to 0.45s, with room left over if the art ever grows more frames.</summary>
+            /// <summary>Frames per second, shared by every tier. The whole thing has to be OVER
+            /// inside a second - a line clear is not an event the player waits through - and at
+            /// 22 that is 0.45s for a ten-frame sheet and 0.41s for a nine-frame one.</summary>
             public static float Fps = 22f;
 
             /// <summary>How far the burst reaches ACROSS its line, in world units - along the
-            /// line it is as long as the line is. This is the dial that sets how much the art
-            /// is stretched: the stretch works out at 3.46 / Thickness, so raising this
-            /// straightens the burst out and drops it further over the board. Why 2.6 is in
-            /// the header.</summary>
+            /// line it is as long as the line is. This is the dial that sets how much the art is
+            /// stretched, so raising it straightens the burst out and drops it further over the
+            /// board. Why 2.6 is in the header.</summary>
             public static float Thickness = 2.6f;
         }
 
-        // =================================================================== the sheet
+        // =================================================================== the sheets
 
-        private const int FrameCount = 10;
-        private const int FrameColumns = 5;
-        private const int FrameRows = 2;
-        private const string SheetPath = "Art/Fx/line_burst_sheet";
+        /// <summary>How many streak tiers the game can ask for. Tiers are numbered from 1, the
+        /// way the design talks about them: 1 is an ordinary clear, 3 the deepest streak.</summary>
+        public const int MaxTier = 3;
+
+        /// <summary>One tier's sheet: where it is and how it is laid out. Per tier rather than
+        /// shared, because the tiers do NOT agree - tier 1 arrived with ten frames and tier 2
+        /// with nine, and a nine-frame sheet read on a ten-frame grid plays an empty cell as its
+        /// last frame, which is a blink at the end of every clear. Whoever repacks the next one
+        /// picks whatever grid suits it and says so here.</summary>
+        private struct Sheet
+        {
+            public string Path;
+            public int Count;
+            public int Columns;
+            public int Rows;
+
+            public Sheet(string path, int count, int columns, int rows)
+            {
+                Path = path;
+                Count = count;
+                Columns = columns;
+                Rows = rows;
+            }
+        }
+
+        /// <summary>Sheet per tier, indexed from 1 - slot 0 is unused so the numbers read the way
+        /// they are spoken. A path with no asset behind it is not an error; see EffectiveTier.</summary>
+        private static readonly Sheet[] Sheets =
+        {
+            default(Sheet),
+            new Sheet("Art/Fx/line_burst_1_sheet", 10, 5, 2),
+            new Sheet("Art/Fx/line_burst_2_sheet", 9, 3, 3),
+            new Sheet("Art/Fx/line_burst_3_sheet", 10, 5, 2)
+        };
 
         /// <summary>Just over CellFlashFx (10), so the burst covers the squares it is going off
         /// with, and still under the cards.</summary>
         private const int SortingOrder = 11;
 
-        private static Sprite[] frames;
-        private static bool sheetLoaded;
+        private static readonly Sprite[][] tierFrames = new Sprite[MaxTier + 1][];
 
-        /// <summary>A frame's own width:height, read off the sheet rather than written down.
-        /// Needed because a sprite is one world unit WIDE at scale 1 (PPU is the cell width),
-        /// so reaching a given world HEIGHT means dividing by this - and a redrawn sheet with
-        /// different proportions then still lands at the height the caller asked for.</summary>
-        private static float frameAspect = 1f;
+        /// <summary>Each tier's own frame width:height, read off its sheet rather than written
+        /// down. Needed because a sprite is one world unit WIDE at scale 1 (PPU is the cell
+        /// width), so reaching a given world thickness means dividing by this - and a sheet
+        /// redrawn at other proportions still lands at the thickness asked for.</summary>
+        private static readonly float[] tierAspect = new float[MaxTier + 1];
 
-        /// <summary>The ten frames, sliced once and shared. Null when the art is missing, and
-        /// then Play does nothing - the squares still go off, which is the part that carries
-        /// the meaning.</summary>
-        private static Sprite[] Frames
+        private static readonly bool[] tierLoaded = new bool[MaxTier + 1];
+
+        /// <summary>The tier that will actually be DRAWN for a requested one: the highest tier
+        /// at or below it whose sheet exists. Tier 3 is not drawn yet, so a third clear in a row
+        /// currently shows the tier 2 burst - and because Feedback asks this too, it shows it in
+        /// tier 2's colour rather than pairing purple debris with some other flash.</summary>
+        public static int EffectiveTier(int tier)
         {
-            get
+            for (int t = Mathf.Clamp(tier, 1, MaxTier); t >= 1; t--)
             {
-                if (sheetLoaded)
+                if (Frames(t) != null)
                 {
-                    return frames;
+                    return t;
                 }
-                sheetLoaded = true;
-                var sheet = Resources.Load<Texture2D>(SheetPath);
-                if (sheet == null)
-                {
-                    Debug.LogWarning("[block_bonk] Line burst sheet missing: Resources/" + SheetPath);
-                    return null;
-                }
-                int cw = sheet.width / FrameColumns;
-                int ch = sheet.height / FrameRows;
-                var built = new Sprite[FrameCount];
-                for (int i = 0; i < FrameCount; i++)
-                {
-                    int col = i % FrameColumns;
-                    int row = i / FrameColumns;
-                    // Texture y counts from the BOTTOM while the sheet reads top row first.
-                    int rectY = (FrameRows - 1 - row) * ch;
-                    built[i] = Sprite.Create(sheet, new Rect(col * cw, rectY, cw, ch),
-                        new Vector2(0.5f, 0.5f), cw);   // PPU = cell width: 1 unit wide at scale 1
-                }
-                frameAspect = (float)cw / ch;
-                frames = built;
-                return frames;
             }
+            return 1;
+        }
+
+        /// <summary>One tier's ten frames, sliced once and shared. Null when that sheet is not
+        /// in the project - the normal state for a tier whose art is still to be drawn, so only
+        /// tier 1 going missing is worth saying anything about.</summary>
+        private static Sprite[] Frames(int tier)
+        {
+            if (tierLoaded[tier])
+            {
+                return tierFrames[tier];
+            }
+            tierLoaded[tier] = true;
+            Sheet spec = Sheets[tier];
+            var sheet = Resources.Load<Texture2D>(spec.Path);
+            if (sheet == null)
+            {
+                if (tier == 1)
+                {
+                    Debug.LogWarning("[block_bonk] Line burst sheet missing: Resources/"
+                        + spec.Path);
+                }
+                return null;
+            }
+            int cw = sheet.width / spec.Columns;
+            int ch = sheet.height / spec.Rows;
+            var built = new Sprite[spec.Count];
+            for (int i = 0; i < spec.Count; i++)
+            {
+                int col = i % spec.Columns;
+                int row = i / spec.Columns;
+                // Texture y counts from the BOTTOM while the sheet reads top row first.
+                int rectY = (spec.Rows - 1 - row) * ch;
+                built[i] = Sprite.Create(sheet, new Rect(col * cw, rectY, cw, ch),
+                    new Vector2(0.5f, 0.5f), cw);   // PPU = cell width: 1 unit wide at scale 1
+            }
+            tierAspect[tier] = (float)cw / ch;
+            tierFrames[tier] = built;
+            return built;
         }
 
         // =================================================================== internals
 
-        /// <summary>The one renderer, made on the first Play and reused. There is nothing to
-        /// pool: a row clear puts up a single burst, and a second row clearing in the same turn
-        /// restarts this one rather than stacking a copy on top of it.</summary>
-        private SpriteRenderer burst;
-
-        /// <summary>Counts up through the animation. At or past FrameCount/Fps it is spent and
-        /// the renderer is off.</summary>
-        private float clock;
-
-        private bool running;
-
-        /// <summary>Sets off the burst over one cleared line. `cells` are world centres and
-        /// need not be contiguous - the burst spans from the first to the last, so a line with
-        /// a hole in it still gets one explosion across the whole thing rather than two.
-        /// `horizontal` is the line's own direction: a column turns the same art a quarter
-        /// turn, which is why the scale below is identical for both.</summary>
-        public void Play(IReadOnlyList<Vector2> cells, float cellSize, bool horizontal)
+        private sealed class Burst
         {
-            if (cells == null || cells.Count == 0 || cellSize <= 0f || Frames == null)
+            public SpriteRenderer Renderer;
+            public Sprite[] Frames;
+
+            /// <summary>Counts up through the animation; once it is past its own sheet's last
+            /// frame it is spent,
+            /// the renderer goes off and the entry is free for the next Play.</summary>
+            public float Clock;
+
+            public bool Running;
+        }
+
+        /// <summary>Live and spent bursts alike. A plus-shaped clear needs two at once and a
+        /// board power can take several lines in a turn, so a spent one is reused rather than
+        /// overwritten - which is exactly what the single renderer used to get wrong.</summary>
+        private readonly List<Burst> bursts = new List<Burst>();
+
+        /// <summary>Sets off the burst over one cleared line. `cells` are world centres and need
+        /// not be contiguous - the burst spans from the first to the last, so a line with a hole
+        /// in it still gets one explosion across the whole thing rather than two. `horizontal`
+        /// is the line's own direction: a column turns the same art a quarter turn, which is why
+        /// the scale below is identical for both. `tier` is the streak depth, 1-based.</summary>
+        public void Play(IReadOnlyList<Vector2> cells, float cellSize, bool horizontal, int tier)
+        {
+            int drawn = EffectiveTier(tier);
+            Sprite[] frames = Frames(drawn);
+            if (cells == null || cells.Count == 0 || cellSize <= 0f || frames == null)
             {
                 return;
             }
@@ -158,44 +227,66 @@ namespace ProjectBlock.View
             float alongMid = (min + max) * 0.5f;
             float across = acrossSum / cells.Count;
 
-            if (burst == null)
-            {
-                var go = new GameObject("Burst");
-                go.transform.SetParent(transform, false);
-                burst = go.AddComponent<SpriteRenderer>();
-                burst.sortingOrder = SortingOrder;
-            }
-            burst.transform.localPosition = horizontal
+            Burst b = Take();
+            b.Frames = frames;
+            b.Renderer.transform.localPosition = horizontal
                 ? new Vector3(alongMid, across, 0f)
                 : new Vector3(across, alongMid, 0f);
             // Local x is ALWAYS the length of the line and local y always the thickness; the
             // rotation is what points them at the world. x takes the span outright, y divides
             // through the frame's aspect because the sprite is one unit WIDE, not tall.
-            burst.transform.localRotation = horizontal
+            b.Renderer.transform.localRotation = horizontal
                 ? Quaternion.identity
                 : Quaternion.Euler(0f, 0f, 90f);
-            burst.transform.localScale = new Vector3(span, Style.Thickness * frameAspect, 1f);
-            burst.sprite = frames[0];
-            burst.enabled = true;
-            clock = 0f;
-            running = true;
+            b.Renderer.transform.localScale =
+                new Vector3(span, Style.Thickness * tierAspect[drawn], 1f);
+            b.Renderer.sprite = frames[0];
+            b.Renderer.enabled = true;
+            b.Clock = 0f;
+            b.Running = true;
+        }
+
+        /// <summary>A spent burst, or a new one. Never grows past what a single turn actually
+        /// needs at once.</summary>
+        private Burst Take()
+        {
+            for (int i = 0; i < bursts.Count; i++)
+            {
+                if (!bursts[i].Running)
+                {
+                    return bursts[i];
+                }
+            }
+            var go = new GameObject("Burst" + bursts.Count);
+            go.transform.SetParent(transform, false);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sortingOrder = SortingOrder;
+            sr.enabled = false;
+            var made = new Burst { Renderer = sr };
+            bursts.Add(made);
+            return made;
         }
 
         private void Update()
         {
-            if (!running)
+            float dt = Time.deltaTime;
+            for (int i = 0; i < bursts.Count; i++)
             {
-                return;
+                Burst b = bursts[i];
+                if (!b.Running)
+                {
+                    continue;
+                }
+                b.Clock += dt;
+                int frame = Mathf.FloorToInt(b.Clock * Style.Fps);
+                if (frame >= b.Frames.Length)
+                {
+                    b.Renderer.enabled = false;
+                    b.Running = false;
+                    continue;
+                }
+                b.Renderer.sprite = b.Frames[frame];
             }
-            clock += Time.deltaTime;
-            int frame = Mathf.FloorToInt(clock * Style.Fps);
-            if (frame >= FrameCount)
-            {
-                burst.enabled = false;
-                running = false;
-                return;
-            }
-            burst.sprite = frames[frame];
         }
     }
 }
