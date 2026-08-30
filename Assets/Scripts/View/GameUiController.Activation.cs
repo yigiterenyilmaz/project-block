@@ -637,9 +637,34 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // THE CORE CHARGES FIRST. The rules already destroyed the cubes, so this is the one
+            // place the presentation runs LATE on purpose: the infection goes quiet, beats twice
+            // and then lets go. Without it the block simply vanishes and the joker's whole three
+            // turns of buildup pay off in nothing. If the gap ever reads as detached from the
+            // cubes going, InfectionChargeDelay is the one number to take to zero.
+            float charge = 0f;
+            for (int i = 0; i < infectionBlastBuffer.Count; i++)
+            {
+                charge = Mathf.Max(charge, boardView.PlayInfectionCharge(infectionBlastBuffer[i]));
+            }
+            StartCoroutine(InfectionBlastAfter(charge * InfectionChargeDelay,
+                new List<GridPos>(infectionBlastBuffer)));
+        }
+
+        /// <summary>How much of the core's charge the blast waits out. One means the full
+        /// silence-and-two-beats; zero fires it the instant the cubes go, as it used to.</summary>
+        private const float InfectionChargeDelay = 1f;
+
+        private System.Collections.IEnumerator InfectionBlastAfter(float delay,
+            List<GridPos> cells)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
             // Cells off the board by now (a turn that also eroded the arena) are dropped by
             // FlashCells, which is also what "any" comes from.
-            if (FlashCells(infectionBlastBuffer, new Color(0.25f, 0.95f, 0.4f), 8))
+            if (FlashCells(cells, new Color(0.25f, 0.95f, 0.4f), 8))
             {
                 sfx.Explode();
                 ShakeCamera(0.13f, 0.22f);

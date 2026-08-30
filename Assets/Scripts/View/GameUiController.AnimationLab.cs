@@ -451,9 +451,12 @@ namespace ProjectBlock.View
             AddAnim("retro falling piece", "retro düşen parça", AnimFallingPiece);
             AddAnim("light up around a blast (dark)", "patlama ışığı (karanlık)",
                 delegate { boardView.LightUpAround(AnimCells()); });
-            AddAnim("infection pips", "enfeksiyon işaretleri", AnimInfectionPips);
+            AddAnim("infection cores (Enfeksiyon)", "enfeksiyon çekirdekleri (Enfeksiyon)",
+                AnimInfectionPips);
             AddAnim("circuit trace (Devre)", "devre izi (Devre)",
-                delegate { boardView.ShowCircuit(AnimCells()); });
+                delegate { boardView.ShowCircuit(AnimCircuitPath()); });
+            AddAnim("circuit OVERLOAD (blow it)", "devreyi PATLAT",
+                delegate { boardView.DetonateCircuit(); });
             AddAnim("quarantine wash (Karantina)", "karantina boyası (Karantina)",
                 delegate
                 {
@@ -496,7 +499,8 @@ namespace ProjectBlock.View
                 delegate { FlashCells(AnimCells(), LiftedColor, 3, true); });
             AddAnim("clean sweep: board flash + confetti", "temizlik: alan ışığı + yağmur",
                 delegate { EmitSweepConfetti(); });
-            AddAnim("dynamite: board flash + smoke", "dinamit: alan ışığı + duman", FlashDynamite);
+            AddAnim("dynamite: blast + smoke", "dinamit: patlama + duman",
+                delegate { FlashDynamite(DynamiteCenter(null)); });
             AddAnim("dynamite smoke alone", "dinamit dumanı (tek başına)", PlayDynamiteSmoke);
             AddAnim("power blast", "güç patlaması",
                 delegate { PlayPowerBlast(AnimCells()); });
@@ -594,6 +598,46 @@ namespace ProjectBlock.View
 
         /// <summary>The N cells nearest the middle of the board, N from the cells knob. Centred
         /// so a blast reads as one event rather than a scatter along an edge.</summary>
+        /// <summary>A REAL circuit path for the lab: top edge to bottom edge, one contiguous
+        /// horizontal run per row, consecutive runs touching. AnimCells was being used for this
+        /// and it returns the cells NEAREST THE MIDDLE - a diamond, which the joker could never
+        /// produce: its paths are monotone along one axis and can never double back, so a plus
+        /// is not a shape a circuit can take. Deterministic, so the lab shows the same route
+        /// every time and a change to the drawing is the only thing that can move.</summary>
+        private List<GridPos> AnimCircuitPath()
+        {
+            var cells = new List<GridPos>();
+            GameBoard board = AnimBoard();
+            if (board == null)
+            {
+                return cells;
+            }
+            // How far the run wanders left or right on each row down the board.
+            int[] steps = { 0, 2, -1, 3, -2, 1, -3, 2, -1, 2, -2, 1 };
+            int x = board.MinX + board.Width / 2;
+            for (int row = 0; row < board.Height; row++)
+            {
+                int y = board.MinY + board.Height - 1 - row;   // top edge downward
+                int next = Mathf.Clamp(x + steps[row % steps.Length],
+                    board.MinX, board.MinX + board.Width - 1);
+                int step = next >= x ? 1 : -1;
+                for (int cx = x; ; cx += step)
+                {
+                    var pos = new GridPos(cx, y);
+                    if (board.IsInside(pos))
+                    {
+                        cells.Add(pos);
+                    }
+                    if (cx == next)
+                    {
+                        break;
+                    }
+                }
+                x = next;
+            }
+            return cells;
+        }
+
         private List<GridPos> AnimCells()
         {
             var cells = new List<GridPos>();
@@ -1070,7 +1114,7 @@ namespace ProjectBlock.View
 
         private void AnimTurnDynamite()
         {
-            FlashDynamite();
+            FlashDynamite(DynamiteCenter(null));
             sfx.Explode();
             ShakeForBlast(true, false, animCombo);
             SpawnDynamitePopup();

@@ -144,6 +144,10 @@ namespace ProjectBlock.View
             cleanseGo.transform.SetParent(transform, false);
             boardCleanse = cleanseGo.AddComponent<BoardCleanseView>();
 
+            var tntGo = new GameObject("DynamiteBlast");
+            tntGo.transform.SetParent(transform, false);
+            dynamiteBlast = tntGo.AddComponent<DynamiteBlastView>();
+
             var blastGo = new GameObject("BlastFx");
             blastGo.transform.SetParent(transform, false);
             blastFx = blastGo.AddComponent<BlastFxView>();

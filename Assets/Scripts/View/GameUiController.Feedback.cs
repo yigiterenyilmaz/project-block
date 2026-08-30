@@ -204,7 +204,7 @@ namespace ProjectBlock.View
             ShakeForBlast(report.DynamiteTriggered, report.CleanSweep, comboStreak);
             if (report.DynamiteTriggered)
             {
-                FlashDynamite();
+                FlashDynamite(DynamiteCenter(report));
                 SpawnDynamitePopup();
             }
             // The popup shows the SCORING combo (consecutive line-clearing turns), which is
@@ -249,17 +249,58 @@ namespace ProjectBlock.View
         /// rolls in over the screen. Nothing drew this before: its cubes go through DestroyCubes
         /// rather than a line explosion, so they appear in no exploded row or column and simply
         /// blinked out of existence.</summary>
-        private void FlashDynamite()
+        /// <summary>The TNT detonation, at the block that blew. NOT FlashBoard: that strikes
+        /// every cell on a schedule measured from the middle of the BOARD, so the whole arena
+        /// lit the same red at once around a point the bomb had nothing to do with - a damage
+        /// flash rather than an explosion. DynamiteBlastView runs the light out from HERE with
+        /// a falloff, and the camera kick lands on its detonation beat rather than 45ms early.</summary>
+        private void FlashDynamite(Vector2 at)
         {
-            FlashBoard(ViewUtil.ElementColor(BlockElement.Dynamite));
-            PlayDynamiteSmoke();
+            if (boardView == null || boardView.Board == null)
+            {
+                return;
+            }
+            dynamiteBlast.Play(boardView, boardView.Board, at,
+                ViewUtil.ElementColor(BlockElement.Dynamite),
+                delegate
+                {
+                    ShakeCamera(DynamiteBlastView.Style.CameraShakeStrength,
+                        DynamiteBlastView.Style.CameraShakeDuration,
+                        DynamiteBlastView.Style.CameraShakeDamping);
+                });
         }
 
-        /// <summary>The smoke a board clear leaves hanging over everything for a moment. Its own
-        /// method so the animation lab can fire it alone.</summary>
+        /// <summary>Where the bomb was. The rule is that the block which detonates is the one
+        /// PLACED THIS TURN, so the placed cells ARE the blast centre - no Core change was
+        /// needed to find it, and the board middle is only a fallback for the lab.</summary>
+        private Vector2 DynamiteCenter(TurnReport report)
+        {
+            IReadOnlyList<GridPos> placed = report != null ? report.PlacedCells : null;
+            if (boardView == null)
+            {
+                return Vector2.zero;
+            }
+            if (placed == null || placed.Count == 0)
+            {
+                return boardView.WorldRect.center;
+            }
+            var sum = Vector2.zero;
+            for (int i = 0; i < placed.Count; i++)
+            {
+                sum += boardView.CellToWorld(placed[i]);
+            }
+            return sum / placed.Count;
+        }
+
+        /// <summary>The smoke a detonation leaves. Its own method so the animation lab can fire
+        /// it alone; thrown from the board middle there, since the lab has no bomb.</summary>
         private void PlayDynamiteSmoke()
         {
-            SmokeFx.Cover(transform, CameraWorldRect());
+            if (boardView == null)
+            {
+                return;
+            }
+            SmokeFx.Burst(transform, boardView.WorldRect.center, boardView.CellWorldSize);
         }
 
         /// <summary>The world rectangle the camera can currently see - what a full-screen effect

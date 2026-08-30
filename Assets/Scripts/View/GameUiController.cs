@@ -82,6 +82,8 @@ namespace ProjectBlock.View
 
         private BoardCleanseView boardCleanse;
 
+        private DynamiteBlastView dynamiteBlast;
+
         /// <summary>The overtime pressure wave and the screen closing in around it. The fire
         /// they replaced is still in the project, switched off - see the note in RefreshFlames.
         /// The pressure system drives the vignette AND the board's own squeeze itself, so all

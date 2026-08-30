@@ -405,6 +405,7 @@ namespace ProjectBlock.View
             lineSweep.Stop();
             sweepSparks.Stop();
             boardCleanse.Stop();
+            dynamiteBlast.Stop();
             marketView.Hide();
             deckOverlay.Hide();
             grantPicker.Hide();

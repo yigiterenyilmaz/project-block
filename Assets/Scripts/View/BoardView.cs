@@ -112,6 +112,12 @@ namespace ProjectBlock.View
         private readonly List<SpriteRenderer> outsidePreviewSprites = new List<SpriteRenderer>();
         private readonly List<GameObject> infectionMarkers = new List<GameObject>();
 
+        private InfectionCoreView infectionCores;
+
+        private CircuitTraceView circuitTrace;
+
+        private CircuitOverloadView circuitOverload;
+
         /// <summary>Nodes of "Devre"'s traced circuit, redrawn whenever the route changes.</summary>
         private readonly List<GameObject> circuitMarkers = new List<GameObject>();
 
@@ -305,7 +311,6 @@ namespace ProjectBlock.View
             else if (!animatingWater)
             {
                 AnimateElementCubes(); // would fight the fall animation's cell painting
-                AnimateInfections();   // green pulse, applied on top of the base/element color
             }
             ambientTimer += Time.deltaTime;
             while (ambientTimer >= 0.12f)
@@ -560,10 +565,17 @@ namespace ProjectBlock.View
             // rebuilt every time a block landed - which is precisely what the visible hitch was.
             Transform keepGlow = lineGlow != null ? lineGlow.transform : null;
             Transform keepSurface = surface != null ? surface.transform : null;
+            Transform keepInfection = infectionCores != null
+                ? infectionCores.transform : null;
+            Transform keepCircuit = circuitTrace != null ? circuitTrace.transform : null;
+            Transform keepOverload = circuitOverload != null
+                ? circuitOverload.transform : null;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Transform child = transform.GetChild(i);
-                if (child == keepGlow || child == keepSurface)
+                if (child == keepGlow || child == keepSurface
+                    || child == keepInfection || child == keepCircuit
+                    || child == keepOverload)
                 {
                     continue;
                 }
@@ -572,7 +584,6 @@ namespace ProjectBlock.View
             ghostSprites.Clear();
             outsidePreviewSprites.Clear();
             infectionMarkers.Clear();
-            infectionCells.Clear();
             deadZoneLine = null; // destroyed with the other children above; redrawn by SetDeadZone
             board = newBoard;
             cellSize = Mathf.Min(maxWorldSize / board.Width, maxWorldSize / board.Height);
@@ -774,85 +785,63 @@ namespace ProjectBlock.View
             }
         }
 
-        private struct InfectionMark
-        {
-            public int Lx;
-            public int Ly;
-            public int Turns;
-            public int Threshold;
-        }
-
-        private readonly List<InfectionMark> infectionCells = new List<InfectionMark>();
         private static readonly Color InfectionGreen = new Color(0.2f, 0.95f, 0.35f);
 
-        /// <summary>Draws the "Enfeksiyon" markers: the infected block pulses GREEN (like a
-        /// mine but green, animated in Update), and a row of pips (filled = turns elapsed)
-        /// shows the 3-turn countdown to detonation. Rebuilt each refresh.</summary>
+        /// <summary>The infected cells, as the rules currently see them. The drawing is
+        /// InfectionCoreView's business: a living core inside each cell rather than the flat
+        /// green tint and the three pips this used to hang under it.</summary>
         public void ShowInfections(IReadOnlyList<InfectedCell> cells)
         {
-            ClearInfections();
-            if (board == null || cells == null)
+            EnsureInfectionCores();
+            if (infectionCores != null)
             {
-                return;
-            }
-            for (int i = 0; i < cells.Count; i++)
-            {
-                InfectedCell inf = cells[i];
-                if (!board.IsInside(inf.Cell))
-                {
-                    continue;
-                }
-                int lx = inf.Cell.X - board.MinX;
-                int ly = inf.Cell.Y - board.MinY;
-                infectionCells.Add(new InfectionMark
-                {
-                    Lx = lx, Ly = ly, Turns = inf.Turns, Threshold = inf.Threshold
-                });
-
-                // Static buildup pips just below the cell (filled green = turns elapsed).
-                Vector2 center = CellToWorld(inf.Cell);
-                var root = new GameObject("InfectionPips");
-                root.transform.SetParent(transform, false);
-                root.transform.localPosition = new Vector3(center.x, center.y, 0f);
-                infectionMarkers.Add(root);
-
-                int pips = Mathf.Max(inf.Threshold, 1);
-                float pip = cellSize * 0.17f;
-                float startX = -(pips - 1) * pip * 0.9f;
-                for (int p = 0; p < pips; p++)
-                {
-                    Color pipColor = p < inf.Turns
-                        ? new Color(0.35f, 1f, 0.4f)
-                        : new Color(0.22f, 0.3f, 0.24f);
-                    ViewUtil.MakeCell(root.transform, "Pip",
-                        new Vector2(startX + p * pip * 1.8f, -cellSize * 0.34f), pip, pipColor, 3);
-                }
+                infectionCores.SetCells(cells, board, CellToWorld, cellSize);
             }
         }
 
-        /// <summary>Pulses each infected cell green, brighter the closer it is to detonating -
-        /// the infection twin of the mine cube's red blink. Runs every frame.</summary>
-        private void AnimateInfections()
+        /// <summary>The cores live on their own object so a Rebuild does not take them with the
+        /// cells - the same arrangement the surface and the line glow use.</summary>
+        private void EnsureInfectionCores()
         {
-            if (infectionCells.Count == 0 || cellRenderers == null)
+            if (infectionCores != null)
             {
                 return;
             }
-            float time = Time.time;
-            for (int i = 0; i < infectionCells.Count; i++)
-            {
-                InfectionMark m = infectionCells[i];
-                if (m.Lx < 0 || m.Lx >= board.Width || m.Ly < 0 || m.Ly >= board.Height)
-                {
-                    continue;
-                }
-                float progress = m.Threshold > 0 ? Mathf.Clamp01(m.Turns / (float)m.Threshold) : 1f;
-                float blend = Mathf.Clamp01(
-                    0.2f + 0.4f * progress + 0.25f * Mathf.Sin(time * 5f + m.Lx + m.Ly));
-                cellRenderers[m.Lx, m.Ly].color = Color.Lerp(baseColorCache[m.Lx, m.Ly],
-                    InfectionGreen, blend);
-            }
+            var go = new GameObject("InfectionCores");
+            go.transform.SetParent(transform, false);
+            infectionCores = go.AddComponent<InfectionCoreView>();
+            infectionCores.Build(cellSize);
         }
+
+        /// <summary>Blows the circuit: the overload runs down the cable, tiled end to end, and
+        /// the cable burns away behind it. Returns how long the whole thing takes.</summary>
+        public float DetonateCircuit()
+        {
+            if (circuitTrace == null || circuitTrace.RouteLength <= 0f)
+            {
+                return 0f;
+            }
+            if (circuitOverload == null)
+            {
+                var go = new GameObject("CircuitOverload");
+                go.transform.SetParent(transform, false);
+                circuitOverload = go.AddComponent<CircuitOverloadView>();
+            }
+            circuitOverload.Play(circuitTrace.Route, circuitTrace.RouteAt,
+                circuitTrace.RouteLength, circuitTrace.CellSize);
+            // The cable goes out behind the failure rather than after it, so the two are one
+            // event: a tile bursts and the cable it was on stops being there.
+            circuitTrace.BurnAway(CircuitOverloadView.Style.TravelSeconds + 0.35f);
+            return CircuitOverloadView.Duration;
+        }
+
+        /// <summary>The charge before an infected block is taken. Returns how long it runs, so
+        /// the caller can hand off to the blast when it is done.</summary>
+        public float PlayInfectionCharge(GridPos cell)
+        {
+            return infectionCores != null ? infectionCores.PlayCharge(cell) : 0f;
+        }
+
 
         /// <summary>Turns the lights out, or back on ("Alacakaranlık").</summary>
         public void SetDarkness(bool on)
@@ -1032,40 +1021,31 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Draws "Devre"'s circuit as a chain of small nodes across the grid. The route
-        /// arrives in order, so consecutive nodes are always neighbours and the chain reads as a
-        /// line. Pass null or an empty list to clear it. Drawn ON TOP of the cells, because a
-        /// circuit cell may be empty or full and the player has to see the route either way.</summary>
+        /// <summary>The circuit path, IN ORDER. The drawing is CircuitTraceView's business: one
+        /// continuous trace routed between two terminals, rather than the pale square this used
+        /// to drop in the middle of every path cell.</summary>
         public void ShowCircuit(IReadOnlyList<GridPos> cells)
         {
-            for (int i = circuitMarkers.Count - 1; i >= 0; i--)
+            EnsureCircuitTrace();
+            if (circuitTrace != null)
             {
-                if (circuitMarkers[i] != null)
-                {
-                    Destroy(circuitMarkers[i]);
-                }
+                circuitTrace.Show(cells, board, CellToWorld, cellSize);
             }
-            circuitMarkers.Clear();
-            if (board == null || cells == null)
+        }
+
+        private void EnsureCircuitTrace()
+        {
+            if (circuitTrace != null)
             {
                 return;
             }
-            for (int i = 0; i < cells.Count; i++)
-            {
-                if (!board.IsInside(cells[i]))
-                {
-                    continue;
-                }
-                SpriteRenderer node = ViewUtil.MakeRect(transform, "Circuit_" + i,
-                    CellToWorld(cells[i]), new Vector2(cellSize * 0.3f, cellSize * 0.3f),
-                    CircuitColor, 6);
-                circuitMarkers.Add(node.gameObject);
-            }
+            var go = new GameObject("CircuitTrace");
+            go.transform.SetParent(transform, false);
+            circuitTrace = go.AddComponent<CircuitTraceView>();
         }
 
         public void ClearInfections()
         {
-            infectionCells.Clear();
             for (int i = infectionMarkers.Count - 1; i >= 0; i--)
             {
                 if (infectionMarkers[i] != null)
