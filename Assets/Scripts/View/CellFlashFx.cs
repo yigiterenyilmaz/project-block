@@ -13,8 +13,9 @@
 //
 // Every destruction keeps its own colour and passes it as a Palette, so the language is
 // shared but a green infection still reads as the infection and a cold lift still reads as
-// cold. The particle burst that goes with it (GameUiController.BurstParticles) is handed the
-// SAME schedule, so sparks and squares fire together - there is one clock, not two.
+// cold. Where sparks go with it (GameUiController.BurstParticles) they are handed the SAME
+// schedule, so sparks and squares fire together - there is one clock, not two. A cleared LINE
+// is the exception that throws none: its sheet is drawn with its own debris already.
 
 using System.Collections.Generic;
 using UnityEngine;

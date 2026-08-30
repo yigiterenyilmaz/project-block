@@ -98,6 +98,17 @@ namespace ProjectBlock.View
             var marketGo = new GameObject("MarketView");
             marketGo.transform.SetParent(transform, false);
             marketView = marketGo.AddComponent<MarketView>();
+            // Holding a section refreshes it. The view reports the gesture and nothing else -
+            // it never touches money or the market, exactly as clicking an offer does not.
+            marketView.SectionHeld = delegate (MarketOfferKind kind)
+            {
+                if (session != null && session.RerollMarket(kind))
+                {
+                    sfx.Buy();   // the buy "ka-ching" doubles as the refresh
+                    marketView.Show(session);
+                    UpdateHud();
+                }
+            };
 
             var sfxGo = new GameObject("SoundFx");
             sfxGo.transform.SetParent(transform, false);
@@ -120,6 +131,18 @@ namespace ProjectBlock.View
             var lineBurstGo = new GameObject("LineBurst");
             lineBurstGo.transform.SetParent(transform, false);
             lineBurst = lineBurstGo.AddComponent<LineBurstView>();
+
+            var lineSweepGo = new GameObject("LineSweep");
+            lineSweepGo.transform.SetParent(transform, false);
+            lineSweep = lineSweepGo.AddComponent<LineSweepView>();
+
+            var sweepSparkGo = new GameObject("SweepSparks");
+            sweepSparkGo.transform.SetParent(transform, false);
+            sweepSparks = sweepSparkGo.AddComponent<SweepSparkView>();
+
+            var cleanseGo = new GameObject("BoardCleanse");
+            cleanseGo.transform.SetParent(transform, false);
+            boardCleanse = cleanseGo.AddComponent<BoardCleanseView>();
 
             var blastGo = new GameObject("BlastFx");
             blastGo.transform.SetParent(transform, false);
@@ -184,24 +207,38 @@ namespace ProjectBlock.View
             CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
+            hudCanvas = canvas;
 
-            infoText = MakeText(canvasGo.transform, "InfoText", new Vector2(0f, 1f),
+            // EVERY piece of HUD hangs off this, not off the canvas, so a camera shake can take
+            // the interface with it. The canvas is ScreenSpaceOverlay: it does not follow the
+            // camera, so shaking the camera alone moved the WORLD under a interface that stayed
+            // nailed down - which reads as the board rattling inside a still screen rather than
+            // as the screen being hit. Stretched to fill, offset only while a shake is running.
+            var shakeGo = new GameObject("HudShake", typeof(RectTransform));
+            hudShake = (RectTransform)shakeGo.transform;
+            hudShake.SetParent(canvasGo.transform, false);
+            hudShake.anchorMin = Vector2.zero;
+            hudShake.anchorMax = Vector2.one;
+            hudShake.offsetMin = Vector2.zero;
+            hudShake.offsetMax = Vector2.zero;
+
+            infoText = MakeText(hudShake, "InfoText", new Vector2(0f, 1f),
                 new Vector2(16f, -16f), TextAnchor.UpperLeft, 24, Color.white);
             // Score first, at the top centre; the message line sits under it.
-            totalText = MakeText(canvasGo.transform, "TotalText", new Vector2(0.5f, 1f),
+            totalText = MakeText(hudShake, "TotalText", new Vector2(0.5f, 1f),
                 new Vector2(0f, -14f), TextAnchor.UpperCenter, 34, new Color(1f, 0.86f, 0.42f));
-            messageText = MakeText(canvasGo.transform, "MessageText", new Vector2(0.5f, 1f),
+            messageText = MakeText(hudShake, "MessageText", new Vector2(0.5f, 1f),
                 new Vector2(0f, -66f), TextAnchor.UpperCenter, 28, new Color(1f, 0.92f, 0.45f));
 
-            jokerBar.Build(canvasGo.transform);
-            powerBar.Build(canvasGo.transform);
+            jokerBar.Build(hudShake);
+            powerBar.Build(hudShake);
 
             // Built last so it starts on top of the bars and the HUD text; Show() also
             // re-asserts that, so this ordering is a convenience rather than a dependency.
             var menuGo = new GameObject("MenuScreenView");
             menuGo.transform.SetParent(transform, false);
             menu = menuGo.AddComponent<MenuScreenView>();
-            menu.Build(canvasGo.transform);
+            menu.Build(hudShake);
         }
 
         private static Text MakeText(Transform parent, string name, Vector2 anchor,

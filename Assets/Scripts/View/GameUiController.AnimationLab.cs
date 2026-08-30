@@ -911,10 +911,11 @@ namespace ProjectBlock.View
         }
 
         /// <summary>The combo knob's reading, and WHICH tier it will actually DRAW when the two
-        /// differ. Tier 3 has no sheet yet, so knob 3 through 6 all fall back to tier 2 - five
-        /// settings that play the same burst with nothing on screen saying why, which is exactly
-        /// how you end up unable to tell whether a newly installed sheet is the one you are
-        /// watching. Reads "3 -> 2" in that case and a plain number when nothing is standing in.</summary>
+        /// differ. All three tiers are painted now, so today it always reads as a plain number;
+        /// it earns its place the next time a tier is designed before it is drawn, when several
+        /// knob settings would otherwise play the same burst with nothing on screen saying why -
+        /// which is exactly how you end up unable to tell whether a newly installed sheet is the
+        /// one you are watching. Reads "4 -> 3" in that case.</summary>
         private string ComboKnobLabel()
         {
             int asked = Mathf.Clamp(animCombo, 1, LineBurstView.MaxTier);

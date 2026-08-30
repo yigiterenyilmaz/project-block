@@ -33,18 +33,23 @@
 // arena, with the burst hiding the board it is going off on. Thickness is the dial that trades
 // one against the other: at 2.0 the stretch reaches 1.73x and the debris reads as rectangles,
 // which is the one distortion a game about square blocks cannot afford; at 3.0 it is honest but
-// enormous. 2.6 costs 1.33x, which the chunks carry, and clears the line by about a cell.
+// enormous. 2.6 costs tier 1 1.33x, which the chunks carry, and clears the line by about a cell -
+// and the later sheets are drawn wider, so the same 2.6 costs tier 3 1.15x and tier 2 nothing at
+// all. Whoever draws the next one: the wider you draw it, the less this has to distort it.
 //
 // It used to be a CHAIN of cell-sized bursts staggered out from the middle. That reads as three
 // explosions rather than one - a line coming apart in pieces - and the line already has
 // something saying it travels: CellFlashFx.RayTimes, underneath, in the squares themselves.
 //
-// THE SHEETS ARE REPACKED, each into whatever grid suits it - tier 1 into a 5x2 and tier 2 into
-// a 3x3 - because they do not arrive tidy: tier 1 came laid out 4/3/3 with its trailing frames
-// broken into loose sparks, which no grid can address. Slicing happens at runtime, as with the
+// THE SHEETS ARE REPACKED, each into whatever grid suits it - tier 1 into a 5x2, tier 2 into a
+// 3x3, tier 3 into a 4x3 with two cells left empty - because they do not arrive tidy: tier 1 came
+// laid out 4/3/3 with its trailing frames broken into loose sparks, which no grid can address.
+// The grid is also what keeps a sheet UNDER the 2048 the importer caps at: tier 3's ten frames in
+// a 5x2 would have been 2880 wide and lost 29% of every frame to the downscale, where the 4x3
+// costs only 11% and two blank cells nothing at all. Slicing happens at runtime, as with the
 // flame, so no meta ever has to describe the rectangles, and a tier's cell aspect is read off its
-// own sheet - which is what lets tier 2 be a 2.61:1 drawing next to tier 1's 1.88:1 and still
-// come out the same thickness on the board.
+// own sheet - which is what lets tier 2's 2.61:1 and tier 3's 2.17:1 sit next to tier 1's 1.88:1
+// and still come out the same thickness on the board.
 
 using System.Collections.Generic;
 using UnityEngine;
@@ -105,7 +110,7 @@ namespace ProjectBlock.View
             default(Sheet),
             new Sheet("Art/Fx/line_burst_1_sheet", 10, 5, 2),
             new Sheet("Art/Fx/line_burst_2_sheet", 9, 3, 3),
-            new Sheet("Art/Fx/line_burst_3_sheet", 10, 5, 2)
+            new Sheet("Art/Fx/line_burst_3_sheet", 10, 4, 3)
         };
 
         /// <summary>Just over CellFlashFx (10), so the burst covers the squares it is going off
@@ -123,9 +128,10 @@ namespace ProjectBlock.View
         private static readonly bool[] tierLoaded = new bool[MaxTier + 1];
 
         /// <summary>The tier that will actually be DRAWN for a requested one: the highest tier
-        /// at or below it whose sheet exists. Tier 3 is not drawn yet, so a third clear in a row
-        /// currently shows the tier 2 burst - and because Feedback asks this too, it shows it in
-        /// tier 2's colour rather than pairing purple debris with some other flash.</summary>
+        /// at or below it whose sheet exists. All three are drawn now, so this currently answers
+        /// with what it was asked - it stays because it is what lets a FOURTH tier be designed
+        /// before it is painted, and because Feedback asks it too, so the squares can never be
+        /// left flashing one tier's colour under another tier's debris.</summary>
         public static int EffectiveTier(int tier)
         {
             for (int t = Mathf.Clamp(tier, 1, MaxTier); t >= 1; t--)

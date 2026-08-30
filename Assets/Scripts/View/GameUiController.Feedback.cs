@@ -350,15 +350,24 @@ namespace ProjectBlock.View
 
         /// <summary>A cleared line's colour, by streak tier, indexed from 1. The SQUARES and the
         /// burst over them are two halves of one thing, so this table is read through
-        /// LineBurstView.EffectiveTier: while tier 3 has no art the third clear in a row shows
-        /// tier 2's burst, and it has to show tier 2's flash with it. Fill in a colour here at
-        /// the same time as the sheet, not before.</summary>
+        /// LineBurstView.EffectiveTier and a tier can never flash one colour under another
+        /// tier's debris. Fill in a colour here at the same time as the sheet, not before.
+        ///
+        /// TIER 3 IS NOT THE GREEN ITS SHEET IS MOSTLY PAINTED IN, deliberately. That green sits
+        /// at hue 133, which is the infection blast below to within 0.14 in RGB - the two would
+        /// have been the same colour, and on this board colour is what says WHICH destruction
+        /// you are looking at. The sheet is two-toned, though: a green body under pale
+        /// yellow-green spikes, and about a quarter of its lit pixels are that second colour.
+        /// Taking the flash from the spikes instead lands 0.39 from the infection and 0.39 from
+        /// tier 1's orange - the best separation available without repainting the art, and still
+        /// a colour that is honestly in it. Anything nearer hue 130 collapses back onto the
+        /// infection; anything nearer 70 collapses onto the orange.</summary>
         private static readonly Color[] LineBlastColors =
         {
             default(Color),
             new Color(1f, 0.72f, 0.35f),      // 1 - the ordinary clear, the warm orange
             new Color(0.72f, 0.38f, 1f),      // 2 - a clear straight after another: purple
-            new Color(0.30f, 0.95f, 0.85f)    // 3 - PROVISIONAL, no sheet drawn yet
+            new Color(0.73f, 1f, 0.36f)       // 3 - the deepest streak: the sheet's spike lime
         };
 
         /// <summary>The streak tier the NEXT cleared line plays at, 1-based.
@@ -415,15 +424,18 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            // The squares and the burst take the SAME tier, through the same fallback, so the
+            // The sweep and the burst take the SAME tier, through the same fallback, so the
             // two can never disagree about which streak the player is on.
             int tier = LineBurstView.EffectiveTier(activeLineTier);
             Color tone = LineBlastColors[tier];
-            float[] times = CellFlashFx.RayTimes(cells.Count);
-            CellFlashFx.Play(transform, cells, times, boardView.CellWorldSize,
-                row ? CellFlashFx.Pinch.AcrossRow : CellFlashFx.Pinch.AcrossColumn,
-                CellFlashFx.Palette.Hot(tone));
-            StartCoroutine(BurstParticles(cells, times, tone, 4));
+            // A cleared LINE does not go through CellFlashFx and throws no code particles,
+            // unlike every other destruction. Both were built for a loose handful of cells: a
+            // whole row of struck squares is a rectangle, and the sheet already flies its own
+            // debris out of the middle. What a line gets instead is LineSweepView - energy
+            // leaving the centre for both ends, with each slot answering as it passes - under
+            // the drawn burst. FlashCells keeps the squares and the sparks, because a loose
+            // group has neither a direction nor a drawing of its own.
+            lineSweep.Play(cells, boardView.CellWorldSize, row, tone);
             lineBurst.Play(cells, boardView.CellWorldSize, row, activeLineTier);
         }
 
@@ -507,23 +519,33 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// The clean-sweep celebration: the WHOLE arena strikes gold, rippling out from its
-        /// centre, and then the gold shower rains over it. The board flash is the same one a
-        /// blast uses - it is the emptied board itself going off, one square at a time - and it
-        /// is gold rather than the blast's orange so that it layers legibly over the ray that
-        /// just cleared the last line, instead of doubling it.
+        /// The clean-sweep celebration: the WHOLE arena strikes, rippling out from its centre,
+        /// and then the spark shower rains over it. The board flash is the same one a blast uses
+        /// - it is the emptied board itself going off, one square at a time - and its colour has
+        /// to layer legibly over the ray that just cleared the last line rather than doubling it.
+        /// The cyan is taken from the shower's own art (hue 188) and is 0.97 from tier 1's
+        /// orange in RGB; the gold that used to be here was 0.14 from it, which is to say the
+        /// same colour. A sweep is now the one blast on this board that is COLD, which is the
+        /// clearest thing it could be against a game whose destruction is all warm.
         ///
         /// Its own method so the animation lab can fire it alone (see ShakeForBlast).
         /// </summary>
         private void EmitSweepConfetti()
         {
-            var gold = new Color(1f, 0.85f, 0.3f);
-            FlashBoard(gold);
-            for (int i = 0; i < 70; i++)
-            {
-                var pos = new Vector2(Random.Range(-3.2f, 3.2f), Random.Range(-2.2f, 4f));
-                blastFx.EmitAt(pos, gold, 2);
-            }
+            var cyan = new Color(0.30f, 0.91f, 1f);
+            // NOT FlashBoard. A sweep is the one event about the WHOLE arena, and FlashBoard
+            // fills each square in turn - correct for a dynamite clear, a paint bucket here.
+            // BoardCleanseView runs a shockwave out of the middle instead: cells REACT as the
+            // front reaches their own distance from the centre, the frame breaks the wave, and
+            // it kicks the camera through the callback below so this view need not know what a
+            // camera is. The motes come from the same clock, dropped in the wake.
+            boardCleanse.Play(boardView, boardView.Board, cyan, sweepSparks,
+                delegate
+                {
+                    ShakeCamera(BoardCleanseView.Style.ScreenShakeStrength,
+                        BoardCleanseView.Style.ScreenShakeDuration,
+                        BoardCleanseView.Style.ScreenShakeFrequency);
+                });
         }
 
         /// <summary>
@@ -630,10 +652,38 @@ namespace ProjectBlock.View
                 float falloff = Mathf.Pow(1f - Mathf.Clamp01(time / duration), sharpness);
                 Vector2 offset = Random.insideUnitCircle * (amplitude * falloff);
                 cam.transform.position = camBasePosition + new Vector3(offset.x, offset.y, 0f);
+                ShakeHud(offset);
                 yield return null;
             }
             cam.transform.position = camBasePosition;
+            ShakeHud(Vector2.zero);
             shakeRoutine = null;
+        }
+
+        /// <summary>Takes the HUD along with the camera. The canvas is ScreenSpaceOverlay and so
+        /// does not follow the camera at all: moving the camera alone slides the WORLD under an
+        /// interface that stays nailed to the screen, which reads as the board rattling rather
+        /// than as the screen being hit.
+        ///
+        /// The sign is inverted because moving the camera one way pushes what you see the OTHER
+        /// way, and the HUD has to travel with what you see. The conversion is the camera's own:
+        /// a world unit is Screen.height / (2 * orthographicSize) pixels, and the scaler's factor
+        /// turns those into the canvas units anchoredPosition wants - so this stays correct at
+        /// any resolution without a number written down anywhere.</summary>
+        private void ShakeHud(Vector2 worldOffset)
+        {
+            if (hudShake == null || cam == null)
+            {
+                return;
+            }
+            if (worldOffset == Vector2.zero)
+            {
+                hudShake.anchoredPosition = Vector2.zero;
+                return;
+            }
+            float pxPerUnit = Screen.height / Mathf.Max(2f * cam.orthographicSize, 0.0001f);
+            float scale = hudCanvas != null ? Mathf.Max(hudCanvas.scaleFactor, 0.0001f) : 1f;
+            hudShake.anchoredPosition = -worldOffset * (pxPerUnit / scale);
         }
 
         /// <summary>The top revealed cards of the discard pile ("Fraksiyon" inspect),

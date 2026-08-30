@@ -76,6 +76,12 @@ namespace ProjectBlock.View
         private FlameStreakView flameStreak;
         private LineBurstView lineBurst;
 
+        private LineSweepView lineSweep;
+
+        private SweepSparkView sweepSparks;
+
+        private BoardCleanseView boardCleanse;
+
         /// <summary>The overtime pressure wave and the screen closing in around it. The fire
         /// they replaced is still in the project, switched off - see the note in RefreshFlames.
         /// The pressure system drives the vignette AND the board's own squeeze itself, so all
@@ -111,6 +117,12 @@ namespace ProjectBlock.View
         private Text totalText;
         private Camera cam;
         private Vector3 camBasePosition;
+
+        /// <summary>The HUD's own root, offset alongside the camera so a shake moves the whole
+        /// SCREEN rather than only the world under a stationary interface.</summary>
+        private RectTransform hudShake;
+
+        private Canvas hudCanvas;
         private Coroutine shakeRoutine;
         private CardVisual draggedCard;
         private int foxPickSlot = -1;
@@ -279,6 +291,10 @@ namespace ProjectBlock.View
             }
             if (session != null && session.Phase == GamePhase.Market)
             {
+                // A fresh visit starts at the top of the shelf, the same way the deck screen
+                // does - carrying the last visit's scroll over would open the market halfway
+                // down for no reason the player can see.
+                marketView.ResetScroll();
                 marketView.Show(session);
             }
             RefreshAll(null);

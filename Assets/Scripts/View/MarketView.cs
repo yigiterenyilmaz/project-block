@@ -15,18 +15,13 @@ namespace ProjectBlock.View
     /// <summary>Renders and hit-tests the market offers.</summary>
     public sealed class MarketView : MonoBehaviour
     {
-        private const float OfferSpacing = 3.15f;
 
         /// <summary>Vertical distance between two section rows.</summary>
         private const float RowPitch = 3.7f;
 
         /// <summary>Section header above a row's tiles / price label below them.</summary>
-        private const float HeaderOffset = 1.62f;
-        private const float PriceOffset = 1.62f;
 
         /// <summary>Reroll button size and how far it sits clear of the row's widest tile.</summary>
-        private static readonly Vector2 RerollHalf = new Vector2(1.35f, 0.42f);
-        private const float RerollGap = 0.55f;
 
         /// <summary>Height shared by every offer tile, so the rows line up whatever kind they
         /// hold. Block cards are drawn at BlockTileScale to reach it.</summary>
@@ -61,8 +56,6 @@ namespace ProjectBlock.View
         private static readonly Color JokerDescColor = new Color(0.82f, 0.86f, 0.92f);
         private static readonly Color PowerBodyColor = new Color(0.12f, 0.30f, 0.34f);
         private static readonly Color PowerTagColor = new Color(0.55f, 0.92f, 0.95f);
-        private static readonly Color RerollButtonColor = new Color(0.20f, 0.24f, 0.34f);
-        private static readonly Color RerollButtonDisabledColor = new Color(0.14f, 0.14f, 0.16f);
 
 
         /// <summary>Joker and power tiles are WIDER than a block card, because they carry text
@@ -82,6 +75,10 @@ namespace ProjectBlock.View
         private readonly List<CardVisual> offerVisuals = new List<CardVisual>();
         private readonly List<Vector2> offerCenters = new List<Vector2>();
 
+        /// <summary>Each offer's tile size, which the COMPARTMENT decides rather than the tile
+        /// kind - a shelf that is 5.03 by 1.29 gets tiles that fit 5.03 by 1.29.</summary>
+        private readonly List<Vector2> offerTileSizes = new List<Vector2>();
+
         /// <summary>Index-aligned with the offers, so the buy fx can fly away in the same
         /// rarity colour the tile had (Common for block offers).</summary>
         private readonly List<Rarity> offerRarities = new List<Rarity>();
@@ -91,16 +88,10 @@ namespace ProjectBlock.View
         /// them and mis-answer OfferAt.</summary>
         private readonly List<float> offerHalfWidths = new List<float>();
 
+        private readonly List<float> offerHalfHeights = new List<float>();
+
         /// <summary>One reroll button per section - refreshing the blocks must not disturb the
         /// jokers standing next to them.</summary>
-        private struct SectionButton
-        {
-            public MarketOfferKind Kind;
-            public Vector2 Center;
-            public Vector2 Half;
-        }
-
-        private readonly List<SectionButton> rerollButtons = new List<SectionButton>();
 
         /// <summary>Index-aligned with the offers: whether a tile is already sold, and whether
         /// the player can afford it. The hover outline reads both, so it never lights up an
@@ -117,6 +108,12 @@ namespace ProjectBlock.View
         /// a frame around them never has to know what it is framing, and never covers it.</summary>
         private readonly SpriteRenderer[] hoverEdges = new SpriteRenderer[4];
 
+        /// <summary>What each offer says about itself, for the strip under the panel. Index
+        /// aligned with the offers, like everything else in this file.</summary>
+        private readonly List<string> offerDetails = new List<string>();
+
+        private TextMesh detailText;
+
         private static readonly Color HoverColor = new Color(1f, 0.92f, 0.45f);
         private static readonly Color HoverBlockedColor = new Color(1f, 0.45f, 0.4f);
 
@@ -130,212 +127,522 @@ namespace ProjectBlock.View
         public void Show(GameSession session)
         {
             Hide();
+            shownSession = session;
+            // The hold gesture still costs what the buttons used to, on the same shared counter.
+            long rerollCost = session.NextRerollCost;
+            rerollAffordable = session.TotalScore >= rerollCost;
+            rerollCostText = rerollCost.ToString();
             IReadOnlyList<MarketOffer> offers = session.Market.Offers;
             int count = offers.Count;
-
-            // One row per offer kind that has offers, in kind order. Rows collect offer
-            // INDICES so offerCenters stays index-aligned with the offers list (OfferAt
-            // and the buy fx rely on that).
-            var rowKinds = new List<MarketOfferKind>();
-            var rowOffers = new List<List<int>>();
-            foreach (MarketOfferKind kind in new[]
-                { MarketOfferKind.Block, MarketOfferKind.Joker, MarketOfferKind.Power })
-            {
-                var row = new List<int>();
-                for (int i = 0; i < count; i++)
-                {
-                    if (offers[i].Kind == kind)
-                    {
-                        row.Add(i);
-                    }
-                }
-                if (row.Count > 0)
-                {
-                    rowKinds.Add(kind);
-                    rowOffers.Add(row);
-                }
-            }
 
             for (int i = 0; i < count; i++)
             {
                 offerCenters.Add(Vector2.zero);
+                offerTileSizes.Add(Vector2.zero);
                 offerHalfWidths.Add(CardVisual.BodyWidth * 0.5f);
+                offerHalfHeights.Add(0.5f);
                 offerSold.Add(offers[i].Sold);
                 offerAffordable.Add(session.TotalScore >= offers[i].Price);
+                offerDetails.Add(OfferDetail(offers[i]));
             }
 
-            float maxSpan = 0f;
-            for (int r = 0; r < rowOffers.Count; r++)
+            // ---- THE FRAME. Drawn at its own pixels-per-unit and never magnified past it; see
+            // FitToCamera. Everything below is measured out of this picture rather than invented.
+            ViewUtil.MakeIcon(transform, "Frame", FrameCenter, 1f, Color.white, 30,
+                ViewUtil.UiSprite("menu_frame"));
+            Rect titleTab = FrameRegion(TitleTabRegion);
+            ViewUtil.MakeText3D(transform, "Title", titleTab.center, Loc.Pick("MARKET", "MARKET"),
+                60, 0.068f, PanelCreamColor, 38, TextAnchor.MiddleCenter);
+
+            // ---- THE WINDOW. The frame's cream interior is a viewport, not a shelf: the three
+            // sections are taller than it and you scroll them past it. That is the whole point of
+            // splitting the art in two - the old single panel had to fit blocks, jokers and
+            // powers on one screen, so all three had to be small.
+            Rect window = FrameRegion(WindowRegion);
+            windowRect = window;
+
+            float sectionHeight = SectionRegion(SectionBoxRegion).height;
+            float pitch = sectionHeight + SectionGap;
+            contentHeight = SectionCount * sectionHeight + (SectionCount - 1) * SectionGap;
+            maxScroll = Mathf.Max(0f, contentHeight - window.height);
+            scroll = Mathf.Clamp(scroll, 0f, maxScroll);
+
+            // Sprites are CLIPPED by a mask over the window, so a half-scrolled section slides
+            // under the frame's edge instead of over it. Text is a MeshRenderer and a sprite mask
+            // cannot touch it, so text outside the window is simply never built - which costs
+            // nothing, because a scroll rebuilds the whole shelf anyway.
+            BuildWindowMask(window);
+
+            var offerBuckets = new List<int>[SectionCount];
+            for (int s = 0; s < SectionCount; s++)
             {
-                maxSpan = Mathf.Max(maxSpan, (rowOffers[r].Count - 1) * OfferSpacing);
+                offerBuckets[s] = new List<int>();
             }
-            float topRowY = Center.y + (rowOffers.Count - 1) * RowPitch * 0.5f;
-            float bottomRowY = topRowY - (rowOffers.Count - 1) * RowPitch;
-
-            // ---- LAYOUT FIRST, PANEL SECOND. Every position below is derived, then the panel
-            // is sized to CONTAIN them. Padding constants used to guess at the panel's size,
-            // and the guess was wrong: the first section header landed on the sell hint.
-            float firstHeaderY = topRowY + HeaderOffset;
-            // Gaps scale with the type: the hint lines were bumped up a size, so the rhythm
-            // above them has to open up or the balance line sits on top of the hint.
-            float sellHintY = firstHeaderY + 0.68f;
-            float balanceY = sellHintY + 0.56f;
-            float titleY = balanceY + 0.74f;
-            float promptY = bottomRowY - PriceOffset - 0.85f;
-
-            // Widest tile kind decides the row's reach - joker/power tiles are wider than a
-            // block card, so a block-card width would let them poke out of the panel.
-            float widestTile = Mathf.Max(CardVisual.BodyWidth * BlockTileScale, NamedTileWidth);
-            float rowReach = maxSpan * 0.5f + widestTile * 0.5f;
-            // Reroll buttons sit to the RIGHT of their section, on the row's own line.
-            float rerollX = Center.x + rowReach + RerollGap + RerollHalf.x;
-            float halfWidth = Mathf.Max(rowReach, rerollX - Center.x + RerollHalf.x) + 0.7f;
-
-            float contentTop = titleY + 0.8f;
-            float contentBottom = promptY - 0.7f;
-            var panelCenter = new Vector2(Center.x, (contentTop + contentBottom) * 0.5f);
-            var panelSize = new Vector2(halfWidth * 2f, contentTop - contentBottom);
-
-            // Frame first and one sorting step further back, so all that shows of it is the
-            // margin around the opaque backdrop - which is exactly the border.
-            ViewUtil.MakeRect(transform, "PanelFrame", panelCenter,
-                panelSize + new Vector2(PanelBorder * 2f, PanelBorder * 2f), PanelFrameColor, 32);
-            ViewUtil.MakeRect(transform, "Backdrop", panelCenter, panelSize, BackdropColor, 33);
-            ViewUtil.MakeText3D(transform, "Title", new Vector2(Center.x, titleY), "MARKET",
-                60, 0.075f, Color.white, 38, TextAnchor.MiddleCenter);
-            // What you have to spend. The shelf shows prices everywhere and used to leave the
-            // player to work their balance out from the HUD dump.
-            ViewUtil.MakeText3D(transform, "Balance", new Vector2(Center.x, balanceY),
-                Loc.Pick("You have ", "Paran: ") + session.TotalScore,
-                90, 0.032f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, "SellHint", new Vector2(Center.x, sellHintY),
-                Loc.Pick(
-                    "Click a joker or a power to sell it  -  click the deck pile to sell cards",
-                    "Satmak için jokere veya güce tıkla  -  kart satmak için desteye tıkla"),
-                90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
-
-            for (int r = 0; r < rowOffers.Count; r++)
+            for (int i = 0; i < count; i++)
             {
-                float rowY = topRowY - r * RowPitch;
-                List<int> row = rowOffers[r];
-                ViewUtil.MakeText3D(transform, SectionLabel(rowKinds[r]) + "Header",
-                    new Vector2(Center.x, rowY + HeaderOffset), SectionLabel(rowKinds[r]),
-                    90, 0.026f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
-                float startX = Center.x - (row.Count - 1) * OfferSpacing * 0.5f;
-                for (int c = 0; c < row.Count; c++)
+                offerBuckets[SectionIndex(offers[i].Kind)].Add(i);
+            }
+
+            Rect boxLocal = SectionRegion(SectionBoxRegion);
+            Rect tabLocal = SectionRegion(SectionTabRegion);
+            Rect contentLocal = SectionRegion(SectionContentRegion);
+
+            for (int s = 0; s < SectionCount; s++)
+            {
+                // Where this section's visible box sits once the scroll is applied.
+                float boxTop = window.yMax + scroll - s * pitch;
+                float centerY = boxTop - boxLocal.yMax;
+                var center = new Vector2(window.center.x, centerY);
+                sectionCenters[s] = center;
+                sectionHalf = new Vector2(boxLocal.width * 0.5f, boxLocal.height * 0.5f);
+
+                // Wholly past the window on either side: nothing to draw at all.
+                if (centerY + boxLocal.yMax < window.yMin - 0.05f
+                    || centerY + boxLocal.yMin > window.yMax + 0.05f)
                 {
-                    offerCenters[row[c]] = new Vector2(startX + c * OfferSpacing, rowY);
+                    continue;
+                }
+
+                SpriteRenderer panel = ViewUtil.MakeIcon(transform, "Section_" + s, center, 1f,
+                    Color.white, 31, ViewUtil.UiSprite("menu_section"));
+                Masked(panel);
+
+                Rect tab = Shift(tabLocal, center);
+                if (InsideWindow(tab.center, window))
+                {
+                    ViewUtil.MakeText3D(transform, "SectionTitle_" + s, tab.center,
+                        SectionLabel(KindOf(s)), 60, 0.048f, PanelInkColor, 38,
+                        TextAnchor.MiddleCenter);
+                }
+
+                // The hold-to-refresh readout, on the tab beside the title. It is the only thing
+                // that says the gesture exists, so it is always drawn while the section is up.
+                Rect content = Shift(contentLocal, center);
+                sectionContent[s] = content;
+                if (InsideWindow(content.center, window))
+                {
+                    float hold = holdSection == s ? holdTimer / HoldSeconds : 0f;
+                    ViewUtil.MakeText3D(transform, "SectionHint_" + s,
+                        new Vector2(content.xMax - 0.06f, tab.center.y),
+                        hold > 0f
+                            ? Loc.Pick("refreshing...", "yenileniyor...")
+                            : Loc.Pick("hold to refresh  " + rerollCostText,
+                                "yenilemek için basılı tut  " + rerollCostText),
+                        90, 0.022f, rerollAffordable ? SectionHeaderColor : TooExpensiveColor,
+                        38, TextAnchor.MiddleRight);
+                    if (hold > 0f)
+                    {
+                        // Fills across the top of the content area as the hold builds.
+                        float w = content.width * Mathf.Clamp01(hold);
+                        Masked(ViewUtil.MakeRect(transform, "HoldBar_" + s,
+                            new Vector2(content.xMin + w * 0.5f, content.yMax - 0.05f),
+                            new Vector2(w, 0.07f), AffordablePriceColor, 38));
+                    }
+                }
+
+                List<int> bucket = offerBuckets[s];
+                if (bucket.Count == 0)
+                {
+                    continue;
+                }
+                float slot = content.width / bucket.Count;
+                var tile = new Vector2(slot - SectionPadX * 2f, content.height - SectionPadY * 2f);
+                for (int c = 0; c < bucket.Count; c++)
+                {
+                    int i = bucket[c];
+                    offerCenters[i] = new Vector2(content.xMin + slot * (c + 0.5f),
+                        content.center.y);
+                    offerTileSizes[i] = tile;
                 }
             }
 
             for (int i = 0; i < count; i++)
             {
-                Vector2 slotCenter = offerCenters[i];
-                MarketOffer offer = offers[i];
-                // The frame is the rarity's loudest signal: a rare/legendary tile is ringed in
-                // its tier colour, a common one keeps the neutral frame.
-                Rarity rarity = offer.Kind == MarketOfferKind.Joker ? offer.Joker.Rarity
-                    : offer.Kind == MarketOfferKind.Power ? offer.Power.Rarity
-                    : Rarity.Common;
-                offerRarities.Add(rarity);
-                // The frame must follow the TILE's width, not the block card's - a joker tile
-                // is wider, and a frame sized for a block card leaves it ringed top and bottom
-                // only, which reads as broken art.
-                float tileWidth = offer.Kind == MarketOfferKind.Block
-                    ? CardVisual.BodyWidth * BlockTileScale
-                    : NamedTileWidth;
-                offerHalfWidths[i] = tileWidth * 0.5f;
-                ViewUtil.MakeRect(transform, "Frame_" + i, slotCenter,
-                    new Vector2(tileWidth + 0.2f, TileHeight + 0.2f),
-                    RarityPalette.Frame(FrameColor, rarity), 34);
-                if (offer.Sold)
+                if (offerTileSizes[i] == Vector2.zero)
                 {
+                    // Its section is scrolled out of the window: nothing was placed for it, and
+                    // OfferAt must not be able to answer with it either.
                     offerVisuals.Add(null);
-                    ViewUtil.MakeText3D(transform, "Sold_" + i, slotCenter,
-                        Loc.Pick("SOLD", "SATILDI"),
-                        60, 0.07f, SoldColor, 38, TextAnchor.MiddleCenter);
+                    offerRarities.Add(Rarity.Common);
                     continue;
                 }
-                if (offer.Kind == MarketOfferKind.Joker)
+                BuildOffer(session, offers, i);
+            }
+
+            BuildSideColumn(session);
+            BuildHoverOutline();
+            FitToCamera(FrameCenter,
+                new Vector2(FramePixelWidth / FramePpu, FramePixelHeight / FramePpu));
+        }
+
+        /// <summary>One offer, at the place the section loop worked out for it.</summary>
+        private void BuildOffer(GameSession session, IReadOnlyList<MarketOffer> offers, int i)
+        {
+            Vector2 slotCenter = offerCenters[i];
+            MarketOffer offer = offers[i];
+            Rarity rarity = offer.Kind == MarketOfferKind.Joker ? offer.Joker.Rarity
+                : offer.Kind == MarketOfferKind.Power ? offer.Power.Rarity
+                : Rarity.Common;
+            offerRarities.Add(rarity);
+            Vector2 tileSize = offerTileSizes[i];
+            offerHalfWidths[i] = tileSize.x * 0.5f;
+            offerHalfHeights[i] = tileSize.y * 0.5f;
+
+            Masked(ViewUtil.MakeRect(transform, "Frame_" + i, slotCenter, tileSize,
+                RarityPalette.Frame(FrameColor, rarity), 34));
+            bool text = InsideWindow(slotCenter, windowRect);
+
+            if (offer.Sold)
+            {
+                offerVisuals.Add(null);
+                if (text)
                 {
-                    // Joker/power tiles have no CardVisual; a null keeps offerVisuals
-                    // index-aligned with the offers so PlayBuyFx and OfferAt stay correct.
-                    offerVisuals.Add(null);
-                    BuildNamedTile(slotCenter, i, "Joker", TierTag(Loc.Pick("JOKER", "JOKER"), rarity),
-                        offer.Joker.DisplayName, offer.Joker.Description,
-                        RarityPalette.Tint(JokerBodyColor, rarity),
-                        rarity == Rarity.Common ? JokerTagColor : RarityPalette.Accent(rarity));
+                    ViewUtil.MakeText3D(transform, "Sold_" + i, slotCenter,
+                        Loc.Pick("SOLD", "SATILDI"), 60, 0.06f, SoldColor, 38,
+                        TextAnchor.MiddleCenter);
                 }
-                else if (offer.Kind == MarketOfferKind.Power)
-                {
-                    offerVisuals.Add(null);
-                    BuildNamedTile(slotCenter, i, "Power", TierTag(Loc.Pick("POWER", "GÜÇ"), rarity),
-                        offer.Power.DisplayName, offer.Power.Description,
-                        RarityPalette.Tint(PowerBodyColor, rarity),
-                        rarity == Rarity.Common ? PowerTagColor : RarityPalette.Accent(rarity));
-                }
-                else
-                {
-                    CardVisual visual = CardVisual.Create(transform, "Offer_" + i, offer.Card,
-                        true, false, slotCenter, 36);
-                    // Blown up to the shared tile size - a card at its hand size looks tiny
-                    // next to a joker tile.
-                    visual.transform.localScale = new Vector3(BlockTileScale, BlockTileScale, 1f);
-                    offerVisuals.Add(visual);
-                }
+                return;
+            }
+            if (offer.Kind == MarketOfferKind.Joker)
+            {
+                offerVisuals.Add(null);
+                BuildNamedTile(slotCenter, i, "Joker", TierTag(Loc.Pick("JOKER", "JOKER"), rarity),
+                    offer.Joker.DisplayName, offer.Joker.Description,
+                    RarityPalette.Tint(JokerBodyColor, rarity),
+                    rarity == Rarity.Common ? JokerTagColor : RarityPalette.Accent(rarity), text);
+            }
+            else if (offer.Kind == MarketOfferKind.Power)
+            {
+                offerVisuals.Add(null);
+                BuildNamedTile(slotCenter, i, "Power", TierTag(Loc.Pick("POWER", "GÜÇ"), rarity),
+                    offer.Power.DisplayName, offer.Power.Description,
+                    RarityPalette.Tint(PowerBodyColor, rarity),
+                    rarity == Rarity.Common ? PowerTagColor : RarityPalette.Accent(rarity), text);
+            }
+            else
+            {
+                CardVisual visual = CardVisual.Create(transform, "Offer_" + i, offer.Card,
+                    true, false, slotCenter, 36);
+                float fit = Mathf.Min(tileSize.x / CardVisual.BodyWidth,
+                    tileSize.y / CardVisual.BodyHeight) * 0.78f;
+                visual.transform.localScale = new Vector3(fit, fit, 1f);
+                // A card is a SUBTREE of renderers, not one - body, every cube, the tint. Each
+                // of them has to clip or a scrolled block card sails out over the frame, which
+                // is exactly what it did: this call was written and then lost, and the block
+                // shelf was the only one that showed it because it is the only one using
+                // CardVisual.
+                MaskAll(visual.transform);
+                offerVisuals.Add(visual);
+            }
+            if (text)
+            {
                 bool affordable = session.TotalScore >= offer.Price;
                 ViewUtil.MakeText3D(transform, "Price_" + i,
-                    slotCenter + new Vector2(0f, -PriceOffset), offer.Price.ToString(),
-                    60, 0.07f, affordable ? AffordablePriceColor : TooExpensiveColor,
-                    38, TextAnchor.MiddleCenter);
+                    slotCenter + new Vector2(0f, -tileSize.y * 0.5f + 0.16f),
+                    offer.Price.ToString(), 60, 0.060f,
+                    affordable ? AffordablePriceColor : TooExpensiveColor, 38,
+                    TextAnchor.MiddleCenter);
             }
+        }
 
-            // One reroll button per section, sitting under that section's prices: refreshing
-            // the blocks must leave the jokers beside them alone (GameSession.RerollMarket).
-            // The price is shared across sections, so it escalates however you spend it.
-            long rerollCost = session.NextRerollCost;
-            bool canReroll = session.TotalScore >= rerollCost;
-            rerollAffordable = canReroll;
-            for (int r = 0; r < rowOffers.Count; r++)
-            {
-                float rowY = topRowY - r * RowPitch;
-                var button = new SectionButton();
-                button.Kind = rowKinds[r];
-                // Beside its section rather than under it: the shelf was stacking four things
-                // deep per row while the screen had width going spare.
-                button.Center = new Vector2(rerollX, rowY);
-                button.Half = RerollHalf;
-                rerollButtons.Add(button);
-                Color inkColor = canReroll ? AffordablePriceColor : TooExpensiveColor;
-                ViewUtil.MakeRect(transform, "Reroll_" + r, button.Center, button.Half * 2f,
-                    canReroll ? RerollButtonColor : RerollButtonDisabledColor, 34);
-                // Finer thickness than the ring's radius would suggest: the segments overlap
-                // into a smooth circle, so a fat stroke just makes a blob at this size.
-                ViewUtil.MakeRefreshIcon(transform, "RerollIcon_" + r,
-                    button.Center + new Vector2(-button.Half.x + 0.42f, -0.02f),
-                    0.17f, 0.055f, inkColor, 38);
-                ViewUtil.MakeText3D(transform, "RerollLabel_" + r,
-                    button.Center + new Vector2(0.26f, 0f), rerollCost.ToString(),
-                    90, 0.030f, inkColor, 38, TextAnchor.MiddleCenter);
-            }
-
-            // The buy / next-round prompt lives INSIDE the panel. It used to be HUD text at the
-            // top of the screen, where the opaque panel now sits - the canvas draws over world
-            // space, so the two simply printed on top of each other.
-            ViewUtil.MakeText3D(transform, "Prompt", new Vector2(Center.x, promptY),
-                Loc.Pick("Click a block to add it to your deck    -    [N] start ",
-                        "Desteye katmak için bloğa tıkla    -    [N] başlat: ")
-                    // What comes next is the BOSS STAGE of the round just played when one follows
-                    // it - the player is walking into a wall and has to know before they shop.
+        /// <summary>Balance, hints and the hovered offer's description, in the room beside the
+        /// frame. The frame is 7.1 units of a 17.8-unit screen and has no spare cream inside it,
+        /// so everything that is not an offer lives out here.</summary>
+        private void BuildSideColumn(GameSession session)
+        {
+            float sideX = FrameCenter.x - FramePixelWidth / FramePpu * 0.5f - 0.55f;
+            ViewUtil.MakeText3D(transform, "Balance", new Vector2(sideX, FrameCenter.y + 2.0f),
+                Loc.Pick("You have ", "Paran: ") + session.TotalScore,
+                90, 0.032f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleRight);
+            ViewUtil.MakeText3D(transform, "SellHint", new Vector2(sideX, FrameCenter.y + 1.4f),
+                Loc.Pick("Click a joker or a power to sell it",
+                    "Satmak için jokere veya güce tıkla"),
+                90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleRight);
+            ViewUtil.MakeText3D(transform, "SellHint2", new Vector2(sideX, FrameCenter.y + 1.1f),
+                Loc.Pick("Click the deck pile to sell cards",
+                    "Kart satmak için desteye tıkla"),
+                90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleRight);
+            ViewUtil.MakeText3D(transform, "ScrollHint", new Vector2(sideX, FrameCenter.y + 0.7f),
+                maxScroll > 0.01f
+                    ? Loc.Pick("Scroll for more", "Devamı için kaydır")
+                    : string.Empty,
+                90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleRight);
+            ViewUtil.MakeText3D(transform, "Prompt", new Vector2(sideX, FrameCenter.y - 1.6f),
+                Loc.Pick("[N] start ", "[N] başlat ")
                     + (session.BossStageFollowsThisRound && !session.InBossStage
                         ? Loc.Pick("the BOSS of round " + session.RoundNumber,
                             session.RoundNumber + ". rauntun PATRONU")
                         : Loc.Pick("round " + (session.RoundNumber + 1),
                             "raunt " + (session.RoundNumber + 1))),
-                90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+                90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleRight);
 
-            BuildHoverOutline();
-            FitToCamera(panelCenter, panelSize);
+            detailText = ViewUtil.MakeText3D(transform, "Detail",
+                new Vector2(FrameCenter.x + FramePixelWidth / FramePpu * 0.5f + 0.55f,
+                    FrameCenter.y + 1.2f),
+                string.Empty, 90, 0.026f, SectionHeaderColor, 38, TextAnchor.UpperLeft);
+        }
+
+        // ================= THE TWO TEMPLATES, and every region measured off them ==============
+        // The market is drawn from two pictures now, not one. menu_frame is the OUTER shell - a
+        // fixed window with a title tab - and menu_section is the panel a single kind of offer
+        // lives in. Splitting them is what makes the shelf scrollable: the old single panel had
+        // to hold blocks, jokers and powers at once, so each of them got a third of the height
+        // and everything in it had to be tiny. A section panel is now 4.42 by 1.98 against the
+        // 5.03 by 1.29 it used to get - half again as tall - and the three of them are simply
+        // taller than the window, which is what scrolling is for.
+        //
+        // Every figure below is a pixel coordinate in its own PNG. Redraw the art at another
+        // size and only the Ppu changes; move a region in the art and only its four numbers do.
+        private const float FramePpu = 152f;
+
+        private const float FramePixelWidth = 1081f;
+
+        private const float FramePixelHeight = 1455f;
+
+        private static readonly Vector2 FrameCenter = Vector2.zero;
+
+        /// <summary>The dark tab at the top of the shell, which is where MARKET goes.</summary>
+        private static readonly Vector4 TitleTabRegion = new Vector4(328f, 28f, 752f, 170f);
+
+        /// <summary>The shell's cream interior. NOT a shelf - a viewport the sections scroll
+        /// past.</summary>
+        private static readonly Vector4 WindowRegion = new Vector4(159f, 210f, 923f, 1291f);
+
+        private const float SectionPpu = 305f;
+
+        private const float SectionPixelWidth = 1536f;
+
+        private const float SectionPixelHeight = 1024f;
+
+        /// <summary>What the section sprite actually COVERS - the drawing sits inside a larger
+        /// canvas with a glow around it, so the sprite's own size is not what stacks.</summary>
+        private static readonly Vector4 SectionBoxRegion = new Vector4(51f, 87f, 1486f, 938f);
+
+        /// <summary>The cream tab at the section's top left: BLOKLAR, JOKERLER, GÜÇLER.</summary>
+        private static readonly Vector4 SectionTabRegion = new Vector4(184f, 117f, 733f, 233f);
+
+        private static readonly Vector4 SectionContentRegion =
+            new Vector4(94f, 271f, 1442f, 874f);
+
+        /// <summary>Air between stacked sections.</summary>
+        private const float SectionGap = 0.25f;
+
+        private const int SectionCount = 3;
+
+        /// <summary>How much of a section a tile leaves as breathing room, per side.</summary>
+        private const float SectionPadX = 0.10f;
+
+        private const float SectionPadY = 0.09f;
+
+        /// <summary>How long the button has to be held on a section to refresh it. The refresh
+        /// BUTTONS are gone - there is nowhere on this art to put three of them, and a button
+        /// that small was a poor target anyway. Holding the panel you want refreshed says which
+        /// one without needing a control at all.</summary>
+        private const float HoldSeconds = 0.55f;
+
+        /// <summary>World units of scroll per notch of wheel.</summary>
+        private const float ScrollPerNotch = 0.55f;
+
+        private const float DetailWrap = 22;
+
+        /// <summary>The two colours the art is painted in, sampled from it.</summary>
+        private static readonly Color PanelInkColor = new Color(0.161f, 0.204f, 0.282f);
+
+        private static readonly Color PanelCreamColor = new Color(0.961f, 0.882f, 0.800f);
+
+        /// <summary>A pixel rectangle in the SHELL art, as world space.</summary>
+        private static Rect FrameRegion(Vector4 px)
+        {
+            float left = FrameCenter.x - FramePixelWidth / FramePpu * 0.5f;
+            float top = FrameCenter.y + FramePixelHeight / FramePpu * 0.5f;
+            return new Rect(left + px.x / FramePpu, top - px.w / FramePpu,
+                (px.z - px.x) / FramePpu, (px.w - px.y) / FramePpu);
+        }
+
+        /// <summary>A pixel rectangle in the SECTION art, relative to that panel's own centre.</summary>
+        private static Rect SectionRegion(Vector4 px)
+        {
+            float left = -SectionPixelWidth / SectionPpu * 0.5f;
+            float top = SectionPixelHeight / SectionPpu * 0.5f;
+            return new Rect(left + px.x / SectionPpu, top - px.w / SectionPpu,
+                (px.z - px.x) / SectionPpu, (px.w - px.y) / SectionPpu);
+        }
+
+        private static Rect Shift(Rect r, Vector2 by)
+        {
+            return new Rect(r.x + by.x, r.y + by.y, r.width, r.height);
+        }
+
+        /// <summary>Which section a kind belongs in - fixed by the ART, so an empty section
+        /// leaves its panel empty instead of sliding the others up.</summary>
+        private static int SectionIndex(MarketOfferKind kind)
+        {
+            return kind == MarketOfferKind.Block ? 0 : kind == MarketOfferKind.Joker ? 1 : 2;
+        }
+
+        private static MarketOfferKind KindOf(int section)
+        {
+            return section == 0 ? MarketOfferKind.Block
+                : section == 1 ? MarketOfferKind.Joker : MarketOfferKind.Power;
+        }
+
+        // ---- scroll and hold state ----
+
+        /// <summary>What the last Show was given, so a scroll can lay the shelf out again. The
+        /// whole thing is rebuilt on every scroll, which is what DeckOverlayView does and what
+        /// keeps offerCenters in this transform's own space - the alternative is a moving parent
+        /// and a hit test that has to know about it.</summary>
+        private GameSession shownSession;
+
+        private float scroll;
+
+        private float maxScroll;
+
+        private float contentHeight;
+
+        private Rect windowRect;
+
+        private readonly Rect[] sectionContent = new Rect[SectionCount];
+
+        private readonly Vector2[] sectionCenters = new Vector2[SectionCount];
+
+        private Vector2 sectionHalf;
+
+        private SpriteMask windowMask;
+
+        private int holdSection = -1;
+
+        private float holdTimer;
+
+        private string rerollCostText = string.Empty;
+
+        /// <summary>Fired when a section has been held long enough to refresh. The view never
+        /// touches money or the market - it only reports the gesture, the same way clicking an
+        /// offer is reported.</summary>
+        public System.Action<MarketOfferKind> SectionHeld;
+
+        /// <summary>Puts a renderer under the window mask. Sprites clip against the shell's
+        /// interior; without this a half-scrolled section draws over the frame.</summary>
+        private static void Masked(SpriteRenderer renderer)
+        {
+            if (renderer != null)
+            {
+                renderer.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            }
+        }
+
+        /// <summary>Puts a whole subtree under the window mask.</summary>
+        private static void MaskAll(Transform root)
+        {
+            SpriteRenderer[] all = root.GetComponentsInChildren<SpriteRenderer>(true);
+            for (int i = 0; i < all.Length; i++)
+            {
+                all[i].maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            }
+        }
+
+        private static bool InsideWindow(Vector2 p, Rect window)
+        {
+            return p.y > window.yMin + 0.06f && p.y < window.yMax - 0.06f;
+        }
+
+        private void BuildWindowMask(Rect window)
+        {
+            var go = new GameObject("WindowMask");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(window.center.x, window.center.y, 0f);
+            go.transform.localScale = new Vector3(window.width, window.height, 1f);
+            windowMask = go.AddComponent<SpriteMask>();
+            windowMask.sprite = ViewUtil.WhiteSprite;
+        }
+
+        /// <summary>Scrolls the shelf and lays it out again. Clamped, so the ends are hard.</summary>
+        public bool Scroll(float notches)
+        {
+            if (shownSession == null || maxScroll <= 0.001f)
+            {
+                return false;
+            }
+            float next = Mathf.Clamp(scroll + notches * ScrollPerNotch, 0f, maxScroll);
+            if (Mathf.Approximately(next, scroll))
+            {
+                return false;
+            }
+            scroll = next;
+            Show(shownSession);
+            return true;
+        }
+
+        public void ResetScroll()
+        {
+            scroll = 0f;
+        }
+
+        /// <summary>Which section a world point is over, or -1. This is the target of the
+        /// hold-to-refresh gesture, and it is the PANEL that is the target - not a button on it.</summary>
+        public int SectionAt(Vector2 world)
+        {
+            // An OFFER is not part of its section for this purpose. Clicking buys on the button
+            // going down, so without this a press-and-hold on a tile would buy the offer and
+            // then refresh the shelf out from under it. What is left to grab is the tab strip,
+            // the gaps between tiles and the panel's own margin - which is also the more
+            // sensible gesture: you hold the SHELF, not a thing on it.
+            if (OfferAt(world) >= 0)
+            {
+                return -1;
+            }
+            Vector2 local = ToLocal(world);
+            if (local.y < windowRect.yMin || local.y > windowRect.yMax)
+            {
+                return -1;
+            }
+            for (int s = 0; s < SectionCount; s++)
+            {
+                if (Mathf.Abs(local.x - sectionCenters[s].x) <= sectionHalf.x
+                    && Mathf.Abs(local.y - sectionCenters[s].y) <= sectionHalf.y)
+                {
+                    return s;
+                }
+            }
+            return -1;
+        }
+
+        /// <summary>Drives the hold. The caller says where the pointer is and whether it is
+        /// down; this counts, and fires SectionHeld once when the count is made. Letting go, or
+        /// sliding off the panel, starts over - a hold is a commitment to one shelf.</summary>
+        public void UpdateHold(Vector2 world, bool held)
+        {
+            int section = held ? SectionAt(world) : -1;
+            if (section < 0 || section != holdSection)
+            {
+                bool wasCounting = holdSection >= 0;
+                holdSection = section;
+                holdTimer = 0f;
+                if (wasCounting && shownSession != null)
+                {
+                    Show(shownSession);   // clear the progress readout
+                }
+                return;
+            }
+            float before = holdTimer;
+            holdTimer += Time.deltaTime;
+            if (holdTimer >= HoldSeconds)
+            {
+                MarketOfferKind kind = KindOf(holdSection);
+                holdSection = -1;
+                holdTimer = 0f;
+                if (SectionHeld != null)
+                {
+                    SectionHeld(kind);
+                }
+                return;
+            }
+            // Redraw only when the bar would actually move, not every frame.
+            if (Mathf.FloorToInt(before * 12f) != Mathf.FloorToInt(holdTimer * 12f)
+                && shownSession != null)
+            {
+                Show(shownSession);
+            }
         }
 
         /// <summary>
@@ -356,12 +663,18 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            const float Margin = 0.94f;
-            // Scales UP as well as down. Without that, spacing and readability fight each other:
-            // every bit of breathing room added to the layout would come straight out of the
-            // text size. Filling the available space means the spacing below is purely a
-            // question of PROPORTION, and the panel is always as large as the window allows.
-            const float MaxScale = 2.2f;
+            const float Margin = 0.98f;
+            // THE CAP IS THE TEXTURE, NOT THE NUMBER 1. The panel is painted art, so the thing
+            // that must not happen is magnifying it past its own pixels - and where that lands
+            // depends on the screen. FramePpu / (pixels per world unit) is exactly the scale at
+            // which one texture pixel covers one screen pixel: 1.45 at 1080p, 1.09 at 1440p.
+            // A flat cap of 1 threw that headroom away and left the shelf small on every screen
+            // it was already sharp on. Floored at 1 so a 4K screen - where scale 1 is ALREADY a
+            // magnification and nothing can fix that - fills the window rather than shrinking to
+            // chase a sharpness it cannot have.
+            float pixelsPerUnit = Screen.height / (cam.orthographicSize * 2f);
+            float MaxScale = Mathf.Max(1f,
+                pixelsPerUnit > 0.01f ? FramePpu / pixelsPerUnit : 1f);
             float halfHeight = cam.orthographicSize * Margin;
             float halfWidth = halfHeight * cam.aspect;
             float scale = Mathf.Min(MaxScale,
@@ -392,24 +705,37 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Draws a joker or power offer: a tinted body with a kind tag, the name and
-        /// a wrapped description. <paramref name="key"/> is a stable ASCII prefix for the
-        /// GameObject names; <paramref name="label"/> is the localized tag shown to the player.</summary>
+        /// <summary>Draws a joker or power offer: a tinted body with a kind tag and the name.
+        /// SIZED BY ITS COMPARTMENT rather than by a constant - the shelf is painted art now and
+        /// a tile that ignores it hangs over the frame. An empty <paramref name="description"/>
+        /// draws nothing: the description belongs to the strip under the panel, because a
+        /// compartment 1.29 units tall has no room for eight wrapped lines.</summary>
         private void BuildNamedTile(Vector2 center, int index, string key, string label,
-            string displayName, string description, Color bodyColor, Color tagColor)
+            string displayName, string description, Color bodyColor, Color tagColor,
+            bool withText)
         {
-            ViewUtil.MakeRect(transform, key + "Body_" + index, center,
-                new Vector2(NamedTileWidth, TileHeight), bodyColor, 36);
+            Vector2 size = index >= 0 && index < offerTileSizes.Count
+                ? offerTileSizes[index]
+                : new Vector2(NamedTileWidth, TileHeight);
+            Masked(ViewUtil.MakeRect(transform, key + "Body_" + index, center, size,
+                bodyColor, 36));
+            if (!withText)
+            {
+                return;
+            }
             ViewUtil.MakeText3D(transform, key + "Tag_" + index,
-                center + new Vector2(0f, TileHeight * 0.5f - 0.22f), label,
-                90, 0.021f, tagColor, 37, TextAnchor.MiddleCenter);
+                center + new Vector2(0f, size.y * 0.5f - 0.16f), label,
+                90, 0.019f, tagColor, 37, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, key + "Name_" + index,
-                center + new Vector2(0f, 0.66f), ViewUtil.WrapText(displayName, 16),
-                90, 0.029f, JokerNameColor, 37, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, key + "Desc_" + index,
-                center + new Vector2(0f, 0.22f),
-                ViewUtil.WrapText(description, DescriptionWrap, MaxDescriptionLines),
-                90, 0.017f, JokerDescColor, 37, TextAnchor.UpperCenter);
+                center + new Vector2(0f, 0.02f), ViewUtil.WrapText(displayName, 14),
+                90, 0.027f, JokerNameColor, 37, TextAnchor.MiddleCenter);
+            if (!string.IsNullOrEmpty(description))
+            {
+                ViewUtil.MakeText3D(transform, key + "Desc_" + index,
+                    center + new Vector2(0f, -size.y * 0.5f + 0.34f),
+                    ViewUtil.WrapText(description, DescriptionWrap, 2),
+                    90, 0.017f, JokerDescColor, 37, TextAnchor.UpperCenter);
+            }
         }
 
         public void Hide()
@@ -417,10 +743,14 @@ namespace ProjectBlock.View
             offerVisuals.Clear();
             offerCenters.Clear();
             offerHalfWidths.Clear();
+            offerHalfHeights.Clear();
+            offerTileSizes.Clear();
+            offerDetails.Clear();
+            detailText = null;
+            windowMask = null;
             offerRarities.Clear();
             offerSold.Clear();
             offerAffordable.Clear();
-            rerollButtons.Clear();
             // The outline's objects go with every other child below, so drop the references
             // rather than leave four destroyed renderers behind.
             for (int i = 0; i < hoverEdges.Length; i++)
@@ -436,22 +766,6 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>The section whose reroll button is under a world point, or null. Only that
-        /// section is refreshed - see GameSession.RerollMarket(kind).</summary>
-        public MarketOfferKind? RerollSectionAt(Vector2 world)
-        {
-            Vector2 local = ToLocal(world);
-            for (int i = 0; i < rerollButtons.Count; i++)
-            {
-                SectionButton button = rerollButtons[i];
-                if (Mathf.Abs(local.x - button.Center.x) <= button.Half.x
-                    && Mathf.Abs(local.y - button.Center.y) <= button.Half.y)
-                {
-                    return button.Kind;
-                }
-            }
-            return null;
-        }
 
         /// <summary>World point in the panel's own space. The panel is scaled and re-centred to
         /// fit the screen (FitToCamera), so every hit-test has to come through here.</summary>
@@ -469,6 +783,7 @@ namespace ProjectBlock.View
             {
                 hoverEdges[i] = ViewUtil.MakeRect(transform, "HoverEdge_" + i, Vector2.zero,
                     Vector2.one, HoverColor, 39);
+                Masked(hoverEdges[i]);
                 hoverEdges[i].enabled = false;
             }
         }
@@ -487,23 +802,36 @@ namespace ProjectBlock.View
             if (index >= 0 && index < offerSold.Count && !offerSold[index])
             {
                 ShowHoverOutline(offerCenters[index],
-                    new Vector2(offerHalfWidths[index], TileHeight * 0.5f),
+                    new Vector2(offerHalfWidths[index], offerHalfHeights[index]),
                     offerAffordable[index] ? HoverColor : HoverBlockedColor);
+                SetDetail(index < offerDetails.Count ? offerDetails[index] : string.Empty);
                 return;
             }
-            Vector2 local = ToLocal(world);
-            for (int i = 0; i < rerollButtons.Count; i++)
-            {
-                SectionButton button = rerollButtons[i];
-                if (Mathf.Abs(local.x - button.Center.x) <= button.Half.x
-                    && Mathf.Abs(local.y - button.Center.y) <= button.Half.y)
-                {
-                    ShowHoverOutline(button.Center, button.Half,
-                        rerollAffordable ? HoverColor : HoverBlockedColor);
-                    return;
-                }
-            }
             HideHoverOutline();
+            SetDetail(string.Empty);
+        }
+
+        private void SetDetail(string text)
+        {
+            if (detailText != null)
+            {
+                detailText.text = ViewUtil.WrapText(text, (int)DetailWrap, 8);
+            }
+        }
+
+        /// <summary>What an offer says about itself in the strip: the name, then the description
+        /// the tile no longer has room for. Blocks have neither, so they say what they are.</summary>
+        private static string OfferDetail(MarketOffer offer)
+        {
+            if (offer.Kind == MarketOfferKind.Joker)
+            {
+                return offer.Joker.DisplayName + "  -  " + offer.Joker.Description;
+            }
+            if (offer.Kind == MarketOfferKind.Power)
+            {
+                return offer.Power.DisplayName + "  -  " + offer.Power.Description;
+            }
+            return Loc.Pick("Block card", "Blok kartı");
         }
 
         /// <summary>Wraps the four edges around a box, in the view's LOCAL space (the panel is
@@ -539,6 +867,7 @@ namespace ProjectBlock.View
         public void ClearHover()
         {
             HideHoverOutline();
+            SetDetail(string.Empty);
         }
 
         private void HideHoverOutline()
@@ -559,7 +888,8 @@ namespace ProjectBlock.View
             for (int i = 0; i < offerCenters.Count; i++)
             {
                 if (Mathf.Abs(local.x - offerCenters[i].x) <= offerHalfWidths[i]
-                    && Mathf.Abs(local.y - offerCenters[i].y) <= TileHeight * 0.5f)
+                    && Mathf.Abs(local.y - offerCenters[i].y)
+                        <= (i < offerHalfHeights.Count ? offerHalfHeights[i] : TileHeight * 0.5f))
                 {
                     return i;
                 }

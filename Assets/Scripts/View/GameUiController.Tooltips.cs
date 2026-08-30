@@ -32,6 +32,21 @@ namespace ProjectBlock.View
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
 
+            // The market scrolls, and a section is refreshed by HOLDING it rather than by
+            // pressing a button on it. Both are driven from here because this is the one place
+            // that already has the pointer in world space every frame.
+            if (screen == AppScreen.Playing && session.Phase == GamePhase.Market)
+            {
+                Vector2 wheel = mouse.scroll.ReadValue();
+                if (Mathf.Abs(wheel.y) > 0.01f)
+                {
+                    // Wheel UP shows what is ABOVE, which means the content moves DOWN and
+                    // the scroll offset goes DOWN with it. It was the other way round.
+                    marketView.Scroll(wheel.y > 0f ? -1f : 1f);
+                }
+                marketView.UpdateHold(world, mouse.leftButton.isPressed);
+            }
+
             // The draw pile is clickable in both phases - the deck list in a round, the sell
             // screen in the market - so it lights up whenever the pointer is on it and nothing
             // is covering it.

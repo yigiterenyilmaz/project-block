@@ -400,6 +400,11 @@ namespace ProjectBlock.View
             overtimePressure.Stop();
             overtimeStartTurn = -1;
             overtimeTurns = 0;
+            // Same reason: a sweep mid-flight owns board-space renderers of its own and would
+            // go on painting a line across whatever replaced the board.
+            lineSweep.Stop();
+            sweepSparks.Stop();
+            boardCleanse.Stop();
             marketView.Hide();
             deckOverlay.Hide();
             grantPicker.Hide();
