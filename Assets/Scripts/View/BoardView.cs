@@ -70,8 +70,6 @@ namespace ProjectBlock.View
         /// <summary>"İstilacı"'s marked column: the demolition wash. Deliberately its own colour -
         /// a marked column is neither sealed (a seal lifts next turn) nor eaten (that is
         /// permanent); it is a place with a deadline on it.</summary>
-        private static readonly Color DoomedColumnTint = new Color(0.85f, 0.45f, 0.12f);
-
         /// <summary>"Kütleçekim merkezi"'s pull markers, in water's own blue - what they are
         /// telling you about is where the WATER goes, and nothing else.</summary>
         private static readonly Color GravityArrowColor = new Color(0.35f, 0.6f, 1f, 0.75f);
@@ -120,6 +118,8 @@ namespace ProjectBlock.View
         private CircuitHeatFx circuitHeat;
 
         private CreatureNestView creatureNest;
+
+        private InvaderColumnView invaderColumn;
 
         private CircuitTraceView circuitTrace;
 
@@ -600,13 +600,14 @@ namespace ProjectBlock.View
             // The nest is a habitat over the board, not part of its contents, and rebuilding its
             // distance field on every placement would be pure waste.
             Transform keepNest = creatureNest != null ? creatureNest.transform : null;
+            Transform keepLane = invaderColumn != null ? invaderColumn.transform : null;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Transform child = transform.GetChild(i);
                 if (child == keepGlow || child == keepSurface
                     || child == keepInfection || child == keepCircuit
                     || child == keepOverload || child == keepQuarantine
-                    || child == keepHeat || child == keepNest)
+                    || child == keepHeat || child == keepNest || child == keepLane)
                 {
                     continue;
                 }
@@ -759,7 +760,7 @@ namespace ProjectBlock.View
                     // lose and decide whether to keep building there anyway.
                     if (doomedColumn.HasValue && gp.X == doomedColumn.Value)
                     {
-                        color = Color.Lerp(color, DoomedColumnTint, cube.HasValue ? 0.45f : 0.6f);
+                        color = color;   // the corridor draws itself; see InvaderColumnView
                     }
                     // "Alacakaranlık": the truth is drowned in the dark and only a blast's
                     // light brings any of it back, in proportion to how bright that light is.
@@ -1223,9 +1224,47 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Marks "İstilacı"'s doomed column. Pass null to clear it.</summary>
-        public void ShowDoomedColumn(int? column)
+        /// <summary>Hands "İstilacı"'s marked column to the corridor, with how many turns it has
+        /// left - which is what the whole escalation is driven from.</summary>
+        public void ShowDoomedColumn(int? column, int turnsLeft)
         {
             doomedColumn = column;
+            if (board == null)
+            {
+                return;
+            }
+            if (!column.HasValue)
+            {
+                if (invaderColumn != null)
+                {
+                    invaderColumn.Clear();
+                }
+                return;
+            }
+            EnsureInvaderColumn();
+            invaderColumn.Show(column, turnsLeft, board, CellToWorld, cellSize, IsOccupied);
+        }
+
+        /// <summary>The marked column came due. One band travels it and takes what it passes.</summary>
+        public void PlayColumnExtraction(IReadOnlyList<DestroyedCube> taken)
+        {
+            if (invaderColumn == null || taken == null || taken.Count == 0)
+            {
+                return;
+            }
+            invaderColumn.PlayExtraction(taken, CellToWorld,
+                cube => ViewUtil.CubeTile(cube.Kind, CardOf(cube)),
+                (cube, tile) => ViewUtil.CubeTileColor(cube, tile));
+        }
+
+        private void EnsureInvaderColumn()
+        {
+            if (invaderColumn == null)
+            {
+                var go = new GameObject("InvaderColumn");
+                go.transform.SetParent(transform, false);
+                invaderColumn = go.AddComponent<InvaderColumnView>();
+            }
         }
 
         /// <summary>

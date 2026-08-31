@@ -484,7 +484,16 @@ namespace ProjectBlock.View
                 {
                     AnimTintMarker(delegate
                     {
-                        boardView.ShowDoomedColumn(AnimMiddleColumn());
+                        boardView.ShowDoomedColumn(AnimMiddleColumn(), animInvaderTurns);
+                        // Each press steps the countdown 3 -> 2 -> 1 and then fires the
+                        // extraction, which is the only way to see all four states.
+                        animInvaderTurns--;
+                        if (animInvaderTurns < 1)
+                        {
+                            boardView.PlayColumnExtraction(
+                                AnimColumnCubes(AnimMiddleColumn()));
+                            animInvaderTurns = 3;
+                        }
                     });
                 });
             AddAnim("gravity arrows (cycles 4 ways)", "yerçekimi okları (4 yönü gezer)",
@@ -793,6 +802,28 @@ namespace ProjectBlock.View
             return owned != null && owned.Count > 0 ? owned[0].Id : 0;
         }
 
+        private int animInvaderTurns = 3;
+
+        /// <summary>The cubes a column extraction would take. Whatever really stands there, and a
+        /// plain one where the board is empty, so the lab can show the sweep without the player
+        /// first having to fill a column by hand.</summary>
+        private List<DestroyedCube> AnimColumnCubes(int column)
+        {
+            var cubes = new List<DestroyedCube>();
+            GameBoard board = AnimBoard();
+            if (board == null)
+            {
+                return cubes;
+            }
+            for (int y = board.MinY; y < board.MinY + board.Height; y++)
+            {
+                var cell = new GridPos(column, y);
+                Cube? real = board.GetCube(cell);
+                cubes.Add(new DestroyedCube(cell, real ?? new Cube(CubeKind.Normal, AnimCardId())));
+            }
+            return cubes;
+        }
+
         private List<int> AnimLines(bool rows)
         {
             var list = new List<int>();
@@ -1040,7 +1071,7 @@ namespace ProjectBlock.View
             {
                 boardView.ShowQuarantine(null, null);
                 boardView.ShowCreature(null);
-                boardView.ShowDoomedColumn(null);
+                boardView.ShowDoomedColumn(null, 0);
             });
         }
 

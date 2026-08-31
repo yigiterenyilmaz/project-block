@@ -76,6 +76,8 @@ namespace ProjectBlock.Core
 
         private readonly List<GridPos> circuitExplodedCells = new List<GridPos>();
 
+        private readonly List<GridPos> columnSweptCells = new List<GridPos>();
+
         /// <summary>
         /// Cells a "Hedefli" payout took with the target when the block went up whole.
         ///
@@ -86,6 +88,21 @@ namespace ProjectBlock.Core
         /// it sets off every armed targeted block at once.) The View treats the two lists alike -
         /// both are late clears that need blasting.
         /// </summary>
+        /// <summary>What "İstilacı" took when its marked column came due. Its OWN channel for the
+        /// same reason the circuit has one: this is not destruction in the scoring sense - it pays
+        /// nothing, counts toward no sweep and feeds no ledger - so it must never be mistaken for
+        /// cubes that exploded. Nothing in Core reads this back; it exists so the view can play the
+        /// extraction, which it otherwise has no way to learn about.</summary>
+        public IReadOnlyList<GridPos> ColumnSweptCells
+        {
+            get { return columnSweptCells; }
+        }
+
+        internal void AddColumnSweptCells(IReadOnlyList<GridPos> cells)
+        {
+            columnSweptCells.AddRange(cells);
+        }
+
         /// <summary>What "Devre" took when its circuit broke. Its OWN channel, for the same
         /// reason "Hedefli" has one: ExtraExplodedCells is BILLED against by a joker, so putting
         /// these cells there would quietly change what that joker pays. Nothing in Core reads

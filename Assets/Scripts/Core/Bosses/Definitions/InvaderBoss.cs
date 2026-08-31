@@ -117,7 +117,7 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            Demolish(turn.Round);
+            Demolish(turn);
             Mark(turn.Round, turn.Rng);
         }
 
@@ -150,9 +150,10 @@ namespace ProjectBlock.Core
 
         /// <summary>Takes the marked column: everything in it goes, scorelessly, and the player
         /// pays for what was there.</summary>
-        private void Demolish(RoundEngine round)
+        private void Demolish(TurnContext turn)
         {
             hasMark = false;
+            RoundEngine round = turn != null ? turn.Round : null;
             GameBoard board = round != null ? round.Board : null;
             if (board == null)
             {
@@ -174,7 +175,11 @@ namespace ProjectBlock.Core
             }
             // countsForSweep: false and forced: true - the same terms as erosion. It pays
             // nothing, counts toward no sweep, feeds no ledger, and nothing resists it.
-            int taken = round.DestroyCubes(doomed, false, true).Count;
+            IReadOnlyList<GridPos> swept = round.DestroyCubes(doomed, false, true);
+            int taken = swept.Count;
+            // Reported for the view only - it has no other way to know the column came due, and
+            // nothing in Core reads it back. The scoring below is untouched.
+            turn.Report.AddColumnSweptCells(swept);
             columnsTaken++;
             cubesTaken += taken;
             round.ChargeScore(taken * PenaltyPerCube, DefId);

@@ -168,6 +168,7 @@ public static class JokerTests
         Snake_EatsWhatStopsItAndGrows();
         Snake_ShrinksOnAnExplosionAndDyingWinsTheRound();
         Istilaci_TakesTheMarkedColumnAndBills();
+        Istilaci_EverySweptCubeIsReportedForTheView();
         Tamagotchi_FeedingClearsTheDemandAndTheCardLeavesTheRound();
         Tamagotchi_AnUnfedDemandLosesWhenTheDeckRunsDry();
         MayinEsegi_TheCubesAreUntouchedByAShuffle();
@@ -5588,6 +5589,91 @@ public static class JokerTests
             start + " -> " + boss.Length);
         Check(round.Board.CountCubesOfKind(CubeKind.Snake) == boss.Length,
             "and the board agrees about how long it is");
+    }
+
+    /// <summary>
+    /// THE EXTRACTION'S CONTRACT. The view plays the column sweep off
+    /// TurnReport.ColumnSweptCells, and this is what guarantees that list is exactly the set of
+    /// cubes the column actually took - of any kind, indestructible ones included, since nothing
+    /// resists this. It exists because that wiring is invisible to the compiler: a view that
+    /// quietly stopped animating would still build and still pass every other test.
+    /// </summary>
+    private static void Istilaci_EverySweptCubeIsReportedForTheView()
+    {
+        Section("istilacı / every cube the column takes is reported for the view");
+        var session = NewBossSession(9731, 5, 1000000, "istilaci", 60, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (IstilaciBoss)round.Boss;
+
+        PlayAt(round, new GridPos(0, 0));
+        Check(boss.HasMark, "a column is marked");
+        int column = boss.MarkedColumn;
+
+        // OBSIDIAN among them: nothing resists this demolition, so nothing may go unreported
+        // either - the view has to animate the cube that no explosion could have touched.
+        var kinds = new[] { CubeKind.Normal, CubeKind.Obsidian, CubeKind.Normal };
+        var placed = new List<GridPos>();
+        for (int y = 0; y < kinds.Length; y++)
+        {
+            var cell = new GridPos(column, y);
+            round.Board.SetCubeAt(cell, new Cube(kinds[y], 9800 + y));
+            placed.Add(cell);
+        }
+
+        TurnReport last = null;
+        for (int i = 0; i < boss.FuseTurns + 1 && boss.ColumnsTaken == 0; i++)
+        {
+            TurnReport got = PlayAnywhereAvoiding(round, column);
+            if (got == null)
+            {
+                break;
+            }
+            last = got;
+        }
+        Check(boss.ColumnsTaken >= 1, "the column was taken");
+        Check(last != null && last.ColumnSweptCells.Count > 0,
+            "and the turn that took it reported cells for the view",
+            "reported " + (last == null ? 0 : last.ColumnSweptCells.Count));
+
+        // 1. Nothing reported is still standing - the view never animates a cube that stayed.
+        int stillThere = 0;
+        foreach (GridPos cell in last.ColumnSweptCells)
+        {
+            if (round.Board.GetCube(cell).HasValue) { stillThere++; }
+        }
+        Check(stillThere == 0, "every reported cell really lost its cube", "" + stillThere);
+
+        // 2. And nothing the column took went unreported, obsidian included.
+        int takenButUnreported = 0;
+        foreach (GridPos cell in placed)
+        {
+            if (round.Board.GetCube(cell).HasValue)
+            {
+                continue;
+            }
+            bool reported = false;
+            foreach (GridPos got in last.ColumnSweptCells)
+            {
+                if (got.Equals(cell)) { reported = true; break; }
+            }
+            if (!reported) { takenButUnreported++; }
+        }
+        Check(takenButUnreported == 0,
+            "every cube it took was reported, indestructible ones included",
+            "unreported " + takenButUnreported);
+
+        // 3. And it is NOT in the explosion channel - this pays nothing and must never be
+        // mistaken for cubes that broke.
+        int inExplosionChannel = 0;
+        foreach (GridPos cell in last.ColumnSweptCells)
+        {
+            foreach (GridPos other in last.ExtraExplodedCells)
+            {
+                if (other.Equals(cell)) { inExplosionChannel++; }
+            }
+        }
+        Check(inExplosionChannel == 0,
+            "and none of it leaked into the explosion channel", "" + inExplosionChannel);
     }
 
     private static void Istilaci_TakesTheMarkedColumnAndBills()

@@ -157,6 +157,12 @@ namespace ProjectBlock.View
                 lit.AddRange(report.TargetedExplodedCells);
                 boardView.LightUpAround(lit);
             }
+            // "İstilacı": the marked column came due. Its cubes were not exploded - they were
+            // taken - so they go to the corridor's own extraction rather than through FlashCells.
+            if (report.ColumnSweptCells.Count > 0)
+            {
+                boardView.PlayColumnExtraction(SweptCubes(report));
+            }
             // "Karantina": a cube that broke inside a sealed zone cost the player exactly what
             // it would have paid. The membrane over it answers - the view decides for itself
             // whether the cell was in a zone, so this asks about every cube and nothing here
@@ -848,7 +854,7 @@ namespace ProjectBlock.View
                 boardView.ShowQuarantine(null, null);
                 boardView.ShowCreature(null);
                 boardView.ShowDolls(null, null);
-                boardView.ShowDoomedColumn(null);
+                boardView.ShowDoomedColumn(null, 0);
                 // The pull markers sit OUTSIDE the arena and say nothing about what is on it, so
                 // they are the one marker the dark does not have to swallow.
                 boardView.ShowGravity(session.CurrentRound.Board.WaterFlow);
@@ -889,9 +895,9 @@ namespace ProjectBlock.View
             }
 
             var invader = boss as IstilaciBoss;
-            boardView.ShowDoomedColumn(invader != null && invader.HasMark
-                ? invader.MarkedColumn
-                : (int?)null);
+            boardView.ShowDoomedColumn(
+                invader != null && invader.HasMark ? invader.MarkedColumn : (int?)null,
+                invader != null ? invader.TurnsLeft : 0);
         }
 
         /// <summary>Hands "Besleme"'s creature patch to the board view. A pet you cannot see is
@@ -912,6 +918,25 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Hands "Karantina"'s sealed lines to the board view, which washes them.</summary>
+        /// <summary>The cubes the invader's column took, with the art they were wearing.</summary>
+        private static List<DestroyedCube> SweptCubes(TurnReport report)
+        {
+            var found = new List<DestroyedCube>();
+            for (int i = 0; i < report.ColumnSweptCells.Count; i++)
+            {
+                GridPos cell = report.ColumnSweptCells[i];
+                foreach (DestroyedCube dead in report.DestroyedCubes)
+                {
+                    if (dead.Pos.Equals(cell))
+                    {
+                        found.Add(dead);
+                        break;
+                    }
+                }
+            }
+            return found;
+        }
+
         /// <summary>The destroyed cubes that stood on the circuit, in the order the path runs.</summary>
         private static List<DestroyedCube> CircuitCubes(TurnReport report)
         {
