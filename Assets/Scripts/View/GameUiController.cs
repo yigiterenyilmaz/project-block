@@ -367,7 +367,7 @@ namespace ProjectBlock.View
             boardView.Refresh();
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
-            RefreshInfections();
+            RefreshInfections(null);
             sfx.Shuffle();
             cardLayer.AnimateRoundStart(round);
             UpdateHud();

@@ -76,13 +76,14 @@ namespace ProjectBlock.View
         /// telling you about is where the WATER goes, and nothing else.</summary>
         private static readonly Color GravityArrowColor = new Color(0.35f, 0.6f, 1f, 0.75f);
 
-        /// <summary>"Karantina": a cube exploded in here costs what it would have earned. A
-        /// sickly wash over the cell, so the zone reads without hiding what stands in it.</summary>
-        private static readonly Color QuarantineTint = new Color(0.75f, 0.72f, 0.20f);
+        /// <summary>"Karantina": how much colour is pulled out of a block standing in a sealed
+        /// zone, and how far its value is taken down. This is done to the block's OWN colour
+        /// rather than by an overlay, because alpha blending can only mix toward a colour - it
+        /// cannot drain one - and a zone that merely tinted its blocks would still look like a
+        /// place things live. The hue survives, so the player can still read WHICH block it is.</summary>
+        private const float QuarantineDrain = 0.66f;
 
-        /// <summary>"Besleme": the patch its creature lives in. A warm living pink, distinct from
-        /// the quarantine's sickly yellow - one is a thing you feed, the other a thing you avoid.</summary>
-        private static readonly Color CreatureTint = new Color(0.85f, 0.35f, 0.55f);
+        private const float QuarantineDarken = 0.50f;
 
         /// <summary>"Alacakaranlık": what a cell looks like with the lights out. Barely above
         /// the background, so the grid is still findable but tells you nothing.</summary>
@@ -113,6 +114,12 @@ namespace ProjectBlock.View
         private readonly List<GameObject> infectionMarkers = new List<GameObject>();
 
         private InfectionCoreView infectionCores;
+
+        private QuarantineFieldView quarantineField;
+
+        private CircuitHeatFx circuitHeat;
+
+        private CreatureNestView creatureNest;
 
         private CircuitTraceView circuitTrace;
 
@@ -177,6 +184,13 @@ namespace ProjectBlock.View
         /// <summary>Every cell a running fall covers, blanked for its duration so the settled
         /// board underneath cannot show through the cubes still travelling.</summary>
         private readonly HashSet<GridPos> waterHiddenCells = new HashSet<GridPos>();
+
+        /// <summary>Cells whose own cube the circuit effect has taken over the drawing of. In a
+        /// real turn Core has already destroyed them and the board is empty there anyway; in the
+        /// ANIMATION LAB nothing was destroyed, so without this the lab draws a copy on top of the
+        /// player's actual block, breaks the copy, and leaves the original sitting there - which
+        /// looks exactly like the effect skipping their block.</summary>
+        private readonly List<GridPos> circuitHiddenCells = new List<GridPos>();
 
         private void Awake()
         {
@@ -297,6 +311,13 @@ namespace ProjectBlock.View
 
         private void Update()
         {
+            // The circuit effect draws its own copies of the cubes it owns; the moment it lets go,
+            // the board takes its own back. Polled rather than pushed because the effect ends on
+            // its own clock, not on anything the board is told about.
+            if (circuitHiddenCells.Count > 0 && (circuitHeat == null || !circuitHeat.Active))
+            {
+                RestoreCircuitCells();
+            }
             PulseOvertimeLines();
             if (board == null || kindCache == null)
             {
@@ -559,6 +580,7 @@ namespace ProjectBlock.View
             StopAllCoroutines();
             animatingWater = false;
             waterHiddenCells.Clear(); // the drop sprites go with the children below
+            circuitHiddenCells.Clear(); // the renderers below are rebuilt enabled anyway
             // EXCEPT the overtime glow, which outlives a rebuild. It is not part of the board's
             // contents: it is a light over them, its texture costs real time to generate, and
             // sweeping it up with everything else meant the overtime effect was torn down and
@@ -570,12 +592,21 @@ namespace ProjectBlock.View
             Transform keepCircuit = circuitTrace != null ? circuitTrace.transform : null;
             Transform keepOverload = circuitOverload != null
                 ? circuitOverload.transform : null;
+            // The containment field is a layer over the board rather than part of its contents,
+            // and its whole texture would have to be recomputed on every placement otherwise.
+            Transform keepQuarantine = quarantineField != null
+                ? quarantineField.transform : null;
+            Transform keepHeat = circuitHeat != null ? circuitHeat.transform : null;
+            // The nest is a habitat over the board, not part of its contents, and rebuilding its
+            // distance field on every placement would be pure waste.
+            Transform keepNest = creatureNest != null ? creatureNest.transform : null;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Transform child = transform.GetChild(i);
                 if (child == keepGlow || child == keepSurface
                     || child == keepInfection || child == keepCircuit
-                    || child == keepOverload)
+                    || child == keepOverload || child == keepQuarantine
+                    || child == keepHeat || child == keepNest)
                 {
                     continue;
                 }
@@ -710,10 +741,9 @@ namespace ProjectBlock.View
                     Color color = cube.HasValue
                         ? ViewUtil.CubeTileColor(cube.Value, tile)
                         : (board.IsSealed(gp) ? SealedColor : EmptyColor);
-                    // "Karantina" washes its sealed lines without hiding what stands in them.
                     if (IsQuarantined(gp))
                     {
-                        color = Color.Lerp(color, QuarantineTint, cube.HasValue ? 0.45f : 0.6f);
+                        color = Drained(color);
                     }
                     // "Kangren": a line the rot took WHOLE can never explode again, which the
                     // player has to be able to see - an unexplodable full line otherwise reads as
@@ -724,10 +754,6 @@ namespace ProjectBlock.View
                     }
                     // "Besleme"'s creature: the patch you have to keep feeding, so it has to be
                     // unmistakable whether there is a cube standing on it or not.
-                    if (IsCreature(gp))
-                    {
-                        color = Color.Lerp(color, CreatureTint, cube.HasValue ? 0.5f : 0.72f);
-                    }
                     // "İstilacı": the column with a demolition date on it. Washed rather than
                     // hidden - the player has to be able to see exactly what they are about to
                     // lose and decide whether to keep building there anyway.
@@ -908,10 +934,69 @@ namespace ProjectBlock.View
         /// <summary>Marks where "Besleme"'s creature lives. Pass null to clear it.</summary>
         public void ShowCreature(IReadOnlyList<GridPos> cells)
         {
+            // Only rebuild when the REGION actually changed. This is called on every refresh, and
+            // the nest's distance field and speck pool are not free.
+            bool same = cells != null && cells.Count == creatureCells.Count;
+            if (same)
+            {
+                for (int i = 0; i < cells.Count; i++)
+                {
+                    if (!cells[i].Equals(creatureCells[i]))
+                    {
+                        same = false;
+                        break;
+                    }
+                }
+            }
+            if (same)
+            {
+                // The REGION has not moved, but what stands on it may have. The habitat has to
+                // duck under a block the turn it lands, not the next time the joker moves.
+                if (creatureNest != null)
+                {
+                    creatureNest.RefreshOccupancy(IsOccupied);
+                }
+                return;
+            }
             creatureCells.Clear();
             if (cells != null)
             {
                 creatureCells.AddRange(cells);
+            }
+            if (board == null)
+            {
+                return;
+            }
+            if (creatureCells.Count == 0)
+            {
+                if (creatureNest != null)
+                {
+                    creatureNest.Clear();
+                }
+                return;
+            }
+            EnsureCreatureNest();
+            creatureNest.SetRegion(creatureCells, board, CellToWorld, cellSize, IsOccupied);
+            creatureNest.RefreshOccupancy(IsOccupied);
+        }
+
+        /// <summary>A cube was eaten inside the nest. The pool answers - the view decides for
+        /// itself whether the cell was in the region, so callers need not know the joker exists.</summary>
+        public void PlayCreatureFeed(GridPos cell)
+        {
+            if (creatureNest != null && IsCreature(cell))
+            {
+                creatureNest.PlayFeed(CellToWorld(cell));
+            }
+        }
+
+        private void EnsureCreatureNest()
+        {
+            if (creatureNest == null)
+            {
+                var go = new GameObject("CreatureNest");
+                go.transform.SetParent(transform, false);
+                creatureNest = go.AddComponent<CreatureNestView>();
             }
         }
 
@@ -927,13 +1012,169 @@ namespace ProjectBlock.View
             return false;
         }
 
-        /// <summary>Marks "Karantina"'s sealed lines. Pass nulls to clear them.</summary>
+        /// <summary>Hands "Karantina"'s sealed lines to the containment field. Pass nulls to
+        /// clear them. The field works out for itself which lines are new and which board edge
+        /// each one came in from, so this is only ever told the current state.</summary>
         public void ShowQuarantine(IReadOnlyList<int> rows, IReadOnlyList<int> columns)
         {
             quarantinedRows.Clear();
             quarantinedColumns.Clear();
             if (rows != null) { quarantinedRows.AddRange(rows); }
             if (columns != null) { quarantinedColumns.AddRange(columns); }
+            if (board == null)
+            {
+                return;
+            }
+            if (quarantineField == null)
+            {
+                var go = new GameObject("QuarantineField");
+                go.transform.SetParent(transform, false);
+                quarantineField = go.AddComponent<QuarantineFieldView>();
+            }
+            quarantineField.SetLines(quarantinedRows, quarantinedColumns, board, CellToWorld,
+                cellSize, IsOccupied);
+        }
+
+        private bool IsOccupied(GridPos cell)
+        {
+            return board != null && board.IsInside(cell) && board.GetCube(cell).HasValue;
+        }
+
+        /// <summary>
+        /// Holds copies of the cubes a breaking circuit is about to take, and cooks them for
+        /// <paramref name="seconds"/>. They are copies because Core already destroyed the real
+        /// ones and the board has been redrawn without them - the tile and colour come out of the
+        /// destruction log, which carries the whole Cube, so what the player sees heat up is
+        /// exactly what was standing there.
+        /// </summary>
+        public void PlayCircuitHeat(IReadOnlyList<DestroyedCube> cubes, float seconds)
+        {
+            if (cubes == null || cubes.Count == 0 || board == null)
+            {
+                return;
+            }
+            EnsureCircuitHeat();
+            HideForCircuit(cubes);
+            circuitHeat.Play(CircuitGhosts(cubes), cellSize, seconds);
+        }
+
+        /// <summary>Parks copies of those cubes on the board without cooking them - what the
+        /// circuit looks like with blocks under it, before anything happens to either.</summary>
+        public void HoldCircuitBlocks(IReadOnlyList<DestroyedCube> cubes)
+        {
+            if (cubes == null || cubes.Count == 0 || board == null)
+            {
+                return;
+            }
+            EnsureCircuitHeat();
+            HideForCircuit(cubes);
+            circuitHeat.Hold(CircuitGhosts(cubes), cellSize);
+        }
+
+        /// <summary>Takes the parked blocks back off the board.</summary>
+        public void ClearCircuitBlocks()
+        {
+            if (circuitHeat != null)
+            {
+                circuitHeat.Stop();
+            }
+            RestoreCircuitCells();
+        }
+
+        private void HideForCircuit(IReadOnlyList<DestroyedCube> cubes)
+        {
+            RestoreCircuitCells();
+            for (int i = 0; i < cubes.Count; i++)
+            {
+                GridPos p = cubes[i].Pos;
+                int cx = p.X - board.MinX;
+                int cy = p.Y - board.MinY;
+                if (cx < 0 || cy < 0 || cx >= cellRenderers.GetLength(0)
+                    || cy >= cellRenderers.GetLength(1))
+                {
+                    continue;
+                }
+                SpriteRenderer r = cellRenderers[cx, cy];
+                if (r != null && r.enabled)
+                {
+                    r.enabled = false;
+                    circuitHiddenCells.Add(p);
+                }
+            }
+        }
+
+        private void RestoreCircuitCells()
+        {
+            for (int i = 0; i < circuitHiddenCells.Count; i++)
+            {
+                GridPos p = circuitHiddenCells[i];
+                int cx = p.X - board.MinX;
+                int cy = p.Y - board.MinY;
+                if (cx >= 0 && cy >= 0 && cx < cellRenderers.GetLength(0)
+                    && cy < cellRenderers.GetLength(1) && cellRenderers[cx, cy] != null)
+                {
+                    cellRenderers[cx, cy].enabled = true;
+                }
+            }
+            circuitHiddenCells.Clear();
+        }
+
+        private void EnsureCircuitHeat()
+        {
+            if (circuitHeat == null)
+            {
+                var go = new GameObject("CircuitHeat");
+                go.transform.SetParent(transform, false);
+                circuitHeat = go.AddComponent<CircuitHeatFx>();
+            }
+        }
+
+        private List<CircuitHeatFx.Ghost> CircuitGhosts(IReadOnlyList<DestroyedCube> cubes)
+        {
+            var ghosts = new List<CircuitHeatFx.Ghost>(cubes.Count);
+            for (int i = 0; i < cubes.Count; i++)
+            {
+                Cube cube = cubes[i].Cube;
+                Sprite tile = ViewUtil.CubeTile(cube.Kind, CardOf(cube));
+                // Which way the cable runs through THIS cell, from its neighbours on the path.
+                // The heat is a band on that axis, so the block burns where the circuit touches
+                // it rather than all over at once.
+                GridPos prev = cubes[System.Math.Max(i - 1, 0)].Pos;
+                GridPos nextCell = cubes[System.Math.Min(i + 1, cubes.Count - 1)].Pos;
+                var dir = new Vector2(nextCell.X - prev.X, nextCell.Y - prev.Y);
+                ghosts.Add(new CircuitHeatFx.Ghost
+                {
+                    World = CellToWorld(cubes[i].Pos),
+                    Tile = tile,
+                    Colour = ViewUtil.CubeTileColor(cube, tile),
+                    Size = cellSize * CubeFill,
+                    CableDir = dir.sqrMagnitude > 0.0001f ? dir : Vector2.right
+                });
+            }
+            return ghosts;
+        }
+
+        /// <summary>A cube exploded inside a sealed zone. The mechanic charges the player for it;
+        /// this is the membrane over it noticing.</summary>
+        public void PlayQuarantineReaction(GridPos cell)
+        {
+            if (quarantineField != null && IsQuarantined(cell))
+            {
+                quarantineField.PlayReaction(CellToWorld(cell));
+            }
+        }
+
+        /// <summary>Pulls the life out of a colour: most of the way to its own grey, then down.
+        /// Hue is left alone on purpose - a drained green is still recognisably the green block,
+        /// which is the difference between a zone being dangerous and a zone being unreadable.</summary>
+        private static Color Drained(Color c)
+        {
+            float grey = c.r * 0.2126f + c.g * 0.7152f + c.b * 0.0722f;
+            return new Color(
+                Mathf.Lerp(c.r, grey, QuarantineDrain) * QuarantineDarken,
+                Mathf.Lerp(c.g, grey, QuarantineDrain) * QuarantineDarken,
+                Mathf.Lerp(c.b, grey, QuarantineDrain) * QuarantineDarken,
+                c.a);
         }
 
         /// <summary>True if that cell stands in a sealed row or column.</summary>

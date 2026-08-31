@@ -318,6 +318,14 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>When the sheet's blue core actually BURSTS, in seconds from Play. Anything
+        /// that should happen "as the circuit goes off" happens here - measured off the art, not
+        /// picked, so retiming the animation moves it too.</summary>
+        public static float RuptureTime
+        {
+            get { return Style.RuptureFrame / Mathf.Max(Style.Fps, 0.001f); }
+        }
+
         public bool Running
         {
             get { return running; }

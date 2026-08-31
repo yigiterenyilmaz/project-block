@@ -183,6 +183,9 @@ namespace ProjectBlock.Core
             int cells = path.Count;
 
             IReadOnlyList<GridPos> blown = turn.Round.DestroyCubes(path, true);
+            // Reported for the view only - it has no other way to know this happened, and
+            // nothing in Core reads it back. Scoring below is untouched.
+            turn.Report.AddCircuitExplodedCells(blown);
             if (blown.Count > 0)
             {
                 turn.Round.TryResolveCleanSweep();

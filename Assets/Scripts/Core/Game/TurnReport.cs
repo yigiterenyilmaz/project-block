@@ -74,6 +74,8 @@ namespace ProjectBlock.Core
 
         private readonly List<GridPos> targetedExplodedCells = new List<GridPos>();
 
+        private readonly List<GridPos> circuitExplodedCells = new List<GridPos>();
+
         /// <summary>
         /// Cells a "Hedefli" payout took with the target when the block went up whole.
         ///
@@ -84,6 +86,22 @@ namespace ProjectBlock.Core
         /// it sets off every armed targeted block at once.) The View treats the two lists alike -
         /// both are late clears that need blasting.
         /// </summary>
+        /// <summary>What "Devre" took when its circuit broke. Its OWN channel, for the same
+        /// reason "Hedefli" has one: ExtraExplodedCells is BILLED against by a joker, so putting
+        /// these cells there would quietly change what that joker pays. Nothing in Core reads
+        /// this list - it exists so the view can blast the cubes and set the cable off, which it
+        /// otherwise has no way to learn about. An in-turn destruction reaches neither the report
+        /// lists nor the external log, so without this the circuit's cubes simply vanish.</summary>
+        public IReadOnlyList<GridPos> CircuitExplodedCells
+        {
+            get { return circuitExplodedCells; }
+        }
+
+        internal void AddCircuitExplodedCells(IReadOnlyList<GridPos> cells)
+        {
+            circuitExplodedCells.AddRange(cells);
+        }
+
         public IReadOnlyList<GridPos> TargetedExplodedCells
         {
             get { return targetedExplodedCells; }

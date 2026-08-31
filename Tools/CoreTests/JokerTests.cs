@@ -147,6 +147,7 @@ public static class JokerTests
         Devre_WaitsForARandomTurnAndThenStays();
         Devre_BreakingItExplodesThePathAndPays();
         Devre_OnlyOneCircuitPerRound();
+        Devre_EveryBrokenCubeIsReportedForTheView();
         Devre_ALineClearOnTheSameTurnStillCounts();
         Nester_CutsABlockInTwo();
         Nester_RefusesACutThatWouldNotHoldTogether();
@@ -4605,6 +4606,81 @@ public static class JokerTests
         {
             Check(true, "it was completed during play, which is the other legal outcome");
         }
+    }
+
+    /// <summary>
+    /// THE ANIMATION'S CONTRACT. The view draws the block destruction off
+    /// TurnReport.CircuitExplodedCells, and this is what guarantees that list is exactly the set
+    /// of cubes that actually broke - whatever kind they are and wherever the circuit fell. It
+    /// exists because that wiring is invisible to the compiler: a view that quietly stopped
+    /// animating would still build, still pass every other test, and only be caught by playing.
+    /// </summary>
+    private static void Devre_EveryBrokenCubeIsReportedForTheView()
+    {
+        Section("devre / every cube it breaks is reported for the view, whatever kind it is");
+        var session = NewSession(7104, 5, 1000000, 40, 1);
+        var joker = (DevreJoker)session.Jokers.Add(new DevreJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        PlayTurns(session, joker.MaxArmTurn + 2);
+        Check(joker.HasCircuit, "a circuit is on the board");
+
+        // A DIFFERENT KIND ON EVERY CELL. If the report only covered plain cubes, or only the
+        // ones from one card, this is where it would show.
+        var path = new List<GridPos>(joker.Path);
+        // Kinds that STAY WHERE THEY ARE PUT. Water settles under gravity and a mine or a
+        // dynamite takes its neighbours with it - either would empty a path cell before the turn
+        // resolved and leave this testing the setup rather than the report.
+        CubeKind[] kinds =
+        {
+            CubeKind.Normal, CubeKind.Ice, CubeKind.Transparent, CubeKind.Normal, CubeKind.Ice
+        };
+        var placed = new Dictionary<GridPos, CubeKind>();
+        for (int i = 0; i < path.Count; i++)
+        {
+            CubeKind kind = kinds[i % kinds.Length];
+            round.Board.SetCubeAt(path[i], new Cube(kind, 9600 + i));
+            placed[path[i]] = kind;
+        }
+
+        TurnReport report = PlayOneCard(round);
+        Check(joker.BrokenThisRound, "the circuit broke");
+        Check(report.CircuitExplodedCells.Count > 0, "and it reported cells for the view",
+            "reported " + report.CircuitExplodedCells.Count);
+
+        // 1. Every reported cell really lost a cube - the view never animates a phantom.
+        int missingFromLog = 0;
+        foreach (GridPos cell in report.CircuitExplodedCells)
+        {
+            bool found = false;
+            foreach (DestroyedCube dead in report.DestroyedCubes)
+            {
+                if (dead.Pos.Equals(cell)) { found = true; break; }
+            }
+            if (!found) { missingFromLog++; }
+        }
+        Check(missingFromLog == 0,
+            "every reported cell is in the destruction log, so the view can find its cube",
+            "missing " + missingFromLog);
+
+        // 2. And every cube the circuit took is reported - nothing breaks unanimated.
+        int brokenButUnreported = 0;
+        foreach (KeyValuePair<GridPos, CubeKind> entry in placed)
+        {
+            if (round.Board.GetCube(entry.Key).HasValue)
+            {
+                continue;   // survived, so it is not owed an animation
+            }
+            bool reported = false;
+            foreach (GridPos cell in report.CircuitExplodedCells)
+            {
+                if (cell.Equals(entry.Key)) { reported = true; break; }
+            }
+            if (!reported) { brokenButUnreported++; }
+        }
+        Check(brokenButUnreported == 0,
+            "every cube the circuit destroyed was reported, whatever its kind",
+            "unreported " + brokenButUnreported);
     }
 
     private static void Devre_BreakingItExplodesThePathAndPays()

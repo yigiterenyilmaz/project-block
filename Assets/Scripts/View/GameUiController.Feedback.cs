@@ -157,6 +157,18 @@ namespace ProjectBlock.View
                 lit.AddRange(report.TargetedExplodedCells);
                 boardView.LightUpAround(lit);
             }
+            // "Karantina": a cube that broke inside a sealed zone cost the player exactly what
+            // it would have paid. The membrane over it answers - the view decides for itself
+            // whether the cell was in a zone, so this asks about every cube and nothing here
+            // needs to know the boss exists.
+            foreach (DestroyedCube dead in report.DestroyedCubes)
+            {
+                boardView.PlayQuarantineReaction(dead.Pos);
+                // "Besleme": a cube broken inside the nest is FOOD, and the pool reacts to being
+                // fed. Same shape as the quarantine reaction - ask about every cube and let the
+                // view decide whether that cell belongs to anything.
+                boardView.PlayCreatureFeed(dead.Pos);
+            }
             HandleBlastFeedback(round, report);
         }
 
@@ -165,7 +177,8 @@ namespace ProjectBlock.View
         /// joker bills against one of them, but every FX decision here treats them alike.</summary>
         private static int LateExplodedCount(TurnReport report)
         {
-            return report.ExtraExplodedCells.Count + report.TargetedExplodedCells.Count;
+            return report.ExtraExplodedCells.Count + report.TargetedExplodedCells.Count
+                + report.CircuitExplodedCells.Count;
         }
 
         /// <summary>Particles, shake, combo popups and the sweep celebration for one turn.</summary>
@@ -775,7 +788,7 @@ namespace ProjectBlock.View
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();
-            RefreshInfections();
+            RefreshInfections(report);
             cardLayer.Sync(round, report);
             // "Tamagotchi" lays out what it is still owed, next to the hand it has to come from.
             var pet = round.Boss as TamagotchiBoss;
@@ -815,7 +828,7 @@ namespace ProjectBlock.View
 
         /// <summary>Gathers "Enfeksiyon" infection markers from the inventory and hands them
         /// to the board view to draw (buildup pips + tint).</summary>
-        private void RefreshInfections()
+        private void RefreshInfections(TurnReport report)
         {
             infectionBuffer.Clear();
             IReadOnlyList<Joker> jokers = session.Jokers.Jokers;
@@ -842,7 +855,7 @@ namespace ProjectBlock.View
                 return;
             }
             boardView.ShowInfections(infectionBuffer);
-            RefreshCircuit();
+            RefreshCircuit(report);
             RefreshQuarantine();
             RefreshCreature();
             RefreshBossBoardMarks();
@@ -899,6 +912,25 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Hands "Karantina"'s sealed lines to the board view, which washes them.</summary>
+        /// <summary>The destroyed cubes that stood on the circuit, in the order the path runs.</summary>
+        private static List<DestroyedCube> CircuitCubes(TurnReport report)
+        {
+            var found = new List<DestroyedCube>();
+            for (int i = 0; i < report.CircuitExplodedCells.Count; i++)
+            {
+                GridPos cell = report.CircuitExplodedCells[i];
+                foreach (DestroyedCube dead in report.DestroyedCubes)
+                {
+                    if (dead.Pos.Equals(cell))
+                    {
+                        found.Add(dead);
+                        break;
+                    }
+                }
+            }
+            return found;
+        }
+
         private void RefreshQuarantine()
         {
             RoundEngine round = session.CurrentRound;
@@ -915,8 +947,27 @@ namespace ProjectBlock.View
 
         /// <summary>Hands "Devre"'s traced circuit to the board view. Same shape as the infection
         /// pass: the joker holds the route, the board just draws it.</summary>
-        private void RefreshCircuit()
+        private void RefreshCircuit(TurnReport report)
         {
+            // The circuit broke THIS TURN. It has to be set off HERE, before the loop below
+            // finds no circuit any more and clears the cable: the overload reads its route off
+            // the trace that is still loaded, and a cleared trace has no route to read. Nor is
+            // the cable cleared afterwards - BurnAway takes it out behind the failure, which is
+            // the point of the two being one event.
+            if (report != null && report.CircuitExplodedCells.Count > 0)
+            {
+                boardView.DetonateCircuit();
+                // The cubes hold their ground and COOK until the sheet's blue core bursts, then
+                // break with it. Breaking them first reads backwards - as if the blocks went on
+                // their own and the circuit answered - so the two are pinned to the same moment.
+                // The blocks own their whole failure, rupture included - deliberately NOT the
+                // shared FlashCells, whose square-on-the-slot is exactly the full-cell white
+                // flash this effect must not have. The one destruction that breaks the house
+                // rule, and only because the rule's own drawing is the thing being avoided.
+                boardView.PlayCircuitHeat(CircuitCubes(report),
+                    CircuitOverloadView.RuptureTime);
+                return;
+            }
             IReadOnlyList<Joker> jokers = session.Jokers.Jokers;
             for (int i = 0; i < jokers.Count; i++)
             {

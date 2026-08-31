@@ -453,22 +453,30 @@ namespace ProjectBlock.View
                 delegate { boardView.LightUpAround(AnimCells()); });
             AddAnim("infection cores (Enfeksiyon)", "enfeksiyon çekirdekleri (Enfeksiyon)",
                 AnimInfectionPips);
-            AddAnim("circuit trace (Devre)", "devre izi (Devre)",
-                delegate { boardView.ShowCircuit(AnimCircuitPath()); });
-            AddAnim("circuit OVERLOAD (blow it)", "devreyi PATLAT",
-                delegate { boardView.DetonateCircuit(); });
-            AddAnim("quarantine wash (Karantina)", "karantina boyası (Karantina)",
+            AddAnim("circuit trace + blocks (Devre)", "devre izi + bloklar (Devre)",
                 delegate
                 {
-                    AnimTintMarker(delegate
-                    {
-                        boardView.ShowQuarantine(AnimLines(true), AnimLines(false));
-                    });
+                    // Cable AND cubes, parked together. The break starts from exactly this
+                    // picture, so this is the one to look at before setting it off.
+                    IReadOnlyList<GridPos> path = AnimCircuitPath();
+                    boardView.ShowCircuit(path);
+                    boardView.HoldCircuitBlocks(AnimCircuitCubes(path));
                 });
-            AddAnim("creature patch (Besleme)", "yaratık bölgesi (Besleme)",
+            AddAnim("circuit BREAKS (cubes + cable)", "devre KIRILDI (bloklar + kablo)",
+                AnimCircuitBreak);
+            AddAnim("quarantine SEAL (Karantina)", "karantina MÜHRÜ (Karantina)",
+                AnimQuarantineSeal);
+            AddAnim("creature nest + FEED (Besleme)", "yaratık yuvası + BESLEME (Besleme)",
                 delegate
                 {
-                    AnimTintMarker(delegate { boardView.ShowCreature(AnimCells()); });
+                    // The nest, and then a feed in it - pressing again feeds it again, which is
+                    // the only way to see the reaction the game gives it when a cube breaks there.
+                    IReadOnlyList<GridPos> region = AnimCells();
+                    AnimTintMarker(delegate { boardView.ShowCreature(region); });
+                    if (region.Count > 0)
+                    {
+                        boardView.PlayCreatureFeed(region[Random.Range(0, region.Count)]);
+                    }
                 });
             AddAnim("dolls (Matruşka)", "bebekler (Matruşka)", AnimDolls);
             AddAnim("doomed column (İstilacı)", "işaretli sütun (İstilacı)",
@@ -688,6 +696,103 @@ namespace ProjectBlock.View
         }
 
         /// <summary>A one-entry row or column list, for the markers that take line indices.</summary>
+        private readonly List<int> animQuarantineRows = new List<int>();
+
+        private readonly List<int> animQuarantineColumns = new List<int>();
+
+        /// <summary>
+        /// Seals two more lines every time it is pressed, exactly the way the boss does it: the
+        /// outermost lines still clean, working inward, from one end or the other. Pressing it
+        /// repeatedly is the only way to see what this effect is actually FOR - the sweep coming
+        /// in from outside, two fields merging when a new line touches an old one, and the board
+        /// closing in. One press shows a seal; six presses show the boss.
+        /// </summary>
+        private void AnimQuarantineSeal()
+        {
+            GameBoard board = AnimBoard();
+            if (board == null)
+            {
+                return;
+            }
+            for (int taken = 0; taken < 2; taken++)
+            {
+                bool wantRow = (animQuarantineRows.Count + animQuarantineColumns.Count) % 2 == 0;
+                if (!AnimSealLine(board, wantRow) && !AnimSealLine(board, !wantRow))
+                {
+                    break;
+                }
+            }
+            boardView.ShowQuarantine(animQuarantineRows, animQuarantineColumns);
+        }
+
+        private bool AnimSealLine(GameBoard board, bool row)
+        {
+            List<int> taken = row ? animQuarantineRows : animQuarantineColumns;
+            int min = row ? board.MinY : board.MinX;
+            int count = row ? board.Height : board.Width;
+            int low = -1;
+            int high = -1;
+            for (int i = 0; i < count; i++)
+            {
+                if (!taken.Contains(min + i)) { low = min + i; break; }
+            }
+            for (int i = count - 1; i >= 0; i--)
+            {
+                if (!taken.Contains(min + i)) { high = min + i; break; }
+            }
+            if (low < 0)
+            {
+                return false;
+            }
+            // Alternating ends rather than random, so the lab is repeatable frame to frame.
+            taken.Add(low == high ? low : (taken.Count % 2 == 0 ? low : high));
+            return true;
+        }
+
+        /// <summary>
+        /// The whole of "Devre" breaking, both halves of it, because in the game they are one
+        /// event: the cubes standing on the circuit go off in the cable's own colour, and the
+        /// cable overloads along its length. Both calls are the ones the game makes from
+        /// EmitBlastParticles and RefreshCircuit - only the cell list is fabricated.
+        ///
+        /// Draw "devre izi" first: the overload reads its route off the live trace, exactly as
+        /// it does in a real turn, so there has to be a cable there to break.
+        /// </summary>
+        private void AnimCircuitBreak()
+        {
+            IReadOnlyList<GridPos> path = AnimCircuitPath();
+            boardView.DetonateCircuit();
+            boardView.PlayCircuitHeat(AnimCircuitCubes(path),
+                CircuitOverloadView.RuptureTime);
+        }
+
+        /// <summary>The cubes the break would take. Whatever is really standing on those cells,
+        /// and a plain one where the board is empty - the lab has to be able to show the heat
+        /// without the player first having to fill a circuit by hand.</summary>
+        private List<DestroyedCube> AnimCircuitCubes(IReadOnlyList<GridPos> path)
+        {
+            var cubes = new List<DestroyedCube>();
+            GameBoard board = AnimBoard();
+            for (int i = 0; i < path.Count; i++)
+            {
+                Cube? real = board != null ? board.GetCube(path[i]) : null;
+                // A card id that actually RESOLVES. Id 0 does not: BoardView.CardOf fails to
+                // find it, counts it unresolved and draws the debug outline - which is what those
+                // red hollow squares were, not a block design.
+                cubes.Add(new DestroyedCube(path[i],
+                    real ?? new Cube(CubeKind.Normal, AnimCardId())));
+            }
+            return cubes;
+        }
+
+        /// <summary>A real card out of the player's own deck, so a fabricated cube is drawn with
+        /// the tile and colour that card actually gives it.</summary>
+        private int AnimCardId()
+        {
+            IReadOnlyList<BlockCard> owned = session != null ? session.OwnedCards : null;
+            return owned != null && owned.Count > 0 ? owned[0].Id : 0;
+        }
+
         private List<int> AnimLines(bool rows)
         {
             var list = new List<int>();
@@ -923,11 +1028,14 @@ namespace ProjectBlock.View
             // The marker-object overlays clear on their own...
             boardView.ShowInfections(null);
             boardView.ShowCircuit(null);
+            boardView.ClearCircuitBlocks();
             boardView.ShowDolls(null, null);
             boardView.ShowGravity(new GridPos(0, -1)); // the default draws no arrows
             animGravityStep = 0;
             boardView.ClearPreview();
             // ...the three tinted ones need the repaint (see AnimTintMarker).
+            animQuarantineRows.Clear();
+            animQuarantineColumns.Clear();
             AnimTintMarker(delegate
             {
                 boardView.ShowQuarantine(null, null);
