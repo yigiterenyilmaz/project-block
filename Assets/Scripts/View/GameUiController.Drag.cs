@@ -231,8 +231,13 @@ namespace ProjectBlock.View
                             return; // a locked card is never picked up
                         }
                         draggedCard = hit;
-                        draggedCard.SetSortingBoost(10);
-                        draggedCard.SetAlpha(0.55f);
+                        // 18, not 10: the hand is a fan now and a resting card can already be
+                        // nine orders above the base, so 10 no longer clears the row.
+                        draggedCard.SetSortingBoost(18);
+                        // Faint on purpose: what matters while placing is the BOARD and the
+                        // preview under the cursor, not the card being carried over them - the
+                        // card has already been read by the time it is picked up.
+                        draggedCard.SetAlpha(0.4f);
                     }
                 }
                 return;
@@ -255,8 +260,11 @@ namespace ProjectBlock.View
             bool valid = false;
             if (overBoard)
             {
-                // Anchor the shape so the cursor sits roughly at its center.
-                origin = new GridPos(hovered.X - (shape.Width - 1) / 2, hovered.Y - (shape.Height - 1) / 2);
+                // The cursor IS the middle of the block - see BoardView.WorldToCenteredOrigin.
+                // The hover test above only answers whether the pointer is over the arena; the
+                // anchor is taken from the raw world point, so a 2- or 4-wide block straddles the
+                // cursor instead of hanging off its right.
+                origin = boardView.WorldToCenteredOrigin(world, shape.Width, shape.Height);
                 valid = round.CanPlaceCard(slotCard, origin);
                 boardView.ShowPreview(shape, origin, valid);
             }

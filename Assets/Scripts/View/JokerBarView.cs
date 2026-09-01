@@ -20,6 +20,9 @@ namespace ProjectBlock.View
         private const float PanelHeight = 92f;
         private const float PanelGap = 8f;
 
+        /// <summary>Inset from the top-right corner, shared by every anchored position here.</summary>
+        private const float CornerInset = 16f;
+
         private static readonly Color PanelColor = new Color(0.13f, 0.15f, 0.19f, 0.92f);
         private static readonly Color ReadyColor = new Color(0.20f, 0.34f, 0.24f, 0.95f);
         private static readonly Color TargetingColor = new Color(0.42f, 0.32f, 0.12f, 0.97f);
@@ -56,8 +59,19 @@ namespace ProjectBlock.View
             root.anchorMin = new Vector2(1f, 1f);
             root.anchorMax = new Vector2(1f, 1f);
             root.pivot = new Vector2(1f, 1f);
-            root.anchoredPosition = new Vector2(-16f, -16f);
+            root.anchoredPosition = new Vector2(-CornerInset, -CornerInset);
             root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+        }
+
+        /// <summary>How far the strip is pushed DOWN from its corner, in canvas pixels. The boss
+        /// badge is anchored to the same corner and would otherwise land on the first joker, so
+        /// it asks for its own height back rather than the bar guessing what is above it.</summary>
+        public void SetTopOffset(float pixels)
+        {
+            if (root != null)
+            {
+                root.anchoredPosition = new Vector2(-CornerInset, -CornerInset - pixels);
+            }
         }
 
         /// <summary>Shows or hides the whole strip. The menu layer hides it while no run is

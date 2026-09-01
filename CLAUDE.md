@@ -27,9 +27,12 @@ rounds.
   must accept **both** terminal phases.
 
 Board size comes from `DefaultRoundProgression.BoardSizeBands` — a fixed table covering exactly
-those 15 numbered rounds (1-5 on 7x7, 6-11 on 9x9, 12-15 on 11x11), and each band also names the
-`ShuffleErosion` that punishes a stalling round. A boss stage inherits its round's band. Run length
-and that table are meant to change together.
+those 15 numbered rounds. **The arena is 7x7 for the WHOLE run** (designer's call, 2026-08-31); it
+used to grow (1-5 on 7x7, 6-11 on 9x9, 12-15 on 11x11) and restoring that is three numbers in that
+table. The bands themselves stay, because size is not all they carry: each one also names the
+`ShuffleErosion` that punishes a stalling round, and those still step (rim → centre hole → both).
+A late round is now a harder round in the same arena rather than a bigger one. A boss stage
+inherits its round's band. Run length and that table are meant to change together.
 
 Anything that rebuilds a `RoundConfig` from another one (a joker/power `FilterRoundConfig`) must
 use **`RoundConfig.WithBoard`**, never a hand-written `new RoundConfig(...)`: a field listed by
@@ -127,8 +130,8 @@ dropped that way once each.
 - Numbers in `ScoringConfig` / `DefaultRoundProgression` / the joker fields are balance
   placeholders; the flow around them is confirmed design. One exception: a run is 15 numbered
   rounds with a boss stage between every third (20 stages in all), and the board-size table
-  (`DefaultRoundProgression.BoardSizeBands` — rounds 1-5 on 7x7, 6-11 on 9x9, 12-15 on 11x11) is
-  confirmed design, not a knob to tune. Surviving the BOSS OF ROUND 15 wins the run
+  (`DefaultRoundProgression.BoardSizeBands` — 7x7 for every round; see above) is confirmed
+  design, not a knob to tune. Surviving the BOSS OF ROUND 15 wins the run
   (`GamePhase.RunWon`); `GameOver` is loss-only, so anything waiting for a run to finish must
   accept both.
 - **The threshold is a CEILING for normal play.** A round banks at most its own

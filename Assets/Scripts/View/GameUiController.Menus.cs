@@ -388,6 +388,7 @@ namespace ProjectBlock.View
             totalText.gameObject.SetActive(visible);
             jokerBar.SetVisible(visible);
             powerBar.SetVisible(visible);
+            SetBossBadgeVisible(visible);
             if (visible)
             {
                 return;

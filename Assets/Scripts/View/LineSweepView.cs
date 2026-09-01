@@ -71,15 +71,18 @@ namespace ProjectBlock.View
             public static float AuraWidth = 1.30f;
 
             /// <summary>How long the front takes to travel from the middle to the ends. Short:
-            /// the player should feel it sweep, not watch it arrive.</summary>
-            public static float PropagationSeconds = 0.105f;
+            /// the player should feel it sweep, not watch it arrive. These sat at 0.105 and were
+            /// halved, then eased back 25%: the whole line clear now runs at 1.6x its original
+            /// speed. Every timing in this block moves TOGETHER by that factor, and so does
+            /// LineBurstView.Style.Fps - see the note on Attack for why.</summary>
+            public static float PropagationSeconds = 0.066f;
 
             /// <summary>How long the whole line sits at full strength once the front lands.</summary>
-            public static float PeakHold = 0.055f;
+            public static float PeakHold = 0.034f;
 
             /// <summary>The dissolve. Longer than the spread, because energy leaving is what
             /// makes it feel like energy rather than a switch being flipped.</summary>
-            public static float FadeSeconds = 0.20f;
+            public static float FadeSeconds = 0.125f;
 
             /// <summary>How steeply the fade lets go. Above 1 it drops fast and then lingers,
             /// which reads as a glow dissolving rather than a light dimming.</summary>
@@ -89,8 +92,9 @@ namespace ProjectBlock.View
             /// enough to feel struck, large enough that the leading edge is not a hard step -
             /// and it must not outlast the head that is passing over it. When it did, the band
             /// just behind the front was still rising while the head had already left, which
-            /// drew a dark notch chasing the bright one down the row.</summary>
-            public static float Attack = 0.016f;
+            /// drew a dark notch chasing the bright one down the row. So it is tied to
+            /// PropagationSeconds: speed the sweep up and this must come down with it.</summary>
+            public static float Attack = 0.010f;
 
             /// <summary>Extra brightness carried by the moving front itself, over what the line
             /// behind it settles at. This is the whole sense of momentum: without it the row
@@ -147,7 +151,7 @@ namespace ProjectBlock.View
             /// by design - it is there to tie the beam to the grid, not to be looked at.</summary>
             public static float CellReactionStrength = 0.62f;
 
-            public static float CellReactionSeconds = 0.17f;
+            public static float CellReactionSeconds = 0.106f;
 
             /// <summary>How much a reacting cell swells, as a fraction of its size.</summary>
             public static float CellSwell = 0.11f;

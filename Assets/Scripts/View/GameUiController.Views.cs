@@ -109,6 +109,17 @@ namespace ProjectBlock.View
                     UpdateHud();
                 }
             };
+            // DEMO shelf: the PROCEED button is the mouse twin of [N]. Same three steps, so a
+            // player who never finds the key is not stuck in the shop.
+            marketView.ProceedPressed = delegate
+            {
+                if (session != null && session.Phase == GamePhase.Market)
+                {
+                    session.LeaveMarket();
+                    marketView.Hide();
+                    StartRoundPresentation();
+                }
+            };
 
             var sfxGo = new GameObject("SoundFx");
             sfxGo.transform.SetParent(transform, false);
@@ -227,7 +238,14 @@ namespace ProjectBlock.View
             hudShake.offsetMax = Vector2.zero;
 
             infoText = MakeText(hudShake, "InfoText", new Vector2(0f, 1f),
-                new Vector2(16f, -16f), TextAnchor.UpperLeft, 24, Color.white);
+                new Vector2(16f, -16f), TextAnchor.UpperLeft, InfoFontSize, Color.white);
+            // A LEFT COLUMN, not a banner. At the shared 860 the debug lines ran most of the way
+            // across the screen and broke wherever they happened to run out, which is how a line
+            // ends up reading "... F3:" / "animations" over the board. Narrowing the rect is the
+            // whole wrap: Unity Text wraps to its own width, so this is what decides the shape.
+            // The font came down with it - the column has to stay clear of the POWER BAR, which
+            // is anchored 256px below the top on this same side.
+            infoText.rectTransform.sizeDelta = new Vector2(InfoWidth, 460f);
             // Score first, at the top centre; the message line sits under it.
             totalText = MakeText(hudShake, "TotalText", new Vector2(0.5f, 1f),
                 new Vector2(0f, -14f), TextAnchor.UpperCenter, 34, new Color(1f, 0.86f, 0.42f));
@@ -235,6 +253,8 @@ namespace ProjectBlock.View
                 new Vector2(0f, -66f), TextAnchor.UpperCenter, 28, new Color(1f, 0.92f, 0.45f));
 
             jokerBar.Build(hudShake);
+            // Before the bars are laid out: the badge owns the top of that same corner column.
+            BuildBossBadge(hudShake);
             powerBar.Build(hudShake);
 
             // Built last so it starts on top of the bars and the HUD text; Show() also
@@ -244,6 +264,13 @@ namespace ProjectBlock.View
             menu = menuGo.AddComponent<MenuScreenView>();
             menu.Build(hudShake);
         }
+
+        /// <summary>How wide the top-left run/debug readout is allowed to be, in the canvas
+        /// 1920x1080 reference space - under a third of the width, so it never crosses the
+        /// board or the market panel.</summary>
+        private const float InfoWidth = 620f;
+
+        private const int InfoFontSize = 20;
 
         private static Text MakeText(Transform parent, string name, Vector2 anchor,
             Vector2 offset, TextAnchor alignment, int fontSize, Color color)

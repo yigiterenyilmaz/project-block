@@ -691,6 +691,32 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>
+        /// DEBUG ONLY: ends the stage in progress as WON and opens its market. From the MARKET
+        /// it leaves first, so one press always lands on the NEXT market - the stage in between
+        /// is created and won without being played.
+        ///
+        /// It goes through DeclareRoundWon, the same door a boss beaten on its own terms uses,
+        /// rather than faking a score: the stage banks EXACTLY its threshold, the run currency
+        /// follows, round-end jokers pay out, the debt accrues and a boss stage still checks it.
+        /// So the state it leaves behind is a state the game could really have reached - which
+        /// is the only kind of skip worth having for testing the market.
+        ///
+        /// Does nothing once the round is already lost (DeclareRoundWon refuses), and ends the
+        /// run rather than opening a market when the stage skipped was the last one.
+        /// </summary>
+        public void DebugSkipToMarket()
+        {
+            if (Phase == GamePhase.Market)
+            {
+                LeaveMarket();
+            }
+            if (Phase == GamePhase.Round && CurrentRound != null)
+            {
+                CurrentRound.DeclareRoundWon();
+            }
+        }
+
         /// <summary>Leaves the market and starts the next round.</summary>
         public void LeaveMarket()
         {

@@ -311,6 +311,13 @@ namespace ProjectBlock.View
                 return;
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+            // DEMO shelf buttons come FIRST: they sit in a section header and on the footer,
+            // where no offer is, but a click that fell through to the deck-pile branch below
+            // would open the sell screen behind the market.
+            if (marketView.TryProceedAt(world) || marketView.TryRerollAt(world))
+            {
+                return;
+            }
             int offerIndex = marketView.OfferAt(world);
             if (offerIndex < 0)
             {

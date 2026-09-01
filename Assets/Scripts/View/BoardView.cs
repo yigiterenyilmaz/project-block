@@ -1367,6 +1367,38 @@ namespace ProjectBlock.View
                 && y >= -margin && y < board.Height + margin;
         }
 
+        /// <summary>Where a shape must START so that the CURSOR sits at the middle of it. The
+        /// block follows the pointer instead of hanging off one side of it, which is the whole
+        /// point: anchoring off a cell index alone put every EVEN-sized block (a 2x2, a 4-long
+        /// bar) to the right of the cursor, because the half-cell it owed could not be paid in
+        /// whole cells.
+        ///
+        /// So the world point is used AS IT IS, sub-cell part included, and only the finished
+        /// answer is rounded. Odd widths land on the hovered cell exactly as before; an even one
+        /// straddles the cursor and flips to whichever side is nearer as it crosses the middle of
+        /// a cell. It is the shape's BOUNDING BOX that is centred - the same box CardVisual
+        /// centres its mini-block in - so the preview sits under the dragged card, and a rotation
+        /// cannot make the anchor wander the way a filled-cell centroid would.
+        ///
+        /// Unclamped on purpose: an origin off the board is a placement the engine refuses, which
+        /// is exactly the red preview the player should see. Callers gate on TryWorldToCell(Loose)
+        /// for "is the cursor over the arena at all".</summary>
+        public GridPos WorldToCenteredOrigin(Vector2 world, int shapeWidth, int shapeHeight)
+        {
+            if (board == null)
+            {
+                return default(GridPos);
+            }
+            float x = (world.x - bottomLeft.x) / cellSize - shapeWidth * 0.5f;
+            float y = (world.y - bottomLeft.y) / cellSize - shapeHeight * 0.5f;
+            // FloorToInt(v + 0.5) rather than RoundToInt: the latter rounds a .5 to the nearest
+            // EVEN number, which would make the flip point of an even-sized block jump about
+            // depending on where it is on the board.
+            return new GridPos(
+                board.MinX + Mathf.FloorToInt(x + 0.5f),
+                board.MinY + Mathf.FloorToInt(y + 0.5f));
+        }
+
         /// <summary>Highlights the shape's target cells (green legal / red illegal) and, for
         /// legal placements, tints every cell of the rows/columns that would explode.</summary>
         public void ShowPreview(BlockShape shape, GridPos origin, bool valid)

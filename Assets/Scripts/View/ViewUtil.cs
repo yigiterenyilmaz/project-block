@@ -43,6 +43,79 @@ namespace ProjectBlock.View
             }
         }
 
+        private static Sprite roundedSprite;
+
+        /// <summary>Pixels a side of the generated rounded sprite, and the corner radius in
+        /// those pixels. Both only ever divide by RoundedPpu, so the shape is what matters and
+        /// the numbers are just resolution.</summary>
+        private const int RoundedPixels = 64;
+
+        private const int RoundedRadius = 16;
+
+        /// <summary>At 128 pixels per unit the 16-pixel corner is 0.125 world units - about a
+        /// twelfth of a card's width, which is where a playing card's corner sits.</summary>
+        private const float RoundedPpu = 128f;
+
+        /// <summary>
+        /// A white ROUNDED rectangle, generated once and 9-SLICED, for anything that wants a
+        /// card's silhouette instead of a hard rectangle. Hand it to MakePlate and the corner
+        /// keeps its radius at any size while only the middle stretches - which is the whole
+        /// reason it is sliced rather than scaled.
+        ///
+        /// The corner is antialiased across one pixel. That is not a soft texture in the sense
+        /// the board forbids: at 128 ppu the ramp is 0.008 of a world unit, far under a screen
+        /// pixel at any sane zoom, and without it a "rounded" corner is just a staircase.
+        /// </summary>
+        public static Sprite RoundedSprite
+        {
+            get
+            {
+                if (roundedSprite == null)
+                {
+                    var tex = new Texture2D(RoundedPixels, RoundedPixels, TextureFormat.RGBA32,
+                        false);
+                    for (int y = 0; y < RoundedPixels; y++)
+                    {
+                        for (int x = 0; x < RoundedPixels; x++)
+                        {
+                            tex.SetPixel(x, y, new Color(1f, 1f, 1f, RoundedAlpha(x, y)));
+                        }
+                    }
+                    tex.Apply();
+                    tex.filterMode = FilterMode.Bilinear;
+                    tex.wrapMode = TextureWrapMode.Clamp;
+                    roundedSprite = Sprite.Create(tex,
+                        new Rect(0, 0, RoundedPixels, RoundedPixels), new Vector2(0.5f, 0.5f),
+                        RoundedPpu, 0, SpriteMeshType.FullRect,
+                        new Vector4(RoundedRadius, RoundedRadius, RoundedRadius, RoundedRadius));
+                }
+                return roundedSprite;
+            }
+        }
+
+        /// <summary>Coverage of one pixel by the rounded rectangle: 1 inside, 0 outside, and a
+        /// single pixel of ramp across the curve.</summary>
+        private static float RoundedAlpha(int x, int y)
+        {
+            // Distance from the pixel's centre to the nearest corner circle's centre, measured
+            // only once the pixel is actually in a corner - along an edge the shape is straight.
+            float px = x + 0.5f;
+            float py = y + 0.5f;
+            float cx = Mathf.Clamp(px, RoundedRadius, RoundedPixels - RoundedRadius);
+            float cy = Mathf.Clamp(py, RoundedRadius, RoundedPixels - RoundedRadius);
+            float distance = Mathf.Sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+            return Mathf.Clamp01(RoundedRadius + 0.5f - distance);
+        }
+
+        /// <summary>MakeRect's rectangle with a card's ROUNDED corners. Same arguments, same
+        /// meaning - it is MakePlate over the generated rounded sprite, so the corner keeps its
+        /// radius however the rest is stretched.</summary>
+        public static SpriteRenderer MakeRounded(Transform parent, string name, Vector2 position,
+            Vector2 size, Color color, int sortingOrder)
+        {
+            return MakePlate(parent, name, position, size, color, sortingOrder, RoundedSprite);
+        }
+
         // ---- painted UI plates ---------------------------------------------------------
 
         private const string UiFolder = "Art/Ui/";

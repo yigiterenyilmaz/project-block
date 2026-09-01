@@ -6,6 +6,7 @@
 // Every one of them re-rolls its victim from ctx.Rng, so a replay of the same seed harasses
 // the player in exactly the same order.
 
+using System;
 using System.Collections.Generic;
 
 namespace ProjectBlock.Core
@@ -450,17 +451,61 @@ namespace ProjectBlock.Core
     /// </summary>
     public sealed class SaatciBoss : BossRound
     {
-        /// <summary>Turns the player gets to reach the bar.</summary>
-        public int TurnLimit = 12;
+        /// <summary>
+        /// Turns the player gets to reach the bar, WORKED OUT PER STAGE (see LimitFor). It was a
+        /// flat 12 for every appearance, which is the one thing this boss could not be: the bar
+        /// grows 1.5x per boss stage, so a fixed limit quietly demanded 17 points a turn at the
+        /// boss of round 3 and 2,190 at the boss of 15. The same card was a formality early and
+        /// unwinnable late, and which one you got was a draw from GameSession.DrawBoss.
+        ///
+        /// Set at round start and then only counted down, so it is a normal saved field.
+        /// </summary>
+        public int TurnLimit;
+
+        /// <summary>Turns granted at the LAST boss of the run. The whole curve hangs off this
+        /// one number - see LimitFor - so making the boss kinder or crueller is one edit.</summary>
+        public int TurnsAtFinalRound = 100;
+
+        /// <summary>
+        /// The turn budget for a stage: <c>TurnsAtFinalRound * sqrt(round / totalRounds)</c>.
+        ///
+        /// SQUARE ROOT, not a line, and deliberately not the shape of the threshold. Measured
+        /// against a scripted player, a stage takes roughly 26 turns at the boss of 3, 63 at the
+        /// boss of 6 and 122 at the boss of 9 - so this hands out 45 / 63 / 77 / 89 / 100 across
+        /// the five bosses: comfortable at the first, level with the measured need at the second,
+        /// and increasingly a test of the build after that.
+        ///
+        /// It CANNOT hold the difficulty flat, and is not trying to. The bar grows 1.5x a round
+        /// while a player's scoring rate grows maybe 1.2x, so any turn limit gets harder with
+        /// depth; matching that gap would need 456 turns at the last boss, which is not a limit
+        /// at all. A root curve gives away most of its slack early, where the boss should teach,
+        /// and least at the end, where it should bite.
+        ///
+        /// Read off TotalRounds rather than a hard-coded 15, because run length and the round
+        /// tables are meant to move together.
+        /// </summary>
+        private int LimitFor(RoundContext ctx)
+        {
+            int total = ctx != null && ctx.Session != null ? ctx.Session.Config.TotalRounds : 15;
+            int round = ctx != null && ctx.Session != null ? ctx.Session.RoundNumber : 1;
+            if (total < 1)
+            {
+                total = 1;
+            }
+            double share = Math.Min(1.0, Math.Max(1, round) / (double)total);
+            return Math.Max(1, (int)Math.Round(TurnsAtFinalRound * Math.Sqrt(share)));
+        }
 
         public SaatciBoss()
             : base("saatci", "Saatçi")
         {
             SetDescription(
-                "You have a hard turn limit. Reach the score threshold inside it or the round is "
-                    + "lost - there is no stalling this one out.",
-                "Kesin bir tur sınırın var. Puan eşiğini o sınırın içinde geç, yoksa raunt "
-                    + "kaybedilir - bunu oyalanarak geçemezsin.");
+                "You have a hard turn limit - wider on a late stage than an early one, but "
+                    + "never generous. Reach the score threshold inside it or the round is lost "
+                    + "- there is no stalling this one out.",
+                "Kesin bir tur sınırın var - geç aşamalarda daha geniş, ama asla cömert değil. "
+                    + "Puan eşiğini o sınırın içinde geç, yoksa raunt kaybedilir - bunu "
+                    + "oyalanarak geçemezsin.");
         }
 
         /// <summary>Turns left before the deadline, for the UI. Never below 0.</summary>
@@ -473,6 +518,7 @@ namespace ProjectBlock.Core
 
         public override void OnRoundStarted(RoundContext ctx)
         {
+            TurnLimit = LimitFor(ctx);
             TurnsLeft = TurnLimit;
         }
 

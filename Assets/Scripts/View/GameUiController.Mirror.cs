@@ -268,7 +268,9 @@ namespace ProjectBlock.View
             }
             BlockCard picked = round.MirrorHand[mirrorPickedIndex];
             BlockShape shape = round.EffectiveShape(picked);
-            var origin = new GridPos(cell.X - (shape.Width - 1) / 2, cell.Y - (shape.Height - 1) / 2);
+            // Centred on the cursor exactly as the main board is (BoardView.WorldToCenteredOrigin)
+            // - the mirror is the same placement gesture, so it must not aim differently.
+            var origin = mirrorBoardView.WorldToCenteredOrigin(world, shape.Width, shape.Height);
             if (round.StageMirrorPlay(mirrorPickedIndex, origin))
             {
                 sfx.Place();
@@ -301,7 +303,9 @@ namespace ProjectBlock.View
             }
             BlockCard picked = round.MirrorHand[mirrorPickedIndex];
             BlockShape shape = round.EffectiveShape(picked);
-            var origin = new GridPos(cell.X - (shape.Width - 1) / 2, cell.Y - (shape.Height - 1) / 2);
+            // Centred on the cursor exactly as the main board is (BoardView.WorldToCenteredOrigin)
+            // - the mirror is the same placement gesture, so it must not aim differently.
+            var origin = mirrorBoardView.WorldToCenteredOrigin(world, shape.Width, shape.Height);
             mirrorBoardView.ShowPreview(shape, origin, round.CanPlaceMirrorCard(picked, origin));
         }
 

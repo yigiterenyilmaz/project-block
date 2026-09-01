@@ -1044,6 +1044,19 @@ namespace ProjectBlock.View
         /// clock, "right-click to rotate") and, because the canvas draws over world space, it
         /// printed straight across the market panel. Only the run-level facts and the debug
         /// keys survive, and the panel itself carries the prompts.</summary>
+        /// <summary>The debug keys BOTH huds carry, in one place - they had drifted apart and
+        /// the market's copy was missing half of them. Written as short tokens rather than
+        /// "J: pick joker" sentences: the readout is a narrow left COLUMN now (InfoWidth), and a
+        /// sentence per key wrapped three lines deep and ran down into the power bar.</summary>
+        private static string DebugKeyLine()
+        {
+            return Loc.Pick(
+                "Debug  J joker  P power  D deck  R new run  L türkçe\n"
+                    + "F3 anim  F4 blocks  G boss  F5 skip to market",
+                "Debug  J joker  P güç  D deste  R yeni oyun  L english\n"
+                    + "F3 animasyon  F4 bloklar  G patron  F5 markete atla");
+        }
+
         private void BuildMarketHud()
         {
             var sb = new StringBuilder();
@@ -1062,11 +1075,7 @@ namespace ProjectBlock.View
                 sb.Append(Loc.Pick("DEBT ", "BORÇ ")).Append(session.Debt)
                     .Append(Loc.Pick("   [O] pay", "   [O] öde")).Append('\n');
             }
-            sb.Append(Loc.Pick(
-                "Debug - J: pick joker   P: pick power   D: choose deck   R: new run   L: türkçe"
-                    + "   F3: animations",
-                "Debug - J: joker seç   P: güç seç   D: deste seç   R: yeni oyun   L: english"
-                    + "   F3: animasyonlar"));
+            sb.Append(DebugKeyLine());
             infoText.text = sb.ToString();
             // "Kaçakçı": the free item is invisible unless the market says so.
             messageText.text = session.CanSmuggle
@@ -1078,6 +1087,7 @@ namespace ProjectBlock.View
         private void UpdateHud()
         {
             UpdateScoreHud();
+            RefreshBossBadge();
             // The draw pile doubles as the SELL screen while shopping, which nothing on screen
             // said. Set from the phase on every refresh, so it can never be left on in a round.
             cardLayer.SetSellHint(session.Phase == GamePhase.Market);
@@ -1102,18 +1112,13 @@ namespace ProjectBlock.View
             {
                 sb.Append(Loc.Pick("  - boss next", "  - sonraki: patron"));
             }
+            // WHICH boss, what it does and what it is up to are on the BOSS BADGE and its
+            // hover now (see GameUiController.BossBadge) - three facts that made this line the
+            // longest in a readout that is a narrow column. What stays is the one bit the badge
+            // cannot say from the corner: that this stage is a boss stage at all.
             if (round.Config.IsBossRound)
             {
-                sb.Append(Loc.Pick("  [BOSS", "  [PATRON"));
-                if (round.Boss != null)
-                {
-                    sb.Append(": ").Append(round.Boss.DisplayName);
-                    if (round.Boss.StatusText != null)
-                    {
-                        sb.Append(" - ").Append(round.Boss.StatusText);
-                    }
-                }
-                sb.Append(']');
+                sb.Append(Loc.Pick("  [BOSS]", "  [PATRON]"));
             }
             // "Uzun vadeli yatırımcı" restarts the final round silently, so say why the board
             // just went blank - otherwise the do-over looks like a bug.
@@ -1122,10 +1127,7 @@ namespace ProjectBlock.View
                 sb.Append(Loc.Pick("  [REPLAY]", "  [TEKRAR]"));
             }
             sb.Append(Loc.Pick("   Turn ", "   Tur ")).Append(round.TurnNumber).Append('\n');
-            if (round.Boss != null)
-            {
-                sb.Append(round.Boss.Description).Append('\n');
-            }
+
             // RoundScore lives in the scaled economy; lift the threshold to match for display.
             sb.Append(Loc.Pick("Score ", "Puan ")).Append(round.RoundScore)
                 // RoundEngine.ScoreThreshold, not the config's: a boss may ask for less
@@ -1197,15 +1199,11 @@ namespace ProjectBlock.View
             sb.Append(Loc.Pick(
                 "Drag to place.  Click draw pile: deck.  Right-click: rotate GEARS / reshape FOX\n",
                 "Sürükleyip yerleştir.  Çekme destesi: kartların.  Sağ tık: ÇARK döndür / TİLKİ şekillendir\n"));
+            // The keys that only mean something DURING a round; everything else is shared.
             sb.Append(Loc.Pick(
-                "Debug - S: redraw hand   B: bonus card   D: choose deck   R: new run   L: türkçe\n",
-                "Debug - S: eli yenile   B: bonus kart   D: deste seç   R: yeni oyun   L: english\n"));
-            sb.Append(Loc.Pick(
-                "Debug - J: pick joker   P: pick power   K: sell last joker   O: pay debt   W/M: two worlds\n",
-                "Debug - J: joker seç   P: güç seç   K: son jokeri sat   O: borç öde   W/M: iki dünya\n"));
-            sb.Append(Loc.Pick(
-                "Debug - F3: animation lab   G: boss stage",
-                "Debug - F3: animasyon labı   G: patron aşaması"));
+                "Debug  S hand  B bonus  K sell joker  O debt  W/M worlds\n",
+                "Debug  S el  B bonus  K joker sat  O borç  W/M dünyalar\n"));
+            sb.Append(DebugKeyLine());
             infoText.text = sb.ToString();
 
             if (pendingTargetJokerId.HasValue)

@@ -23,13 +23,25 @@ namespace ProjectBlock.Core
     /// </summary>
     public sealed class DefaultRoundProgression : IRoundProgression
     {
-        /// <summary>The board-size table, in round order. Ranges are inclusive on both ends and
-        /// together they cover the whole 15-round run.</summary>
+        /// <summary>
+        /// The board-size table, in round order. Ranges are inclusive on both ends and together
+        /// they cover the whole 15-round run.
+        ///
+        /// THE ARENA IS 7x7 FOR THE WHOLE RUN (designer's call). It used to grow - 7 for rounds
+        /// 1-5, 9 for 6-11, 11 for 12-15 - and restoring that is three numbers on the lines
+        /// below. The bands themselves stay, because SIZE is not all they carry: each one also
+        /// names the EROSION that punishes a stalling round, and those still step (the rim, then
+        /// a centre hole, then both). A late round is now harder in the same arena rather than a
+        /// bigger one.
+        ///
+        /// Erosion on a board this small degrades safely rather than running out: RoundEngine's
+        /// ErodeRim refuses to take a band once the arena is down to a sliver.
+        /// </summary>
         public BoardSizeBand[] BoardSizeBands =
         {
             new BoardSizeBand(1, 5, 7, ShuffleErosion.FromOutside),
-            new BoardSizeBand(6, 11, 9, ShuffleErosion.FromCenter),
-            new BoardSizeBand(12, 15, 11, ShuffleErosion.Both)
+            new BoardSizeBand(6, 11, 7, ShuffleErosion.FromCenter),
+            new BoardSizeBand(12, 15, 7, ShuffleErosion.Both)
         };
 
         public int BaseThreshold = 60;

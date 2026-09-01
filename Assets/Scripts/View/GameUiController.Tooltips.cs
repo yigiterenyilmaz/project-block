@@ -95,6 +95,15 @@ namespace ProjectBlock.View
             if (session.Phase == GamePhase.Round || session.Phase == GamePhase.Market)
             {
                 Vector2 barScreen = mouse.position.ReadValue();
+                // The badge sits above the joker bar in the same corner, and it is the only
+                // place the boss's rules are written down now - so it answers first.
+                BossRound badgeBoss = ActiveBoss();
+                if (badgeBoss != null && BossBadgeAt(barScreen))
+                {
+                    cardLayer.SetHoveredCard(-1);
+                    ShowBossTooltip(badgeBoss, world);
+                    return;
+                }
                 int ji = jokerBar.JokerIndexAt(barScreen);
                 if (ji >= 0 && ji < session.Jokers.Count)
                 {
@@ -116,7 +125,17 @@ namespace ProjectBlock.View
                 int index = marketView.OfferAt(world);
                 if (index < 0 || index >= session.Market.Offers.Count)
                 {
-                    HideTooltip();
+                    // Not on an offer: the section NAMES are hoverable too, and say what the
+                    // whole mechanic is rather than what one thing on the shelf does.
+                    MarketOfferKind section;
+                    if (marketView.TrySectionLabelAt(world, out section))
+                    {
+                        ShowSectionTooltip(section, world);
+                    }
+                    else
+                    {
+                        HideTooltip();
+                    }
                     return;
                 }
                 MarketOffer offer = session.Market.Offers[index];
@@ -181,6 +200,59 @@ namespace ProjectBlock.View
         {
             string tier = RarityPalette.Label(rarity);
             return tier == null ? string.Empty : tier + "\n";
+        }
+
+        /// <summary>What a market SHELF is: the mechanic, in a few lines, for a player who has
+        /// just met it. Deliberately about the RULE and not about the offers standing on it -
+        /// what a particular joker does is that joker's own tooltip, one hover to the side.</summary>
+        private void ShowSectionTooltip(MarketOfferKind kind, Vector2 nearWorld)
+        {
+            string title;
+            string body;
+            switch (kind)
+            {
+                case MarketOfferKind.Joker:
+                    title = Loc.Pick("JOKERS", "JOKERLER");
+                    body = Loc.Pick(
+                        "Always on. They bend the rules and score for you by themselves, "
+                            + "triggering left to right in the order you bought them. "
+                            + "Sell one any time in the market.",
+                        "Sürekli aktif. Kuralları büker ve kendi başlarına puan katarlar; "
+                            + "aldığın sıraya göre soldan sağa çalışırlar. "
+                            + "Markette istediğin zaman satabilirsin.");
+                    break;
+                case MarketOfferKind.Power:
+                    title = Loc.Pick("POWERS", "GÜÇLER");
+                    body = Loc.Pick(
+                        "Used by hand. One charge, refilled by a clean sweep or by a new round. "
+                            + "One power per turn, and using it never costs you the turn.",
+                        "Elle kullanılır. Tek şarj: temizlik yapınca veya yeni rauntta dolar. "
+                            + "Tur başına bir güç, kullanmak turunu harcamaz.");
+                    break;
+                default:
+                    title = Loc.Pick("BLOCKS", "BLOKLAR");
+                    body = Loc.Pick(
+                        "The shapes you place on the grid. A block you buy joins your run deck "
+                            + "for good, so every round from here on can deal it to you.",
+                        "Oyun alanına yerleştirdiğin şekiller. Aldığın blok kalıcı olarak oyun "
+                            + "destene girer; bundan sonraki her raunt onu dağıtabilir.");
+                    break;
+            }
+            RenderTooltip("section:" + kind, title, ViewUtil.WrapText(body, 34), nearWorld);
+        }
+
+        /// <summary>The boss badge's hover: who it is, what it does to this round, and what it
+        /// is up to right now. StatusText is read LIVE off the boss, so a counter it keeps
+        /// ("3 turns left") is current every time the tooltip is opened.</summary>
+        private void ShowBossTooltip(BossRound boss, Vector2 nearWorld)
+        {
+            string body = ViewUtil.WrapText(boss.Description, 34);
+            if (!string.IsNullOrEmpty(boss.StatusText))
+            {
+                body += "\n\n" + ViewUtil.WrapText(boss.StatusText, 34);
+            }
+            RenderTooltip("boss:" + boss.DefId,
+                Loc.Pick("BOSS - ", "PATRON - ") + boss.DisplayName, body, nearWorld);
         }
 
         private void ShowJokerTooltip(JokerDefinition joker, int price, Vector2 nearWorld)

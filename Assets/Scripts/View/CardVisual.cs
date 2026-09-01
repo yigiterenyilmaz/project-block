@@ -26,6 +26,36 @@ namespace ProjectBlock.View
         private static readonly Color BonusFaceColor = new Color(0.62f, 0.80f, 0.78f);
         private static readonly Color BackInnerColor = new Color(0.15f, 0.19f, 0.31f);
 
+        /// <summary>The line drawn around a card's FACE. The back has always had one - a frame
+        /// colour showing past its inner panel - and the face had nothing, so a pale card met
+        /// the pale background with no edge at all. It matters more now that the hand is a fan:
+        /// what separates two overlapping cards IS this line.</summary>
+        private static readonly Color FaceEdgeColor = new Color(0.24f, 0.22f, 0.20f);
+
+        private static readonly Color BonusFaceEdgeColor = new Color(0.13f, 0.30f, 0.29f);
+
+        /// <summary>How thick that line is, per side. Against a 1.35-wide card this reads as a
+        /// drawn border rather than a hairline - and in a tight fan it is the only thing telling
+        /// two overlapping cards apart, so it has to survive being half covered.</summary>
+        private const float FaceEdge = 0.075f;
+
+        // ---- the HELD mark: a card a boss has taken off the table for a turn ----
+        // Ice over a card that cannot be played, in the same flat hard-edged language as
+        // everything else: a translucent pane across the face, a frame around it, and a band
+        // that says so in words. No glow, no icon - the pane is what makes it read as unplayable
+        // at a glance and the band is what stops that reading being a guess.
+        private static readonly Color FrozenPaneColor = new Color(0.42f, 0.70f, 0.95f, 0.34f);
+        private static readonly Color FrozenEdgeColor = new Color(0.62f, 0.86f, 1f);
+        private static readonly Color FrozenBandColor = new Color(0.08f, 0.16f, 0.26f, 0.94f);
+        private static readonly Color FrozenLabelColor = new Color(0.86f, 0.96f, 1f);
+
+        /// <summary>Thickness of the frame around a held card.</summary>
+        private const float FrozenEdge = 0.075f;
+
+        /// <summary>How far a full-width band has to stay inside the card's edge to clear the
+        /// rounded corner. Slightly more than the 0.125 radius, so it never touches the curve.</summary>
+        private const float BandInset = 0.14f;
+
         /// <summary>Frame colors card backs cycle through (combined with 6 symbols this
         /// gives 24 distinct backs before repeating).</summary>
         private static readonly Color[] BackFramePalette =
@@ -57,6 +87,14 @@ namespace ProjectBlock.View
         private readonly List<MeshRenderer> textRenderers = new List<MeshRenderer>();
         private readonly List<int> textBaseOrders = new List<int>();
         private readonly List<Color> textBaseColors = new List<Color>();
+
+        /// <summary>The sorting order the card was built at. The HELD mark is stacked on top of
+        /// it, and it is built later than the card is - so the number has to be kept.</summary>
+        private int baseOrder;
+
+        /// <summary>The HELD mark's objects, built on first use and then only toggled. Null
+        /// until a boss actually seizes this card, which is the usual case.</summary>
+        private GameObject frozenMark;
 
         private Vector2 moveStart;
         private Vector2 moveTarget;
@@ -91,11 +129,24 @@ namespace ProjectBlock.View
         private void BuildSprites(BlockCard card, bool faceUp, bool bonusTint, int order,
             BlockShape displayShape)
         {
+            baseOrder = order;
             var bodySize = new Vector2(BodyWidth, BodyHeight);
             if (faceUp && card != null)
             {
-                Track(ViewUtil.MakeRect(transform, "Body", Vector2.zero, bodySize,
-                    bonusTint ? BonusFaceColor : FaceColor, order), order);
+                // Two rounded plates, the way the BACK has always been built: the outer one IS
+                // the outline, the inner one is the face sitting FaceEdge inside it.
+                //
+                // THEY MUST NOT SHARE A SORTING ORDER. Two overlapping sprites on the same order
+                // are drawn in whatever sequence Unity happens to register them, so the outline
+                // sometimes came out ON TOP of the face and the card was a dark slab with its
+                // cubes floating on it. The face is one order up, and everything above it moved
+                // up with it - a card now spans [order, order+4] on its face and [order, order+2]
+                // on its back.
+                Track(ViewUtil.MakeRounded(transform, "BodyEdge", Vector2.zero, bodySize,
+                    bonusTint ? BonusFaceEdgeColor : FaceEdgeColor, order), order);
+                Track(ViewUtil.MakeRounded(transform, "Body", Vector2.zero,
+                    bodySize - new Vector2(FaceEdge * 2f, FaceEdge * 2f),
+                    bonusTint ? BonusFaceColor : FaceColor, order + 1), order + 1);
                 BlockShape shape = displayShape != null ? displayShape : card.Shape;
                 // "Hedefli" is a mark on ONE cube, not a colour for the whole block, so it is
                 // skipped when picking the block's body colour - otherwise a plain targeted card
@@ -153,12 +204,12 @@ namespace ProjectBlock.View
                     Color miniTint = ViewUtil.CubeTileColor(miniTile, cubeColor);
                     SpriteRenderer miniCube = ViewUtil.MakeCell(transform, "Mini",
                         bottomLeft + new Vector2(cell.X * mini, cell.Y * mini),
-                        mini * MiniFlatFill, miniTint, order + 1);
+                        mini * MiniFlatFill, miniTint, order + 2);
                     // A painted tile brings its own frame and fills more of its cell than the
                     // inset flat square ever did.
                     ViewUtil.ApplyTile(miniCube, miniTile,
                         mini * (ViewUtil.ArtLoaded ? MiniTileFill : MiniFlatFill));
-                    Track(miniCube, order + 1);
+                    Track(miniCube, order + 2);
                 }
                 // The top band names the card's TYPE: its element(s), and/or "custom" for a
                 // player-designed block ("Karakter oluşturma"). Plain market/deck blocks get none.
@@ -187,9 +238,13 @@ namespace ProjectBlock.View
                                 : string.Join("+", elementLabels);
                     // A dark band behind plain text - outlines ghost on TextMesh, this doesn't.
                     var bandCenter = new Vector2(0f, BodyHeight * 0.5f - 0.15f);
+                    // Inset past the corner radius (0.125) rather than the old 0.05: a band
+                    // that ran the full width used to be square with the card, and now it would
+                    // hang out of the rounded corner at both ends.
                     Track(ViewUtil.MakeRect(transform, "ElementBand", bandCenter,
-                        new Vector2(BodyWidth - 0.1f, 0.22f), new Color(0.1f, 0.11f, 0.14f, 0.92f),
-                        order + 2), order + 2);
+                        new Vector2(BodyWidth - BandInset * 2f, 0.22f),
+                        new Color(0.1f, 0.11f, 0.14f, 0.92f),
+                        order + 3), order + 3);
                     Color labelColor = card.AntimatterOf.HasValue
                         ? ViewUtil.CubeDisplayColor(new Cube(card.AntimatterOf.Value, -1))
                         : card.FallsThrough
@@ -200,8 +255,8 @@ namespace ProjectBlock.View
                             ? Color.Lerp(ViewUtil.ElementColor(card.Elements[0]), Color.white, 0.4f)
                             : new Color(0.85f, 0.80f, 1f); // custom-only: a bright neutral tag
                     TrackText(ViewUtil.MakeText3D(transform, "ElementLabel", bandCenter,
-                        bandText, 90, 0.016f, labelColor, order + 3,
-                        TextAnchor.MiddleCenter), order + 3);
+                        bandText, 90, 0.016f, labelColor, order + 4,
+                        TextAnchor.MiddleCenter), order + 4);
                 }
             }
             else
@@ -231,10 +286,13 @@ namespace ProjectBlock.View
         {
             int id = card != null ? card.Id : -1;
             Color frame = FrameColorFor(id);
-            Report(track, ViewUtil.MakeRect(parent, "BackFrame", Vector2.zero,
+            Report(track, ViewUtil.MakeRounded(parent, "BackFrame", Vector2.zero,
                 new Vector2(BodyWidth, BodyHeight), frame, order), order);
-            Report(track, ViewUtil.MakeRect(parent, "BackInner", Vector2.zero,
-                new Vector2(BodyWidth - 0.18f, BodyHeight - 0.18f), BackInnerColor, order + 1), order + 1);
+            // The back's frame matches the face's edge (2 x FaceEdge taken off each axis), so
+            // the two sides of a card are bordered the same.
+            Report(track, ViewUtil.MakeRounded(parent, "BackInner", Vector2.zero,
+                new Vector2(BodyWidth - FaceEdge * 2f, BodyHeight - FaceEdge * 2f),
+                BackInnerColor, order + 1), order + 1);
             if (id >= 0)
             {
                 BuildBackSymbol(parent, id, frame, order + 2, track);
@@ -320,13 +378,76 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Hover highlight for hand/bonus cards: a slight grow while the mouse is
-        /// over the card. Scale-only, so it never fights the drag alpha/sorting effects.</summary>
+        /// <summary>
+        /// Marks the card as HELD - seized by the "Alıkoyma" boss, or frozen by "Hazine" - which
+        /// is the one thing about a card in hand that the player could not see. The rules already
+        /// refused the pick-up (GameUiController.Drag), so before this the card simply did not
+        /// answer the mouse and nothing on screen said why.
+        ///
+        /// Built on first use and then only toggled: most cards are never held, and a card that
+        /// is held once is usually held again. The pieces are tracked like every other part of
+        /// the card, so the drag fade and the sorting boost reach them too.
+        /// </summary>
+        public void SetFrozen(bool frozen)
+        {
+            if (!frozen)
+            {
+                if (frozenMark != null)
+                {
+                    frozenMark.SetActive(false);
+                }
+                return;
+            }
+            if (frozenMark == null)
+            {
+                BuildFrozenMark();
+            }
+            frozenMark.SetActive(true);
+        }
+
+        /// <summary>The pane, the frame and the band, once. Orders sit above the card's own
+        /// [order, order+4] so the mark is never half-buried by a cube or the element band.</summary>
+        private void BuildFrozenMark()
+        {
+            frozenMark = new GameObject("Held");
+            frozenMark.transform.SetParent(transform, false);
+            Transform root = frozenMark.transform;
+
+            // A rounded ring rather than four straight bars: bars square off the corners the
+            // card no longer has, and would stick out past its silhouette at all four of them.
+            // Outer plate IS the frame; the pane sits FrozenEdge inside it.
+            Track(ViewUtil.MakeRounded(root, "Frame", Vector2.zero,
+                new Vector2(BodyWidth, BodyHeight), FrozenEdgeColor, baseOrder + 5), baseOrder + 5);
+            Track(ViewUtil.MakeRounded(root, "Pane", Vector2.zero,
+                new Vector2(BodyWidth - FrozenEdge * 2f, BodyHeight - FrozenEdge * 2f),
+                FrozenPaneColor, baseOrder + 6), baseOrder + 6);
+
+            // Where the ELEMENT band would sit if this were the top of the card - the same bar,
+            // at the other end, so a held elemental block wears both without them colliding.
+            var bandCentre = new Vector2(0f, -BodyHeight * 0.5f + 0.15f);
+            Track(ViewUtil.MakeRect(root, "Band", bandCentre,
+                new Vector2(BodyWidth - BandInset * 2f, 0.22f), FrozenBandColor,
+                baseOrder + 7), baseOrder + 7);
+            TrackText(ViewUtil.MakeText3D(root, "Label", bandCentre,
+                Loc.Pick("HELD", "TUTULDU"), 90, 0.016f, FrozenLabelColor, baseOrder + 8,
+                TextAnchor.MiddleCenter), baseOrder + 8);
+        }
+
+        /// <summary>Hover highlight for hand/bonus cards - the GROW half of it. The lift out of
+        /// the row and the jump to the front of the fan belong to CardLayerView, which is the
+        /// only thing that knows where the row is and what else is in it.
+        ///
+        /// Scale-only here on purpose: position is driven by MoveTo, and a hover that wrote to
+        /// it directly would be undone by the next slide.</summary>
         public void SetHovered(bool hovered)
         {
-            float scale = hovered ? 1.07f : 1f;
+            float scale = hovered ? HoverScale : 1f;
             transform.localScale = new Vector3(scale, scale, 1f);
         }
+
+        /// <summary>Bigger than the old 1.07: in a fan the neighbours are covering this card's
+        /// edges, and the growth is half of what makes it readable again.</summary>
+        private const float HoverScale = 1.16f;
 
         /// <summary>Raises (or resets, with 0) the sorting order of the whole card,
         /// so dragged/flying cards render above resting ones.</summary>

@@ -3088,7 +3088,7 @@ public static class JokerTests
 
     private static void Progression_BoardSizeStepsWithTheRoundBands()
     {
-        Section("progression / board size steps 5x5 -> 7x7 -> 9x9");
+        Section("progression / the arena is 7x7 for the whole run");
         var progression = new DefaultRoundProgression();
 
         bool firstBand = true;
@@ -3102,19 +3102,27 @@ public static class JokerTests
         bool secondBand = true;
         for (int round = 6; round <= 11; round++)
         {
-            secondBand &= progression.BoardSizeFor(round) == 9;
+            secondBand &= progression.BoardSizeFor(round) == 7;
         }
-        Check(secondBand, "rounds 6-11 are played on 9x9");
+        Check(secondBand, "rounds 6-11 are played on 7x7 too");
 
         bool thirdBand = true;
         for (int round = 12; round <= 15; round++)
         {
-            thirdBand &= progression.BoardSizeFor(round) == 11;
+            thirdBand &= progression.BoardSizeFor(round) == 7;
         }
-        Check(thirdBand, "rounds 12-15 are played on 11x11");
+        Check(thirdBand, "rounds 12-15 are played on 7x7 too");
 
-        Check(progression.BoardSizeFor(16) == 11 && progression.BoardSizeFor(40) == 11,
+        Check(progression.BoardSizeFor(16) == 7 && progression.BoardSizeFor(40) == 7,
             "a round past the table keeps the last band's size");
+
+        // The bands no longer step in SIZE, but they still step in EROSION - which is the other
+        // half of what they carry, and the half that still makes a late round a harder place.
+        BoardSizeBand[] erosionBands = progression.BoardSizeBands;
+        Check(erosionBands[0].Erosion == ShuffleErosion.FromOutside
+                && erosionBands[1].Erosion == ShuffleErosion.FromCenter
+                && erosionBands[2].Erosion == ShuffleErosion.Both,
+            "the erosion styles still step band by band");
         // The run is 15 rounds numbered 1-15, so the bands must tile it exactly: start at 1,
         // end at 15, and leave no gap or overlap in between.
         BoardSizeBand[] bands = progression.BoardSizeBands;
@@ -3127,10 +3135,12 @@ public static class JokerTests
         }
         Check(contiguous && covered == 15, "the bands tile rounds 1-15 exactly",
             "covered " + covered);
-        Check(progression.GetRound(6, false).BoardWidth == 9 && progression.GetRound(5, false).BoardWidth == 7,
-            "the step happens between round 5 and round 6");
-        Check(progression.GetRound(12, false).BoardWidth == 11 && progression.GetRound(11, false).BoardWidth == 9,
-            "and between round 11 and round 12");
+        // No STEP to find any more - the point of these two is now the opposite one: crossing
+        // a band boundary must not change the arena, because the run is 7x7 throughout.
+        Check(progression.GetRound(6, false).BoardWidth == 7 && progression.GetRound(5, false).BoardWidth == 7,
+            "the arena does not change between round 5 and round 6");
+        Check(progression.GetRound(12, false).BoardWidth == 7 && progression.GetRound(11, false).BoardWidth == 7,
+            "nor between round 11 and round 12");
 
         // The table is data: a variant curve only has to hand over different bands.
         progression.BoardSizeBands = new[] { new BoardSizeBand(1, 3, 4), new BoardSizeBand(4, 6, 12) };

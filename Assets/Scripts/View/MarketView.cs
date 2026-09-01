@@ -1,5 +1,22 @@
 // PURPOSE: The between-rounds market screen: block-card, joker and power offers with
 // prices, click to buy. Rebuilt from scratch on every change (cheap at this scale).
+//
+// ============================ TEMPORARY DEMO LAYOUT ==================================
+// There are TWO layouts in this file and ONE switch between them: DemoLayout.
+//
+//   true  - the DEMO shelf. Flat generated rects, no art: blocks down the left, jokers
+//           and powers down the right, a reroll button on every section, a PROCEED
+//           button bottom right, and NO SCROLL - the whole market is on screen at once.
+//   false - the SHIPPED shelf. Painted menu_frame / menu_section art, three sections
+//           stacked in a scrolling window, refreshed by HOLDING a section.
+//
+// ROLLING BACK IS ONE CHARACTER: set DemoLayout to false. Everything the old layout
+// needs is still here and still compiled - the demo adds paths, it deletes none. The
+// pieces the two share (BuildOffer, BuildNamedTile, the hover outline, the buy fx, every
+// hit test) are written once and used by both, so the demo cannot drift from the real
+// thing while it stands. Delete the DEMO LAYOUT region at the bottom of this file and
+// the switch to remove it for good.
+// =====================================================================================
 // Purchases go through GameSession.TryBuyOffer - this view never touches money, the deck
 // or the inventories. Joker/power offers are framed, tinted and tagged by their graded
 // Rarity through RarityPalette (the same colours the bars and the debug pickers use).
@@ -15,6 +32,12 @@ namespace ProjectBlock.View
     /// <summary>Renders and hit-tests the market offers.</summary>
     public sealed class MarketView : MonoBehaviour
     {
+        /// <summary>THE ROLLBACK SWITCH - see the header. true is the temporary demo shelf,
+        /// false the shipped painted one. static readonly rather than const on purpose: a const
+        /// makes every branch of the layout that is currently off unreachable code, and six
+        /// CS0162 warnings in the console is a poor way to say "this half is switched off".</summary>
+        private static readonly bool DemoLayout = true;
+
 
         /// <summary>Vertical distance between two section rows.</summary>
         private const float RowPitch = 3.7f;
@@ -144,6 +167,12 @@ namespace ProjectBlock.View
                 offerSold.Add(offers[i].Sold);
                 offerAffordable.Add(session.TotalScore >= offers[i].Price);
                 offerDetails.Add(OfferDetail(offers[i]));
+            }
+
+            if (DemoLayout)
+            {
+                BuildDemoShelf(session, offers, count);
+                return;
             }
 
             // ---- THE FRAME. Drawn at its own pixels-per-unit and never magnified past it; see
@@ -307,7 +336,7 @@ namespace ProjectBlock.View
             {
                 offerVisuals.Add(null);
                 BuildNamedTile(slotCenter, i, "Joker", TierTag(Loc.Pick("JOKER", "JOKER"), rarity),
-                    offer.Joker.DisplayName, offer.Joker.Description,
+                    offer.Joker.DisplayName, DemoLayout ? string.Empty : offer.Joker.Description,
                     RarityPalette.Tint(JokerBodyColor, rarity),
                     rarity == Rarity.Common ? JokerTagColor : RarityPalette.Accent(rarity), text);
             }
@@ -315,7 +344,7 @@ namespace ProjectBlock.View
             {
                 offerVisuals.Add(null);
                 BuildNamedTile(slotCenter, i, "Power", TierTag(Loc.Pick("POWER", "GÜÇ"), rarity),
-                    offer.Power.DisplayName, offer.Power.Description,
+                    offer.Power.DisplayName, DemoLayout ? string.Empty : offer.Power.Description,
                     RarityPalette.Tint(PowerBodyColor, rarity),
                     rarity == Rarity.Common ? PowerTagColor : RarityPalette.Accent(rarity), text);
             }
@@ -521,10 +550,31 @@ namespace ProjectBlock.View
         /// offer is reported.</summary>
         public System.Action<MarketOfferKind> SectionHeld;
 
+        /// <summary>DEMO: fired when the PROCEED button is clicked. Same contract as
+        /// SectionHeld - the view reports the gesture and the controller decides what a
+        /// "leave the market" actually is.</summary>
+        public System.Action ProceedPressed;
+
+        /// <summary>DEMO: where each section's reroll button ended up, in this view's own
+        /// space (the panel is scaled to fit, so hit tests come through ToLocal). A zero-width
+        /// rect means "not built", which is what an empty shelf leaves behind.</summary>
+        private readonly Rect[] demoRerollRects = new Rect[SectionCount];
+
+        private Rect demoProceedRect;
+
+        /// <summary>DEMO: the hit box around each section's NAME. Hovering it explains what that
+        /// whole shelf is - not what one offer on it does, which is the offer's own tooltip.</summary>
+        private readonly Rect[] demoLabelRects = new Rect[SectionCount];
+
         /// <summary>Puts a renderer under the window mask. Sprites clip against the shell's
         /// interior; without this a half-scrolled section draws over the frame.</summary>
         private static void Masked(SpriteRenderer renderer)
         {
+            if (DemoLayout)
+            {
+                return; // no window, nothing to clip against - and clipping to a mask that
+                        // does not exist hides the sprite outright
+            }
             if (renderer != null)
             {
                 renderer.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
@@ -534,6 +584,10 @@ namespace ProjectBlock.View
         /// <summary>Puts a whole subtree under the window mask.</summary>
         private static void MaskAll(Transform root)
         {
+            if (DemoLayout)
+            {
+                return; // see Masked
+            }
             SpriteRenderer[] all = root.GetComponentsInChildren<SpriteRenderer>(true);
             for (int i = 0; i < all.Length; i++)
             {
@@ -559,6 +613,10 @@ namespace ProjectBlock.View
         /// <summary>Scrolls the shelf and lays it out again. Clamped, so the ends are hard.</summary>
         public bool Scroll(float notches)
         {
+            if (DemoLayout)
+            {
+                return false; // the demo shelf puts everything on screen at once
+            }
             if (shownSession == null || maxScroll <= 0.001f)
             {
                 return false;
@@ -582,6 +640,13 @@ namespace ProjectBlock.View
         /// hold-to-refresh gesture, and it is the PANEL that is the target - not a button on it.</summary>
         public int SectionAt(Vector2 world)
         {
+            if (DemoLayout)
+            {
+                // The demo has a REROLL BUTTON on every section, so the hold gesture is off:
+                // leaving both live would refresh the shelf under a player who just meant to
+                // press and think.
+                return -1;
+            }
             // An OFFER is not part of its section for this purpose. Clicking buys on the button
             // going down, so without this a press-and-hold on a tile would buy the offer and
             // then refresh the shelf out from under it. What is left to grab is the tab strip,
@@ -705,6 +770,12 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>WHY A DEMO TILE HAS NO DESCRIPTION. Hovering an offer already opens the full
+        /// tooltip - name, description and price - through GameUiController.Tooltips, and that
+        /// tooltip has room for all of it. What the tile could show was two lines and an
+        /// ellipsis, which is not enough to decide a purchase on and is enough to crowd the name
+        /// and the price it is sitting between. So the tile is the LABEL and the tooltip is the
+        /// text, and the shelf reads at a glance.</summary>
         /// <summary>Draws a joker or power offer: a tinted body with a kind tag and the name.
         /// SIZED BY ITS COMPARTMENT rather than by a constant - the shelf is painted art now and
         /// a tile that ignores it hangs over the frame. An empty <paramref name="description"/>
@@ -726,8 +797,12 @@ namespace ProjectBlock.View
             ViewUtil.MakeText3D(transform, key + "Tag_" + index,
                 center + new Vector2(0f, size.y * 0.5f - 0.16f), label,
                 90, 0.019f, tagColor, 37, TextAnchor.MiddleCenter);
+            // A DEMO TILE CARRIES NO DESCRIPTION - see the note at the call site - so the name
+            // sits in the middle of it, between the tag above and the price below, and nothing
+            // has to be measured up from the bottom edge.
             ViewUtil.MakeText3D(transform, key + "Name_" + index,
-                center + new Vector2(0f, 0.02f), ViewUtil.WrapText(displayName, 14),
+                center + new Vector2(0f, 0.02f),
+                ViewUtil.WrapText(displayName, DemoLayout ? DemoNameWrap : 14),
                 90, 0.027f, JokerNameColor, 37, TextAnchor.MiddleCenter);
             if (!string.IsNullOrEmpty(description))
             {
@@ -737,6 +812,405 @@ namespace ProjectBlock.View
                     90, 0.017f, JokerDescColor, 37, TextAnchor.UpperCenter);
             }
         }
+
+        // ======================= THE DEMO SHELF (temporary) ==========================
+        // Flat rects and text, no art, no scroll, everything on screen: BLOCKS take the left
+        // column, JOKERS and POWERS stack down the right, every section carries its own reroll
+        // button, and PROCEED sits bottom right. See the file header for the rollback.
+        //
+        // Measured in world units around DemoCentre on a 17.8 x 10 screen (ortho size 5), then
+        // scaled to whatever the camera really is by the SAME FitToCamera the painted shelf uses.
+        //
+        // Sorting orders, outside in: border 30, backdrop 31, section boxes 33, offer frames 34
+        // (BuildOffer), buttons 35, tiles and cards 36, text 37-38, hover outline 39. No two
+        // things that overlap share an order - a tie between the backdrop and a section box is
+        // resolved by nothing in particular and flickers.
+
+        // THE PANEL DOES NOT OWN THE SCREEN. It is measured from the live camera every Show and
+        // three strips are left OUTSIDE it, because what is under them is still live:
+        //   top    - the run HUD (seed, round, debug keys) and the message line.
+        //   bottom - the DRAW PILE at (6.4, -4.05) and the discard at (-6.4, -4.05). The draw
+        //            pile is the SELL/INSPECT screen in the market, so covering it takes a
+        //            feature away; its "SELL CARDS" plate draws at order 38-40 and came out on
+        //            top of the panel anyway, which is what a panel over a live control looks
+        //            like.
+        //   sides  - a hair of air so the frame is not flush with the screen edge.
+        // The joker and power bars are Canvas UI and draw above all of this on their own.
+        private const float DemoTopReserve = 1.5f;
+
+        /// <summary>Clears the top of the piles: they are centred at -4.05 and a card is 1.8
+        /// tall, so their top edge is -3.15 - and IsDrawPileAt answers over a box 0.09 larger
+        /// again, at -3.06. The panel stops at -2.85 so that the PROCEED button cannot come
+        /// within a hair of stealing a click meant for the deck.</summary>
+        private const float DemoBottomReserve = 2.15f;
+
+        private const float DemoSideReserve = 0.35f;
+
+        /// <summary>Air between the panel edge and anything in it.</summary>
+        private const float DemoPad = 0.3f;
+
+        /// <summary>The strip across the top: MARKET on the left, the balance on the right.</summary>
+        private const float DemoTitleHeight = 0.85f;
+
+        /// <summary>The strip across the bottom: the hints, and PROCEED on the right.</summary>
+        private const float DemoFooterHeight = 0.85f;
+
+        // ---- WIDTH IS DECIDED BY THE CONTENT, NOT BY THE SCREEN ----
+        // The panel used to take the whole width it was given and then hand each offer a slot a
+        // third of it wide, which left a 3.4-wide joker tile floating in a 5-wide slot. So the
+        // slots are sized first - a tile plus its padding - the columns are the sum of their
+        // own slots, and the panel is whatever those add up to, centred. It only shrinks from
+        // there, if the screen cannot hold it.
+
+        /// <summary>A block tile: a card (1.35 x 1.8 before scaling) and its price.</summary>
+        private const float DemoBlockTileWidth = 1.80f;
+
+        /// <summary>A joker/power tile: a name and two lines of description.</summary>
+        private const float DemoNamedTileWidth = 3.30f;
+
+        /// <summary>No section is narrower than its own HEADER - a label and a reroll button -
+        /// however few offers it is holding.</summary>
+        private const float DemoMinSectionWidth = 4.2f;
+
+        /// <summary>The bar along the top of a section box: its name, and its reroll button.</summary>
+        private const float DemoHeaderHeight = 0.55f;
+
+        /// <summary>How much of a section header answers to its NAME. Kept clear of the reroll
+        /// button, which starts 2.33 in from the right of even the narrowest section.</summary>
+        private const float DemoLabelHitWidth = 2.3f;
+
+        private static readonly Vector2 DemoRerollSize = new Vector2(2.15f, 0.46f);
+
+        private static readonly Vector2 DemoProceedSize = new Vector2(3.2f, 0.78f);
+
+        private const float DemoTilePadX = 0.14f;
+
+        private const float DemoTilePadY = 0.12f;
+
+        private const float DemoColumnGap = 0.34f;
+
+        private const float DemoRowGap = 0.22f;
+
+        /// <summary>Tallest a tile gets, as a multiple of its own width. Card-shaped, so the
+        /// block column keeps card-shaped frames however tall its box is.</summary>
+        private const float DemoTileAspect = 1.55f;
+
+        /// <summary>Name wrap for a demo tile, which is wider than the painted one it inherits
+        /// its text layout from - 14 characters in a 3.3-wide tile is a column of confetti.</summary>
+        private const int DemoNameWrap = 20;
+
+
+        private static readonly Color DemoSectionColor = new Color(0.115f, 0.135f, 0.180f);
+
+        private static readonly Color DemoButtonColor = new Color(0.22f, 0.30f, 0.44f);
+
+        private static readonly Color DemoButtonDeadColor = new Color(0.17f, 0.17f, 0.20f);
+
+        private static readonly Color DemoProceedColor = new Color(0.17f, 0.42f, 0.28f);
+
+        /// <summary>The demo shelf, start to finish. The per-offer lists are already sized by
+        /// Show; this decides WHERE everything goes and then hands each offer to the same
+        /// BuildOffer the painted shelf uses.</summary>
+        private void BuildDemoShelf(GameSession session, IReadOnlyList<MarketOffer> offers,
+            int count)
+        {
+            // Nothing clips in the demo, so the "is this inside the scroll window" test that
+            // BuildOffer asks has to answer yes for everything.
+            windowRect = new Rect(-1000f, -1000f, 2000f, 2000f);
+            maxScroll = 0f;
+
+            // Laid out in REAL world units at scale 1 - there is no FitToCamera here, because
+            // fitting is what made the panel swallow the screen: it scales a fixed design up
+            // until it fills the camera. The panel is measured FROM the camera instead, so the
+            // reserved strips survive every aspect ratio.
+            // The buckets are worked out FIRST: how many offers each section is holding is what
+            // decides how wide the panel wants to be.
+            var buckets = new List<int>[SectionCount];
+            for (int s = 0; s < SectionCount; s++)
+            {
+                buckets[s] = new List<int>();
+            }
+            for (int i = 0; i < count; i++)
+            {
+                buckets[SectionIndex(offers[i].Kind)].Add(i);
+            }
+            int blockCount = buckets[SectionIndex(MarketOfferKind.Block)].Count;
+            int namedCount = Mathf.Max(buckets[SectionIndex(MarketOfferKind.Joker)].Count,
+                buckets[SectionIndex(MarketOfferKind.Power)].Count);
+            float leftWanted = Mathf.Max(DemoMinSectionWidth,
+                blockCount * (DemoBlockTileWidth + DemoTilePadX * 2f));
+            float rightWanted = Mathf.Max(DemoMinSectionWidth,
+                namedCount * (DemoNamedTileWidth + DemoTilePadX * 2f));
+
+            Rect panel = DemoPanelRect(
+                DemoPad * 2f + leftWanted + DemoColumnGap + rightWanted);
+            transform.localScale = Vector3.one;
+            Camera mainCam = Camera.main;
+            transform.position = mainCam != null
+                ? new Vector3(mainCam.transform.position.x, mainCam.transform.position.y, 0f)
+                : Vector3.zero;
+
+            ViewUtil.MakeRect(transform, "DemoFrame", panel.center,
+                new Vector2(panel.width + PanelBorder * 2f, panel.height + PanelBorder * 2f),
+                PanelFrameColor, 30);
+            ViewUtil.MakeRect(transform, "DemoBackdrop", panel.center,
+                new Vector2(panel.width, panel.height), BackdropColor, 31);
+
+            BuildDemoTitle(session, panel);
+
+            // ---- the two columns ----
+            float contentTop = panel.yMax - DemoTitleHeight;
+            float contentBottom = panel.yMin + DemoFooterHeight;
+            float contentLeft = panel.xMin + DemoPad;
+            float contentRight = panel.xMax - DemoPad;
+            // k is 1 when the panel got the width it asked for, and less when the screen was
+            // too narrow to give it - in which case both columns give up the same fraction.
+            float contentWidth = contentRight - contentLeft - DemoColumnGap;
+            float k = contentWidth / (leftWanted + rightWanted);
+            float leftWidth = leftWanted * k;
+
+            float rightLeft = contentLeft + leftWidth + DemoColumnGap;
+            float rightWidth = contentRight - rightLeft;
+            // Three boxes: BLOCKS down the whole left column, JOKERS over POWERS on the right.
+            // A tile never stretches to fill its box (see DemoTileAspect) - the row is centred
+            // in it instead, so the tall block column holds card-shaped frames rather than one
+            // 4-unit frame with a 1.8-unit card floating inside it.
+            float halfHeight = (contentTop - contentBottom - DemoRowGap) * 0.5f;
+            var blocksBox = new Rect(contentLeft, contentBottom, leftWidth,
+                contentTop - contentBottom);
+            var jokersBox = new Rect(rightLeft, contentTop - halfHeight, rightWidth, halfHeight);
+            var powersBox = new Rect(rightLeft, contentBottom, rightWidth, halfHeight);
+
+            var boxes = new Rect[SectionCount];
+            boxes[SectionIndex(MarketOfferKind.Block)] = blocksBox;
+            boxes[SectionIndex(MarketOfferKind.Joker)] = jokersBox;
+            boxes[SectionIndex(MarketOfferKind.Power)] = powersBox;
+
+            for (int s = 0; s < SectionCount; s++)
+            {
+                BuildDemoSection(s, boxes[s], buckets[s]);
+            }
+
+            // Placed in index order, because BuildOffer appends to the parallel lists.
+            for (int i = 0; i < count; i++)
+            {
+                if (offerTileSizes[i] == Vector2.zero)
+                {
+                    offerVisuals.Add(null);
+                    offerRarities.Add(Rarity.Common);
+                    continue;
+                }
+                BuildOffer(session, offers, i);
+            }
+
+            BuildDemoFooter(session, panel);
+
+            BuildHoverOutline();
+        }
+
+        /// <summary>The panel, in world units. HEIGHT comes from the camera minus the reserved
+        /// strips; WIDTH is whatever the content asked for, centred, and only cut back when the
+        /// screen cannot hold it. Falls back to ortho 5 / 16:9 when there is no camera to ask.</summary>
+        private static Rect DemoPanelRect(float wantedWidth)
+        {
+            Camera cam = Camera.main;
+            float halfHeight = cam != null && cam.orthographic ? cam.orthographicSize : 5f;
+            float halfWidth = halfHeight * (cam != null ? cam.aspect : 16f / 9f);
+            float width = Mathf.Min(wantedWidth, (halfWidth - DemoSideReserve) * 2f);
+            return Rect.MinMaxRect(-width * 0.5f, -halfHeight + DemoBottomReserve,
+                width * 0.5f, halfHeight - DemoTopReserve);
+        }
+
+        private void BuildDemoTitle(GameSession session, Rect panel)
+        {
+            float y = panel.yMax - DemoTitleHeight * 0.5f;
+            ViewUtil.MakeText3D(transform, "DemoTitle",
+                new Vector2(panel.xMin + DemoPad, y), Loc.Pick("MARKET", "MARKET"),
+                60, 0.075f, PanelCreamColor, 38, TextAnchor.MiddleLeft);
+            ViewUtil.MakeText3D(transform, "DemoBalance",
+                new Vector2(panel.xMax - DemoPad, y),
+                Loc.Pick("You have ", "Paran: ") + session.TotalScore,
+                90, 0.036f, AffordablePriceColor, 38, TextAnchor.MiddleRight);
+        }
+
+        /// <summary>One section box: its name, its own reroll button, and the slots its offers
+        /// will be drawn into. The slot centres go straight into offerCenters, so OfferAt and
+        /// the hover outline need to know nothing about the demo at all.</summary>
+        private void BuildDemoSection(int section, Rect box, List<int> bucket)
+        {
+            ViewUtil.MakeRect(transform, "DemoSection_" + section, box.center,
+                new Vector2(box.width, box.height), DemoSectionColor, 33);
+
+            float headerY = box.yMax - DemoHeaderHeight * 0.5f;
+            ViewUtil.MakeText3D(transform, "DemoSectionTitle_" + section,
+                new Vector2(box.xMin + 0.22f, headerY), SectionLabel(KindOf(section)),
+                60, 0.044f, SectionHeaderColor, 38, TextAnchor.MiddleLeft);
+            // The name is the handle for "what IS this shelf" (see TrySectionLabelAt). A fixed
+            // box rather than the text's own extent: a TextMesh does not offer one until it has
+            // been laid out, and the widest label here ("JOKERLER") is well inside this.
+            demoLabelRects[section] = new Rect(box.xMin + 0.10f,
+                headerY - DemoHeaderHeight * 0.5f, DemoLabelHitWidth, DemoHeaderHeight);
+
+            // ---- the section's own reroll button ----
+            var buttonCentre = new Vector2(box.xMax - 0.18f - DemoRerollSize.x * 0.5f, headerY);
+            demoRerollRects[section] = new Rect(buttonCentre.x - DemoRerollSize.x * 0.5f,
+                buttonCentre.y - DemoRerollSize.y * 0.5f, DemoRerollSize.x, DemoRerollSize.y);
+            ViewUtil.MakeRect(transform, "DemoReroll_" + section, buttonCentre, DemoRerollSize,
+                rerollAffordable ? DemoButtonColor : DemoButtonDeadColor, 35);
+            ViewUtil.MakeText3D(transform, "DemoRerollLabel_" + section, buttonCentre,
+                Loc.Pick("REROLL  ", "YENİLE  ") + rerollCostText, 90, 0.026f,
+                rerollAffordable ? PanelCreamColor : TooExpensiveColor, 38,
+                TextAnchor.MiddleCenter);
+
+            if (bucket.Count == 0)
+            {
+                return;
+            }
+            var content = new Rect(box.xMin, box.yMin, box.width, box.height - DemoHeaderHeight);
+            float slot = content.width / bucket.Count;
+            // The slot was sized FOR this width (see the panel), so the cap normally lands
+            // exactly on it - it only bites when a narrow screen made the columns give ground.
+            float tileWidth = Mathf.Min(slot - DemoTilePadX * 2f,
+                KindOf(section) == MarketOfferKind.Block
+                    ? DemoBlockTileWidth : DemoNamedTileWidth);
+            // Height follows the WIDTH, capped by the box. A tile stretched to a tall box is a
+            // frame with a card lost in the middle of it; a tile that keeps its shape and sits
+            // centred reads as a shelf with air above it.
+            float tileHeight = Mathf.Min(content.height - DemoTilePadY * 2f,
+                tileWidth * DemoTileAspect);
+            var tile = new Vector2(tileWidth, tileHeight);
+            for (int c = 0; c < bucket.Count; c++)
+            {
+                int i = bucket[c];
+                offerCenters[i] = new Vector2(content.xMin + slot * (c + 0.5f), content.center.y);
+                offerTileSizes[i] = tile;
+            }
+        }
+
+        /// <summary>The bottom strip: what the pointer can do on the left, PROCEED on the
+        /// right. The prompt names the stage it starts, because a boss stage and round N+1 are
+        /// not the same thing and the button is now the only place that says which is next.</summary>
+        private void BuildDemoFooter(GameSession session, Rect panel)
+        {
+            float left = panel.xMin + DemoPad;
+            ViewUtil.MakeText3D(transform, "DemoHint1",
+                new Vector2(left, panel.yMin + 0.56f),
+                Loc.Pick("Click a joker or power on the bars to sell it",
+                    "Satmak için barlardaki jokere veya güce tıkla"),
+                90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleLeft);
+            ViewUtil.MakeText3D(transform, "DemoHint2",
+                new Vector2(left, panel.yMin + 0.28f),
+                Loc.Pick("Click the DECK, bottom right, to inspect it and sell cards",
+                    "Kartlara bakmak ve satmak için sağ alttaki DESTEYE tıkla"),
+                90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleLeft);
+
+            // Centred in the FOOTER STRIP, not measured up from the panel edge: at 0.78 tall
+            // and 0.3 of padding the button reached 0.08 into the POWERS box above it.
+            var centre = new Vector2(panel.xMax - DemoPad - DemoProceedSize.x * 0.5f,
+                panel.yMin + DemoFooterHeight * 0.5f);
+            demoProceedRect = new Rect(centre.x - DemoProceedSize.x * 0.5f,
+                centre.y - DemoProceedSize.y * 0.5f, DemoProceedSize.x, DemoProceedSize.y);
+            ViewUtil.MakeRect(transform, "DemoProceed", centre, DemoProceedSize,
+                DemoProceedColor, 35);
+            ViewUtil.MakeText3D(transform, "DemoProceedLabel", centre + new Vector2(0f, 0.11f),
+                Loc.Pick("PROCEED", "DEVAM"), 60, 0.040f, PanelCreamColor, 38,
+                TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "DemoProceedSub", centre - new Vector2(0f, 0.16f),
+                session.BossStageFollowsThisRound && !session.InBossStage
+                    ? Loc.Pick("BOSS of round " + session.RoundNumber + "   [N]",
+                        session.RoundNumber + ". rauntun PATRONU   [N]")
+                    : Loc.Pick("round " + (session.RoundNumber + 1) + "   [N]",
+                        "raunt " + (session.RoundNumber + 1) + "   [N]"),
+                90, 0.021f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+        }
+
+        /// <summary>DEMO: a click on a section's reroll button. Fires the SAME SectionHeld seam
+        /// the hold gesture used, so the controller's reroll code did not have to change.
+        /// Returns whether the click was consumed.</summary>
+        public bool TryRerollAt(Vector2 world)
+        {
+            if (!DemoLayout)
+            {
+                return false;
+            }
+            Vector2 local = ToLocal(world);
+            for (int s = 0; s < SectionCount; s++)
+            {
+                if (demoRerollRects[s].width > 0f && demoRerollRects[s].Contains(local))
+                {
+                    if (SectionHeld != null)
+                    {
+                        SectionHeld(KindOf(s));
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>DEMO: is the pointer on a section's NAME, and if so whose? The controller
+        /// answers it with a tooltip explaining the mechanic - the shelf, not the goods on it.
+        /// False in the painted layout, whose labels live inside a scrolling window.</summary>
+        public bool TrySectionLabelAt(Vector2 world, out MarketOfferKind kind)
+        {
+            kind = MarketOfferKind.Block;
+            if (!DemoLayout)
+            {
+                return false;
+            }
+            Vector2 local = ToLocal(world);
+            for (int s = 0; s < SectionCount; s++)
+            {
+                if (demoLabelRects[s].width > 0f && demoLabelRects[s].Contains(local))
+                {
+                    kind = KindOf(s);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>DEMO: a click on PROCEED. Returns whether the click was consumed.</summary>
+        public bool TryProceedAt(Vector2 world)
+        {
+            if (!DemoLayout || demoProceedRect.width <= 0f
+                || !demoProceedRect.Contains(ToLocal(world)))
+            {
+                return false;
+            }
+            if (ProceedPressed != null)
+            {
+                ProceedPressed();
+            }
+            return true;
+        }
+
+        /// <summary>DEMO: outlines whichever button the pointer is over. Returns false when it
+        /// is over none, so SetHover can carry on and clear the outline.</summary>
+        private bool TryHoverDemoButton(Vector2 world)
+        {
+            Vector2 local = ToLocal(world);
+            for (int s = 0; s < SectionCount; s++)
+            {
+                if (demoRerollRects[s].width > 0f && demoRerollRects[s].Contains(local))
+                {
+                    ShowHoverOutline(demoRerollRects[s].center,
+                        new Vector2(demoRerollRects[s].width, demoRerollRects[s].height) * 0.5f,
+                        rerollAffordable ? HoverColor : HoverBlockedColor);
+                    return true;
+                }
+            }
+            if (demoProceedRect.width > 0f && demoProceedRect.Contains(local))
+            {
+                ShowHoverOutline(demoProceedRect.center,
+                    new Vector2(demoProceedRect.width, demoProceedRect.height) * 0.5f,
+                    HoverColor);
+                return true;
+            }
+            return false;
+        }
+
+        // ===================== end of the demo shelf ==================================
 
         public void Hide()
         {
@@ -748,6 +1222,12 @@ namespace ProjectBlock.View
             offerDetails.Clear();
             detailText = null;
             windowMask = null;
+            for (int i = 0; i < demoRerollRects.Length; i++)
+            {
+                demoRerollRects[i] = new Rect();
+                demoLabelRects[i] = new Rect();
+            }
+            demoProceedRect = new Rect();
             offerRarities.Clear();
             offerSold.Clear();
             offerAffordable.Clear();
@@ -805,6 +1285,11 @@ namespace ProjectBlock.View
                     new Vector2(offerHalfWidths[index], offerHalfHeights[index]),
                     offerAffordable[index] ? HoverColor : HoverBlockedColor);
                 SetDetail(index < offerDetails.Count ? offerDetails[index] : string.Empty);
+                return;
+            }
+            if (DemoLayout && TryHoverDemoButton(world))
+            {
+                SetDetail(string.Empty);
                 return;
             }
             HideHoverOutline();

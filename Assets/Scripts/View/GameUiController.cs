@@ -208,6 +208,11 @@ namespace ProjectBlock.View
         /// <summary>Pushes the fire's state, letting the debug override win when one is set.
         /// Every in-game caller goes through here; the ANIMATION LAB deliberately does not, since
         /// driving the view directly is its whole job.</summary>
+        /// <summary>Rows the deck overlay travels per wheel notch. Two of its three visible rows
+        /// - a big step without losing your place, and the one number to turn if it wants to be
+        /// faster still.</summary>
+        private const float DeckScrollRowsPerNotch = 2f;
+
         private void RefreshFlames(int overtimeLevel)
         {
             // THE FIRE IS OFF and the HEARTBEAT is on. The fire was not deleted - every part of
@@ -217,7 +222,15 @@ namespace ProjectBlock.View
             //     FlameStreakView.Style.DrawDrift     - the embers drawn in from the top corners
             //     BoardLineGlowView.Style.Enabled     - the glow on the board's grid
             // Turning those on and OvertimePulseView/OvertimeVignetteView off swaps the looks.
-            int level = overtimeLevel;
+            // OVERTIME BELONGS TO A ROUND THAT IS STILL BEING PLAYED. A finished round keeps its
+            // ContinueCount and the market opens over the same board, so RefreshAll goes on
+            // feeding this the level of a round nobody is playing any more - and the pulse and
+            // the closing-in vignette followed the player into the shop.
+            //
+            // Gated HERE, in the one place all of it is driven from, rather than at the four call
+            // sites: the same trap is waiting for every future caller, and the market is only one
+            // of the phases a round can end into (RunWon and GameOver are the others).
+            int level = session != null && session.Phase == GamePhase.Round ? overtimeLevel : 0;
             flameStreak.SetState(level, boardView.WorldRect);
             boardView.SetOvertimeGlow(level);
 
@@ -347,6 +360,34 @@ namespace ProjectBlock.View
             AutoSave();
         }
 
+        /// <summary>[F5]: skip the stage in progress and open the next market. The session does
+        /// the skipping; this puts the screen back together afterwards, and has to cope with
+        /// every phase the skip can land in - a boss stage with an unpaid debt ends the run, and
+        /// skipping the LAST stage wins it, so neither is a market.</summary>
+        private void DebugSkipToMarket()
+        {
+            CancelDrag();          // a card under the cursor does not survive the stage
+            marketView.Hide();     // rebuilt below if we land back in a market
+            session.DebugSkipToMarket();
+            RefreshAll(null);
+            if (session.Phase == GamePhase.Market)
+            {
+                marketView.ResetScroll();
+                marketView.Show(session);
+                Debug.Log("[block_bonk] DEBUG skipped to the market after round "
+                    + session.RoundNumber + ".");
+            }
+            else if (session.Phase == GamePhase.Round)
+            {
+                // The skip was refused - the round was already lost, which is the one state
+                // DeclareRoundWon will not overrule. Put the round back on screen unchanged.
+                StartRoundPresentation();
+            }
+            // RunWon / GameOver need nothing here: OnSessionPhaseChanged is subscribed for the
+            // life of the session and has already raised runOverPending, and Update opens the
+            // summary from it once nothing is animating.
+        }
+
         /// <summary>Board + HUD refresh with the round-start shuffle-and-deal animation.</summary>
         private void StartRoundPresentation()
         {
@@ -415,6 +456,15 @@ namespace ProjectBlock.View
             if (session == null || waterAnimating || supurgeAnimating)
             {
                 return; // input is locked while a board animation plays
+            }
+            // debug: [F5] wins the stage in progress and drops you in its market. Pressed IN a
+            // market it steps a whole stage, so holding it walks the run market by market -
+            // which is the point, the market is what wants testing over and over.
+            if (kb != null && kb.f5Key.wasPressedThisFrame
+                && (session.Phase == GamePhase.Round || session.Phase == GamePhase.Market))
+            {
+                DebugSkipToMarket();
+                return;
             }
             // The run ended: this waits for the guard above to stop firing, so the last
             // placement's blast finishes playing before the summary covers the board.
@@ -504,15 +554,20 @@ namespace ProjectBlock.View
                     return;
                 }
                 // The wheel scrolls a deck too long to fit - the overlay re-lays itself out and
-                // remembers where it was, so selling from page 3 stays on page 3. A notch is
-                // 120 units, and a notch moving half a row is what makes it feel continuous
-                // rather than teleporting.
+                // remembers where it was, so selling from page 3 stays on page 3.
+                //
+                // ONE NOTCH, ONE STEP - the wheel's SIGN, like every other wheel handler here
+                // (the animation lab, how-to-play, the market). This was the one place that
+                // divided the raw delta by a hard-coded 120: that is what a notch reports on
+                // Windows, and anywhere it reports 1 instead the list crawled a hundredth of a
+                // row per notch. Reading the sign cannot be wrong on any backend.
                 if (mouse != null)
                 {
                     float deckScroll = mouse.scroll.ReadValue().y;
                     if (Mathf.Abs(deckScroll) > 0.01f)
                     {
-                        deckOverlay.Scroll(-deckScroll / 120f);
+                        deckOverlay.Scroll(deckScroll > 0f
+                            ? -DeckScrollRowsPerNotch : DeckScrollRowsPerNotch);
                         return;
                     }
                 }

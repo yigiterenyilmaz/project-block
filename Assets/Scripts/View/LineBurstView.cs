@@ -66,8 +66,12 @@ namespace ProjectBlock.View
         {
             /// <summary>Frames per second, shared by every tier. The whole thing has to be OVER
             /// inside a second - a line clear is not an event the player waits through - and at
-            /// 22 that is 0.45s for a ten-frame sheet and 0.41s for a nine-frame one.</summary>
-            public static float Fps = 22f;
+            /// 35 that is 0.29s for a ten-frame sheet and 0.26s for a nine-frame one. It was 22,
+            /// doubled to 44 and then eased back 25% - 1.6x the original speed. The sheets are
+            /// drawn, not simulated, so the only cost of running them faster is that the last
+            /// frames read as a flicker; LineSweepView's timings carry the SAME factor, and the
+            /// two must stay in step or the beam outlives the explosion it belongs to.</summary>
+            public static float Fps = 35f;
 
             /// <summary>How far the burst reaches ACROSS its line, in world units - along the
             /// line it is as long as the line is. This is the dial that sets how much the art is
