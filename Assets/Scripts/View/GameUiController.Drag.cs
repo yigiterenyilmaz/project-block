@@ -158,12 +158,15 @@ namespace ProjectBlock.View
             {
                 if (mouse.rightButton.wasPressedThisFrame)
                 {
-                    // right-click: rotate mechanical blocks, open the fox shape picker
+                    // right-click: rotate mechanical blocks, open the fox shape picker.
+                    // Resolved through CardOfSlot, so a BONUS-hand card gets its abilities
+                    // too - the slot convention is hand first, bonus hand straight after.
                     CardVisual rightHit = cardLayer.CardAt(world);
-                    if (rightHit != null && rightHit.SlotIndex >= 0
-                        && rightHit.SlotIndex < round.Hand.Count)
+                    BlockCard rightCard = rightHit != null
+                        ? CardOfSlot(round, rightHit.SlotIndex)
+                        : null;
+                    if (rightCard != null)
                     {
-                        BlockCard rightCard = round.Hand[rightHit.SlotIndex];
                         // Asked through the round, not the card: a boss round can suppress every
                         // element ("Vanilya"), and the engine would then refuse the rotation.
                         if (round.CardHasElement(rightCard, BlockElement.Mechanical))

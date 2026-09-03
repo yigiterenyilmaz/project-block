@@ -141,23 +141,45 @@ namespace ProjectBlock.Core
             return covered;
         }
 
-        /// <summary>MECHANICAL RULE: rotates the block 90° clockwise (right-click in the
-        /// UI). Only mechanical blocks rotate; the orientation persists for the round.</summary>
-        public void RotateCard(int handIndex)
+        /// <summary>
+        /// The card at a HELD SLOT: the hand first, then the bonus hand straight after it
+        /// (slot Hand.Count + i is bonus card i). One decode for both, because a card's
+        /// in-hand abilities do not care which of the two it is sitting in - rotation and the
+        /// fox reshape are stored per CARD ID, so they already work for either.
+        /// Returns null for a slot that addresses neither.
+        /// </summary>
+        public BlockCard CardAtSlot(int slotIndex)
         {
-            RotateCard(handIndex, false);
+            if (slotIndex < 0)
+            {
+                return null;
+            }
+            if (slotIndex < Hand.Count)
+            {
+                return Hand[slotIndex];
+            }
+            int bonusIndex = slotIndex - Hand.Count;
+            return bonusIndex < bonusHand.Count ? bonusHand[bonusIndex].Card : null;
+        }
+
+        /// <summary>MECHANICAL RULE: rotates the block 90° clockwise (right-click in the
+        /// UI). Only mechanical blocks rotate; the orientation persists for the round.
+        /// Takes a HELD SLOT (see CardAtSlot), so a bonus-hand block rotates too.</summary>
+        public void RotateCard(int slotIndex)
+        {
+            RotateCard(slotIndex, false);
         }
 
         /// <summary>Rotation with an override for the "Cımbız" power, which grants a single
         /// turn of the mechanical block's ability to any held card.</summary>
-        public void RotateCard(int handIndex, bool ignoreMechanicalRequirement)
+        public void RotateCard(int slotIndex, bool ignoreMechanicalRequirement)
         {
             EnsurePlacingAllowed();
-            if (handIndex < 0 || handIndex >= Hand.Count)
+            BlockCard card = CardAtSlot(slotIndex);
+            if (card == null)
             {
-                throw new ArgumentOutOfRangeException("handIndex");
+                throw new ArgumentOutOfRangeException("slotIndex");
             }
-            BlockCard card = Hand[handIndex];
             if (!ignoreMechanicalRequirement && !Has(card, BlockElement.Mechanical))
             {
                 throw new InvalidOperationException("Only mechanical blocks can rotate.");
@@ -168,15 +190,16 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>FOX RULE (confirmed): a fox block can take any shape that exists in
-        /// the current deck. The UI offers only deck shapes; this trusts its caller.</summary>
-        public void SetFoxShape(int handIndex, BlockShape shape)
+        /// the current deck. The UI offers only deck shapes; this trusts its caller.
+        /// Takes a HELD SLOT (see CardAtSlot), so a bonus-hand fox reshapes too.</summary>
+        public void SetFoxShape(int slotIndex, BlockShape shape)
         {
             EnsurePlacingAllowed();
-            if (handIndex < 0 || handIndex >= Hand.Count)
+            BlockCard card = CardAtSlot(slotIndex);
+            if (card == null)
             {
-                throw new ArgumentOutOfRangeException("handIndex");
+                throw new ArgumentOutOfRangeException("slotIndex");
             }
-            BlockCard card = Hand[handIndex];
             if (!Has(card, BlockElement.Fox))
             {
                 throw new InvalidOperationException("Only fox blocks can be reshaped.");

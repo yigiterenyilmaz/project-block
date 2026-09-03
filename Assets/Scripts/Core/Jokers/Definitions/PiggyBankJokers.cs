@@ -20,7 +20,7 @@ namespace ProjectBlock.Core
     /// <summary>"Domuz Kumbarası" - gains value at the end of every round survived.</summary>
     public sealed class DomuzKumbarasiJoker : Joker
     {
-        public int ValuePerRound = 25;
+        public int ValuePerRound = 150;
 
         public DomuzKumbarasiJoker()
             : base("domuz_kumbarasi", "Domuz Kumbarası")
@@ -42,7 +42,7 @@ namespace ProjectBlock.Core
     /// <summary>"Cimri Kumbara" - gains value every turn it is held.</summary>
     public sealed class CimriKumbaraJoker : Joker
     {
-        public int ValuePerTurn = 3;
+        public int ValuePerTurn = 2;
 
         public CimriKumbaraJoker()
             : base("cimri_kumbara", "Cimri Kumbara")
@@ -61,9 +61,9 @@ namespace ProjectBlock.Core
     /// <summary>"Altın Kumbara" - banks on turns, clean sweeps and finished rounds.</summary>
     public sealed class AltinKumbaraJoker : Joker
     {
-        public int ValuePerTurn = 2;
+        public int ValuePerTurn = 1;
         public int ValuePerCleanSweep = 30;
-        public int ValuePerRound = 20;
+        public int ValuePerRound = 100;
 
         public AltinKumbaraJoker()
             : base("altin_kumbara", "Altın Kumbara")

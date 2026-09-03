@@ -294,20 +294,31 @@ namespace ProjectBlock.Core
                     continue; // same rule as ResolveFullLines: an eaten cell kills the line
                 }
                 bool full = false;
+                bool breaks = false;
                 for (int x = 0; x < Width; x++)
                 {
                     if (!playable[x, y])
                     {
                         continue;
                     }
-                    if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x + MinX, y + MinY)))
+                    bool placedHere = shapeCells.Contains(new GridPos(x + MinX, y + MinY));
+                    if (!cells[x, y].HasValue && !placedHere)
                     {
+                        if (optional[x, y])
+                        {
+                            continue; // bonus ground never holds a line up
+                        }
                         full = false;
                         break;
                     }
-                    full = true;
+                    full = full || !optional[x, y];
+                    // A cube about to be placed is assumed breakable: the shape arrives without
+                    // its card, so its element is not knowable here. Completing an all-gold line
+                    // WITH gold is the one case this over-predicts.
+                    breaks = breaks || placedHere
+                        || CubeRules.IsDestructible(cells[x, y].Value);
                 }
-                if (full) fullRows.Add(y);
+                if (full && breaks) fullRows.Add(y);
             }
             var fullColumns = new List<int>();
             for (int x = 0; x < Width; x++)
@@ -317,20 +328,28 @@ namespace ProjectBlock.Core
                     continue;
                 }
                 bool full = false;
+                bool breaks = false;
                 for (int y = 0; y < Height; y++)
                 {
                     if (!playable[x, y])
                     {
                         continue;
                     }
-                    if (!cells[x, y].HasValue && !shapeCells.Contains(new GridPos(x + MinX, y + MinY)))
+                    bool placedHere = shapeCells.Contains(new GridPos(x + MinX, y + MinY));
+                    if (!cells[x, y].HasValue && !placedHere)
                     {
+                        if (optional[x, y])
+                        {
+                            continue; // see the row loop
+                        }
                         full = false;
                         break;
                     }
-                    full = true;
+                    full = full || !optional[x, y];
+                    breaks = breaks || placedHere
+                        || CubeRules.IsDestructible(cells[x, y].Value);
                 }
-                if (full) fullColumns.Add(x);
+                if (full && breaks) fullColumns.Add(x);
             }
             if (fullRows.Count == 0 && fullColumns.Count == 0)
             {
@@ -364,6 +383,13 @@ namespace ProjectBlock.Core
             {
                 for (int y = 0; y < Height; y++)
                 {
+                    if (optional[x, y])
+                    {
+                        // Bonus ground ("Tılsım") is exempt, exactly as it is exempt from the
+                        // fullness check: ground the power gave you must never cost you a sweep
+                        // it would otherwise have allowed. One rule, not a special case.
+                        continue;
+                    }
                     Cube? cube = cells[x, y];
                     if (cube.HasValue && CubeRules.CountsForCleanSweep(cube.Value))
                     {

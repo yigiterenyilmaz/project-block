@@ -170,7 +170,11 @@ dropped that way once each.
    was not already empty. Effects that can trigger a sweep call it; they never re-check
    the board themselves. Note this is stricter than "a line exploded": a full line of
    indestructible cubes destroys nothing, so it no longer re-triggers a sweep every turn
-   once obsidian/gold sit on the board.
+   once obsidian/gold sit on the board. **A line that would destroy nothing is not an
+   explosion at all** — `ResolveFullLines` drops it, so a solid gold/obsidian row stops
+   paying `PointsPerLine` and stops flashing every turn for the rest of the round. That is
+   the same reasoning applied at the source, and it is what keeps score, animation and the
+   sweep pre-condition agreeing on what an explosion is.
 3. **Overtime disabling is central.** A joker sets `DisabledInOvertime` and
    `JokerInventory` skips all of its hooks once `ThresholdPassed`. Never write
    `if (overtime)` inside a joker. Overtime itself follows the continue-cost rule
@@ -189,9 +193,22 @@ Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.
 
-The roster now stands at **53 jokers, 35 powers and 37 bosses** (registry counts); of the
+The roster now stands at **52 jokers, 35 powers and 37 bosses** (registry counts); of the
 originally planned powers only "Dolly" is left, set aside by the designer.
 See `docs/jokers-plan.md`.
+
+**A board cell has FOUR states, not two.** `GameBoard` is a bounding box plus masks:
+*required* (plain play area), *optional*, *hole* and *dead*. A **hole** is skipped by the
+fullness check and cannot be built on; a **dead** cell (`MarkDead`, shuffle erosion) cannot be
+built on either and KILLS its row and column; an **optional** cell is the only one that is
+playable without being required — you may build on it, but a line does not wait for it while it
+stands EMPTY, and a cube left standing there never blocks a clean sweep. "Tılsım" is what
+grants them (`RoundConfig.OptionalPlayableCells`, a list kept separate from
+`ExtraPlayableCells` precisely so bonus ground and "Kentsel Dönüşüm"'s permanent board cannot
+be confused). Bonus ground may never hold a line up — and by the same token may never conjure
+one: a row that is nothing but optional cells is not a row, however full of cubes it is. A cube
+IN one is ordinary in every other respect: it explodes with the line and it scores. The mask
+travels through `CreateResized`, `CreateClone` and the save file like `WaterFlow` does.
 
 **Water does not always fall downward.** `GameBoard.WaterFlow` is the one-cell step water
 settles along — `(0,-1)` on every ordinary arena, turned to any of the four sides for the rest

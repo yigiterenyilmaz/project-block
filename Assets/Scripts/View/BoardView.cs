@@ -53,6 +53,11 @@ namespace ProjectBlock.View
         /// and kills its line, while a seal lifts again next turn. The two can sit on the same
         /// board, so they must not look alike.</summary>
         private static readonly Color SealedColor = new Color(0.20f, 0.24f, 0.40f);
+
+        /// <summary>Empty BONUS ground ("Tılsım"): free to build on, and no line waits for it.
+        /// Warm and faint - a gift, not a wound - so it cannot be mistaken for the eroded cell
+        /// (DeadColor) or the barred one (SealedColor) it may sit beside.</summary>
+        private static readonly Color BonusGroundColor = new Color(0.20f, 0.19f, 0.13f);
         private static readonly Color ValidPreviewColor = new Color(0.35f, 1f, 0.45f, 0.6f);
         private static readonly Color InvalidPreviewColor = new Color(1f, 0.35f, 0.35f, 0.6f);
         private static readonly Color ExplosionPreviewColor = new Color(1f, 0.78f, 0.25f, 0.65f);
@@ -134,9 +139,6 @@ namespace ProjectBlock.View
         /// <summary>"Kütleçekim merkezi"'s arrows, shown only while gravity is NOT pointing
         /// down - normal gravity needs no explaining.</summary>
         private readonly List<GameObject> gravityMarkers = new List<GameObject>();
-
-        /// <summary>"İstilacı"'s marked column, or null when nothing is marked.</summary>
-        private int? doomedColumn;
 
         /// <summary>"Karantina"'s sealed rows and columns, in absolute board coordinates.</summary>
         private readonly List<int> quarantinedRows = new List<int>();
@@ -742,6 +744,14 @@ namespace ProjectBlock.View
                     Color color = cube.HasValue
                         ? ViewUtil.CubeTileColor(cube.Value, tile)
                         : (board.IsSealed(gp) ? SealedColor : EmptyColor);
+                    // "Tılsım" bonus ground: playable, but no line waits for it. An optional
+                    // cell that looked like an ordinary one would make the fullness rule read
+                    // as a bug, so empty bonus ground is tinted - the same argument the erosion
+                    // scar and the rot-dead line already make.
+                    if (!cube.HasValue && board.IsOptional(gp))
+                    {
+                        color = BonusGroundColor;
+                    }
                     if (IsQuarantined(gp))
                     {
                         color = Drained(color);
@@ -753,15 +763,10 @@ namespace ProjectBlock.View
                     {
                         color = Color.Lerp(color, RotDeadLineColor, cube.HasValue ? 0.4f : 0.66f);
                     }
-                    // "Besleme"'s creature: the patch you have to keep feeding, so it has to be
-                    // unmistakable whether there is a cube standing on it or not.
-                    // "İstilacı": the column with a demolition date on it. Washed rather than
-                    // hidden - the player has to be able to see exactly what they are about to
-                    // lose and decide whether to keep building there anyway.
-                    if (doomedColumn.HasValue && gp.X == doomedColumn.Value)
-                    {
-                        color = color;   // the corridor draws itself; see InvaderColumnView
-                    }
+                    // NOT painted here, on purpose: "Besleme"'s creature patch and "İstilacı"'s
+                    // doomed column both draw themselves in their own views (CreatureNestView,
+                    // InvaderColumnView), over the top of this one. Washing the cells here as
+                    // well would double the tint and fight the corridor's own escalation.
                     // "Alacakaranlık": the truth is drowned in the dark and only a blast's
                     // light brings any of it back, in proportion to how bright that light is.
                     if (dark)
@@ -1223,12 +1228,10 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Marks "İstilacı"'s doomed column. Pass null to clear it.</summary>
         /// <summary>Hands "İstilacı"'s marked column to the corridor, with how many turns it has
-        /// left - which is what the whole escalation is driven from.</summary>
+        /// left - which is what the whole escalation is driven from. Pass null to clear it.</summary>
         public void ShowDoomedColumn(int? column, int turnsLeft)
         {
-            doomedColumn = column;
             if (board == null)
             {
                 return;
@@ -1802,8 +1805,24 @@ namespace ProjectBlock.View
         {
             foreach (GridPos cell in waterHiddenCells)
             {
-                PaintCell(cell, EmptyColor);
+                BlankCell(cell);
             }
+        }
+
+        /// <summary>Draws a cell as EMPTY, tile and all. Recolouring alone is not enough any
+        /// more: Refresh gives an occupied cell a painted tile sprite, and a tile tinted
+        /// EmptyColor is still a fully visible cube - which is how a falling water cube used to
+        /// be shown twice at once, in flight AND already settled at the cell it was heading for.
+        /// </summary>
+        private void BlankCell(GridPos pos)
+        {
+            if (board == null || !board.IsInside(pos))
+            {
+                return;
+            }
+            SpriteRenderer renderer = cellRenderers[pos.X - board.MinX, pos.Y - board.MinY];
+            ViewUtil.ApplyTile(renderer, null, cellSize * EmptyFill);
+            renderer.color = board.IsSealed(pos) ? SealedColor : EmptyColor;
         }
 
         private void PaintCell(GridPos pos, Color color)

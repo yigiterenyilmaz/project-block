@@ -10,6 +10,9 @@
 // EXTENSION POINT: ExtraPlayableCells is how a joker or power hands the round a board that
 // is bigger than a plain rectangle ("Kentsel Dönüşüm", "Tılsım"). Jokers rewrite this
 // through Joker.FilterRoundConfig, which runs before the board is built.
+// OptionalPlayableCells is the same seam for ground that is BONUS: playable, but never
+// required to complete the line it sits in ("Tılsım" only - "Kentsel Dönüşüm" hands over
+// permanent, ordinary board). Kept a separate list precisely so the two cannot be confused.
 
 using System.Collections.Generic;
 
@@ -33,6 +36,12 @@ namespace ProjectBlock.Core
         /// Empty for a normal round. Coordinates must be non-negative: the board grows right
         /// and up, never left or down (see GameBoard).</summary>
         public IReadOnlyList<GridPos> ExtraPlayableCells { get; }
+
+        /// <summary>Cells bolted on as BONUS ground: playable, but skipped by the fullness
+        /// check while empty, so they never raise the price of the lines they stretched
+        /// ("Tılsım"). Normally a subset of ExtraPlayableCells; a cell named only here is
+        /// bolted on just the same. Empty for a normal round.</summary>
+        public IReadOnlyList<GridPos> OptionalPlayableCells { get; }
 
         /// <summary>How this round's arena erodes once the draw pile has run dry more than
         /// RoundRules.FreeDeckRecycles times - the anti-stalling clock. Comes from the round
@@ -69,12 +78,22 @@ namespace ProjectBlock.Core
         /// merely reshapes the board wants WithBoard instead.</summary>
         public RoundConfig(int roundNumber, int boardWidth, int boardHeight, int scoreThreshold,
             IReadOnlyList<GridPos> extraPlayableCells, ShuffleErosion erosion, bool isBossRound)
+            : this(roundNumber, boardWidth, boardHeight, scoreThreshold, extraPlayableCells,
+                erosion, isBossRound, null)
+        {
+        }
+
+        /// <summary>The full setup, bonus ground included.</summary>
+        public RoundConfig(int roundNumber, int boardWidth, int boardHeight, int scoreThreshold,
+            IReadOnlyList<GridPos> extraPlayableCells, ShuffleErosion erosion, bool isBossRound,
+            IReadOnlyList<GridPos> optionalPlayableCells)
         {
             RoundNumber = roundNumber;
             BoardWidth = boardWidth;
             BoardHeight = boardHeight;
             ScoreThreshold = scoreThreshold;
             ExtraPlayableCells = extraPlayableCells ?? NoExtraCells;
+            OptionalPlayableCells = optionalPlayableCells ?? NoExtraCells;
             Erosion = erosion;
             IsBossRound = isBossRound;
         }
@@ -88,7 +107,18 @@ namespace ProjectBlock.Core
             IReadOnlyList<GridPos> extraPlayableCells)
         {
             return new RoundConfig(RoundNumber, boardWidth, boardHeight, ScoreThreshold,
-                extraPlayableCells, Erosion, IsBossRound);
+                extraPlayableCells, Erosion, IsBossRound, OptionalPlayableCells);
+        }
+
+        /// <summary>As above, also replacing the bonus ground. Only a filter that actually
+        /// GRANTS optional cells ("Tılsım") wants this one; every other caller uses the
+        /// three-argument overload, which carries the existing bonus ground across.</summary>
+        public RoundConfig WithBoard(int boardWidth, int boardHeight,
+            IReadOnlyList<GridPos> extraPlayableCells,
+            IReadOnlyList<GridPos> optionalPlayableCells)
+        {
+            return new RoundConfig(RoundNumber, boardWidth, boardHeight, ScoreThreshold,
+                extraPlayableCells, Erosion, IsBossRound, optionalPlayableCells);
         }
     }
 }

@@ -135,6 +135,14 @@ namespace ProjectBlock.Core
         /// Deliberately does NOT touch the breakdown: report.Score.Total stays what the turn
         /// EARNED, while report.ScoreGained is what it banked. They differ on a clamped turn
         /// exactly as they differ on the threshold-crossing turn.
+        ///
+        /// THE WRITE-OFF HAS TO BE REMEMBERED. Forgiving a negative turn in RoundScore alone
+        /// would leave the breakdown still carrying the charge, and the NEXT late write would
+        /// then land on a baseline the ledger does not share - the turn banks a full credit
+        /// while the breakdown nets it against a debt it never forgave, so ScoreGained ends up
+        /// larger than Total and the books stop balancing. So a write-off is recorded in
+        /// turnScoreForgiven and a later credit pays that back before it reaches RoundScore.
+        /// The floor still holds either way: the turn can bank nothing, never less.
         /// </summary>
         private void ClampTurnScoreFloor()
         {
@@ -144,7 +152,18 @@ namespace ProjectBlock.Core
             }
             if (RoundScore < turnStartRoundScore)
             {
+                turnScoreForgiven += turnStartRoundScore - RoundScore;
                 RoundScore = turnStartRoundScore;
+            }
+            else if (turnScoreForgiven > 0)
+            {
+                // Something paid back into a turn the floor has already written off. It settles
+                // the debt first, exactly as the breakdown does, and only what is left over is
+                // really earned.
+                int credit = RoundScore - turnStartRoundScore;
+                int repaid = credit < turnScoreForgiven ? credit : turnScoreForgiven;
+                RoundScore -= repaid;
+                turnScoreForgiven -= repaid;
             }
             currentReport.ScoreGained = RoundScore - turnStartRoundScore;
             currentReport.RoundScoreAfter = RoundScore;

@@ -21,11 +21,20 @@ namespace ProjectBlock.Core
     ///
     /// A line is full when every PLAYABLE cell of that row/column is occupied, so an added
     /// cell genuinely extends the row it sits in. Rows with no playable cells never explode.
+    /// A line that would destroy NOTHING (solid gold/obsidian) is not an explosion at all -
+    /// see ResolveFullLines - or it would pay out and flash every turn for the rest of the round.
     ///
     /// THE ONE EXCEPTION: a cell EATEN by shuffle erosion (MarkDead) is not merely skipped - it
     /// kills its row and its column outright, because an unfillable cell sits inside the line.
     /// A hole that was never board (bounding-box filler around bolted-on cells) does NOT do
     /// that, or adding a cell to the board would kill the rows it stretched the box across.
+    ///
+    /// OPTIONAL CELLS are the fourth state, and the only one that is playable without being
+    /// required: real ground you may build on, skipped by the fullness check while it is EMPTY.
+    /// "Tılsım" grants them, so its bonus ground can never raise the price of the lines it
+    /// stretched. A cube standing in one still explodes with the line and still counts.
+    /// So the four states are: required (plain play area), optional, hole (skipped, unplayable)
+    /// and dead (unplayable AND kills its line).
     ///
     /// Cells added through the CONSTRUCTOR must be non-negative (that path keeps the origin
     /// at 0,0). Mid-round inflation goes through CreateResized instead, which grows on any
@@ -37,6 +46,12 @@ namespace ProjectBlock.Core
 
         /// <summary>Which cells of the bounding box are real play area.</summary>
         private readonly bool[,] playable;
+
+        /// <summary>Which playable cells are OPTIONAL: buildable, but not required for their
+        /// row/column to count as full while they stand empty ("Tılsım"'s bonus ground). Always
+        /// a subset of <see cref="playable"/>. A cube standing in one is an ordinary cube in
+        /// every other respect - it explodes with the line, it is destructible, it scores.</summary>
+        private readonly bool[,] optional;
 
         /// <summary>Cells that were play area and have been EATEN AWAY mid-round (shuffle
         /// erosion). They are not playable any more, and unlike an ordinary hole in the bounding
@@ -146,12 +161,22 @@ namespace ProjectBlock.Core
         /// bounding box stretches to cover them; everything not in the rectangle and not in
         /// the extra set stays a hole.</summary>
         public GameBoard(int width, int height, IEnumerable<GridPos> extraCells)
+            : this(width, height, extraCells, null)
+        {
+        }
+
+        /// <summary>As above, and <paramref name="optionalCells"/> are granted as OPTIONAL play
+        /// area: buildable, but skipped by the fullness check while empty ("Tılsım"). They are
+        /// bolted on exactly like the extra cells, so a cell may be named by both lists.</summary>
+        public GameBoard(int width, int height, IEnumerable<GridPos> extraCells,
+            IEnumerable<GridPos> optionalCells)
         {
             if (width < 1 || height < 1)
             {
                 throw new ArgumentException("Board must be at least 1x1.");
             }
             var extra = new List<GridPos>();
+            var optionalExtra = new List<GridPos>();
             int boxWidth = width;
             int boxHeight = height;
             if (extraCells != null)
@@ -167,6 +192,19 @@ namespace ProjectBlock.Core
                     if (cell.Y >= boxHeight) boxHeight = cell.Y + 1;
                 }
             }
+            if (optionalCells != null)
+            {
+                foreach (GridPos cell in optionalCells)
+                {
+                    if (cell.X < 0 || cell.Y < 0)
+                    {
+                        continue;
+                    }
+                    optionalExtra.Add(cell);
+                    if (cell.X >= boxWidth) boxWidth = cell.X + 1;
+                    if (cell.Y >= boxHeight) boxHeight = cell.Y + 1;
+                }
+            }
 
             MinX = 0;
             MinY = 0;
@@ -174,6 +212,7 @@ namespace ProjectBlock.Core
             Height = boxHeight;
             cells = new Cube?[boxWidth, boxHeight];
             playable = new bool[boxWidth, boxHeight];
+            optional = new bool[boxWidth, boxHeight];
             dead = new bool[boxWidth, boxHeight];
 
             int count = 0;
@@ -193,12 +232,26 @@ namespace ProjectBlock.Core
                     count++;
                 }
             }
+            foreach (GridPos cell in optionalExtra)
+            {
+                if (!playable[cell.X, cell.Y])
+                {
+                    playable[cell.X, cell.Y] = true;
+                    count++;
+                }
+                // Never optional-ise a cell of the BASE rectangle: bonus ground may only ever
+                // be added, never quietly excuse a cell the round already required.
+                if (cell.X >= width || cell.Y >= height)
+                {
+                    optional[cell.X, cell.Y] = true;
+                }
+            }
             PlayableCellCount = count;
         }
 
-        /// <summary>Board built from explicit masks; only CreateResized uses this.</summary>
+        /// <summary>Board built from explicit masks; only CreateResized/CreateClone use this.</summary>
         private GameBoard(int minX, int minY, int width, int height, bool[,] mask,
-            bool[,] deadMask, int playableCount, int deadCount)
+            bool[,] optionalMask, bool[,] deadMask, int playableCount, int deadCount)
         {
             MinX = minX;
             MinY = minY;
@@ -206,6 +259,7 @@ namespace ProjectBlock.Core
             Height = height;
             cells = new Cube?[width, height];
             playable = mask;
+            optional = optionalMask;
             dead = deadMask;
             PlayableCellCount = playableCount;
             DeadCellCount = deadCount;
@@ -235,6 +289,7 @@ namespace ProjectBlock.Core
             int newMinY = source.MinY - bottom;
 
             var mask = new bool[newWidth, newHeight];
+            var optionalMask = new bool[newWidth, newHeight];
             var deadMask = new bool[newWidth, newHeight];
             int count = 0;
             int deadCount = 0;
@@ -250,6 +305,9 @@ namespace ProjectBlock.Core
                     // Inside the old board: keep its mask, holes and all. Outside it: this is
                     // freshly inflated ground, so it is play area.
                     mask[ix, iy] = inSource ? source.playable[sx, sy] : true;
+                    // Bonus ground stays bonus ground across a resize; freshly inflated ground
+                    // is ordinary required play area.
+                    optionalMask[ix, iy] = inSource && source.optional[sx, sy];
                     // Eaten cells stay eaten across a resize. A band that erosion removed
                     // wholesale left the bounding box, so it is simply not here any more; only
                     // interior kills survive as dead cells.
@@ -265,8 +323,8 @@ namespace ProjectBlock.Core
                 }
             }
 
-            var board = new GameBoard(newMinX, newMinY, newWidth, newHeight, mask, deadMask,
-                count, deadCount);
+            var board = new GameBoard(newMinX, newMinY, newWidth, newHeight, mask, optionalMask,
+                deadMask, count, deadCount);
             board.IgnoreElements = source.IgnoreElements;
             board.WaterFlow = source.WaterFlow;
             for (int sx = 0; sx < source.Width; sx++)
@@ -317,17 +375,19 @@ namespace ProjectBlock.Core
         public static GameBoard CreateClone(GameBoard source)
         {
             var mask = new bool[source.Width, source.Height];
+            var optionalMask = new bool[source.Width, source.Height];
             var deadMask = new bool[source.Width, source.Height];
             for (int x = 0; x < source.Width; x++)
             {
                 for (int y = 0; y < source.Height; y++)
                 {
                     mask[x, y] = source.playable[x, y];
+                    optionalMask[x, y] = source.optional[x, y];
                     deadMask[x, y] = source.dead[x, y];
                 }
             }
             var clone = new GameBoard(source.MinX, source.MinY, source.Width, source.Height,
-                mask, deadMask, source.PlayableCellCount, source.DeadCellCount);
+                mask, optionalMask, deadMask, source.PlayableCellCount, source.DeadCellCount);
             for (int x = 0; x < source.Width; x++)
             {
                 for (int y = 0; y < source.Height; y++)
@@ -363,6 +423,17 @@ namespace ProjectBlock.Core
         public bool IsPlayable(GridPos pos)
         {
             return IsInside(pos);
+        }
+
+        /// <summary>True for BONUS GROUND ("Tılsım"): playable, but a line does not wait for it
+        /// while it stands empty, and a cube left standing there does not hold up a clean sweep.
+        /// The View draws these differently, so the player can see which ground is free.</summary>
+        public bool IsOptional(GridPos pos)
+        {
+            int ix = pos.X - MinX;
+            int iy = pos.Y - MinY;
+            return ix >= 0 && ix < Width && iy >= 0 && iy < Height
+                && playable[ix, iy] && optional[ix, iy];
         }
 
         /// <summary>True for a cell erosion has EATEN. Never playable, and it kills the row and
@@ -405,10 +476,21 @@ namespace ProjectBlock.Core
                     cells[ix, iy] = null;
                     OccupiedCount--;
                 }
+                bool wasOptional = optional[ix, iy];
                 playable[ix, iy] = false;
-                dead[ix, iy] = true;
+                optional[ix, iy] = false;
+                // Eating BONUS ground ("Tılsım") leaves a plain HOLE, not a dead cell. A dead
+                // cell kills its row and column because an unfillable cell sits inside the
+                // line - but an optional cell was never part of that line to begin with, so
+                // killing the row would punish the player for ground the power GAVE them, and
+                // leave them worse off than if they had never cast it. Exactly the argument
+                // the class header already makes for bounding-box holes, one step further.
+                if (!wasOptional)
+                {
+                    dead[ix, iy] = true;
+                    DeadCellCount++;
+                }
                 PlayableCellCount--;
-                DeadCellCount++;
                 eaten.Add(pos);
             }
             return eaten;

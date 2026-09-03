@@ -258,6 +258,7 @@ namespace ProjectBlock.Core
                     continue; // "Kangren" took this row whole - it can never explode again
                 }
                 bool full = false;
+                bool breaks = false;
                 for (int x = 0; x < Width; x++)
                 {
                     if (!playable[x, y])
@@ -266,12 +267,24 @@ namespace ProjectBlock.Core
                     }
                     if (!cells[x, y].HasValue)
                     {
+                        if (optional[x, y])
+                        {
+                            continue; // bonus ground ("Tılsım") never holds a line up
+                        }
                         full = false;
                         break;
                     }
-                    full = true; // at least one playable cell so far, and it is occupied
+                    // Only a REQUIRED cell can carry the line: bonus ground may not hold a line
+                    // up, and by the same token it may not conjure one either - a row that is
+                    // nothing but optional cells is not a row, however full of cubes it is.
+                    full = full || !optional[x, y];
+                    breaks = breaks || CubeRules.IsDestructible(cells[x, y].Value);
                 }
-                if (full) fullRows.Add(y);
+                // A line that would destroy NOTHING is not an explosion at all: a row of solid
+                // gold/obsidian is permanently "full", so paying for it (and flashing it) would
+                // repeat every single turn for the rest of the round. Same reasoning as the
+                // clean-sweep pre-condition, which already counts destruction rather than lines.
+                if (full && breaks) fullRows.Add(y);
             }
             var fullColumns = new List<int>();
             for (int x = 0; !rowsOnly && x < Width; x++)
@@ -285,6 +298,7 @@ namespace ProjectBlock.Core
                     continue; // "Kangren" took this column whole
                 }
                 bool full = false;
+                bool breaks = false;
                 for (int y = 0; y < Height; y++)
                 {
                     if (!playable[x, y])
@@ -293,12 +307,17 @@ namespace ProjectBlock.Core
                     }
                     if (!cells[x, y].HasValue)
                     {
+                        if (optional[x, y])
+                        {
+                            continue; // see the row loop
+                        }
                         full = false;
                         break;
                     }
-                    full = true;
+                    full = full || !optional[x, y];
+                    breaks = breaks || CubeRules.IsDestructible(cells[x, y].Value);
                 }
-                if (full) fullColumns.Add(x);
+                if (full && breaks) fullColumns.Add(x); // see the row loop
             }
             if (fullRows.Count == 0 && fullColumns.Count == 0)
             {

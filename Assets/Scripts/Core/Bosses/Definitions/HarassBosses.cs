@@ -1,4 +1,4 @@
-// PURPOSE: The three bosses that interfere with the player's turn itself rather than with
+﻿// PURPOSE: The three bosses that interfere with the player's turn itself rather than with
 // scoring - "Alıkoyma" holds a card back, "Mapus" seals a cell of the board, "Feda" makes a
 // bonus card cost the whole hand. All three act from the end-of-turn hook, which is BEFORE
 // the dead-end check, so any of them can genuinely finish a round off.
@@ -552,6 +552,10 @@ namespace ProjectBlock.Core
     ///
     /// The growth stays in ONE PIECE - the new cube always touches the block - so a fattened card
     /// is a harder card, never a nonsense one.
+    ///
+    /// UNBREAKABLE BLOCKS ARE SPARED (gold, obsidian, void). Nothing can clear them, so every
+    /// cube of one clogs the arena for the rest of the round no matter how well the player plays;
+    /// fattening them would bill the same card twice with no way to pay it off.
     /// </summary>
     public sealed class KitlikBoss : BossRound
     {
@@ -562,9 +566,11 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Every card that comes back from the discard grows by one cube, somewhere at "
-                    + "random. Play on long enough and your whole deck is too fat to fit.",
-                "Iskartadan desteye dönen her kart rastgele bir yerinden bir küp büyür. Yeterince "
-                    + "uzun oynarsan bütün desten tahtaya sığmayacak kadar şişer.");
+                    + "random. Unbreakable blocks - gold and obsidian - are spared. Play on long "
+                    + "enough and your whole deck is too fat to fit.",
+                "Iskartadan desteye dönen her kart rastgele bir yerinden bir küp büyür. "
+                    + "Kırılamayan bloklar - altın ve obsidyen - bundan muaftır. Yeterince uzun "
+                    + "oynarsan bütün desten tahtaya sığmayacak kadar şişer.");
         }
 
         /// <summary>Cubes added to cards this round, for the UI.</summary>
@@ -601,6 +607,16 @@ namespace ProjectBlock.Core
             IReadOnlyList<BlockCard> comingBack = round.Deck.DiscardPile;
             for (int i = 0; i < comingBack.Count; i++)
             {
+                // UNBREAKABLE BLOCKS ARE SPARED. A gold or obsidian block is already a liability
+                // - nothing can clear it, so every cube of it clogs the arena for the rest of
+                // the round - and fattening it would punish the same card twice over, in a way
+                // the player can never undo. Asked of the ROUND, so the kind is the one the card
+                // would actually lay; asked of CubeRules, so the list of unbreakable kinds lives
+                // in one place.
+                if (!CubeRules.IsDestructibleKind(round.EffectiveCubeKind(comingBack[i])))
+                {
+                    continue;
+                }
                 if (round.GrowCardShape(comingBack[i], ctx.Rng) != null)
                 {
                     cubesGrown++;

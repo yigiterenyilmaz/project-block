@@ -44,11 +44,12 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "One column is marked for demolition. Three turns later everything in it is "
-                    + "swept away and you are charged for every cube that was standing there - "
-                    + "then the next column is marked.",
+                    + "swept away - nothing resists it, not even gold or obsidian - and you are "
+                    + "charged for every cube that was standing there, then the next column is "
+                    + "marked.",
                 "Bir sütun yıkım için işaretlenir. Üç tur sonra içindeki her şey silinip "
-                    + "süpürülür ve orada duran her küp için puan ödersin - ardından sıradaki "
-                    + "sütun işaretlenir.");
+                    + "süpürülür - altın ya da obsidyen bile buna direnemez - ve orada duran her "
+                    + "küp için puan ödersin, ardından sıradaki sütun işaretlenir.");
         }
 
         /// <summary>The column under the mark, in absolute board coordinates. Meaningless

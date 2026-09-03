@@ -112,6 +112,13 @@ namespace ProjectBlock.Core
         /// never push the round below (see ClampTurnScoreFloor).</summary>
         private int turnStartRoundScore;
 
+        /// <summary>How much of this turn's DEBT the floor has already written off. The floor
+        /// forgives a negative turn in RoundScore, but the breakdown goes on carrying the charge
+        /// - so without remembering the write-off, the next late write would compound against a
+        /// baseline the ledger does not share, and the turn would bank more than it earned.
+        /// A later credit pays this back BEFORE it reaches RoundScore. See ClampTurnScoreFloor.</summary>
+        private int turnScoreForgiven;
+
         /// <summary>True once RoundScore has reached the threshold; enables overtime rules.</summary>
         public bool ThresholdPassed { get; private set; }
 
@@ -205,6 +212,19 @@ namespace ProjectBlock.Core
         public bool CardHasElement(BlockCard card, BlockElement element)
         {
             return card != null && Has(card, element);
+        }
+
+        /// <summary>What kind of cube this card WOULD lay right now. Asked of the round rather
+        /// than of the card, so a boss that suppresses every element ("Vanilya") is answered
+        /// correctly - exactly the reason CardHasElement exists. The same call GameBoard.Place
+        /// makes when the card actually lands.</summary>
+        public CubeKind EffectiveCubeKind(BlockCard card)
+        {
+            if (card == null || Board == null || Board.IgnoreElements)
+            {
+                return CubeKind.Normal;
+            }
+            return CubeRules.KindForCard(card);
         }
 
         /// <summary>True if this round's boss has silenced that joker ("Anarşi", "Oburluk"):
@@ -986,7 +1006,8 @@ namespace ProjectBlock.Core
             this.scorer = scorer;
             this.session = session;
             this.hooks = hooks ?? NoTurnHooks.Instance;
-            Board = new GameBoard(config.BoardWidth, config.BoardHeight, config.ExtraPlayableCells);
+            Board = new GameBoard(config.BoardWidth, config.BoardHeight, config.ExtraPlayableCells,
+                config.OptionalPlayableCells);
             Deck = new RoundDeck(ownedCards, rng);
             // "Hileli zar": pull the preset cards to the top so they are the opening hand.
             if (session != null)

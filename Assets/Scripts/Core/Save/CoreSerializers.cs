@@ -183,6 +183,7 @@ namespace ProjectBlock.Core
             w.Write(key + ".erosion", (int)config.Erosion);
             w.Write(key + ".boss", config.IsBossRound);
             WritePosList(w, key + ".extra", config.ExtraPlayableCells);
+            WritePosList(w, key + ".optional", config.OptionalPlayableCells);
         }
 
         public static RoundConfig ReadRoundConfig(SaveReader r, string key)
@@ -194,7 +195,9 @@ namespace ProjectBlock.Core
             var erosion = (ShuffleErosion)r.ReadInt(key + ".erosion");
             bool boss = r.ReadBool(key + ".boss");
             List<GridPos> extra = ReadPosList(r, key + ".extra");
-            return new RoundConfig(round, width, height, threshold, extra, erosion, boss);
+            List<GridPos> optional = ReadPosList(r, key + ".optional");
+            return new RoundConfig(round, width, height, threshold, extra, erosion, boss,
+                optional);
         }
 
         // ---------------------------------------------------------------- RoundRules

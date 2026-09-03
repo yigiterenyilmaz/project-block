@@ -19,6 +19,7 @@ namespace ProjectBlock.Core
             // score backwards - see ClampTurnScoreFloor, applied at step 8.6 and again after any
             // late write, because some of them land after that (the dead-end check).
             turnStartRoundScore = RoundScore;
+            turnScoreForgiven = 0;
 
             // Remember the board as it stands BEFORE this placement, so "Kum saati" can
             // rewind into it later. Oldest entries fall off the front.

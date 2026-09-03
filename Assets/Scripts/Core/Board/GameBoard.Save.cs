@@ -33,6 +33,7 @@ namespace ProjectBlock.Core
             for (int iy = 0; iy < Height; iy++)
             {
                 w.Write(key + ".playable." + iy, MaskRow(playable, iy));
+                w.Write(key + ".optional." + iy, MaskRow(optional, iy));
                 w.Write(key + ".dead." + iy, MaskRow(dead, iy));
             }
 
@@ -93,12 +94,14 @@ namespace ProjectBlock.Core
             var flow = new GridPos(r.ReadInt(key + ".flowX"), r.ReadInt(key + ".flowY"));
 
             var mask = new bool[width, height];
+            var optionalMask = new bool[width, height];
             var deadMask = new bool[width, height];
             int playableCount = 0;
             int deadCount = 0;
             for (int iy = 0; iy < height; iy++)
             {
                 string playableRow = r.ReadString(key + ".playable." + iy);
+                string optionalRow = r.ReadString(key + ".optional." + iy);
                 string deadRow = r.ReadString(key + ".dead." + iy);
                 for (int ix = 0; ix < width; ix++)
                 {
@@ -106,6 +109,10 @@ namespace ProjectBlock.Core
                     {
                         mask[ix, iy] = true;
                         playableCount++;
+                    }
+                    if (ix < optionalRow.Length && optionalRow[ix] == '1')
+                    {
+                        optionalMask[ix, iy] = true;
                     }
                     if (ix < deadRow.Length && deadRow[ix] == '1')
                     {
@@ -115,7 +122,7 @@ namespace ProjectBlock.Core
                 }
             }
 
-            var board = new GameBoard(minX, minY, width, height, mask, deadMask,
+            var board = new GameBoard(minX, minY, width, height, mask, optionalMask, deadMask,
                 playableCount, deadCount);
             board.IgnoreElements = ignoreElements;
             board.SetWaterFlow(flow);

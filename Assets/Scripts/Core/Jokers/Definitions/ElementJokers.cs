@@ -24,9 +24,6 @@ namespace ProjectBlock.Core
         /// <summary>Points per gold CUBE held, per turn. Mirrors the board-side gold bonus.</summary>
         public int PointsPerGoldCubeHeld = 2;
 
-        /// <summary>Added to the on-board per-cube gold bonus while Midas is owned.</summary>
-        public int GoldBonusBoost = 1;
-
         /// <summary>Gold cubes counted in hand last turn, for the UI.</summary>
         public int GoldCubesHeld { get; private set; }
 
@@ -34,21 +31,10 @@ namespace ProjectBlock.Core
             : base("midas", "Midas")
         {
             SetDescription(
-                "Gold blocks pay their bonus in your hand too (bonus hand included), "
-                    + "and every gold cube is worth more.",
-                "Altın bloklar elindeyken de bonus verir (bonus el dahil) "
-                    + "ve her altın küp daha çok puan kazandırır.");
-        }
-
-        /// <summary>Permanently raises the board-side gold bonus (a live ScoringConfig buff).</summary>
-        public override void OnAcquired(SessionContext ctx)
-        {
-            ctx.Scoring.GoldPointsPerCubePerTurn += GoldBonusBoost;
-        }
-
-        public override void OnRemoved(SessionContext ctx)
-        {
-            ctx.Scoring.GoldPointsPerCubePerTurn -= GoldBonusBoost;
+                "Gold blocks pay their bonus while they are in your hand, bonus hand included. "
+                    + "Gold already on the board is unaffected.",
+                "Altın bloklar elindeyken bonus verir, bonus el de dahil. Tahtada duran altına "
+                    + "bir etkisi olmaz.");
         }
 
         public override string StatusText
@@ -67,23 +53,31 @@ namespace ProjectBlock.Core
             RoundEngine round = turn.Round;
             for (int i = 0; i < round.Hand.Count; i++)
             {
-                if (round.Hand[i].Has(BlockElement.Gold))
-                {
-                    cubes += round.Hand[i].Shape.Size;
-                }
+                cubes += GoldCubesOf(round, round.Hand[i]);
             }
             foreach (BonusSlot slot in round.BonusHand)
             {
-                if (slot.Card.Has(BlockElement.Gold))
-                {
-                    cubes += slot.Card.Shape.Size;
-                }
+                cubes += GoldCubesOf(round, slot.Card);
             }
             GoldCubesHeld = cubes;
             if (cubes > 0)
             {
                 turn.Score.AddFlat(cubes * PointsPerGoldCubeHeld, DefId);
             }
+        }
+
+        /// <summary>How many gold cubes this held card is worth right now. Both questions go
+        /// through the ROUND, never the card: a boss can suppress every element ("Vanilya"), and
+        /// a card's shape is not fixed for the round - "Kıtlık" fattens what comes back from the
+        /// discard and the fox reshape rewrites it, both into the same store. Counting the
+        /// PRINTED shape paid for a block the player is no longer holding.</summary>
+        private static int GoldCubesOf(RoundEngine round, BlockCard card)
+        {
+            if (card == null || !round.CardHasElement(card, BlockElement.Gold))
+            {
+                return 0;
+            }
+            return round.EffectiveShape(card).Size;
         }
     }
 

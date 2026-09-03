@@ -1,10 +1,12 @@
-// PURPOSE: The two jokers that keep the REST of your kit running - "Şifacı" heals spent
-// jokers, "Yer altı kaynakları" refuels spent powers until it runs itself dry.
+﻿// PURPOSE: The joker that keeps the REST of your kit running - "Yer altı kaynakları" refuels
+// spent powers until it runs itself dry. ("Şifacı", which healed spent JOKERS on the same
+// pattern, was cut: only a handful of jokers have charges at all, so a rare joker spent most
+// runs doing nothing.)
 //
-// Both act from AfterTurnScored, so they tick with the turn rather than with anything the
-// player does, and both go through the inventories' own primitives (Joker.GrantCharge,
-// PowerInventory.Recharge) - which means a boss that forbids refills ("Tükenmişlik") stops
-// them for free, without either joker knowing that boss exists.
+// It acts from AfterTurnScored, so it ticks with the turn rather than with anything the player
+// does, and it goes through the inventory's own primitive (PowerInventory.Recharge) - which
+// means a boss that forbids refills ("Tükenmişlik") stops it for free, without the joker
+// knowing that boss exists.
 //
 // All numbers are BALANCE PLACEHOLDERS.
 
@@ -12,96 +14,6 @@ using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>
-    /// "Şifacı" - every few turns it gives one use back to a random SPENT joker.
-    ///
-    /// The clock does not run down while there is nothing to heal: if no joker is empty when it
-    /// comes due, it stays ready and heals the moment one empties, then goes back to sleep. So
-    /// the wait is never wasted - it is a promise, not a window you can miss.
-    /// </summary>
-    public sealed class SifaciJoker : Joker
-    {
-        /// <summary>Turns between heals.</summary>
-        public int TurnsBetweenHeals = 5;
-
-        /// <summary>Turns counted since the last heal. Stops counting once it is due.</summary>
-        private int turnsWaited;
-
-        /// <summary>Heals given this round, for the UI.</summary>
-        private int healsGiven;
-
-        public SifaciJoker()
-            : base("sifaci", "Şifacı")
-        {
-            SetDescription(
-                "Every 5 turns it gives one use back to a random spent joker. If nothing is "
-                    + "spent it stays ready and heals the moment something is.",
-                "Her 5 turda bir, hakkı bitmiş rastgele bir jokerine bir hak geri verir. "
-                    + "Bitmiş joker yoksa hazır bekler ve biri biter bitmez iyileştirir.");
-        }
-
-        /// <summary>True when the clock is up and it is only waiting for something to heal.</summary>
-        public bool IsReadyToHeal
-        {
-            get { return turnsWaited >= TurnsBetweenHeals; }
-        }
-
-        public override string StatusText
-        {
-            get
-            {
-                if (IsReadyToHeal)
-                {
-                    return Loc.Pick("ready", "hazır");
-                }
-                int left = TurnsBetweenHeals - turnsWaited;
-                return left + Loc.Pick("t to heal", "t sonra");
-            }
-        }
-
-        public override void OnRoundStarted(RoundContext ctx)
-        {
-            // The clock restarts with the round, but a heal owed is not carried over: every
-            // joker comes back fully charged at round start anyway, so there is nothing owed.
-            turnsWaited = 0;
-            healsGiven = 0;
-        }
-
-        public override void AfterTurnScored(TurnContext turn)
-        {
-            if (turnsWaited < TurnsBetweenHeals)
-            {
-                turnsWaited++;
-            }
-            if (turnsWaited < TurnsBetweenHeals)
-            {
-                return;
-            }
-            // Due. Heal a spent joker if there is one; otherwise stay ready and try again next
-            // turn - the clock does NOT restart on an empty search.
-            IReadOnlyList<Joker> jokers = turn.Session.Jokers.Jokers;
-            var spent = new List<Joker>();
-            for (int i = 0; i < jokers.Count; i++)
-            {
-                Joker other = jokers[i];
-                if (other != this && other.ChargesPerRound > 0 && other.ChargesLeft <= 0)
-                {
-                    spent.Add(other);
-                }
-            }
-            if (spent.Count == 0)
-            {
-                return;
-            }
-            Joker patient = spent[turn.Rng.NextInt(0, spent.Count)];
-            if (patient.GrantCharge())
-            {
-                healsGiven++;
-                turnsWaited = 0;
-            }
-        }
-    }
-
     /// <summary>
     /// "Yer altı kaynakları" - a seam of fuel for your POWERS. Every few turns it refills the
     /// spent common powers, and on a slower clock the spent rare ones.

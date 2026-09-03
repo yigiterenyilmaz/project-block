@@ -305,10 +305,12 @@ namespace ProjectBlock.Core
             : base("tilsim", "Tılsım")
         {
             SetDescription(
-                "Blows up ghost blocks and turns the space they covered outside the map "
-                    + "into play area. Resets when the round ends.",
-                "Hayalet blokları patlatır ve harita dışında kapladıkları yeri "
-                    + "oyun alanına katar. Raunt bitince sıfırlanır.");
+                "Blows up ghost blocks and turns the space they covered outside the map into "
+                    + "BONUS play area: you may build on it, but a row or column never waits "
+                    + "for it to be filled. Resets when the round ends.",
+                "Hayalet blokları patlatır ve harita dışında kapladıkları yeri BONUS oyun "
+                    + "alanına katar: üzerine blok koyabilirsin ama bir satır ya da sütun onun "
+                    + "dolmasını beklemez. Raunt bitince sıfırlanır.");
         }
 
         /// <summary>Cells this power is currently granting to the board.</summary>
@@ -367,9 +369,13 @@ namespace ProjectBlock.Core
             }
             var cells = new List<GridPos>(config.ExtraPlayableCells);
             cells.AddRange(convertedCells);
+            // The same cells go in as OPTIONAL: ground this power reclaimed is a gift, so a
+            // line must never wait for it to be filled (see GameBoard's header).
+            var bonus = new List<GridPos>(config.OptionalPlayableCells);
+            bonus.AddRange(convertedCells);
             // WithBoard, not a hand-written rebuild: the erosion style and the boss flag come
             // along by themselves (see RoundConfig's header - both have been dropped before).
-            return config.WithBoard(config.BoardWidth, config.BoardHeight, cells);
+            return config.WithBoard(config.BoardWidth, config.BoardHeight, cells, bonus);
         }
     }
 

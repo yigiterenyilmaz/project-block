@@ -56,7 +56,6 @@ namespace ProjectBlock.Core
             Register(() => new KolayParaJoker());
             Register(() => new KrediKartiJoker());
             Register(() => new DevreJoker());
-            Register(() => new SifaciJoker());
             Register(() => new YerAltiKaynaklariJoker());
             Register(() => new MetamorfozJoker());
             Register(() => new BeslemeJoker());

@@ -6,12 +6,70 @@ everything here is unreleased and balance numbers are still placeholders.
 
 ## Unreleased — `balance`
 
+### Fixed
+- **A turn could bank more than it earned.** "A turn is never worth less than nothing" is enforced
+  by putting the round score back where the turn started - but that write-off happened in the round
+  score ONLY, while the turn breakdown went on carrying the charge. Any credit arriving after it
+  (a second joker paying out, a late bonus) then landed on a clean slate and banked in full, so the
+  turn paid out more than its own ledger said it earned and the run currency drifted. A write-off is
+  now remembered and a later credit settles it first. The floor itself is unchanged: a turn can
+  still bank nothing, never less. Found by the fuzz suite; pinned down by a deterministic test.
+- **"Midas" counted the printed shape, not the one you are holding.** A gold card fattened by
+  "Kıtlık" or reshaped by a fox paid for its ORIGINAL cube count, and a gold card on a
+  "Vanilya" round paid even though its element was suppressed. Both questions now go through the
+  round (`EffectiveShape` / `CardHasElement`).
+- **A full line of unbreakable blocks no longer pays out or flashes every turn.** A row or column
+  of solid gold/obsidian is permanently "full" and destroys nothing, so it was scoring
+  `PointsPerLine` (plus the multi-line bonus, plus every joker multiplier on top) and playing the
+  clear animation on **every single turn** for the rest of the round. `ResolveFullLines` now drops
+  a line that would destroy nothing, so score, animation and the clean-sweep pre-condition finally
+  agree on what an explosion is. One breakable cube in the row is enough to make it a real line
+  again.
+- **A falling water cube is no longer drawn twice.** The cell it was heading for kept showing its
+  settled cube while the drop was still in flight, so you saw the block falling and a copy of it
+  already sitting at the landing cell. `HideWaterCells` was only recolouring the cell, which stopped
+  blanking anything once cubes were drawn on painted TILE sprites; it now clears the tile too.
+- **Gear and fox bonus cards get their right-click abilities.** Rotation and the fox shape picker
+  bounds-checked against the hand alone, so a mechanical or fox block sitting in the BONUS hand
+  silently did nothing on right-click. Both now address a held SLOT — the hand, then the bonus hand
+  — through the same convention the drag path already used (`RoundEngine.CardAtSlot`).
+
 ### Removed
+- **"Şifacı" (joker) is cut.** The joker that gave a spent joker one use back every 5 turns is
+  gone: only a handful of jokers have charges at all, so a **rare** joker spent most runs with
+  nothing to heal. "Yer altı kaynakları" is untouched and remains the refueller for POWERS,
+  which is where the recharge economy actually lives. The catalogue is **52 jokers** now.
 - **"Savunmacı" (joker) is cut.** The bank-safe-rounds-then-cash-them-on-one-overtime joker is
-  gone from the roster; the catalogue is **52 jokers** now. "Eforsuz galibiyet" still reads
-  overtime the same way it did, so nothing else changes.
+  gone from the roster. "Eforsuz galibiyet" still reads overtime the same way it did, so nothing
+  else changes. (The running catalogue total is on the Şifacı entry above.)
 
 ### Changed
+- **"Tılsım" now grants BONUS ground, not ordinary board.** The cells it reclaims are *optional*:
+  you may build on them, but a row or column never waits for them to be filled, and a cube left
+  standing in one never blocks a clean sweep. Before, the power quietly raised the price of every
+  line it stretched — it gave you space and charged you a cube for it. A cube standing in bonus
+  ground still explodes with the line and still scores; bonus ground can never conjure a line of
+  its own. Empty bonus ground is tinted so it reads as distinct from ordinary play area.
+  Erosion that eats a piece of bonus ground leaves a plain HOLE rather than a line-killing dead
+  cell, so the power can never leave you worse off than not having cast it, and the placement
+  preview follows the same rule the board does.
+  (New fourth board-cell state — required / optional / hole / dead — see CLAUDE.md.)
+- **"Midas" is an in-hand joker only.** It no longer raises the per-cube bonus for gold sitting
+  ON THE BOARD; it pays for gold held in your hand and bonus hand, which is what its name was
+  always about. Both descriptions updated.
+- **Kumbara rebalance** — the piggy banks now pay far more for surviving a round and slightly less
+  per turn, so they reward getting through stages rather than stalling inside one:
+  Domuz Kumbarası 25 → **150**/round; Altın Kumbara 20 → **100**/round and 2 → **1**/turn;
+  Cimri Kumbara 3 → **2**/turn.
+- **"Kıtlık" no longer fattens unbreakable blocks.** Gold, obsidian and void blocks are spared:
+  nothing can clear one, so every cube of it clogs the arena for the rest of the round however
+  well you play, and growing it billed the same card twice with no way to pay it off. Breakable
+  blocks fatten exactly as before. Both descriptions say so.
+- **"İstilacı" description** now says outright that nothing resists the demolition, gold and
+  obsidian included — the behaviour was always that, the text did not say so (both languages).
+- **Save format version 13.** The round config now carries its optional-cell list, so older saves
+  are refused rather than half-loaded.
+
 - **Destruction has ONE language now, and it travels.** Every blast in the game used to be the
   same thing: a puff of particles on every affected cell, all on the same frame, with no
   direction in it. Now the cells themselves go off — `CellFlashFx` strikes a square bright and

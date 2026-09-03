@@ -117,11 +117,20 @@ namespace ProjectBlock.Core
         /// destructible here on purpose - a player-completed line is the only thing that breaks it.</summary>
         public static bool IsDestructible(Cube cube)
         {
-            return cube.Kind != CubeKind.Obsidian
-                && cube.Kind != CubeKind.Gold
-                && cube.Kind != CubeKind.Void
+            return IsDestructibleKind(cube.Kind);
+        }
+
+        /// <summary>The same question asked of a KIND alone, for callers reasoning about a card
+        /// that has not been placed yet ("Kıtlık" refusing to fatten an unbreakable block).
+        /// THE list of indestructible kinds - IsDestructible defers to it, so the two can
+        /// never drift apart.</summary>
+        public static bool IsDestructibleKind(CubeKind kind)
+        {
+            return kind != CubeKind.Obsidian
+                && kind != CubeKind.Gold
+                && kind != CubeKind.Void
                 // The snake is cut down by its own boss's rule, never by a line.
-                && cube.Kind != CubeKind.Snake;
+                && kind != CubeKind.Snake;
         }
 
         /// <summary>Can an EXTERNAL effect (a joker or power) destroy this cube? Same as

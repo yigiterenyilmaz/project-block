@@ -41,7 +41,7 @@ namespace ProjectBlock.Core
         // 12 (2026-08-17): "Hileli zar" moved from the powers to the jokers, keeping its DefId,
         // so an older save's owned POWER "hileli_zar" no longer resolves - and a new one owns a
         // joker of that id with a field the power never had.
-        public const int FormatVersion = 12;
+        public const int FormatVersion = 13;
 
         private const string VersionKey = "version";
 

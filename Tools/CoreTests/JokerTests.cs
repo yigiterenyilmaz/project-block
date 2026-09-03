@@ -111,6 +111,11 @@ public static class JokerTests
         RunStructure_BossStagesSitBetweenNumberedRounds();
         DebugStartBossStage_JumpsStraightToABossStage();
         RunStructure_EveryStageOpensAMarket();
+        Lines_ASolidIndestructibleLineIsNotAnExplosion();
+        Lines_OptionalCellsDoNotHoldALineUp();
+        HeldSlots_BonusCardsRotateAndReshape();
+        OptionalCells_PreviewAndErosionAgreeWithTheRule();
+        TurnFloor_ACreditAfterAWriteOffPaysTheDebtFirst();
         BossRounds_FlaggedEveryThirdRound();
         Boss_DrawnOncePerRunAndOnlyOnFlaggedRounds();
         Boss_UfukAndKulePayForOneAxisOnly();
@@ -136,9 +141,6 @@ public static class JokerTests
         OtekiDunya_PowersHitTheWorldTheyArePointedAt();
         OtekiDunya_TargetingAlwaysSnapsBack();
         OtekiDunya_LeavesAnOrdinaryRoundAlone();
-        Sifaci_HealsASpentJokerOnItsClock();
-        Sifaci_GivesOneUseNotAFullRefill();
-        Sifaci_NeverHealsItselfOrAPassiveJoker();
         YerAlti_RefuelsPowersAndSpendsItsSeam();
         YerAlti_CostsPerPowerNotPerTick();
         YerAlti_GoesQuietWhenTheSeamRunsOut();
@@ -202,6 +204,7 @@ public static class JokerTests
         Saatci_ARoundWonOnTheBuzzerIsNotLost();
         Kitlik_FattensCardsButOnlyForTheRound();
         Kitlik_TheGrowthStaysInOnePiece();
+        Kitlik_SparesUnbreakableBlocks();
         Merkezkac_FlingsCubesOutwardAndOffTheEdge();
         Merkezkac_WhatGoesOverTheEdgePaysNothing();
         DortKutup_SquaresTheBoardAndSealsThreeQuarters();
@@ -4315,84 +4318,6 @@ public static class JokerTests
         Check(report.MirroredColumns.Count == 0, "no column match to pay");
     }
 
-    private static void Sifaci_HealsASpentJokerOnItsClock()
-    {
-        Section("şifacı / gives a spent joker one use back, on its own clock");
-        var session = NewSession(8100, 6, 1000000, 40, 1);
-        var healer = (SifaciJoker)session.Jokers.Add(new SifaciJoker());
-        var patient = (RenovasyonJoker)session.Jokers.Add(new RenovasyonJoker());
-        RoundEngine round = session.CurrentRound;
-        session.Jokers.DispatchRoundStarted(round);
-
-        int full = patient.ChargesPerRound;
-        Check(full > 0, "the patient is a charged joker", "charges " + full);
-        Check(patient.ChargesLeft == full, "and starts full");
-
-        // Nothing is spent: the clock comes due and simply waits.
-        PlayTurns(session, healer.TurnsBetweenHeals + 2);
-        Check(healer.IsReadyToHeal, "with nothing to heal it sits ready",
-            "status " + healer.StatusText);
-        Check(patient.ChargesLeft == full, "and healed nothing");
-
-        // Empty the patient. The very next turn should heal it, without waiting again.
-        while (patient.ChargesLeft > 0)
-        {
-            session.Jokers.TryActivate(patient.InstanceId, ActivationTarget.None);
-        }
-        Check(patient.ChargesLeft == 0, "the patient is spent", "left " + patient.ChargesLeft);
-        PlayTurns(session, 1);
-        Check(patient.ChargesLeft == 1, "the waiting healer topped it up at once",
-            "left " + patient.ChargesLeft);
-        Check(!healer.IsReadyToHeal, "and went back to sleep");
-    }
-
-    private static void Sifaci_GivesOneUseNotAFullRefill()
-    {
-        Section("şifacı / one use back, not a full refill");
-        var session = NewSession(8101, 6, 1000000, 40, 1);
-        var healer = (SifaciJoker)session.Jokers.Add(new SifaciJoker());
-        // Renovasyon has 2 uses per round, so a full refill would be visible.
-        var patient = (RenovasyonJoker)session.Jokers.Add(new RenovasyonJoker());
-        RoundEngine round = session.CurrentRound;
-        session.Jokers.DispatchRoundStarted(round);
-        int full = patient.ChargesPerRound;
-        Check(full >= 2, "the patient has more than one use", "charges " + full);
-
-        while (patient.ChargesLeft > 0)
-        {
-            if (!session.Jokers.TryActivate(patient.InstanceId, ActivationTarget.None))
-            {
-                break;
-            }
-        }
-        if (patient.ChargesLeft > 0)
-        {
-            Check(true, "the patient could not be emptied in this setup - skipped");
-            return;
-        }
-        PlayTurns(session, healer.TurnsBetweenHeals + 1);
-        Check(patient.ChargesLeft == 1, "exactly one use came back, not all of them",
-            patient.ChargesLeft + " of " + full);
-        Check(healer.IsReadyToHeal == false || patient.ChargesLeft == 1,
-            "the heal was spent on that one use");
-    }
-
-    private static void Sifaci_NeverHealsItselfOrAPassiveJoker()
-    {
-        Section("şifacı / passive jokers are not patients");
-        var session = NewSession(8102, 6, 1000000, 40, 1);
-        var healer = (SifaciJoker)session.Jokers.Add(new SifaciJoker());
-        Joker passive = session.Jokers.Add(new InsiderJoker()); // no charges at all
-        session.Jokers.DispatchRoundStarted(session.CurrentRound);
-
-        Check(passive.ChargesPerRound == 0, "Insider has no charges to heal");
-        Check(healer.ChargesPerRound == 0, "and the healer itself is passive too");
-        PlayTurns(session, healer.TurnsBetweenHeals + 3);
-        Check(healer.IsReadyToHeal, "so it stays ready forever with nothing to do",
-            "status " + healer.StatusText);
-        Check(passive.ChargesLeft == 0, "and nothing was granted to a passive joker");
-    }
-
     private static void YerAlti_RefuelsPowersAndSpendsItsSeam()
     {
         Section("yer altı kaynakları / refuels spent powers and pays for each out of the seam");
@@ -6539,6 +6464,51 @@ public static class JokerTests
             "but no card in the run deck was actually changed - the growth is round-scoped");
     }
 
+    /// <summary>"Kıtlık" leaves unbreakable blocks alone: nothing can clear a gold or obsidian
+    /// block, so fattening one would bill the same card twice with no way to pay it off.</summary>
+    private static void Kitlik_SparesUnbreakableBlocks()
+    {
+        Section("kıtlık / unbreakable blocks are not fattened");
+        var session = NewBossSession(6108, 5, 1000000, "kitlik", 6, 1);
+        RoundEngine round = session.CurrentRound;
+
+        // Retype two of the run deck's cards: one gold (unbreakable), one fire (breakable).
+        BlockCard gold = session.CreateCard(Bar(2), new[] { BlockElement.Gold });
+        BlockCard obsidian = session.CreateCard(Bar(2), new[] { BlockElement.Obsidian });
+        BlockCard fire = session.CreateCard(Bar(2), new[] { BlockElement.Fire });
+        Check(!CubeRules.IsDestructibleKind(round.EffectiveCubeKind(gold)),
+            "a gold card would lay an unbreakable cube");
+        Check(!CubeRules.IsDestructibleKind(round.EffectiveCubeKind(obsidian)),
+            "and so would an obsidian one");
+        Check(CubeRules.IsDestructibleKind(round.EffectiveCubeKind(fire)),
+            "a fire card would not");
+
+        // GrowCardShape itself is indiscriminate - the SPARING is the boss's rule - so drive the
+        // boss's own hook and check what it chose to touch.
+        var boss = (KitlikBoss)round.Boss;
+        int before = boss.CubesGrown;
+        PlayTurns(session, 14);
+        Check(boss.CubesGrown > before, "the boss did fatten cards this round",
+            "" + boss.CubesGrown);
+
+        // Every card the boss touched must be a breakable one.
+        int unbreakableGrown = 0;
+        for (int i = 0; i < session.OwnedCards.Count; i++)
+        {
+            BlockCard card = session.OwnedCards[i];
+            if (CubeRules.IsDestructibleKind(round.EffectiveCubeKind(card)))
+            {
+                continue;
+            }
+            if (round.EffectiveShape(card).Size > card.Shape.Size)
+            {
+                unbreakableGrown++;
+            }
+        }
+        Check(unbreakableGrown == 0, "no unbreakable block was fattened",
+            unbreakableGrown + " grew");
+    }
+
     private static void Kitlik_TheGrowthStaysInOnePiece()
     {
         Section("kıtlık / a fattened card is still one connected block");
@@ -7112,6 +7082,64 @@ public static class JokerTests
         session.LeaveMarket();
         Check(thrift.LastAnythingPurchased,
             "the market was left having 'purchased' something");
+    }
+
+    /// <summary>Bills the turn hard enough to push it under, then pays some of it back - both
+    /// AFTER the score is finalized, which is the path that goes through AddLateTurnScore.</summary>
+    private sealed class ChargeThenCreditJoker : Joker
+    {
+        public int Charge = 150;
+        public int Credit = 200;
+
+        public ChargeThenCreditJoker()
+            : base("charge_then_credit", "Charge Then Credit")
+        {
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            turn.AddFlatScore(-Charge, DefId);
+            turn.AddFlatScore(Credit, DefId);
+        }
+    }
+
+    /// <summary>
+    /// A turn is never worth less than nothing - but the floor may not FORGIVE a debt either.
+    /// When a charge pushes a turn under, the floor writes it off in RoundScore while the
+    /// breakdown goes on carrying it; a later credit then has to settle that debt before it
+    /// counts, or the turn banks more than it earned and the books stop balancing.
+    /// (Found by the fuzz suite; this pins it down deterministically.)
+    /// </summary>
+    private static void TurnFloor_ACreditAfterAWriteOffPaysTheDebtFirst()
+    {
+        Section("turn floor / a credit after a write-off settles the debt first");
+        var session = NewSession(9201, 6, 1000000, 40, 3);
+        session.Config.Scoring.PointsPerCubePlaced = 1;
+        var joker = (ChargeThenCreditJoker)session.Jokers.Add(new ChargeThenCreditJoker());
+        RoundEngine round = session.CurrentRound;
+
+        TurnReport report = null;
+        round.TurnResolved += r => { if (report == null) report = r; };
+        int before = round.RoundScore;
+        PlayTurns(session, 1);
+
+        Check(report != null, "a turn resolved");
+        Check(report.Score != null, "and it carries a breakdown");
+        // The charge (150) exceeds what the turn earned, so the floor writes the rest off; the
+        // credit (200) then pays that write-off back before any of it is really earned.
+        Check(report.ScoreGained == report.Score.Total,
+            "what the turn BANKED equals what it EARNED",
+            "banked " + report.ScoreGained + " earned " + report.Score.Total);
+        Check(report.ScoreGained >= 0, "and the turn is never worth less than nothing",
+            "" + report.ScoreGained);
+        Check(round.RoundScore == before + report.ScoreGained,
+            "the round score moved by exactly what was banked",
+            round.RoundScore + " vs " + (before + report.ScoreGained));
+        // The credit does NOT get to start from a clean slate: 200 paid against a 150 write-off
+        // is worth 50 on top of the turn, not 200.
+        Check(report.ScoreGained < joker.Credit * session.Config.Scoring.ScoreScale,
+            "the credit did not bank in full over the forgiven debt",
+            "banked " + report.ScoreGained);
     }
 
     /// <summary>Records what DispatchMarketLeft was told.</summary>
@@ -9510,5 +9538,182 @@ public static class JokerTests
         }
         sb.Append("total=").Append(session.TotalScore);
         return sb.ToString();
+    }
+
+    /// <summary>A row of nothing but gold/obsidian is permanently "full" and destroys nothing.
+    /// It must not read as an explosion at all, or it pays out and flashes every single turn for
+    /// the rest of the round.</summary>
+    private static void Lines_ASolidIndestructibleLineIsNotAnExplosion()
+    {
+        Section("lines / a line that destroys nothing is not an explosion");
+        var session = NewSession(9101, 4, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+
+        // Fill row 0 with gold, which nothing can break.
+        PaintBoard(round, session, CubeKind.Gold,
+            new GridPos(0, 0), new GridPos(1, 0), new GridPos(2, 0), new GridPos(3, 0));
+        Check(round.Board.OccupiedCount == 4, "the gold row is standing",
+            "occupied " + round.Board.OccupiedCount);
+
+        LineExplosionResult result = round.Board.ResolveFullLines();
+        Check(result.LineCount == 0, "a solid gold row is not a line",
+            "lines " + result.LineCount);
+        Check(result.ExplodedCells.Count == 0, "and nothing exploded",
+            "cells " + result.ExplodedCells.Count);
+        Check(round.Board.OccupiedCount == 4, "the gold is untouched",
+            "occupied " + round.Board.OccupiedCount);
+
+        // One breakable cube in the row is enough to make it a real line again.
+        round.Board.SetCubeKind(new GridPos(2, 0), CubeKind.Normal);
+        LineExplosionResult real = round.Board.ResolveFullLines();
+        Check(real.LineCount == 1, "one destructible cube restores the line",
+            "lines " + real.LineCount);
+        Check(real.ExplodedCells.Count == 1, "only the breakable cube goes",
+            "cells " + real.ExplodedCells.Count);
+    }
+
+    /// <summary>"Tılsım" bonus ground: playable, but a line never waits for it while it is
+    /// empty - and it may not conjure a line of its own either.</summary>
+    private static void Lines_OptionalCellsDoNotHoldALineUp()
+    {
+        Section("lines / optional cells are skipped while empty");
+        // 3x3 board with one bonus cell bolted onto row 0 at x=3.
+        var optional = new List<GridPos> { new GridPos(3, 0) };
+        var config = new RoundConfig(1, 3, 3, 1000000, optional, ShuffleErosion.None, false,
+            optional);
+        var board = new GameBoard(config.BoardWidth, config.BoardHeight,
+            config.ExtraPlayableCells, config.OptionalPlayableCells);
+        Check(board.Width == 4, "the bounding box stretched over the bonus cell",
+            "width " + board.Width);
+        Check(board.IsInside(new GridPos(3, 0)), "bonus ground is playable");
+        Check(board.IsOptional(new GridPos(3, 0)), "and it is marked optional");
+        Check(!board.IsOptional(new GridPos(0, 0)), "ordinary ground is not");
+
+        // Fill the three REQUIRED cells of row 0, leaving the bonus cell empty.
+        var filler = new BlockCard(1, Bar(1));
+        board.Place(filler, new GridPos(0, 0));
+        board.Place(new BlockCard(2, Bar(1)), new GridPos(1, 0));
+        board.Place(new BlockCard(3, Bar(1)), new GridPos(2, 0));
+        LineExplosionResult result = board.ResolveFullLines();
+        Check(result.LineCount == 1, "the row clears without the bonus cell",
+            "lines " + result.LineCount);
+        Check(result.ExplodedCells.Count == 3, "three cubes went",
+            "cells " + result.ExplodedCells.Count);
+
+        // A cube standing IN the bonus cell still explodes with the line.
+        board.Place(new BlockCard(4, Bar(1)), new GridPos(0, 0));
+        board.Place(new BlockCard(5, Bar(1)), new GridPos(1, 0));
+        board.Place(new BlockCard(6, Bar(1)), new GridPos(2, 0));
+        board.Place(new BlockCard(7, Bar(1)), new GridPos(3, 0));
+        LineExplosionResult withBonus = board.ResolveFullLines();
+        Check(withBonus.LineCount == 1, "still one line", "lines " + withBonus.LineCount);
+        Check(withBonus.ExplodedCells.Count == 4, "the bonus cube went up with it",
+            "cells " + withBonus.ExplodedCells.Count);
+
+        // Bonus ground alone is not a line: column 3 holds nothing but the optional cell.
+        board.Place(new BlockCard(8, Bar(1)), new GridPos(3, 0));
+        LineExplosionResult alone = board.ResolveFullLines();
+        Check(alone.LineCount == 0, "an all-optional column is not a line",
+            "lines " + alone.LineCount);
+        // ...and a cube left standing there does not block a clean sweep.
+        Check(board.IsCleanForSweep(), "bonus ground never costs a sweep");
+    }
+
+    /// <summary>Rotation and the fox reshape address a HELD SLOT - the hand, then the bonus hand -
+    /// so a bonus-hand block keeps its own abilities.</summary>
+    private static void HeldSlots_BonusCardsRotateAndReshape()
+    {
+        Section("held slots / bonus cards keep their right-click abilities");
+        var session = NewSession(9103, 8, 1000000, 40, 2);
+        RoundEngine round = session.CurrentRound;
+        int handCount = round.Hand.Count;
+
+        BlockCard gear = session.CreateCard(Bar(3), new[] { BlockElement.Mechanical });
+        round.AddBonusCard(gear, BonusPlayOutcome.ExpireFromRound);
+        int gearSlot = handCount; // the first bonus slot sits straight after the hand
+
+        Check(round.CardAtSlot(gearSlot) != null && round.CardAtSlot(gearSlot).Id == gear.Id,
+            "the bonus card is reachable by slot");
+        BlockShape before = round.EffectiveShape(gear);
+        round.RotateCard(gearSlot);
+        BlockShape after = round.EffectiveShape(gear);
+        Check(before.Width != after.Width || before.Height != after.Height,
+            "a bonus gear block rotates",
+            before.Width + "x" + before.Height + " -> " + after.Width + "x" + after.Height);
+
+        BlockCard fox = session.CreateCard(Bar(1), new[] { BlockElement.Fox });
+        round.AddBonusCard(fox, BonusPlayOutcome.ExpireFromRound);
+        int foxSlot = handCount + 1;
+        round.SetFoxShape(foxSlot, Bar(4));
+        Check(round.EffectiveShape(fox).Size == 4, "a bonus fox block reshapes",
+            "size " + round.EffectiveShape(fox).Size);
+
+        Check(round.CardAtSlot(handCount + 5) == null, "a slot past the bonus hand is nothing");
+        Check(round.CardAtSlot(-1) == null, "and so is a negative slot");
+    }
+
+    /// <summary>Two things that must follow the optional-cell rule rather than contradict it:
+    /// the placement PREVIEW the UI draws every frame, and what happens when erosion eats a
+    /// piece of bonus ground.</summary>
+    private static void OptionalCells_PreviewAndErosionAgreeWithTheRule()
+    {
+        Section("optional cells / preview and erosion follow the same rule");
+        var optional = new List<GridPos> { new GridPos(3, 0) };
+        var board = new GameBoard(3, 3, optional, optional);
+
+        // PREVIEW: filling the three required cells of row 0 WILL clear it, so the preview
+        // must say so even though the bonus cell stays empty.
+        board.Place(new BlockCard(1, Bar(1)), new GridPos(0, 0));
+        board.Place(new BlockCard(2, Bar(1)), new GridPos(1, 0));
+        LineExplosionResult predicted = board.PredictExplosions(Bar(1), new GridPos(2, 0));
+        Check(predicted.LineCount == 1, "the preview sees the line without the bonus cell",
+            "lines " + predicted.LineCount);
+        LineExplosionResult actual = null;
+        board.Place(new BlockCard(3, Bar(1)), new GridPos(2, 0));
+        actual = board.ResolveFullLines();
+        Check(actual.LineCount == predicted.LineCount,
+            "and the preview agreed with what actually happened",
+            "predicted " + predicted.LineCount + " got " + actual.LineCount);
+
+        // PREVIEW must not promise a line that would destroy nothing either.
+        // 3x2, not 3x1: on a one-row board the placement would also complete its own column,
+        // and the assertion below would be counting two lines for the wrong reason.
+        var gold = new GameBoard(3, 2);
+        PaintCells(gold, CubeKind.Gold, new GridPos(0, 0), new GridPos(1, 0));
+        LineExplosionResult goldPredict = gold.PredictExplosions(Bar(1), new GridPos(2, 0));
+        Check(goldPredict.LineCount == 1,
+            "a gold row completed by a breakable cube is still a real line",
+            "lines " + goldPredict.LineCount);
+
+        // EROSION: eating bonus ground must leave a HOLE, never a line-killing dead cell -
+        // the row never waited for that cell, so it must still be completable afterwards.
+        var eroded = new GameBoard(3, 3, optional, optional);
+        eroded.MarkDead(new List<GridPos> { new GridPos(3, 0) });
+        Check(!eroded.IsInside(new GridPos(3, 0)), "the bonus cell was eaten");
+        Check(!eroded.IsDead(new GridPos(3, 0)), "but it is a hole, not a dead cell");
+        eroded.Place(new BlockCard(4, Bar(1)), new GridPos(0, 0));
+        eroded.Place(new BlockCard(5, Bar(1)), new GridPos(1, 0));
+        eroded.Place(new BlockCard(6, Bar(1)), new GridPos(2, 0));
+        Check(eroded.ResolveFullLines().LineCount == 1,
+            "and the row it stretched still clears");
+
+        // Ordinary ground eaten by erosion still kills its line, exactly as before.
+        var plain = new GameBoard(3, 3);
+        plain.MarkDead(new List<GridPos> { new GridPos(1, 0) });
+        Check(plain.IsDead(new GridPos(1, 0)), "ordinary eaten ground is still dead ground");
+        plain.Place(new BlockCard(7, Bar(1)), new GridPos(0, 0));
+        plain.Place(new BlockCard(8, Bar(1)), new GridPos(2, 0));
+        Check(plain.ResolveFullLines().LineCount == 0, "and it still kills its row");
+    }
+
+    /// <summary>PaintBoard without a session, for the bare-GameBoard tests above.</summary>
+    private static void PaintCells(GameBoard board, CubeKind kind, params GridPos[] cells)
+    {
+        int id = 900;
+        foreach (GridPos cell in cells)
+        {
+            board.Place(new BlockCard(id++, Bar(1)), cell);
+            board.SetCubeKind(cell, kind);
+        }
     }
 }
