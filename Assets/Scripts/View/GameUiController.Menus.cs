@@ -235,6 +235,12 @@ namespace ProjectBlock.View
         /// click off the panels goes back to the title rather than stranding the player.</summary>
         private void HandleTitleDeckSelect(Keyboard kb, Mouse mouse)
         {
+            // DIRECT mode steps the decks rather than pointing at them (see .PadPanels), so
+            // choosing that scheme never puts an arrow on the screen that starts a run.
+            if (HandlePadDeckSelect())
+            {
+                return;
+            }
             if (kb != null && kb.escapeKey.wasPressedThisFrame)
             {
                 GoToTitle();

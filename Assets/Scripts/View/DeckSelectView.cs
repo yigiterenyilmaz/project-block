@@ -255,6 +255,22 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Deck index under a world point, or -1.</summary>
+        /// <summary>How many decks are on offer, and where each panel is - what a gamepad
+        /// steps through instead of pointing (see GameUiController.PadPanels.cs).</summary>
+        public int DeckCount
+        {
+            get { return panelCenters.Count; }
+        }
+
+        public Vector2? DeckWorldCenter(int index)
+        {
+            if (index < 0 || index >= panelCenters.Count)
+            {
+                return null;
+            }
+            return panelCenters[index];
+        }
+
         public int DeckAt(Vector2 world)
         {
             for (int i = 0; i < panelCenters.Count; i++)

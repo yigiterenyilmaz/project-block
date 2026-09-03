@@ -847,6 +847,35 @@ namespace ProjectBlock.View
             return textMesh;
         }
 
+        /// <summary>
+        /// Scales a GENERATED plate sprite (one the code drew into a texture itself, like the
+        /// board surface or its line glow) so that it covers exactly <paramref name="size"/>
+        /// world units, whatever pixel dimensions its texture happened to come out at.
+        ///
+        /// USE THIS RATHER THAN ASSIGNING localScale DIRECTLY, and here is the trap it exists to
+        /// close: Sprite.Create takes ONE pixels-per-unit for both axes, so a sprite made from a
+        /// non-square texture is never 1x1 world units - it is (w/ppu) by (h/ppu). Setting the
+        /// scale to the target size therefore only works while the texture is SQUARE, and every
+        /// board in the game was square until retro mode grew four dead rows on top of one. The
+        /// plate then came out narrower than the arena by exactly width/height, leaving the outer
+        /// column of cells sitting off the edge of the board they belong to.
+        ///
+        /// Dividing by the sprite's own world size is exact for both cases: a square sprite is
+        /// 1x1 and this is arithmetically the old assignment, so no square board moves by a pixel.
+        /// </summary>
+        public static void FitGeneratedPlate(SpriteRenderer renderer, Vector2 size)
+        {
+            if (renderer == null || renderer.sprite == null)
+            {
+                return;
+            }
+            Vector2 spriteSize = renderer.sprite.bounds.size;
+            renderer.transform.localScale = new Vector3(
+                size.x / Mathf.Max(0.0001f, spriteSize.x),
+                size.y / Mathf.Max(0.0001f, spriteSize.y),
+                1f);
+        }
+
         /// <summary>Creates a rectangular sprite object (position and size in local space).</summary>
         public static SpriteRenderer MakeRect(Transform parent, string name, Vector2 position,
             Vector2 size, Color color, int sortingOrder)

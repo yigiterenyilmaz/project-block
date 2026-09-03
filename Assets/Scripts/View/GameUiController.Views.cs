@@ -100,26 +100,13 @@ namespace ProjectBlock.View
             marketView = marketGo.AddComponent<MarketView>();
             // Holding a section refreshes it. The view reports the gesture and nothing else -
             // it never touches money or the market, exactly as clicking an offer does not.
-            marketView.SectionHeld = delegate (MarketOfferKind kind)
-            {
-                if (session != null && session.RerollMarket(kind))
-                {
-                    sfx.Buy();   // the buy "ka-ching" doubles as the refresh
-                    marketView.Show(session);
-                    UpdateHud();
-                }
-            };
+            marketView.SectionHeld = delegate (MarketOfferKind kind) { RerollSection(kind); };
             // DEMO shelf: the PROCEED button is the mouse twin of [N]. Same three steps, so a
             // player who never finds the key is not stuck in the shop.
-            marketView.ProceedPressed = delegate
-            {
-                if (session != null && session.Phase == GamePhase.Market)
-                {
-                    session.LeaveMarket();
-                    marketView.Hide();
-                    StartRoundPresentation();
-                }
-            };
+            marketView.ProceedPressed = delegate { LeaveMarketNow(); };
+            // The shelf names the control that starts the next round; which one that IS depends
+            // on what the player is holding, so it asks rather than being told.
+            marketView.ProceedHint = delegate { return PadOr("[N]", "Y"); };
 
             var sfxGo = new GameObject("SoundFx");
             sfxGo.transform.SetParent(transform, false);
@@ -211,18 +198,20 @@ namespace ProjectBlock.View
             animLabGo.transform.SetParent(transform, false);
             animLab = animLabGo.AddComponent<AnimationLabView>();
 
-            tooltipRoot = new GameObject("Tooltip");
-            tooltipRoot.transform.SetParent(transform, false);
-            tooltipRoot.SetActive(false);
-
             var canvasGo = new GameObject("HudCanvas");
             canvasGo.transform.SetParent(transform, false);
             Canvas canvas = canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            // Stated rather than left at the default, because the tooltip canvas below is
+            // defined RELATIVE to it: two overlay canvases sort by this number alone.
+            canvas.sortingOrder = HudCanvasOrder;
             CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             hudCanvas = canvas;
+
+            // AFTER the HUD canvas, and on one of its own - see BuildTooltipCanvas.
+            BuildTooltipCanvas();
 
             // EVERY piece of HUD hangs off this, not off the canvas, so a camera shake can take
             // the interface with it. The canvas is ScreenSpaceOverlay: it does not follow the
@@ -263,6 +252,126 @@ namespace ProjectBlock.View
             menuGo.transform.SetParent(transform, false);
             menu = menuGo.AddComponent<MenuScreenView>();
             menu.Build(hudShake);
+
+            // Last, and on the CANVAS rather than on HudShake: the drawn pointer must not be
+            // moved by a screen shake, and it must draw over the menus built above it.
+            gamepad = new GamepadBridge(hudCanvas);
+
+            // What the pad can do right now, along the bottom. On HudShake, not the canvas:
+            // it is HUD and belongs to the screen, unlike the pointer above.
+            BuildPadPrompts(hudShake);
+
+            // One line that appears ONLY if a synthesized click is failing to register - the
+            // one thing about gamepad input that cannot be diagnosed from inside the game.
+            // Silent when it works, which is the point (see GamepadBridge.RecordDebug).
+            padDebugText = MakeText(hudShake, "PadDebug", new Vector2(0f, 0f),
+                new Vector2(16f, 16f), TextAnchor.LowerLeft, 18,
+                new Color(1f, 0.55f, 0.45f));
+            padDebugText.rectTransform.sizeDelta = new Vector2(900f, 40f);
+            padDebugText.text = string.Empty;
+        }
+
+        /// <summary>The two overlay canvases, in order. The gap is there so a third layer can be
+        /// slid between them later without renumbering either.</summary>
+        private const int HudCanvasOrder = 0;
+
+        private const int TooltipCanvasOrder = 100;
+
+        /// <summary>
+        /// The tooltip's own SCREEN-SPACE OVERLAY canvas, sorted above the HUD's.
+        ///
+        /// WHY IT IS NOT A WORLD-SPACE OBJECT ANY MORE, which is the whole point of this method:
+        /// an overlay canvas is composited after the camera has finished, so it covers EVERY
+        /// world-space renderer no matter what sorting order that renderer claims. The tooltip
+        /// used to be world-space sprites at order 50, and the things it most often has to be
+        /// read over - the joker bar, the power bar, the score and the debug column - are all UI
+        /// on the HUD canvas. So the panel describing a power was drawn underneath the power bar
+        /// it was describing, and no sorting order could ever have fixed it: the fix is to be on
+        /// a canvas too, and to be the higher one.
+        ///
+        /// It also has to be its OWN canvas rather than a child of the HUD's, because the HUD's
+        /// content is ordered by sibling index and a tooltip must outrank all of it without
+        /// having to be re-parented to the end of the list every time something else is added.
+        /// </summary>
+        private void BuildTooltipCanvas()
+        {
+            var canvasGo = new GameObject("TooltipCanvas");
+            canvasGo.transform.SetParent(transform, false);
+            tooltipCanvas = canvasGo.AddComponent<Canvas>();
+            tooltipCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            tooltipCanvas.sortingOrder = TooltipCanvasOrder;
+            CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+
+            // The panel itself: pivot at its TOP-LEFT corner, because that is the corner the
+            // cursor anchors, and anchored to the canvas's bottom-left so anchoredPosition is
+            // simply "where on the screen", in reference-resolution units.
+            var panel = new GameObject("Tooltip");
+            panel.transform.SetParent(canvasGo.transform, false);
+            tooltipRoot = panel.AddComponent<RectTransform>();
+            tooltipRoot.anchorMin = Vector2.zero;
+            tooltipRoot.anchorMax = Vector2.zero;
+            tooltipRoot.pivot = new Vector2(0f, 1f);
+
+            // The edge is a slightly bigger rounded plate BEHIND the fill (first child = drawn
+            // first), so the two corners share a radius and the hairline stays even all the way
+            // round - an outline drawn as four rects cannot turn a corner.
+            MakeTooltipPlate(tooltipRoot, "TipEdge", TooltipEdgeColor, TooltipEdge);
+            MakeTooltipPlate(tooltipRoot, "TipBg", TooltipBgColor, 0f);
+
+            tooltipTitle = MakeTooltipLabel(tooltipRoot, "TipTitle", TooltipTitleFontSize,
+                FontStyle.Bold, TooltipTitleColor);
+            tooltipBody = MakeTooltipLabel(tooltipRoot, "TipBody", TooltipBodyFontSize,
+                FontStyle.Normal, TooltipBodyColor);
+
+            panel.SetActive(false);
+        }
+
+        /// <summary>One rounded plate of the tooltip, stretched to fill the panel and grown by
+        /// <paramref name="bleed"/> pixels on every side. SLICED, so the corner keeps the radius
+        /// it was generated with however wide or tall the description makes the panel - the same
+        /// sprite and the same reason as the cards (ViewUtil.RoundedSprite).</summary>
+        private static Image MakeTooltipPlate(RectTransform parent, string name, Color color,
+            float bleed)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var image = go.AddComponent<Image>();
+            image.sprite = ViewUtil.RoundedSprite;
+            image.type = Image.Type.Sliced;
+            image.color = color;
+            image.raycastTarget = false;
+            RectTransform rect = go.GetComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = new Vector2(-bleed, -bleed);
+            rect.offsetMax = new Vector2(bleed, bleed);
+            return image;
+        }
+
+        /// <summary>One line-block of tooltip text, hung from the panel's top-left. The body
+        /// arrives already wrapped by ViewUtil.WrapText, so both of these overflow rather than
+        /// wrap again - a second wrap at a different width is how a description ends up with one
+        /// orphaned word per paragraph.</summary>
+        private static Text MakeTooltipLabel(RectTransform parent, string name, int fontSize,
+            FontStyle style, Color color)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            Text text = go.AddComponent<Text>();
+            text.font = ViewUtil.UiFontFor(style);
+            text.fontSize = fontSize;
+            text.color = color;
+            text.alignment = TextAnchor.UpperLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.raycastTarget = false;
+            RectTransform rect = go.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            return text;
         }
 
         /// <summary>How wide the top-left run/debug readout is allowed to be, in the canvas

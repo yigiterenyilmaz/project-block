@@ -144,10 +144,12 @@ namespace ProjectBlock.View
                 builtHeight = cellsHigh;
             }
             // The texture covers the plate PLUS the shadow margin, so the world size it is drawn
-            // at has to include the margin too or the board would come out short.
+            // at has to include the margin too or the board would come out short. Fitted rather
+            // than assigned: the texture is only square while the ARENA is, and a retro round is
+            // not - see ViewUtil.FitGeneratedPlate.
             float span = (cellsWide + overhangInCells + 2f * Style.Margin) * cellSize;
             float spanY = (cellsHigh + overhangInCells + 2f * Style.Margin) * cellSize;
-            plate.transform.localScale = new Vector3(span, spanY, 1f);
+            ViewUtil.FitGeneratedPlate(plate, new Vector2(span, spanY));
         }
 
         private void OnDestroy()

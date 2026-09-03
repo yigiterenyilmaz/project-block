@@ -1,5 +1,11 @@
 // PURPOSE: GameUiController hover tooltips - detecting what the mouse is over and
-// building/rendering the world-space tooltip panels for cards, jokers and powers.
+// filling/positioning the tooltip panel for cards, jokers and powers.
+//
+// THE PANEL IS UI, ON ITS OWN OVERLAY CANVAS ABOVE THE HUD'S (see BuildTooltipCanvas). It used
+// to be world-space sprites, and it could not win: an overlay canvas is composited after the
+// camera, so it covers every world-space renderer whatever sorting order that renderer claims -
+// and the joker bar, the power bar and the score readout, which are exactly what a tooltip has
+// to be read over, are all on that canvas. The panel is built ONCE and only refilled here.
 
 using System.Collections;
 using System.Collections.Generic;
@@ -299,57 +305,94 @@ namespace ProjectBlock.View
                 title, body, nearWorld, rarity);
         }
 
-        /// <summary>Rebuilds the tooltip panel only when the hovered target changes; always
-        /// repositions it next to the cursor, clamped inside the camera view.</summary>
+        // The panel's metrics, in the canvas's 1920x1080 reference space. The width is set by the
+        // BODY: every description is pre-wrapped to 34 characters by ViewUtil.WrapText, and at
+        // the body font size that column comes out just under 310px.
+        private const float TooltipWidth = 334f;
+
+        private const float TooltipMargin = 13f;
+
+        private const float TooltipTitleHeight = 30f;
+
+        private const float TooltipLineHeight = 22f;
+
+        private const int TooltipTitleFontSize = 22;
+
+        private const int TooltipBodyFontSize = 18;
+
+        /// <summary>How far the edge plate stands out past the fill, and how far the panel's
+        /// corner sits from the cursor. The gap is bigger than the arrow so the panel never
+        /// lands under the pointer that summoned it.</summary>
+        private const float TooltipEdge = 2f;
+
+        private const float TooltipCursorGapX = 22f;
+
+        private const float TooltipCursorGapY = 26f;
+
+        /// <summary>Refills the tooltip panel only when the hovered target changes; always
+        /// repositions it next to the cursor, clamped inside the screen.
+        ///
+        /// NOTHING IS DESTROYED AND REBUILT any more - the panel, its two plates and its two
+        /// labels are made once in BuildTooltipCanvas and only ever refilled and resized. The old
+        /// version tore its children down and made new ones on every change of target, which on a
+        /// bar of jokers meant a fresh set of GameObjects for every one the cursor crossed.</summary>
         private void RenderTooltip(string key, string title, string body, Vector2 nearWorld,
             Rarity rarity = Rarity.Common)
         {
-            tooltipRoot.SetActive(true);
+            tooltipRoot.gameObject.SetActive(true);
             if (key != tooltipKey)
             {
                 tooltipKey = key;
-                for (int i = tooltipRoot.transform.childCount - 1; i >= 0; i--)
-                {
-                    Destroy(tooltipRoot.transform.GetChild(i).gameObject);
-                }
                 int bodyLines = 1;
                 for (int i = 0; i < body.Length; i++)
                 {
                     if (body[i] == '\n') bodyLines++;
                 }
-                const float margin = 0.14f;
-                const float titleHeight = 0.34f;
-                const float lineHeight = 0.30f;
-                tooltipWidth = 3.4f;
-                tooltipHeight = margin * 2f + titleHeight + bodyLines * lineHeight;
+                tooltipWidth = TooltipWidth;
+                tooltipHeight = TooltipMargin * 2f + TooltipTitleHeight
+                    + bodyLines * TooltipLineHeight;
+                tooltipRoot.sizeDelta = new Vector2(tooltipWidth, tooltipHeight);
 
-                ViewUtil.MakeRect(tooltipRoot.transform, "TipBg",
-                    new Vector2(tooltipWidth * 0.5f, -tooltipHeight * 0.5f),
-                    new Vector2(tooltipWidth, tooltipHeight), TooltipBgColor, 50);
-                // High fontSize + small characterSize keeps TextMesh crisp; the dark panel
-                // gives contrast so no outline is needed here.
-                ViewUtil.MakeText3D(tooltipRoot.transform, "TipTitle",
-                    new Vector2(margin, -margin), title, 90, 0.017f,
-                    rarity == Rarity.Common ? TooltipTitleColor : RarityPalette.Accent(rarity), 51,
-                    TextAnchor.UpperLeft);
-                ViewUtil.MakeText3D(tooltipRoot.transform, "TipBody",
-                    new Vector2(margin, -margin - titleHeight), body, 90, 0.014f, TooltipBodyColor,
-                    51, TextAnchor.UpperLeft);
+                float textWidth = tooltipWidth - TooltipMargin * 2f;
+                tooltipTitle.text = title;
+                tooltipTitle.color = rarity == Rarity.Common
+                    ? TooltipTitleColor
+                    : RarityPalette.Accent(rarity);
+                tooltipTitle.rectTransform.anchoredPosition =
+                    new Vector2(TooltipMargin, -TooltipMargin);
+                tooltipTitle.rectTransform.sizeDelta = new Vector2(textWidth, TooltipTitleHeight);
+
+                tooltipBody.text = body;
+                tooltipBody.rectTransform.anchoredPosition =
+                    new Vector2(TooltipMargin, -TooltipMargin - TooltipTitleHeight);
+                tooltipBody.rectTransform.sizeDelta =
+                    new Vector2(textWidth, bodyLines * TooltipLineHeight);
             }
 
-            // Anchor the panel's top-left just up-right of the cursor, then clamp on screen.
-            Vector3 topLeft = cam.ViewportToWorldPoint(new Vector3(0f, 1f, cam.nearClipPlane));
-            Vector3 bottomRight = cam.ViewportToWorldPoint(new Vector3(1f, 0f, cam.nearClipPlane));
-            float ax = Mathf.Clamp(nearWorld.x + 0.3f, topLeft.x + 0.1f, bottomRight.x - 0.1f - tooltipWidth);
-            float ay = Mathf.Clamp(nearWorld.y + 0.4f, bottomRight.y + 0.1f + tooltipHeight, topLeft.y - 0.1f);
-            tooltipRoot.transform.position = new Vector3(ax, ay, 0f);
+            // Anchor the panel's top-left just up-right of the cursor, then clamp on screen. The
+            // cursor arrives as a WORLD point (every caller has one already, from the same
+            // ScreenToWorldPoint the hover test uses), so it goes back through the camera here -
+            // and then out of screen pixels into the canvas's reference units, which is what an
+            // anchoredPosition is measured in once the scaler has had its say.
+            Vector3 screenPoint = cam.WorldToScreenPoint(nearWorld);
+            float scale = tooltipCanvas != null
+                ? Mathf.Max(tooltipCanvas.scaleFactor, 0.0001f)
+                : 1f;
+            float viewWidth = Screen.width / scale;
+            float viewHeight = Screen.height / scale;
+            float ax = Mathf.Clamp(screenPoint.x / scale + TooltipCursorGapX,
+                TooltipEdge, Mathf.Max(TooltipEdge, viewWidth - TooltipEdge - tooltipWidth));
+            float ay = Mathf.Clamp(screenPoint.y / scale + TooltipCursorGapY,
+                Mathf.Min(viewHeight - TooltipEdge, TooltipEdge + tooltipHeight),
+                viewHeight - TooltipEdge);
+            tooltipRoot.anchoredPosition = new Vector2(ax, ay);
         }
 
         private void HideTooltip()
         {
             if (tooltipRoot != null)
             {
-                tooltipRoot.SetActive(false);
+                tooltipRoot.gameObject.SetActive(false);
             }
             tooltipKey = null;
         }

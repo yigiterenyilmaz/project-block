@@ -69,6 +69,21 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Feeds a world-space click in. Returns true if it landed on an arrow.</summary>
+        /// <summary>The arrows on offer, and where each one is - what a gamepad steps through
+        /// instead of pointing at them (see GameUiController.PadPanels.cs). Picking one is
+        /// still HandleClick, handed the arrow's own centre.</summary>
+        public int ArrowCount
+        {
+            get { return arrows.Count; }
+        }
+
+        public Vector2? ArrowWorldCenter(int index)
+        {
+            return index >= 0 && index < arrows.Count
+                ? arrows[index].Center
+                : (Vector2?)null;
+        }
+
         public bool HandleClick(Vector2 world)
         {
             if (!IsOpen)

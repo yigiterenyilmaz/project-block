@@ -121,33 +121,48 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>
-    /// "Rehin puan" - what a line clear earns is not paid, it is HELD. Clear a line again on the
-    /// very next turn and the held score is released; fail to, and it burns.
+    /// "Rehin puan" - what a line clear earns is not paid, it is HELD. Clear another line before
+    /// the hostage runs out of patience and the held score is released; let it run out, and it
+    /// burns.
     ///
-    /// So every clear is a debt the next turn has to honour, and a chain of clears pays out one
-    /// turn behind itself - which means the LAST clear of any chain is always lost. Stopping is
-    /// what costs you; there is no safe moment to stop.
+    /// THE HOSTAGE KEEPS FOR GraceTurns TURNS (4), not for one. The one-turn version demanded a
+    /// clear on the very next turn every time, which on a board that needs two or three turns of
+    /// setting up to make a line at all meant the score was gone before it could realistically be
+    /// ransomed - the boss was not asking for a chain, it was confiscating. Four turns is long
+    /// enough to build a line towards and short enough that a hostage still expires if you turn
+    /// your attention elsewhere. A chain of clears still pays out one clear behind itself, so the
+    /// LAST clear of any chain is the one at risk; what changed is that stopping now costs you a
+    /// deadline rather than the score outright.
     ///
     /// Only the LINE score is held (confirmed design). Placement points, combo, gold and every
     /// joker bonus are paid normally, so this beats your board without touching your build.
     /// </summary>
     public sealed class RehinPuanBoss : BossRound
     {
+        /// <summary>Turns the held score survives without a clear. It burns at the END of the
+        /// GraceTurns'th turn that failed to ransom it, so that many turns are real chances.
+        /// BALANCE PLACEHOLDER.</summary>
+        public int GraceTurns = 4;
+
         private int held;
         private int earnedThisTurn;
         private int released;
         private int burned;
 
+        /// <summary>Turns the CURRENT hostage has gone unransomed. Reset by every clear, and
+        /// meaningless while nothing is held.</summary>
+        private int turnsWaited;
+
         public RehinPuanBoss()
             : base("rehin_puan", "Rehin Puan")
         {
             SetDescription(
-                "What a line clear earns is HELD, not paid. Clear a line again on the very next "
-                    + "turn and you get it; fail to and it burns. Only the line score is held - "
-                    + "everything else pays as usual.",
-                "Bir hat patlatınca kazandığın puan ödenmez, REHİN kalır. Hemen sonraki tur bir "
-                    + "hat daha patlatırsan alırsın; patlatamazsan yanar. Sadece hat puanı rehin "
-                    + "kalır - gerisi normal ödenir.");
+                "What a line clear earns is HELD, not paid. Clear another line within "
+                    + GraceTurns + " turns and you get it; let the time run out and it burns. "
+                    + "Only the line score is held - everything else pays as usual.",
+                "Bir hat patlatınca kazandığın puan ödenmez, REHİN kalır. " + GraceTurns
+                    + " tur içinde bir hat daha patlatırsan alırsın; süre dolarsa yanar. Sadece "
+                    + "hat puanı rehin kalır - gerisi normal ödenir.");
         }
 
         /// <summary>Score waiting on the next turn to honour it.</summary>
@@ -172,7 +187,15 @@ namespace ProjectBlock.Core
             {
                 if (held > 0)
                 {
-                    return Loc.Pick("holding " + held, "rehin " + held);
+                    // The countdown is shown, because with a grace period the player now has a
+                    // decision to make about it - how many turns are left is the whole question.
+                    int left = GraceTurns - turnsWaited;
+                    if (left < 0)
+                    {
+                        left = 0;
+                    }
+                    return Loc.Pick("holding " + held + " (" + left + "t)",
+                        "rehin " + held + " (" + left + "t)");
                 }
                 return burned > 0
                     ? Loc.Pick("burned " + burned, "yanan " + burned)
@@ -186,6 +209,7 @@ namespace ProjectBlock.Core
             earnedThisTurn = 0;
             released = 0;
             burned = 0;
+            turnsWaited = 0;
         }
 
         /// <summary>The line pays NOTHING now. What it would have paid is remembered, and becomes
@@ -206,12 +230,22 @@ namespace ProjectBlock.Core
                     released += held;
                     turn.AddFlatScore(held, DefId);
                 }
+                // The new hostage starts its own clock, whether or not it replaced one: a clear
+                // always buys the full grace, so a chain never runs a deadline down.
                 held = earnedThisTurn;
+                turnsWaited = 0;
             }
             else if (held > 0)
             {
-                burned += held;
-                held = 0;
+                // A turn that failed to ransom it. It only burns once the grace is spent, so
+                // there are GraceTurns real chances to clear before anything is lost.
+                turnsWaited++;
+                if (turnsWaited >= GraceTurns)
+                {
+                    burned += held;
+                    held = 0;
+                    turnsWaited = 0;
+                }
             }
             earnedThisTurn = 0;
         }

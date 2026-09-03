@@ -333,13 +333,117 @@ namespace ProjectBlock.View
                 }
                 return;
             }
-            MarketOffer offer = session.Market.Offers[offerIndex];
             // "Kaçakçı": hold SHIFT to take the offer for free instead of paying for it. One per
             // market visit, and the goods may be junk - which is why it is a deliberate modifier
             // and not the default click.
             Keyboard keys = Keyboard.current;
-            bool smuggling = session.CanSmuggle && keys != null
-                && (keys.leftShiftKey.isPressed || keys.rightShiftKey.isPressed);
+            BuyOffer(offerIndex, session.CanSmuggle && keys != null
+                && (keys.leftShiftKey.isPressed || keys.rightShiftKey.isPressed));
+        }
+
+        /// <summary>Selling one card off the collection screen, and everything the view does
+        /// about it. Reached by a click and by the pad's A (see .PadPanels) - one route, so the
+        /// sale, the sound, the floating price and the two rebuilds can never disagree.</summary>
+        private void SellCardFromDeck(BlockCard card, Vector2 world)
+        {
+            if (card == null)
+            {
+                return;
+            }
+            deckOverlay.PlaySellFx(card); // before the rebuild eats the visual
+            long paid = session.SellCard(card);
+            Debug.Log("[block_bonk] Sold card " + card + " for " + paid);
+            if (paid > 0)
+            {
+                sfx.Buy();
+                FloatingTextFx.Spawn(transform, world, "+" + paid,
+                    new Color(1f, 0.92f, 0.45f), 60, 0.05f);
+            }
+            else
+            {
+                FloatingTextFx.Spawn(transform, world, Loc.Pick("worthless", "değersiz"),
+                    new Color(0.6f, 0.6f, 0.6f), 50, 0.045f);
+            }
+            deckOverlay.Show(session.OwnedCards,
+                c => session.Config.Market.SellValue(c) * session.Config.Scoring.ScoreScale);
+            marketView.Show(session);
+            UpdateHud();
+        }
+
+        /// <summary>Giving a fox the shape that was picked for it, and closing the screen that
+        /// picked it. Null (a press on no card) still closes - the pick is one shot.</summary>
+        private void ApplyFoxShape(BlockShape picked)
+        {
+            RoundEngine pickRound = session.CurrentRound;
+            BlockCard foxCard = CardOfSlot(pickRound, foxPickSlot);
+            if (picked != null && foxCard != null && pickRound.Status == RoundStatus.InProgress)
+            {
+                pickRound.SetFoxShape(foxPickSlot, picked);
+                cardLayer.ForgetCard(foxCard.Id);
+                Debug.Log("[block_bonk] Fox reshaped to " + picked);
+            }
+            foxPickSlot = -1;
+            deckOverlay.Hide();
+            RefreshAll(null);
+        }
+
+        /// <summary>"Hileli zar": a card TOGGLES in and out of next round's opening hand -
+        /// deselect if picked, else select while there is still room. The overlay is rebuilt so
+        /// the highlights and the counter follow.</summary>
+        private void ToggleHileliPick(BlockCard card)
+        {
+            if (card == null)
+            {
+                return;
+            }
+            if (hileliSelection.Contains(card.Id))
+            {
+                hileliSelection.Remove(card.Id);
+                ShowHileliPicker();
+            }
+            else if (hileliSelection.Count < hileliTarget)
+            {
+                hileliSelection.Add(card.Id);
+                ShowHileliPicker();
+            }
+        }
+
+        /// <summary>Refreshing one shelf. The mouse holds the section (or presses its REROLL
+        /// button), the gamepad presses X on it - one route either way, and the view still
+        /// never touches money or the market itself.</summary>
+        private void RerollSection(MarketOfferKind kind)
+        {
+            if (session != null && session.RerollMarket(kind))
+            {
+                sfx.Buy();   // the buy "ka-ching" doubles as the refresh
+                marketView.Show(session);
+                UpdateHud();
+            }
+        }
+
+        /// <summary>Leaving the shop for the next stage - the one thing [N], the PROCEED button
+        /// and the pad's north button all have to do identically.</summary>
+        private void LeaveMarketNow()
+        {
+            if (session == null || session.Phase != GamePhase.Market)
+            {
+                return;
+            }
+            session.LeaveMarket();
+            marketView.Hide();
+            StartRoundPresentation();
+        }
+
+        /// <summary>Taking one offer off the shelf, and everything the view does about it. The
+        /// mouse reaches it through a click and the gamepad through its own stepping (see
+        /// .PadPlay) - both come here, so a bought joker flies to its bar either way.</summary>
+        private void BuyOffer(int offerIndex, bool smuggling)
+        {
+            if (offerIndex < 0 || offerIndex >= session.Market.Offers.Count)
+            {
+                return;
+            }
+            MarketOffer offer = session.Market.Offers[offerIndex];
             if (smuggling ? session.TrySmuggleOffer(offerIndex) : session.TryBuyOffer(offerIndex))
             {
                 Debug.Log("[block_bonk] " + (smuggling ? "Smuggled " : "Bought ") + offer

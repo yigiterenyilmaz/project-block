@@ -555,6 +555,25 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>The held card sitting in a SLOT, or null. The inverse of CardAt: the mouse
+        /// asks "what is under this point", a gamepad asks "where is the card I have chosen"
+        /// (see GameUiController.PadPlay.cs).</summary>
+        public CardVisual VisualOfSlot(int slot)
+        {
+            if (slot < 0)
+            {
+                return null;
+            }
+            foreach (CardVisual visual in heldVisuals.Values)
+            {
+                if (visual != null && visual.SlotIndex == slot)
+                {
+                    return visual;
+                }
+            }
+            return null;
+        }
+
         /// <summary>The held card under a world point (for drag pickup), or null.</summary>
         public CardVisual CardAt(Vector2 world)
         {

@@ -451,6 +451,38 @@ namespace ProjectBlock.View
             return index >= 0 ? entryCards[index] : null;
         }
 
+        /// <summary>How many cards are laid out right now - the visible page, not the whole
+        /// collection. A gamepad steps these (see GameUiController.PadPanels.cs).</summary>
+        public int EntryCount
+        {
+            get { return entryCenters.Count; }
+        }
+
+        /// <summary>World centre of a laid-out card, or null. The inverse of EntryAt.</summary>
+        public Vector2? EntryWorldCenter(int index)
+        {
+            if (index < 0 || index >= entryCenters.Count)
+            {
+                return null;
+            }
+            Vector3 world = transform.TransformPoint(
+                new Vector3(entryCenters[index].x, entryCenters[index].y, 0f));
+            return new Vector2(world.x, world.y);
+        }
+
+        /// <summary>The SHAPE offered by a laid-out slot (the fox picker reads this), or null.</summary>
+        public BlockShape EntryShape(int index)
+        {
+            return index >= 0 && index < entryShapes.Count ? entryShapes[index] : null;
+        }
+
+        /// <summary>The card in a laid-out slot, or null - so a pad can keep hold of WHICH card
+        /// it had chosen across a scroll, which relays every slot.</summary>
+        public BlockCard EntryCard(int index)
+        {
+            return index >= 0 && index < entryCards.Count ? entryCards[index] : null;
+        }
+
         private int EntryAt(Vector2 world)
         {
             Vector2 local = ToLocal(world);

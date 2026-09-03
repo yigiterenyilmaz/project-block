@@ -114,6 +114,56 @@ dropped that way once each.
   subclass it — and every colour/metric lives in `MenuSkin` so art drops in by assigning a
   `Sprite` where a flat `Color` sits. `GameUiController.Menus.cs` holds the `AppScreen`
   state machine: while `screen != Playing` the menu layer owns the whole frame.
+- `Assets/Scripts/View/GamepadBridge.cs` — **gamepad support, and the reason there is only ONE
+  input path in the game.** The pad does not get handlers of its own: the bridge owns a virtual
+  mouse and keyboard (real InputSystem devices it adds) and writes the sticks and buttons into
+  them, so every existing handler goes on reading `Mouse.current` / `Keyboard.current`. Three
+  consequences. **Only one device may be current**, so it writes only while the pad is the
+  active device — touching the real mouse or keyboard hands the pointer back that same frame.
+  **A synthesized press must survive `wasPressedThisFrame`**, which is why every synthetic
+  button is held for a minimum number of frames with a forced gap behind it. And it is ticked
+  from the TOP of `GameUiController.Update`, before that method reads a device — explicitly,
+  not by script execution order. A new binding is one line in `BuildFrame`; the CONTEXT it
+  needs (a list menu vs a pointer screen; market / round / advance decision) is passed in by
+  the controller, so the bridge never asks the session anything itself.
+- `Assets/Scripts/View/GameUiController.PadPlay.cs` — the **DIRECT** gamepad scheme (the other
+  one is the cursor above; the player picks in SETTINGS). It steps through the hand, walks a
+  block across the arena a cell at a time and holds a shoulder to reach a bar. It does not
+  invent a second way to SEE the game, only a second way to DRIVE it: the pointer is still
+  real, and the bridge SNAPS it onto whatever the pad has selected
+  (`PointerMode.Snapped` + `PadSnapScreen`), so every hover visual and tooltip follows for
+  free. What it must never do is fake a click — the buttons call the same methods the mouse
+  handlers call (`PlayFromHand` → `FinalizePlacement`, `BeginActivation`,
+  `RunPowerActivation`), exactly as the retro falling-piece controller already does. **The
+  MARKET is direct too** (`HandlePadMarket`) and is stepped rather than pointed at, and every
+  one of its verbs gets a BUTTON instead of a place to click. A direction is resolved
+  **spatially** (`PadOfferInDirection`, off `MarketView.OfferWorldCenter`), never by walking the
+  offer list: the shelf is not a row — blocks run down the left column with jokers over powers
+  on the right — so the tile before the first power in the LIST is a joker while the tile to its
+  left ON SCREEN is a block. Asking the layout is also what survives the shelf being rearranged. It owns the frame in the
+  market and in an in-progress, non-retro round with nothing modal over either
+  (`PadDirectPlayable`); everywhere else the pad falls back to the cursor, and
+  `HandlePadRound` returns true only on the frames it actually acted, so the mouse and the
+  debug keys keep working beside it.
+- **A prompt that names a control goes through `PadOr`** (in `.PadPrompts`), never a bare
+  `Loc.Pick("[A] advance...")`. The game is full of key names printed over the board, and every
+  one of them is wrong for a player on a pad — so they are written once and say the key, the
+  cursor scheme's button, or the direct scheme's, depending on what is driving. A view that
+  cannot reach the controller takes a `Func<string>` instead (`MarketView.ProceedHint`), because
+  the answer changes the moment a stick is nudged. **L3 hides the prompt strip**, and nothing
+  else may claim it.
+- `Assets/Scripts/View/GameUiController.PadPanels.cs` — **direct mode uses NO cursor
+  anywhere**, so the panels are stepped too: the collection overlay, the deck pick, the option
+  picker and the dead-end rescue. They all work the shelf's way — a panel exposes a count and a
+  WORLD CENTRE per item, `PadNearestInDirection` picks what a direction leads to, the pointer is
+  snapped onto it so the panel's own highlight and tooltip follow for free, and A calls the
+  method a click there would. Adding a panel is those two accessors plus a case in
+  `PadPanelDriven`/`PadPanelSnap` and a handler.
+- `Assets/Scripts/View/GameUiController.PadPrompts.cs` — the strip along the bottom that says
+  what the pad can do RIGHT NOW, shown only while one is driving. Its one rule: every line is
+  written beside the branch that answers those buttons, because a prompt that has drifted from
+  its binding is worse than none. **The pad never carries a debug key** — J/K/P/G/R/S and the
+  F-keys stay on the keyboard, and neither scheme nor this strip mentions them.
 - `Assets/Scenes/enes.unity` — the working scene (a single `GameBootstrap` object).
   **Only ever modify this scene**, never SampleScene or the URP template.
 - `Tools/CoreTests/` — console test harness (outside `Assets/`, so Unity ignores it).
@@ -281,6 +331,11 @@ A/C on offers, N leaves market, S redraws the hand, R restarts, F feeds the card
 cursor to a "Tamagotchi" boss. Joker debug keys:
 J grants the next joker from the registry, K sells the last one, 1-9 activate (a joker
 that needs a target then waits for a click, Esc cancels).
+
+A **gamepad** works everywhere the mouse and those keys do, because it drives exactly them
+(see `GamepadBridge` above): stick aims, A clicks, X right-clicks, B/Start is Escape, Y is the
+stage's one verb, LB/RB are the wheel. Nudge a stick to take the pointer, touch the mouse to
+get it back. The HOW TO PLAY screen carries the full table in both languages.
 
 **F3 opens the ANIMATION LAB** — a catalogue of every animation in the game, each playable on
 demand, with knobs for the conditions that modulate them (combo streak, sweep count, overtime

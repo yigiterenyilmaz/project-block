@@ -170,14 +170,35 @@ namespace ProjectBlock.View
         private bool deckScrollDragging;
         private int lastSeedUsed;
 
-        // Hover tooltip (world-space): a small panel rebuilt only when the target changes.
-        private GameObject tooltipRoot;
+        // Hover tooltip: a small rounded panel rebuilt only when the target changes. It lives on
+        // its OWN overlay canvas, above the HUD's - see BuildTooltipCanvas for why it cannot be
+        // a world-space object and be on top at the same time.
+        private Canvas tooltipCanvas;
+        private RectTransform tooltipRoot;
+        private Text tooltipTitle;
+        private Text tooltipBody;
         private string tooltipKey;
         private float tooltipWidth;
         private float tooltipHeight;
-        private static readonly Color TooltipBgColor = new Color(0.05f, 0.06f, 0.09f, 0.95f);
+
+        /// <summary>OPAQUE, deliberately. A tooltip is a thing to read, and the board it covers
+        /// is the busiest surface in the game - blocks, flashes, a pulsing preview. At 0.95 the
+        /// board showed through the text just enough to make a long description tiring, which is
+        /// the one thing a description may not be. It is a panel now, not a tint.</summary>
+        private static readonly Color TooltipBgColor = new Color(0.05f, 0.06f, 0.09f, 1f);
+
+        /// <summary>The hairline the rounded panel is cut out of - one shade up from the fill,
+        /// drawn a couple of pixels bigger behind it. Without it an opaque near-black panel over
+        /// the dark board has no edge at all and reads as a hole rather than as a card.</summary>
+        private static readonly Color TooltipEdgeColor = new Color(0.26f, 0.30f, 0.38f, 1f);
+
         private static readonly Color TooltipTitleColor = new Color(1f, 0.93f, 0.72f);
         private static readonly Color TooltipBodyColor = new Color(0.82f, 0.86f, 0.92f);
+
+        /// <summary>Gamepad support. It does NOT have its own input path: it writes the pad
+        /// into a virtual mouse and keyboard, so every handler below goes on reading
+        /// Mouse.current / Keyboard.current exactly as it did (see GamepadBridge).</summary>
+        private GamepadBridge gamepad;
 
         /// <summary>Set while an activated joker waits for the player to pick a target.</summary>
         private int? pendingTargetJokerId;
@@ -416,8 +437,80 @@ namespace ProjectBlock.View
             powerBar.Refresh(session, pendingTargetPowerId);
         }
 
+        /// <summary>What the pad's left stick is this frame. Every screen that is a LIST of
+        /// entries spends it on the selection; a round being played under the DIRECT scheme
+        /// steers the pointer itself (see .PadPlay); everything else - the market, the modals,
+        /// the deck pick - is aimed at with a cursor.</summary>
+        private GamepadBridge.PointerMode PadPointerMode()
+        {
+            if (screen != AppScreen.Playing && screen != AppScreen.DeckSelect)
+            {
+                return GamepadBridge.PointerMode.MenuList;
+            }
+            // A DRIVEN PANEL counts as snapped as well: direct mode does not put an arrow back
+            // on the screen for the collection overlay or the deck pick (see .PadPanels).
+            return PadPanelDriven()
+                    || (screen == AppScreen.Playing && PadDirectPlayable())
+                ? GamepadBridge.PointerMode.Snapped
+                : GamepadBridge.PointerMode.Pointer;
+        }
+
+        /// <summary>The one verb the pad's north button stands for right now. Read straight
+        /// off the phase, so the bridge itself never has to know what a round is.</summary>
+        private GamepadBridge.ActionContext PadActionContext()
+        {
+            if (screen != AppScreen.Playing || session == null)
+            {
+                return GamepadBridge.ActionContext.None;
+            }
+            if (session.Phase == GamePhase.Market)
+            {
+                return GamepadBridge.ActionContext.Market;
+            }
+            if (session.Phase != GamePhase.Round)
+            {
+                return GamepadBridge.ActionContext.None;
+            }
+            RoundEngine round = session.CurrentRound;
+            return round != null && round.Status == RoundStatus.AwaitingAdvanceDecision
+                ? GamepadBridge.ActionContext.RoundDecision
+                : GamepadBridge.ActionContext.Round;
+        }
+
+        /// <summary>Gives the OS cursor back and takes the virtual devices out of the input
+        /// system - without this an editor play/stop cycle leaves a pair behind each time.</summary>
+        private void OnDestroy()
+        {
+            if (gamepad != null)
+            {
+                gamepad.Dispose();
+                gamepad = null;
+            }
+        }
+
         private void Update()
         {
+            // FIRST, before anything reads a device: the pad writes this frame's stick and
+            // buttons into its virtual mouse/keyboard, and the two reads below then pick them
+            // up like any other hardware. Ticked from here rather than left to script
+            // execution order, because "before Mouse.current is read" is the whole contract.
+            if (gamepad != null)
+            {
+                GamepadBridge.PointerMode padMode = PadPointerMode();
+                if (padMode == GamepadBridge.PointerMode.Snapped)
+                {
+                    // DIRECT play steers the pointer itself: it goes wherever the pad's
+                    // selection is, so the hover visuals follow it (see .PadPlay).
+                    gamepad.SnapPosition = PadSnapScreen();
+                }
+                gamepad.Tick(padMode, PadActionContext());
+                // Straight after the tick, so both describe the state the pad is in NOW.
+                UpdatePadPrompts();
+                if (padDebugText != null)
+                {
+                    padDebugText.text = gamepad.Active ? gamepad.DebugSummary : string.Empty;
+                }
+            }
             Keyboard kb = Keyboard.current;
             Mouse mouse = Mouse.current;
             // The menu layer owns the whole frame whenever a run is not on screen, so no menu
@@ -506,7 +599,10 @@ namespace ProjectBlock.View
             // The dead-end rescue owns input while the round is paused on it.
             if (lineSwapPicker.IsOpen)
             {
-                HandleRescuePick(mouse, kb);
+                if (!HandlePadRescue())
+                {
+                    HandleRescuePick(mouse, kb);
+                }
                 return;
             }
             // Parazit attach flow owns input while active (a multi-step market action).
@@ -544,6 +640,11 @@ namespace ProjectBlock.View
             }
             if (deckOverlay.IsOpen)
             {
+                // DIRECT mode steps the cards instead of pointing at them (see .PadPanels).
+                if (HandlePadDeckOverlay())
+                {
+                    return;
+                }
                 // modal: click picks (fox mode), sells (sell mode) or closes; Escape closes
                 if (kb != null && kb.escapeKey.wasPressedThisFrame)
                 {
@@ -604,42 +705,15 @@ namespace ProjectBlock.View
                         ConfirmHileliZar();
                         return;
                     }
-                    // Otherwise a card click TOGGLES it: deselect if picked, else select while
-                    // there is still room. The overlay is rebuilt so highlights + counter update.
-                    BlockCard card = deckOverlay.CardAt(pickWorld);
-                    if (card != null)
-                    {
-                        if (hileliSelection.Contains(card.Id))
-                        {
-                            hileliSelection.Remove(card.Id);
-                            ShowHileliPicker();
-                        }
-                        else if (hileliSelection.Count < hileliTarget)
-                        {
-                            hileliSelection.Add(card.Id);
-                            ShowHileliPicker();
-                        }
-                    }
+                    ToggleHileliPick(deckOverlay.CardAt(pickWorld));
                     return;
                 }
                 if (mouse != null && mouse.leftButton.wasPressedThisFrame)
                 {
                     if (foxPickSlot >= 0)
                     {
-                        Vector2 pickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
-                        BlockShape picked = deckOverlay.ShapeAt(pickWorld);
-                        RoundEngine pickRound = session.CurrentRound;
-                        BlockCard foxCard = CardOfSlot(pickRound, foxPickSlot);
-                        if (picked != null && foxCard != null
-                            && pickRound.Status == RoundStatus.InProgress)
-                        {
-                            pickRound.SetFoxShape(foxPickSlot, picked);
-                            cardLayer.ForgetCard(foxCard.Id);
-                            Debug.Log("[block_bonk] Fox reshaped to " + picked);
-                        }
-                        foxPickSlot = -1;
-                        deckOverlay.Hide();
-                        RefreshAll(null);
+                        ApplyFoxShape(deckOverlay.ShapeAt(
+                            cam.ScreenToWorldPoint(mouse.position.ReadValue())));
                         return;
                     }
                     if (sellCardsMode)
@@ -648,25 +722,7 @@ namespace ProjectBlock.View
                         BlockCard card = deckOverlay.CardAt(sellWorld);
                         if (card != null)
                         {
-                            deckOverlay.PlaySellFx(card); // before the rebuild eats the visual
-                            long paid = session.SellCard(card);
-                            Debug.Log("[block_bonk] Sold card " + card + " for " + paid);
-                            if (paid > 0)
-                            {
-                                sfx.Buy();
-                                FloatingTextFx.Spawn(transform, sellWorld, "+" + paid,
-                                    new Color(1f, 0.92f, 0.45f), 60, 0.05f);
-                            }
-                            else
-                            {
-                                FloatingTextFx.Spawn(transform, sellWorld,
-                                    Loc.Pick("worthless", "değersiz"),
-                                    new Color(0.6f, 0.6f, 0.6f), 50, 0.045f);
-                            }
-                            deckOverlay.Show(session.OwnedCards,
-                                c => session.Config.Market.SellValue(c) * session.Config.Scoring.ScoreScale);
-                            marketView.Show(session);
-                            UpdateHud();
+                            SellCardFromDeck(card, sellWorld);
                             return;
                         }
                     }
@@ -728,6 +784,10 @@ namespace ProjectBlock.View
             }
             if (choicePicker.IsOpen)
             {
+                if (HandlePadChoice())
+                {
+                    return;
+                }
                 // modal: click a row to choose, Esc cancels
                 if (kb != null && kb.escapeKey.wasPressedThisFrame)
                 {
@@ -916,6 +976,12 @@ namespace ProjectBlock.View
             switch (session.Phase)
             {
                 case GamePhase.Market:
+                    // DIRECT gamepad play steps the shelf rather than pointing at it, and gets
+                    // the frame first on the frames it acts (see .PadPlay).
+                    if (HandlePadMarket())
+                    {
+                        break;
+                    }
                     // "Kredi kartı": settling the debt is a market action and never automatic,
                     // so it needs its own key. O ("öde") pays down as much as the score covers -
                     // P is already the power grant picker, and that handler runs first.
@@ -975,6 +1041,13 @@ namespace ProjectBlock.View
                     }
                     else if (round.Status == RoundStatus.InProgress)
                     {
+                        // DIRECT gamepad play gets the frame first, and only takes it on the
+                        // frames it actually acts on - so the mouse, the drag and every debug
+                        // key below go on working right beside it (see .PadPlay).
+                        if (HandlePadRound(round))
+                        {
+                            return;
+                        }
                         if (kb != null && kb.sKey.wasPressedThisFrame)
                         {
                             // debug: discard the hand, shuffle it into the draw pile, redraw

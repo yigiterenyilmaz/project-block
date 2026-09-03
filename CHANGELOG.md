@@ -6,7 +6,88 @@ everything here is unreleased and balance numbers are still placeholders.
 
 ## Unreleased — `balance`
 
+### Added
+- **A second gamepad scheme: DIRECT play, chosen in SETTINGS.** The cursor scheme below is still
+  there and still the default; the new one does not push a pointer around at all. In a round you
+  step through your hand with the stick or the d-pad, press A to take a block, walk it across the
+  arena a cell at a time and press A again to place it (B puts it back). X turns a gear block or
+  reshapes a fox, the MENU button opens your collection, and holding RB or LB opens a strip
+  — the tooltip follows as you step, and A uses the one you stop on.
+  **The shop is stepped too, not a copy of the cursor scheme:** a direction takes you to the
+  nearest offer that actually lies that way on screen — the shelf is not a row (blocks run down
+  the left column with jokers over powers on the right), so pressing left from the first power
+  reaches a BLOCK, which is what is to its left, rather than the joker that merely precedes it
+  in the list. A buys what you are on, LT+A takes it free with the smuggler, X rerolls that
+  shelf, Y starts the next round, a held shoulder SELLS off its strip, MENU opens your
+  collection priced to sell, and R3 pays the debt off. **There is no cursor ANYWHERE in direct
+  mode**: the collection overlay, the deck pick that starts a run, the option picker and the
+  dead-end rescue are stepped the same way the shelf is (`GameUiController.PadPanels.cs`) — a
+  panel says how many things it is showing and where each one is, a direction moves to the
+  nearest one that lies that way, the pointer snaps onto it so the panel's own highlight and
+  tooltip follow, and A does what a click there would do. Card inspect is on the MENU button
+  (the three lines), which the prompt draws as its own glyph where the font has one. A retro
+  round still keeps its falling-piece controls.
+  The trick that keeps it small: it does not invent a second way to SEE the game. The pointer is
+  still real — the bridge snaps it onto whatever the pad has selected — so every hover visual,
+  raised card and tooltip follows the pad for free. What it does not do is fake a click: the
+  buttons call the same methods the mouse handlers call, the way the retro controller already
+  did. `GameUiController.PadPlay.cs`.
+- **The game's own prompts now name the control you are actually holding.** "[A] advance to
+  market   [C] continue", "SHIFT+click an offer: take it FREE", "Drag to place", "(1-9 activate)",
+  "[N] start round 4", "[Esc] cancel", "[O] pay" — every one of those was a lie to a player on a
+  pad, printed over the board in the middle of a decision. They are written once now
+  (`PadOr`, in `.PadPrompts`) and each says the key, the cursor scheme's button or the direct
+  scheme's, depending on what is driving: the threshold message reads "Y advance to market
+  X continue", the smuggle hint becomes "LT + A on an offer", and the placement line changes
+  between dragging and stepping. The market shelf asks the same question through a delegate,
+  since it is rebuilt constantly and the answer changes the moment a stick is nudged.
+  Paying the debt is on R3 in BOTH schemes, so the HUD can name one button.
+- **L3 hides and shows the prompt strip.** It is the one control that is about the prompts
+  rather than about the game, and a player who has learned the scheme should be able to have
+  their screen back.
+- **On-screen button prompts**, along the bottom, only while a pad is actually driving. A control
+  scheme nobody can see is a control scheme nobody uses: HOW TO PLAY is the reference, this is the
+  reminder. It names what the NEXT press will do and changes with the state — picking a block,
+  walking one across the arena, holding a strip open, aiming a power, the market, the advance
+  decision, each menu. Face buttons carry their usual colours so a glance finds the one it wants
+  without reading, and a dim dot separates the control from what it does — without it a control
+  whose name is an ordinary word runs into its label and the token reads as a sentence
+  ("stick pick a block"). The stick is named properly ("stick" does not say which one), a
+  control that must be HELD says so, and the MENU button is drawn as the three lines printed on
+  it — checked against the font first, since a missing glyph renders as an empty box and that is
+  worse than the word it replaced. It never mentions a debug key.
+  `GameUiController.PadPrompts.cs`.
+- **The virtual mouse is made current explicitly every frame.** A state change only makes a device
+  current when the state CHANGED, so a pointer holding still — exactly what a player does in the
+  moment before they click — stopped re-asserting itself, and anything that had made the real
+  mouse current in the meantime was read instead. A single line appears if a synthesized click
+  still fails to register, naming which of the two links broke (the device being read, or the
+  press edge on it); it is silent once one click lands, which is the point.
+- **Gamepad support (basic).** The whole game is playable on a pad — the menus, the board, the
+  market, the modals and the retro falling piece — without a second input path anywhere in the
+  View. `GamepadBridge` owns a **virtual mouse and keyboard** (real InputSystem devices it adds
+  itself) and writes the pad into them, so every existing handler goes on reading
+  `Mouse.current` / `Keyboard.current` and cannot tell the difference. Device switching is
+  automatic and instant in both directions: nudge a stick and a drawn arrow cursor appears,
+  touch the mouse or keyboard and it hands the pointer straight back (OS cursor included).
+  Left stick aims (or moves the selection on a list menu, where it parks the cursor off-screen
+  so hover cannot fight it); d-pad types the arrow keys; A clicks and confirms; X right-clicks;
+  B/Start is Escape; Y is the stage's one press ([N] next round in the market, [A] take the
+  market when it is offered — a round in progress has no such verb, and the debug keys around
+  it are deliberately not on the pad); LT holds Shift for the "Kaçakçı" smuggle;
+  RT speeds the cursor up; LB/RB are the wheel. A new HOW TO PLAY page lists it in both
+  languages. The bindings are a first cut and are meant to be re-cut.
+
 ### Fixed
+- **The arena was drawn too narrow in retro mode.** A retro round grows four dead rows on top of
+  the board, and that made it the first NON-SQUARE arena in the game — at which point the generated
+  surface plate came out squashed horizontally by exactly width/height, leaving the outer column of
+  cells sitting off the edge of the board they belong to (and the overtime line glow with the same
+  squash). `Sprite.Create` takes one pixels-per-unit for both axes, so a sprite made from a
+  non-square texture is never 1x1 world units — it is `(w/ppu)` by `(h/ppu)` — and both views were
+  setting `localScale` to the target size as though it were. They now divide by the sprite's own
+  world size (`ViewUtil.FitGeneratedPlate`), which is arithmetically the old assignment for a
+  square board, so no ordinary arena moves by a pixel.
 - **A turn could bank more than it earned.** "A turn is never worth less than nothing" is enforced
   by putting the round score back where the turn started - but that write-off happened in the round
   score ONLY, while the turn breakdown went on carrying the charge. Any credit arriving after it
@@ -44,6 +125,49 @@ everything here is unreleased and balance numbers are still placeholders.
   else changes. (The running catalogue total is on the Şifacı entry above.)
 
 ### Changed
+- **Every preview highlight BREATHES.** The green "it fits", the red "it does not" and the yellow
+  "this line goes" now pulse together on a 0.85s cycle. The board underneath stays perfectly still,
+  so the layer that is answering a question is the only thing moving on it. It is steady in the
+  literal sense: the phase comes off the shared clock rather than off the preview, because a
+  preview is torn down and repainted from scratch every frame the cursor moves and a phase of its
+  own would restart forever. Everything drawn in that layer is in it — the aimed power blast, the
+  ghost hanging off the edge of the board, the retro landing ghost, and the blind preview too. The
+  one thing that does not breathe is the retro falling PIECE: that is the block you are steering,
+  not an answer about it. `BoardView.PaintPreviewCell` is now the only thing that colours the
+  layer, so a new preview gets the breath for free.
+  The swing is **not symmetric, and it goes DARK**: the painted colour is nearly the top of the
+  breath and the cell falls to 42% of it, because the darkening is what the eye catches and that
+  is where the range is worth spending. The alpha goes *up* as the colour goes down, which is what
+  makes the dark end read as dark on every cell — a preview square lies over an empty cell one
+  moment and a bright gold cube the next, and dimming the colour while also thinning the square
+  would just let the cube show through, which is lighter, not darker.
+- **Hover descriptions are opaque, rounded, and finally on top.** All three were the same bug
+  wearing three hats. The tooltip was a world-space sprite panel at sorting order 50, and the
+  things it most often has to be read over — the joker bar, the power bar, the score, the debug
+  column — are UI on a screen-space overlay canvas, which is composited after the camera and
+  therefore covers *every* world-space renderer whatever order it claims. So the panel describing
+  a power was drawn underneath the power bar it was describing, and no sorting order could ever
+  have fixed it. It is a UI panel now, on its own overlay canvas above the HUD's. With that move
+  it also got a card's rounded corners (the same 9-sliced `ViewUtil.RoundedSprite` the cards use,
+  so the radius holds however long the description is), a hairline edge, and a fully opaque fill —
+  at 0.95 the board showed through the text just enough to make a long description tiring, which
+  is the one thing a description may not be. It is built once and refilled now, rather than
+  destroying and re-creating its children for every joker the cursor crosses.
+- **"Metamorfoz" ripens in 7 turns, not 5.** A plain cube now has to sit still two turns longer
+  before it turns to gold. Gold never breaks and blocks a clean sweep, so every cube that changes
+  is a cell you have given up for the rest of the round — at 5 turns the joker was spending your
+  board faster than it paid for it. The count is read off the field in the description now, so the
+  number and the sentence cannot drift apart again.
+- **"Rehin puan" holds the hostage for 4 turns, not 1.** The boss used to demand another line clear
+  on the *very next* turn or the held score burned. On a board that needs two or three turns of
+  setting up to make a line at all, that meant the score was gone before it could realistically be
+  ransomed — the boss was not asking for a chain, it was confiscating. There is a real deadline
+  now: four turns to clear another line, shown as a countdown on the boss badge (`holding 320
+  (2t)`), and a clear always buys the new hostage a full grace of its own rather than inheriting
+  the spent clock. A chain still pays out one clear behind itself, so the last clear of a chain is
+  still the one at risk; what changed is that stopping costs you a deadline rather than the score
+  outright. **Save format bumped to 14** — the turn counter behind the grace is a new field, and
+  the positional reader would go out of step on an older file.
 - **"Tılsım" now grants BONUS ground, not ordinary board.** The cells it reclaims are *optional*:
   you may build on them, but a row or column never waits for them to be filled, and a cube left
   standing in one never blocks a clean sweep. Before, the power quietly raised the price of every

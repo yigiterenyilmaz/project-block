@@ -41,7 +41,10 @@ namespace ProjectBlock.Core
         // 12 (2026-08-17): "Hileli zar" moved from the powers to the jokers, keeping its DefId,
         // so an older save's owned POWER "hileli_zar" no longer resolves - and a new one owns a
         // joker of that id with a field the power never had.
-        public const int FormatVersion = 13;
+        // 13 (2026-09-03): "Rehin puan" grew a grace period, and the turn counter behind it is a
+        // new field on the boss - so the reflection walk writes one more entry than a 12 does,
+        // and the positional reader would go out of step on every boss saved after it.
+        public const int FormatVersion = 14;
 
         private const string VersionKey = "version";
 

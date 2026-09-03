@@ -180,6 +180,7 @@ public static class JokerTests
         Bilinmezlik_ADryStreakEventuallyFiresByItself();
         RehinPuan_HoldsTheLineScoreUntilTheNextClear();
         RehinPuan_BreakingTheChainBurnsIt();
+        RehinPuan_AClearInsideTheGraceStillRansomsIt();
         Burokrasi_OnlyTheTaskPays();
         Burokrasi_PaysForATaskAndFinesAMissedDeadline();
         BulParayi_TakesOneUnlessYouGuessIt();
@@ -5790,7 +5791,7 @@ public static class JokerTests
 
     private static void RehinPuan_BreakingTheChainBurnsIt()
     {
-        Section("rehin puan / a turn without a clear burns what was held");
+        Section("rehin puan / the hostage keeps for the grace, then burns");
         var session = NewBossSession(8105, 5, 1000000, "rehin_puan", 40, 1);
         var boss = (RehinPuanBoss)session.CurrentRound.Boss;
         RoundEngine round = session.CurrentRound;
@@ -5799,15 +5800,68 @@ public static class JokerTests
         int hostage = boss.Held;
         Check(hostage > 0, "something is held", "" + hostage);
 
-        // A quiet turn: nothing clears.
+        // Quiet turns: nothing clears. The first GraceTurns - 1 of them must NOT cost the
+        // hostage - that grace is the whole point of the boss being ransomable at all.
+        for (int i = 1; i < boss.GraceTurns; i++)
+        {
+            ClearBoard(round.Board);
+            TurnReport quiet = PlayOneCard(round);
+            Check(quiet != null && quiet.ExplodedRows.Count == 0
+                && quiet.ExplodedColumns.Count == 0, "quiet turn " + i + " cleared nothing");
+            Check(boss.Held == hostage, "the hostage survived quiet turn " + i,
+                boss.Held + " vs " + hostage);
+            Check(boss.Burned == 0, "and nothing has burned yet", "" + boss.Burned);
+        }
+
+        // The GraceTurns'th failure is the one that costs it.
         ClearBoard(round.Board);
-        TurnReport quiet = PlayOneCard(round);
-        Check(quiet != null && quiet.ExplodedRows.Count == 0
-            && quiet.ExplodedColumns.Count == 0, "a turn cleared nothing");
-        Check(boss.Held == 0, "the hostage is gone", "" + boss.Held);
+        TurnReport last = PlayOneCard(round);
+        Check(last != null && last.ExplodedRows.Count == 0
+            && last.ExplodedColumns.Count == 0, "the last quiet turn cleared nothing");
+        Check(boss.Held == 0, "the grace ran out and the hostage is gone", "" + boss.Held);
         Check(boss.Burned == hostage, "and it burned, not paid",
             boss.Burned + " vs " + hostage);
-        Check(FlatFrom(quiet.Score, boss.DefId) == 0, "nothing was released");
+        Check(FlatFrom(last.Score, boss.DefId) == 0, "nothing was released");
+    }
+
+    /// <summary>The other half of the grace: a clear ARRIVING inside it ransoms the hostage in
+    /// full, and buys the new one a fresh clock rather than inheriting the spent one.</summary>
+    private static void RehinPuan_AClearInsideTheGraceStillRansomsIt()
+    {
+        Section("rehin puan / a late clear still ransoms the hostage");
+        var session = NewBossSession(8115, 5, 1000000, "rehin_puan", 40, 1);
+        var boss = (RehinPuanBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+
+        ClearABottomRow(round, 8116);
+        int hostage = boss.Held;
+        Check(hostage > 0, "something is held", "" + hostage);
+
+        // Burn all but the last chance, then clear on it.
+        for (int i = 1; i < boss.GraceTurns; i++)
+        {
+            ClearBoard(round.Board);
+            PlayOneCard(round);
+        }
+        Check(boss.Held == hostage, "still held on the last chance", "" + boss.Held);
+
+        TurnReport rescue = ClearABottomRow(round, 8117);
+        Check(rescue != null && rescue.ExplodedRows.Count > 0, "a row cleared in time");
+        Check(FlatFrom(rescue.Score, boss.DefId) == hostage,
+            "and the held score was released in full",
+            FlatFrom(rescue.Score, boss.DefId) + " vs " + hostage);
+        Check(boss.Burned == 0, "nothing ever burned", "" + boss.Burned);
+
+        // The clock is the NEW hostage's, not the old one's: it must survive as long again.
+        int fresh = boss.Held;
+        Check(fresh > 0, "this turn's line is the new hostage", "" + fresh);
+        for (int i = 1; i < boss.GraceTurns; i++)
+        {
+            ClearBoard(round.Board);
+            PlayOneCard(round);
+        }
+        Check(boss.Held == fresh, "which got a full grace of its own, not the spent one",
+            boss.Held + " vs " + fresh);
     }
 
     private static void Burokrasi_OnlyTheTaskPays()

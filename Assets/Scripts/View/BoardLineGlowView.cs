@@ -172,9 +172,11 @@ namespace ProjectBlock.View
                 builtWidth = cellsWide;
                 builtHeight = cellsHigh;
             }
-            // The sprite is one unit across whatever its pixel size, so the plate's world size
-            // goes on the transform and the texture never has to know about cellSize.
-            glow.transform.localScale = new Vector3(w, h, 1f);
+            // The plate's world size goes on the transform, so the texture never has to know
+            // about cellSize. Fitted rather than assigned, because the sprite is one unit across
+            // only while its texture is SQUARE - which stopped being true the moment a retro
+            // round grew four dead rows on top of the arena. See ViewUtil.FitGeneratedPlate.
+            ViewUtil.FitGeneratedPlate(glow, new Vector2(w, h));
         }
 
         /// <summary>Sets the glow's strength, 0..1 within the level's own reach. BoardView drives

@@ -1,6 +1,11 @@
 // PURPOSE: Draws the round's board as a grid of runtime sprites and shows the
 // placement preview under the mouse. Pure presentation - reads GameBoard, never
 // mutates it. Rebuilt whenever a round starts (board sizes differ per round).
+//
+// EVERY PREVIEW HIGHLIGHT BREATHES, and it does so in ONE place: PaintPreviewCell is the only
+// thing that colours the preview layer, and BreathePreview re-lays the swing over it each frame
+// (see PreviewBreathPeriod). So the green "it fits", the red "it does not" and the yellow "this
+// line goes" are on the same beat by construction, and a new preview gets it for free.
 
 using System.Collections;
 using System.Collections.Generic;
@@ -64,6 +69,36 @@ namespace ProjectBlock.View
         private static readonly Color FallingPieceColor = new Color(0.45f, 0.85f, 1f, 0.9f);
         private static readonly Color FallingGhostColor = new Color(0.45f, 0.85f, 1f, 0.28f);
 
+        /// <summary>EVERY preview highlight BREATHES - the green "it fits", the red "it does not"
+        /// and the yellow "this line goes" all swell and settle on the same clock, so the layer
+        /// that answers a question reads as alive while the board underneath stays still.
+        ///
+        /// Seconds per breath. A preview lives only as long as the cursor rests on a cell, so a
+        /// real 4s breath (the overtime pulse's slowest) would show the player a random slice of
+        /// one wave and never a whole one. At 0.85s a breath completes under a resting cursor
+        /// two or three times over, and it is still well under the 2.4Hz the overtime note calls
+        /// unpleasant to sit in front of.</summary>
+        private const float PreviewBreathPeriod = 0.85f;
+
+        /// <summary>The swing is NOT symmetric: it goes down hard and up barely. What the eye
+        /// catches is the DARKENING, so that end is where the range is spent - the painted colour
+        /// is very nearly the top of the breath and the cell falls to under half of it, rather
+        /// than the highlight lightening and darkening the same amount around a middle.
+        ///
+        /// These multiply the painted rgb: Dim at the bottom of the breath, Lift at the top.</summary>
+        private const float PreviewBreathDim = 0.42f;
+
+        private const float PreviewBreathLift = 1.08f;
+
+        /// <summary>What the ALPHA does at the bottom of the breath, as a multiple of the painted
+        /// alpha (it is the painted alpha at the top). It goes UP as the colour goes down, and
+        /// that is the whole reason the dark end reads as dark on every cell: a preview square
+        /// lies over an empty cell one moment and over a bright cube the next, and dimming the
+        /// colour while ALSO thinning the square would only let the cube underneath show through -
+        /// which is lighter, not darker. Dimming and covering more at the same time is what makes
+        /// it darker over anything.</summary>
+        private const float PreviewBreathDimAlpha = 1.20f;
+
         /// <summary>"Devre"'s circuit nodes - a circuit-board green that reads on both an empty
         /// cell and a full one, since the route crosses both.</summary>
         private static readonly Color CircuitColor = new Color(0.35f, 1f, 0.75f, 0.85f);
@@ -110,6 +145,23 @@ namespace ProjectBlock.View
         private GameBoard board;
         private SpriteRenderer[,] cellRenderers;
         private SpriteRenderer[,] previewRenderers;
+
+        /// <summary>The colour each preview cell was PAINTED, before the breath. Kept because the
+        /// breath is re-applied every frame and must always start from the painted colour - reading
+        /// the renderer back and modulating that would compound the swing into a runaway.</summary>
+        private Color[,] previewBaseColors;
+
+        /// <summary>The painted colours of the overhang sprites, parallel to
+        /// outsidePreviewSprites - same reason, and the two lists are always grown and cleared
+        /// together.</summary>
+        private readonly List<Color> outsidePreviewBaseColors = new List<Color>();
+
+        /// <summary>Whether the overhang sprite at the same index breathes. The retro falling
+        /// PIECE is the one thing drawn in this layer that does not: see PaintPreviewCell.</summary>
+        private readonly List<bool> outsidePreviewBreathes = new List<bool>();
+
+        /// <summary>Which in-grid preview cells breathe, by the same rule.</summary>
+        private bool[,] previewBreathes;
         private CubeKind?[,] kindCache;
         private Color[,] baseColorCache;
         private readonly List<SpriteRenderer> ghostSprites = new List<SpriteRenderer>();
@@ -325,6 +377,11 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // The preview breathes in the DARK too. It says nothing about the board - a blind
+            // preview is one neutral colour on the cells the block would cover - so there is
+            // nothing here for the blindness to protect, and freezing it would be the one dead
+            // thing on a screen the player is being asked to feel their way across.
+            BreathePreview();
             if (dark)
             {
                 // Blind: no idle animation may run, or a flickering fire would give away a
@@ -617,6 +674,8 @@ namespace ProjectBlock.View
             }
             ghostSprites.Clear();
             outsidePreviewSprites.Clear();
+            outsidePreviewBaseColors.Clear();
+            outsidePreviewBreathes.Clear();
             infectionMarkers.Clear();
             deadZoneLine = null; // destroyed with the other children above; redrawn by SetDeadZone
             board = newBoard;
@@ -635,6 +694,8 @@ namespace ProjectBlock.View
 
             cellRenderers = new SpriteRenderer[board.Width, board.Height];
             previewRenderers = new SpriteRenderer[board.Width, board.Height];
+            previewBaseColors = new Color[board.Width, board.Height];
+            previewBreathes = new bool[board.Width, board.Height];
             kindCache = new CubeKind?[board.Width, board.Height];
             litFor = new float[board.Width, board.Height];
             baseColorCache = new Color[board.Width, board.Height];
@@ -1418,21 +1479,9 @@ namespace ProjectBlock.View
                 : (valid ? ValidPreviewColor : InvalidPreviewColor);
             foreach (GridPos offset in shape.Cells)
             {
-                GridPos pos = origin + offset;
-                if (board.IsInside(pos))
-                {
-                    // absolute cell -> local array index (origin can be negative after inflation)
-                    int lx = pos.X - board.MinX;
-                    int ly = pos.Y - board.MinY;
-                    previewRenderers[lx, ly].color = color;
-                    previewRenderers[lx, ly].enabled = true;
-                }
-                else
-                {
-                    // ghost overhang: preview outside the grid with temporary sprites
-                    outsidePreviewSprites.Add(ViewUtil.MakeCell(transform, "PreviewGhost",
-                        CellToWorld(pos), cellSize * 0.92f, color, 2));
-                }
+                // Outside the grid this paints a temporary overhang sprite instead - a ghost
+                // block hanging off the edge breathes with the rest of its own preview.
+                PaintPreviewCell(origin + offset, color, true);
             }
             // The explosion preview is the biggest tell of all: it would announce exactly which
             // lines are one cube from full. Blind means blind.
@@ -1443,10 +1492,7 @@ namespace ProjectBlock.View
             LineExplosionResult predicted = board.PredictExplosions(shape, origin);
             foreach (GridPos pos in predicted.ExplodedCells)
             {
-                int lx = pos.X - board.MinX;
-                int ly = pos.Y - board.MinY;
-                previewRenderers[lx, ly].color = ExplosionPreviewColor;
-                previewRenderers[lx, ly].enabled = true;
+                PaintPreviewCell(pos, ExplosionPreviewColor, true);
             }
         }
 
@@ -1462,11 +1508,9 @@ namespace ProjectBlock.View
             }
             for (int i = 0; i < cells.Count; i++)
             {
-                GridPos pos = cells[i];
-                if (board.IsInside(pos))
+                if (board.IsInside(cells[i]))
                 {
-                    previewRenderers[pos.X - board.MinX, pos.Y - board.MinY].color = ExplosionPreviewColor;
-                    previewRenderers[pos.X - board.MinX, pos.Y - board.MinY].enabled = true;
+                    PaintPreviewCell(cells[i], ExplosionPreviewColor, true);
                 }
             }
         }
@@ -1506,29 +1550,100 @@ namespace ProjectBlock.View
             }
             foreach (GridPos offset in shape.Cells)
             {
-                PaintPreviewCell(ghostOrigin + offset, FallingGhostColor);
+                // The LANDING GHOST is a preview - where the piece would come to rest - so it
+                // breathes with every other preview in the game.
+                PaintPreviewCell(ghostOrigin + offset, FallingGhostColor, true);
             }
             foreach (GridPos offset in shape.Cells)
             {
-                PaintPreviewCell(currentOrigin + offset, FallingPieceColor);
+                // The PIECE ITSELF does not. It is drawn in the preview layer for convenience,
+                // but it is the block the player is steering, not an answer about it, and a
+                // block that pulsed while it fell would read as a warning.
+                PaintPreviewCell(currentOrigin + offset, FallingPieceColor, false);
             }
         }
 
         /// <summary>Tints one preview cell: in-grid cells use the persistent renderers; a cell
-        /// outside the grid (a piece still in the air) gets a temporary overhang sprite.</summary>
-        private void PaintPreviewCell(GridPos pos, Color color)
+        /// outside the grid (a piece still in the air, or a ghost block hanging off the edge)
+        /// gets a temporary overhang sprite. The colour is remembered as PAINTED and the breath
+        /// is laid on top of it, here and again every frame in BreathePreview.</summary>
+        private void PaintPreviewCell(GridPos pos, Color color, bool breathes)
         {
+            float wave = PreviewBreath();
             if (board.IsInside(pos))
             {
                 int lx = pos.X - board.MinX;
                 int ly = pos.Y - board.MinY;
-                previewRenderers[lx, ly].color = color;
+                previewBaseColors[lx, ly] = color;
+                previewBreathes[lx, ly] = breathes;
+                previewRenderers[lx, ly].color = breathes ? Breathed(color, wave) : color;
                 previewRenderers[lx, ly].enabled = true;
             }
             else
             {
-                outsidePreviewSprites.Add(ViewUtil.MakeCell(transform, "FallingGhost",
-                    CellToWorld(pos), cellSize * 0.92f, color, 2));
+                outsidePreviewSprites.Add(ViewUtil.MakeCell(transform, "PreviewGhost",
+                    CellToWorld(pos), cellSize * 0.92f,
+                    breathes ? Breathed(color, wave) : color, 2));
+                outsidePreviewBaseColors.Add(color);
+                outsidePreviewBreathes.Add(breathes);
+            }
+        }
+
+        /// <summary>Where the breath is in its cycle right now, 0 (smallest) to 1 (fullest).
+        ///
+        /// Driven by the GLOBAL clock rather than a timer started when the preview appeared, and
+        /// that is the whole reason it works: a preview is torn down and repainted from scratch
+        /// every single frame the cursor moves, so a phase that belonged to the preview would
+        /// restart forever and never leave the beginning of its own breath. Off the shared clock
+        /// it is STEADY - the highlight keeps breathing at the same rate no matter how the block
+        /// is dragged, and every cell of it is on the same beat.</summary>
+        private static float PreviewBreath()
+        {
+            return 0.5f - 0.5f * Mathf.Cos(Time.time / PreviewBreathPeriod * 2f * Mathf.PI);
+        }
+
+        /// <summary>One flat preview square at the given point of its breath: the colour dimmed
+        /// and the square thickened together, so the bottom of the breath is darker than the
+        /// painted colour over an empty cell AND over a cube (see PreviewBreathDimAlpha).
+        /// Nothing is added to the square but its own strength - this board has no glows, and a
+        /// preview that grew a halo would look imported.</summary>
+        private static Color Breathed(Color color, float wave)
+        {
+            float k = Mathf.Lerp(PreviewBreathDim, PreviewBreathLift, wave);
+            return new Color(
+                Mathf.Min(1f, color.r * k),
+                Mathf.Min(1f, color.g * k),
+                Mathf.Min(1f, color.b * k),
+                Mathf.Clamp01(color.a * Mathf.Lerp(PreviewBreathDimAlpha, 1f, wave)));
+        }
+
+        /// <summary>Re-lays the breath over whatever is previewed right now, from the PAINTED
+        /// colours. Runs every frame because a preview that is not being moved is not repainted -
+        /// the pad's selection sits still, the animation lab holds one preview open indefinitely -
+        /// and those are exactly the moments the breathing is there to fill.</summary>
+        private void BreathePreview()
+        {
+            if (previewRenderers == null)
+            {
+                return;
+            }
+            float wave = PreviewBreath();
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    if (previewRenderers[x, y].enabled && previewBreathes[x, y])
+                    {
+                        previewRenderers[x, y].color = Breathed(previewBaseColors[x, y], wave);
+                    }
+                }
+            }
+            for (int i = 0; i < outsidePreviewSprites.Count; i++)
+            {
+                if (outsidePreviewSprites[i] != null && outsidePreviewBreathes[i])
+                {
+                    outsidePreviewSprites[i].color = Breathed(outsidePreviewBaseColors[i], wave);
+                }
             }
         }
 
@@ -1553,6 +1668,8 @@ namespace ProjectBlock.View
                 }
             }
             outsidePreviewSprites.Clear();
+            outsidePreviewBaseColors.Clear();
+            outsidePreviewBreathes.Clear();
         }
 
         /// <summary>Replays the water fall frames, then restores the true board state and

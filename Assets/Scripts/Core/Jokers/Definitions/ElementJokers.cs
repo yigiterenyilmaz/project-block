@@ -368,7 +368,7 @@ namespace ProjectBlock.Core
     public sealed class MetamorfozJoker : Joker
     {
         /// <summary>Turns a plain cube must survive, in one spot, before it turns to gold.</summary>
-        public int TurnsToRipen = 5;
+        public int TurnsToRipen = 7;
 
         /// <summary>Cell -> turns its current cube has held it.</summary>
         private readonly Dictionary<GridPos, int> age = new Dictionary<GridPos, int>();
@@ -385,13 +385,16 @@ namespace ProjectBlock.Core
         public MetamorfozJoker()
             : base("metamorfoz", "Metamorfoz")
         {
+            // The count is read off the field rather than written out twice: a balance number
+            // that also lives in a sentence is a balance number that will be changed in one
+            // place and not the other.
             SetDescription(
-                "A plain block that survives 5 turns on the board turns to GOLD - but gold never "
-                    + "breaks and it blocks a clean sweep, so every block that changes is there "
-                    + "for good.",
-                "Oyun alanında 5 tur patlamadan duran elementsiz bloklar ALTINA dönüşür - ama "
-                    + "altın asla kırılmaz ve temizliği engeller, yani dönüşen her blok "
-                    + "kalıcıdır.");
+                "A plain block that survives " + TurnsToRipen + " turns on the board turns to "
+                    + "GOLD - but gold never breaks and it blocks a clean sweep, so every block "
+                    + "that changes is there for good.",
+                "Oyun alanında " + TurnsToRipen + " tur patlamadan duran elementsiz bloklar "
+                    + "ALTINA dönüşür - ama altın asla kırılmaz ve temizliği engeller, yani "
+                    + "dönüşen her blok kalıcıdır.");
         }
 
         /// <summary>Cubes turned to gold so far this round, for the UI.</summary>

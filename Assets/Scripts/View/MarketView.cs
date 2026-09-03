@@ -397,7 +397,7 @@ namespace ProjectBlock.View
                     : string.Empty,
                 90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleRight);
             ViewUtil.MakeText3D(transform, "Prompt", new Vector2(sideX, FrameCenter.y - 1.6f),
-                Loc.Pick("[N] start ", "[N] başlat ")
+                ProceedControl + Loc.Pick(" start ", " başlat ")
                     + (session.BossStageFollowsThisRound && !session.InBossStage
                         ? Loc.Pick("the BOSS of round " + session.RoundNumber,
                             session.RoundNumber + ". rauntun PATRONU")
@@ -554,6 +554,17 @@ namespace ProjectBlock.View
         /// SectionHeld - the view reports the gesture and the controller decides what a
         /// "leave the market" actually is.</summary>
         public System.Action ProceedPressed;
+
+        /// <summary>What to call the "start the next round" control - "[N]" for a keyboard, the
+        /// pad's own button when one is driving. A delegate rather than a string because the
+        /// shelf is rebuilt constantly and the answer changes the moment a stick is nudged; the
+        /// controller owns the question (see GameUiController.PadPrompts.PadOr).</summary>
+        public System.Func<string> ProceedHint;
+
+        private string ProceedControl
+        {
+            get { return ProceedHint != null ? ProceedHint() : "[N]"; }
+        }
 
         /// <summary>DEMO: where each section's reroll button ended up, in this view's own
         /// space (the panel is scaled to fit, so hit tests come through ToLocal). A zero-width
@@ -1117,10 +1128,10 @@ namespace ProjectBlock.View
                 TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "DemoProceedSub", centre - new Vector2(0f, 0.16f),
                 session.BossStageFollowsThisRound && !session.InBossStage
-                    ? Loc.Pick("BOSS of round " + session.RoundNumber + "   [N]",
-                        session.RoundNumber + ". rauntun PATRONU   [N]")
-                    : Loc.Pick("round " + (session.RoundNumber + 1) + "   [N]",
-                        "raunt " + (session.RoundNumber + 1) + "   [N]"),
+                    ? Loc.Pick("BOSS of round " + session.RoundNumber + "   " + ProceedControl,
+                        session.RoundNumber + ". rauntun PATRONU   " + ProceedControl)
+                    : Loc.Pick("round " + (session.RoundNumber + 1) + "   " + ProceedControl,
+                        "raunt " + (session.RoundNumber + 1) + "   " + ProceedControl),
                 90, 0.021f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
         }
 
@@ -1380,6 +1391,20 @@ namespace ProjectBlock.View
                 }
             }
             return -1;
+        }
+
+        /// <summary>World centre of an offer tile, or null. The inverse of OfferAt: the mouse
+        /// asks "what is under this point", a gamepad asks "where is the offer I have stepped
+        /// to" (see GameUiController.PadPlay.cs).</summary>
+        public Vector2? OfferWorldCenter(int index)
+        {
+            if (index < 0 || index >= offerCenters.Count)
+            {
+                return null;
+            }
+            Vector3 world = transform.TransformPoint(
+                new Vector3(offerCenters[index].x, offerCenters[index].y, 0f));
+            return new Vector2(world.x, world.y);
         }
 
         /// <summary>Flies the bought card toward the draw pile. Call BEFORE Show() rebuilds;

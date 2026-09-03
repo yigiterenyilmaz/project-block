@@ -230,6 +230,70 @@ namespace ProjectBlock.View
                     "          [J] grant joker  [P] grant power  [K] sell the last joker",
                     "          [G] start a boss stage now (pick one, or draw at random)",
                     "          [Y] go into overtime for real, a step deeper each press"
+                },
+                new[]
+                {
+                    "GAMEPAD - THE CURSOR SCHEME",
+                    "   A pad is picked up on its own - nudge a stick and the cursor appears.",
+                    "   Touch the mouse or the keyboard and it hands the pointer straight back.",
+                    "   SETTINGS holds a second scheme, DIRECT, on the next two pages.",
+                    "",
+                    "   Left stick     move the cursor   (in a menu: move the selection)",
+                    "   D-pad          menu rows, settings, page turns, the retro falling piece",
+                    "   A              click - and confirm in a menu",
+                    "   X              right-click: rotate a block, reshape a fox",
+                    "   B / Start      back - cancel, close a panel, or pause",
+                    "   Y              the stage's one press: in the market it starts the next",
+                    "                  round, and when the market is offered it takes it",
+                    "   LT (hold)      the smuggle modifier in the market     RT: faster cursor",
+                    "   LB / RB        scroll - your collection, the market shelf, these pages",
+                    "   L3 / R3        hide or show the prompt strip / pay the debt (market)",
+                    "",
+                    "   Jokers and powers live on their bars: point at one and press A."
+                },
+                new[]
+                {
+                    "GAMEPAD - DIRECT: PLAYING A ROUND",
+                    "   Turn it on in SETTINGS. There is NO cursor anywhere - the board, the",
+                    "   shop and every panel are stepped through instead. Only a retro round is",
+                    "   different: the falling piece keeps its own controls.",
+                    "",
+                    "   Stick / D-pad  step through your hand. Once a block is taken, walk it",
+                    "                  around the arena one cell at a time.",
+                    "   A              take the chosen block - then place it where it stands",
+                    "   B              put the block back   (or pause, from the hand)",
+                    "   X              rotate a gear block, reshape a fox",
+                    "   Menu (three    look through your collection",
+                    "     lines)",
+                    "   RB (hold)      the joker strip - step it, A uses the one you stop on",
+                    "   LB (hold)      the power strip - step it, A uses the one you stop on",
+                    "   R3             feed the pet the chosen card (Tamagotchi rounds)",
+                    "   L3             hide or show the prompt strip along the bottom",
+                    "",
+                    "   A joker or power that wants a target aims the same way: step the arena",
+                    "   or your hand and press A. B cancels."
+                },
+                new[]
+                {
+                    "GAMEPAD - DIRECT: THE SHOP",
+                    "   The shelf is stepped, not pointed at, and every verb the market has gets",
+                    "   a button of its own.",
+                    "",
+                    "   Stick / D-pad  move to whatever is that way on the shelf - blocks run",
+                    "                  down the left, jokers over powers on the right",
+                    "   A              buy the offer you are on",
+                    "   LT + A         take it FREE instead, if you have the smuggler",
+                    "   X              reroll the shelf you are on",
+                    "   Y              start the next round",
+                    "   RB (hold)      the joker strip - step it, A sells the one you stop on",
+                    "   LB (hold)      the power strip - step it, A sells the one you stop on",
+                    "   Menu           your collection, priced to sell",
+                    "   R3             pay off your debt, if you owe any",
+                    "   L3             hide or show the prompt strip",
+                    "   B              pause",
+                    "",
+                    "   A panel that opens over the shop is stepped the same way: a direction",
+                    "   moves to what is that way on it, and A does what a click would."
                 }
             };
         }
@@ -346,6 +410,70 @@ namespace ProjectBlock.View
                     "          [J] joker ver  [P] güç ver  [K] son jokeri sat",
                     "          [G] hemen patron sahnesi başlat (seç ya da rastgele çek)",
                     "          [Y] gerçekten uzatmaya geç, her basışta bir kademe daha"
+                },
+                new[]
+                {
+                    "OYUN KOLU - İMLEÇ ŞEMASI",
+                    "   Kol kendiliğinden devreye girer - çubuğa dokun, imleç belirir. Fareye ya",
+                    "   da klavyeye dokunduğun anda imleci hemen geri verir.",
+                    "   AYARLAR'da ikinci bir şema var: DOĞRUDAN, sonraki iki sayfada.",
+                    "",
+                    "   Sol çubuk      imleci gezdirir   (menüde: seçimi gezdirir)",
+                    "   Yön tuşları    menü satırları, ayarlar, sayfa çevirme, retro düşen parça",
+                    "   A              tıklama - menüde onay",
+                    "   X              sağ tık: bloğu döndürür, tilkinin şeklini seçtirir",
+                    "   B / Start      geri - iptal et, paneli kapat ya da duraklat",
+                    "   Y              sahnenin tek tuşu: markette sonraki raundu başlatır,",
+                    "                  market teklif edildiğinde markete geçer",
+                    "   LT (basılı)    markette kaçakçılık tuşu      RT: imleci hızlandırır",
+                    "   LB / RB        kaydırma - kartların, market rafı, bu sayfalar",
+                    "   L3 / R3        ipucu şeridini gizle-göster / borcu öde (markette)",
+                    "",
+                    "   Jokerler ve güçler kendi barlarında: üstüne gel ve A'ya bas."
+                },
+                new[]
+                {
+                    "OYUN KOLU - DOĞRUDAN: RAUNT OYNAMAK",
+                    "   AYARLAR'dan aç. HİÇBİR yerde imleç yoktur - tahta, market ve bütün",
+                    "   paneller adım adım gezilir. Tek istisna retro raunt: düşen parça kendi",
+                    "   kontrollerinde kalır.",
+                    "",
+                    "   Çubuk / Yön    elindeki kartları gezer. Blok aldıktan sonra bloğu",
+                    "                  alanda hücre hücre yürütür.",
+                    "   A              seçili bloğu al - sonra durduğu yere koy",
+                    "   B              bloğu geri koy   (elindeyken: duraklat)",
+                    "   X              çark bloğunu döndür, tilkiyi şekillendir",
+                    "   Menu (üç       bütün kartlarına bak",
+                    "     çizgi)",
+                    "   RB (basılı)    joker barı - gez, A üstünde durduğunu kullanır",
+                    "   LB (basılı)    güç barı - gez, A üstünde durduğunu kullanır",
+                    "   R3             seçili kartı yaratığa yedirir (Tamagotchi rauntları)",
+                    "   L3             alttaki ipucu şeridini gizler-gösterir",
+                    "",
+                    "   Hedef isteyen joker ya da güç de aynı şekilde nişan alır: alanı ya da",
+                    "   elini gez ve A'ya bas. B iptal eder."
+                },
+                new[]
+                {
+                    "OYUN KOLU - DOĞRUDAN: MARKET",
+                    "   Raf işaret edilmez, adım adım gezilir; marketin her eylemi kendi",
+                    "   tuşunu alır.",
+                    "",
+                    "   Çubuk / Yön    o yönde ne varsa ona geçer - bloklar solda bir sütun,",
+                    "                  jokerler ve güçler sağda alt alta",
+                    "   A              üstünde durduğun ürünü satın al",
+                    "   LT + A         kaçakçın varsa BEDAVA al",
+                    "   X              üstünde durduğun rafı yenile",
+                    "   Y              sonraki raundu başlat",
+                    "   RB (basılı)    joker barı - gez, A üstünde durduğunu satar",
+                    "   LB (basılı)    güç barı - gez, A üstünde durduğunu satar",
+                    "   Menu           kartların, satış fiyatlarıyla",
+                    "   R3             borcun varsa öde",
+                    "   L3             ipucu şeridini gizle-göster",
+                    "   B              duraklat",
+                    "",
+                    "   Marketin üstüne açılan panel de aynı şekilde gezilir: yön tuşu o yönde",
+                    "   ne varsa ona geçer, A da tıklamanın yaptığını yapar."
                 }
             };
         }

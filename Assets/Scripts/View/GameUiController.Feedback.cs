@@ -1073,14 +1073,14 @@ namespace ProjectBlock.View
             if (session.Debt > 0)
             {
                 sb.Append(Loc.Pick("DEBT ", "BORÇ ")).Append(session.Debt)
-                    .Append(Loc.Pick("   [O] pay", "   [O] öde")).Append('\n');
+                    .Append(Loc.Pick(PadOr("   [O] pay", "   R3 pay"), PadOr("   [O] öde", "   R3 öde"))).Append('\n');
             }
             sb.Append(DebugKeyLine());
             infoText.text = sb.ToString();
             // "Kaçakçı": the free item is invisible unless the market says so.
             messageText.text = session.CanSmuggle
-                ? Loc.Pick("SHIFT+click an offer: take it FREE (may be defective)",
-                    "Bir ürüne SHIFT+tık: BEDAVA al (defolu çıkabilir)")
+                ? Loc.Pick(PadOr("SHIFT+click an offer: take it FREE (may be defective)", "LT + A on an offer: take it FREE (may be defective)"),
+                    PadOr("Bir ürüne SHIFT+tık: BEDAVA al (defolu çıkabilir)", "Bir üründe LT + A: BEDAVA al (defolu çıkabilir)"))
                 : string.Empty;
         }
 
@@ -1188,17 +1188,17 @@ namespace ProjectBlock.View
             sb.Append(Loc.Pick("Jokers ", "Joker ")).Append(session.Jokers.Count);
             if (session.Jokers.Count > 0)
             {
-                sb.Append(Loc.Pick("   (1-9 activate)", "   (1-9 kullan)"));
+                sb.Append(Loc.Pick(PadOr("   (1-9 activate)", "   (hold RB, then A)"), PadOr("   (1-9 kullan)", "   (RB basılı, sonra A)")));
             }
             sb.Append(Loc.Pick("   Powers ", "   Güç ")).Append(session.Powers.Count);
             if (session.Powers.Count > 0)
             {
-                sb.Append(Loc.Pick("   (click to use, one per turn)", "   (tıkla, tur başına bir)"));
+                sb.Append(Loc.Pick(PadOr("   (click to use, one per turn)", "   (hold LB, then A - one per turn)"), PadOr("   (tıkla, tur başına bir)", "   (LB basılı, sonra A - tur başına bir)")));
             }
             sb.Append('\n');
             sb.Append(Loc.Pick(
-                "Drag to place.  Click draw pile: deck.  Right-click: rotate GEARS / reshape FOX\n",
-                "Sürükleyip yerleştir.  Çekme destesi: kartların.  Sağ tık: ÇARK döndür / TİLKİ şekillendir\n"));
+                PadOr("Drag to place.  Click draw pile: deck.  Right-click: rotate GEARS / reshape FOX\n", "Hold A to drag.  A on the draw pile: your cards.  X: rotate GEARS / reshape FOX\n", "A takes a block, then places it.  Menu: your cards.  X: rotate GEARS / reshape FOX\n"),
+                PadOr("Sürükleyip yerleştir.  Çekme destesi: kartların.  Sağ tık: ÇARK döndür / TİLKİ şekillendir\n", "Sürüklemek için A basılı.  Çekme destesinde A: kartların.  X: ÇARK döndür / TİLKİ şekillendir\n", "A bloğu alır, sonra koyar.  Menu: kartların.  X: ÇARK döndür / TİLKİ şekillendir\n")));
             // The keys that only mean something DURING a round; everything else is shared.
             sb.Append(Loc.Pick(
                 "Debug  S hand  B bonus  K sell joker  O debt  W/M worlds\n",
@@ -1213,7 +1213,7 @@ namespace ProjectBlock.View
                     ? Loc.Pick("pick a cube on the board", "oyun alanından bir küp seç")
                     : Loc.Pick("pick a block from your hand", "elinden bir blok seç");
                 messageText.text = (targeting != null ? targeting.DisplayName : "Joker")
-                    + ": " + what + Loc.Pick("\n[Esc] cancel", "\n[Esc] vazgeç");
+                    + ": " + what + Loc.Pick(PadOr("\n[Esc] cancel", "\nB cancel"), PadOr("\n[Esc] vazgeç", "\nB vazgeç"));
                 return;
             }
             // A workshop power's pick has steps, and a player who does not know which step they
@@ -1296,8 +1296,8 @@ namespace ProjectBlock.View
                             ? Loc.Pick("  DECK OUT!", "  DESTE BİTER!")
                             : string.Empty;
                         messageText.text = Loc.Pick(
-                                "Threshold reached!\n[A] advance to market    [C] continue: removes ",
-                                "Eşik geçildi!\n[A] markete ilerle    [C] devam et: ")
+                                PadOr("Threshold reached!\n[A] advance to market    [C] continue: removes ", "Threshold reached!\nY advance to market    X continue: removes "),
+                                PadOr("Eşik geçildi!\n[A] markete ilerle    [C] devam et: ", "Eşik geçildi!\nY markete ilerle    X devam et: "))
                             + continueCost
                             + Loc.Pick(" cards, draw pile ", " kart gider, çekme destesi ")
                             + round.Deck.DrawCount

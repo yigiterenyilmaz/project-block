@@ -45,6 +45,21 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>The rows, for a gamepad to step (see GameUiController.PadPanels.cs).</summary>
+        public int OptionCount
+        {
+            get { return rowCenters.Count; }
+        }
+
+        public Vector2? OptionWorldCenter(int index)
+        {
+            if (index < 0 || index >= rowCenters.Count)
+            {
+                return null;
+            }
+            return rowCenters[index];
+        }
+
         /// <summary>Row index under a world point, or -1.</summary>
         public int OptionAt(Vector2 world)
         {

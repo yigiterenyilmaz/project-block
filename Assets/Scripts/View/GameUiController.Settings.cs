@@ -19,14 +19,16 @@ namespace ProjectBlock.View
         // Settings entry order.
         private const int SettingLanguage = 0;
         private const int SettingVolume = 1;
-        private const int SettingSeed = 2;
-        private const int SettingLogs = 3;
-        private const int SettingBack = 4;
+        private const int SettingGamepad = 2;
+        private const int SettingSeed = 3;
+        private const int SettingLogs = 4;
+        private const int SettingBack = 5;
 
         private const string PrefLanguage = "language";
         private const string PrefVolume = "volume";
         private const string PrefSeed = "seed";
         private const string PrefLogs = "verboseLogs";
+        private const string PrefPadScheme = "padScheme";
 
         private const float VolumeStep = 0.1f;
 
@@ -48,6 +50,9 @@ namespace ProjectBlock.View
             // 0 means "roll a fresh seed every run" - the same meaning the field has always had.
             seed = PlayerPrefs.GetInt(PrefSeed, 0);
             verboseTurnLogs = PlayerPrefs.GetInt(PrefLogs, 1) != 0;
+            padScheme = PlayerPrefs.GetInt(PrefPadScheme, 0) != 0
+                ? PadScheme.Direct
+                : PadScheme.Cursor;
         }
 
         private void SaveSettings()
@@ -56,6 +61,7 @@ namespace ProjectBlock.View
             PlayerPrefs.SetFloat(PrefVolume, masterVolume);
             PlayerPrefs.SetInt(PrefSeed, seed);
             PlayerPrefs.SetInt(PrefLogs, verboseTurnLogs ? 1 : 0);
+            PlayerPrefs.SetInt(PrefPadScheme, padScheme == PadScheme.Direct ? 1 : 0);
         }
 
         private void OpenSettings(AppScreen returnTo)
@@ -82,6 +88,14 @@ namespace ProjectBlock.View
                     + (Loc.Language == GameLanguage.Turkish ? "Türkçe" : "English")),
                 MenuEntry.Of(Loc.Pick("Volume: ", "Ses: ")
                     + Mathf.RoundToInt(masterVolume * 100f) + "%"),
+                // Named for what the pad DOES, not for the machinery behind it: one scheme
+                // pushes a pointer around, the other steps through the game.
+                MenuEntry.Of(Loc.Pick("Gamepad: ", "Oyun kolu: ") + DescribePadScheme(),
+                    padScheme == PadScheme.Direct
+                        ? Loc.Pick("step the hand and the arena, no cursor",
+                            "eli ve alanı adım adım gez, imleç yok")
+                        : Loc.Pick("the stick pushes a pointer around",
+                            "çubuk bir imleç gezdirir")),
                 MenuEntry.Of(Loc.Pick("Seed: ", "Tohum: ") + DescribeSeedSetting()),
                 MenuEntry.Of(Loc.Pick("Turn logs: ", "Tur kaydı: ")
                     + (verboseTurnLogs ? on : off)),
@@ -95,6 +109,13 @@ namespace ProjectBlock.View
                 Loc.Pick("click or  ← →  to change     [Esc] back",
                     "tıkla ya da  ← →  ile değiştir     [Esc] geri"),
                 entries, backdrop);
+        }
+
+        private string DescribePadScheme()
+        {
+            return padScheme == PadScheme.Direct
+                ? Loc.Pick("direct", "doğrudan")
+                : Loc.Pick("cursor", "imleç");
         }
 
         /// <summary>"random", or the pinned seed number.</summary>
@@ -116,6 +137,15 @@ namespace ProjectBlock.View
                     return;
                 case SettingVolume:
                     SetMasterVolume(masterVolume + delta * VolumeStep);
+                    break;
+                case SettingGamepad:
+                    padScheme = padScheme == PadScheme.Direct
+                        ? PadScheme.Cursor
+                        : PadScheme.Direct;
+                    // The selection follows the scheme out: a block half-walked across the
+                    // arena under the old one has nothing driving it under the new.
+                    padFocus = PadFocus.Hand;
+                    boardView.ClearPreview();
                     break;
                 case SettingSeed:
                     ToggleSeedPinned();
