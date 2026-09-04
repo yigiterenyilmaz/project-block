@@ -394,8 +394,67 @@ namespace ProjectBlock.Core
                 }
             }
             int scoredCubes = Math.Max(0, cubesExploded - deadCubes);
+            int rowObsidian;
+            int columnObsidian;
+            CountObsidianInLines(explosion, deadZone, out rowObsidian, out columnObsidian);
             return new LineExplosionScore(scoredRows, explosion.Columns.Count, scoredCubes,
-                rowCubes, columnCubes);
+                rowCubes, columnCubes, rowObsidian, columnObsidian);
+        }
+
+        /// <summary>
+        /// Counts the OBSIDIAN still standing on each exploded line, which is what an obsidian
+        /// block is paid for: it cannot break, so instead of being destroyed with the line it
+        /// collects a bonus for having been built around, every time a line through it goes off.
+        ///
+        /// READ OFF THE BOARD, not off the explosion. The explosion only ever lists cells that
+        /// BROKE, and obsidian by definition is not among them - so the only way to know it was
+        /// in the line is to look at where it is standing. This runs while the board is still the
+        /// one the explosion left behind (before the water settles), so those cells are exact.
+        ///
+        /// The retro dead zone is honoured exactly as the destroyed cubes are: obsidian up in the
+        /// overflow rows earns nothing, because a clear up there is survival and not points.
+        /// </summary>
+        private void CountObsidianInLines(LineExplosionResult explosion, bool deadZone,
+            out int rowObsidian, out int columnObsidian)
+        {
+            rowObsidian = 0;
+            columnObsidian = 0;
+            for (int i = 0; i < explosion.Rows.Count; i++)
+            {
+                int y = explosion.Rows[i];
+                if (deadZone && IsDeadRow(y))
+                {
+                    continue;
+                }
+                for (int x = Board.MinX; x < Board.MinX + Board.Width; x++)
+                {
+                    if (IsObsidianAt(new GridPos(x, y)))
+                    {
+                        rowObsidian++;
+                    }
+                }
+            }
+            for (int i = 0; i < explosion.Columns.Count; i++)
+            {
+                int x = explosion.Columns[i];
+                for (int y = Board.MinY; y < Board.MinY + Board.Height; y++)
+                {
+                    if (deadZone && IsDeadRow(y))
+                    {
+                        continue; // the part of the column up in the overflow pays nothing
+                    }
+                    if (IsObsidianAt(new GridPos(x, y)))
+                    {
+                        columnObsidian++;
+                    }
+                }
+            }
+        }
+
+        private bool IsObsidianAt(GridPos pos)
+        {
+            Cube? cube = Board.GetCube(pos);
+            return cube.HasValue && cube.Value.Kind == CubeKind.Obsidian;
         }
 
         /// <summary>What those counts pay. The boss round gets the final say; with no boss this
@@ -406,7 +465,8 @@ namespace ProjectBlock.Core
             {
                 return Boss.ScoreLineExplosion(scorer, lines);
             }
-            return scorer.ScoreLineExplosion(lines.Rows + lines.Columns, lines.Cubes);
+            return scorer.ScoreLineExplosion(lines.Rows + lines.Columns, lines.Cubes)
+                + scorer.ScoreObsidianInLines(lines.Obsidian);
         }
 
         /// <summary>What a boss adds to or takes off an explosion for the SPECIFIC cells it

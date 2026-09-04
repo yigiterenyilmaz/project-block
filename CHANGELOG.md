@@ -125,6 +125,39 @@ everything here is unreleased and balance numbers are still placeholders.
   else changes. (The running catalogue total is on the Şifacı entry above.)
 
 ### Changed
+- **Rerolling the market now makes the market itself dearer.** An offer costs its stocked price
+  plus what a reroll costs *right now*, less what the first reroll of a visit costs — so a freshly
+  stocked shelf is priced exactly as it always was (surcharge 0), and each reroll after that lifts
+  every price by one escalation step. Before, churning the shop cost only the reroll fee, and the
+  goods on the other side of it were as cheap as ever; now the churn shows up in the price tags.
+  It is charged on the **market**, not on the shelf that was refreshed: rerolling the blocks
+  reprices the jokers and powers standing beside them. That is the same reasoning that already
+  gave the three shelves one shared reroll counter — a per-shelf rule would let you refresh three
+  times for the price of one.
+  The subtraction is written as the base reroll cost rather than as the number it happens to come
+  to, so retuning `RerollBaseCost` or the global `ScoreScale` cannot quietly start charging a
+  surcharge on the first visit. `MarketOffer` now separates `BasePrice` (what it was stocked at,
+  and what the save file keeps) from `Price` (what it costs now); every buyer, tooltip and
+  affordability check reads the live one, so what the player is shown and what they are charged
+  cannot come apart. A mid-market save reopens at the price it closed at — the surcharge is
+  rebuilt from the saved reroll counter rather than baked into the offers, which is what stops a
+  load from charging the escalation twice. No save-format bump: the fields are unchanged, and in
+  an older save the two prices were always the same number.
+- **OBSIDIAN now pays rent.** Every row or column that goes off *through* an obsidian cube pays a
+  bonus for it (`ScoringConfig.PointsPerObsidianInLine`, 18 logical). Until now obsidian was a
+  pure liability — a cube you could never remove, permanently taxing every line it stood in — and
+  the block type's whole identity was the drawback. Now the drawback is the payment: the stone
+  does not break, so it is still there after the clear, and the **same cube pays again every time
+  you complete a line through it**. A block you have to build around becomes a block you build
+  around *on purpose*.
+  Two rulings worth writing down. The rent is per LINE, so a stone at the crossing of a cleared
+  row and a cleared column is paid twice — the same way the base line score prices each axis as
+  though it had exploded alone. And it is counted off the BOARD rather than off the explosion,
+  because an explosion only ever lists the cells that broke and obsidian by definition is not
+  among them. The retro dead zone is honoured exactly as destroyed cubes are, and the axis bosses
+  follow their own rule: "Ufuk" pays for the stones on its rows and not the ones in a cleared
+  column, "Kule" the other way round, and "Titizlik", which pays nothing for a line, pays nothing
+  for its stones either. The block-type description is updated in both languages.
 - **Every preview highlight BREATHES.** The green "it fits", the red "it does not" and the yellow
   "this line goes" now pulse together on a 0.85s cycle. The board underneath stays perfectly still,
   so the layer that is answering a question is the only thing moving on it. It is steady in the

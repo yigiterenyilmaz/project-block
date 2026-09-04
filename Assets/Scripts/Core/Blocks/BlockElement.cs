@@ -16,7 +16,10 @@ namespace ProjectBlock.Core
         /// to obsidian and persists.</summary>
         Water = 1,
 
-        /// <summary>Ignored by the clean-sweep check, but indestructible.</summary>
+        /// <summary>Indestructible and ignored by the clean-sweep check - and PAID for it: every
+        /// row or column that goes off through an obsidian cube pays a bonus for it
+        /// (ScoringConfig.PointsPerObsidianInLine). The stone survives the clear, so the same
+        /// cube pays again every time you complete a line through it.</summary>
         Obsidian = 2,
 
         /// <summary>Sweep-exempt and indestructible; pays a per-turn bonus proportional

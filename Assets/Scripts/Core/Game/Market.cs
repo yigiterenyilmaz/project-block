@@ -19,10 +19,28 @@ namespace ProjectBlock.Core
             get { return offers; }
         }
 
+        /// <summary>
+        /// What every offer on this shelf costs OVER its stocked price, in the scaled economy.
+        /// It tracks the reroll counter (GameSession.RefreshMarketPrices), so churning the market
+        /// makes the market itself more expensive - the same escalation the reroll button pays,
+        /// charged on the goods as well.
+        ///
+        /// It lives on the MARKET rather than on each offer because it is a property of the
+        /// visit, not of the item: a reroll of the block shelf reprices the jokers too, which is
+        /// the same reasoning that gave the three shelves one shared reroll counter.
+        /// </summary>
+        public int PriceSurcharge { get; internal set; }
+
         internal void SetOffers(IEnumerable<MarketOffer> newOffers)
         {
             offers.Clear();
             offers.AddRange(newOffers);
+            // Every offer is bound to the shelf it stands on, here rather than at each of the
+            // three construction sites, so a new kind of offer cannot forget to be priced.
+            for (int i = 0; i < offers.Count; i++)
+            {
+                offers[i].AttachTo(this);
+            }
         }
     }
 }

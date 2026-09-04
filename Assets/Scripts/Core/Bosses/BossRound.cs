@@ -177,10 +177,16 @@ namespace ProjectBlock.Core
 
         /// <summary>Rewrites what a line explosion pays ("Ufuk", "Kule"). The default is the
         /// plain rule. See LineExplosionScore for what each count means - it arrives with the
-        /// retro dead zone already taken out, so a boss never has to know about that.</summary>
+        /// retro dead zone already taken out, so a boss never has to know about that.
+        ///
+        /// A boss that overrides this OWNS the obsidian rent too, and must decide about it
+        /// deliberately: the cubes an exploded line ran through are in lines.Obsidian (or per
+        /// axis, for a boss that pays for one). Silence here is silence for the obsidian as
+        /// well, which is the right answer for a boss that pays nothing.</summary>
         public virtual int ScoreLineExplosion(IScoreCalculator scorer, LineExplosionScore lines)
         {
-            return scorer.ScoreLineExplosion(lines.Rows + lines.Columns, lines.Cubes);
+            return scorer.ScoreLineExplosion(lines.Rows + lines.Columns, lines.Cubes)
+                + scorer.ScoreObsidianInLines(lines.Obsidian);
         }
 
         /// <summary>

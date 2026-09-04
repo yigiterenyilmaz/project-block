@@ -40,6 +40,15 @@ namespace ProjectBlock.Core
         /// <summary>Score per cube destroyed by a line explosion.</summary>
         public int PointsPerCubeExploded = 1;
 
+        /// <summary>What one OBSIDIAN cube pays for standing in a line that goes off. It is a
+        /// rent, not a payout: the obsidian survives the clear, so the same cube pays again every
+        /// time the row or column through it is completed - which is the whole point of it, and
+        /// the reason this is worth many times PointsPerCubeExploded. An obsidian at the crossing
+        /// of a cleared row AND a cleared column is paid for both, exactly as the base line score
+        /// prices each axis as though it had exploded alone. Logical (small); the global
+        /// ScoreScale lifts it like every other score. BALANCE PLACEHOLDER.</summary>
+        public int PointsPerObsidianInLine = 18;
+
         /// <summary>"Hedefli": flat bonus for breaking a targeted block's TARGET cube in the
         /// first explosion that touches it. Flat rather than per-cube on purpose - what is being
         /// paid for is the aim, and a big block is already easier to hit. The cubes the payout

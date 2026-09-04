@@ -33,8 +33,11 @@ namespace ProjectBlock.Core
             {
                 return 0; // a columns-only clear earns nothing at all
             }
-            // Priced as if the rows had exploded alone: their own lines, their own cubes.
-            return (int)(scorer.ScoreLineExplosion(lines.Rows, lines.RowCubes) * RowBonus);
+            // Priced as if the rows had exploded alone: their own lines, their own cubes, and
+            // the obsidian standing on THEM - a stone in a cleared column pays nothing here,
+            // for the same reason the column itself does not.
+            return (int)((scorer.ScoreLineExplosion(lines.Rows, lines.RowCubes)
+                + scorer.ScoreObsidianInLines(lines.RowObsidian)) * RowBonus);
         }
     }
 
@@ -60,7 +63,9 @@ namespace ProjectBlock.Core
             {
                 return 0; // a rows-only clear earns nothing at all
             }
-            return (int)(scorer.ScoreLineExplosion(lines.Columns, lines.ColumnCubes) * ColumnBonus);
+            // Its own lines, its own cubes, and the obsidian standing in THEM (see Ufuk).
+            return (int)((scorer.ScoreLineExplosion(lines.Columns, lines.ColumnCubes)
+                + scorer.ScoreObsidianInLines(lines.ColumnObsidian)) * ColumnBonus);
         }
     }
 

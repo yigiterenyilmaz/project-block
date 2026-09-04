@@ -495,6 +495,27 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
+        /// Puts the market's price surcharge back in step with the reroll counter. THE RULE:
+        /// an item costs its base price plus what a reroll costs right now, less what the FIRST
+        /// reroll of a visit costs - so a freshly stocked market is priced exactly as it always
+        /// was, and every reroll after that lifts the whole shelf by one step.
+        ///
+        /// The subtraction is written as the base reroll cost rather than as the number it
+        /// currently comes to, because what it means is "no surcharge before the first reroll".
+        /// Hard-coding the number would quietly start charging a visit-one surcharge the moment
+        /// the designer retunes RerollBaseCost or the global ScoreScale.
+        ///
+        /// Called from every place the counter moves - a reroll, and the two resets - and once
+        /// more after a load, so a saved market reopens at the price it closed at.
+        /// </summary>
+        private void RefreshMarketPrices()
+        {
+            long surcharge = NextRerollCost
+                - (long)Config.Market.RerollBaseCost * Config.Scoring.ScoreScale;
+            Market.PriceSurcharge = surcharge > 0 ? (int)surcharge : 0;
+        }
+
+        /// <summary>
         /// Refreshes ONE section of the market - the blocks, the jokers or the powers - for an
         /// escalating cost, spending TotalScore like a purchase. Offers of the other kinds are
         /// left exactly as they are, sold flags included.
@@ -518,6 +539,8 @@ namespace ProjectBlock.Core
             }
             Spend(cost);
             rerollCount++;
+            // Before the restock, so the fresh offers are already standing at the new price.
+            RefreshMarketPrices();
             RestockSection(kind, rerollCount);
             return true;
         }
@@ -734,6 +757,7 @@ namespace ProjectBlock.Core
             Jokers.DispatchMarketLeft(purchasedThisMarket);
             PendingMarketDiscount = 0.0; // spent on this visit, never carried to the next
             rerollCount = 0;
+            RefreshMarketPrices(); // the escalation is per VISIT, so it goes with the counter
             // The next STAGE, which is the boss of the round just played when one follows it, and
             // otherwise the next numbered round. A boss stage keeps its round's number.
             if (!InBossStage && BossStageFollowsThisRound)
@@ -1182,6 +1206,7 @@ namespace ProjectBlock.Core
                     return;
                 }
                 rerollCount = 0; // a fresh reroll price each market visit
+                RefreshMarketPrices(); // ...and a fresh price on the goods with it
                 RestockMarket();
                 purchasedThisMarket = false;
                 smuggledThisMarket = false; // one free item per VISIT, not per run

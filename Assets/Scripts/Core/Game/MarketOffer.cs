@@ -22,28 +22,54 @@ namespace ProjectBlock.Core
         /// <summary>The power on sale, or null for any other offer kind.</summary>
         public PowerDefinition Power { get; }
 
-        public int Price { get; }
+        /// <summary>What this item was STOCKED at - its rarity, its size, the visit's discount.
+        /// Fixed for as long as the offer stands, and the number the save file keeps.</summary>
+        public int BasePrice { get; }
+
+        /// <summary>
+        /// What it costs RIGHT NOW: the base price plus the shelf's current surcharge, which
+        /// tracks the reroll counter (see Market.PriceSurcharge). Live rather than baked in, so
+        /// rerolling ANY shelf immediately reprices every offer in the market - including the
+        /// ones that were not refreshed.
+        ///
+        /// Every buyer, tooltip and affordability check reads this, so the price the player is
+        /// shown and the price they are charged cannot come apart.
+        /// </summary>
+        public int Price
+        {
+            get { return BasePrice + (market != null ? market.PriceSurcharge : 0); }
+        }
+
         public bool Sold { get; internal set; }
+
+        private Market market;
+
+        /// <summary>Binds the offer to the shelf it is standing on, so it can read the current
+        /// surcharge. Called by Market.SetOffers - an offer is on exactly one market.</summary>
+        internal void AttachTo(Market owner)
+        {
+            market = owner;
+        }
 
         internal MarketOffer(BlockCard card, int price)
         {
             Kind = MarketOfferKind.Block;
             Card = card;
-            Price = price;
+            BasePrice = price;
         }
 
         internal MarketOffer(JokerDefinition joker, int price)
         {
             Kind = MarketOfferKind.Joker;
             Joker = joker;
-            Price = price;
+            BasePrice = price;
         }
 
         internal MarketOffer(PowerDefinition power, int price)
         {
             Kind = MarketOfferKind.Power;
             Power = power;
-            Price = price;
+            BasePrice = price;
         }
 
         /// <summary>Short label for logs, independent of the offer kind.</summary>

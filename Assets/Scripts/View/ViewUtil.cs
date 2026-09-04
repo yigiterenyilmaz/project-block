@@ -678,8 +678,13 @@ namespace ProjectBlock.View
                     return Loc.Pick("Falls and spreads each turn; turns touching fire to obsidian.",
                         "Her tur düşer ve yayılır; değdiği ateşi obsidyene çevirir.");
                 case BlockElement.Obsidian:
-                    return Loc.Pick("Indestructible, but ignored by the clean-sweep check.",
-                        "Yok edilemez, ama temizlik kontrolü onu saymaz.");
+                    return Loc.Pick(
+                        "Indestructible, and ignored by the clean-sweep check. Every row or "
+                            + "column that goes off through it pays a bonus - and it survives "
+                            + "the clear, so it pays again every time.",
+                        "Yok edilemez ve temizlik kontrolü onu saymaz. İçinden geçen her patlayan "
+                            + "satır veya sütun bonus puan öder - patlamada yok olmadığı için de "
+                            + "her seferinde yeniden öder.");
                 case BlockElement.Gold:
                     return Loc.Pick("Indestructible and sweep-exempt; pays a bonus every turn on the board.",
                         "Yok edilemez ve temizliği bozmaz; alanda durduğu her tur bonus öder.");

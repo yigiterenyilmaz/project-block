@@ -124,6 +124,8 @@ public static class JokerTests
         Boss_FedaMakesABonusCardCostTheHand();
         Boss_AnarsiSilencesEverythingRare();
         Boss_OburlukEatsOnlyWhenSlotsAreFull();
+        Market_RerollingLiftsEveryPrice();
+        Market_TheSurchargeSurvivesASaveWithoutDoubling();
         KrediKarti_BuysPastYourScoreAndRecordsTheDebt();
         KrediKarti_RefusesCreditWithoutTheJoker();
         KrediKarti_InterestCompoundsEveryRound();
@@ -187,6 +189,8 @@ public static class JokerTests
         BulParayi_AGoodGuessSavesIt();
         BulParayi_TheGuessMustComeBeforeTheFirstTurn();
         BulParayi_OnlyEverTheFirstBossOfARun();
+        Obsidian_PaysRentForEveryLineThatGoesThroughIt();
+        Obsidian_RentIsPerLineAndFollowsTheAxisBosses();
         Simetri_TheBoardKnowsItsOwnSymmetry();
         Simetri_SleepsFiveTurnsAndAgainAfterEverySweep();
         Simetri_PaysOneAxisAndTriplesForBoth();
@@ -3374,7 +3378,7 @@ public static class JokerTests
         var kule = new KuleBoss();
 
         // rows only: 2 rows, no columns, 8 cubes (4 per row)
-        var rowsOnly = new LineExplosionScore(2, 0, 8, 8, 0);
+        var rowsOnly = new LineExplosionScore(2, 0, 8, 8, 0, 0, 0);
         Check(ufuk.ScoreLineExplosion(scorer, rowsOnly) > 0, "ufuk pays for a rows-only clear",
             "" + ufuk.ScoreLineExplosion(scorer, rowsOnly));
         Check(kule.ScoreLineExplosion(scorer, rowsOnly) == 0,
@@ -3382,7 +3386,7 @@ public static class JokerTests
             "" + kule.ScoreLineExplosion(scorer, rowsOnly));
 
         // columns only
-        var colsOnly = new LineExplosionScore(0, 2, 8, 0, 8);
+        var colsOnly = new LineExplosionScore(0, 2, 8, 0, 8, 0, 0);
         Check(kule.ScoreLineExplosion(scorer, colsOnly) > 0, "kule pays for a columns-only clear",
             "" + kule.ScoreLineExplosion(scorer, colsOnly));
         Check(ufuk.ScoreLineExplosion(scorer, colsOnly) == 0,
@@ -3391,9 +3395,9 @@ public static class JokerTests
 
         // Mixed clears: each boss must price its OWN axis and be blind to the other one. Two
         // scores that differ only in the off-axis must therefore pay exactly the same.
-        var mixedA = new LineExplosionScore(1, 2, 20, 5, 9);
-        var moreRows = new LineExplosionScore(4, 2, 40, 17, 9);   // same columns, more rows
-        var moreCols = new LineExplosionScore(1, 6, 40, 5, 25);   // same rows, more columns
+        var mixedA = new LineExplosionScore(1, 2, 20, 5, 9, 0, 0);
+        var moreRows = new LineExplosionScore(4, 2, 40, 17, 9, 0, 0);   // same columns, more rows
+        var moreCols = new LineExplosionScore(1, 6, 40, 5, 25, 0, 0);   // same rows, more columns
         Check(kule.ScoreLineExplosion(scorer, mixedA) == kule.ScoreLineExplosion(scorer, moreRows),
             "kule is blind to how many rows also went",
             kule.ScoreLineExplosion(scorer, mixedA) + " vs "
@@ -3412,7 +3416,7 @@ public static class JokerTests
             "" + kule.ScoreLineExplosion(scorer, mixedA));
 
         // The bonus really is a bonus: one row under Ufuk beats one row unmodified.
-        var oneRow = new LineExplosionScore(1, 0, 4, 4, 0);
+        var oneRow = new LineExplosionScore(1, 0, 4, 4, 0, 0, 0);
         Check(ufuk.ScoreLineExplosion(scorer, oneRow) > scorer.ScoreLineExplosion(1, 4),
             "ufuk's own axis pays above the plain rate",
             "boss " + ufuk.ScoreLineExplosion(scorer, oneRow)
@@ -3694,6 +3698,108 @@ public static class JokerTests
                 return;
             }
             SpendEverythingAffordable(session);
+        }
+    }
+
+    /// <summary>Every reroll makes the whole SHELF dearer, not just the shelf it refreshed: an
+    /// offer costs its stocked price plus what a reroll costs right now, less the first reroll's
+    /// price - so a freshly stocked market is priced exactly as it always was.</summary>
+    private static void Market_RerollingLiftsEveryPrice()
+    {
+        Section("market / a reroll lifts the price of everything on the shelf");
+        var session = NewSession(6410, 6, 30, 40, 3);
+        Check(AdvanceToMarket(session, 4000), "the run reached the market",
+            "phase " + session.Phase);
+
+        Check(session.Market.PriceSurcharge == 0,
+            "a freshly stocked market carries no surcharge",
+            "" + session.Market.PriceSurcharge);
+        foreach (MarketOffer offer in session.Market.Offers)
+        {
+            Check(offer.Price == offer.BasePrice,
+                "so every offer stands at its stocked price",
+                offer.Price + " vs " + offer.BasePrice);
+        }
+
+        // Remember the offers that a JOKER reroll will NOT replace: they are the ones that prove
+        // the surcharge is charged on the market rather than on the refreshed shelf.
+        var untouched = new List<MarketOffer>();
+        foreach (MarketOffer offer in session.Market.Offers)
+        {
+            if (offer.Kind != MarketOfferKind.Joker)
+            {
+                untouched.Add(offer);
+            }
+        }
+        Check(untouched.Count > 0, "there are offers on the other shelves to watch");
+
+        long firstRerollCost = session.NextRerollCost;
+        Check(session.RerollMarket(MarketOfferKind.Joker), "a reroll goes through");
+
+        long expected = session.NextRerollCost
+            - (long)session.Config.Market.RerollBaseCost * session.Config.Scoring.ScoreScale;
+        Check(session.Market.PriceSurcharge == expected,
+            "the surcharge is now the current reroll cost less the first one's",
+            session.Market.PriceSurcharge + " vs " + expected);
+        Check(session.Market.PriceSurcharge
+                == session.NextRerollCost - firstRerollCost,
+            "which is exactly one escalation step",
+            session.Market.PriceSurcharge + " vs "
+                + (session.NextRerollCost - firstRerollCost));
+        Check(session.Market.PriceSurcharge > 0, "and it is a real rise",
+            "" + session.Market.PriceSurcharge);
+
+        foreach (MarketOffer offer in untouched)
+        {
+            Check(offer.Price == offer.BasePrice + session.Market.PriceSurcharge,
+                "an offer on a shelf that was NOT rerolled costs more too",
+                offer.Price + " vs " + (offer.BasePrice + session.Market.PriceSurcharge));
+        }
+
+        // The escalation is per VISIT: the next market opens at the plain price again.
+        long beforeLeaving = session.Market.PriceSurcharge;
+        Check(beforeLeaving > 0, "the surcharge stood while the visit lasted");
+        session.LeaveMarket();
+        Check(session.Market.PriceSurcharge == 0,
+            "and leaving the market clears it with the reroll counter",
+            "" + session.Market.PriceSurcharge);
+    }
+
+    /// <summary>A mid-market save must reopen at the price it closed at - the surcharge is
+    /// rebuilt from the saved reroll counter, never written onto the offers, or a load would
+    /// charge the escalation twice.</summary>
+    private static void Market_TheSurchargeSurvivesASaveWithoutDoubling()
+    {
+        Section("market / the reroll surcharge survives a save exactly once");
+        var session = NewSession(6411, 6, 30, 40, 3);
+        Check(AdvanceToMarket(session, 6000), "the run reached the market",
+            "phase " + session.Phase);
+        Check(session.RerollMarket(MarketOfferKind.Joker), "one reroll");
+        Check(session.RerollMarket(MarketOfferKind.Power), "and a second");
+
+        int surcharge = session.Market.PriceSurcharge;
+        Check(surcharge > 0, "there is a surcharge to preserve", "" + surcharge);
+        var prices = new List<int>();
+        var bases = new List<int>();
+        foreach (MarketOffer offer in session.Market.Offers)
+        {
+            prices.Add(offer.Price);
+            bases.Add(offer.BasePrice);
+        }
+
+        GameSession loaded = SaveGame.Load(SaveGame.Save(session), new GameConfig());
+        Check(loaded.Market.PriceSurcharge == surcharge,
+            "the surcharge came back at exactly its old value",
+            loaded.Market.PriceSurcharge + " vs " + surcharge);
+        Check(loaded.Market.Offers.Count == prices.Count, "and every offer came back");
+        for (int i = 0; i < loaded.Market.Offers.Count && i < prices.Count; i++)
+        {
+            Check(loaded.Market.Offers[i].BasePrice == bases[i],
+                "offer " + i + " kept its stocked price",
+                loaded.Market.Offers[i].BasePrice + " vs " + bases[i]);
+            Check(loaded.Market.Offers[i].Price == prices[i],
+                "offer " + i + " costs the same as before the save - charged once, not twice",
+                loaded.Market.Offers[i].Price + " vs " + prices[i]);
         }
     }
 
@@ -6012,6 +6118,115 @@ public static class JokerTests
         return PlayAt(round, new GridPos(round.Board.MinX, row));
     }
 
+    /// <summary>Obsidian is paid RENT for standing in a line that goes off - it cannot break, so
+    /// instead of exploding with the line it collects a bonus for having been built around, and
+    /// because it survives, the same cube collects again on the next clear through it.</summary>
+    private static void Obsidian_PaysRentForEveryLineThatGoesThroughIt()
+    {
+        Section("obsidian / a line that goes off through it pays a bonus");
+        var session = NewSession(7701, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        ScoringConfig scoring = session.Config.Scoring;
+        int row = round.Board.MinY;
+
+        // A bottom row that is one cell short, with NO obsidian in it: the plain rate.
+        // The two ANCHOR cubes up on another row matter: without something left standing, the
+        // clear would empty the board and the CLEAN SWEEP would swallow the whole line score
+        // (and obsidian would not stop it - a sweep ignores obsidian by design). Two cubes in
+        // one row complete nothing, so they only ever keep the board from being clean.
+        SetUpObsidianRow(round, row, 0, 9001);
+        TurnReport plain = PlayAt(round, new GridPos(round.Board.MinX, row));
+        Check(plain != null && plain.ExplodedRows.Count == 1, "a plain row cleared");
+        Check(!plain.CleanSweep, "and it was NOT a sweep, so the line score stands");
+        int plainLines = plain.Score.BaseLines;
+        Check(plainLines > 0, "and it paid something", "" + plainLines);
+
+        // The same row again, but with two of its cubes OBSIDIAN. They cannot break, so the line
+        // destroys two fewer cubes - and yet it must pay MORE, because the rent outweighs them.
+        SetUpObsidianRow(round, row, 2, 9002);
+        TurnReport stony = PlayAt(round, new GridPos(round.Board.MinX, row));
+        Check(stony != null && stony.ExplodedRows.Count == 1, "the stony row cleared too");
+        int expectedRent = 2 * scoring.PointsPerObsidianInLine;
+        Check(stony.Score.BaseLines
+                == plainLines - 2 * scoring.PointsPerCubeExploded + expectedRent,
+            "it paid the rent for both stones, minus the two cubes that could not break",
+            stony.Score.BaseLines + " vs "
+                + (plainLines - 2 * scoring.PointsPerCubeExploded + expectedRent));
+        Check(stony.Score.BaseLines > plainLines,
+            "so a line through obsidian is worth MORE than a plain one",
+            stony.Score.BaseLines + " vs " + plainLines);
+
+        // The stones are still standing, and they pay again on the very next clear - which is
+        // the whole point of a cube that cannot be destroyed.
+        Check(round.Board.CountCubesOfKind(CubeKind.Obsidian) == 2,
+            "both stones survived the clear",
+            "" + round.Board.CountCubesOfKind(CubeKind.Obsidian));
+        for (int x = round.Board.MinX + 1; x < round.Board.MinX + round.Board.Width; x++)
+        {
+            if (!round.Board.GetCube(new GridPos(x, row)).HasValue)
+            {
+                round.Board.SetCubeAt(new GridPos(x, row), new Cube(CubeKind.Normal, 9003));
+            }
+        }
+        TurnReport again = PlayAt(round, new GridPos(round.Board.MinX, row));
+        Check(again != null && again.ExplodedRows.Count == 1, "the row cleared a second time");
+        Check(again.Score.BaseLines >= expectedRent,
+            "and the same two stones were paid for all over again",
+            again.Score.BaseLines + " vs at least " + expectedRent);
+    }
+
+    /// <summary>Lays out the obsidian test's board: the target row filled but for its leftmost
+    /// cell, its first <paramref name="stones"/> filler cells obsidian, plus two anchor cubes
+    /// well out of the way so that clearing the row cannot empty the board (see the note at the
+    /// call site - a clean sweep would swallow the very score being measured).</summary>
+    private static void SetUpObsidianRow(RoundEngine round, int row, int stones, int cardId)
+    {
+        ClearBoard(round.Board);
+        for (int x = round.Board.MinX + 1; x < round.Board.MinX + round.Board.Width; x++)
+        {
+            bool stone = x < round.Board.MinX + 1 + stones;
+            round.Board.SetCubeAt(new GridPos(x, row),
+                new Cube(stone ? CubeKind.Obsidian : CubeKind.Normal, cardId));
+        }
+        int anchorRow = round.Board.MinY + 2;
+        round.Board.SetCubeAt(new GridPos(round.Board.MinX + 1, anchorRow),
+            new Cube(CubeKind.Normal, cardId));
+        round.Board.SetCubeAt(new GridPos(round.Board.MinX + 2, anchorRow),
+            new Cube(CubeKind.Normal, cardId));
+    }
+
+    /// <summary>The rent is per LINE, so a stone at the crossing of a cleared row and a cleared
+    /// column is paid twice - and a boss that pays for one axis only pays for the stones on
+    /// THAT axis and no other.</summary>
+    private static void Obsidian_RentIsPerLineAndFollowsTheAxisBosses()
+    {
+        Section("obsidian / the rent is per line, and each axis boss pays for its own");
+        var scorer = new DefaultScoreCalculator(new ScoringConfig());
+        var plainRent = new LineExplosionScore(1, 1, 6, 3, 3, 1, 1);
+        Check(plainRent.Obsidian == 2,
+            "a stone on a cleared row AND a cleared column counts on both",
+            "" + plainRent.Obsidian);
+
+        var boss = new BossRound[] { new UfukBoss(), new KuleBoss() };
+        var ufuk = (UfukBoss)boss[0];
+        var kule = (KuleBoss)boss[1];
+        // Two scores identical but for the OFF-axis stones: each boss must be blind to them.
+        var rowStoneOnly = new LineExplosionScore(1, 1, 6, 3, 3, 2, 0);
+        var colStoneOnly = new LineExplosionScore(1, 1, 6, 3, 3, 0, 2);
+        Check(kule.ScoreLineExplosion(scorer, rowStoneOnly)
+                < kule.ScoreLineExplosion(scorer, colStoneOnly),
+            "kule pays for the stones in its columns, not the ones on the rows");
+        Check(ufuk.ScoreLineExplosion(scorer, colStoneOnly)
+                < ufuk.ScoreLineExplosion(scorer, rowStoneOnly),
+            "and ufuk the other way round");
+
+        // "Titizlik" silences the line score outright, and the rent goes with it.
+        var titizlik = new TitizlikBoss();
+        Check(titizlik.ScoreLineExplosion(scorer, rowStoneOnly) == 0,
+            "a boss that pays nothing for a line pays nothing for its stones either",
+            "" + titizlik.ScoreLineExplosion(scorer, rowStoneOnly));
+    }
+
     private static void Simetri_TheBoardKnowsItsOwnSymmetry()
     {
         Section("simetri / the board's own mirror check");
@@ -8289,7 +8504,7 @@ public static class JokerTests
         var scorer = new DefaultScoreCalculator(new ScoringConfig());
         var boss = new TitizlikBoss();
         Check(boss.OnlyCleanSweepsScore, "it declares that only sweeps score");
-        Check(boss.ScoreLineExplosion(scorer, new LineExplosionScore(2, 1, 12, 8, 4)) == 0,
+        Check(boss.ScoreLineExplosion(scorer, new LineExplosionScore(2, 1, 12, 8, 4, 0, 0)) == 0,
             "a line clear is worth nothing, whoever completed it");
         Check(boss.ScoreCleanSweep(scorer) > scorer.ScoreCleanSweep(),
             "and a sweep is worth a little MORE than usual",

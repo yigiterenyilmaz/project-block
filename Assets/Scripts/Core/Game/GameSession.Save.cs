@@ -137,6 +137,10 @@ namespace ProjectBlock.Core
             session.ownedCards.AddRange(cards.ReadRefs(r, "owned"));
 
             session.ReadMarket(r, "market", cards);
+            // The offers came back at their STOCKED prices; this puts the visit's reroll
+            // surcharge back on top of them, so a saved market reopens at the price it closed at.
+            // After ReadMarket, because it is the market's own field that is being set.
+            session.RefreshMarketPrices();
             session.ReadJokers(r, "jokers");
             session.ReadPowers(r, "powers");
 
@@ -175,7 +179,12 @@ namespace ProjectBlock.Core
             {
                 MarketOffer offer = offers[i];
                 w.Write(key + "." + i + ".kind", (int)offer.Kind);
-                w.Write(key + "." + i + ".price", offer.Price);
+                // The STOCKED price, never the live one. The reroll surcharge on top of it is
+                // rebuilt from the saved reroll counter (RefreshMarketPrices), so writing the
+                // live price here would charge the escalation twice on every load.
+                // No format bump: the field, its key and its position are unchanged, and in a
+                // save written before the surcharge existed the two numbers were always equal.
+                w.Write(key + "." + i + ".price", offer.BasePrice);
                 w.Write(key + "." + i + ".sold", offer.Sold);
                 w.Write(key + "." + i + ".card", offer.Card != null ? offer.Card.Id : 0);
                 w.Write(key + "." + i + ".joker", offer.Joker != null ? offer.Joker.DefId : null);

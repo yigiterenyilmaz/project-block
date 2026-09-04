@@ -8,7 +8,7 @@ Bloğun bir küpü patlayınca bloğun tamamı onunla birlikte patlar. "Tutuştu
 Her tur boşluğa doğru akar - normalde aşağı, "Kütleçekim merkezi" gücü o raunt boyunca yönü değiştirir. Değdiği ateş küplerini obsidyene çevirir, kendisi kalır. Koyduğun turda satır ya da sütun tamamlıyorsa akmadan yerinde patlar; sadece patlama olmayan turda düşer ve düştüğü yerde tamamladığı satır tekrar kontrol edilir. "Buzluk" jokeri varken duvara değen su donar.
 
 3. *OBSİDYEN*
-Yok edilemez - ne satır patlaması ne joker ne güç kırar - ama temizlik kontrolüne girmez, yani sadece obsidyen kalan alan temizlenmiş sayılır. "Elmas kazma" jokeri temizlikte onları da patlatıp puana çevirir.
+Yok edilemez - ne satır patlaması ne joker ne güç kırar - ama temizlik kontrolüne girmez, yani sadece obsidyen kalan alan temizlenmiş sayılır. "Elmas kazma" jokeri temizlikte onları da patlatıp puana çevirir. İçinden geçen her patlayan satır ve sütun onun için bonus puan öder (ScoringConfig.PointsPerObsidianInLine); patlamada yok olmadığı için aynı küp, içinden geçen satır her tamamlandığında yeniden öder - kira gibi. Satır ile sütunun kesiştiği bir obsidyen iki kez ödenir, çünkü her eksen ayrı bir hat sayılır.
 
 4. *ALTIN*
 Yok edilemez ve temizliği bozmaz; üstelik alanda durduğu her tur küp sayısıyla orantılı bonus öder. "Midas" jokeri elde tutulanı da ödüllendirir ve küp başına daha çok verir. Kalıcıdır: alanı sürekli daraltır.

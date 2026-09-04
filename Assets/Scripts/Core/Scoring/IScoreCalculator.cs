@@ -12,6 +12,12 @@ namespace ProjectBlock.Core
         /// <summary>Score for exploding full lines (lineCount = rows + columns).</summary>
         int ScoreLineExplosion(int lineCount, int cubesExploded);
 
+        /// <summary>Bonus for the obsidian cubes STANDING IN the lines that went off. They are
+        /// not destroyed - obsidian never is - so this is separate from ScoreLineExplosion, whose
+        /// cube count only ever means cubes that broke (ScoringConfig.PointsPerObsidianInLine).
+        /// </summary>
+        int ScoreObsidianInLines(int obsidianCubesInLines);
+
         /// <summary>Bonus for emptying the board ("temizlik").</summary>
         int ScoreCleanSweep();
 

@@ -29,6 +29,11 @@ namespace ProjectBlock.Core
             return score;
         }
 
+        public int ScoreObsidianInLines(int obsidianCubesInLines)
+        {
+            return obsidianCubesInLines * config.PointsPerObsidianInLine;
+        }
+
         public int ScoreCleanSweep()
         {
             return config.CleanSweepBonus;
