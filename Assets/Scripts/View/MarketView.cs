@@ -165,7 +165,12 @@ namespace ProjectBlock.View
                 offerHalfWidths.Add(CardVisual.BodyWidth * 0.5f);
                 offerHalfHeights.Add(0.5f);
                 offerSold.Add(offers[i].Sold);
-                offerAffordable.Add(session.TotalScore >= offers[i].Price);
+                // "Affordable" is what the hover outline and the price colour read, and for a
+                // BLOCK it is two questions, not one: the money, and whether the run still has
+                // room under its purchase limit. A shelf you cannot buy from must not light up
+                // as though you could.
+                offerAffordable.Add(session.TotalScore >= offers[i].Price
+                    && (offers[i].Kind != MarketOfferKind.Block || session.CanBuyMoreCards));
                 offerDetails.Add(OfferDetail(offers[i]));
             }
 
@@ -365,12 +370,23 @@ namespace ProjectBlock.View
             }
             if (text)
             {
-                bool affordable = session.TotalScore >= offer.Price;
+                // The run's block limit reads exactly like being unable to pay - the price goes
+                // red - and says WHY over the tile, because "you have the money and it still
+                // will not sell" is the one refusal a price tag cannot explain.
+                bool blockedByLimit = offer.Kind == MarketOfferKind.Block
+                    && !session.CanBuyMoreCards;
+                bool affordable = session.TotalScore >= offer.Price && !blockedByLimit;
                 ViewUtil.MakeText3D(transform, "Price_" + i,
                     slotCenter + new Vector2(0f, -tileSize.y * 0.5f + 0.16f),
                     offer.Price.ToString(), 60, 0.060f,
                     affordable ? AffordablePriceColor : TooExpensiveColor, 38,
                     TextAnchor.MiddleCenter);
+                if (blockedByLimit)
+                {
+                    ViewUtil.MakeText3D(transform, "Limit_" + i, slotCenter,
+                        Loc.Pick("LIMIT", "LIMIT"), 60, 0.05f, TooExpensiveColor, 38,
+                        TextAnchor.MiddleCenter);
+                }
             }
         }
 
@@ -391,6 +407,14 @@ namespace ProjectBlock.View
                 Loc.Pick("Click the deck pile to sell cards",
                     "Kart satmak için desteye tıkla"),
                 90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleRight);
+            // How much of the run's block allowance is spent. Written beside the shelf rather
+            // than on it, because it is a fact about the RUN and not about any one offer.
+            ViewUtil.MakeText3D(transform, "CardLimit", new Vector2(sideX, FrameCenter.y + 0.4f),
+                Loc.Pick("Blocks bought  ", "Alınan blok  ")
+                    + session.PurchasedCardCount + "/" + session.CardPurchaseLimit,
+                90, 0.024f,
+                session.CanBuyMoreCards ? SectionHeaderColor : TooExpensiveColor, 38,
+                TextAnchor.MiddleRight);
             ViewUtil.MakeText3D(transform, "ScrollHint", new Vector2(sideX, FrameCenter.y + 0.7f),
                 maxScroll > 0.01f
                     ? Loc.Pick("Scroll for more", "Devamı için kaydır")
@@ -1042,6 +1066,17 @@ namespace ProjectBlock.View
                 new Vector2(panel.xMax - DemoPad, y),
                 Loc.Pick("You have ", "Paran: ") + session.TotalScore,
                 90, 0.036f, AffordablePriceColor, 38, TextAnchor.MiddleRight);
+            // How much of the run's BLOCK allowance is left, under the balance and in the same
+            // corner: it is the other number that decides whether a block on the shelf can be
+            // taken, and it belongs where the player already looks to find that out. It goes
+            // red once it is spent, which is the same red the tiles below then wear.
+            ViewUtil.MakeText3D(transform, "DemoCardLimit",
+                new Vector2(panel.xMax - DemoPad, y - 0.26f),
+                Loc.Pick("Blocks bought ", "Alınan blok ")
+                    + session.PurchasedCardCount + "/" + session.CardPurchaseLimit,
+                90, 0.024f,
+                session.CanBuyMoreCards ? SectionHeaderColor : TooExpensiveColor, 38,
+                TextAnchor.MiddleRight);
         }
 
         /// <summary>One section box: its name, its own reroll button, and the slots its offers

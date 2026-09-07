@@ -326,10 +326,7 @@ namespace ProjectBlock.View
                 {
                     sellCardsMode = true;
                     deckOverlay.ResetScroll(); // a fresh visit starts at the top of the deck
-                    // x ScoreScale: GameSession.SellCard pays in the scaled economy, and this
-                    // screen used to quote a tenth of what the card actually fetched.
-                    deckOverlay.Show(session.OwnedCards,
-                        c => session.Config.Market.SellValue(c) * session.Config.Scoring.ScoreScale);
+                    deckOverlay.Show(session.OwnedCards, true);
                 }
                 return;
             }
@@ -364,11 +361,50 @@ namespace ProjectBlock.View
                 FloatingTextFx.Spawn(transform, world, Loc.Pick("worthless", "değersiz"),
                     new Color(0.6f, 0.6f, 0.6f), 50, 0.045f);
             }
-            deckOverlay.Show(session.OwnedCards,
-                c => session.Config.Market.SellValue(c) * session.Config.Scoring.ScoreScale);
+            deckOverlay.Show(session.OwnedCards, true);
             marketView.Show(session);
             UpdateHud();
         }
+
+        /// <summary>
+        /// What a fox may turn into: every SHAPE the owned deck holds, once each, as a stand-in
+        /// FOX card so the picker shows what the block will actually look like.
+        ///
+        /// One per shape and not one per card, because the fox only ever took the shape: a deck
+        /// with four copies of a piece used to print that piece four times and make the player
+        /// scroll past its own duplicates. Ordered by size then by the shape's canonical key, so
+        /// the same deck always lays the choices out the same way - the overlay sorts on size and
+        /// then id, and these ids are handed out in exactly that order to agree with it.
+        ///
+        /// The cards are THROWAWAY: they are not in OwnedCards, they carry no elements but Fox,
+        /// and nothing may sell or count them. Only their Shape leaves this screen
+        /// (DeckOverlayView.ShapeAt / EntryShape -> ApplyFoxShape).
+        /// </summary>
+        private List<BlockCard> FoxShapeChoices()
+        {
+            var shapes = new List<BlockShape>();
+            var seen = new HashSet<string>();
+            foreach (BlockCard card in session.OwnedCards)
+            {
+                if (seen.Add(card.Shape.CanonicalKey))
+                {
+                    shapes.Add(card.Shape);
+                }
+            }
+            shapes.Sort((a, b) => a.Size != b.Size
+                ? a.Size - b.Size
+                : string.CompareOrdinal(a.CanonicalKey, b.CanonicalKey));
+            var choices = new List<BlockCard>(shapes.Count);
+            for (int i = 0; i < shapes.Count; i++)
+            {
+                choices.Add(new BlockCard(i + 1, shapes[i], FoxOnly));
+            }
+            return choices;
+        }
+
+        /// <summary>The element every fox choice wears. One array, because the list is rebuilt
+        /// every time the picker opens.</summary>
+        private static readonly BlockElement[] FoxOnly = { BlockElement.Fox };
 
         /// <summary>Giving a fox the shape that was picked for it, and closing the screen that
         /// picked it. Null (a press on no card) still closes - the pick is one shot.</summary>

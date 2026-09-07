@@ -402,31 +402,78 @@ namespace ProjectBlock.Core
 
     /// <summary>
     /// "Alacakaranlık" - the arena goes dark and the player plays blind. What they built is
-    /// still there, still scores, still blocks: they simply cannot see it.
+    /// still there, still scores, still blocks: they simply cannot see it. Not the cubes, not
+    /// which cells are free - every cell in the arena is painted the same dead square, so the
+    /// board says NOTHING. A dark board you can still read is not a dark board.
     ///
-    /// The only relief is an explosion. The blast lights its own surroundings for a moment and
-    /// the board sinks back into the dark, so the one way to see anything is to make something
-    /// happen - and the more you clear, the more you learn.
+    /// Light comes from two places, and the difference between them is the round. Setting a
+    /// block DOWN lights what it touches, faintly and one cell out: your own hand disturbing the
+    /// dark, enough to confirm what you just did and hint at what it landed against. An
+    /// EXPLOSION lights far more and far brighter, so making something happen is still the only
+    /// way to actually see the board - and the more you clear, the more you learn. Both fade and
+    /// the dark closes back over them.
     ///
-    /// This is the ONE boss that bends no rule at all. Every other query on BossRound exists
-    /// because the engine had to behave differently; this one exists because the SCREEN does.
-    /// The engine reads HidesTheBoard once, to hand it to the View, and nothing else.
+    /// Two numbers make that a bargain rather than a punishment. The bar is cut to
+    /// ThresholdFactor of the round's own, because a blind round asks for less; and a placement
+    /// the board REFUSES costs RefusedPlacementPenaltyFactor of that bar. Groping about is the
+    /// intended way to learn the board, and this is what it costs. Together they are the whole
+    /// design: you cannot see, so you are asked for less, and finding out the hard way is priced.
+    ///
+    /// "Refuses" is the whole of it, and deliberately not "lands on a cube": what the board will
+    /// not take is the only thing billed, and CanPlaceCard is the one authority on that. A
+    /// NEGATIVE block is MEANT to be put down over cubes, and a fee for doing what a block is for
+    /// would be a bug - it costs nothing, because the board accepts it. So does an antimatter key
+    /// over its own kind, a ghost block hanging off the edge, and anything set down on
+    /// transparent, void or mine cells. Only what was actually turned away is billed.
+    ///
+    /// It is still the boss that bends the fewest rules. HidesTheBoard is read once, by the
+    /// View, and no rule in the engine depends on it; the other two are the ordinary threshold
+    /// and penalty queries every boss may answer.
     /// </summary>
     public sealed class AlacakaranlikBoss : BossRound
     {
+        /// <summary>What the blind round asks for, as a share of the round's normal bar.
+        /// BALANCE PLACEHOLDER.</summary>
+        private const double ThresholdFactor = 0.60;
+
+        /// <summary>What one REFUSED placement costs, as a share of that lowered bar.
+        /// BALANCE PLACEHOLDER.</summary>
+        private const double RefusedPlacementPenaltyFactor = 0.02;
+
         public AlacakaranlikBoss()
             : base("alacakaranlik", "Alacakaranlık")
         {
             SetDescription(
-                "The board goes dark and you play blind. Only an explosion lights its own "
-                    + "surroundings, for a moment, before the dark closes back over them.",
-                "Oyun alanı karanlığa gömülür, körleme oynarsın. Sadece bir patlama kendi "
-                    + "etrafını bir anlığına aydınlatır, sonra karanlık üstünü tekrar örter.");
+                "The board goes dark and you play blind - you cannot tell a filled cell from an "
+                    + "empty one. Placing a block dimly lights what it touches; an explosion "
+                    + "lights far more, and far brighter. Both fade, and the dark closes back "
+                    + "over them. The bar is cut to 60%, but every placement the board refuses "
+                    + "costs you 2% of it.",
+                "Oyun alanı karanlığa gömülür, körleme oynarsın - dolu kareyle boş kareyi "
+                    + "birbirinden ayıramazsın. Blok koymak değdiği yerleri hafifçe aydınlatır; "
+                    + "bir patlama çok daha genişi, çok daha parlak aydınlatır. İkisi de söner, "
+                    + "karanlık üstünü tekrar örter. Eşik %60'a iner, ama tahtanın kabul "
+                    + "etmediği her hamle sana eşiğin %2'sine mal olur.");
         }
 
         public override bool HidesTheBoard
         {
             get { return true; }
+        }
+
+        public override int FilterScoreThreshold(int threshold)
+        {
+            // Rounded UP, and never to nothing: a blind round is easier, not free.
+            return Math.Max(1, (int)Math.Ceiling(threshold * ThresholdFactor));
+        }
+
+        public override int PenaltyOnIllegalPlacement(int threshold)
+        {
+            // The threshold handed in is the one FilterScoreThreshold already lowered, so the
+            // fee is 2% of the bar the player is actually chasing. At least a point, or a small
+            // enough round would make blundering free. Charged for a REFUSED placement only -
+            // see the class comment on why a negative block pays nothing.
+            return Math.Max(1, (int)Math.Round(threshold * RefusedPlacementPenaltyFactor));
         }
 
         public override string StatusText

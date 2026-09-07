@@ -92,7 +92,20 @@ namespace ProjectBlock.View
             {
                 cardLayer.SetHoveredCard(-1);
                 BlockCard card = deckOverlay.CardAt(world);
-                if (card != null) ShowCardTooltip(card, world); else HideTooltip();
+                if (card == null)
+                {
+                    HideTooltip();
+                }
+                else if (foxPickSlot >= 0)
+                {
+                    // The fox picker's entries are stand-in shapes, not cards you own, so the
+                    // collection tooltip would say untrue things about where they came from.
+                    ShowFoxShapeTooltip(card, world);
+                }
+                else
+                {
+                    ShowDeckCardTooltip(card, world);
+                }
                 return;
             }
             // Hovering a held joker/power panel shows its live details (name + description +
@@ -177,6 +190,82 @@ namespace ProjectBlock.View
             HideTooltip();
         }
 
+        /// <summary>
+        /// The card details POPUP of the collection overlay - and the sell screen's only price
+        /// tag. It says three things a plain block tooltip does not: what the block is, WHERE it
+        /// came from (a card off the market shelf, or one of your own), and - on the sell screen -
+        /// what it would fetch.
+        ///
+        /// Unlike ShowCardTooltip this never declines to appear: a plain block carries no element
+        /// text, but on the sell screen its price is exactly what the player opened the screen to
+        /// read, so there is always something to say.
+        /// </summary>
+        private void ShowDeckCardTooltip(BlockCard card, Vector2 nearWorld)
+        {
+            // Every sentence goes through WrapText at the same column as the rest of the
+            // tooltips: the panel is a fixed width and sizes itself by the lines it was handed,
+            // so an unwrapped sentence would print off the side of it.
+            var body = new StringBuilder();
+            body.Append(ViewUtil.WrapText(card.IsPurchased
+                ? Loc.Pick("Bought card - it came off the market shelf.",
+                    "Satın alınmış kart - marketten geldi.")
+                : Loc.Pick("Deck card - it was never bought.",
+                    "Deste kartı - satın alınmadı."), 34));
+            if (sellCardsMode)
+            {
+                // x ScoreScale: GameSession.SellCard pays in the scaled economy, and this screen
+                // used to quote a tenth of what the card actually fetched.
+                int value = session.Config.Market.SellValue(card)
+                    * session.Config.Scoring.ScoreScale;
+                body.Append('\n').Append(ViewUtil.WrapText(value > 0
+                    ? Loc.Pick("Sells for " + value + ".", "Satış değeri " + value + ".")
+                    : Loc.Pick("Worthless - selling it pays nothing.",
+                        "Değersiz - satmak bir şey kazandırmaz."), 34));
+                if (!card.IsPurchased)
+                {
+                    body.Append('\n').Append(ViewUtil.WrapText(Loc.Pick(
+                        "Selling it frees no buying slot.",
+                        "Satmak alım hakkı geri kazandırmaz."), 34));
+                }
+            }
+            for (int i = 0; i < card.Elements.Count; i++)
+            {
+                BlockElement element = card.Elements[i];
+                body.Append("\n\n").Append(ViewUtil.ElementLabel(element)).Append('\n')
+                    .Append(ViewUtil.WrapText(ViewUtil.ElementDescription(element), 34));
+            }
+            RenderTooltip((sellCardsMode ? "sell:" : "deck:") + card.Id, CardTitle(card),
+                body.ToString(), nearWorld);
+        }
+
+        /// <summary>One entry of the fox picker: the shape, and what taking it does. Says
+        /// nothing about ownership - a shape is not a card and the deck may hold several of
+        /// this one, or none by the time the round ends.</summary>
+        private void ShowFoxShapeTooltip(BlockCard shapeCard, Vector2 nearWorld)
+        {
+            RenderTooltip("fox:" + shapeCard.Shape.CanonicalKey,
+                Loc.Pick(
+                    "SHAPE - " + shapeCard.Shape.Size
+                        + (shapeCard.Shape.Size == 1 ? " cube" : " cubes"),
+                    "ŞEKİL - " + shapeCard.Shape.Size + " küp")
+                    + "  (" + shapeCard.Shape.Width + "x" + shapeCard.Shape.Height + ")",
+                ViewUtil.WrapText(Loc.Pick(
+                    "The fox takes this shape for the rest of the round. Every shape your deck "
+                        + "can deal is offered here once.",
+                    "Tilki raunt boyunca bu şekli alır. Destendeki her şekil burada bir kez "
+                        + "listelenir."), 34),
+                nearWorld);
+        }
+
+        /// <summary>The headline both card tooltips open with: what the block IS.</summary>
+        private static string CardTitle(BlockCard card)
+        {
+            return Loc.Pick(
+                "BLOCK - " + card.Shape.Size + (card.Shape.Size == 1 ? " cube" : " cubes"),
+                "BLOK - " + card.Shape.Size + " küp")
+                + "  (" + card.Shape.Width + "x" + card.Shape.Height + ")";
+        }
+
         private void ShowCardTooltip(BlockCard card, Vector2 nearWorld)
         {
             // Plain blocks carry no special info - no tooltip for them.
@@ -185,10 +274,7 @@ namespace ProjectBlock.View
                 HideTooltip();
                 return;
             }
-            string title = Loc.Pick(
-                "BLOCK - " + card.Shape.Size + (card.Shape.Size == 1 ? " cube" : " cubes"),
-                "BLOK - " + card.Shape.Size + " küp")
-                + "  (" + card.Shape.Width + "x" + card.Shape.Height + ")";
+            string title = CardTitle(card);
             var body = new StringBuilder();
             for (int i = 0; i < card.Elements.Count; i++)
             {
@@ -237,11 +323,22 @@ namespace ProjectBlock.View
                     break;
                 default:
                     title = Loc.Pick("BLOCKS", "BLOKLAR");
+                    // The purchase limit is said HERE, on the shelf it governs, and with the
+                    // run's own numbers in it - a rule the player meets as a red price tag
+                    // needs somewhere to be explained.
                     body = Loc.Pick(
                         "The shapes you place on the grid. A block you buy joins your run deck "
-                            + "for good, so every round from here on can deal it to you.",
+                            + "for good, so every round from here on can deal it to you. "
+                            + "This run may buy " + session.CardPurchaseLimit
+                            + " blocks in all - half the deck you started with - and "
+                            + session.PurchasedCardCount + " are bought. Selling a block you "
+                            + "bought gives its slot back; selling one of your own does not.",
                         "Oyun alanına yerleştirdiğin şekiller. Aldığın blok kalıcı olarak oyun "
-                            + "destene girer; bundan sonraki her raunt onu dağıtabilir.");
+                            + "destene girer; bundan sonraki her raunt onu dağıtabilir. "
+                            + "Bu oyunda toplam " + session.CardPurchaseLimit
+                            + " blok alabilirsin - başlangıç destenin yarısı - ve "
+                            + session.PurchasedCardCount + " tanesi alındı. Aldığın bir bloğu "
+                            + "satarsan hakkı geri gelir; kendi deste kartını satarsan gelmez.");
                     break;
             }
             RenderTooltip("section:" + kind, title, ViewUtil.WrapText(body, 34), nearWorld);

@@ -464,7 +464,7 @@ namespace ProjectBlock.View
                 });
             AddAnim("circuit BREAKS (cubes + cable)", "devre KIRILDI (bloklar + kablo)",
                 AnimCircuitBreak);
-            AddAnim("quarantine SEAL (Karantina)", "karantina MÜHRÜ (Karantina)",
+            AddAnim("quarantine RELAID (Karantina)", "karantina TAŞINDI (Karantina)",
                 AnimQuarantineSeal);
             AddAnim("creature nest + FEED (Besleme)", "yaratık yuvası + BESLEME (Besleme)",
                 delegate
@@ -704,17 +704,19 @@ namespace ProjectBlock.View
             return board != null ? board.MinX + board.Width / 2 : 0;
         }
 
-        /// <summary>A one-entry row or column list, for the markers that take line indices.</summary>
-        private readonly List<int> animQuarantineRows = new List<int>();
-
-        private readonly List<int> animQuarantineColumns = new List<int>();
+        /// <summary>The zone the lab is showing, in board coordinates.</summary>
+        private readonly List<GridPos> animQuarantineCells = new List<GridPos>();
 
         /// <summary>
-        /// Seals two more lines every time it is pressed, exactly the way the boss does it: the
-        /// outermost lines still clean, working inward, from one end or the other. Pressing it
-        /// repeatedly is the only way to see what this effect is actually FOR - the sweep coming
-        /// in from outside, two fields merging when a new line touches an old one, and the board
-        /// closing in. One press shows a seal; six presses show the boss.
+        /// Relays the zone one cell larger every time it is pressed, exactly the way the boss
+        /// does it: a fresh scattered patch, never the old one extended. Pressing it repeatedly
+        /// is the only way to see what this effect is actually FOR - the seal blooming out of
+        /// each new cell, cells that have LEFT the zone lifting, and separate patches merging
+        /// into one field where they happen to touch.
+        ///
+        /// The cells are walked in a fixed stride rather than drawn at random, so the lab is
+        /// repeatable frame to frame - the game's own zone is rng, which is not something to
+        /// study an animation through.
         /// </summary>
         private void AnimQuarantineSeal()
         {
@@ -723,39 +725,25 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            for (int taken = 0; taken < 2; taken++)
+            var playable = new List<GridPos>();
+            for (int y = board.MinY; y < board.MinY + board.Height; y++)
             {
-                bool wantRow = (animQuarantineRows.Count + animQuarantineColumns.Count) % 2 == 0;
-                if (!AnimSealLine(board, wantRow) && !AnimSealLine(board, !wantRow))
+                for (int x = board.MinX; x < board.MinX + board.Width; x++)
                 {
-                    break;
+                    var cell = new GridPos(x, y);
+                    if (board.IsInside(cell)) { playable.Add(cell); }
                 }
             }
-            boardView.ShowQuarantine(animQuarantineRows, animQuarantineColumns);
-        }
-
-        private bool AnimSealLine(GameBoard board, bool row)
-        {
-            List<int> taken = row ? animQuarantineRows : animQuarantineColumns;
-            int min = row ? board.MinY : board.MinX;
-            int count = row ? board.Height : board.Width;
-            int low = -1;
-            int high = -1;
-            for (int i = 0; i < count; i++)
+            int want = Mathf.Min(animQuarantineCells.Count + 1, playable.Count / 2);
+            // A stride that shares no factor with the board width scatters the patch instead of
+            // laying it out in a line, and shifting the start each press relays it somewhere else.
+            int start = animQuarantineCells.Count * 3;
+            animQuarantineCells.Clear();
+            for (int i = 0; i < want && playable.Count > 0; i++)
             {
-                if (!taken.Contains(min + i)) { low = min + i; break; }
+                animQuarantineCells.Add(playable[(start + i * 5) % playable.Count]);
             }
-            for (int i = count - 1; i >= 0; i--)
-            {
-                if (!taken.Contains(min + i)) { high = min + i; break; }
-            }
-            if (low < 0)
-            {
-                return false;
-            }
-            // Alternating ends rather than random, so the lab is repeatable frame to frame.
-            taken.Add(low == high ? low : (taken.Count % 2 == 0 ? low : high));
-            return true;
+            boardView.ShowQuarantine(animQuarantineCells);
         }
 
         /// <summary>
@@ -1065,11 +1053,10 @@ namespace ProjectBlock.View
             animGravityStep = 0;
             boardView.ClearPreview();
             // ...the three tinted ones need the repaint (see AnimTintMarker).
-            animQuarantineRows.Clear();
-            animQuarantineColumns.Clear();
+            animQuarantineCells.Clear();
             AnimTintMarker(delegate
             {
-                boardView.ShowQuarantine(null, null);
+                boardView.ShowQuarantine(null);
                 boardView.ShowCreature(null);
                 boardView.ShowDoomedColumn(null, 0);
             });

@@ -166,6 +166,47 @@ namespace ProjectBlock.Core
             get { return ownedCards; }
         }
 
+        /// <summary>
+        /// How many block cards this run may ever take off the market shelf: HALF the starting
+        /// deck of the deck that was chosen (confirmed design 2026-09-06). A 24-card deck buys
+        /// 12 blocks, a 12-card deck buys 6 - so the ceiling is a property of the archetype and
+        /// the market can never drown a small deck's identity in bought blocks.
+        /// </summary>
+        public int CardPurchaseLimit
+        {
+            get { return Config.Deck.Size / 2; }
+        }
+
+        /// <summary>
+        /// How many of the cards you own right now came off the shelf. Counted over the CARDS
+        /// rather than kept as a running total, which is the whole point: selling a starting-deck
+        /// card leaves this untouched (it frees no slot), while selling a bought one gives its
+        /// slot back. See BlockCard.IsPurchased.
+        /// </summary>
+        public int PurchasedCardCount
+        {
+            get
+            {
+                int count = 0;
+                for (int i = 0; i < ownedCards.Count; i++)
+                {
+                    if (ownedCards[i].IsPurchased)
+                    {
+                        count++;
+                    }
+                }
+                return count;
+            }
+        }
+
+        /// <summary>True while there is still room under the purchase limit for another block.
+        /// Jokers, powers and everything else on the shelf are unaffected - the limit is on
+        /// BLOCKS, because it is the deck it exists to protect.</summary>
+        public bool CanBuyMoreCards
+        {
+            get { return PurchasedCardCount < CardPurchaseLimit; }
+        }
+
         private readonly IRandomSource rng;
         private readonly int resolvedSeed;
         private readonly IScoreCalculator scorer;
@@ -288,6 +329,10 @@ namespace ProjectBlock.Core
                     ownedCards.Add(CreateRandomCard());
                 }
             }
+            // Everything dealt above is DECK, never bought - which is what the purchase limit
+            // measures against. Cards are born unpurchased, so this is only saying out loud
+            // what the starting deck is; the shelf is the one place that flips the flag.
+
             RoundNumber = 1;
             StartRound();
         }
@@ -376,7 +421,15 @@ namespace ProjectBlock.Core
             }
             else
             {
+                // The block shelf is capped for the run (CardPurchaseLimit). Refused here rather
+                // than in the UI so no route - click, pad, or a future one - can slip past it.
+                if (!CanBuyMoreCards)
+                {
+                    return false;
+                }
+                offer.Card.IsPurchased = true;
                 ownedCards.Add(offer.Card);
+                NoteDeckChanged();
             }
             Spend(offer.Price);
             offer.Sold = true;
@@ -467,9 +520,18 @@ namespace ProjectBlock.Core
             {
                 // The block itself is exactly what was on the shelf - an ordinary card. A
                 // DEFECTIVE one simply will not stay on the board: see BlockCard.FallsThrough.
+                // Stolen goods still came off the shelf, so they count against the run's
+                // purchase limit exactly as a paid-for block does - the limit is on how much
+                // the market may add to your deck, not on how much you spent.
+                if (!CanBuyMoreCards)
+                {
+                    return false;
+                }
                 offer.Card.IsSmuggled = true;
+                offer.Card.IsPurchased = true;
                 offer.Card.FallsThrough = defective;
                 ownedCards.Add(offer.Card);
+                NoteDeckChanged();
             }
             offer.Sold = true;
             smuggledThisMarket = true;
@@ -650,6 +712,16 @@ namespace ProjectBlock.Core
             return definition != null && !Powers.IsFull && !OwnsPower(definition.DefId);
         }
 
+        /// <summary>
+        /// The owned deck changed size. Every place that adds or removes a card calls this, so a
+        /// joker reading the collection ("Tutumluluk") is never quoting a stale count - the sale
+        /// that pays it happens in the MARKET, where no turn is resolving to refresh anything.
+        /// </summary>
+        private void NoteDeckChanged()
+        {
+            Jokers.DispatchDeckChanged();
+        }
+
         /// <summary>Sells an owned card back for its sell value (added to TotalScore) and
         /// removes it from the deck. Plain blocks pay nothing; elemental ones pay a fraction
         /// of their buy price. Returns what was paid, or 0 if the card was not owned.</summary>
@@ -659,6 +731,7 @@ namespace ProjectBlock.Core
             {
                 return 0;
             }
+            NoteDeckChanged();
             // Sell values live in the same currency as the scaled run economy.
             int value = Config.Market.SellValue(card) * Config.Scoring.ScoreScale;
             TotalScore += value;
@@ -801,6 +874,10 @@ namespace ProjectBlock.Core
                 }
                 taken++;
             }
+            if (taken > 0)
+            {
+                NoteDeckChanged();
+            }
             return taken;
         }
 
@@ -933,6 +1010,7 @@ namespace ProjectBlock.Core
                 perCube[i] = byNormalized.TryGetValue(shape.Cells[i], out e) ? e : null;
             }
             ownedCards.Add(BlockCard.Designed(nextCardId++, shape, perCube)); // tagged "custom"
+            NoteDeckChanged();
             power.Spend();
             round.NotePowerUsed();
             return true;
@@ -1289,15 +1367,22 @@ namespace ProjectBlock.Core
             }
         }
 
-        /// <summary>Rolls a block shape of at least <paramref name="minSize"/> cubes, re-rolling
-        /// a few times if the generator hands back something smaller. Capped so a generator that
-        /// only makes tiny shapes cannot loop forever - it just returns its best effort.</summary>
+        /// <summary>Rolls a block shape for a MARKET offer of at least <paramref name="minSize"/>
+        /// cubes, re-rolling a few times if the pool hands back something smaller. Capped so a
+        /// generator that only makes tiny shapes cannot loop forever - it just returns its best
+        /// effort.
+        ///
+        /// It draws from DeckDefinition.MarketShapeGenerator, NOT the deck's own generator: the
+        /// shop's job is to sell you what your deck is short of, and a shelf restricted to the
+        /// pieces you already own is a shelf with nothing on it. Every other minting path (a
+        /// random deck, a joker's card, a debug bonus) still uses ShapeGenerator.</summary>
         private BlockShape NextBlockShape(IRandomSource r, int minSize)
         {
-            BlockShape shape = Config.Deck.ShapeGenerator.NextShape(r);
+            IShapeGenerator pool = Config.Deck.MarketShapeGenerator;
+            BlockShape shape = pool.NextShape(r);
             for (int attempt = 0; attempt < 24 && shape.Size < minSize; attempt++)
             {
-                shape = Config.Deck.ShapeGenerator.NextShape(r);
+                shape = pool.NextShape(r);
             }
             return shape;
         }

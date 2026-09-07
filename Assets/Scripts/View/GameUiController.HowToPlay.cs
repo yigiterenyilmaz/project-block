@@ -170,7 +170,8 @@ namespace ProjectBlock.View
                     "",
                     "   You pick a deck archetype when a run starts - classic, small blocks, big",
                     "   blocks or chaos - and it decides what shapes you keep drawing all run.",
-                    "   Cards bought in the market join your collection from the next round.",
+                    "   Cards bought in the market join your collection from the next round, and",
+                    "   the shop stocks every shape in the catalogue - not only your deck's own.",
                     "",
                     "BONUS HAND",
                     "   Extra blocks that do not take up a hand slot. Playing one burns the next",
@@ -217,8 +218,14 @@ namespace ProjectBlock.View
                     "   Between rounds: click an offer to buy it, click your deck to sell cards,",
                     "   click a joker or power in its bar to sell it, REROLL to restock the whole",
                     "   shelf for a price that rises each time you do it.",
-                    "   [N] starts the next round.",
-                    "",
+                    "   A run may buy only HALF as many blocks as its deck started with. Selling",
+                    "   a block you bought gives that slot back; selling one of your own does not.",
+                    "   On the sell screen, hover a card to see what it is, where it came from",
+                    "   and what it fetches.",
+                    "   [N] starts the next round."
+                },
+                new[]
+                {
                     "KEYS",
                     "   [Esc] pause      [L] language      [F2] rarity grader",
                     "   [1-9] use a joker      [A] advance      [C] continue (overtime)",
@@ -350,7 +357,8 @@ namespace ProjectBlock.View
                     "",
                     "   Oyun başlarken bir deste türü seçersin - klasik, küçük bloklar, büyük",
                     "   bloklar ya da kaos - ve bu, oyun boyunca çekeceğin şekilleri belirler.",
-                    "   Marketten aldığın kartlar sonraki rauntta desteye karışır.",
+                    "   Marketten aldığın kartlar sonraki rauntta desteye karışır; market yalnız",
+                    "   kendi destendekileri değil, bütün şekil kataloğunu satar.",
                     "",
                     "BONUS EL",
                     "   Elde yer kaplamayan ek bloklar. Birini oynadığında çekme destesinin",
@@ -397,8 +405,14 @@ namespace ProjectBlock.View
                     "   Rauntlar arası: almak için teklife tıkla, kart satmak için desteye tıkla,",
                     "   joker ya da güç satmak için barındaki panele tıkla, bütün rafı yenilemek",
                     "   için REROLL - bedeli her kullanışta artar.",
-                    "   [N] sonraki raundu başlatır.",
-                    "",
+                    "   Bir oyunda, başlangıç destenin YARISI kadar blok alabilirsin. Aldığın bir",
+                    "   bloğu satarsan hakkı geri gelir; kendi deste kartını satarsan gelmez.",
+                    "   Satış ekranında kartın üstüne gelince ne olduğu, nereden geldiği ve kaça",
+                    "   gittiği görünür.",
+                    "   [N] sonraki raundu başlatır."
+                },
+                new[]
+                {
                     "TUŞLAR",
                     "   [Esc] duraklat      [L] dil      [F2] nadirlik defteri",
                     "   [1-9] joker kullan      [A] markete geç      [C] devam et (uzatma)",

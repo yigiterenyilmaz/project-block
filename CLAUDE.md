@@ -288,6 +288,33 @@ debt compounds at the end of every STAGE and a **boss stage** that ends with it 
 survived and still lost. The real deadline is therefore the market before a boss stage. A credit joker cannot be sold while it owes (`JokerInventory.CanSell`), which
 is what stops the debt being walked away from.
 
+**The block shelf has a RUN-LONG cap: half the starting deck.** `GameSession.CardPurchaseLimit`
+is `Config.Deck.Size / 2`, and `TryBuyOffer` / `TrySmuggleOffer` refuse a block past it — in Core,
+so no UI route can slip by. What it counts is `PurchasedCardCount`, walked over `OwnedCards`
+asking each card's `BlockCard.IsPurchased`, and that indirection is the rule: a card that came
+off the SHELF took a slot and gives it back when sold, while a starting-deck card (or one a
+joker handed you) never took one and selling it frees nothing. Deriving the count from the deck
+SIZE instead would hand a slot back for every card sold. Jokers and powers are unaffected — the
+cap exists to protect the deck's identity, not the wallet.
+
+**A deck decides what you are DEALT, not what you may be SOLD.** `DeckDefinition` carries two
+shape sources: `ShapeGenerator` (the deck itself when random, plus every card minted outside the
+market) and `MarketShapeGenerator`, which is what the shop stocks from — the curated decks all
+share `DeckLibrary.MarketShapes`, one of each distinct piece the three of them are built from.
+A shop restricted to the pieces you already own is a shop with nothing on it. Chaos names no
+market pool and so falls back to its own randomness. Deck compositions (2026-09-06): Small Blocks
+18 cards, nothing over 3 cubes; Classic 24, two thirds small with ten tetrominoes; Big Blocks 24,
+tetromino-heavy — the set Classic used to have. **Four cubes is the ceiling for a starting deck**
+— the pentominoes were cut, and Chaos is the only place a five-cube piece is still dealt.
+
+**The sell screen prices in a POPUP, not under every card.** `DeckOverlayView.Show(cards,
+sellMode)` lays out the same grid either way and carries no price labels; what a card fetches,
+and whether it is a bought card or one of your own, is
+`GameUiController.Tooltips.ShowDeckCardTooltip` — one popup about the card under the cursor
+instead of two dozen numbers competing for the eye. Unlike the plain card tooltip it always
+appears, because a plain block has no element text and its price is the whole point of the
+screen.
+
 - `Assets/Scripts/Core/Powers/` — the power system. `Power.cs` is the base type,
   `PowerInventory.cs` the only caller. Powers are ACTIVE: one charge, refilled by a clean
   sweep or a new round, at most one per turn, and using one never costs a turn.

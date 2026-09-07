@@ -8,11 +8,17 @@
 // principle, and a row crossing a column becomes one cross-shaped field with a single outer
 // contour rather than two overlays stacked at the intersection.
 //
-// THE SEAL COMES FROM OUTSIDE. A newly quarantined line is not switched on. Each pixel carries the
-// time its own seal arrives, counted from the board edge the line was taken from - which the view
-// works out from the line's index, since the boss always takes the outermost clean line. The front
-// therefore travels the same way the mechanic does, and the wave is a bright edge with membrane
-// settling behind it.
+// THE SEAL BLOOMS OUT OF EACH NEW CELL. A newly quarantined cell is not switched on. Each pixel
+// carries the time its own seal arrives, measured outward from the centre of the cell it belongs
+// to, so the film spreads from the middle of every new square instead of sweeping in from a board
+// edge. That changed with the mechanic: the boss no longer takes the outermost clean LINE and work
+// inward - it lays a scattered patch of cells and relays it somewhere else every few turns, and
+// there is no edge such a patch could be said to come from. The wave is still a bright front with
+// membrane settling behind it.
+//
+// THE ZONE MOVES, SO CELLS LEAVE AS WELL AS ARRIVE. Anything no longer in the set is simply gone
+// from the mask on the next rebuild; only ARRIVALS get a front. A relaying therefore reads as the
+// old patch lifting and a new one sealing itself, which is exactly what happened.
 //
 // IT IS A FILM THAT COVERS, NOT A TINT THAT DARKENS. This was got wrong twice. A near-black layer
 // at partial alpha leaves the whole surface squeezed between the board and black - measured, that
@@ -230,8 +236,8 @@ namespace ProjectBlock.View
             public static float EdgeSoftness = 0.055f;
 
             // ------------------------------------------------------------------ sealing
-            /// <summary>The beat before anything moves, while the edge the seal comes from
-            /// brightens. Long enough to be noticed, too short to be a wait.</summary>
+            /// <summary>The beat before a new seal starts to close, so an arrival is a beat of
+            /// its own rather than a jump. Long enough to be noticed, too short to be a wait.</summary>
             public static float WarningDuration = 0.17f;
 
             /// <summary>How long the front takes to cross the whole board.</summary>
@@ -245,18 +251,6 @@ namespace ProjectBlock.View
             /// <summary>The one glint of amber on the front, so the wave is findable at all against
             /// a dark board. Tiny by design.</summary>
             public static float SweepGlint = 0.13f;
-
-            /// <summary>How much of the sweep is the front REACHING IN from the board edge, as
-            /// against travelling along the line once it is there. This is what sells the boss
-            /// working inward: the first lines sealed are at the rim and answer at once, while a
-            /// later one visibly has to come in past everything already sealed.</summary>
-            public static float SweepApproachShare = 0.45f;
-
-            /// <summary>The glow on the outside board edge before the front sets off, and how far
-            /// out into the margin it reaches, in cells.</summary>
-            public static float WarningIntensity = 0.30f;
-
-            public static float WarningReach = 0.34f;
 
             /// <summary>How wide the bright front is, in seconds of its own travel.</summary>
             public static float SweepWaveWidth = 0.075f;
@@ -353,9 +347,12 @@ namespace ProjectBlock.View
 
         // =================================================================== state
 
-        private readonly List<int> rows = new List<int>();
+        /// <summary>The quarantined cells in ABSOLUTE board coordinates - the whole state this
+        /// view is driven by. Packed into a set as well, because the mask asks "is this cell in
+        /// the zone" once per cell per rebuild.</summary>
+        private readonly List<GridPos> cells = new List<GridPos>();
 
-        private readonly List<int> columns = new List<int>();
+        private readonly HashSet<int> cellKeys = new HashSet<int>();
 
         private SpriteRenderer field;
 
@@ -431,17 +428,15 @@ namespace ProjectBlock.View
         // =================================================================== driving it
 
         /// <summary>
-        /// Hands the field the boss's sealed lines. Works out for itself which of them are NEW,
-        /// and which board edge each new one was taken from - the boss always seals the outermost
-        /// clean line, so a line's index is enough to say which side it came in from.
+        /// Hands the field the boss's sealed cells. Works out for itself which of them are NEW -
+        /// those are the ones that get a seal front; the rest are already film, and anything that
+        /// has LEFT the set simply stops being drawn.
         /// </summary>
-        public void SetLines(IReadOnlyList<int> newRows, IReadOnlyList<int> newColumns,
-            GameBoard board, System.Func<GridPos, Vector2> toWorld, float cell,
+        public void SetCells(IReadOnlyList<GridPos> newCells, GameBoard board,
+            System.Func<GridPos, Vector2> toWorld, float cell,
             System.Func<GridPos, bool> occupied)
         {
-            if (board == null || cell <= 0f
-                || ((newRows == null || newRows.Count == 0)
-                    && (newColumns == null || newColumns.Count == 0)))
+            if (board == null || cell <= 0f || newCells == null || newCells.Count == 0)
             {
                 Clear();
                 return;
@@ -456,45 +451,44 @@ namespace ProjectBlock.View
             height = board.Height;
             cellSize = cell;
 
-            var addedRows = new List<int>();
-            var addedColumns = new List<int>();
-            Diff(newRows, rows, addedRows);
-            Diff(newColumns, columns, addedColumns);
+            var added = new List<GridPos>();
+            for (int i = 0; i < newCells.Count; i++)
+            {
+                if (!cellKeys.Contains(Key(newCells[i])))
+                {
+                    added.Add(newCells[i]);
+                }
+            }
             bool fresh = !built || boardChanged;
 
-            rows.Clear();
-            columns.Clear();
-            if (newRows != null) { rows.AddRange(newRows); }
-            if (newColumns != null) { columns.AddRange(newColumns); }
+            cells.Clear();
+            cellKeys.Clear();
+            for (int i = 0; i < newCells.Count; i++)
+            {
+                cells.Add(newCells[i]);
+                cellKeys.Add(Key(newCells[i]));
+            }
 
             EnsureTexture(toWorld);
             BuildDistance(fresh);
             BuildStrength(occupied);
-            BuildReveal(addedRows, addedColumns, fresh);
+            BuildReveal(added, fresh);
             RebuildMotes();
             built = true;
             Paint();
         }
 
-        private static void Diff(IReadOnlyList<int> now, List<int> before, List<int> added)
+        /// <summary>A cell's identity in the key set. Board coordinates are small and may be
+        /// negative, so they are biased into a positive range before being packed.</summary>
+        private static int Key(GridPos cell)
         {
-            if (now == null)
-            {
-                return;
-            }
-            for (int i = 0; i < now.Count; i++)
-            {
-                if (!before.Contains(now[i]))
-                {
-                    added.Add(now[i]);
-                }
-            }
+            return (cell.X + 512) * 4096 + (cell.Y + 512);
         }
 
         public void Clear()
         {
-            rows.Clear();
-            columns.Clear();
+            cells.Clear();
+            cellKeys.Clear();
             built = false;
             if (field != null)
             {
@@ -547,7 +541,7 @@ namespace ProjectBlock.View
 
         private bool IsQuarantined(int x, int y)
         {
-            return rows.Contains(minY + y) || columns.Contains(minX + x);
+            return cellKeys.Contains(Key(new GridPos(minX + x, minY + y)));
         }
 
         private void EnsureTexture(System.Func<GridPos, Vector2> toWorld)
@@ -1020,14 +1014,19 @@ namespace ProjectBlock.View
         /// line, so which half of the board a line sits in is enough to say which side it came
         /// from - no extra information has to cross from Core.
         /// </summary>
-        private void BuildReveal(List<int> addedRows, List<int> addedColumns, bool fresh)
+        /// <summary>
+        /// When each pixel's seal arrives. A new cell blooms from its own centre outward, one
+        /// after another, so a patch of three cells reads as three seals closing rather than one
+        /// rectangle appearing. Pixels that were already sealed are left alone - that is what
+        /// keeps a cell landing beside an existing one from re-sweeping its neighbour.
+        /// </summary>
+        private void BuildReveal(List<GridPos> added, bool fresh)
         {
             for (int i = 0; i < revealAt.Length; i++)
             {
                 revealAt[i] = -1f;
             }
-            warningCount = 0;
-            if (fresh || (addedRows.Count == 0 && addedColumns.Count == 0))
+            if (fresh || added.Count == 0)
             {
                 sealEndsAt = -1f;
                 lockAt = -1f;
@@ -1036,77 +1035,46 @@ namespace ProjectBlock.View
 
             int pad = Mathf.CeilToInt(Padding * PixelsPerCell);
             float latest = 0f;
-            int stagger = 0;
-
-            for (int r = 0; r < addedRows.Count; r++)
+            // The bloom reaches a little past the cell so the film joins up with whatever it
+            // lands against, and the pixels between two new cells are covered by both.
+            float reach = PixelsPerCell * 0.5f + RevealMargin;
+            for (int c = 0; c < added.Count; c++)
             {
-                int line = addedRows[r] - minY;
-                // The boss always takes the outermost CLEAN line, so which half of the board a
-                // line sits in is enough to say which edge it was taken from - no extra
-                // information has to cross from Core for the seal to come in the right way.
-                bool fromLow = line * 2 < height;
-                float approach = fromLow
-                    ? (line + 0.5f) / height : (height - 0.5f - line) / height;
-                float start = clock + Style.WarningDuration + stagger * Style.SweepStagger;
-                AddWarning(start, true, line, fromLow);
-                stagger++;
-                // The band is widened by the margin the outer shadow occupies. Without that the
-                // shadow sits in a pixel belonging to the NEXT row, which has no reveal of its
-                // own, and so the new line is outlined in dark before its seal has arrived.
-                int lo = Mathf.Max(0, pad + line * PixelsPerCell - RevealMargin);
-                int hi = Mathf.Min(texH, pad + (line + 1) * PixelsPerCell + RevealMargin);
-                for (int py = lo; py < hi; py++)
+                int cx = added[c].X - minX;
+                int cy = added[c].Y - minY;
+                if (cx < 0 || cy < 0 || cx >= width || cy >= height)
                 {
-                    for (int px = 0; px < texW; px++)
-                    {
-                        // Never re-seal what was already sealed - that is what keeps a crossing
-                        // with an existing zone from being swept a second time.
-                        if (prevSdf[py * texW + px] > 0f)
-                        {
-                            continue;
-                        }
-                        float u = Mathf.Clamp01((px - pad) / (float)(width * PixelsPerCell));
-                        // Sweeping along the line runs the same way round the board as the edge it
-                        // came from, so successive seals read as one system working inward rather
-                        // than as unrelated wipes.
-                        float along = fromLow ? u : 1f - u;
-                        float t = start + Style.SweepDuration
-                            * (approach * Style.SweepApproachShare
-                                + along * (1f - Style.SweepApproachShare));
-                        revealAt[py * texW + px] = t;
-                        latest = Mathf.Max(latest, t);
-                    }
+                    continue;
                 }
-            }
-
-            for (int c = 0; c < addedColumns.Count; c++)
-            {
-                int line = addedColumns[c] - minX;
-                bool fromLow = line * 2 < width;
-                float approach = fromLow
-                    ? (line + 0.5f) / width : (width - 0.5f - line) / width;
-                float start = clock + Style.WarningDuration + stagger * Style.SweepStagger;
-                AddWarning(start, false, line, fromLow);
-                stagger++;
-                int lo = Mathf.Max(0, pad + line * PixelsPerCell - RevealMargin);
-                int hi = Mathf.Min(texW, pad + (line + 1) * PixelsPerCell + RevealMargin);
-                for (int px = lo; px < hi; px++)
+                // Staggered, so several cells sealed at once arrive as a run of events rather
+                // than one flat flash.
+                float start = clock + Style.WarningDuration + c * Style.SweepStagger;
+                float centreX = pad + (cx + 0.5f) * PixelsPerCell;
+                float centreY = pad + (cy + 0.5f) * PixelsPerCell;
+                int lox = Mathf.Max(0, Mathf.FloorToInt(centreX - reach));
+                int hix = Mathf.Min(texW, Mathf.CeilToInt(centreX + reach));
+                int loy = Mathf.Max(0, Mathf.FloorToInt(centreY - reach));
+                int hiy = Mathf.Min(texH, Mathf.CeilToInt(centreY + reach));
+                for (int py = loy; py < hiy; py++)
                 {
-                    for (int py = 0; py < texH; py++)
+                    for (int px = lox; px < hix; px++)
                     {
-                        if (prevSdf[py * texW + px] > 0f)
+                        int i = py * texW + px;
+                        // Never re-seal what was already sealed.
+                        if (prevSdf[i] > 0f)
                         {
                             continue;
                         }
-                        float v = Mathf.Clamp01((py - pad) / (float)(height * PixelsPerCell));
-                        float along = fromLow ? v : 1f - v;
-                        float t = start + Style.SweepDuration
-                            * (approach * Style.SweepApproachShare
-                                + along * (1f - Style.SweepApproachShare));
-                        int i = py * texW + px;
-                        // Where a new row and a new column cross, the EARLIER seal wins. That is
-                        // what stops the intersection being sealed twice and coming out at double
-                        // opacity - the crossing belongs to one field, not to two.
+                        float dx = px - centreX;
+                        float dy = py - centreY;
+                        float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                        if (dist > reach)
+                        {
+                            continue;
+                        }
+                        float t = start + Style.SweepDuration * (dist / reach);
+                        // Where two new cells overlap, the EARLIER seal wins - the pixel belongs
+                        // to one front, not to two.
                         if (revealAt[i] < 0f || t < revealAt[i])
                         {
                             revealAt[i] = t;
@@ -1117,35 +1085,6 @@ namespace ProjectBlock.View
             }
             sealEndsAt = latest + Style.SweepSettle;
             lockAt = sealEndsAt;
-        }
-
-        /// <summary>Something coming from outside, announced on the board edge it will come
-        /// through, for the moment before it sets off.</summary>
-        private struct Warning
-        {
-            public float StartsAt;
-            public bool Horizontal;
-            public int Line;
-            public bool FromLow;
-        }
-
-        private readonly Warning[] warnings = new Warning[4];
-
-        private int warningCount;
-
-        private void AddWarning(float startsAt, bool horizontal, int line, bool fromLow)
-        {
-            if (warningCount >= warnings.Length)
-            {
-                return;
-            }
-            warnings[warningCount++] = new Warning
-            {
-                StartsAt = startsAt,
-                Horizontal = horizontal,
-                Line = line,
-                FromLow = fromLow
-            };
         }
 
         // =================================================================== painting
@@ -1282,23 +1221,13 @@ namespace ProjectBlock.View
                     float d = sdf[i];
                     float wx = (px - pad) * inv;
 
-                    // The margin outside the board carries nothing but the warning glow, so it is
-                    // settled here and the pixel is done. This has to come BEFORE the far-outside
-                    // early-out, which is exactly where the margin lives.
+                    // Well outside the mask there is nothing to draw at all. The margin used to
+                    // carry the edge warning of an incoming seal; the zone no longer comes in from
+                    // an edge, so the margin is simply empty.
                     if (d < -LutRange)
                     {
-                        float only = warningCount > 0 ? WarningAt(wx, wy) : 0f;
-                        pixels[i] = only > 0.004f ? WarningPixel(only) : new Color32(0, 0, 0, 0);
+                        pixels[i] = new Color32(0, 0, 0, 0);
                         continue;
-                    }
-                    if (d < 0f && warningCount > 0)
-                    {
-                        float warn = WarningAt(wx, wy);
-                        if (warn > 0.004f)
-                        {
-                            pixels[i] = WarningPixel(warn);
-                            continue;
-                        }
                     }
 
                     // How far this pixel's own seal has got. Everything else is multiplied by it,
@@ -1654,48 +1583,6 @@ namespace ProjectBlock.View
             {
                 Paint();
             }
-        }
-
-        /// <summary>The glow on the board edge a seal is about to come through: a short amber
-        /// pressure pulse in the margin, aligned with the line it belongs to, and gone by the time
-        /// the front sets off.</summary>
-        private float WarningAt(float wx, float wy)
-        {
-            float total = 0f;
-            for (int i = 0; i < warningCount; i++)
-            {
-                float lead = warnings[i].StartsAt - clock;
-                if (lead <= 0f || lead > Style.WarningDuration)
-                {
-                    continue;
-                }
-                float k = 1f - lead / Style.WarningDuration;        // 0 -> 1 as it approaches
-                float along = warnings[i].Horizontal ? wx : wy;
-                float across = warnings[i].Horizontal ? wy : wx;
-                float span = warnings[i].Horizontal ? width : height;
-                if (along < -0.05f || along > span + 0.05f)
-                {
-                    continue;
-                }
-                float edge = warnings[i].FromLow ? 0f : (warnings[i].Horizontal ? height : width);
-                float outside = warnings[i].FromLow ? edge - across : across - edge;
-                if (outside <= 0f)
-                {
-                    continue;
-                }
-                float f = outside / Style.WarningReach;
-                total += Mathf.Exp(-f * f * 4f) * Style.WarningIntensity * k;
-            }
-            return total;
-        }
-
-        private static Color32 WarningPixel(float a)
-        {
-            return new Color32(
-                (byte)Mathf.RoundToInt(Style.WarningColor.r * 255f),
-                (byte)Mathf.RoundToInt(Style.WarningColor.g * 255f),
-                (byte)Mathf.RoundToInt(Style.WarningColor.b * 255f),
-                (byte)Mathf.RoundToInt(Mathf.Clamp01(a) * 255f));
         }
 
         private bool AnyReaction()

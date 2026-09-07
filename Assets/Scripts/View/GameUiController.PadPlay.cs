@@ -1,4 +1,4 @@
-// PURPOSE: DIRECT gamepad play - the control scheme that does not push a cursor around.
+﻿// PURPOSE: DIRECT gamepad play - the control scheme that does not push a cursor around.
 // You step through your hand, step a block across the arena a cell at a time, and hold a
 // shoulder to reach the joker or power strip. Chosen in the settings; the other scheme is
 // the virtual cursor in GamepadBridge, and this file is the reason the bridge has a
@@ -303,8 +303,7 @@ namespace ProjectBlock.View
                 // overlay is a panel, so the pad points at it with the cursor from here.
                 sellCardsMode = true;
                 deckOverlay.ResetScroll();
-                deckOverlay.Show(session.OwnedCards,
-                    c => session.Config.Market.SellValue(c) * session.Config.Scoring.ScoreScale);
+                deckOverlay.Show(session.OwnedCards, true);
                 PadPanelReset();
                 return true;
             }
@@ -592,6 +591,10 @@ namespace ProjectBlock.View
             }
             if (!valid)
             {
+                // Direct mode has no way to drop a block anywhere BUT the arena (PadClampCell
+                // keeps it inside), so pressing A on a spot the board refuses is always the
+                // aimed, refused placement the drag path charges for.
+                RejectPlacement(round, boardView.CellToWorld(padCell));
                 return true; // a refused placement is still the pad's frame
             }
             // "Öteki dünya": the mirror world books its half of the turn first, exactly as in
@@ -640,7 +643,7 @@ namespace ProjectBlock.View
             {
                 foxPickSlot = padHandSlot;
                 deckOverlay.ResetScroll();
-                deckOverlay.Show(session.OwnedCards);
+                deckOverlay.ShowShapes(FoxShapeChoices());
                 return true;
             }
             return false;

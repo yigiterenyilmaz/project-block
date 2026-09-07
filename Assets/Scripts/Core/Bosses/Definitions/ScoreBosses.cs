@@ -110,137 +110,170 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>
-    /// "Karantina" - the arena is sealed off a ring at a time. Every few turns two more of the
-    /// OUTERMOST lines not yet quarantined are marked, in one of three shapes: a row and a
-    /// column, two rows, or two columns.
+    /// "Karantina" - a patch of the arena is sealed off, and it will not stay still. Every three
+    /// turns the patch is LIFTED AND RELAID somewhere else, one cell larger than it was.
     ///
-    /// A cube that explodes while standing in a quarantined line does not merely fail to pay -
-    /// it LOSES exactly what it would have earned. Only those cubes: a five-cube row clear with
-    /// two of them inside a zone still pays full price for the other three, so a clear that
-    /// clips a zone is a trade rather than a disaster.
+    /// A cube that explodes while standing in the patch does not merely fail to pay - it LOSES
+    /// exactly what it would have earned. Only those cubes: a five-cube row clear with two of
+    /// them inside the patch still pays full price for the other three, so a clear that clips
+    /// the zone is a trade rather than a disaster.
     ///
-    /// The zones ACCUMULATE and work inward: the rim first, then the ring behind it, and so on,
-    /// until there is barely a safe square left. That is the clock this boss runs on.
+    /// TWO RULES KEEP IT PLAYABLE, and both were learned the hard way. It used to seal whole
+    /// ROWS AND COLUMNS, two of them every four turns, accumulating - and since a row and a
+    /// column together poison a cross, three sealings covered two thirds of a 7x7 board and the
+    /// round was simply over. So:
+    ///   - it is CELLS, never lines, and it never covers more than HALF the playable board
+    ///     (MaxCoverage). The other half is always somewhere to play;
+    ///   - it MOVES rather than accumulates. Every relaying is a fresh set of cells, so no square
+    ///     is lost for good and the board you learn is the board you have for three turns.
+    /// Growth is one cell per relaying, which on a 7x7 board means the cap is a long way off -
+    /// the pressure comes from the patch moving under your plans, not from running out of room.
     ///
-    /// Lines are held in ABSOLUTE board coordinates, so a line that erosion later carries off
-    /// the board simply stops matching, exactly as it should - that row is gone.
+    /// Cells are held in ABSOLUTE board coordinates, and a relaying only ever draws from cells
+    /// that are on the board right now, so erosion cannot leave the zone hanging over nothing.
     /// </summary>
     public sealed class KarantinaBoss : BossRound
     {
-        /// <summary>Turns between one sealing and the next.</summary>
-        public int SealEveryTurns = 4;
+        /// <summary>Turns between one relaying and the next.</summary>
+        public int MoveEveryTurns = 3;
 
-        /// <summary>Lines sealed each time.</summary>
-        public int LinesPerSealing = 2;
+        /// <summary>Cells the zone covers when the round opens.</summary>
+        public int StartingCells = 3;
 
-        private readonly List<int> rows = new List<int>();
-        private readonly List<int> columns = new List<int>();
-        private int turnsSinceSealing;
+        /// <summary>Cells the zone gains each time it is relaid.</summary>
+        public int GrowPerMove = 1;
+
+        /// <summary>The most of the playable board the zone may ever cover. Half, and that is a
+        /// design promise rather than a balance knob: the player must always have as much board
+        /// to work with as the boss has taken.</summary>
+        public double MaxCoverage = 0.5;
+
+        private readonly List<GridPos> cells = new List<GridPos>();
+        private int size;
+        private int turnsSinceMove;
 
         public KarantinaBoss()
             : base("karantina", "Karantina")
         {
             SetDescription(
-                "Every 4 turns two more of the outermost rows or columns are quarantined, "
-                    + "working inward. A cube that explodes inside a zone loses exactly what it "
-                    + "would have earned - the cubes outside still pay in full.",
-                "Her 4 turda en dıştaki iki satır ya da sütun daha karantinaya alınır ve "
-                    + "içeri doğru ilerler. Karantinada patlayan küp, kazandıracağı kadar "
-                    + "kaybettirir - dışarıdaki küpler tam puanını vermeye devam eder.");
+                "A patch of the board is quarantined. Every 3 turns it moves somewhere else and "
+                    + "grows by one cell, and it never covers more than half the arena. A cube "
+                    + "that explodes inside it loses exactly what it would have earned - the "
+                    + "cubes outside still pay in full.",
+                "Alanın bir bölgesi karantinaya alınır. Her 3 turda bölge başka bir yere taşınır "
+                    + "ve bir kare büyür; alanın yarısından fazlasını asla kaplamaz. Karantinada "
+                    + "patlayan küp, kazandıracağı kadar kaybettirir - dışarıdaki küpler tam "
+                    + "puanını vermeye devam eder.");
         }
 
-        /// <summary>Quarantined rows and columns, in ABSOLUTE board coordinates, for the UI.</summary>
-        public IReadOnlyList<int> QuarantinedRows
+        /// <summary>The quarantined cells, in ABSOLUTE board coordinates, for the UI.</summary>
+        public IReadOnlyList<GridPos> QuarantinedCells
         {
-            get { return rows; }
+            get { return cells; }
         }
 
-        public IReadOnlyList<int> QuarantinedColumns
+        /// <summary>Turns until the zone moves again - what the badge counts down.</summary>
+        public int TurnsUntilMove
         {
-            get { return columns; }
+            get { return MoveEveryTurns - turnsSinceMove; }
         }
 
         public override string StatusText
         {
             get
             {
-                int sealed_ = rows.Count + columns.Count;
-                return sealed_ > 0
-                    ? sealed_ + Loc.Pick(" lines sealed", " hat kapalı")
-                    : Loc.Pick("clean", "temiz");
+                if (cells.Count == 0)
+                {
+                    return Loc.Pick("clean", "temiz");
+                }
+                return Loc.Pick(
+                    cells.Count + " cells sealed, moves in " + TurnsUntilMove,
+                    cells.Count + " kare kapalı, " + TurnsUntilMove + " turda taşınır");
             }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
         {
-            rows.Clear();
-            columns.Clear();
-            turnsSinceSealing = 0;
+            cells.Clear();
+            turnsSinceMove = 0;
+            size = StartingCells;
+            // Laid at once rather than after the first three turns: the zone is small to begin
+            // with, and a boss whose whole rule only appears on turn four spends its opening
+            // pretending to be an ordinary round.
+            Relay(ctx.Round.Board, ctx.Rng);
         }
 
         public override void AfterTurnScored(TurnContext turn)
         {
-            turnsSinceSealing++;
-            if (turnsSinceSealing < SealEveryTurns)
+            turnsSinceMove++;
+            if (turnsSinceMove < MoveEveryTurns)
             {
                 return;
             }
-            turnsSinceSealing = 0;
-            Seal(turn.Round.Board, turn.Rng);
+            turnsSinceMove = 0;
+            // The floor covers a boss that was attached to a round already in progress (the
+            // debug key, a test) and so never saw OnRoundStarted - it should still be the size
+            // it was designed to be rather than a single cell.
+            size = (size < StartingCells ? StartingCells : size) + GrowPerMove;
+            Relay(turn.Round.Board, turn.Rng);
         }
 
-        /// <summary>Seals two more lines: a row and a column, two rows, or two columns, drawn
-        /// from the outermost that are still clean. Falls back to whatever is left when one axis
-        /// runs out, so the sealing never silently does nothing while lines remain.</summary>
-        private void Seal(GameBoard board, IRandomSource rng)
+        /// <summary>
+        /// Picks a fresh set of cells. Every playable cell on the board is a candidate and the
+        /// draw is without replacement (a partial Fisher-Yates over the candidate list), so the
+        /// zone is scattered rather than clustered - a solid block would just be a smaller board,
+        /// while scattered cells are something to place AROUND.
+        /// </summary>
+        private void Relay(GameBoard board, IRandomSource rng)
         {
-            int shape = rng.NextInt(0, 3); // 0 = row + column, 1 = two rows, 2 = two columns
-            for (int taken = 0; taken < LinesPerSealing; taken++)
+            cells.Clear();
+            if (board == null)
             {
-                bool wantRow = shape == 1 || (shape == 0 && taken == 0);
-                if (!TrySealLine(board, rng, wantRow) && !TrySealLine(board, rng, !wantRow))
+                return;
+            }
+            var candidates = new List<GridPos>();
+            for (int y = board.MinY; y < board.MinY + board.Height; y++)
+            {
+                for (int x = board.MinX; x < board.MinX + board.Width; x++)
                 {
-                    return; // the whole board is sealed - nothing left to take
+                    var cell = new GridPos(x, y);
+                    if (board.IsInside(cell))
+                    {
+                        candidates.Add(cell);
+                    }
                 }
             }
+            int cap = (int)(candidates.Count * MaxCoverage);
+            int take = size;
+            if (take > cap) { take = cap; }
+            if (take > candidates.Count) { take = candidates.Count; }
+            for (int i = 0; i < take; i++)
+            {
+                int pick = i + rng.NextInt(0, candidates.Count - i);
+                GridPos chosen = candidates[pick];
+                candidates[pick] = candidates[i];
+                candidates[i] = chosen;
+                cells.Add(chosen);
+            }
         }
 
-        /// <summary>Seals the outermost clean line on one axis, from whichever end the rng
-        /// picks (falling back to the other end when that one is already sealed).</summary>
-        private bool TrySealLine(GameBoard board, IRandomSource rng, bool row)
-        {
-            List<int> taken = row ? rows : columns;
-            int min = row ? board.MinY : board.MinX;
-            int count = row ? board.Height : board.Width;
-            int low = -1;
-            int high = -1;
-            for (int i = 0; i < count; i++)
-            {
-                if (!taken.Contains(min + i)) { low = min + i; break; }
-            }
-            for (int i = count - 1; i >= 0; i--)
-            {
-                if (!taken.Contains(min + i)) { high = min + i; break; }
-            }
-            if (low < 0)
-            {
-                return false; // every line on this axis is already sealed
-            }
-            int pick = low == high ? low : (rng.NextInt(0, 2) == 0 ? low : high);
-            taken.Add(pick);
-            return true;
-        }
-
-        /// <summary>True if that cell stands in a quarantined row or column.</summary>
+        /// <summary>True if that cell stands in the quarantine.</summary>
         public bool IsQuarantined(GridPos cell)
         {
-            return rows.Contains(cell.Y) || columns.Contains(cell.X);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (cells[i].X == cell.X && cells[i].Y == cell.Y)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         public override int AdjustExplosionScore(IScoreCalculator scorer,
             IReadOnlyList<GridPos> cells)
         {
-            if (cells == null || (rows.Count == 0 && columns.Count == 0))
+            if (cells == null || this.cells.Count == 0)
             {
                 return 0;
             }

@@ -80,9 +80,16 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Büyüteç" - the top two cards of the draw pile turn face-up. Pure information
-    /// (the draw order itself is untouched) and CONSUMABLE: every card drawn uncovers one fewer
-    /// (2 -> 1 -> 0), decremented centrally in RoundEngine.NoteCardDrawn.</summary>
+    /// <summary>
+    /// "Büyüteç" - two MORE cards of the draw pile turn face-up. Pure information (the draw order
+    /// itself is untouched) and CONSUMABLE: every card drawn uncovers one fewer, decremented
+    /// centrally in RoundEngine.NoteCardDrawn.
+    ///
+    /// It reveals two cards you could not already see, rather than setting the reveal TO two: if
+    /// "Insider" is already turning the top card up, the glass goes under it and shows the two
+    /// behind that one, and a second use shows the two behind those. Clamping to two, as it used
+    /// to, meant using it while anything else was revealing did nothing at all.
+    /// </summary>
     public sealed class BuyutecPower : Power
     {
         public int RevealCount = 2;
@@ -91,18 +98,22 @@ namespace ProjectBlock.Core
             : base("buyutec", "Büyüteç")
         {
             SetDescription(
-                "Reveals the top two cards of the draw pile. As you draw, one fewer stays "
-                    + "revealed (2, then 1, then none).",
-                "Çekme destesinin en üstteki iki kartını açığa çıkarır. Kart çektikçe biri daha "
-                    + "az görünür (2, sonra 1, sonra hiç).");
+                "Reveals two more cards of the draw pile than you can already see. As you "
+                    + "draw, one fewer stays revealed.",
+                "Çekme destesinde zaten gördüklerinin altındaki iki kartı daha açar. Kart "
+                    + "çektikçe biri daha az görünür.");
         }
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
         {
-            if (ctx.Rules.RevealedDrawCount < RevealCount)
+            // What is ALREADY visible, whoever is showing it - Insider's permanent top card
+            // counts as one even though it is a separate flag.
+            int already = ctx.Rules.RevealedDrawCount;
+            if (ctx.Rules.RevealTopDrawCard && already < 1)
             {
-                ctx.Rules.RevealedDrawCount = RevealCount;
+                already = 1;
             }
+            ctx.Rules.RevealedDrawCount = already + RevealCount;
             return true;
         }
 

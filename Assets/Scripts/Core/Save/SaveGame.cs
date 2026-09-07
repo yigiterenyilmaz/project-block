@@ -44,7 +44,14 @@ namespace ProjectBlock.Core
         // 13 (2026-09-03): "Rehin puan" grew a grace period, and the turn counter behind it is a
         // new field on the boss - so the reflection walk writes one more entry than a 12 does,
         // and the positional reader would go out of step on every boss saved after it.
-        public const int FormatVersion = 14;
+        // 15 (2026-09-06): the market's block purchase limit landed, so every card writes
+        // whether it came off the shelf - a 14 cannot say, and reading one would give the
+        // player back every slot they had spent.
+        // 16 (2026-09-06): "Altın Kumbara" counts turns between payments, "Karantina" was
+        // rebuilt from sealed lines into a moving patch of cells, and "Tutumluluk" remembers the
+        // deck it started with - each changed which fields the reflection walk writes, so a 15's
+        // content block no longer lines up.
+        public const int FormatVersion = 16;
 
         private const string VersionKey = "version";
 

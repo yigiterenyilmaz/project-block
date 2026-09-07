@@ -303,6 +303,19 @@ namespace ProjectBlock.Core
         // ------------------------------------------------------------ market (reserved)
 
         /// <summary>Reserved: market phase opened.</summary>
+        /// <summary>
+        /// The owned deck ("oyun destesi") gained or lost a card - a market purchase, a sale, a
+        /// boss's deck tax. Session-scoped and purely informational: it fires in the MARKET as
+        /// well as in a round, so a joker that reads the deck size for its badge can stay honest
+        /// between turns instead of quoting whatever it saw last time it scored.
+        ///
+        /// Never use it to score - no turn is resolving. GameSession fires it from every place
+        /// that changes the collection (see NoteDeckChanged).
+        /// </summary>
+        public virtual void OnDeckChanged(SessionContext ctx)
+        {
+        }
+
         public virtual void OnMarketEntered(SessionContext ctx)
         {
         }

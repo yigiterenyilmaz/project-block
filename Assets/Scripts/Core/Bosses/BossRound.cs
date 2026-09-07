@@ -1,4 +1,4 @@
-// PURPOSE: The base type of every boss round ("patron raundu"). A boss is the round's
+﻿// PURPOSE: The base type of every boss round ("patron raundu"). A boss is the round's
 // ANTAGONIST: unlike a joker it is not owned, not bought and cannot be sold - it is handed
 // to one round by GameSession and dies with it.
 //
@@ -268,6 +268,26 @@ namespace ProjectBlock.Core
         public virtual bool HidesTheBoard
         {
             get { return false; }
+        }
+
+        /// <summary>
+        /// What a placement the board REFUSED costs, in logical points ("Alacakaranlik" billing
+        /// the player for groping about in the dark). Asked with the round's EFFECTIVE threshold
+        /// - the one FilterScoreThreshold already had its say over - so a boss that lowered the
+        /// bar bills against the bar it actually set.
+        ///
+        /// "Refused" means CanPlaceCard said no, and nothing narrower. It is NOT "a cube landed
+        /// on a cube": a negative block is supposed to be put down over cubes, so the board takes
+        /// it and it costs nothing. A rule that billed for overlap instead would charge a block
+        /// for doing the one thing it exists to do.
+        ///
+        /// A query like every other bend: the engine asks it from ChargeIllegalPlacement, which
+        /// is the ONE place a refused placement is billed, so every driver (mouse, pad, retro)
+        /// pays the same price without knowing the rule exists.
+        /// </summary>
+        public virtual int PenaltyOnIllegalPlacement(int threshold)
+        {
+            return 0;
         }
 
         /// <summary>Rewrites the round's score threshold ("Taş ve sopa" asking for less because

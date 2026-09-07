@@ -1,4 +1,4 @@
-// PURPOSE: The debug UI controller / main input loop (partial: fields, lifecycle, and
+﻿// PURPOSE: The debug UI controller / main input loop (partial: fields, lifecycle, and
 // the per-frame Update dispatch). The rest of the behaviour lives in partial files:
 //   .Bars     - joker/power bar clicks, hileli-zar and Parazit flows, market clicks
 //   .Activation - joker/power activation, pickers, block designer, power blasts
@@ -417,24 +417,28 @@ namespace ProjectBlock.View
             overtimeStartTurn = -1;
             overtimeTurns = 0;
             retroFallHand = -1; // no piece is mid-fall across a round boundary
-            // Keep the CRT in sync at every round start - crucially, a restart (R) or a deck
-            // change builds a fresh session with retro OFF, so this turns the overlay back off.
-            SyncRetroPresentation();
-            RoundEngine round = session.CurrentRound;
-            if (boardView.Board != round.Board)
-            {
-                boardView.Rebuild(round.Board, maxBoardWorldSize, BoardCenter);
-            }
-            RefreshFlames(round.ContinueCount);
-            boardView.Refresh();
-            boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
-            boardView.ClearPreview();
-            RefreshInfections(null);
+
+            // The whole screen, through the SAME method every other repaint goes through.
+            //
+            // This used to be a hand-written copy of RefreshAll, and it had drifted: it never
+            // called SetDarkness, so an "Alacakaranlık" round opened with the lights ON and only
+            // went dark on the first placement - the boss appeared to start a turn late. It also
+            // missed the mirror world, the main board's mirror-shrunk size and centre, and
+            // "Tamagotchi"'s demands, all for the same reason. A step listed by hand is a step
+            // that can be forgotten, so the list is not written twice any more: a round begins by
+            // painting everything, exactly as the end of a turn does.
+            //
+            // A BOSS IS ALREADY ATTACHED HERE. GameSession draws it and calls SetBoss while
+            // building the round (it may reshape the board before the engine exists), so
+            // round.BoardIsDark and every other boss query answer correctly on this first paint -
+            // there is nothing to wait for.
+            RefreshAll(null);
+
+            // Then the part that belongs to a round START and nowhere else: the shuffle and the
+            // deal. AnimateRoundStart clears the layer first, so it takes the hand over from the
+            // static sync RefreshAll just did rather than fighting it.
             sfx.Shuffle();
-            cardLayer.AnimateRoundStart(round);
-            UpdateHud();
-            jokerBar.Refresh(session, pendingTargetJokerId);
-            powerBar.Refresh(session, pendingTargetPowerId);
+            cardLayer.AnimateRoundStart(session.CurrentRound);
         }
 
         /// <summary>What the pad's left stick is this frame. Every screen that is a LIST of

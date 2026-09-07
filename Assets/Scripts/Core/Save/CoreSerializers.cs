@@ -77,6 +77,9 @@ namespace ProjectBlock.Core
             // reload would quietly turn a card that falls through the board into a healthy one.
             w.Write(key + ".smuggled", card.IsSmuggled);
             w.Write(key + ".falls", card.FallsThrough);
+            // Whether the card came off the market shelf. It is what the run's block purchase
+            // limit counts, so losing it on a reload would hand the player free slots back.
+            w.Write(key + ".bought", card.IsPurchased);
             // "Antimadde": which cube kind this card annihilates, or -1 for an ordinary card.
             // Without it a reloaded antimatter card would place like a normal block.
             w.Write(key + ".antimatter",
@@ -113,6 +116,7 @@ namespace ProjectBlock.Core
             bool custom = r.ReadBool(key + ".custom");
             bool smuggled = r.ReadBool(key + ".smuggled");
             bool falls = r.ReadBool(key + ".falls");
+            bool bought = r.ReadBool(key + ".bought");
             int antimatter = r.ReadInt(key + ".antimatter");
             int target = r.ReadInt(key + ".target");
             BlockShape shape = ReadShape(r, key + ".shape");
@@ -125,8 +129,8 @@ namespace ProjectBlock.Core
             bool perCube = r.ReadBool(key + ".percube");
             if (!perCube)
             {
-                return Marked(new BlockCard(id, shape, elements, custom), smuggled, falls,
-                    antimatter, target);
+                return Marked(new BlockCard(id, shape, elements, custom), smuggled, bought,
+                    falls, antimatter, target);
             }
             int cubes = r.ReadInt(key + ".percube.count");
             var layout = new List<BlockElement?>(cubes);
@@ -137,18 +141,19 @@ namespace ProjectBlock.Core
             }
             // Designed() recomputes the distinct element set from the layout, which is exactly
             // what was written above, so the card comes back identical.
-            return Marked(BlockCard.Designed(id, shape, layout), smuggled, falls, antimatter,
-                target);
+            return Marked(BlockCard.Designed(id, shape, layout), smuggled, bought, falls,
+                antimatter, target);
         }
 
         /// <summary>Puts the after-the-fact marks back on a rebuilt card - the two "Kaçakçı"
-        /// flags, the "Antimadde" kind and the "Hedefli" target cube. All of them are stamped
-        /// AFTER a card exists, exactly as the market and the jokers do it, so they are set
-        /// rather than constructed.</summary>
-        private static BlockCard Marked(BlockCard card, bool smuggled, bool falls, int antimatter,
-            int target)
+        /// flags, the shelf-bought mark, the "Antimadde" kind and the "Hedefli" target cube.
+        /// All of them are stamped AFTER a card exists, exactly as the market and the jokers do
+        /// it, so they are set rather than constructed.</summary>
+        private static BlockCard Marked(BlockCard card, bool smuggled, bool bought, bool falls,
+            int antimatter, int target)
         {
             card.IsSmuggled = smuggled;
+            card.IsPurchased = bought;
             card.FallsThrough = falls;
             card.AntimatterOf = antimatter < 0 ? (CubeKind?)null : (CubeKind)antimatter;
             card.TargetCellIndex = target;

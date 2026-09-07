@@ -44,6 +44,9 @@ public static class JokerTests
         Market_StocksAndSellsJokers();
         Market_NeverOffersOwnedJokers();
         Market_RefusesJokerWhenSlotsFull();
+        Tutumluluk_LiftsTheWholeTurnAsTheDeckThins();
+        Market_BlockPurchasesAreCappedAtHalfTheStartingDeck();
+        Market_SellingADeckCardFreesNoBuyingSlot();
         HileliZar_DealsTheOpeningHandOncePerMarket();
         Overtime_GatedJokerIsSkipped();
         HarcamaBonusu_PaysWhenDrawPileEmpties();
@@ -249,8 +252,8 @@ public static class JokerTests
         Threshold_IsACeilingForNormalPlay();
         Threshold_OvertimeIsAllowedPastTheBar();
         Threshold_ATurnUnderTheBarIsUntouched();
-        Boss_AlacakaranlikBendsNoRuleAtAll();
-        Boss_KarantinaSealsOutwardInAndCharges();
+        Boss_AlacakaranlikBlindsCutsTheBarAndBillsRefusedPlacements();
+        Boss_KarantinaMovesGrowsAndStaysUnderHalf();
         Boss_KarantinaChargesOnlyTheCubesInside();
         Boss_KarantinaChangesNothingWithoutTheBoss();
         Boss_YuruyenMerdivenCarriesEveryRowUp();
@@ -4649,6 +4652,21 @@ public static class JokerTests
         {
             Check(true, "it was completed during play, which is the other legal outcome");
         }
+
+        // And it survives the round boundary: a circuit nobody finished is the SAME circuit next
+        // round, not a fresh one. This is the rule that makes "no deadline" mean anything.
+        if (joker.HasCircuit)
+        {
+            var kept = new List<GridPos>(joker.Path);
+            joker.OnRoundStarted(new RoundContext(session, session.Rng, round));
+            bool same = joker.HasCircuit && joker.Path.Count == kept.Count;
+            for (int i = 0; same && i < kept.Count; i++)
+            {
+                same = joker.Path[i].X == kept[i].X && joker.Path[i].Y == kept[i].Y;
+            }
+            Check(same, "an unfinished circuit is carried into the next round, cell for cell",
+                kept.Count + " -> " + joker.Path.Count);
+        }
     }
 
     /// <summary>
@@ -4766,7 +4784,7 @@ public static class JokerTests
 
     private static void Devre_OnlyOneCircuitPerRound()
     {
-        Section("devre / one circuit per round, and a fresh one next round");
+        Section("devre / one circuit at a time, and a fresh one only after it breaks");
         var session = NewSession(7102, 5, 1000000, 40, 1);
         var joker = (DevreJoker)session.Jokers.Add(new DevreJoker());
         RoundEngine round = session.CurrentRound;
@@ -6557,6 +6575,87 @@ public static class JokerTests
     }
 
     /// <summary>Total flat score one source contributed to a breakdown.</summary>
+    /// <summary>
+    /// The whole point of "Tutumluluk": the bonus has to MOVE, and it has to lift EVERYTHING.
+    /// It is measured against the deck the run was dealt, it goes up the turn after a card is
+    /// sold, it stops climbing at the cap, and it is a multiplier - so what it pays depends on
+    /// what the rest of the turn earned.
+    ///
+    /// The old joker paid a flat bonus against a fixed reference of 20, which on a 24-card deck
+    /// was nothing at all until five cards had been sold. That is what "it does not work" looked
+    /// like from the outside.
+    /// </summary>
+    private static void Tutumluluk_LiftsTheWholeTurnAsTheDeckThins()
+    {
+        Section("tutumluluk / a percentage on everything, following the deck sale by sale");
+        var session = NewSession(9300, 6, 1000000, 20, 1, 2);
+        var joker = (TutumlulukJoker)session.Jokers.Add(new TutumlulukJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+
+        TurnReport first = PlayOneCard(round);
+        Check(first != null && MultFrom(first.Score, "tutumluluk") == 1.0,
+            "a full deck multiplies by nothing - the reference IS the deck you started with");
+
+        // Three cards out of the collection. This is a market action in the game; here it is the
+        // same call the sell screen makes.
+        int sold = 0;
+        while (sold < 3 && session.OwnedCards.Count > 0)
+        {
+            session.SellCard(session.OwnedCards[session.OwnedCards.Count - 1]);
+            sold++;
+        }
+        Check(sold == 3, "three cards left the deck", "" + sold);
+
+        TurnReport after = PlayOneCard(round);
+        // The curve, not a rate: three cards are 2 + 3 + 4 = 9 percentage points.
+        int wantPercent = 3 * joker.PercentFirstCard + joker.PercentGrowthPerCard * 3 * 2 / 2;
+        double want = 1.0 + wantPercent / 100.0;
+        double got = after != null ? MultFrom(after.Score, "tutumluluk") : 0.0;
+        Check(after != null && Math.Abs(got - want) < 0.0001,
+            "and the very next turn is multiplied for all three", got + " expected " + want);
+
+        // It is the MULTIPLIER stage, which is the whole point: it lifts the base score and
+        // every other joker's flat bonus alike, rather than being one more flat of its own.
+        Check(after != null && Math.Abs(after.Score.Multiplier - want) < 0.0001,
+            "and that is the turn's whole multiplier, not a flat pretending to be one");
+        Check(after != null && FlatFrom(after.Score, "tutumluluk") == 0,
+            "it adds no flat points of its own");
+
+        // The badge is live too: it is refreshed by the sale itself (OnDeckChanged), not only by
+        // a turn resolving - selling happens in the market, where no turn is going to resolve.
+        session.SellCard(session.OwnedCards[session.OwnedCards.Count - 1]);
+        int fourCards = 4 * joker.PercentFirstCard + joker.PercentGrowthPerCard * 4 * 3 / 2;
+        Check(joker.StatusText.Contains("" + fourCards),
+            "the status text followed the sale without waiting for a turn", joker.StatusText);
+        Check(fourCards - wantPercent > joker.PercentFirstCard,
+            "and the fourth card was worth MORE than the first - the curve accelerates",
+            wantPercent + " -> " + fourCards);
+
+        // And it is capped, however far the deck is stripped.
+        while (session.OwnedCards.Count > 2)
+        {
+            session.SellCard(session.OwnedCards[session.OwnedCards.Count - 1]);
+        }
+        int capped = joker.MaxCardsCounted * joker.PercentFirstCard
+            + joker.PercentGrowthPerCard * joker.MaxCardsCounted * (joker.MaxCardsCounted - 1) / 2;
+        Check(joker.StatusText.Contains("" + capped),
+            "a stripped deck pays the cap and no more", joker.StatusText);
+    }
+
+    /// <summary>The multiplier one source contributed, or 1.0 - the multiplier twin of
+    /// FlatFrom. Several contributions from the same source compound, as they do in the
+    /// breakdown itself.</summary>
+    private static double MultFrom(ScoreBreakdown score, string source)
+    {
+        double total = 1.0;
+        foreach (ScoreContribution c in score.Contributions)
+        {
+            if (c.Source == source && c.Multiplier != 1.0) { total *= c.Multiplier; }
+        }
+        return total;
+    }
+
     private static int FlatFrom(ScoreBreakdown score, string source)
     {
         int total = 0;
@@ -7914,9 +8013,9 @@ public static class JokerTests
             (session.TotalScore - runBefore) + " vs " + banked);
     }
 
-    private static void Boss_AlacakaranlikBendsNoRuleAtAll()
+    private static void Boss_AlacakaranlikBlindsCutsTheBarAndBillsRefusedPlacements()
     {
-        Section("boss / alacakaranlık hides the board and changes nothing else");
+        Section("boss / alacakaranlık blinds, cuts the bar to 60% and bills a refusal 2%");
         var dark = NewSession(8600, 6, 1000000, 40, 3);
         RoundEngine round = dark.CurrentRound;
         round.SetBoss(new AlacakaranlikBoss());
@@ -7925,8 +8024,12 @@ public static class JokerTests
         var lit = NewSession(8600, 6, 1000000, 40, 3);
         Check(!lit.CurrentRound.BoardIsDark, "and an ordinary round does not");
 
-        // The whole point: with the same seed, the two rounds must play IDENTICALLY. The boss
-        // is a blindfold, not a rule - if any of these diverge, it is doing more than it should.
+        // A blind round asks for less: 60% of the bar, rounded up.
+        Check(round.ScoreThreshold == 600000, "the bar is cut to 60% of the round's own",
+            round.ScoreThreshold + " vs " + lit.CurrentRound.ScoreThreshold);
+
+        // Beyond the bar it is still a blindfold rather than a rule: with the same seed the two
+        // rounds must PLAY identically. If any of these diverge it is doing more than it should.
         for (int turn = 0; turn < 10; turn++)
         {
             TurnReport a = PlayOneCard(round);
@@ -7955,69 +8058,152 @@ public static class JokerTests
         Check(round.Status == lit.CurrentRound.Status, "and the same status",
             round.Status + " vs " + lit.CurrentRound.Status);
 
-        // Every OTHER boss leaves the lights on.
+        // Every OTHER boss leaves the lights on, and charges nothing for a bad drop.
         Check(!new VanilyaBoss().HidesTheBoard && !new KarantinaBoss().HidesTheBoard,
             "no other boss hides the board");
+        Check(new VanilyaBoss().PenaltyOnIllegalPlacement(1000) == 0,
+            "and no other boss bills a refused placement");
+
+        // A refused placement costs 2% of the bar the player is actually chasing - the LOWERED
+        // one, not the round's own, so the two numbers cannot drift apart.
+        var billed = NewSession(8601, 6, 5000, 40, 3);
+        RoundEngine fee = billed.CurrentRound;
+        fee.SetBoss(new AlacakaranlikBoss());
+        Check(fee.ScoreThreshold == 3000, "60% of 5000", fee.ScoreThreshold.ToString());
+        Check(new AlacakaranlikBoss().PenaltyOnIllegalPlacement(fee.ScoreThreshold) == 60,
+            "the fee is 2% of the lowered bar - 60, not the 100 the round's own bar would give",
+            new AlacakaranlikBoss().PenaltyOnIllegalPlacement(fee.ScoreThreshold).ToString());
+
+        // Nothing banked yet: the meter cannot go below zero, so the first blunder is free.
+        Check(fee.ChargeIllegalPlacement() == 0, "an empty meter pays nothing");
+        Check(fee.RoundScore == 0, "and is not pushed negative", fee.RoundScore.ToString());
+
+        // With score on the board it bills, and the run currency follows it down.
+        for (int i = 0; i < 6 && fee.Status == RoundStatus.InProgress; i++)
+        {
+            if (PlayOneCard(fee) == null)
+            {
+                break;
+            }
+        }
+        int scoreBefore = fee.RoundScore;
+        long runBefore = billed.TotalScore;
+        int charged = fee.ChargeIllegalPlacement();
+        Check(charged > 0, "a refusal with score on the board costs points",
+            charged.ToString());
+        Check(scoreBefore - fee.RoundScore == runBefore - billed.TotalScore,
+            "and the run currency loses exactly what the round did",
+            (scoreBefore - fee.RoundScore) + " vs " + (runBefore - billed.TotalScore));
+
+        // What comes back is what the METER lost, in the scaled economy the HUD prints - so a
+        // popup can show it as it comes. Not the logical fee, and not the logical fee scaled
+        // back up: those two differ the moment a near-empty meter pays only part of the bill,
+        // and the difference is exactly the remainder integer division would throw away.
+        Check(charged == scoreBefore - fee.RoundScore,
+            "the number returned IS the scaled amount the meter lost",
+            charged + " vs " + (scoreBefore - fee.RoundScore));
+
+        // The partial case, pinned: 45 scaled on the meter against a 600 scaled fee pays all 45
+        // and reports 45. Divided down to logical points it would have reported 4, which reads
+        // back as 40 and quietly loses 5.
+        var part = NewSession(8603, 5, 5000, 40, 1);
+        RoundEngine thin = part.CurrentRound;
+        thin.SetBoss(new AlacakaranlikBoss());
+        thin.AddScoreOutsideTurn(45);
+        int onMeter = thin.RoundScore;
+        Check(onMeter > 0 && onMeter < 60 * 10, "the meter holds less than the fee",
+            onMeter + " vs a fee of " + (60 * 10));
+        int paid = thin.ChargeIllegalPlacement();
+        Check(paid == onMeter, "a near-empty meter pays all it has, and says so exactly",
+            paid + " vs " + onMeter);
+        Check(thin.RoundScore == 0, "leaving nothing behind", thin.RoundScore.ToString());
+
+        // An ordinary round is untouched by any of it.
+        Check(lit.CurrentRound.ChargeIllegalPlacement() == 0,
+            "a bossless round charges nothing for a bad drop");
+
+        // What is billed is a REFUSED placement, not overlap. A negative block is MEANT to be
+        // put down over cubes, so the board takes it and it must cost nothing - a fee there
+        // would charge the block for doing the one thing it exists to do. The engine gets this
+        // right for free by asking CanPlaceCard rather than looking at the board's contents,
+        // and this is what holds it to that.
+        var over = NewSession(8602, 5, 5000, 40, 1);
+        RoundEngine neg = over.CurrentRound;
+        neg.SetBoss(new AlacakaranlikBoss());
+        PaintBoard(neg, over, CubeKind.Normal,
+            new GridPos(1, 1), new GridPos(2, 1), new GridPos(3, 1));
+        BlockCard eraser = over.CreateCard(Bar(3), new[] { BlockElement.Negative });
+        neg.AddBonusCard(eraser, BonusPlayOutcome.ExpireFromRound);
+        Check(neg.CanPlaceCard(eraser, new GridPos(1, 1)),
+            "a negative block is ACCEPTED over cubes even in the dark - so no driver ever "
+                + "reaches the fee for it");
+
+        // A plain block on those same cubes IS refused, and THAT is what gets billed. The two
+        // are told apart by the board, not by whether cubes are in the way.
+        BlockCard plain = over.CreateCard(Bar(3), null);
+        Check(!neg.CanPlaceCard(plain, new GridPos(1, 1)),
+            "while a plain block over the same cubes is refused, and pays");
     }
 
-    private static void Boss_KarantinaSealsOutwardInAndCharges()
+    private static void Boss_KarantinaMovesGrowsAndStaysUnderHalf()
     {
-        Section("boss / karantina seals the rim inward and charges for cubes inside it");
+        Section("boss / karantina moves, grows by one, and never takes half the board");
         var scorer = new DefaultScoreCalculator(new ScoringConfig());
         var session = NewSession(8500, 7, 1000000, 40, 1);
         RoundEngine round = session.CurrentRound;
         var boss = new KarantinaBoss();
         round.SetBoss(boss);
         GameBoard board = round.Board;
+        // The engine dispatches this at round start; a boss attached to a round already running
+        // has to be opened by hand.
+        boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
 
-        Check(boss.QuarantinedRows.Count + boss.QuarantinedColumns.Count == 0,
-            "nothing is sealed to start with");
-        Check(boss.AdjustExplosionScore(scorer, new List<GridPos> { new GridPos(0, 0) }) == 0,
-            "and no cube is charged for");
+        Check(boss.QuarantinedCells.Count == boss.StartingCells,
+            "the zone is laid the moment the round opens",
+            "" + boss.QuarantinedCells.Count);
+        bool onBoard = true;
+        foreach (GridPos cell in boss.QuarantinedCells) { onBoard &= board.IsInside(cell); }
+        Check(onBoard, "and every sealed cell is a playable one");
 
-        // The first sealing lands on the rim.
-        PlayTurns(session, boss.SealEveryTurns);
-        int sealed1 = boss.QuarantinedRows.Count + boss.QuarantinedColumns.Count;
-        Check(sealed1 == boss.LinesPerSealing, "two lines sealed on the first tick",
-            "" + sealed1);
-        int minX = board.MinX;
-        int maxX = board.MinX + board.Width - 1;
-        int minY = board.MinY;
-        int maxY = board.MinY + board.Height - 1;
-        bool onRim = true;
-        foreach (int r in boss.QuarantinedRows) { onRim &= r == minY || r == maxY; }
-        foreach (int c in boss.QuarantinedColumns) { onRim &= c == minX || c == maxX; }
-        Check(onRim, "and both of them are on the OUTERMOST ring");
+        var before = new HashSet<string>();
+        foreach (GridPos cell in boss.QuarantinedCells) { before.Add(cell.X + "," + cell.Y); }
 
-        // The next sealing adds two more, never repeating one.
-        PlayTurns(session, boss.SealEveryTurns);
-        int sealed2 = boss.QuarantinedRows.Count + boss.QuarantinedColumns.Count;
-        Check(sealed2 == sealed1 + boss.LinesPerSealing, "the zones ACCUMULATE",
-            sealed1 + " -> " + sealed2);
-        var seen = new HashSet<string>();
-        bool distinct = true;
-        foreach (int r in boss.QuarantinedRows) { distinct &= seen.Add("r" + r); }
-        foreach (int c in boss.QuarantinedColumns) { distinct &= seen.Add("c" + c); }
-        Check(distinct, "with no line sealed twice");
-
-        // Keep going: it must work inward rather than stalling on the rim.
-        for (int i = 0; i < 4; i++)
+        PlayTurns(session, boss.MoveEveryTurns);
+        Check(boss.QuarantinedCells.Count == boss.StartingCells + boss.GrowPerMove,
+            "three turns on it is one cell larger", "" + boss.QuarantinedCells.Count);
+        int stayed = 0;
+        foreach (GridPos cell in boss.QuarantinedCells)
         {
-            PlayTurns(session, boss.SealEveryTurns);
+            if (before.Contains(cell.X + "," + cell.Y)) { stayed++; }
         }
-        int sealedLater = boss.QuarantinedRows.Count + boss.QuarantinedColumns.Count;
-        Check(sealedLater > sealed2, "later sealings keep taking new lines",
-            sealed2 + " -> " + sealedLater);
-        bool wentInward = false;
-        foreach (int r in boss.QuarantinedRows)
+        Check(stayed < boss.QuarantinedCells.Count,
+            "and it was RELAID, not merely extended", stayed + " cells stayed put");
+
+        // The cap is the promise: however long the round runs, half the board stays playable.
+        int playable = 0;
+        for (int y = board.MinY; y < board.MinY + board.Height; y++)
         {
-            if (r != minY && r != maxY) { wentInward = true; }
+            for (int x = board.MinX; x < board.MinX + board.Width; x++)
+            {
+                if (board.IsInside(new GridPos(x, y))) { playable++; }
+            }
         }
-        foreach (int c in boss.QuarantinedColumns)
+        boss.StartingCells = playable * 4; // far past anything a round could grow to
+        boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+        Check(boss.QuarantinedCells.Count == (int)(playable * boss.MaxCoverage),
+            "an unbounded zone is capped at half the playable board",
+            boss.QuarantinedCells.Count + " of " + playable);
+        Check(boss.QuarantinedCells.Count * 2 <= playable,
+            "which is to say: never more than half");
+        var distinct = new HashSet<string>();
+        bool noRepeats = true;
+        foreach (GridPos cell in boss.QuarantinedCells)
         {
-            if (c != minX && c != maxX) { wentInward = true; }
+            noRepeats &= distinct.Add(cell.X + "," + cell.Y);
         }
-        Check(wentInward, "and the quarantine has moved off the rim, inward");
+        Check(noRepeats, "and no cell is sealed twice over");
+        Check(boss.AdjustExplosionScore(scorer, new List<GridPos>()) == 0,
+            "an explosion that touched nothing is charged nothing");
     }
 
     private static void Boss_KarantinaChargesOnlyTheCubesInside()
@@ -8028,9 +8214,8 @@ public static class JokerTests
         var session = NewSession(8501, 6, 1000000, 40, 1);
         RoundEngine round = session.CurrentRound;
         round.SetBoss(boss);
-        PlayTurns(session, boss.SealEveryTurns);
-        Check(boss.QuarantinedRows.Count + boss.QuarantinedColumns.Count > 0,
-            "a zone exists");
+        boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+        Check(boss.QuarantinedCells.Count > 0, "a zone exists");
 
         // Five cubes, two of them inside the zone: the adjustment must charge for exactly two.
         var inside = new List<GridPos>();
@@ -9730,6 +9915,123 @@ public static class JokerTests
             }
         }
         return session;
+    }
+
+    /// <summary>The run may take HALF its starting deck off the block shelf and no more.
+    /// Buying is refused at the cap, and the refused offer is left standing.</summary>
+    private static void Market_BlockPurchasesAreCappedAtHalfTheStartingDeck()
+    {
+        Section("market / block purchase limit");
+        GameSession session = DriveToMarket(311);
+        if (session.Phase != GamePhase.Market)
+        {
+            Check(false, "reached the market", "phase " + session.Phase);
+            return;
+        }
+        int limit = session.CardPurchaseLimit;
+        Check(limit == session.Config.Deck.Size / 2,
+            "the cap is half the starting deck", "cap " + limit);
+        Check(session.PurchasedCardCount == 0, "nothing is bought to begin with");
+
+        // Buy blocks, rerolling the shelf for more stock, until the cap bites.
+        int bought = 0;
+        int safety = 0;
+        while (session.CanBuyMoreCards && safety++ < 400)
+        {
+            int index = FirstBlockOffer(session);
+            if (index < 0)
+            {
+                session.AddCurrency(session.NextRerollCost);
+                session.RerollMarket(MarketOfferKind.Block);
+                continue;
+            }
+            session.AddCurrency(session.Market.Offers[index].Price);
+            if (session.TryBuyOffer(index))
+            {
+                bought++;
+            }
+        }
+        Check(bought == limit, "exactly the cap could be bought", "bought " + bought);
+        Check(session.PurchasedCardCount == limit,
+            "and every one of them is counted", "count " + session.PurchasedCardCount);
+
+        int next = FirstBlockOffer(session);
+        if (next < 0)
+        {
+            session.AddCurrency(session.NextRerollCost);
+            session.RerollMarket(MarketOfferKind.Block);
+            next = FirstBlockOffer(session);
+        }
+        if (next < 0)
+        {
+            Check(false, "the market stocks another block offer");
+            return;
+        }
+        session.AddCurrency(session.Market.Offers[next].Price);
+        Check(!session.TryBuyOffer(next), "the cap refuses one more block");
+        Check(!session.Market.Offers[next].Sold, "the refused offer stays available");
+        Check(session.PurchasedCardCount == limit, "and nothing was counted for it");
+    }
+
+    /// <summary>Selling is asymmetric on purpose: a card you BOUGHT gives its slot back, a card
+    /// your deck started with never took a slot and so cannot free one.</summary>
+    private static void Market_SellingADeckCardFreesNoBuyingSlot()
+    {
+        Section("market / selling and the purchase limit");
+        GameSession session = DriveToMarket(312);
+        if (session.Phase != GamePhase.Market)
+        {
+            Check(false, "reached the market", "phase " + session.Phase);
+            return;
+        }
+        int index = FirstBlockOffer(session);
+        if (index < 0)
+        {
+            Check(false, "the market stocks a block offer");
+            return;
+        }
+        BlockCard bought = session.Market.Offers[index].Card;
+        session.AddCurrency(session.Market.Offers[index].Price);
+        Check(session.TryBuyOffer(index), "the block was bought");
+        Check(bought.IsPurchased, "a bought block is marked as bought");
+        Check(session.PurchasedCardCount == 1, "and it counts against the cap",
+            "count " + session.PurchasedCardCount);
+
+        BlockCard deckCard = null;
+        foreach (BlockCard card in session.OwnedCards)
+        {
+            if (!card.IsPurchased)
+            {
+                deckCard = card;
+                break;
+            }
+        }
+        if (deckCard == null)
+        {
+            Check(false, "the deck still holds a card that was not bought");
+            return;
+        }
+        session.SellCard(deckCard);
+        Check(session.PurchasedCardCount == 1,
+            "selling a deck card frees no slot", "count " + session.PurchasedCardCount);
+
+        session.SellCard(bought);
+        Check(session.PurchasedCardCount == 0,
+            "selling the bought card gives its slot back",
+            "count " + session.PurchasedCardCount);
+    }
+
+    private static int FirstBlockOffer(GameSession session)
+    {
+        IReadOnlyList<MarketOffer> offers = session.Market.Offers;
+        for (int i = 0; i < offers.Count; i++)
+        {
+            if (offers[i].Kind == MarketOfferKind.Block && !offers[i].Sold)
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static int FirstJokerOffer(GameSession session)

@@ -81,12 +81,19 @@ namespace ProjectBlock.Core
         public double OvertimeRegularScoreFactor = 0.1;
 
         /// <summary>Bonus for WINNING an overtime, as a fraction of the round threshold. The
-        /// n-th overtime win pays (Base + Step*(n-1)) * threshold. Defaults 0.25 / 0.35 / 0.45
-        /// for wins 1 / 2 / 3, summing to ~1.05x threshold across three - roughly a second
-        /// baseline. The bonus flows through the score pipeline, so score jokers scale it.</summary>
-        public double OvertimeWinBonusBaseFraction = 0.25;
+        /// n-th overtime win pays (Base + Step*(n-1)) * threshold: 0.20 / 0.35 / 0.50 / 0.65 for
+        /// wins 1 / 2 / 3 / 4, still summing to ~1.05x threshold across three - roughly a second
+        /// baseline, which is the calibration this pair exists to hold.
+        ///
+        /// Retuned 2026-09-06 from 0.25 / 0.10 to 0.20 / 0.15: the FIRST overtime pays a little
+        /// less and every one after it a little more, so the reward accumulates rather than
+        /// front-loading. Taking one lap and leaving used to be most of the value; the cost of a
+        /// continue escalates (RoundRules.ContinueCostEscalation) and now the payout escalates
+        /// harder than it does, which is what makes going deeper the interesting decision.
+        /// The bonus flows through the score pipeline, so score jokers scale it.</summary>
+        public double OvertimeWinBonusBaseFraction = 0.20;
 
         /// <summary>Growth per sequential overtime win (see OvertimeWinBonusBaseFraction).</summary>
-        public double OvertimeWinBonusStepFraction = 0.10;
+        public double OvertimeWinBonusStepFraction = 0.15;
     }
 }

@@ -1,6 +1,6 @@
-// PURPOSE: "Devre" - a winding circuit is traced across the board at a random moment each
-// round. Fill every cell of it and the circuit BREAKS: those cubes blow up and the joker pays a
-// bonus on top.
+// PURPOSE: "Devre" - a winding circuit is traced across the board at a random moment, and stays
+// there across rounds until it is completed. Fill every cell of it and the circuit BREAKS: those
+// cubes blow up and the joker pays a bonus on top.
 //
 // THE PATH. It runs from one edge to the OPPOSITE edge and is monotone along that axis: on a
 // left-to-right circuit it winds up and down as much as it likes but never doubles back to the
@@ -10,8 +10,10 @@
 // single 4-connected line. A vertical circuit is the same construction with the axes swapped.
 //
 // CONFIRMED RULES:
-//  - one circuit per round, laid at a random turn (not at round start - a circuit on an empty
-//    board is a chore, not a challenge);
+//  - one circuit AT A TIME, laid at a random turn (not at round start - a circuit on an empty
+//    board is a chore, not a challenge). A circuit still standing when the round ends is CARRIED
+//    OVER to the next one rather than redrawn: it is a standing offer with no deadline, and
+//    rerolling it every round quietly turned "no deadline" into "one round";
 //  - NO deadline. It waits until it is completed or the round ends, which is exactly what keeps
 //    it different from "Meydan Okuma";
 //  - completing it explodes the cubes on it. That is a real destruction: it goes through
@@ -39,11 +41,15 @@ namespace ProjectBlock.Core
         /// along it and the next. 0 would be a straight line.</summary>
         public int MaxWind = 2;
 
-        /// <summary>Flat bonus for breaking the circuit, on top of the normal explosion score.</summary>
-        public int BreakBonus = 120;
+        /// <summary>Flat bonus for breaking the circuit, on top of the normal explosion score.
+        /// Rebalanced 2026-09-06 from 120: a typical circuit on a 7x7 board is 10-14 cells, so
+        /// the old pair paid around 230 logical - a third of a mid-run threshold out of one
+        /// joker, before joker multipliers touched it.</summary>
+        public int BreakBonus = 40;
 
-        /// <summary>Extra bonus per cell of the circuit - a longer circuit is worth more.</summary>
-        public int BonusPerCell = 8;
+        /// <summary>Extra bonus per cell of the circuit - a longer circuit is worth more.
+        /// Rebalanced 2026-09-06 from 8.</summary>
+        public int BonusPerCell = 3;
 
         private const int GenerationAttempts = 12;
 
@@ -57,12 +63,14 @@ namespace ProjectBlock.Core
             : base("devre", "Devre")
         {
             SetDescription(
-                "At some point each round a winding circuit is traced from one edge of the board "
-                    + "to the other. Fill every cell of it and the circuit breaks: those blocks "
-                    + "explode and you are paid a bonus. It waits all round for you.",
-                "Her raunt bir noktada oyun alanının bir kenarından diğerine kıvrımlı bir devre "
-                    + "çizilir. Devrenin bütün karelerini doldurursan devre kırılır: o bloklar "
-                    + "patlar ve ekstra puan alırsın. Raunt boyunca seni bekler.");
+                "A winding circuit is traced from one edge of the board to the other. Fill "
+                    + "every cell of it and the circuit breaks: those blocks explode and you are "
+                    + "paid a bonus. It waits as long as it takes - a circuit you do not finish "
+                    + "is still there next round.",
+                "Oyun alanının bir kenarından diğerine kıvrımlı bir devre çizilir. Devrenin "
+                    + "bütün karelerini doldurursan devre kırılır: o bloklar patlar ve ekstra "
+                    + "puan alırsın. Ne kadar sürerse sürsün bekler - bitiremediğin devre "
+                    + "sonraki rauntta da yerinde durur.");
         }
 
         /// <summary>The circuit's cells IN ROUTE ORDER, for the UI to draw. Empty when nothing is
@@ -107,13 +115,44 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>
+        /// A NEW round does not mean a new circuit. One that is still standing is kept exactly
+        /// where it is - the joker's promise is that it waits for you, and a circuit rerolled
+        /// every round was really a one-round deadline wearing a different hat.
+        ///
+        /// The one thing that forces a redraw is the board changing under it: a boss that
+        /// resizes the arena ("Dört kutup"), or erosion from the round just played, can leave a
+        /// cell of the path off the board, and a circuit that cannot be completed is worse than
+        /// no circuit at all.
+        /// </summary>
         public override void OnRoundStarted(RoundContext ctx)
         {
+            brokenThisRound = false;
+            if (armed && PathFitsBoard(ctx.Round.Board))
+            {
+                return;
+            }
             path.Clear();
             armed = false;
-            brokenThisRound = false;
             int span = MaxArmTurn - MinArmTurn + 1;
             armOnTurn = MinArmTurn + (span > 1 ? ctx.Rng.NextInt(0, span) : 0);
+        }
+
+        /// <summary>True when every cell of the standing circuit is still on the board.</summary>
+        private bool PathFitsBoard(GameBoard board)
+        {
+            if (board == null || path.Count == 0)
+            {
+                return false;
+            }
+            for (int i = 0; i < path.Count; i++)
+            {
+                if (!board.IsInside(path[i]))
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         public override void AfterTurnScored(TurnContext turn)

@@ -125,6 +125,61 @@ everything here is unreleased and balance numbers are still placeholders.
   else changes. (The running catalogue total is on the Şifacı entry above.)
 
 ### Changed
+- **"Alacakaranlık" reworked: a real blackout, a lower bar, and a price for groping about.**
+  The blackout was not one. Cells were tinted dark, but a cube brought its own painted tile and
+  stood nearly edge to edge while an empty cell was a smaller flat square — so the board still
+  drew every block in silhouette, bigger squares with tighter gaps, plainly readable. The idle
+  element animations leaked too: a fire cube went on flickering bright orange in the dark,
+  against the changelog entry that said they were hidden. Now an unlit cell is anonymised
+  completely — same sprite, same size, same colour, and no element animation — so a filled cell
+  and an empty one are genuinely indistinguishable. A cube grows into its cell as the light
+  reaches it and shrinks back as it fades, rather than popping in and out.
+  The **light reaches further**: a blast lights radius 4 instead of 2. And **setting a block
+  down now lights what it touches** — one cell out, at under half a blast's strength, so your own
+  hand disturbs the dark just enough to confirm what you touched and hint at what it landed
+  against. Blowing something up is still the only way to actually survey the board. Both go
+  through one method, so a placement and a blast fade the same way and a blast always wins the
+  cells they share.
+  Two rules follow from being blind. The **bar is cut to 60%** of the round's own, and **any
+  placement the board refuses costs 2% of that lowered bar**. Groping about is the intended way
+  to read a dark board; this is what it costs. So it is no longer the boss that bends no rule at
+  all: it answers the ordinary threshold query, plus a new
+  `BossRound.PenaltyOnIllegalPlacement`. The fee is billed from one place
+  (`RoundEngine.ChargeIllegalPlacement`), so every driver — drag, direct-pad — pays the same
+  price, and only for a drop genuinely aimed at the arena: letting go of a card away from the
+  board is a cancel, not a mistake, and stays free. It goes through `ChargeScore`, so an empty
+  meter pays nothing and the run currency follows the round score down.
+  What is billed is the **refusal**, deliberately not overlap — the fee asks `CanPlaceCard` and
+  nothing narrower. A **negative block is meant to be laid over cubes**, so the board accepts it
+  and it costs nothing; charging for it would bill a block for doing the one thing it exists to
+  do. The same goes for an antimatter key on its own kind, a ghost block hanging off the edge,
+  and anything set down on transparent, void or mine cells. Only what was actually turned away
+  is billed, and the wording in both languages says so.
+  The **popup shows the loss in the same units as the rest of the game** — every score on screen
+  is the scaled one, and the fee was printing the logical number, a tenth of what the meter
+  actually lost. `ChargeIllegalPlacement` returns the scaled amount it took rather than dividing
+  it down, which is not the same as scaling the logical fee back up: a near-empty meter pays only
+  what it has, and the division would drop the remainder it cannot carry — 45 taken would be
+  announced as 4 and read back as 40. The subtraction is exact, so there is nothing to convert.
+- **A boss round opened as though it had no boss until the first block was placed.** Most
+  visibly with "Alacakaranlık" — the lights stayed ON for a turn and the board only went dark
+  once something was played, so the boss looked like it started a turn late. The cause was not in
+  the boss: `StartRoundPresentation` was a hand-written copy of `RefreshAll` that had drifted
+  from it, and the step it never picked up was `SetDarkness`. It missed three more for the same
+  reason — the mirror world, the main board's mirror-shrunk size and centre, and "Tamagotchi"'s
+  demands — each of which also only appeared after the first placement.
+  Fixed by not writing the list twice: a round now begins by painting the whole screen through
+  the same `RefreshAll` every other repaint uses, and keeps only the shuffle and the deal of its
+  own. The boss is already attached at that point — `GameSession` draws it and calls `SetBoss`
+  while building the round, because it may reshape the board before the engine exists — so every
+  boss query answers correctly on the very first paint. This also covers loading a save into a
+  boss round, which took the same path.
+- **The HUD's round meter showed the wrong bar under any boss that lowers one.** The
+  `TOTAL … round x / y` line read `RoundConfig.ScoreThreshold` — the round's own number, before
+  the boss had its say — so "Alacakaranlık" (60%) and "Taş ve sopa" (−25%) both printed a target
+  higher than the one the rules would actually check, and the round ended while the HUD still
+  showed it short. It reads `RoundEngine.ScoreThreshold` now, like the round dump beside it
+  always did.
 - **Rerolling the market now makes the market itself dearer.** An offer costs its stocked price
   plus what a reroll costs *right now*, less what the first reroll of a visit costs — so a freshly
   stocked shelf is priced exactly as it always was (surcharge 0), and each reroll after that lifts

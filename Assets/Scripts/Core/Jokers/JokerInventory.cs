@@ -482,6 +482,19 @@ namespace ProjectBlock.Core
             RaiseChanged();
         }
 
+        /// <summary>The owned deck changed size. Not gated by a boss and not tied to a round:
+        /// it is a fact about the collection, and a joker only reads it.</summary>
+        public void DispatchDeckChanged()
+        {
+            SessionContext ctx = SessionCtx();
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
+            {
+                batch[i].OnDeckChanged(ctx);
+            }
+            RaiseChanged();
+        }
+
         public void DispatchMarketEntered()
         {
             SessionContext ctx = SessionCtx();

@@ -1,4 +1,4 @@
-// PURPOSE: Draws the round's board as a grid of runtime sprites and shows the
+﻿// PURPOSE: Draws the round's board as a grid of runtime sprites and shows the
 // placement preview under the mouse. Pure presentation - reads GameBoard, never
 // mutates it. Rebuilt whenever a round starts (board sizes differ per round).
 //
@@ -132,9 +132,20 @@ namespace ProjectBlock.View
         /// whole board by waving the mouse over it.</summary>
         private static readonly Color BlindPreviewColor = new Color(0.72f, 0.72f, 0.78f, 0.45f);
 
-        /// <summary>How long a blast keeps its surroundings lit, and how far the light reaches.</summary>
+        /// <summary>How long a blast keeps its surroundings lit, and how far the light reaches.
+        /// The radius is generous on purpose: a blind round is meant to be READ from what you
+        /// blow up, and a light that only reached its own neighbours told the player almost
+        /// nothing for the trouble of clearing a line.</summary>
         private const float LightSeconds = 1.1f;
-        private const int LightRadius = 2;
+        private const int LightRadius = 4;
+
+        /// <summary>What a PLACEMENT lights, as against a blast: one cell out, and a fraction as
+        /// long. Setting a block down disturbs the dark around your own hand - just enough to
+        /// confirm what you touched and to hint at what it landed against - without turning
+        /// walking a block across the arena into a way to survey it. Blowing something up is
+        /// still the only way to actually see.</summary>
+        private const int PlacementLightRadius = 1;
+        private const float PlacementLightStrength = 0.45f;
 
         /// <summary>How much of its cell a CUBE covers, and how much an EMPTY one does. A
         /// painted tile brings its own frame and wants to sit nearly edge to edge; an empty
@@ -193,8 +204,7 @@ namespace ProjectBlock.View
         private readonly List<GameObject> gravityMarkers = new List<GameObject>();
 
         /// <summary>"Karantina"'s sealed rows and columns, in absolute board coordinates.</summary>
-        private readonly List<int> quarantinedRows = new List<int>();
-        private readonly List<int> quarantinedColumns = new List<int>();
+        private readonly List<GridPos> quarantinedCells = new List<GridPos>();
 
         /// <summary>"Besleme"'s creature patch, in absolute board coordinates.</summary>
         private readonly List<GridPos> creatureCells = new List<GridPos>();
@@ -789,6 +799,25 @@ namespace ProjectBlock.View
                     }
                     cellRenderers[x, y].enabled = true;
                     Cube? cube = board.GetCube(gp);
+                    // "Alacakaranlık": an UNLIT cell tells the player NOTHING. Not by being
+                    // tinted dark - the tint was never the tell. A cube brings its own painted
+                    // tile and stands nearly edge to edge (CubeFill) while an empty cell is a
+                    // smaller flat square (EmptyFill), so a board darkened only by colour still
+                    // drew its blocks in silhouette: bigger squares with tighter gaps, plainly
+                    // readable. So the sprite and the SIZE are anonymised too, and every cell in
+                    // the arena becomes the same dead square until something lights it.
+                    //
+                    // kindCache is cleared with it, which is what stops AnimateElementCubes from
+                    // flickering a hidden fire cube back into view every frame.
+                    float light = dark ? LightAt(x, y) : 1f;
+                    if (light <= 0f)
+                    {
+                        ViewUtil.ApplyTile(cellRenderers[x, y], null, cellSize * EmptyFill);
+                        cellRenderers[x, y].color = DarkCellColor;
+                        kindCache[x, y] = null;
+                        baseColorCache[x, y] = DarkCellColor;
+                        continue;
+                    }
                     // A CUBE is a painted tile and fills its cell; an EMPTY cell stays the flat
                     // inset square it always was, so the grid still reads as holes waiting to be
                     // filled rather than as pale blocks.
@@ -796,7 +825,11 @@ namespace ProjectBlock.View
                     if (cube.HasValue)
                     {
                         tile = ViewUtil.CubeTile(cube.Value.Kind, CardOf(cube.Value));
-                        ViewUtil.ApplyTile(cellRenderers[x, y], tile, cellSize * CubeFill);
+                        // Blind: the cube GROWS into its cell as the light reaches it and
+                        // shrinks back to an anonymous square as it fades, so a revealed block
+                        // never pops in and out of the dark.
+                        ViewUtil.ApplyTile(cellRenderers[x, y], tile,
+                            cellSize * Mathf.Lerp(EmptyFill, CubeFill, light));
                     }
                     else
                     {
@@ -828,11 +861,12 @@ namespace ProjectBlock.View
                     // doomed column both draw themselves in their own views (CreatureNestView,
                     // InvaderColumnView), over the top of this one. Washing the cells here as
                     // well would double the tint and fight the corridor's own escalation.
-                    // "Alacakaranlık": the truth is drowned in the dark and only a blast's
-                    // light brings any of it back, in proportion to how bright that light is.
+                    // "Alacakaranlık": the truth is drowned in the dark, and comes back only in
+                    // proportion to the light standing on the cell - a placement's faint one or
+                    // a blast's far brighter one.
                     if (dark)
                     {
-                        color = Color.Lerp(DarkCellColor, color, LightAt(x, y));
+                        color = Color.Lerp(DarkCellColor, color, light);
                     }
                     cellRenderers[x, y].color = color;
                     kindCache[x, y] = cube.HasValue ? cube.Value.Kind : (CubeKind?)null;
@@ -961,7 +995,30 @@ namespace ProjectBlock.View
         /// dark; on a lit board there is nothing to reveal.</summary>
         public void LightUpAround(IReadOnlyList<GridPos> cells)
         {
-            if (!dark || board == null || litFor == null || cells == null)
+            LightUpAround(cells, LightRadius, 1f);
+        }
+
+        /// <summary>A block was set down. It lights what it touches, faintly and briefly - see
+        /// PlacementLightRadius.</summary>
+        public void LightUpPlacement(IReadOnlyList<GridPos> cells)
+        {
+            LightUpAround(cells, PlacementLightRadius, PlacementLightStrength);
+        }
+
+        /// <summary>
+        /// As above, but at a chosen reach and strength - the second caller is a PLACEMENT,
+        /// which lights only what it touches and only faintly ("Alacakaranlık").
+        ///
+        /// One method rather than two because the falloff, the round mask and the
+        /// keep-the-brightest rule are the whole behaviour and must not be written twice: a
+        /// placement that faded differently from a blast would read as a second kind of light.
+        /// A blast landing on a cell a placement just lit keeps the brighter of the two, which
+        /// is what stops the small light from ever dimming the big one.
+        /// </summary>
+        public void LightUpAround(IReadOnlyList<GridPos> cells, int radius, float strength)
+        {
+            if (!dark || board == null || litFor == null || cells == null || radius < 0
+                || strength <= 0f)
             {
                 return;
             }
@@ -969,9 +1026,9 @@ namespace ProjectBlock.View
             {
                 int cx = cell.X - board.MinX;
                 int cy = cell.Y - board.MinY;
-                for (int x = cx - LightRadius; x <= cx + LightRadius; x++)
+                for (int x = cx - radius; x <= cx + radius; x++)
                 {
-                    for (int y = cy - LightRadius; y <= cy + LightRadius; y++)
+                    for (int y = cy - radius; y <= cy + radius; y++)
                     {
                         if (x < 0 || x >= board.Width || y < 0 || y >= board.Height)
                         {
@@ -981,13 +1038,13 @@ namespace ProjectBlock.View
                         // a glow rather than as a box.
                         int dx = x - cx;
                         int dy = y - cy;
-                        if (dx * dx + dy * dy > LightRadius * LightRadius)
+                        if (dx * dx + dy * dy > radius * radius)
                         {
                             continue;
                         }
                         // Nearer cells hold the light longer, so it fades from the edge inward.
-                        float share = 1f - Mathf.Sqrt(dx * dx + dy * dy) / (LightRadius + 1f);
-                        float seconds = LightSeconds * share;
+                        float share = 1f - Mathf.Sqrt(dx * dx + dy * dy) / (radius + 1f);
+                        float seconds = LightSeconds * share * strength;
                         if (seconds > litFor[x, y])
                         {
                             litFor[x, y] = seconds;
@@ -1079,15 +1136,14 @@ namespace ProjectBlock.View
             return false;
         }
 
-        /// <summary>Hands "Karantina"'s sealed lines to the containment field. Pass nulls to
-        /// clear them. The field works out for itself which lines are new and which board edge
-        /// each one came in from, so this is only ever told the current state.</summary>
-        public void ShowQuarantine(IReadOnlyList<int> rows, IReadOnlyList<int> columns)
+        /// <summary>Hands "Karantina"'s sealed cells to the containment field. Pass null to
+        /// clear them. The field works out for itself which cells are new, so this is only ever
+        /// told the current state - which now CHANGES rather than only growing, since the zone
+        /// is relaid somewhere else every few turns.</summary>
+        public void ShowQuarantine(IReadOnlyList<GridPos> cells)
         {
-            quarantinedRows.Clear();
-            quarantinedColumns.Clear();
-            if (rows != null) { quarantinedRows.AddRange(rows); }
-            if (columns != null) { quarantinedColumns.AddRange(columns); }
+            quarantinedCells.Clear();
+            if (cells != null) { quarantinedCells.AddRange(cells); }
             if (board == null)
             {
                 return;
@@ -1098,8 +1154,7 @@ namespace ProjectBlock.View
                 go.transform.SetParent(transform, false);
                 quarantineField = go.AddComponent<QuarantineFieldView>();
             }
-            quarantineField.SetLines(quarantinedRows, quarantinedColumns, board, CellToWorld,
-                cellSize, IsOccupied);
+            quarantineField.SetCells(quarantinedCells, board, CellToWorld, cellSize, IsOccupied);
         }
 
         private bool IsOccupied(GridPos cell)
@@ -1244,10 +1299,17 @@ namespace ProjectBlock.View
                 c.a);
         }
 
-        /// <summary>True if that cell stands in a sealed row or column.</summary>
+        /// <summary>True if that cell stands in the quarantine.</summary>
         private bool IsQuarantined(GridPos cell)
         {
-            return quarantinedRows.Contains(cell.Y) || quarantinedColumns.Contains(cell.X);
+            for (int i = 0; i < quarantinedCells.Count; i++)
+            {
+                if (quarantinedCells[i].X == cell.X && quarantinedCells[i].Y == cell.Y)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>

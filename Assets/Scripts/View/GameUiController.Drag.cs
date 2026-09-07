@@ -179,7 +179,7 @@ namespace ProjectBlock.View
                         {
                             foxPickSlot = rightHit.SlotIndex;
                             deckOverlay.ResetScroll();
-                            deckOverlay.Show(session.OwnedCards);
+                            deckOverlay.ShowShapes(FoxShapeChoices());
                         }
                         else if (session.Config.Rules.RetroMode)
                         {
@@ -303,6 +303,14 @@ namespace ProjectBlock.View
                 }
                 else
                 {
+                    // Aimed AT the arena and refused by the board: a boss may bill for that.
+                    // Let go anywhere else and it is only a cancel, so nothing is charged. A
+                    // placement the board ACCEPTS never reaches here, which is why a negative
+                    // block laid over cubes costs nothing.
+                    if (overBoard)
+                    {
+                        RejectPlacement(round, world);
+                    }
                     released.MoveTo(released.HomePosition, 0.2f, null);
                     boardView.ClearPreview();
                 }

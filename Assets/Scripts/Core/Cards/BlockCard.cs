@@ -56,6 +56,18 @@ namespace ProjectBlock.Core
         /// marker so the UI can tag it "custom"; it does not change any rule.</summary>
         public bool IsCustom { get; }
 
+        /// <summary>
+        /// True for a card that was TAKEN OFF THE MARKET SHELF (bought, or smuggled - the goods
+        /// changed hands either way), false for every card that was already yours: the starting
+        /// deck, a designed block, anything a joker or a power handed you.
+        ///
+        /// It is what the market's purchase limit counts (GameSession.PurchasedCardCount), which
+        /// is why it is a property of the CARD and not a running total on the session: selling a
+        /// starting-deck card must not buy you another slot, and the only way to keep those two
+        /// apart is to know which cards came from the shelf. The sell screen shows it too.
+        /// </summary>
+        public bool IsPurchased { get; internal set; }
+
         /// <summary>True for goods that came off the back of a lorry ("Kaçakçı"), sound or not.
         /// Purely an identity marker so the UI can tag it; it changes no rule by itself.</summary>
         public bool IsSmuggled { get; internal set; }

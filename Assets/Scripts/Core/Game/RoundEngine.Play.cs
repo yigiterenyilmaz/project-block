@@ -32,6 +32,50 @@ namespace ProjectBlock.Core
                 Has(card, BlockElement.Negative));
         }
 
+        /// <summary>
+        /// The player aimed a block at the arena and the board REFUSED it, for whatever reason
+        /// CanPlaceCard gave. Normally that costs nothing: the block simply goes back to the
+        /// hand. Under a boss that bills for it ("Alacakaranlik", where what turned the block
+        /// away is exactly what you could not see) it costs points.
+        ///
+        /// What is billed is the refusal itself, never overlap: a negative block put down over
+        /// cubes is a LEGAL placement and is free, as is an antimatter key on its own kind and a
+        /// ghost block hanging off the edge. Asking CanPlaceCard rather than the board's contents
+        /// is what keeps that true without a single special case here.
+        ///
+        /// Call it from the drivers INSTEAD of silently returning the card, and only for a drop
+        /// the player genuinely aimed at the arena - taking a card back, or letting go of it
+        /// away from the board, is a cancel and not a mistake.
+        ///
+        /// Returns what the meter ACTUALLY lost, in the SCALED economy - the same units as
+        /// RoundScore and as every number on the HUD, so the popup can print it as it comes.
+        /// Not the logical fee, and deliberately not the logical fee scaled back up: an empty-ish
+        /// meter pays only what it has, and dividing that down to logical points would throw away
+        /// the remainder that integer division cannot carry (45 taken would be announced as 4,
+        /// which reads back as 40). The subtraction is exact; there is nothing to convert.
+        ///
+        /// It goes through ChargeScore, so it is floored the way every other penalty is and the
+        /// run currency follows the round score down.
+        /// </summary>
+        public int ChargeIllegalPlacement()
+        {
+            if (Boss == null || Status != RoundStatus.InProgress)
+            {
+                return 0;
+            }
+            int penalty = Boss.PenaltyOnIllegalPlacement(ScoreThreshold);
+            if (penalty <= 0)
+            {
+                return 0;
+            }
+            int before = RoundScore;
+            ChargeScore(penalty, "boss.refusedPlacement");
+            // What was actually taken, not what was asked for: an empty meter pays nothing, a
+            // near-empty one pays what it has, and the popup must never announce a loss that did
+            // not happen. Scaled, exactly as it left RoundScore.
+            return before - RoundScore;
+        }
+
         /// <summary>True when every cube of an antimatter card would land on a cube of its kind.</summary>
         private bool AntimatterFits(BlockCard card, GridPos origin)
         {

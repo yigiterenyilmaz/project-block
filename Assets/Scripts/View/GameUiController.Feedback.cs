@@ -1,4 +1,4 @@
-// PURPOSE: GameUiController post-placement feedback - finalizing a placement, explosion
+﻿// PURPOSE: GameUiController post-placement feedback - finalizing a placement, explosion
 // and blast FX, camera shake, full refresh, infection marks, the HUD, and turn logs.
 
 using System.Collections;
@@ -144,10 +144,17 @@ namespace ProjectBlock.View
                 // payout - neither of which the placement's own CubesExploded count ever saw.
                 sfx.Explode();
             }
-            // "Alacakaranlık": a blast is the one thing that shows the player anything, so it
-            // lights its own surroundings before the dark closes back over them.
+            // "Alacakaranlık": the two lights of a blind round. Setting a block DOWN lights what
+            // it touches, faintly and one cell out - enough to confirm what your hand just did,
+            // not enough to survey the board with. A BLAST lights far more and far brighter, so
+            // making something happen stays the only way to actually see. The placement goes in
+            // first, so a blast on the same turn overwrites it with its own brighter light
+            // rather than the other way round.
             if (boardView.IsDark)
             {
+                // PlacedCells only: MirrorPlacedCells are coordinates in the OTHER world and
+                // would light the wrong squares of this one.
+                boardView.LightUpPlacement(report.PlacedCells);
                 var lit = new List<GridPos>();
                 foreach (DestroyedCube dead in report.DestroyedCubes)
                 {
@@ -335,6 +342,32 @@ namespace ProjectBlock.View
             Vector3 at = camBasePosition;
             return new Rect(at.x - halfWidth, at.y - halfHeight,
                 halfWidth * 2f, halfHeight * 2f);
+        }
+
+        /// <summary>
+        /// A block the player genuinely aimed at the arena was REFUSED by the board. Normally
+        /// that is free and silent - the card just goes home - but a boss may bill for it
+        /// ("Alacakaranlık", where what turned the block away is exactly what the dark hid), so
+        /// the ONE question is put to the engine and the answer is what decides whether anything
+        /// is said. Every driver that can refuse a placement calls this, so the price is the same
+        /// whether the block was dragged, walked there on a pad, or dropped by the retro piece.
+        ///
+        /// It is called only for a drop AT the board: letting go of a card away from the arena,
+        /// or putting it back, is a cancel and must never cost anything.
+        /// </summary>
+        private void RejectPlacement(RoundEngine round, Vector2 world)
+        {
+            // Already in the scaled economy, so it is printed as it comes: every score on the
+            // HUD is scaled, and a popup that showed the logical number would read as a tenth of
+            // what the meter just lost.
+            int charged = round.ChargeIllegalPlacement();
+            if (charged <= 0)
+            {
+                return;
+            }
+            FloatingTextFx.Spawn(transform, world, "-" + charged,
+                new Color(1f, 0.35f, 0.35f), 56, 0.07f);
+            UpdateHud();
         }
 
         private void SpawnDynamitePopup()
@@ -851,7 +884,7 @@ namespace ProjectBlock.View
             {
                 boardView.ShowInfections(null);
                 boardView.ShowCircuit(null);
-                boardView.ShowQuarantine(null, null);
+                boardView.ShowQuarantine(null);
                 boardView.ShowCreature(null);
                 boardView.ShowDolls(null, null);
                 boardView.ShowDoomedColumn(null, 0);
@@ -960,14 +993,7 @@ namespace ProjectBlock.View
         {
             RoundEngine round = session.CurrentRound;
             var boss = round != null ? round.Boss as KarantinaBoss : null;
-            if (boss != null)
-            {
-                boardView.ShowQuarantine(boss.QuarantinedRows, boss.QuarantinedColumns);
-            }
-            else
-            {
-                boardView.ShowQuarantine(null, null);
-            }
+            boardView.ShowQuarantine(boss != null ? boss.QuarantinedCells : null);
         }
 
         /// <summary>Hands "Devre"'s traced circuit to the board view. Same shape as the infection
@@ -1032,9 +1058,13 @@ namespace ProjectBlock.View
             RoundEngine round = session.CurrentRound;
             if (round != null)
             {
+                // RoundEngine.ScoreThreshold, never Config's: a boss may ask for less
+                // ("Alacakaranlık" cutting the bar to 60%, "Taş ve sopa" by a quarter) and the
+                // number the player is chasing must be the one the rules will check. The round
+                // dump below already had this right; this line did not.
                 sb.Append(Loc.Pick("        round ", "        raunt "))
                     .Append(round.RoundScore).Append(" / ")
-                    .Append(round.Config.ScoreThreshold * session.Config.Scoring.ScoreScale);
+                    .Append(round.ScoreThreshold * session.Config.Scoring.ScoreScale);
             }
             totalText.text = sb.ToString();
         }

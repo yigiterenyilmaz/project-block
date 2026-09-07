@@ -2,6 +2,16 @@
 // destesi"), opened by clicking the draw pile. Cards are shown SORTED (by size, then
 // id), never in draw order - the draw pile is face-down and its order must not leak.
 // Future reveal jokers (Insider, Büyüteç) will get their own explicit reveal UI.
+//
+// The FOX picker is the same grid again, showing one entry per SHAPE rather than one per
+// card - see GameUiController.FoxShapeChoices. It only ever needed the shapes, and a deck
+// with four copies of a piece used to offer that piece four times.
+//
+// The SELL screen is the same grid with one flag flipped. It carries no price labels of
+// its own: what a card fetches, and whether it is a deck card or one you bought, is the
+// hover TOOLTIP's business (GameUiController.Tooltips.ShowDeckCardTooltip). A price under
+// every card is 24 numbers competing for the eye; a popup is one, about the card you are
+// actually looking at.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -12,16 +22,13 @@ namespace ProjectBlock.View
     /// <summary>Modal card-list overlay. While open, the controller blocks other input.</summary>
     public sealed class DeckOverlayView : MonoBehaviour
     {
-        private const int Columns = 8;
+        /// <summary>The WIDEST a row may get. The row actually used is narrower whenever the
+        /// list is short (see ColumnsFor) - a nine-shape fox picker in an eight-wide panel is
+        /// one full row, one lonely card and a great deal of empty table.</summary>
+        private const int MaxColumns = 8;
         private const float CardScale = 0.72f;
         private const float SpacingX = 1.15f;
         private const float SpacingY = 1.45f;
-
-        /// <summary>Row pitch when every card carries a price label under it. The plain pitch
-        /// leaves 0.15 between rows, and a price label is taller than that - it used to print
-        /// over the heads of the cards in the row below, which is what made the sell screen
-        /// look like a jumble.</summary>
-        private const float PricedSpacingY = 1.92f;
 
         /// <summary>Rows on screen at once. Everything past this scrolls; a 24-card deck is
         /// already 3 rows, and the deck only grows from there.</summary>
@@ -30,7 +37,22 @@ namespace ProjectBlock.View
         /// <summary>Centre of the top visible row.</summary>
         private const float GridTop = 2.35f;
 
-        private const float PanelHalfWidth = 5.15f;
+        /// <summary>Air between the outermost card and the panel's edge.</summary>
+        private const float SidePadding = 0.64f;
+
+        /// <summary>Extra room down the right edge when the scrollbar is there to be drawn.</summary>
+        private const float ScrollbarGutter = 0.30f;
+
+        /// <summary>
+        /// Half the panel's width, WORKED OUT PER LIST rather than fixed: the grid it has to
+        /// hold, floored by the longest line of chrome printed across it. A panel is then as
+        /// wide as its contents and no wider, which is what stops a handful of choices being
+        /// spread over a full-screen table.
+        ///
+        /// It is a field because everything measured off the edge - the occluder plates, the
+        /// scrollbar, the panel itself - has to agree with it.
+        /// </summary>
+        private float panelHalfWidth = 5.15f;
 
         // Sorting tiers, all distinct: the dim and the frame used to share order 40, and which
         // of the two won was down to creation order - so on some rebuilds the dim covered the
@@ -41,7 +63,6 @@ namespace ProjectBlock.View
         private const int CardOrder = 42;
         private const int ScrollTrackOrder = 43;
         private const int ScrollThumbOrder = 44;
-        private const int PriceOrder = 45;
         private const int OccluderOrder = 46;
         private const int ChromeOrder = 47;
 
@@ -76,7 +97,8 @@ namespace ProjectBlock.View
         /// <summary>What the last Show was given, so a scroll can re-lay-out without the
         /// controller having to remember which mode the overlay is in.</summary>
         private IReadOnlyList<BlockCard> lastCards;
-        private System.Func<BlockCard, int> lastSellValue;
+        private bool lastSellMode;
+        private bool lastShapeMode;
         private int totalRows;
 
         private readonly List<Vector2> entryCenters = new List<Vector2>();
@@ -93,32 +115,49 @@ namespace ProjectBlock.View
         /// <summary>Shows the overlay with the given cards (normally the whole owned deck).</summary>
         public void Show(IReadOnlyList<BlockCard> cards)
         {
-            Show(cards, null);
+            Show(cards, false);
         }
 
-        /// <summary>Shows the owned deck. When sellValue is non-null the overlay is a SELL
-        /// screen: each card gets its sell price and clicking one sells it.</summary>
-        public void Show(IReadOnlyList<BlockCard> cards, System.Func<BlockCard, int> sellValue)
+        /// <summary>Shows the owned deck. In SELL mode the title says so and clicking a card
+        /// sells it; the price and the card's origin are the hover tooltip's job, so the grid
+        /// itself is laid out identically either way.</summary>
+        public void Show(IReadOnlyList<BlockCard> cards, bool sellMode)
+        {
+            ShowList(cards, sellMode, false);
+        }
+
+        /// <summary>The FOX picker: the shapes the deck can offer, one entry each, every one of
+        /// them drawn as a fox block. The caller builds those stand-in cards (they are not owned
+        /// and must never be sold or counted) - all this screen changes is what it calls itself
+        /// and that clicking is a CHOICE rather than a sale.</summary>
+        public void ShowShapes(IReadOnlyList<BlockCard> shapeCards)
+        {
+            ShowList(shapeCards, false, true);
+        }
+
+        private void ShowList(IReadOnlyList<BlockCard> cards, bool sellMode, bool shapeMode)
         {
             lastCards = cards;
-            lastSellValue = sellValue;
+            lastSellMode = sellMode;
+            lastShapeMode = shapeMode;
             Hide();
             IsOpen = true;
 
             var sorted = new List<BlockCard>(cards);
             sorted.Sort(CompareCards);
-            bool priced = sellValue != null;
-            float pitch = priced ? PricedSpacingY : SpacingY;
-            totalRows = (sorted.Count + Columns - 1) / Columns;
+            float pitch = SpacingY;
+            int columns = ColumnsFor(sorted.Count, shapeMode);
+            totalRows = (sorted.Count + columns - 1) / columns;
             float maxScroll = Mathf.Max(0, totalRows - VisibleRows);
             scrollRows = Mathf.Clamp(scrollRows, 0f, maxScroll);
             int shownRows = Mathf.Min(VisibleRows, totalRows);
 
             float gridBottom = GridTop - (shownRows - 1) * pitch;
             float cardHalf = CardVisual.BodyHeight * CardScale * 0.5f;
-            // How far a row's content reaches below its centre - the price label, when there
-            // is one, hangs further than the card does.
-            float reachDown = priced ? cardHalf + 0.42f : cardHalf;
+            // How far a row's content reaches below its centre. Nothing hangs under a card any
+            // more, so this is the card itself - kept as its own name because the occluder /
+            // cull / panel sequence below is written in terms of it.
+            float reachDown = cardHalf;
             bool scrolls = totalRows > VisibleRows;
 
             // THE WHOLE LAYOUT IS DERIVED FROM HERE DOWN, and the order matters. A scrolling row
@@ -137,39 +176,61 @@ namespace ProjectBlock.View
             float titleY = (topCut + panelTop) * 0.5f;
             float hintY = (bottomCut + panelBottom) * 0.5f;
 
+            // What the two chrome lines SAY is decided here, above the panel, because how wide
+            // they are is one of the things that decides how wide the panel is. The fox picker
+            // keeps its title short on purpose - what taking a shape does is in the tooltip on
+            // each one, and a sentence up here would be the only reason the panel was wide.
+            string title = shapeMode
+                ? Loc.Pick("PICK A SHAPE", "ŞEKİL SEÇ")
+                : sellMode
+                    ? Loc.Pick("SELL CARDS  -  hover for details, click to sell",
+                        "KART SAT  -  detay için üzerine gel, satmak için tıkla")
+                    : Loc.Pick("YOUR DECK  -  " + sorted.Count + " cards",
+                        "DESTEN  -  " + sorted.Count + " kart");
+            string hint = scrolls
+                ? Loc.Pick("wheel or drag the bar to scroll    -    click outside to close",
+                    "tekerlek ya da çubukla kaydır    -    kapatmak için dışarı tıkla")
+                : Loc.Pick("click outside to close", "kapatmak için dışarı tıkla");
+
             // A full-screen dim so the market behind is clearly OUT of play, then an OPAQUE
             // panel on top of it - the old overlay was only the dim, so the whole shelf showed
             // through the card list and the two fought each other.
             ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(40f, 20f),
                 DimColor, DimOrder);
+            // The three claims on the width - the grid, the title, the hint - settled before
+            // anything is drawn, because the panel, the plates and the bar are all measured
+            // off the answer. Text is ESTIMATED (see EstimateTextWidth): a TextMesh will not
+            // give its extent until it has been laid out, and by then the panel exists.
+            float gridHalf = (columns - 1) * SpacingX * 0.5f
+                + CardVisual.BodyWidth * CardScale * 0.5f + SidePadding
+                + (scrolls ? ScrollbarGutter : 0f);
+            panelHalfWidth = Mathf.Max(gridHalf,
+                Mathf.Max(EstimateTextWidth(title, 0.030f),
+                    EstimateTextWidth(hint, 0.023f)) * 0.5f + 0.35f);
+
             var panelCenter = new Vector2(0f, (panelTop + panelBottom) * 0.5f);
-            var panelSize = new Vector2(PanelHalfWidth * 2f, panelTop - panelBottom);
+            var panelSize = new Vector2(panelHalfWidth * 2f, panelTop - panelBottom);
             ViewUtil.MakeRect(transform, "PanelFrame", panelCenter,
                 panelSize + new Vector2(0.22f, 0.22f), PanelFrameColor, FrameOrder);
             ViewUtil.MakeRect(transform, "Panel", panelCenter, panelSize, PanelColor, PanelOrder);
             panelBoundsCenter = panelCenter;
             panelBoundsHalf = panelSize * 0.5f + new Vector2(0.11f, 0.11f);
 
-            ViewUtil.MakeText3D(transform, "Title", new Vector2(0f, titleY),
-                priced
-                    ? Loc.Pick("SELL CARDS  -  click a card to sell it",
-                        "KART SAT  -  satmak için karta tıkla")
-                    : Loc.Pick("YOUR DECK  -  " + sorted.Count + " cards",
-                        "DESTEN  -  " + sorted.Count + " kart"),
+            ViewUtil.MakeText3D(transform, "Title", new Vector2(0f, titleY), title,
                 90, 0.030f, TitleColor, ChromeOrder, TextAnchor.MiddleCenter);
 
             // A fractional offset means the row above and the row below can BOTH be partly on
             // screen, so the window reaches one row past the visible band on each side and rows
             // are then culled by their CENTRE. The overspill lands in the panel's padding, which
-            // matters because TextMesh price labels cannot be clipped by a sprite mask.
-            int firstIndex = Mathf.Max(0, (Mathf.FloorToInt(scrollRows) - 1) * Columns);
+            // matters because a sprite mask cannot clip this overlay's TextMesh chrome.
+            int firstIndex = Mathf.Max(0, (Mathf.FloorToInt(scrollRows) - 1) * columns);
             int lastIndex = Mathf.Min(sorted.Count,
-                (Mathf.CeilToInt(scrollRows) + VisibleRows + 1) * Columns);
+                (Mathf.CeilToInt(scrollRows) + VisibleRows + 1) * columns);
             for (int i = firstIndex; i < lastIndex; i++)
             {
-                int row = i / Columns;
-                int column = i % Columns;
-                int columnsInRow = Mathf.Min(Columns, sorted.Count - row * Columns);
+                int row = i / columns;
+                int column = i % columns;
+                int columnsInRow = Mathf.Min(columns, sorted.Count - row * columns);
                 float startX = -(columnsInRow - 1) * SpacingX * 0.5f;
                 var position = new Vector2(startX + column * SpacingX,
                     GridTop - (row - scrollRows) * pitch);
@@ -180,17 +241,6 @@ namespace ProjectBlock.View
                 CardVisual visual = CardVisual.Create(transform, "Overlay_" + sorted[i].Id,
                     sorted[i], true, false, position, CardOrder);
                 visual.transform.localScale = new Vector3(CardScale, CardScale, 1f);
-                if (priced)
-                {
-                    int value = sellValue(sorted[i]);
-                    ViewUtil.MakeText3D(transform, "SellPrice_" + i,
-                        position + new Vector2(0f, -cardHalf - 0.22f),
-                        value > 0
-                            ? Loc.Pick("sell " + value, "satış " + value)
-                            : Loc.Pick("worthless", "değersiz"), 90, 0.026f,
-                        value > 0 ? TitleColor : new Color(0.72f, 0.74f, 0.78f),
-                        PriceOrder, TextAnchor.MiddleCenter);
-                }
                 // Only a card whose CENTRE is still in the band takes clicks. One that has
                 // scrolled up under the plate is half-hidden, and selling a card you cannot see
                 // because you clicked where it used to be would be indefensible.
@@ -206,8 +256,8 @@ namespace ProjectBlock.View
 
             // The plates that make scrolling clean: panel-coloured, drawn ABOVE the cards and
             // below the title/hint, so a row sliding out slides UNDER them instead of blinking
-            // out. This is the stand-in for a sprite mask, which cannot be used here because
-            // TextMesh price labels ignore masks entirely.
+            // out. This is the stand-in for a sprite mask, which the TextMesh chrome in this
+            // overlay ignores entirely.
             BuildOccluder("TopPlate", topCut, panelTop);
             BuildOccluder("BottomPlate", panelBottom, bottomCut);
 
@@ -217,12 +267,44 @@ namespace ProjectBlock.View
                 BuildScrollbar(GridTop + cardHalf, gridBottom - cardHalf, maxScroll);
             }
             FitToCamera(panelCenter, panelSize);
-            ViewUtil.MakeText3D(transform, "CloseHint", new Vector2(0f, hintY),
-                scrolls
-                    ? Loc.Pick("wheel or drag the bar to scroll    -    click outside to close",
-                        "tekerlek ya da çubukla kaydır    -    kapatmak için dışarı tıkla")
-                    : Loc.Pick("click outside to close", "kapatmak için dışarı tıkla"),
+            ViewUtil.MakeText3D(transform, "CloseHint", new Vector2(0f, hintY), hint,
                 90, 0.023f, HintColor, ChromeOrder, TextAnchor.MiddleCenter);
+        }
+
+        /// <summary>
+        /// How many cards a row holds for a list this long. Never more than MaxColumns, and
+        /// never more than there are cards - a five-card list is five wide, not eight wide with
+        /// three holes in it.
+        ///
+        /// The SHAPE picker goes further and blocks the grid up, because it is the one list
+        /// that is always short: nine shapes read as a 3x3 block of choices rather than a row
+        /// of eight with one card stranded underneath. Two claims decide how wide that block
+        /// is - enough columns to fit every shape in the rows that are ON SCREEN (a picker the
+        /// player has to scroll is a picker that hides half the answer), and never narrower
+        /// than a square. Whichever asks for more wins.
+        /// </summary>
+        private static int ColumnsFor(int count, bool shapeMode)
+        {
+            int wanted = shapeMode
+                ? Mathf.Max(Mathf.CeilToInt(count / (float)VisibleRows),
+                    Mathf.CeilToInt(Mathf.Sqrt(count)))
+                : count;
+            return Mathf.Clamp(wanted, 1, MaxColumns);
+        }
+
+        /// <summary>
+        /// Roughly how wide a line of overlay chrome will come out, in world units. A TextMesh
+        /// only knows its extent once it has been laid out, which is a frame too late for a
+        /// panel that has to be sized around it, so this estimates instead: Unity draws a
+        /// TextMesh glyph at characterSize * fontSize / 10 tall, and this font averages about
+        /// half that wide. Every caller here uses fontSize 90.
+        ///
+        /// Deliberately a slight OVER-estimate - too wide a panel is a panel with air in it,
+        /// too narrow is a title hanging off the edge.
+        /// </summary>
+        private static float EstimateTextWidth(string text, float characterSize)
+        {
+            return text == null ? 0f : text.Length * characterSize * 90f * 0.05f;
         }
 
         /// <summary>True if the point is inside the overlay's panel. A click in here must NOT
@@ -308,7 +390,7 @@ namespace ProjectBlock.View
                 return;
             }
             scrollRows = wanted;
-            Show(lastCards, lastSellValue);
+            ShowList(lastCards, lastSellMode, lastShapeMode);
         }
 
         /// <summary>Starts the next visit at the top. Called when the overlay is OPENED, not on
@@ -327,13 +409,13 @@ namespace ProjectBlock.View
                 return;
             }
             ViewUtil.MakeRect(transform, name, new Vector2(0f, (top + bottom) * 0.5f),
-                new Vector2(PanelHalfWidth * 2f, top - bottom), PanelColor, OccluderOrder);
+                new Vector2(panelHalfWidth * 2f, top - bottom), PanelColor, OccluderOrder);
         }
 
         /// <summary>Track and thumb down the right edge, showing where in the deck you are.</summary>
         private void BuildScrollbar(float top, float bottom, float maxScroll)
         {
-            float x = PanelHalfWidth - 0.24f;
+            float x = panelHalfWidth - 0.24f;
             float height = top - bottom;
             scrollTrackCenter = new Vector2(x, (top + bottom) * 0.5f);
             scrollTrackHalf = new Vector2(0.08f, height * 0.5f);
@@ -368,13 +450,13 @@ namespace ProjectBlock.View
 
             var sorted = new List<BlockCard>(cards);
             sorted.Sort(CompareCards);
-            int rows = (sorted.Count + Columns - 1) / Columns;
+            int rows = (sorted.Count + MaxColumns - 1) / MaxColumns;
             float startY = (rows - 1) * SpacingY * 0.5f + 0.3f;
             for (int i = 0; i < sorted.Count; i++)
             {
-                int row = i / Columns;
-                int column = i % Columns;
-                int columnsInRow = Mathf.Min(Columns, sorted.Count - row * Columns);
+                int row = i / MaxColumns;
+                int column = i % MaxColumns;
+                int columnsInRow = Mathf.Min(MaxColumns, sorted.Count - row * MaxColumns);
                 float startX = -(columnsInRow - 1) * SpacingX * 0.5f;
                 var position = new Vector2(startX + column * SpacingX, startY - row * SpacingY);
                 if (selectedIds.Contains(sorted[i].Id))
@@ -501,6 +583,7 @@ namespace ProjectBlock.View
         {
             IsOpen = false;
             confirmButtonShown = false;
+            lastShapeMode = false;
             scrollbarShown = false;
             // Undo the fit, or the picker - which lays itself out in raw world units - would
             // inherit whatever scale the last card list was given.
