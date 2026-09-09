@@ -16,9 +16,40 @@ namespace ProjectBlock.View
     /// <summary>Canvas strip listing the player's powers.</summary>
     public sealed class PowerBarView : MonoBehaviour
     {
-        private const float PanelWidth = 232f;
-        private const float PanelHeight = 84f;
-        private const float PanelGap = 8f;
+        // Shape belongs to the layout - a column down the left edge on a desktop, a row of
+        // squares under the joker row on a phone. See UiLayout.
+        private static float PanelWidth
+        {
+            get { return UiLayout.Active.PowerPanel.x; }
+        }
+
+        private static float PanelHeight
+        {
+            get { return UiLayout.Active.PowerPanel.y; }
+        }
+
+        private static float PanelGap
+        {
+            get { return UiLayout.Active.PowerGap; }
+        }
+
+        private static bool Compact
+        {
+            get { return UiLayout.Active.BarsAsRow; }
+        }
+
+        /// <summary>Where the strip hangs from the top of the canvas. On the desktop this is the
+        /// old hand-placed 256; in a row it sits under the joker row.</summary>
+        private static float TopOffset
+        {
+            get
+            {
+                UiLayout layout = UiLayout.Active;
+                return layout.BarsAsRow
+                    ? layout.BarRowTop + layout.JokerPanel.y + 12f
+                    : 256f - layout.CornerInset;
+            }
+        }
 
         private static readonly Color PanelColor = new Color(0.13f, 0.15f, 0.19f, 0.92f);
         private static readonly Color ReadyColor = new Color(0.12f, 0.30f, 0.34f, 0.95f);
@@ -51,11 +82,49 @@ namespace ProjectBlock.View
             var go = new GameObject("PowerBar");
             go.transform.SetParent(canvas, false);
             root = go.AddComponent<RectTransform>();
-            root.anchorMin = new Vector2(0f, 1f);
-            root.anchorMax = new Vector2(0f, 1f);
-            root.pivot = new Vector2(0f, 1f);
-            root.anchoredPosition = new Vector2(16f, -256f);
             root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+            UiLayout.PlaceBarRoot(root, false, TopOffset);
+        }
+
+        /// <summary>Re-anchors the strip and every slot in it after the layout changed.</summary>
+        public void RelayoutForScreen()
+        {
+            if (root == null)
+            {
+                return;
+            }
+            root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+            UiLayout.PlaceBarRoot(root, false, TopOffset);
+            PlaceSlots();
+        }
+
+        /// <summary>Lays every visible slot out for the current profile. A row needs the count so
+        /// it can stay centred, which is why this runs after Refresh rather than at creation.</summary>
+        private void PlaceSlots()
+        {
+            int showing = 0;
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i].Root.activeSelf)
+                {
+                    showing++;
+                }
+            }
+            for (int i = 0; i < panels.Count; i++)
+            {
+                UiLayout.PlaceBarSlot(panels[i].Root.GetComponent<RectTransform>(),
+                    i, showing, new Vector2(PanelWidth, PanelHeight), PanelGap, false);
+                if (panels[i].Body != null)
+                {
+                    panels[i].Body.gameObject.SetActive(!Compact);
+                }
+                if (panels[i].Title != null)
+                {
+                    panels[i].Title.fontSize = Compact ? 16 : 22;
+                    panels[i].Title.rectTransform.sizeDelta = new Vector2(
+                        PanelWidth - 20f, Compact ? PanelHeight - 22f : 24f);
+                }
+            }
         }
 
         /// <summary>Shows or hides the whole strip. The menu layer hides it while no run is
@@ -91,6 +160,7 @@ namespace ProjectBlock.View
                     Fill(panels[i], powers[i], session, targetingInstanceId);
                 }
             }
+            PlaceSlots();
         }
 
         /// <summary>Index of the power panel under a screen point, or -1. The index matches
@@ -244,11 +314,8 @@ namespace ProjectBlock.View
             var go = new GameObject("Power_" + index);
             go.transform.SetParent(root, false);
             RectTransform rect = go.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-            rect.anchoredPosition = new Vector2(0f, -index * (PanelHeight + PanelGap));
+            UiLayout.PlaceBarSlot(rect, index, index + 1,
+                new Vector2(PanelWidth, PanelHeight), PanelGap, false);
 
             var background = go.AddComponent<Image>();
             background.color = PanelColor;

@@ -207,7 +207,9 @@ namespace ProjectBlock.View
             canvas.sortingOrder = HudCanvasOrder;
             CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.referenceResolution = UiLayout.Active.CanvasReference;
+            scaler.matchWidthOrHeight = UiLayout.Active.CanvasMatch;
+            hudScaler = scaler;
             hudCanvas = canvas;
 
             // AFTER the HUD canvas, and on one of its own - see BuildTooltipCanvas.
@@ -269,6 +271,161 @@ namespace ProjectBlock.View
                 new Color(1f, 0.55f, 0.45f));
             padDebugText.rectTransform.sizeDelta = new Vector2(900f, 40f);
             padDebugText.text = string.Empty;
+
+            // LAST: everything above was built at the desktop's numbers, and this is what moves
+            // it to the active profile. Doing it here rather than inline keeps ONE description of
+            // where the HUD goes, which is also the one a layout change re-runs.
+            ApplyLayoutToHud();
+        }
+
+        private CanvasScaler hudScaler;
+
+        private RectTransform[] letterboxMask;
+
+        /// <summary>
+        /// Paints the window OUTSIDE the phone area white while a layout is being forced onto a
+        /// screen of the wrong shape (F6). Editor only in practice: nothing forces a profile on a
+        /// device, so a real build never has a surround at all.
+        ///
+        /// FOUR UI PANELS, NOT A SECOND CAMERA. A camera was the obvious way to fill the leftover
+        /// window and it was the wrong one - URP's render graph will not have two screen cameras
+        /// added this way and fills the console with resource errors instead of drawing anything.
+        /// The HUD canvas already covers the whole window, so four rects anchored to the strips
+        /// outside the viewport do the same job with nothing to go wrong.
+        ///
+        /// WHITE on purpose. The game's own backdrop is nearly black, so a black surround is
+        /// invisible and you cannot tell where the phone screen stops - which is the entire
+        /// reason for drawing one.
+        /// </summary>
+        private void ApplyLetterboxMask(Rect view)
+        {
+            bool needed = view.width < 0.999f || view.height < 0.999f;
+            if (letterboxMask == null)
+            {
+                if (!needed || hudCanvas == null)
+                {
+                    return;
+                }
+                letterboxMask = new RectTransform[4];
+                for (int i = 0; i < 4; i++)
+                {
+                    var go = new GameObject("LetterboxMask" + i, typeof(RectTransform));
+                    var rect = (RectTransform)go.transform;
+                    rect.SetParent(hudCanvas.transform, false);
+                    var image = go.AddComponent<Image>();
+                    image.color = Color.white;
+                    image.raycastTarget = false;
+                    letterboxMask[i] = rect;
+                }
+            }
+            for (int i = 0; i < letterboxMask.Length; i++)
+            {
+                letterboxMask[i].gameObject.SetActive(needed);
+                if (needed)
+                {
+                    // Last in the canvas, so it covers anything that bleeds outside the phone.
+                    letterboxMask[i].SetAsLastSibling();
+                }
+            }
+            if (!needed)
+            {
+                return;
+            }
+            // left, right, below, above - between them they are exactly the window minus the view
+            Stretch(letterboxMask[0], new Vector2(0f, 0f), new Vector2(view.xMin, 1f));
+            Stretch(letterboxMask[1], new Vector2(view.xMax, 0f), new Vector2(1f, 1f));
+            Stretch(letterboxMask[2], new Vector2(view.xMin, 0f),
+                new Vector2(view.xMax, view.yMin));
+            Stretch(letterboxMask[3], new Vector2(view.xMin, view.yMax),
+                new Vector2(view.xMax, 1f));
+        }
+
+        private static void Stretch(RectTransform rect, Vector2 min, Vector2 max)
+        {
+            rect.anchorMin = min;
+            rect.anchorMax = max;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+        }
+
+        private CanvasScaler tooltipScaler;
+
+        /// <summary>
+        /// Moves the HUD to the active layout profile. Called once at build and again whenever
+        /// the screen's shape changes.
+        ///
+        /// Nothing here is created or destroyed - the same texts, the same bars, the same badge
+        /// are re-anchored and re-sized. That is deliberate: an interface that rebuilds itself on
+        /// a layout change loses whatever state it was showing, and this one can change shape in
+        /// the middle of a round.
+        /// </summary>
+        private void ApplyLayoutToHud()
+        {
+            UiLayout layout = UiLayout.Active;
+            Rect view = UiLayout.Viewport;
+
+            // THE HUD LIVES INSIDE THE VIEWPORT. Every piece of it hangs off hudShake, so moving
+            // that one rect onto the letterbox takes the whole interface with it - otherwise the
+            // world would be drawn phone-shaped in the middle while the score and the bars stayed
+            // pinned to the corners of a 16:9 monitor, which is worse than not letterboxing.
+            if (hudShake != null)
+            {
+                hudShake.anchorMin = view.min;
+                hudShake.anchorMax = view.max;
+                hudShake.offsetMin = Vector2.zero;
+                hudShake.offsetMax = Vector2.zero;
+            }
+            // And the SCALER has to be told the same thing. It sizes UI against the whole window,
+            // so inside a half-width letterbox everything would come out twice the size it should
+            // be; dividing the reference by the viewport cancels exactly that.
+            var reference = new Vector2(
+                layout.CanvasReference.x / Mathf.Max(view.width, 0.0001f),
+                layout.CanvasReference.y / Mathf.Max(view.height, 0.0001f));
+            if (hudScaler != null)
+            {
+                hudScaler.referenceResolution = reference;
+                hudScaler.matchWidthOrHeight = layout.CanvasMatch;
+            }
+            if (tooltipScaler != null)
+            {
+                tooltipScaler.referenceResolution = reference;
+                tooltipScaler.matchWidthOrHeight = layout.CanvasMatch;
+            }
+            if (totalText != null)
+            {
+                totalText.fontSize = layout.ScoreFont;
+                totalText.rectTransform.anchoredPosition = new Vector2(0f, -layout.ScoreTop);
+            }
+            if (messageText != null)
+            {
+                messageText.fontSize = layout.MessageFont;
+                messageText.rectTransform.anchoredPosition = new Vector2(0f, -layout.MessageTop);
+            }
+            if (infoText != null)
+            {
+                infoText.fontSize = layout.InfoFont;
+                infoText.rectTransform.anchoredPosition =
+                    new Vector2(layout.CornerInset, -layout.CornerInset);
+                infoText.rectTransform.sizeDelta = new Vector2(layout.InfoWidth, 460f);
+            }
+            if (bossBadgeRoot != null)
+            {
+                // SCALED rather than resized: the badge's diamond, glyph and label are children
+                // positioned in its own pixels, and scaling takes all of them together.
+                float k = layout.BadgeSize / BossBadgeSize;
+                bossBadgeRoot.localScale = new Vector3(k, k, 1f);
+                bossBadgeRoot.anchoredPosition =
+                    new Vector2(-layout.BadgeMargin, -layout.BadgeMargin);
+            }
+            ApplyLetterboxMask(view);
+            if (jokerBar != null)
+            {
+                jokerBar.RelayoutForScreen();
+            }
+            if (powerBar != null)
+            {
+                powerBar.RelayoutForScreen();
+            }
         }
 
         /// <summary>The two overlay canvases, in order. The gap is there so a third layer can be
@@ -302,7 +459,9 @@ namespace ProjectBlock.View
             tooltipCanvas.sortingOrder = TooltipCanvasOrder;
             CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.referenceResolution = UiLayout.Active.CanvasReference;
+            scaler.matchWidthOrHeight = UiLayout.Active.CanvasMatch;
+            tooltipScaler = scaler;
 
             // The panel itself: pivot at its TOP-LEFT corner, because that is the corner the
             // cursor anchors, and anchored to the canvas's bottom-left so anchoredPosition is

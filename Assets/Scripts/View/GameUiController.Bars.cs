@@ -318,6 +318,15 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // The stacked shelf's own DECK button. It stands in for the deck PILE, which that
+            // layout covers - so it does exactly what clicking the pile does.
+            if (marketView.TryDeckAt(world))
+            {
+                sellCardsMode = true;
+                deckOverlay.ResetScroll();
+                deckOverlay.Show(session.OwnedCards, true);
+                return;
+            }
             int offerIndex = marketView.OfferAt(world);
             if (offerIndex < 0)
             {

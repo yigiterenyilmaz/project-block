@@ -37,6 +37,10 @@ namespace ProjectBlock.View
         /// <summary>Board size the main world was last built at, so a world opening or closing
         /// rebuilds it even though the GameBoard object did not change.</summary>
         private float lastMainBoardSize = -1f;
+
+        /// <summary>Where the board was last built. Part of the rebuild test in RefreshAll: the
+        /// two layouts use the same 6.5-unit box but put the board in different places.</summary>
+        private Vector2 lastMainBoardCenter = new Vector2(float.NaN, float.NaN);
         private readonly List<SpriteRenderer> mirrorHandSprites = new List<SpriteRenderer>();
         private readonly List<GameObject> mirrorHandRoots = new List<GameObject>();
 
@@ -100,7 +104,7 @@ namespace ProjectBlock.View
                 RoundEngine round = session != null ? session.CurrentRound : null;
                 return round != null && round.HasMirrorWorld
                     ? MirrorBoardWorldSize
-                    : maxBoardWorldSize;
+                    : MaxBoardWorldSize;
             }
         }
 

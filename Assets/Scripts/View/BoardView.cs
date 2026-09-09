@@ -112,7 +112,6 @@ namespace ProjectBlock.View
         /// permanent); it is a place with a deadline on it.</summary>
         /// <summary>"Kütleçekim merkezi"'s pull markers, in water's own blue - what they are
         /// telling you about is where the WATER goes, and nothing else.</summary>
-        private static readonly Color GravityArrowColor = new Color(0.35f, 0.6f, 1f, 0.75f);
 
         /// <summary>"Karantina": how much colour is pulled out of a block standing in a sealed
         /// zone, and how far its value is taken down. This is done to the block's OWN colour
@@ -199,9 +198,9 @@ namespace ProjectBlock.View
         /// <summary>"Matruşka"'s dolls, redrawn whenever one splits or moves.</summary>
         private readonly List<GameObject> dollMarkers = new List<GameObject>();
 
-        /// <summary>"Kütleçekim merkezi"'s arrows, shown only while gravity is NOT pointing
-        /// down - normal gravity needs no explaining.</summary>
-        private readonly List<GameObject> gravityMarkers = new List<GameObject>();
+        /// <summary>"Kütleçekim merkezi"'s field, shown only while gravity is NOT pointing
+        /// down - normal gravity needs no explaining. See GravityFieldView.</summary>
+        private GravityFieldView gravityField;
 
         /// <summary>"Karantina"'s sealed rows and columns, in absolute board coordinates.</summary>
         private readonly List<GridPos> quarantinedCells = new List<GridPos>();
@@ -254,7 +253,17 @@ namespace ProjectBlock.View
         /// ANIMATION LAB nothing was destroyed, so without this the lab draws a copy on top of the
         /// player's actual block, breaks the copy, and leaves the original sitting there - which
         /// looks exactly like the effect skipping their block.</summary>
-        private readonly List<GridPos> circuitHiddenCells = new List<GridPos>();
+        /// <summary>
+        /// Cells whose cube the BOARD has stopped drawing because an effect is drawing its own
+        /// copy instead. Shared by every effect that borrows a cube rather than owned by one:
+        /// the circuit cooks blocks, the invader's column pulls them out, and both need the
+        /// board to stand back for exactly as long as they are holding them.
+        ///
+        /// In a real round the cube is already destroyed and this changes nothing. It is the
+        /// ANIMATION LAB it exists for - there nothing has been destroyed, so without it the
+        /// effect's copy is drawn on top of a cube that never leaves.
+        /// </summary>
+        private readonly List<GridPos> borrowedCells = new List<GridPos>();
 
         private void Awake()
         {
@@ -378,9 +387,11 @@ namespace ProjectBlock.View
             // The circuit effect draws its own copies of the cubes it owns; the moment it lets go,
             // the board takes its own back. Polled rather than pushed because the effect ends on
             // its own clock, not on anything the board is told about.
-            if (circuitHiddenCells.Count > 0 && (circuitHeat == null || !circuitHeat.Active))
+            if (borrowedCells.Count > 0
+                && (circuitHeat == null || !circuitHeat.Active)
+                && (invaderColumn == null || !invaderColumn.Extracting))
             {
-                RestoreCircuitCells();
+                RestoreBorrowedCells();
             }
             PulseOvertimeLines();
             if (board == null || kindCache == null)
@@ -649,7 +660,7 @@ namespace ProjectBlock.View
             StopAllCoroutines();
             animatingWater = false;
             waterHiddenCells.Clear(); // the drop sprites go with the children below
-            circuitHiddenCells.Clear(); // the renderers below are rebuilt enabled anyway
+            borrowedCells.Clear(); // the renderers below are rebuilt enabled anyway
             // EXCEPT the overtime glow, which outlives a rebuild. It is not part of the board's
             // contents: it is a light over them, its texture costs real time to generate, and
             // sweeping it up with everything else meant the overtime effect was torn down and
@@ -670,17 +681,26 @@ namespace ProjectBlock.View
             // distance field on every placement would be pure waste.
             Transform keepNest = creatureNest != null ? creatureNest.transform : null;
             Transform keepLane = invaderColumn != null ? invaderColumn.transform : null;
+            // The gravity field is a property of the ROUND, not of the board's contents, so it
+            // survives the rebuild and is CLEARED below - a new arena starts under ordinary
+            // gravity, which is the rules' own behaviour and not something this decides.
+            Transform keepGravity = gravityField != null ? gravityField.transform : null;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Transform child = transform.GetChild(i);
                 if (child == keepGlow || child == keepSurface
                     || child == keepInfection || child == keepCircuit
                     || child == keepOverload || child == keepQuarantine
-                    || child == keepHeat || child == keepNest || child == keepLane)
+                    || child == keepHeat || child == keepNest || child == keepLane
+                    || child == keepGravity)
                 {
                     continue;
                 }
                 Destroy(child.gameObject);
+            }
+            if (gravityField != null)
+            {
+                gravityField.Clear();
             }
             ghostSprites.Clear();
             outsidePreviewSprites.Clear();
@@ -1176,7 +1196,7 @@ namespace ProjectBlock.View
                 return;
             }
             EnsureCircuitHeat();
-            HideForCircuit(cubes);
+            HideBorrowedCells(cubes);
             circuitHeat.Play(CircuitGhosts(cubes), cellSize, seconds);
         }
 
@@ -1189,7 +1209,7 @@ namespace ProjectBlock.View
                 return;
             }
             EnsureCircuitHeat();
-            HideForCircuit(cubes);
+            HideBorrowedCells(cubes);
             circuitHeat.Hold(CircuitGhosts(cubes), cellSize);
         }
 
@@ -1200,12 +1220,12 @@ namespace ProjectBlock.View
             {
                 circuitHeat.Stop();
             }
-            RestoreCircuitCells();
+            RestoreBorrowedCells();
         }
 
-        private void HideForCircuit(IReadOnlyList<DestroyedCube> cubes)
+        private void HideBorrowedCells(IReadOnlyList<DestroyedCube> cubes)
         {
-            RestoreCircuitCells();
+            RestoreBorrowedCells();
             for (int i = 0; i < cubes.Count; i++)
             {
                 GridPos p = cubes[i].Pos;
@@ -1220,16 +1240,16 @@ namespace ProjectBlock.View
                 if (r != null && r.enabled)
                 {
                     r.enabled = false;
-                    circuitHiddenCells.Add(p);
+                    borrowedCells.Add(p);
                 }
             }
         }
 
-        private void RestoreCircuitCells()
+        private void RestoreBorrowedCells()
         {
-            for (int i = 0; i < circuitHiddenCells.Count; i++)
+            for (int i = 0; i < borrowedCells.Count; i++)
             {
-                GridPos p = circuitHiddenCells[i];
+                GridPos p = borrowedCells[i];
                 int cx = p.X - board.MinX;
                 int cy = p.Y - board.MinY;
                 if (cx >= 0 && cy >= 0 && cx < cellRenderers.GetLength(0)
@@ -1238,7 +1258,7 @@ namespace ProjectBlock.View
                     cellRenderers[cx, cy].enabled = true;
                 }
             }
-            circuitHiddenCells.Clear();
+            borrowedCells.Clear();
         }
 
         private void EnsureCircuitHeat()
@@ -1313,41 +1333,34 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// "Kütleçekim merkezi": marks which way water is being pulled, with a row of pips just
-        /// outside the edge it falls towards. Nothing is drawn while gravity points DOWN, because
-        /// that is what every board does and a permanent marker for it would be noise.
+        /// "Kütleçekim merkezi": points the arena's gravity FIELD along the pull.
+        ///
+        /// <paramref name="flow"/> is GameBoard.WaterFlow, handed straight through from the rules
+        /// - this view keeps no direction of its own. (0,-1) is an ordinary board and turns the
+        /// whole thing off: every board falls downward, and a permanent marker for that is noise.
+        ///
+        /// It used to be a row of pips outside one edge. They read as a debug marker, which is
+        /// the wrong weight for a power that turns the physics of the arena for a whole round -
+        /// see GravityFieldView for what replaced them.
         /// </summary>
         public void ShowGravity(GridPos flow)
         {
-            for (int i = gravityMarkers.Count - 1; i >= 0; i--)
-            {
-                if (gravityMarkers[i] != null)
-                {
-                    Destroy(gravityMarkers[i]);
-                }
-            }
-            gravityMarkers.Clear();
-            if (board == null || (flow.X == 0 && flow.Y == -1))
+            bool down = flow.X == 0 && flow.Y == -1;
+            if (board == null || (down && gravityField == null))
             {
                 return;
             }
-            // One pip per lane, just beyond the edge the water is heading for.
-            bool horizontal = flow.X != 0;
-            int lanes = horizontal ? board.Height : board.Width;
-            for (int i = 0; i < lanes; i++)
+            EnsureGravityField();
+            gravityField.Show(flow, WorldRect, cellSize, board.Width, board.Height);
+        }
+
+        private void EnsureGravityField()
+        {
+            if (gravityField == null)
             {
-                GridPos edge = horizontal
-                    ? new GridPos(flow.X > 0 ? board.MinX + board.Width - 1 : board.MinX,
-                        board.MinY + i)
-                    : new GridPos(board.MinX + i,
-                        flow.Y > 0 ? board.MinY + board.Height - 1 : board.MinY);
-                Vector2 at = CellToWorld(edge)
-                    + new Vector2(flow.X, flow.Y) * (cellSize * 0.72f);
-                SpriteRenderer pip = ViewUtil.MakeRect(transform, "Gravity_" + i, at,
-                    new Vector2(cellSize * (horizontal ? 0.18f : 0.5f),
-                        cellSize * (horizontal ? 0.5f : 0.18f)),
-                    GravityArrowColor, 6);
-                gravityMarkers.Add(pip.gameObject);
+                var go = new GameObject("GravityField");
+                go.transform.SetParent(transform, false);
+                gravityField = go.AddComponent<GravityFieldView>();
             }
         }
 
@@ -1378,6 +1391,9 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // The column draws its OWN copies of what it takes, so the board stands back for
+            // as long as it is holding them - see borrowedCells.
+            HideBorrowedCells(taken);
             invaderColumn.PlayExtraction(taken, CellToWorld,
                 cube => ViewUtil.CubeTile(cube.Kind, CardOf(cube)),
                 (cube, tile) => ViewUtil.CubeTileColor(cube, tile));

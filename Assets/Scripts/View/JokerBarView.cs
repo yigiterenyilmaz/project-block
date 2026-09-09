@@ -16,12 +16,29 @@ namespace ProjectBlock.View
     /// <summary>Canvas strip listing the player's jokers.</summary>
     public sealed class JokerBarView : MonoBehaviour
     {
-        private const float PanelWidth = 232f;
-        private const float PanelHeight = 92f;
-        private const float PanelGap = 8f;
+        // The strip's SHAPE belongs to the layout: a column of wide panels down the right edge
+        // on a desktop, a row of square slots under the score on a phone. See UiLayout.
+        private static float PanelWidth
+        {
+            get { return UiLayout.Active.JokerPanel.x; }
+        }
 
-        /// <summary>Inset from the top-right corner, shared by every anchored position here.</summary>
-        private const float CornerInset = 16f;
+        private static float PanelHeight
+        {
+            get { return UiLayout.Active.JokerPanel.y; }
+        }
+
+        private static float PanelGap
+        {
+            get { return UiLayout.Active.JokerGap; }
+        }
+
+        /// <summary>True while the strip is a row of squares, which is too small for a body line
+        /// and gets the name alone.</summary>
+        private static bool Compact
+        {
+            get { return UiLayout.Active.BarsAsRow; }
+        }
 
         private static readonly Color PanelColor = new Color(0.13f, 0.15f, 0.19f, 0.92f);
         private static readonly Color ReadyColor = new Color(0.20f, 0.34f, 0.24f, 0.95f);
@@ -56,11 +73,8 @@ namespace ProjectBlock.View
             var go = new GameObject("JokerBar");
             go.transform.SetParent(canvas, false);
             root = go.AddComponent<RectTransform>();
-            root.anchorMin = new Vector2(1f, 1f);
-            root.anchorMax = new Vector2(1f, 1f);
-            root.pivot = new Vector2(1f, 1f);
-            root.anchoredPosition = new Vector2(-CornerInset, -CornerInset);
             root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+            UiLayout.PlaceBarRoot(root, true, topOffset);
         }
 
         /// <summary>How far the strip is pushed DOWN from its corner, in canvas pixels. The boss
@@ -68,9 +82,53 @@ namespace ProjectBlock.View
         /// it asks for its own height back rather than the bar guessing what is above it.</summary>
         public void SetTopOffset(float pixels)
         {
-            if (root != null)
+            topOffset = pixels;
+            UiLayout.PlaceBarRoot(root, true, topOffset);
+        }
+
+        private float topOffset;
+
+        /// <summary>Re-anchors the strip and every slot in it after the layout changed.</summary>
+        public void RelayoutForScreen()
+        {
+            if (root == null)
             {
-                root.anchoredPosition = new Vector2(-CornerInset, -CornerInset - pixels);
+                return;
+            }
+            root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+            UiLayout.PlaceBarRoot(root, true, UiLayout.Active.BarsAsRow
+                ? UiLayout.Active.BarRowTop : topOffset);
+            PlaceSlots();
+        }
+
+        /// <summary>Lays every visible slot out for the current profile. A row has to be told how
+        /// many there are so it can stay centred, which is why this runs after Refresh has
+        /// decided what is showing rather than when a panel is created.</summary>
+        private void PlaceSlots()
+        {
+            int showing = 0;
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i].Root.activeSelf)
+                {
+                    showing++;
+                }
+            }
+            for (int i = 0; i < panels.Count; i++)
+            {
+                UiLayout.PlaceBarSlot(panels[i].Root.GetComponent<RectTransform>(),
+                    i, showing, new Vector2(PanelWidth, PanelHeight), PanelGap, true);
+                if (panels[i].Body != null)
+                {
+                    // No room for a description in a square slot - the name carries it.
+                    panels[i].Body.gameObject.SetActive(!Compact);
+                }
+                if (panels[i].Title != null)
+                {
+                    panels[i].Title.fontSize = Compact ? 16 : 22;
+                    var tr = panels[i].Title.rectTransform;
+                    tr.sizeDelta = new Vector2(PanelWidth - 20f, Compact ? PanelHeight - 22f : 24f);
+                }
             }
         }
 
@@ -107,6 +165,8 @@ namespace ProjectBlock.View
                     Fill(panels[i], jokers[i], i, session, targetingInstanceId);
                 }
             }
+            // A ROW has to be re-centred whenever the count changes; a column does not care.
+            PlaceSlots();
         }
 
         /// <summary>Index of the joker panel under a screen point, or -1. The index matches
@@ -281,11 +341,8 @@ namespace ProjectBlock.View
             var go = new GameObject("Joker_" + index);
             go.transform.SetParent(root, false);
             RectTransform rect = go.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(1f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(1f, 1f);
-            rect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-            rect.anchoredPosition = new Vector2(0f, -index * (PanelHeight + PanelGap));
+            UiLayout.PlaceBarSlot(rect, index, index + 1,
+                new Vector2(PanelWidth, PanelHeight), PanelGap, true);
 
             var background = go.AddComponent<Image>();
             background.color = PanelColor;

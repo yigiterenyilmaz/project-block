@@ -441,7 +441,20 @@ namespace ProjectBlock.View
         /// it directly would be undone by the next slide.</summary>
         public void SetHovered(bool hovered)
         {
-            float scale = hovered ? HoverScale : 1f;
+            float scale = (hovered ? HoverScale : 1f) * BaseScale;
+            transform.localScale = new Vector3(scale, scale, 1f);
+        }
+
+        /// <summary>The card's RESTING size, which the hover multiplies rather than replaces.
+        /// It exists because a phone held upright draws the hand smaller: without it the first
+        /// hover would silently snap the card back to desktop size and leave it there.</summary>
+        public float BaseScale = 1f;
+
+        /// <summary>Sets the resting size and applies it now (the card is not hovered when this
+        /// is called - it is called as the card is dealt, or when the layout changes).</summary>
+        public void SetBaseScale(float scale)
+        {
+            BaseScale = scale;
             transform.localScale = new Vector3(scale, scale, 1f);
         }
 

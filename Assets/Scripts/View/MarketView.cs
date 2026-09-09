@@ -324,7 +324,11 @@ namespace ProjectBlock.View
 
             Masked(ViewUtil.MakeRect(transform, "Frame_" + i, slotCenter, tileSize,
                 RarityPalette.Frame(FrameColor, rarity), 34));
-            bool text = InsideWindow(slotCenter, windowRect);
+            // The tile's whole HEIGHT has to be inside, not just its middle: a tile that is
+            // half out of the window would otherwise print its name and price past the edge.
+            bool text = InsideWindow(slotCenter, windowRect)
+                && InsideWindow(slotCenter + new Vector2(0f, tileSize.y * 0.5f), windowRect)
+                && InsideWindow(slotCenter - new Vector2(0f, tileSize.y * 0.5f), windowRect);
 
             if (offer.Sold)
             {
@@ -603,9 +607,9 @@ namespace ProjectBlock.View
 
         /// <summary>Puts a renderer under the window mask. Sprites clip against the shell's
         /// interior; without this a half-scrolled section draws over the frame.</summary>
-        private static void Masked(SpriteRenderer renderer)
+        private void Masked(SpriteRenderer renderer)
         {
-            if (DemoLayout)
+            if (windowMask == null)
             {
                 return; // no window, nothing to clip against - and clipping to a mask that
                         // does not exist hides the sprite outright
@@ -617,9 +621,9 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Puts a whole subtree under the window mask.</summary>
-        private static void MaskAll(Transform root)
+        private void MaskAll(Transform root)
         {
-            if (DemoLayout)
+            if (windowMask == null)
             {
                 return; // see Masked
             }
@@ -648,9 +652,9 @@ namespace ProjectBlock.View
         /// <summary>Scrolls the shelf and lays it out again. Clamped, so the ends are hard.</summary>
         public bool Scroll(float notches)
         {
-            if (DemoLayout)
+            if (DemoLayout && !UiLayout.Active.MarketStacked)
             {
-                return false; // the demo shelf puts everything on screen at once
+                return false; // side by side, the whole shelf is on screen at once
             }
             if (shownSession == null || maxScroll <= 0.001f)
             {
@@ -786,6 +790,64 @@ namespace ProjectBlock.View
                 camPos.y - panelCenter.y * scale, 0f);
         }
 
+        /// <summary>
+        /// The footer for a STACKED shelf. Two hint lines and a corner button do not fit across a
+        /// phone - they end up printed over each other - so the strip is taller, the hint is one
+        /// centred line, and PROCEED becomes the full-width primary action a thumb expects at the
+        /// bottom of a screen.
+        /// </summary>
+        private void BuildStackedFooter(GameSession session, Rect panel)
+        {
+            ViewUtil.MakeText3D(transform, "DemoHint1",
+                new Vector2(panel.center.x, panel.yMin + DemoFooterHeight - 0.22f),
+                Loc.Pick("Tap a joker or power on the bars above to sell it",
+                    "Joker ya da güç satmak için üstteki barlara dokun"),
+                90, 0.021f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+
+            // TWO buttons, because the panel now covers the whole screen and the deck pile it
+            // used to leave visible is underneath it. The deck is the SELL screen, so losing the
+            // way in would lose selling altogether - it gets its own button rather than a hint
+            // pointing at something the player cannot see.
+            float gap = 0.18f;
+            float full = panel.width - DemoPad * 2f;
+            float deckWidth = full * 0.34f;
+            float proceedWidth = full - deckWidth - gap;
+            float buttonY = panel.yMin + 0.52f;
+            var deckCentre = new Vector2(panel.xMin + DemoPad + deckWidth * 0.5f, buttonY);
+            var deckSize = new Vector2(deckWidth, 0.86f);
+            demoDeckRect = new Rect(deckCentre.x - deckWidth * 0.5f,
+                deckCentre.y - deckSize.y * 0.5f, deckWidth, deckSize.y);
+            ViewUtil.MakeRect(transform, "DemoDeck", deckCentre, deckSize, DemoDeckColor, 35);
+            ViewUtil.MakeText3D(transform, "DemoDeckLabel", deckCentre + new Vector2(0f, 0.12f),
+                Loc.Pick("DECK", "DESTE"), 60, 0.040f, PanelCreamColor, 38,
+                TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "DemoDeckSub", deckCentre - new Vector2(0f, 0.17f),
+                Loc.Pick("sell cards", "kart sat"), 90, 0.024f, PanelCreamColor, 38,
+                TextAnchor.MiddleCenter);
+
+            var size = new Vector2(proceedWidth, 0.86f);
+            var centre = new Vector2(panel.xMax - DemoPad - proceedWidth * 0.5f, buttonY);
+            demoProceedRect = new Rect(centre.x - size.x * 0.5f, centre.y - size.y * 0.5f,
+                size.x, size.y);
+            ViewUtil.MakeRect(transform, "DemoProceed", centre, size, DemoProceedColor, 35);
+            ViewUtil.MakeText3D(transform, "DemoProceedLabel", centre + new Vector2(0f, 0.13f),
+                Loc.Pick("PROCEED", "DEVAM"), 60, 0.042f, PanelCreamColor, 38,
+                TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "DemoProceedSub", centre - new Vector2(0f, 0.17f),
+                session.BossStageFollowsThisRound && !session.InBossStage
+                    ? Loc.Pick("BOSS of round " + session.RoundNumber,
+                        session.RoundNumber + ". rauntun PATRONU")
+                    : Loc.Pick("round " + (session.RoundNumber + 1),
+                        "raunt " + (session.RoundNumber + 1)),
+                90, 0.024f, PanelCreamColor, 38, TextAnchor.MiddleCenter);
+        }
+
+        /// <summary>True if a world point is on the stacked footer's DECK button.</summary>
+        public bool TryDeckAt(Vector2 world)
+        {
+            return demoDeckRect.width > 0.001f && demoDeckRect.Contains(ToLocal(world));
+        }
+
         /// <summary>The tag printed at the top of a tile: the tier word replaces the kind word
         /// for rare/legendary (the row header already says which kind it is, and one short word
         /// is all that fits across the tile).</summary>
@@ -888,7 +950,10 @@ namespace ProjectBlock.View
         private const float DemoTitleHeight = 0.85f;
 
         /// <summary>The strip across the bottom: the hints, and PROCEED on the right.</summary>
-        private const float DemoFooterHeight = 0.85f;
+        private static float DemoFooterHeight
+        {
+            get { return UiLayout.Active.MarketFooterHeight; }
+        }
 
         // ---- WIDTH IS DECIDED BY THE CONTENT, NOT BY THE SCREEN ----
         // The panel used to take the whole width it was given and then hand each offer a slot a
@@ -943,6 +1008,18 @@ namespace ProjectBlock.View
 
         private static readonly Color DemoProceedColor = new Color(0.17f, 0.42f, 0.28f);
 
+        /// <summary>The DECK button beside it - a secondary action, so a cooler colour.</summary>
+        private static readonly Color DemoDeckColor = new Color(0.20f, 0.26f, 0.38f);
+
+        /// <summary>Where that button is, for the click test. Empty when it is not drawn.</summary>
+        private Rect demoDeckRect;
+
+        /// <summary>What the joker and power bars are showing, so the panel knows how much of the
+        /// top it has to leave alone. See DemoPanelRect.</summary>
+        private int barJokerSlots;
+
+        private int barPowerSlots;
+
         /// <summary>The demo shelf, start to finish. The per-offer lists are already sized by
         /// Show; this decides WHERE everything goes and then hands each offer to the same
         /// BuildOffer the painted shelf uses.</summary>
@@ -951,8 +1028,17 @@ namespace ProjectBlock.View
         {
             // Nothing clips in the demo, so the "is this inside the scroll window" test that
             // BuildOffer asks has to answer yes for everything.
+            // Nothing clips in the side-by-side shelf, so the "is this inside the scroll
+            // window" test that BuildOffer asks has to answer yes for everything. The STACKED
+            // one overwrites both of these once it knows where its window is.
             windowRect = new Rect(-1000f, -1000f, 2000f, 2000f);
             maxScroll = 0f;
+            // How much BAR is on screen, for the top reserve below.
+            barJokerSlots = session.Jokers.Jokers.Count;
+            barPowerSlots = session.Powers.Powers.Count;
+            // Cleared every build: only the stacked footer draws it, and a rect left over from a
+            // profile flip would keep answering clicks where there is no longer a button.
+            demoDeckRect = new Rect();
 
             // Laid out in REAL world units at scale 1 - there is no FitToCamera here, because
             // fitting is what made the panel swallow the screen: it scales a fixed design up
@@ -1011,10 +1097,59 @@ namespace ProjectBlock.View
             // in it instead, so the tall block column holds card-shaped frames rather than one
             // 4-unit frame with a 1.8-unit card floating inside it.
             float halfHeight = (contentTop - contentBottom - DemoRowGap) * 0.5f;
-            var blocksBox = new Rect(contentLeft, contentBottom, leftWidth,
-                contentTop - contentBottom);
-            var jokersBox = new Rect(rightLeft, contentTop - halfHeight, rightWidth, halfHeight);
-            var powersBox = new Rect(rightLeft, contentBottom, rightWidth, halfHeight);
+            Rect blocksBox;
+            Rect jokersBox;
+            Rect powersBox;
+            if (UiLayout.Active.MarketStacked)
+            {
+                // ONE COLUMN, three shelves down it, and it SCROLLS.
+                //
+                // Each shelf is given the height its own tiles want rather than a share of what
+                // is left over, so a block stays card-shaped and a joker keeps room for its two
+                // lines. That means the three of them are usually taller than the screen - which
+                // is the point: the window below is a viewport and the stack slides past it.
+                //
+                // The clipping is the machinery this file already had for the painted shelf:
+                // sprites are cut by a mask over the window, and text - which a sprite mask
+                // cannot touch - is simply not built when it falls outside. A scroll rebuilds
+                // the shelf, so nothing has to be moved.
+                float full = contentRight - contentLeft;
+                float blocksHeight = UiLayout.Active.MarketBlockSection;
+                float namedHeight = UiLayout.Active.MarketNamedSection;
+
+                var window = Rect.MinMaxRect(panel.xMin, contentBottom, panel.xMax, contentTop);
+                // A TALL phone has more window than the three shelves need, and leaving the
+                // difference as dead space at the bottom looks like something failed to load. So
+                // they grow into it - capped, because past a point a bigger tile is just a bigger
+                // tile and the shelf stops reading as a list.
+                float wanted = blocksHeight + namedHeight * 2f + DemoRowGap * 2f;
+                if (wanted < window.height)
+                {
+                    float grow = Mathf.Min(1.35f,
+                        (window.height - DemoRowGap * 2f) / Mathf.Max(wanted - DemoRowGap * 2f, 0.01f));
+                    blocksHeight *= grow;
+                    namedHeight *= grow;
+                }
+                windowRect = window;
+                contentHeight = blocksHeight + namedHeight * 2f + DemoRowGap * 2f;
+                maxScroll = Mathf.Max(0f, contentHeight - window.height);
+                scroll = Mathf.Clamp(scroll, 0f, maxScroll);
+                BuildWindowMask(window);
+
+                float stackTop = contentTop + scroll;
+                blocksBox = new Rect(contentLeft, stackTop - blocksHeight, full, blocksHeight);
+                stackTop -= blocksHeight + DemoRowGap;
+                jokersBox = new Rect(contentLeft, stackTop - namedHeight, full, namedHeight);
+                stackTop -= namedHeight + DemoRowGap;
+                powersBox = new Rect(contentLeft, stackTop - namedHeight, full, namedHeight);
+            }
+            else
+            {
+                blocksBox = new Rect(contentLeft, contentBottom, leftWidth,
+                    contentTop - contentBottom);
+                jokersBox = new Rect(rightLeft, contentTop - halfHeight, rightWidth, halfHeight);
+                powersBox = new Rect(rightLeft, contentBottom, rightWidth, halfHeight);
+            }
 
             var boxes = new Rect[SectionCount];
             boxes[SectionIndex(MarketOfferKind.Block)] = blocksBox;
@@ -1046,14 +1181,25 @@ namespace ProjectBlock.View
         /// <summary>The panel, in world units. HEIGHT comes from the camera minus the reserved
         /// strips; WIDTH is whatever the content asked for, centred, and only cut back when the
         /// screen cannot hold it. Falls back to ortho 5 / 16:9 when there is no camera to ask.</summary>
-        private static Rect DemoPanelRect(float wantedWidth)
+        private Rect DemoPanelRect(float wantedWidth)
         {
+            UiLayout layout = UiLayout.Active;
             Camera cam = Camera.main;
             float halfHeight = cam != null && cam.orthographic ? cam.orthographicSize : 5f;
             float halfWidth = halfHeight * (cam != null ? cam.aspect : 16f / 9f);
-            float width = Mathf.Min(wantedWidth, (halfWidth - DemoSideReserve) * 2f);
-            return Rect.MinMaxRect(-width * 0.5f, -halfHeight + DemoBottomReserve,
-                width * 0.5f, halfHeight - DemoTopReserve);
+            float room = (halfWidth - layout.MarketSideReserve) * 2f;
+            // What is ABOVE the panel is measured, not guessed: the bars are the only thing the
+            // stacked layout has to clear, and an empty bar takes no room. Reserving for bars
+            // that are not there left a band of nothing across the top of every early market.
+            float top = layout.MarketStacked
+                ? Mathf.Max(0.55f, layout.HudBottomWorld(barJokerSlots, barPowerSlots) + 0.30f)
+                : layout.MarketTopReserve;
+            // STACKED sections take the width they are given: there is only one column, so there
+            // is nothing to centre it against and every unit left over is a unit the tiles could
+            // have had. Side-by-side columns keep asking for what their content needs.
+            float width = layout.MarketStacked ? room : Mathf.Min(wantedWidth, room);
+            return Rect.MinMaxRect(-width * 0.5f, -halfHeight + layout.MarketBottomReserve,
+                width * 0.5f, halfHeight - top);
         }
 
         private void BuildDemoTitle(GameSession session, Rect panel)
@@ -1084,13 +1230,21 @@ namespace ProjectBlock.View
         /// the hover outline need to know nothing about the demo at all.</summary>
         private void BuildDemoSection(int section, Rect box, List<int> bucket)
         {
-            ViewUtil.MakeRect(transform, "DemoSection_" + section, box.center,
-                new Vector2(box.width, box.height), DemoSectionColor, 33);
+            Masked(ViewUtil.MakeRect(transform, "DemoSection_" + section, box.center,
+                new Vector2(box.width, box.height), DemoSectionColor, 33));
 
             float headerY = box.yMax - DemoHeaderHeight * 0.5f;
-            ViewUtil.MakeText3D(transform, "DemoSectionTitle_" + section,
-                new Vector2(box.xMin + 0.22f, headerY), SectionLabel(KindOf(section)),
-                60, 0.044f, SectionHeaderColor, 38, TextAnchor.MiddleLeft);
+            // A SPRITE MASK CANNOT TOUCH TEXT. The plate above is clipped by the window, but the
+            // name and the reroll label are MeshRenderers and would keep drawing after the shelf
+            // had scrolled them out - over the title, over the debug column, over anything. So
+            // they are simply not built when the header has left the window.
+            bool headerVisible = InsideWindow(new Vector2(box.center.x, headerY), windowRect);
+            if (headerVisible)
+            {
+                ViewUtil.MakeText3D(transform, "DemoSectionTitle_" + section,
+                    new Vector2(box.xMin + 0.22f, headerY), SectionLabel(KindOf(section)),
+                    60, 0.044f, SectionHeaderColor, 38, TextAnchor.MiddleLeft);
+            }
             // The name is the handle for "what IS this shelf" (see TrySectionLabelAt). A fixed
             // box rather than the text's own extent: a TextMesh does not offer one until it has
             // been laid out, and the widest label here ("JOKERLER") is well inside this.
@@ -1101,12 +1255,16 @@ namespace ProjectBlock.View
             var buttonCentre = new Vector2(box.xMax - 0.18f - DemoRerollSize.x * 0.5f, headerY);
             demoRerollRects[section] = new Rect(buttonCentre.x - DemoRerollSize.x * 0.5f,
                 buttonCentre.y - DemoRerollSize.y * 0.5f, DemoRerollSize.x, DemoRerollSize.y);
-            ViewUtil.MakeRect(transform, "DemoReroll_" + section, buttonCentre, DemoRerollSize,
-                rerollAffordable ? DemoButtonColor : DemoButtonDeadColor, 35);
-            ViewUtil.MakeText3D(transform, "DemoRerollLabel_" + section, buttonCentre,
-                Loc.Pick("REROLL  ", "YENİLE  ") + rerollCostText, 90, 0.026f,
-                rerollAffordable ? PanelCreamColor : TooExpensiveColor, 38,
-                TextAnchor.MiddleCenter);
+            Masked(ViewUtil.MakeRect(transform, "DemoReroll_" + section, buttonCentre,
+                DemoRerollSize,
+                rerollAffordable ? DemoButtonColor : DemoButtonDeadColor, 35));
+            if (headerVisible)
+            {
+                ViewUtil.MakeText3D(transform, "DemoRerollLabel_" + section, buttonCentre,
+                    Loc.Pick("REROLL  ", "YENİLE  ") + rerollCostText, 90, 0.026f,
+                    rerollAffordable ? PanelCreamColor : TooExpensiveColor, 38,
+                    TextAnchor.MiddleCenter);
+            }
 
             if (bucket.Count == 0)
             {
@@ -1138,6 +1296,11 @@ namespace ProjectBlock.View
         /// not the same thing and the button is now the only place that says which is next.</summary>
         private void BuildDemoFooter(GameSession session, Rect panel)
         {
+            if (UiLayout.Active.MarketStacked)
+            {
+                BuildStackedFooter(session, panel);
+                return;
+            }
             float left = panel.xMin + DemoPad;
             ViewUtil.MakeText3D(transform, "DemoHint1",
                 new Vector2(left, panel.yMin + 0.56f),

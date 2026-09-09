@@ -816,10 +816,16 @@ namespace ProjectBlock.View
             // below. With one world these are the values the board always had.
             float mainSize = MainBoardWorldSize;
             Vector2 mainCenter = MainBoardCenter;
-            if (boardView.Board != round.Board || !Mathf.Approximately(lastMainBoardSize, mainSize))
+            // The CENTRE is part of this test, not just the size: the two layouts fit the
+            // board into the same 6.5-unit box but put it in different places, so a profile flip
+            // changes where the board goes without changing how big it is.
+            if (boardView.Board != round.Board
+                || !Mathf.Approximately(lastMainBoardSize, mainSize)
+                || (lastMainBoardCenter - mainCenter).sqrMagnitude > 0.000001f)
             {
                 boardView.Rebuild(round.Board, mainSize, mainCenter);
                 lastMainBoardSize = mainSize;
+                lastMainBoardCenter = mainCenter;
             }
             // "Alacakaranlık" - set BEFORE the refresh, so the very first paint is already dark.
             boardView.SetDarkness(round.BoardIsDark);

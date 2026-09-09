@@ -14,10 +14,35 @@ namespace ProjectBlock.View
     /// <summary>Owns and animates all card visuals + the two pile displays.</summary>
     public sealed class CardLayerView : MonoBehaviour
     {
-        public static readonly Vector2 DrawPilePos = new Vector2(6.4f, -4.05f);
-        public static readonly Vector2 DiscardPilePos = new Vector2(-6.4f, -4.05f);
-        private static readonly Vector2 HandCenter = new Vector2(0f, -4.05f);
-        private const float HandSpacing = 1.7f;
+        // WHERE THE HAND AND THE PILES GO is the layout's call, not this class's: a phone held
+        // upright has about seven world units of width to play with where the desktop has
+        // seventeen, so the fan tightens, the cards shrink and the piles come in off the edge.
+        // See UiLayout - the desktop values are the constants that used to sit right here.
+        public static Vector2 DrawPilePos
+        {
+            get { return UiLayout.Active.DrawPile; }
+        }
+
+        public static Vector2 DiscardPilePos
+        {
+            get { return UiLayout.Active.DiscardPile; }
+        }
+
+        private static Vector2 HandCenter
+        {
+            get { return UiLayout.Active.HandCenter; }
+        }
+
+        private static float HandSpacing
+        {
+            get { return UiLayout.Active.HandSpacing; }
+        }
+
+        /// <summary>How big a card is drawn. 1 on the desktop; smaller in portrait.</summary>
+        public static float CardScale
+        {
+            get { return UiLayout.Active.CardScale; }
+        }
         private const int MaxStackLayers = 10;
         private const int CardsPerStackLayer = 3; // one visible card edge per N cards
         private const float StackOffset = 0.035f;
@@ -182,14 +207,19 @@ namespace ProjectBlock.View
         {
             const float duration = 0.18f;
             float time = 0f;
+            // MULTIPLIES the pile's resting size rather than replacing it - the root now carries
+            // the layout's pile scale, and writing Vector3.one here would snap a phone's pile
+            // back to desktop size the first time it was shuffled.
+            float rest = UiLayout.Active.PileScale;
             while (time < duration)
             {
                 time += Time.deltaTime;
                 float k = Mathf.Sin(Mathf.Clamp01(time / duration) * Mathf.PI);
-                root.localScale = Vector3.one * (1f + 0.12f * k);
+                float s = rest * (1f + 0.12f * k);
+                root.localScale = new Vector3(s, s, 1f);
                 yield return null;
             }
-            root.localScale = Vector3.one;
+            root.localScale = new Vector3(rest, rest, 1f);
         }
 
         /// <summary>Shrinks and fades a card visual to nothing (an expiring bonus card).</summary>
@@ -367,6 +397,7 @@ namespace ProjectBlock.View
                     visual = CardVisual.Create(transform, "Card_" + id, card, faceUp,
                         bonusIds.Contains(id), animate ? DrawPilePos : slotPos, HeldCardOrder,
                         round.EffectiveShape(card));
+                    visual.SetBaseScale(CardScale);
                     heldVisuals[id] = visual;
                     if (animate)
                     {
@@ -483,15 +514,22 @@ namespace ProjectBlock.View
         /// <summary>True if a world point is on the draw pile (used to open the deck overlay).</summary>
         public bool IsDrawPileAt(Vector2 world)
         {
-            return Mathf.Abs(world.x - DrawPilePos.x) <= CardVisual.BodyWidth * 0.5f + 0.09f
-                && Mathf.Abs(world.y - DrawPilePos.y) <= CardVisual.BodyHeight * 0.5f + 0.09f;
+            return PileHit(world, DrawPilePos);
         }
 
         /// <summary>True if a world point is on the discard pile ("Fraksiyon" inspect).</summary>
         public bool IsDiscardPileAt(Vector2 world)
         {
-            return Mathf.Abs(world.x - DiscardPilePos.x) <= CardVisual.BodyWidth * 0.5f + 0.09f
-                && Mathf.Abs(world.y - DiscardPilePos.y) <= CardVisual.BodyHeight * 0.5f + 0.09f;
+            return PileHit(world, DiscardPilePos);
+        }
+
+        /// <summary>Scaled with the pile it is testing. A phone draws the piles at about half
+        /// size, and an unscaled box would open the deck from well outside the card.</summary>
+        private static bool PileHit(Vector2 world, Vector2 pile)
+        {
+            float scale = UiLayout.Active.PileScale;
+            return Mathf.Abs(world.x - pile.x) <= CardVisual.BodyWidth * 0.5f * scale + 0.09f
+                && Mathf.Abs(world.y - pile.y) <= CardVisual.BodyHeight * 0.5f * scale + 0.09f;
         }
 
         private int hoveredCardId = -1;
@@ -574,6 +612,74 @@ namespace ProjectBlock.View
             return null;
         }
 
+        /// <summary>
+        /// Re-fits everything this layer owns to the CURRENT layout profile.
+        ///
+        /// The piles are rebuilt rather than moved: their slot art is drawn at the profile's pile
+        /// scale, so a profile change is a different sprite size, not a different position. The
+        /// hand is re-placed and re-scaled in place - the cards themselves are unchanged, which is
+        /// what keeps every dealing and discarding animation working exactly as it did.
+        /// </summary>
+        public void RelayoutForScreen()
+        {
+            if (pilesBuilt)
+            {
+                if (drawPileRoot != null)
+                {
+                    Destroy(drawPileRoot.gameObject);
+                }
+                if (discardPileRoot != null)
+                {
+                    Destroy(discardPileRoot.gameObject);
+                }
+                drawPileRoot = null;
+                discardPileRoot = null;
+                pilesBuilt = false;
+                BuildPilesIfNeeded();
+                SetPilesVisible(pilesVisible);
+            }
+            int total = 0;
+            foreach (CardVisual visual in heldVisuals.Values)
+            {
+                if (visual != null && visual.SlotIndex >= 0)
+                {
+                    total++;
+                }
+            }
+            foreach (CardVisual visual in heldVisuals.Values)
+            {
+                if (visual == null || visual.SlotIndex < 0)
+                {
+                    continue;
+                }
+                visual.SetBaseScale(CardScale);
+                visual.SnapTo(SlotPosition(visual.SlotIndex, total));
+            }
+        }
+
+        /// <summary>
+        /// Shows or hides the two piles. The portrait MARKET covers the whole screen, and the
+        /// piles' labels sort above its panel - so left alone they print through it. Their job
+        /// there is taken by the market's own DECK button.
+        /// </summary>
+        public void SetPilesVisible(bool visible)
+        {
+            pilesVisible = visible;
+            if (drawPileRoot != null && drawPileRoot.gameObject.activeSelf != visible)
+            {
+                drawPileRoot.gameObject.SetActive(visible);
+            }
+            if (discardPileRoot != null && discardPileRoot.gameObject.activeSelf != visible)
+            {
+                discardPileRoot.gameObject.SetActive(visible);
+            }
+        }
+
+        /// <summary>Remembered so a REBUILD comes back in the state it was left in - a relayout
+        /// destroys and recreates the piles, and they would otherwise reappear over the market
+        /// that had just hidden them.</summary>
+        private bool pilesVisible = true;
+
         /// <summary>The held card under a world point (for drag pickup), or null.</summary>
         public CardVisual CardAt(Vector2 world)
         {
@@ -593,8 +699,10 @@ namespace ProjectBlock.View
                 // testing against the lifted box makes it hold on to its own hover - the pointer
                 // leaves the card, the card follows, and nothing else can take the hover.
                 Vector2 pos = visual.HomePosition;
-                if (Mathf.Abs(world.x - pos.x) <= CardVisual.BodyWidth * 0.5f
-                    && Mathf.Abs(world.y - pos.y) <= CardVisual.BodyHeight * 0.5f
+                // Scaled with the card: in portrait a card is drawn at 0.92, and testing against
+                // the unscaled box would hand back a card the pointer is not actually over.
+                if (Mathf.Abs(world.x - pos.x) <= CardVisual.BodyWidth * CardScale * 0.5f
+                    && Mathf.Abs(world.y - pos.y) <= CardVisual.BodyHeight * CardScale * 0.5f
                     && (best == null || visual.SlotIndex > best.SlotIndex))
                 {
                     best = visual;
@@ -620,15 +728,25 @@ namespace ProjectBlock.View
         // wall of slivers that is read by HOVERING, which is the whole point of the treatment.
 
         /// <summary>Width the fan is happy at, between the outermost card CENTRES.</summary>
-        private const float HandFanSpan = 9f;
+        private static float HandFanSpan
+        {
+            get { return UiLayout.Active.HandFanSpan; }
+        }
 
-        /// <summary>Hard ceiling on that width. The piles' inner edge is at 5.725 and a card is
-        /// 1.35 wide, so an outermost centre at 5.05 is the furthest that still clears them.</summary>
-        private const float HandFanSpanMax = 10.1f;
+        /// <summary>Hard ceiling on that width. On the desktop the piles' inner edge is at 5.725
+        /// and a card is 1.35 wide, so an outermost centre at 5.05 is the furthest that still
+        /// clears them; in portrait the screen's own edge is what decides it.</summary>
+        private static float HandFanSpanMax
+        {
+            get { return UiLayout.Active.HandFanSpanMax; }
+        }
 
         /// <summary>How little of a card the fan is willing to leave showing before it widens
         /// instead: 0.8 of a 1.35-wide card, so about 60% of each one.</summary>
-        private const float HandMinSpacing = 0.8f;
+        private static float HandMinSpacing
+        {
+            get { return UiLayout.Active.HandMinSpacing; }
+        }
 
         /// <summary>Distance between two neighbouring cards for a hand of this size.</summary>
         private static float HandSpacingFor(int totalCount)
@@ -693,6 +811,12 @@ namespace ProjectBlock.View
             // each pile lives under its own root so the shuffle pulse can scale it
             drawPileRoot = MakePileRoot("DrawPile", DrawPilePos);
             discardPileRoot = MakePileRoot("DiscardPile", DiscardPilePos);
+            // THE ROOT carries the size, not the slot sprite: the count, the sell prompt and the
+            // stack are all children, and scaling only the slot left them at desktop size - the
+            // sell prompt is wider than the pile itself and hung off the side of a phone.
+            float pileScale = UiLayout.Active.PileScale;
+            drawPileRoot.localScale = new Vector3(pileScale, pileScale, 1f);
+            discardPileRoot.localScale = new Vector3(pileScale, pileScale, 1f);
             var slotSize = new Vector2(CardVisual.BodyWidth + 0.18f, CardVisual.BodyHeight + 0.18f);
             ViewUtil.MakeRect(drawPileRoot, "Slot", Vector2.zero, slotSize, PileSlotColor, 2);
             ViewUtil.MakeRect(discardPileRoot, "Slot", Vector2.zero, slotSize, PileSlotColor, 2);

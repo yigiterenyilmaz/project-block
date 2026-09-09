@@ -202,6 +202,14 @@ namespace ProjectBlock.View
                 new Vector2(0f, decks.Count * PanelSpacing * 0.5f + 0.8f),
                 Loc.Pick("CHOOSE DECK (starts a new run)", "DESTE SEÇ (yeni oyun başlatır)"),
                 48, 0.07f, Color.white, 41, TextAnchor.MiddleCenter);
+            // Scaled to the screen BEFORE the rows are placed, so the hit tests below - which
+            // work in this overlay's own local space - keep matching what is drawn.
+            float titleTop = decks.Count * PanelSpacing * 0.5f + 0.8f + 0.5f;
+            float rowsBottom = -(decks.Count - 1) * PanelSpacing * 0.5f - PanelHeight * 0.5f;
+            ViewUtil.FitOverlay(transform,
+                new Vector2(PanelWidth + 0.6f, titleTop - rowsBottom),
+                new Vector2(0f, (titleTop + rowsBottom) * 0.5f));
+
             float startY = (decks.Count - 1) * PanelSpacing * 0.5f;
             for (int i = 0; i < decks.Count; i++)
             {
@@ -268,15 +276,20 @@ namespace ProjectBlock.View
             {
                 return null;
             }
-            return panelCenters[index];
+            // THROUGH THE TRANSFORM. The centres are this overlay's own local coordinates, and
+            // the overlay is scaled and moved to fit the screen (see FitOverlay) - so on a phone
+            // local and world are no longer the same point. They used to be, which is why this
+            // and DeckAt could get away with treating them as one.
+            return transform.TransformPoint(panelCenters[index]);
         }
 
         public int DeckAt(Vector2 world)
         {
+            Vector2 local = transform.InverseTransformPoint(world);
             for (int i = 0; i < panelCenters.Count; i++)
             {
-                if (Mathf.Abs(world.x - panelCenters[i].x) <= PanelWidth * 0.5f
-                    && Mathf.Abs(world.y - panelCenters[i].y) <= PanelHeight * 0.5f)
+                if (Mathf.Abs(local.x - panelCenters[i].x) <= PanelWidth * 0.5f
+                    && Mathf.Abs(local.y - panelCenters[i].y) <= PanelHeight * 0.5f)
                 {
                     return i;
                 }

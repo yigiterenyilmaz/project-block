@@ -162,7 +162,7 @@ namespace ProjectBlock.View
 
             // ------------------------------------------------------------------ extraction
             /// <summary>How long the band takes to travel the whole lane. Fast, but readable.</summary>
-            public static float SweepSeconds = 0.42f;
+            public static float SweepSeconds = 0.80f;
 
             public static float SweepWidth = 0.075f;
 
@@ -171,10 +171,6 @@ namespace ProjectBlock.View
             /// <summary>Bottom to top: the lane is vertical and the cubes are being taken OUT of
             /// the arena, so the direction has to be an exit.</summary>
             public static bool SweepUpward = true;
-
-            public static float ShakeStrength = 0.14f;
-
-            public static float ShakeSeconds = 0.13f;
 
             // ------------------------------------------------------------------ removal
             /// <summary>Motes per cube taken. Few: this is material being drawn out, not debris
@@ -197,10 +193,64 @@ namespace ProjectBlock.View
 
             public static Color MoteAsh = new Color(0.24f, 0.19f, 0.16f);
 
-            /// <summary>How long the block is stretched toward the exit before it goes.</summary>
-            public static float PullSeconds = 0.14f;
+            // ---------------------------------------------------------------- the collector
+            /// <summary>The beat before the band moves: rails lock, the foot of the lane gathers.
+            /// Short - this is a machine starting, not a fuse burning.</summary>
+            public static float PreLockSeconds = 0.20f;
 
-            public static float PullStretch = 0.55f;
+            /// <summary>How thin the band's hot core is against its halo.</summary>
+            public static float BandCore = 1.30f;
+
+            public static float BandHalo = 0.55f;
+
+            /// <summary>The node where the band meets each rail. What makes the collector look
+            /// like it is running ON the corridor rather than over it.</summary>
+            public static float RailContact = 1.5f;
+
+            public static float RailContactWidth = 0.045f;
+
+            /// <summary>Energy at the foot of the lane during the lock.</summary>
+            public static float ChargeStrength = 0.55f;
+
+            /// <summary>The band leaving the top: pinched to a thread rather than switched off.</summary>
+            public static float ExitSeconds = 0.16f;
+
+            /// <summary>What a swept cell keeps for a moment. LOW - the cell has to read as
+            /// playable again straight away, so this is an afterimage and not a mark.</summary>
+            public static float Residue = 0.30f;
+
+            /// <summary>The corridor standing down once the column has been taken.</summary>
+            public static float ShutdownSeconds = 0.32f;
+
+            // ---------------------------------------------------------------- one cube's exit
+            /// <summary>How long a cube takes to be drawn out once the band reaches it.</summary>
+            public static float PullSeconds = 0.34f;
+
+            /// <summary>The small lift OUT of its slot, before it travels - the beat that says it
+            /// is no longer part of the board.</summary>
+            public static float LiftAmount = 0.16f;
+
+            /// <summary>How far it travels on its way out, in cells.</summary>
+            public static float PullTravel = 1.35f;
+
+            /// <summary>How far it is drawn out along the pull, and how much it narrows across it.
+            /// Kept well short of a line: this is a cube being taken, not a streak being drawn.</summary>
+            public static float PullStretch = 0.85f;
+
+            public static float CrossCompression = 0.42f;
+
+            /// <summary>The trail behind it, in the CUBE'S OWN colour - so a green block leaves a
+            /// green thread and a gold one a gold thread. It is what stops the sweep looking like
+            /// one amber effect applied to everything.</summary>
+            public static float TrailLength = 1.6f;
+
+            public static float TrailOpacity = 0.55f;
+
+            /// <summary>The shadow it leaves in its slot for a moment after it lifts - the clearest
+            /// way to say a thing is no longer attached to the board.</summary>
+            public static float ShadowOpacity = 0.55f;
+
+            public static float CaptureStrength = 0.85f;
 
             public static float AftermathSeconds = 0.30f;
         }
@@ -209,6 +259,21 @@ namespace ProjectBlock.View
         private const int LaneOrder = 6;
 
         private const int MoteOrder = 14;
+
+        /// <summary>Exactly where the real cube sat: under the corridor, over the board.</summary>
+        private const int TakenOrder = 1;
+
+        /// <summary>Matches BoardView's own cube fill, so the copy is the same size as the cube
+        /// it stands in for and the swap is invisible.</summary>
+        private const float TakenFill = 0.98f;
+
+        /// <summary>The shadow sits UNDER the cube it belongs to; the trail behind it; the catch
+        /// light on top of it. All below the corridor, which draws over the whole lane.</summary>
+        private const int ShadowOrder = 0;
+
+        private const int TrailOrder = 1;
+
+        private const int CaptureOrder = 2;
 
         private const int OccupancyTexels = 64;
 
@@ -253,6 +318,12 @@ namespace ProjectBlock.View
         private static readonly int SweepAtId = Shader.PropertyToID("_SweepAt");
 
         private static readonly int SweepActiveId = Shader.PropertyToID("_SweepActive");
+
+        private static readonly int ChargeId = Shader.PropertyToID("_Charge");
+
+        private static readonly int NarrowId = Shader.PropertyToID("_BandNarrow");
+
+        private static readonly int ShutdownId = Shader.PropertyToID("_Shutdown");
 
         // =================================================================== driving it
 
@@ -327,7 +398,7 @@ namespace ProjectBlock.View
                 return;
             }
             sweepStartedAt = clock;
-            pulled.Clear();
+            ClearPulled();
             if (taken == null)
             {
                 return;
@@ -335,13 +406,20 @@ namespace ProjectBlock.View
             for (int i = 0; i < taken.Count; i++)
             {
                 Sprite tile = tileOf != null ? tileOf(taken[i].Cube) : null;
+                Vector2 at = toWorld(taken[i].Pos);
+                Color colour = colourOf != null ? colourOf(taken[i].Cube, tile) : Color.white;
                 pulled.Add(new Pulled
                 {
-                    Where = toWorld(taken[i].Pos),
+                    Where = at,
                     Along = Mathf.InverseLerp(minY, minY + height - 1, taken[i].Pos.Y),
                     Tile = tile,
-                    Colour = colourOf != null ? colourOf(taken[i].Cube, tile) : Color.white,
-                    Taken = false
+                    Colour = colour,
+                    Taken = false,
+                    Body = MakeBody(at, tile, colour),
+                    Trail = MakeFlat(at, colour, TrailOrder),
+                    Shadow = MakeFlat(at, new Color(0f, 0f, 0f, 1f), ShadowOrder),
+                    Capture = MakeFlat(at, Style.CriticalColor, CaptureOrder),
+                    TakenAt = 0f
                 });
             }
         }
@@ -353,9 +431,49 @@ namespace ProjectBlock.View
             public Sprite Tile;
             public Color Colour;
             public bool Taken;
+
+            /// <summary>The cube itself, drawn by THIS view.
+            ///
+            /// It has to be drawn here because by the time any of this runs the rules have
+            /// already destroyed it and the board has already stopped drawing it - so without a
+            /// copy of its own the extraction plays over an empty column and the cubes simply
+            /// blink out. That is what it did: the band swept nothing.</summary>
+            public SpriteRenderer Body;
+
+            /// <summary>The cube's own colour trailing behind it, and the shadow it leaves in
+            /// the slot. Both are what make the exit read as a REMOVAL rather than a fade.</summary>
+            public SpriteRenderer Trail;
+
+            public SpriteRenderer Shadow;
+
+            /// <summary>The light that grabs it the instant the band arrives.</summary>
+            public SpriteRenderer Capture;
+
+            /// <summary>When the band reached it, so its own pull can be timed from there.</summary>
+            public float TakenAt;
         }
 
         private readonly List<Pulled> pulled = new List<Pulled>();
+
+        private void Kill(SpriteRenderer r)
+        {
+            if (r != null)
+            {
+                Destroy(r.gameObject);
+            }
+        }
+
+        private void ClearPulled()
+        {
+            for (int i = 0; i < pulled.Count; i++)
+            {
+                Kill(pulled[i].Body);
+                Kill(pulled[i].Trail);
+                Kill(pulled[i].Shadow);
+                Kill(pulled[i].Capture);
+            }
+            pulled.Clear();
+        }
 
         // =================================================================== the lane
 
@@ -445,6 +563,11 @@ namespace ProjectBlock.View
             material.SetFloat("_CellPhase", 0f);
             material.SetFloat("_SweepWidth", Style.SweepWidth);
             material.SetFloat("_SweepGlow", Style.SweepGlow);
+            material.SetFloat("_SweepCore", Style.BandCore);
+            material.SetFloat("_SweepHalo", Style.BandHalo);
+            material.SetFloat("_RailContact", Style.RailContact);
+            material.SetFloat("_RailContactWidth", Style.RailContactWidth);
+            material.SetFloat("_Residue", Style.Residue);
         }
 
         /// <summary>Which cells of the lane hold a cube, as a one-pixel-wide strip the shader
@@ -469,6 +592,150 @@ namespace ProjectBlock.View
         }
 
         // =================================================================== motes
+
+        /// <summary>A standing copy of a cube the column is about to take. The SAME call the
+        /// board uses to dress a cube, so a gold block leaves as gold and an obsidian one as
+        /// obsidian rather than as a coloured square.</summary>
+        private SpriteRenderer MakeBody(Vector2 at, Sprite tile, Color colour)
+        {
+            var go = new GameObject("Taken");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(at.x, at.y, 0f);
+            var r = go.AddComponent<SpriteRenderer>();
+            r.sortingOrder = TakenOrder;
+            ViewUtil.ApplyTile(r, tile, cellSize * TakenFill);
+            r.color = colour;
+            return r;
+        }
+
+        /// <summary>A plain coloured quad that belongs to one taken cube - its trail, its
+        /// shadow, or the light that grabs it.</summary>
+        private SpriteRenderer MakeFlat(Vector2 at, Color colour, int order)
+        {
+            var go = new GameObject("TakenPart");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(at.x, at.y, 0f);
+            var r = go.AddComponent<SpriteRenderer>();
+            r.sprite = ViewUtil.WhiteSprite;
+            r.sortingOrder = order;
+            var c = colour;
+            c.a = 0f;
+            r.color = c;
+            r.enabled = false;
+            return r;
+        }
+
+        /// <summary>
+        /// ONE CUBE BEING TAKEN, start to finish. The whole identity of this boss is in here:
+        ///
+        ///   0-20%   the band arrives and CATCHES it - it is still the cube you built with
+        ///   20-45%  it comes out of its slot, and its shadow stays behind for a moment
+        ///   45-75%  it is drawn out along the pull and narrows across it
+        ///   75-90%  what is left is a thread in its own colour
+        ///   90-100% gone
+        ///
+        /// It never cracks, never sheds a fragment, and never flashes. The dynamite breaks a
+        /// block; this takes it, and every beat above exists to keep those two apart.
+        /// </summary>
+        private void StepPulled()
+        {
+            float dir = Style.SweepUpward ? 1f : -1f;
+            float size = cellSize * TakenFill;
+            for (int i = 0; i < pulled.Count; i++)
+            {
+                Pulled p = pulled[i];
+                if (p.Body == null || !p.Taken)
+                {
+                    continue;                       // still standing; the band has not reached it
+                }
+                float k = Mathf.Clamp01((clock - p.TakenAt) / Mathf.Max(Style.PullSeconds, 0.01f));
+                if (k >= 1f)
+                {
+                    Hide(p.Body);
+                    Hide(p.Trail);
+                    Hide(p.Shadow);
+                    Hide(p.Capture);
+                    continue;
+                }
+
+                // ---- CAUGHT. A short bar of light across the cube the instant the band is on
+                // it, gone before it has travelled - what says the collector took hold of THIS
+                // cube rather than the band merely passing over it.
+                float grab = Mathf.Sin(Mathf.PI * Mathf.Clamp01(k / 0.30f));
+                if (p.Capture != null)
+                {
+                    p.Capture.enabled = grab > 0.01f;
+                    p.Capture.transform.localPosition =
+                        new Vector3(p.Where.x, p.Where.y - dir * size * 0.42f, 0f);
+                    p.Capture.transform.localScale =
+                        new Vector3(size * 1.02f, size * 0.16f, 1f);
+                    Color cc = Style.CriticalColor;
+                    cc.a = grab * Style.CaptureStrength;
+                    p.Capture.color = cc;
+                }
+
+                // ---- OUT OF THE SLOT, then away. The lift is small and early; the travel is
+                // squared, so it leaves slowly and is gone quickly.
+                float lift = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.15f, 0.45f, k));
+                float go = Mathf.Clamp01(Mathf.InverseLerp(0.30f, 1f, k));
+                float travel = Style.LiftAmount * cellSize * lift
+                    + Style.PullTravel * cellSize * go * go;
+
+                // ---- DRAWN OUT along the pull, narrowed across it. The growth is pushed toward
+                // the LEADING edge, so the far side moves first and the near side follows - a
+                // pull, rather than something inflating in place.
+                float shape = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.35f, 0.95f, k));
+                float stretch = 1f + Style.PullStretch * shape;
+                float narrow = 1f - Style.CrossCompression * shape;
+                float lead = (stretch - 1f) * size * 0.5f * 0.65f;
+
+                float fade = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.72f, 1f, k));
+                Transform tr = p.Body.transform;
+                tr.localPosition = new Vector3(p.Where.x, p.Where.y + dir * (travel + lead), 0f);
+                tr.localScale = new Vector3(narrow, stretch, 1f);
+                Color c = p.Colour;
+                c.a = fade;
+                p.Body.color = c;
+                p.Body.enabled = true;
+
+                // ---- ITS OWN COLOUR behind it. A gold block leaves a gold thread; the sweep is
+                // not one amber effect painted over everything it takes.
+                if (p.Trail != null)
+                {
+                    float trailK = Mathf.Clamp01(Mathf.InverseLerp(0.25f, 1f, k));
+                    p.Trail.enabled = trailK > 0.01f;
+                    float len = size * Style.TrailLength * trailK;
+                    p.Trail.transform.localPosition = new Vector3(p.Where.x,
+                        p.Where.y + dir * (travel - len * 0.5f + size * 0.1f), 0f);
+                    p.Trail.transform.localScale =
+                        new Vector3(size * narrow * 0.55f, len, 1f);
+                    Color tc = p.Colour;
+                    tc.a = Style.TrailOpacity * trailK * (1f - trailK * trailK);
+                    p.Trail.color = tc;
+                }
+
+                // ---- THE SHADOW STAYS a moment. Nothing says "this is no longer attached to the
+                // board" as plainly as its shadow being left behind in the slot.
+                if (p.Shadow != null)
+                {
+                    float shadowFade = 1f - Mathf.Clamp01(Mathf.InverseLerp(0.15f, 0.55f, k));
+                    p.Shadow.enabled = shadowFade > 0.01f;
+                    p.Shadow.transform.localPosition =
+                        new Vector3(p.Where.x, p.Where.y, 0f);
+                    p.Shadow.transform.localScale =
+                        new Vector3(size * 0.92f, size * 0.92f, 1f);
+                    p.Shadow.color = new Color(0f, 0f, 0f, Style.ShadowOpacity * shadowFade);
+                }
+            }
+        }
+
+        private static void Hide(SpriteRenderer r)
+        {
+            if (r != null)
+            {
+                r.enabled = false;
+            }
+        }
 
         private struct Mote
         {
@@ -594,10 +861,40 @@ namespace ProjectBlock.View
 
         // =================================================================== running
 
-        /// <summary>Whether the extraction is still running, so a caller can wait it out.</summary>
+        /// <summary>Whether the BAND is still travelling.</summary>
         public bool Sweeping
         {
             get { return sweepStartedAt >= 0f && clock - sweepStartedAt <= Style.SweepSeconds; }
+        }
+
+        /// <summary>
+        /// Whether this view still OWNS the cubes it is taking - true until the last one has
+        /// finished being pulled out, which is later than the band finishing.
+        ///
+        /// The board asks this before taking its own cubes back. It matters in the animation lab
+        /// above all: there the rules have destroyed nothing, so the real cubes are still standing
+        /// under the copies this view draws, and handing them back too early leaves the column
+        /// looking as though the sweep took nothing.
+        /// </summary>
+        public bool Extracting
+        {
+            get { return sweepStartedAt >= 0f && clock - sweepStartedAt <= TotalSeconds; }
+        }
+
+        /// <summary>How long a column takes to travel, scaled to how tall it is - a band that
+        /// crossed a short arena and a tall one in the same time would read as two speeds.</summary>
+        private float SweepTravelSeconds
+        {
+            get { return Style.SweepSeconds * Mathf.Clamp(height / 7f, 0.7f, 1.6f); }
+        }
+
+        private float TotalSeconds
+        {
+            get
+            {
+                return Style.PreLockSeconds + SweepTravelSeconds + Style.ExitSeconds
+                    + Style.ShutdownSeconds;
+            }
         }
 
         public static float ExtractionDuration
@@ -605,8 +902,9 @@ namespace ProjectBlock.View
             get { return Style.SweepSeconds + Style.AftermathSeconds; }
         }
 
-        /// <summary>Set by the view when the sweep starts, so the board can shake once.</summary>
-        public System.Action<float, float> Shake;
+        // NO SCREEN SHAKE, and the fields for one are gone rather than left unread. A shake is
+        // the dynamite's language: it says something was blown apart. This boss COLLECTS, and the
+        // whole point of the sweep is that it does not feel like an explosion.
 
         private void Update()
         {
@@ -617,22 +915,49 @@ namespace ProjectBlock.View
             float dt = Time.deltaTime;
             clock += dt;
             StepMotes(dt);
+            StepPulled();
 
             // The state leans in rather than snapping, so a countdown step reads as pressure
             // arriving instead of a value being assigned.
             threat = Mathf.MoveTowards(threat, threatTarget,
                 dt / Mathf.Max(Style.StateBlend, 0.001f));
 
+            // ================================================== THE COLLECTION, IN FOUR BEATS
+            //
+            //   LOCK      the rails tighten and the foot of the lane gathers. Nothing has moved
+            //             yet, and that pause is what makes the sweep read as a system being
+            //             STARTED rather than as something going off.
+            //   SWEEP     one pass, bottom to top. Every cube it reaches begins its own exit.
+            //   EXIT      the band is pinched into a thread at the top rather than switched off.
+            //   SHUTDOWN  the corridor stands down: there is nothing left here to threaten.
+            //
+            // No flash and no shake anywhere in it. This boss does not break the column, it
+            // empties it, and every beat above is chosen to keep those two things apart.
             float sweepAt = -1f;
             bool sweeping = false;
+            float charge = 0f;
+            float narrow = 0f;
+            float shutdown = 0f;
             if (sweepStartedAt >= 0f)
             {
-                float k = (clock - sweepStartedAt) / Style.SweepSeconds;
-                if (k <= 1f)
+                float t = clock - sweepStartedAt;
+                float travel = SweepTravelSeconds;
+                if (t < Style.PreLockSeconds)
                 {
+                    charge = Mathf.SmoothStep(0f, 1f, t / Mathf.Max(Style.PreLockSeconds, 0.01f))
+                        * Style.ChargeStrength;
+                }
+                else if (t < Style.PreLockSeconds + travel)
+                {
+                    float k = (t - Style.PreLockSeconds) / Mathf.Max(travel, 0.01f);
+                    // Leaves with a push, holds its pace, and gains a little on the way out.
+                    // Written as a curve rather than an easing name so the three parts of the
+                    // brief - start, middle, finish - are each visible in it.
+                    float e = 0.25f * k * k + 0.60f * k + 0.15f * k * k * k;
                     sweeping = true;
-                    sweepAt = Style.SweepUpward ? k : 1f - k;
-                    // Anything the band has reached is taken as it passes.
+                    charge = Style.ChargeStrength * (1f - k) * 0.4f;
+                    sweepAt = Style.SweepUpward ? e : 1f - e;
+                    // Anything the band has reached begins its own exit, on its own clock.
                     for (int i = 0; i < pulled.Count; i++)
                     {
                         if (pulled[i].Taken)
@@ -647,14 +972,29 @@ namespace ProjectBlock.View
                         }
                         Pulled p = pulled[i];
                         p.Taken = true;
+                        p.TakenAt = clock;
                         pulled[i] = p;
                         EmitMotes(p.Where, p.Colour);
                     }
                 }
-                else if (clock - sweepStartedAt > Style.SweepSeconds + Style.AftermathSeconds)
+                else if (t < Style.PreLockSeconds + travel + Style.ExitSeconds)
+                {
+                    float k = (t - Style.PreLockSeconds - travel)
+                        / Mathf.Max(Style.ExitSeconds, 0.01f);
+                    sweeping = true;
+                    sweepAt = Style.SweepUpward ? 1f : 0f;
+                    narrow = Mathf.SmoothStep(0f, 1f, k);
+                }
+                else if (t < TotalSeconds)
+                {
+                    float k = (t - Style.PreLockSeconds - travel - Style.ExitSeconds)
+                        / Mathf.Max(Style.ShutdownSeconds, 0.01f);
+                    shutdown = Mathf.SmoothStep(0f, 1f, k);
+                }
+                else
                 {
                     sweepStartedAt = -1f;
-                    pulled.Clear();
+                    ClearPulled();
                 }
             }
 
@@ -664,6 +1004,9 @@ namespace ProjectBlock.View
                 material.SetFloat(ThreatId, threat);
                 material.SetFloat(SweepAtId, sweepAt);
                 material.SetFloat(SweepActiveId, sweeping ? 1f : 0f);
+                material.SetFloat(ChargeId, charge);
+                material.SetFloat(NarrowId, narrow);
+                material.SetFloat(ShutdownId, shutdown);
             }
         }
 

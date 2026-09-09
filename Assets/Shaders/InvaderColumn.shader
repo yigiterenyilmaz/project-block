@@ -131,10 +131,29 @@ Shader "ProjectBlock/InvaderColumn"
             float _GridStrength;
 
             // Extraction: how far along the lane the band has travelled, and how strong it is.
+            // THE COLLECTOR. Not one glow: a thin hot core inside a softer halo, with a node
+            // where it meets each rail, so the band reads as a head running ON the corridor's own
+            // hardware rather than as a light drawn over it.
             float _SweepAt;
             float _SweepWidth;
             float _SweepGlow;
             float _SweepActive;
+            float _SweepCore;
+            float _SweepHalo;
+            float _RailContact;
+            float _RailContactWidth;
+
+            /// The beat before it moves: energy gathering at the foot of the lane.
+            float _Charge;
+
+            /// 0 leaves the band its full width; 1 pinches it to a thread as it leaves the top.
+            float _BandNarrow;
+
+            /// Fades the WHOLE corridor once the column has been taken.
+            float _Shutdown;
+
+            /// Behind the band: what a swept cell keeps for a moment before it is plainly empty.
+            float _Residue;
 
             Varyings vert(Attributes IN)
             {
@@ -319,15 +338,38 @@ Shader "ProjectBlock/InvaderColumn"
                 float edgeNess = saturate(1.0 - min(e.x, e.y) * 2.0);
                 edgeNess = edgeNess * edgeNess;
 
-                // ---- extraction. One narrow band, once, travelling the lane.
+                // ---- the charge. Before anything moves, the foot of the lane gathers - the
+                // system starting up, not a fuse burning.
+                float footY = along;                     // 0 at the bottom of the lane
+                float charge = exp(-(footY * footY) / 0.55) * _Charge;
+
+                // ---- THE COLLECTOR BAND. One pass, bottom to top, and it is built rather than
+                // glowing: a thin core, a softer halo around it, and a node on each rail where it
+                // makes contact. That triple - left node, band, right node - is what makes it read
+                // as a gate travelling the corridor instead of a stripe sliding over it.
                 float sweep = 0.0;
+                float railNode = 0.0;
+                float residue = 0.0;
                 if (_SweepActive > 0.5)
                 {
                     float sd = IN.uv.y - _SweepAt;
-                    sweep = exp(-(sd * sd) / (_SweepWidth * _SweepWidth)) * _SweepGlow;
+                    // Pinched toward the middle as it leaves the top, so the band ENDS by being
+                    // drawn out into a thread rather than by switching off.
+                    float acrossFade = 1.0 - _BandNarrow * saturate(abs(across - 0.5) * 2.4);
+                    float core = exp(-(sd * sd) / (_SweepWidth * _SweepWidth * 0.20)) * _SweepCore;
+                    float halo = exp(-(sd * sd) / (_SweepWidth * _SweepWidth)) * _SweepHalo;
+                    sweep = (core + halo) * _SweepGlow * max(acrossFade, 0.0);
+
+                    // The node rides the band along each rail.
+                    railNode = exp(-(sd * sd) / (_RailContactWidth * _RailContactWidth))
+                        * railBody * _RailContact;
+
                     // Behind the band the lane is already empty and goes quiet at once - the point
-                    // of an extraction is that what it passes is GONE.
+                    // of an extraction is that what it passes is GONE. What it leaves is a short
+                    // warm afterimage, not a mark: the cell has to read as playable again.
                     float behind = smoothstep(_SweepAt + _SweepWidth, _SweepAt, IN.uv.y);
+                    residue = behind * exp(-(sd * sd) / (_SweepWidth * _SweepWidth * 9.0))
+                        * _Residue;
                     occupied = lerp(occupied, 0.0, behind);
                     heat *= lerp(1.0, 0.25, behind);
                     motes *= lerp(1.0, 0.15, behind);
@@ -353,7 +395,8 @@ Shader "ProjectBlock/InvaderColumn"
                     + rail * _RailGlow
                     + capRail * 0.9 + capField
                     + spark * _SparkGlow
-                    + sweep) * inLane);
+                    + charge + railNode + residue
+                    + sweep) * inLane) * (1.0 - _Shutdown);
                 if (alpha <= 0.003)
                 {
                     return half4(0, 0, 0, 0);
@@ -367,9 +410,10 @@ Shader "ProjectBlock/InvaderColumn"
 
                 // Normalised against its own total: unnormalised, every layer stacking bleaches
                 // the lane to white.
-                float wHeat = saturate(heat * 1.4 + scan * 0.5);
+                float wHeat = saturate(heat * 1.4 + scan * 0.5 + residue * 1.6);
                 float wRail = saturate(rail * _RailGlow + capRail);
-                float wCrit = saturate(sweep + spark * 2.0 + rail * _RailGlow * th * 0.45);
+                float wCrit = saturate(sweep + railNode * 1.4 + charge * 0.8 + spark * 2.0
+                    + rail * _RailGlow * th * 0.45);
                 float wMote = saturate(motes * 1.5);
                 wRail = saturate(wRail + tick * 1.2);       // the ladder is machined, like the rails
                 float total = 1.0 + wHeat + wRail + wCrit + wMote;

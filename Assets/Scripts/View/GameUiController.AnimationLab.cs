@@ -56,12 +56,19 @@ namespace ProjectBlock.View
         private int animInfectIndex = 2;
         private int animSpeedIndex = 3;
 
-        /// <summary>Which way the gravity-arrow entry points next (see AnimGravityArrows).</summary>
+        /// <summary>Which way the gravity entry points next (see AnimGravityField).</summary>
         private int animGravityStep;
 
+        /// <summary>
+        /// RIGHT, UP, LEFT, DOWN - in that order on purpose. The lab starts (and RESET leaves it)
+        /// under ordinary gravity, so pressing the entry four times walks exactly the four
+        /// transitions worth watching: DOWN -> RIGHT (the power being used), RIGHT -> UP and
+        /// UP -> LEFT (being re-aimed, which is the hardest one to get right), and LEFT -> DOWN
+        /// (the field collapsing back to an ordinary board).
+        /// </summary>
         private static readonly GridPos[] AnimGravityFlows =
         {
-            new GridPos(-1, 0), new GridPos(1, 0), new GridPos(0, 1), new GridPos(0, -1)
+            new GridPos(1, 0), new GridPos(0, 1), new GridPos(-1, 0), new GridPos(0, -1)
         };
 
         private static readonly int[] AnimCellCounts = { 1, 2, 3, 5, 8, 12, 20, 40 };
@@ -496,8 +503,10 @@ namespace ProjectBlock.View
                         }
                     });
                 });
-            AddAnim("gravity arrows (cycles 4 ways)", "yerçekimi okları (4 yönü gezer)",
-                AnimGravityArrows);
+            AddAnim("İstilacı COLLECTION (empty/one/full/colours/hard)",
+                "İstilacı TAHSİLAT (boş/tek/dolu/renkler/sert)", AnimColumnSweep);
+            AddAnim("gravity field (down/right/up/left)",
+                "kütleçekim alanı (aşağı/sağ/yukarı/sol)", AnimGravityField);
             AddAnim("clear board markers", "işaretleri temizle", AnimClearMarkers);
             AddAnim("mine shuffle dance (Mayın eşeği)", "mayın dansı (Mayın eşeği)", AnimMineDance);
 
@@ -812,6 +821,75 @@ namespace ProjectBlock.View
             return cubes;
         }
 
+        /// <summary>Which case the collection entry shows next (see AnimColumnSweep).</summary>
+        private int animSweepCase;
+
+        /// <summary>
+        /// THE COLLECTION, one case per press. These are the five that can actually go wrong, and
+        /// each of them checks something different:
+        ///
+        ///   EMPTY    the band has to sweep a bare column cleanly - nothing to take is a case,
+        ///            not an absence of one.
+        ///   ONE      one cube alone, where the capture and the stretch are large enough to read
+        ///            frame by frame.
+        ///   FULL     the whole column, for the RHYTHM: scan, take, scan, take.
+        ///   COLOURS  four different blocks, because each one has to leave in its OWN colour -
+        ///            if the sweep turns them all amber, this is where it shows.
+        ///   HARD     obsidian and gold. Nothing resists this, and they must go the same way as
+        ///            everything else: no cracking for the obsidian, no melting for the gold.
+        /// </summary>
+        private void AnimColumnSweep()
+        {
+            int column = AnimMiddleColumn();
+            boardView.ShowDoomedColumn(column, 1);
+            boardView.PlayColumnExtraction(AnimSweepCubes(column, animSweepCase));
+            animSweepCase = (animSweepCase + 1) % 5;
+        }
+
+        private List<DestroyedCube> AnimSweepCubes(int column, int which)
+        {
+            var cubes = new List<DestroyedCube>();
+            GameBoard board = AnimBoard();
+            if (board == null)
+            {
+                return cubes;
+            }
+            int height = board.Height;
+            int middle = board.MinY + height / 2;
+            var mixed = new[] { CubeKind.Normal, CubeKind.Fire, CubeKind.Water, CubeKind.Normal };
+            for (int y = board.MinY; y < board.MinY + height; y++)
+            {
+                var cell = new GridPos(column, y);
+                switch (which)
+                {
+                    case 0:
+                        continue;                                   // EMPTY: nothing to take
+                    case 1:
+                        if (y != middle)
+                        {
+                            continue;                               // ONE
+                        }
+                        cubes.Add(new DestroyedCube(cell,
+                            new Cube(CubeKind.Normal, AnimCardId())));
+                        break;
+                    case 2:
+                        cubes.Add(new DestroyedCube(cell,
+                            new Cube(CubeKind.Normal, AnimCardId())));   // FULL
+                        break;
+                    case 3:
+                        cubes.Add(new DestroyedCube(cell,               // COLOURS
+                            new Cube(mixed[(y - board.MinY) % mixed.Length], AnimCardId())));
+                        break;
+                    default:
+                        cubes.Add(new DestroyedCube(cell,               // HARD
+                            new Cube((y - board.MinY) % 2 == 0
+                                ? CubeKind.Obsidian : CubeKind.Gold, AnimCardId())));
+                        break;
+                }
+            }
+            return cubes;
+        }
+
         private List<int> AnimLines(bool rows)
         {
             var list = new List<int>();
@@ -1031,12 +1109,15 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// Walks the gravity arrows through all four directions, one per play, ending on the
+        /// Walks the gravity FIELD through all four directions, one per play, ending on the
         /// default. Cycling rather than showing the round's real flow, because the real flow is
         /// (0,-1) on nearly every board and ShowGravity draws NOTHING for it - so an entry that
         /// asked the board would have looked broken on every arena but a "Kütleçekim merkezi" one.
+        ///
+        /// What each press shows is a TRANSITION, not a state: the activation beat, two re-aims
+        /// and the collapse back to down. See AnimGravityFlows for why they are in that order.
         /// </summary>
-        private void AnimGravityArrows()
+        private void AnimGravityField()
         {
             boardView.ShowGravity(AnimGravityFlows[animGravityStep]);
             animGravityStep = (animGravityStep + 1) % AnimGravityFlows.Length;
@@ -1049,7 +1130,7 @@ namespace ProjectBlock.View
             boardView.ShowCircuit(null);
             boardView.ClearCircuitBlocks();
             boardView.ShowDolls(null, null);
-            boardView.ShowGravity(new GridPos(0, -1)); // the default draws no arrows
+            boardView.ShowGravity(new GridPos(0, -1)); // the default draws no field
             animGravityStep = 0;
             boardView.ClearPreview();
             // ...the three tinted ones need the repaint (see AnimTintMarker).

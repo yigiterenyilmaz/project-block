@@ -23,10 +23,20 @@ namespace ProjectBlock.View
     public sealed partial class GameUiController : MonoBehaviour
     {
         [SerializeField] private int seed = 0; // 0 = random seed every run
-        [SerializeField] private float maxBoardWorldSize = 6.5f;
         [SerializeField] private bool verboseTurnLogs = true;
 
-        private static readonly Vector2 BoardCenter = new Vector2(0f, 0.9f);
+        /// <summary>The box the board is fitted into. It comes from the LAYOUT now rather than
+        /// from a field on this component, because a phone held upright needs a different one and
+        /// both have to be able to exist in the same build - see UiLayout.</summary>
+        private static float MaxBoardWorldSize
+        {
+            get { return UiLayout.Active.BoardWorldSize; }
+        }
+
+        private static Vector2 BoardCenter
+        {
+            get { return UiLayout.Active.BoardCenter; }
+        }
 
         private GameSession session;
         private BoardView boardView;
@@ -118,6 +128,11 @@ namespace ProjectBlock.View
         /// debug dump, and the market never showed it at all.</summary>
         private Text totalText;
         private Camera cam;
+
+        /// <summary>Where a market drag started, and how far it has gone - see the market frame.</summary>
+        private Vector2 marketDragFrom;
+
+        private float marketDragged;
         private Vector3 camBasePosition;
 
         /// <summary>The HUD's own root, offset alongside the camera so a shake moves the whole
@@ -200,6 +215,9 @@ namespace ProjectBlock.View
         /// Mouse.current / Keyboard.current exactly as it did (see GamepadBridge).</summary>
         private GamepadBridge gamepad;
 
+        /// <summary>Finger input, written into a virtual mouse. See TouchBridge.</summary>
+        private readonly TouchBridge touch = new TouchBridge();
+
         /// <summary>Set while an activated joker waits for the player to pick a target.</summary>
         private int? pendingTargetJokerId;
 
@@ -210,12 +228,124 @@ namespace ProjectBlock.View
         /// action, not a use - see OltaPower.TryMark). Cleared with pendingTargetPowerId.</summary>
         private bool pendingOltaMark;
 
+        // ==================================================== THE SCREEN'S SHAPE
+        //
+        // The layout is not chosen once at boot: a window can be resized, a device can be handed
+        // over, and the F6 override exists precisely so both shapes can be looked at without
+        // leaving the editor. So the shape is watched every frame - it is two integer reads - and
+        // anything that was POSITIONED for the old one is rebuilt when it changes.
+
+        /// <summary>Pushes the active profile's orthographic size onto the camera. Everything else
+        /// that cares about the visible area (the backdrop, the CRT, the deck overlay, the market)
+        /// reads cam.orthographicSize live, so this one line moves all of them.</summary>
+        private void ApplyLayoutToCamera()
+        {
+            if (cam == null)
+            {
+                return;
+            }
+            cam.orthographicSize = UiLayout.Active.OrthoSize;
+            // Setting the rect also changes cam.aspect, which every world-space view already
+            // reads - so the backdrop, the CRT overlay and the market follow the letterbox for
+            // free rather than each needing to be told about it.
+            cam.rect = UiLayout.Viewport;
+        }
+
+        /// <summary>
+        /// Hides the two piles while a STACKED market is open. That layout covers the whole
+        /// screen and the piles' labels sort above its panel, so left alone they print straight
+        /// through it; the market's own DECK button is the way in while it is up.
+        /// </summary>
+        private void SyncPilesForMarket()
+        {
+            if (cardLayer == null)
+            {
+                return;
+            }
+            bool hide = session != null
+                && session.Phase == GamePhase.Market
+                && UiLayout.Active.MarketStacked;
+            // Asked every frame rather than cached against a remembered answer: the piles are
+            // REBUILT whenever the layout changes, and a rebuilt pile comes back visible - so a
+            // cache would go on believing it had already hidden them.
+            cardLayer.SetPilesVisible(!hide);
+        }
+
+        /// <summary>Re-fits the interface if the screen's shape changed. Called every frame.</summary>
+        private void WatchScreenShape()
+        {
+            if (!UiLayout.Refresh())
+            {
+                return;
+            }
+            ApplyLayoutToCamera();
+            ApplyLayoutToHud();
+            if (cardLayer != null)
+            {
+                cardLayer.RelayoutForScreen();
+            }
+            RelayoutBoards();
+            // The menu shell computes its rows from MenuSkin every time it is shown, so showing
+            // it again IS the relayout - and it has to happen, because the button metrics it
+            // reads have just changed underneath it.
+            if (screen != AppScreen.Playing)
+            {
+                ShowCurrentMenu();
+            }
+            // The market is rebuilt from scratch every time it is shown, so re-showing it IS the
+            // relayout - and it has to happen here because its shelf goes from two columns to one
+            // stack between the profiles (see UiLayout.MarketStacked).
+            if (session != null && session.Phase == GamePhase.Market)
+            {
+                marketView.Show(session);
+            }
+        }
+
+        /// <summary>Re-fits the board to the layout. It is REBUILT rather than moved because the
+        /// cell size is derived from the box it is fitted into, and every view that hangs off the
+        /// board (the surface, the glow, the boss fields) is built from that cell size.</summary>
+        private void RelayoutBoards()
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || boardView == null)
+            {
+                return;
+            }
+            boardView.Rebuild(round.Board, MainBoardWorldSize, MainBoardCenter);
+            lastMainBoardSize = MainBoardWorldSize;
+            lastMainBoardCenter = MainBoardCenter;
+            boardView.SetDarkness(round.BoardIsDark);
+            boardView.Refresh();
+            boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
+            RefreshMirrorWorld();
+        }
+
+        /// <summary>Flips between the desktop and portrait layouts by hand (F6), so the phone
+        /// layout can be worked on in a landscape editor and, more importantly, so a change to
+        /// either one is checked against the other in the same run.</summary>
+        private void ToggleLayoutShape()
+        {
+            UiShape next = UiLayout.Active.IsPortrait ? UiShape.Desktop : UiShape.Portrait;
+            UiLayout.Override = next;
+            WatchScreenShape();
+            if (messageText != null)
+            {
+                messageText.text = next == UiShape.Portrait
+                    ? Loc.Pick("portrait layout", "dikey yerleşim")
+                    : Loc.Pick("desktop layout", "masaüstü yerleşim");
+            }
+        }
+
         private void Start()
         {
             // Preferences before any text is built, so the first labels come out in the right
             // language. The volume needs SoundFx, so it is pushed in after BuildViews.
             LoadSettings();
             cam = Camera.main;
+            // BEFORE anything is built: every view asks the layout where it goes, so the profile
+            // has to be settled first or the first frame is built for the wrong screen.
+            UiLayout.Refresh();
+            ApplyLayoutToCamera();
             camBasePosition = cam.transform.position;
             // The bit-crush must sit on the AudioListener (the camera) to process the whole mix;
             // a filter on the SoundFx object's sources is not reliably called.
@@ -494,7 +624,16 @@ namespace ProjectBlock.View
 
         private void Update()
         {
-            // FIRST, before anything reads a device: the pad writes this frame's stick and
+            // Before anything is drawn or read: the window may have been resized, the device may
+            // have been turned. Two integer reads on a normal frame (see UiLayout.Refresh).
+            WatchScreenShape();
+            // A finger, if there is one, writes itself into a virtual mouse BEFORE any handler
+            // reads Mouse.current - the same contract the pad has (see TouchBridge).
+            if (touch != null)
+            {
+                touch.Tick();
+            }
+            // Then, before anything reads a device: the pad writes this frame's stick and
             // buttons into its virtual mouse/keyboard, and the two reads below then pick them
             // up like any other hardware. Ticked from here rather than left to script
             // execution order, because "before Mouse.current is read" is the whole contract.
@@ -517,6 +656,13 @@ namespace ProjectBlock.View
             }
             Keyboard kb = Keyboard.current;
             Mouse mouse = Mouse.current;
+            // F6 flips between the desktop and phone layouts. Handled ahead of every screen's own
+            // input because it is not about what is on screen - it is about the screen itself,
+            // and it has to work from the menus and the market too.
+            if (kb != null && kb.f6Key.wasPressedThisFrame)
+            {
+                ToggleLayoutShape();
+            }
             // The menu layer owns the whole frame whenever a run is not on screen, so no menu
             // has to know about drags, targeting or the in-game modals (see .Menus).
             if (screen != AppScreen.Playing)
@@ -1006,7 +1152,35 @@ namespace ProjectBlock.View
                     }
                     else if (mouse != null && mouse.leftButton.wasPressedThisFrame)
                     {
+                        marketDragFrom = mouse.position.ReadValue();
+                        marketDragged = 0f;
                         HandleMarketClick(mouse);
+                    }
+                    // The shelf SCROLLS when it is stacked (a phone). Wheel for a mouse, and a
+                    // held drag for a finger - the drag is read after the click above, so a tap
+                    // still buys and only real movement scrolls.
+                    if (mouse != null)
+                    {
+                        float wheel = mouse.scroll.ReadValue().y;
+                        if (Mathf.Abs(wheel) > 0.01f)
+                        {
+                            marketView.Scroll(wheel > 0f ? -1f : 1f);
+                        }
+                        else if (mouse.leftButton.isPressed)
+                        {
+                            Vector2 at = mouse.position.ReadValue();
+                            float dy = at.y - marketDragFrom.y;
+                            if (Mathf.Abs(dy) > 1f)
+                            {
+                                marketDragged += Mathf.Abs(dy);
+                                // Screen pixels to notches, through the camera's own scale, so a
+                                // drag moves the shelf the distance the finger moved.
+                                float perUnit = Screen.height
+                                    / Mathf.Max(2f * cam.orthographicSize, 0.0001f);
+                                marketView.Scroll(dy / Mathf.Max(perUnit, 0.0001f) / 0.55f);
+                                marketDragFrom = at;
+                            }
+                        }
                     }
                     break;
                 case GamePhase.Round:

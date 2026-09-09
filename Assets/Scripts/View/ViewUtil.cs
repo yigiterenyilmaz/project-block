@@ -882,6 +882,40 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Creates a rectangular sprite object (position and size in local space).</summary>
+        /// <summary>
+        /// Fits a WORLD-SPACE overlay screen into whatever the camera can actually see.
+        ///
+        /// Every one of these screens - the deck picker, the grant picker, the collection - was
+        /// laid out in world units against a wide window, so on a phone held upright they are
+        /// simply wider than the screen and run off both sides. Rather than giving each one a
+        /// second hand-authored layout, the whole thing is SCALED to fit and centred on the
+        /// camera: the design is preserved exactly, and it is guaranteed to be on screen.
+        ///
+        /// It never magnifies. A screen that already fits is left at 1, so nothing about the
+        /// desktop changes - which is what makes this safe to drop into every overlay at once.
+        /// </summary>
+        /// <param name="size">The design's full extent in world units.</param>
+        /// <param name="centre">The middle of that extent, in the overlay's own local space.</param>
+        /// <param name="margin">How much of the view to leave as air around it.</param>
+        public static void FitOverlay(Transform root, Vector2 size, Vector2 centre,
+            float margin = 0.94f)
+        {
+            Camera cam = Camera.main;
+            if (root == null || cam == null || !cam.orthographic)
+            {
+                return;
+            }
+            float halfH = cam.orthographicSize * margin;
+            float halfW = halfH * cam.aspect;
+            float scale = Mathf.Min(1f, Mathf.Min(
+                halfH / Mathf.Max(size.y * 0.5f, 0.0001f),
+                halfW / Mathf.Max(size.x * 0.5f, 0.0001f)));
+            root.localScale = new Vector3(scale, scale, 1f);
+            Vector3 camPos = cam.transform.position;
+            root.position = new Vector3(camPos.x - centre.x * scale,
+                camPos.y - centre.y * scale, 0f);
+        }
+
         public static SpriteRenderer MakeRect(Transform parent, string name, Vector2 position,
             Vector2 size, Color color, int sortingOrder)
         {

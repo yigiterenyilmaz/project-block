@@ -34,6 +34,15 @@ namespace ProjectBlock.View
             ViewUtil.MakeText3D(transform, "Title", new Vector2(0f, startY + 1.1f),
                 title, 48, 0.06f, Color.white, 41, TextAnchor.MiddleCenter);
 
+            // Scaled to whatever the screen can show. On a phone held upright the rows are
+            // wider than the view, and a picker you cannot read both ends of is a picker you
+            // cannot use. See ViewUtil.FitOverlay - it never magnifies, so the desktop is
+            // untouched.
+            float top = startY + 1.1f + 0.4f;
+            float bottom = startY - (n - 1) * RowPitch - RowHeight * 0.5f;
+            ViewUtil.FitOverlay(transform, new Vector2(RowWidth + 0.6f, top - bottom),
+                new Vector2(0f, (top + bottom) * 0.5f));
+
             for (int i = 0; i < n; i++)
             {
                 var center = new Vector2(0f, startY - i * RowPitch);
@@ -57,16 +66,19 @@ namespace ProjectBlock.View
             {
                 return null;
             }
-            return rowCenters[index];
+            // Through the transform: the centres are local, and the overlay is now scaled and
+            // moved to fit the screen, so local and world are no longer the same point.
+            return transform.TransformPoint(rowCenters[index]);
         }
 
         /// <summary>Row index under a world point, or -1.</summary>
         public int OptionAt(Vector2 world)
         {
+            Vector2 local = transform.InverseTransformPoint(world);
             for (int i = 0; i < rowCenters.Count; i++)
             {
-                if (Mathf.Abs(world.x - rowCenters[i].x) <= RowWidth * 0.5f
-                    && Mathf.Abs(world.y - rowCenters[i].y) <= RowHeight * 0.5f)
+                if (Mathf.Abs(local.x - rowCenters[i].x) <= RowWidth * 0.5f
+                    && Mathf.Abs(local.y - rowCenters[i].y) <= RowHeight * 0.5f)
                 {
                     return i;
                 }

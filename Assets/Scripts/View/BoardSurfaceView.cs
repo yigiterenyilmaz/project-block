@@ -102,11 +102,39 @@ namespace ProjectBlock.View
             /// fall into. Too small and the shadow is cut off square.</summary>
             public static float Margin = 0.30f;
 
-            /// <summary>Pixels per cell in the generated texture. The image is all soft falloff,
-            /// so this is about the smallest that keeps the plate's corner and the slot walls
-            /// from stepping.</summary>
+            /// <summary>FLOOR for the pixels per cell in the generated texture. The real number
+            /// comes from the screen (see ResolutionFor); this is only what it will not go below
+            /// when there is no camera to ask.</summary>
             public static int Resolution = 64;
         }
+
+
+        /// <summary>
+        /// Pixels per cell to DRAW the texture at, from how big a cell really is on this screen.
+        ///
+        /// It used to be a flat 64, and that is what made the board look soft: a cell is about
+        /// 100 screen pixels on a 1080p monitor and 130 on a phone, so the plate was being blown
+        /// up between 1.6x and 2.1x and bilinear-filtered on the way. Asking the screen instead
+        /// means one texture pixel per screen pixel wherever the game is running, and a 4K
+        /// monitor is what the ceiling is for.
+        /// </summary>
+        private static int ResolutionFor(float cellSize)
+        {
+            Camera cam = Camera.main;
+            float perUnit = cam != null && cam.orthographic && cam.orthographicSize > 0.001f
+                ? Screen.height / (2f * cam.orthographicSize)
+                : 108f;
+            int wanted = Mathf.CeilToInt(cellSize * perUnit);
+            return Mathf.Clamp(wanted, Style.Resolution, MaxResolution);
+        }
+
+        /// <summary>Ceiling on that, because the texture is painted pixel by pixel on the CPU and
+        /// it is rebuilt whenever the arena is. Past this the sharpness stops being visible and
+        /// the cost does not.</summary>
+        private const int MaxResolution = 160;
+
+        /// <summary>What the last one was drawn at, so a screen that changed size rebuilds.</summary>
+        private int builtResolution;
 
         /// <summary>The light, once, for the whole board: from the upper left.</summary>
         private static readonly Vector2 LightDir = new Vector2(-0.7071f, 0.7071f);
@@ -114,7 +142,10 @@ namespace ProjectBlock.View
         // =================================================================== internals
 
         /// <summary>Under everything: the cells are at 1, their previews at 2.</summary>
-        private const int SortingOrder = 0;
+        /// <summary>Below the cubes (1) as it always was, and now far enough below to leave
+        /// room for the GRAVITY FIELD, which has to draw over the plate and under the blocks.
+        /// Nothing else in the game sits between here and the backdrop at -205.</summary>
+        private const int SortingOrder = -3;
 
         private SpriteRenderer plate;
         private Texture2D texture;
@@ -137,11 +168,17 @@ namespace ProjectBlock.View
             plate.transform.localPosition = new Vector3(center.x, center.y, 0f);
 
             float overhangInCells = overhang / cellSize;
-            if (texture == null || builtWidth != cellsWide || builtHeight != cellsHigh)
+            // The RESOLUTION is part of this test now: the same 7x7 arena needs a bigger texture
+            // on a phone than on a 1080p monitor, and without this the plate kept whatever
+            // sharpness it happened to be born with.
+            int resolution = ResolutionFor(cellSize);
+            if (texture == null || builtWidth != cellsWide || builtHeight != cellsHigh
+                || builtResolution != resolution)
             {
-                Regenerate(cellsWide, cellsHigh, overhangInCells);
+                Regenerate(cellsWide, cellsHigh, overhangInCells, resolution);
                 builtWidth = cellsWide;
                 builtHeight = cellsHigh;
+                builtResolution = resolution;
             }
             // The texture covers the plate PLUS the shadow margin, so the world size it is drawn
             // at has to include the margin too or the board would come out short. Fitted rather
@@ -161,13 +198,17 @@ namespace ProjectBlock.View
             }
         }
 
-        private void Regenerate(int cellsWide, int cellsHigh, float overhangInCells)
+        private void Regenerate(int cellsWide, int cellsHigh, float overhangInCells,
+            int resolution)
         {
-            int px = Mathf.Max(8, Style.Resolution);
+            int px = Mathf.Max(8, resolution);
             float spanX = cellsWide + overhangInCells + 2f * Style.Margin;
             float spanY = cellsHigh + overhangInCells + 2f * Style.Margin;
-            int w = Mathf.Clamp(Mathf.RoundToInt(spanX * px), 32, 1024);
-            int h = Mathf.Clamp(Mathf.RoundToInt(spanY * px), 32, 1024);
+            // The cap was 1024, which quietly threw the extra resolution away the moment it was
+            // asked for - a board is about eight cells across, so 128 per cell already needs
+            // more than that.
+            int w = Mathf.Clamp(Mathf.RoundToInt(spanX * px), 32, 2048);
+            int h = Mathf.Clamp(Mathf.RoundToInt(spanY * px), 32, 2048);
 
             if (texture != null)
             {

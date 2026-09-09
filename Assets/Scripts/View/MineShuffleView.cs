@@ -5,6 +5,11 @@
 // (MayinEsegiBoss.ShufflePath), which computed it off the round's own rng, so the cover the player
 // follows really is where the mine went. A View that made up its own dance would be lying to them.
 //
+// ONCE THE COVER IS DOWN, THE MINE IS NOT VISIBLE. That is the entire game here, and it was the
+// bug: the marker used to be re-sorted ON TOP of the covers for the whole dance, so a player simply
+// watched a red square move and there was nothing to lose track of. What you follow is the COVER -
+// you are shown which one it is as it lands, and after that every cover on the board is identical.
+//
 // The cubes underneath are untouched and unmoved throughout; only the covers move. Placeholder
 // presentation like everything else under View/.
 
@@ -27,6 +32,13 @@ namespace ProjectBlock.View
 
         /// <summary>How long the board stays covered after the last hop, before the lift.</summary>
         private const float SettleSeconds = 0.45f;
+
+        /// <summary>The pause after the other covers land and before the mine's does - what makes
+        /// the last one arriving a beat the eye can catch rather than part of a wave.</summary>
+        private const float LandBeatSeconds = 0.28f;
+
+        /// <summary>The mine's cover dropping into place.</summary>
+        private const float LandSeconds = 0.22f;
 
         private static readonly Color CoverColor = new Color(0.06f, 0.06f, 0.09f);
         private static readonly Color MineColor = new Color(0.85f, 0.22f, 0.18f);
@@ -78,13 +90,15 @@ namespace ProjectBlock.View
                 size * 0.86f, MineColor, 30);
             yield return new WaitForSeconds(RevealSeconds);
 
-            // 2. The covers come down over everything, the mine's among them.
+            // 2. The covers come down over everything EXCEPT the mine's cell, which is left
+            //    showing for a beat longer. That beat is the whole contract with the player: they
+            //    are told exactly which cover to follow, once, and then they are on their own.
             for (int x = model.MinX; x < model.MinX + model.Width; x++)
             {
                 for (int y = model.MinY; y < model.MinY + model.Height; y++)
                 {
                     var cell = new GridPos(x, y);
-                    if (!model.IsInside(cell))
+                    if (!model.IsInside(cell) || (cell.X == at.X && cell.Y == at.Y))
                     {
                         continue;
                     }
@@ -92,13 +106,35 @@ namespace ProjectBlock.View
                         board.CellToWorld(cell), size * 0.92f, CoverColor, 29);
                 }
             }
-            // The marker rides ON TOP of the covers from here - that is the thing to follow.
-            mineMarker.transform.SetAsLastSibling();
-            mineMarker.sortingOrder = 31;
-            yield return new WaitForSeconds(0.2f);
+            yield return new WaitForSeconds(LandBeatSeconds);
 
-            // 3. The dance. Every hop swaps the mine's cover with the one it is moving to, so the
-            //    board of covers stays a board of covers and the eye has something to track.
+            // 3. And now the last cover lands on it. It drops from slightly above and settles, so
+            //    the eye has something to lock onto - after this it is one of the crowd.
+            SpriteRenderer mineCover = ViewUtil.MakeCell(transform, "Cover_Mine",
+                board.CellToWorld(at), size * 0.92f, CoverColor, 29);
+            covers[at] = mineCover;
+            Vector2 rest = board.CellToWorld(at);
+            float drop = 0f;
+            while (drop < LandSeconds)
+            {
+                drop += Time.deltaTime;
+                float k = Mathf.Clamp01(drop / LandSeconds);
+                float above = (1f - k) * (1f - k) * size * 0.55f;
+                mineCover.transform.localPosition =
+                    (Vector3)rest + new Vector3(0f, above, 0f);
+                yield return null;
+            }
+            mineCover.transform.localPosition = rest;
+
+            // THE MINE IS NOW HIDDEN. It keeps travelling with its cover below, so the marker is
+            // where it should be when everything is torn down - but nothing shows it again. A
+            // player who lost the cover is guessing, which is what this boss is for.
+            mineMarker.enabled = false;
+            yield return new WaitForSeconds(0.15f);
+
+            // 4. The dance. Every hop swaps the mine's cover with the one it is moving to, so
+            //    the board of covers stays a board of covers and the only thing telling them
+            //    apart is the movement itself.
             for (int step = 1; step < path.Count; step++)
             {
                 GridPos from = at;
