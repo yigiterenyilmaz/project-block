@@ -1,8 +1,12 @@
-// PURPOSE: How this game destroys a cube, everywhere. A set of cells STRIKES bright, cools
-// back into the grid and pinches out - and which cells are in which beat travels, so a
-// destruction reads as something that happened in a direction. A cleared line's wave leaves
-// the MIDDLE and reaches both ends at once (the "ray"); a loose handful - a power blast, an
-// infection going off, a boss lifting cubes away - ripples out from its own centre.
+// PURPOSE: The QUIET destruction. A set of cells STRIKES, cools back into the grid and pinches
+// out - and which cells are in which beat travels, so it still reads as something that happened
+// in a direction.
+//
+// This was once how EVERY cube died. The loud ones have since got languages of their own - a
+// cleared line (LineSweepView + LineBurstView), a loose group exploding (ClusterBurstView), the
+// clean sweep (BoardCleanseView), TNT (DynamiteBlastView), an infection (InfectionBurstView).
+// What is left here is a boss LIFTING cubes away (GameUiController.LiftCells) - not an
+// explosion, and it must not look like one - and FlashBoard.
 //
 // IT IS DRAWN IN CELLS, ON PURPOSE. This board has no gradients and no glows anywhere: a cube
 // is a flat hard-edged square that expresses itself by changing COLOUR (fire flickers, water

@@ -324,6 +324,29 @@ namespace ProjectBlock.Core
             get { return lastDetonated; }
         }
 
+        /// <summary>
+        /// Cells the ONE spread actually infected this turn, and the cell it went out from.
+        ///
+        /// FOR THE VIEW, and it has to be reported rather than inferred: the plus is only four
+        /// neighbours ON PAPER. AddInfection turns down a cell that is off the board or already
+        /// infected, so an animation that drew all four arms would be showing infections that do
+        /// not exist. Empty when nothing spread - which is every detonation after the first.
+        /// </summary>
+        public IReadOnlyList<GridPos> LastSpreadCells
+        {
+            get { return lastSpread; }
+        }
+
+        /// <summary>Where that spread came from. Null when nothing spread this turn.</summary>
+        public GridPos? LastSpreadCentre
+        {
+            get { return spreadFrom; }
+        }
+
+        private readonly List<GridPos> lastSpread = new List<GridPos>();
+
+        private GridPos? spreadFrom;
+
         public EnfeksiyonJoker()
             : base("enfeksiyon", "Enfeksiyon")
         {
@@ -399,6 +422,8 @@ namespace ProjectBlock.Core
             // Cleared every turn, before the early-out, so the view can never replay a blast
             // from an earlier detonation.
             lastDetonated.Clear();
+            lastSpread.Clear();
+            spreadFrom = null;
             if (infected.Count == 0)
             {
                 return;
@@ -467,6 +492,7 @@ namespace ProjectBlock.Core
             if (spreadNow)
             {
                 hasSpread = true;
+                spreadFrom = spreadCentre;
                 SpreadPlus(board, spreadCentre);
             }
         }
@@ -482,6 +508,8 @@ namespace ProjectBlock.Core
             AddInfection(board, new GridPos(centre.X, centre.Y - 1));
         }
 
+        /// <summary>Infects a cell if it can be. Records the ones that TOOK, so the view shows
+        /// the infections that exist rather than the four it assumed - see LastSpreadCells.</summary>
         private void AddInfection(GameBoard board, GridPos cell)
         {
             if (!board.IsInside(cell) || infected.ContainsKey(cell))
@@ -494,6 +522,7 @@ namespace ProjectBlock.Core
                 CardId = cube.HasValue ? cube.Value.SourceCardId : -1,
                 Turns = 0
             };
+            lastSpread.Add(cell);
         }
 
         private static List<GridPos> CellsOfCard(GameBoard board, int cardId)

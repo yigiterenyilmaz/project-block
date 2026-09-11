@@ -169,6 +169,7 @@ public static class JokerTests
         MayinEsegi_ArmsAMineAndShufflesItAway();
         Sasirtmaca_OneCommitmentPerTurnAndTheLockLifts();
         Matruska_SplitsOnTheLadderAndWinsOnTheLastDoll();
+        Matruska_ReportsExactlyWhatTheDollsDid();
         Matruska_ADollLessLineLosesTheRound();
         Matruska_TheDollCheckSurvivesAnInflatedBoard();
         Snake_TheCutCheckSurvivesAnInflatedBoard();
@@ -5440,6 +5441,96 @@ public static class JokerTests
             before + " -> " + boss.DollCount);
     }
 
+    /// <summary>
+    /// The View stages the dolls from TurnReport.DollEvents and is forbidden to work anything out for
+    /// itself - so the report has to be the truth. Every cell and generation it names is checked
+    /// against where the boss actually put the dolls.
+    /// </summary>
+    private static void Matruska_ReportsExactlyWhatTheDollsDid()
+    {
+        Section("matruşka / the turn reports what the dolls did - and only that");
+        var session = NewBossSession(9710, 5, 100, "matruska", 60, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (MatruskaBoss)round.Boss;
+
+        TurnReport first = PlayAt(round, new GridPos(0, 0));
+        Check(first.DollEvents.Count == 1 && first.DollEvents[0].Kind == DollEventKind.Arrived,
+            "the first doll's turn reports one arrival", "" + first.DollEvents.Count);
+        Check(boss.DollCells.Count == 1 && first.DollEvents.Count == 1
+            && first.DollEvents[0].Cell.Equals(boss.DollCells[0])
+            && first.DollEvents[0].Generation == 1 && boss.GenerationAt(boss.DollCells[0]) == 1,
+            "on the cell the boss chose, as generation 1");
+
+        PaintBoard(round, session, CubeKind.Normal, new GridPos(1, 2), new GridPos(3, 2),
+            new GridPos(1, 4));
+        GridPos parent = boss.DollCells[0];
+        int y = parent.Y;
+        for (int x = 0; x < 4; x++)
+        {
+            PaintBoard(round, session, CubeKind.Normal, new GridPos(x, y));
+        }
+        TurnReport split = DropOneCube(round, new GridPos(4, y));
+        Check(split != null, "the doll's row can be exploded");
+        if (split == null)
+        {
+            return;
+        }
+        DollEvent? splitEvent = null;
+        int splits = 0;
+        for (int i = 0; i < split.DollEvents.Count; i++)
+        {
+            if (split.DollEvents[i].Kind == DollEventKind.Split)
+            {
+                splits++;
+                splitEvent = split.DollEvents[i];
+            }
+        }
+        Check(splits == 1, "one broken doll is one split", "" + splits);
+        if (!splitEvent.HasValue)
+        {
+            return;
+        }
+        DollEvent e = splitEvent.Value;
+        Check(e.Cell.Equals(parent) && e.Generation == 1 && e.ChildGeneration == 2,
+            "the split names the doll that broke and its generation");
+        bool childrenAreReal = e.Children.Count == boss.SplitInto
+            && e.Children.Count == boss.DollCells.Count;
+        for (int i = 0; i < e.Children.Count && childrenAreReal; i++)
+        {
+            bool found = false;
+            for (int j = 0; j < boss.DollCells.Count; j++)
+            {
+                found |= boss.DollCells[j].Equals(e.Children[i]);
+            }
+            childrenAreReal = found && boss.GenerationAt(e.Children[i]) == 2
+                && !e.Children[i].Equals(parent);
+        }
+        Check(childrenAreReal, "and its children are exactly the dolls the boss put down, a size smaller",
+            e.Children.Count + " children, " + boss.DollCells.Count + " dolls");
+
+        Section("matruşka / the last generation opens on nothing, and the last doll is reported");
+        var session2 = NewBossSession(9710, 5, 100, "matruska", 60, 1);
+        RoundEngine round2 = session2.CurrentRound;
+        var boss2 = (MatruskaBoss)round2.Boss;
+        boss2.Generations = 1;
+        TurnReport arrival = PlayAt(round2, new GridPos(0, 0));
+        Check(arrival.DollEvents.Count == 1 && arrival.DollEvents[0].IsLastGeneration,
+            "a doll of the last generation says so when it arrives");
+        GridPos only = boss2.DollCells[0];
+        for (int x = 0; x < 4; x++)
+        {
+            PaintBoard(round2, session2, CubeKind.Normal, new GridPos(x, only.Y));
+        }
+        TurnReport last = DropOneCube(round2, new GridPos(4, only.Y));
+        Check(last != null && last.DollEvents.Count == 2
+            && last.DollEvents[0].Kind == DollEventKind.Emptied && last.DollEvents[0].Cell.Equals(only)
+            && last.DollEvents[0].Children.Count == 0
+            && last.DollEvents[1].Kind == DollEventKind.AllCracked,
+            "emptied on its own cell with no children, then the boss beaten",
+            last == null ? "no turn" : "" + last.DollEvents.Count);
+        Check(boss2.DollCount == 0, "and there really are no dolls left");
+    }
+
     /// <summary>Explodes the row the first doll is standing in, which is the only clear this
     /// boss allows. Returns false when no doll could be reached.</summary>
     private static bool BreakTheDolls(GameSession session, RoundEngine round, MatruskaBoss boss)
@@ -6952,6 +7043,42 @@ public static class JokerTests
         Check(cornerLost, "and it went over the edge", "lost " + lost.Count);
         Check(board.OccupiedCount == 2, "so two cubes are left on the board",
             "" + board.OccupiedCount);
+
+        // What the View is told about each cube that went: the step it was taking and why it
+        // could not land - so it never has to work a direction out from where the cube stood.
+        var told = new GameBoard(5, 5);
+        told.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 31)); // corner: out diagonally
+        told.SetCubeAt(new GridPos(4, 2), new Cube(CubeKind.Normal, 32)); // right of centre: straight out
+        told.SetCubeAt(new GridPos(2, 4), new Cube(CubeKind.Gold, 33));   // above centre: straight up
+        var motions = new List<LiftMotion>();
+        List<GridPos> gone = told.FlingCubesOutward(motions);
+        Check(gone.Count == 3 && motions.Count == gone.Count, "one motion for each cube that went",
+            motions.Count + " for " + gone.Count);
+        bool stepsRight = motions.Count == gone.Count;
+        for (int i = 0; stepsRight && i < motions.Count; i++)
+        {
+            LiftMotion m = motions[i];
+            int id = m.Cube.SourceCardId;
+            int ex = id == 31 ? -1 : id == 32 ? 1 : 0;
+            int ey = id == 31 ? -1 : id == 32 ? 0 : 1;
+            stepsRight &= m.Step.X == ex && m.Step.Y == ey && m.Reason == LiftReason.ExitedBoard
+                && m.From.X == gone[i].X && m.From.Y == gone[i].Y && !m.Mirror;
+        }
+        Check(stepsRight, "each with its own outward step (diagonal from the corner), off the edge, "
+            + "from its own cell, carrying the cube itself - the gold one too");
+
+        // A hole where it would have landed: that is not the edge, it is no ground.
+        var holed = new GameBoard(5, 4, new[]
+        {
+            new GridPos(0, 4), new GridPos(1, 4), new GridPos(3, 4), new GridPos(4, 4)
+        });
+        holed.SetCubeAt(new GridPos(2, 3), new Cube(CubeKind.Normal, 34)); // straight up, onto (2, 4)
+        var holeMotions = new List<LiftMotion>();
+        List<GridPos> fell = holed.FlingCubesOutward(holeMotions);
+        Check(fell.Count == 1 && holeMotions.Count == 1 && holeMotions[0].Reason == LiftReason.NoGround
+            && holeMotions[0].Step.X == 0 && holeMotions[0].Step.Y == 1,
+            "a cube flung onto a hole is reported as having no ground, stepping toward it",
+            fell.Count + " lost, " + (holeMotions.Count > 0 ? holeMotions[0].Reason.ToString() : "-"));
     }
 
     private static void Merkezkac_WhatGoesOverTheEdgePaysNothing()
@@ -6974,6 +7101,20 @@ public static class JokerTests
             "" + report.DestroyedCubes.Count);
         Check(report.LiftedCells.Count > 0, "they are reported as LIFTED",
             "" + report.LiftedCells.Count);
+        bool flungKinds = true;
+        for (int i = 0; i < report.LiftedCells.Count; i++)
+        {
+            flungKinds &= report.LiftKindAt(i) == LiftKind.Relocated;
+        }
+        Check(flungKinds, "as CARRIED OFF by a board that moved - the View must not open a pit under whatever slid into the cell");
+        bool outward = true;
+        for (int i = 0; i < report.LiftedCells.Count; i++)
+        {
+            LiftMotion m = report.LiftMotionAt(i);
+            outward &= m.Reason != LiftReason.None && (m.Step.X != 0 || m.Step.Y != 0)
+                && m.Step.X * m.Step.X <= 1 && m.Step.Y * m.Step.Y <= 1;
+        }
+        Check(outward, "each with the one-cell outward step it was taking and why it could not land");
         Check(!report.CleanSweep, "and clearing the board this way is not a clean sweep");
     }
 
@@ -8314,7 +8455,51 @@ public static class JokerTests
         }
         Check(report.LiftedCells.Count > 0, "and the turn reported what was carried off",
             "cells " + report.LiftedCells.Count);
+        bool carriedKinds = true;
+        for (int i = 0; i < report.LiftedCells.Count; i++)
+        {
+            carriedKinds &= report.LiftKindAt(i) == LiftKind.Relocated;
+        }
+        Check(carriedKinds, "as CARRIED OFF, not as vanished - the row below moved into those cells");
         Check(boss.CellsCarriedOff > 0, "the boss counted it", "" + boss.CellsCarriedOff);
+        bool carriedUp = true;
+        bool whoWent = false;
+        for (int i = 0; i < report.LiftedCells.Count; i++)
+        {
+            LiftMotion m = report.LiftMotionAt(i);
+            carriedUp &= m.Step.X == 0 && m.Step.Y == 1 && m.Reason == LiftReason.ExitedBoard;
+            whoWent |= m.Cube.SourceCardId == topCardId;
+        }
+        Check(carriedUp, "each carried cube is reported riding UP one, off the top edge");
+        Check(whoWent, "and the report carries the cube that went, not the one that slid into its cell");
+
+        // A hole in the top row: the cube riding into it has no ground - reported at the hole,
+        // coming FROM the cell below it.
+        var holed = new GameBoard(5, 4, new[]
+        {
+            new GridPos(0, 4), new GridPos(1, 4), new GridPos(3, 4), new GridPos(4, 4)
+        });
+        holed.SetCubeAt(new GridPos(2, 3), new Cube(CubeKind.Normal, 35));
+        holed.SetCubeAt(new GridPos(4, 4), new Cube(CubeKind.Normal, 36));
+        var rideMotions = new List<LiftMotion>();
+        List<GridPos> rode = holed.ShiftRowsUp(rideMotions);
+        bool holeRight = rode.Count == 2 && rideMotions.Count == 2;
+        for (int i = 0; holeRight && i < rideMotions.Count; i++)
+        {
+            LiftMotion m = rideMotions[i];
+            holeRight &= m.Step.X == 0 && m.Step.Y == 1;
+            if (m.Cube.SourceCardId == 36)
+            {
+                holeRight &= m.Reason == LiftReason.ExitedBoard && m.From.X == 4 && m.From.Y == 4;
+            }
+            else
+            {
+                holeRight &= m.Reason == LiftReason.NoGround && m.From.X == 2 && m.From.Y == 3
+                    && rode[i].X == 2 && rode[i].Y == 4;
+            }
+        }
+        Check(holeRight, "off the top it EXITED; into the hole above it had NO GROUND, coming from "
+            + "the cell below", rode.Count + " lost");
     }
 
     private static void Boss_YuruyenMerdivenLeavesTheBottomRowEmpty()
@@ -8453,6 +8638,12 @@ public static class JokerTests
             "left " + round.Board.CountCubesOf(cardId));
         Check(forgetting.LiftedCells.Count > 0, "the turn reported what it forgot",
             "cells " + forgetting.LiftedCells.Count);
+        bool forgotKinds = true;
+        for (int i = 0; i < forgetting.LiftedCells.Count; i++)
+        {
+            forgotKinds &= forgetting.LiftKindAt(i) == LiftKind.Removed;
+        }
+        Check(forgotKinds, "as REMOVED - vanished where they stood, cells empty");
         Check(boss.CellsForgotten > 0, "and the boss counted it",
             "" + boss.CellsForgotten);
     }

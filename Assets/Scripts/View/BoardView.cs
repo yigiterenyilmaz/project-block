@@ -48,6 +48,13 @@ namespace ProjectBlock.View
         public const float BorderOverhang = 0.15f;
         private static readonly Color EmptyColor = new Color(0.112f, 0.121f, 0.147f);
 
+        /// <summary>What an empty cell looks like, for an effect that hands a cell back to the
+        /// board and must do it without a seam (ColdSinkView closing its pit).</summary>
+        public static Color EmptySlotColor
+        {
+            get { return EmptyColor; }
+        }
+
         /// <summary>A cell shuffle erosion ATE. Deliberately not hidden like an ordinary hole:
         /// the player has to see what the stalling cost them, and that its row/column is dead.</summary>
         private static readonly Color DeadColor = new Color(0.30f, 0.10f, 0.12f, 0.85f);
@@ -102,10 +109,6 @@ namespace ProjectBlock.View
         /// <summary>"Devre"'s circuit nodes - a circuit-board green that reads on both an empty
         /// cell and a full one, since the route crosses both.</summary>
         private static readonly Color CircuitColor = new Color(0.35f, 1f, 0.75f, 0.85f);
-
-        /// <summary>"Matruşka"'s dolls, drawn as a pip ON a cube rather than as a cube. A warm
-        /// lacquer red, because a doll is a thing sitting on the board and not a piece of it.</summary>
-        private static readonly Color DollColor = new Color(0.95f, 0.35f, 0.30f, 0.95f);
 
         /// <summary>"İstilacı"'s marked column: the demolition wash. Deliberately its own colour -
         /// a marked column is neither sealed (a seal lifts next turn) nor eaten (that is
@@ -174,11 +177,27 @@ namespace ProjectBlock.View
         private bool[,] previewBreathes;
         private CubeKind?[,] kindCache;
         private Color[,] baseColorCache;
+
+        /// <summary>What a cube looked like on the repaint that emptied its cell, and when. An
+        /// explosion plays a moment AFTER that repaint, and this is what lets it break the cube
+        /// that was there instead of an empty slot. Keyed by absolute cell, so a rebuild of the
+        /// arrays cannot lose it; overwritten the moment a cube stands there again.</summary>
+        private readonly Dictionary<GridPos, VacatedCube> vacated =
+            new Dictionary<GridPos, VacatedCube>();
+
+        private struct VacatedCube
+        {
+            public Sprite Tile;
+            public Color Colour;
+            public float At;
+        }
         private readonly List<SpriteRenderer> ghostSprites = new List<SpriteRenderer>();
         private readonly List<SpriteRenderer> outsidePreviewSprites = new List<SpriteRenderer>();
         private readonly List<GameObject> infectionMarkers = new List<GameObject>();
 
         private InfectionCoreView infectionCores;
+
+        private InfectionBurstView infectionBurst;
 
         private QuarantineFieldView quarantineField;
 
@@ -195,8 +214,9 @@ namespace ProjectBlock.View
         /// <summary>Nodes of "Devre"'s traced circuit, redrawn whenever the route changes.</summary>
         private readonly List<GameObject> circuitMarkers = new List<GameObject>();
 
-        /// <summary>"Matruşka"'s dolls, redrawn whenever one splits or moves.</summary>
-        private readonly List<GameObject> dollMarkers = new List<GameObject>();
+        /// <summary>"Matruşka"'s dolls - resting on their cubes and staged when they split. A layer over
+        /// the board rather than part of its contents, so it survives a rebuild.</summary>
+        private MatryoshkaView matryoshka;
 
         /// <summary>"Kütleçekim merkezi"'s field, shown only while gravity is NOT pointing
         /// down - normal gravity needs no explaining. See GravityFieldView.</summary>
@@ -631,6 +651,48 @@ namespace ProjectBlock.View
             get { return cellSize; }
         }
 
+        /// <summary>Edge length a CUBE is drawn at - a cell less its gap - so cubes drawn away from
+        /// the board (a defective block falling off the screen) are the size the board draws them.</summary>
+        public float CubeWorldSize
+        {
+            get { return cellSize * CubeFill; }
+        }
+
+        /// <summary>The size an empty cell's slot is drawn at - the mouth a pit opens in.</summary>
+        public float EmptySlotSize
+        {
+            get { return cellSize * EmptyFill; }
+        }
+
+        /// <summary>The face the cube at <paramref name="pos"/> wears - still standing there, or
+        /// taken by a repaint in the last <paramref name="maxAge"/> seconds (unscaled). False
+        /// for a cell that has held no cube lately, or one lost to the dark.</summary>
+        public bool TryCubeLook(GridPos pos, float maxAge, out Sprite tile, out Color colour)
+        {
+            tile = null;
+            colour = Color.white;
+            if (board != null && kindCache != null && cellRenderers != null)
+            {
+                int x = pos.X - board.MinX;
+                int y = pos.Y - board.MinY;
+                if (x >= 0 && y >= 0 && x < kindCache.GetLength(0) && y < kindCache.GetLength(1)
+                    && kindCache[x, y].HasValue && cellRenderers[x, y] != null)
+                {
+                    tile = cellRenderers[x, y].sprite;
+                    colour = baseColorCache[x, y];
+                    return tile != null;
+                }
+            }
+            VacatedCube gone;
+            if (vacated.TryGetValue(pos, out gone) && Time.unscaledTime - gone.At <= maxAge)
+            {
+                tile = gone.Tile;
+                colour = gone.Colour;
+                return tile != null;
+            }
+            return false;
+        }
+
         private Vector2 bottomLeft;
         private SpriteRenderer deadZoneLine; // red separator for the retro dead zone, or null
 
@@ -669,6 +731,10 @@ namespace ProjectBlock.View
             Transform keepSurface = surface != null ? surface.transform : null;
             Transform keepInfection = infectionCores != null
                 ? infectionCores.transform : null;
+            // The burst outlives a rebuild for the same reason the cores do - and for one more:
+            // the turn that detonates an infection can also erode the arena, and a rebuild
+            // halfway through the animation would otherwise delete it mid-frame.
+            Transform keepBurst = infectionBurst != null ? infectionBurst.transform : null;
             Transform keepCircuit = circuitTrace != null ? circuitTrace.transform : null;
             Transform keepOverload = circuitOverload != null
                 ? circuitOverload.transform : null;
@@ -685,14 +751,17 @@ namespace ProjectBlock.View
             // survives the rebuild and is CLEARED below - a new arena starts under ordinary
             // gravity, which is the rules' own behaviour and not something this decides.
             Transform keepGravity = gravityField != null ? gravityField.transform : null;
+            // The dolls are staged across several frames; a rebuild mid-split must not delete the
+            // dolls in the air.
+            Transform keepDolls = matryoshka != null ? matryoshka.transform : null;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Transform child = transform.GetChild(i);
                 if (child == keepGlow || child == keepSurface
-                    || child == keepInfection || child == keepCircuit
+                    || child == keepInfection || child == keepBurst || child == keepCircuit
                     || child == keepOverload || child == keepQuarantine
                     || child == keepHeat || child == keepNest || child == keepLane
-                    || child == keepGravity)
+                    || child == keepGravity || child == keepDolls)
                 {
                     continue;
                 }
@@ -844,6 +913,7 @@ namespace ProjectBlock.View
                     Sprite tile = null;
                     if (cube.HasValue)
                     {
+                        vacated.Remove(gp);
                         tile = ViewUtil.CubeTile(cube.Value.Kind, CardOf(cube.Value));
                         // Blind: the cube GROWS into its cell as the light reaches it and
                         // shrinks back to an anonymous square as it fades, so a revealed block
@@ -853,6 +923,17 @@ namespace ProjectBlock.View
                     }
                     else
                     {
+                        // A cube stood here on the last repaint and is gone on this one: keep
+                        // its face for the explosion that is about to play over the cell.
+                        if (kindCache[x, y].HasValue && cellRenderers[x, y].sprite != null)
+                        {
+                            vacated[gp] = new VacatedCube
+                            {
+                                Tile = cellRenderers[x, y].sprite,
+                                Colour = baseColorCache[x, y],
+                                At = Time.unscaledTime
+                            };
+                        }
                         ViewUtil.ApplyTile(cellRenderers[x, y], null, cellSize * EmptyFill);
                     }
                     Color color = cube.HasValue
@@ -987,6 +1068,137 @@ namespace ProjectBlock.View
         public float PlayInfectionCharge(GridPos cell)
         {
             return infectionCores != null ? infectionCores.PlayCharge(cell) : 0f;
+        }
+
+        /// <summary>
+        /// The detonation itself: the infected block is eaten from inside and comes apart, and on
+        /// the FIRST one its spores carry the contagion to the cells the spread took.
+        ///
+        /// It takes the destroyed cubes rather than plain cells because the burst draws the
+        /// block wearing its own tiles right up to the moment it comes apart, and by the time
+        /// this runs the rules have destroyed them and Refresh has already painted them away -
+        /// so the art has to come from the turn's destruction log.
+        ///
+        /// <paramref name="hold"/> is how long the block stands intact first: the core's charge.
+        /// <paramref name="spreadTo"/> is the rules' own list of cells that were actually
+        /// infected, empty on every detonation after the first; the view never works the plus
+        /// out for itself. Those cells' cores already exist - the refresh made them - and would
+        /// arrive before the block had even gone, so their birth is held until the spores
+        /// carrying the spread have landed on them.
+        ///
+        /// Returns the seconds from now until the source cell ruptures.
+        /// </summary>
+        public float PlayInfectionBurst(IReadOnlyList<DestroyedCube> block, GridPos source,
+            IReadOnlyList<GridPos> spreadTo, float hold)
+        {
+            if (block == null || block.Count == 0)
+            {
+                return 0f;
+            }
+            EnsureInfectionBurst();
+            if (infectionBurst == null)
+            {
+                return 0f;
+            }
+            // How many steps THROUGH the block each cube is from the cell that ripened - through
+            // it, not across the gap inside an L or a U - because that is the path the sickness
+            // takes, and the rupture follows it.
+            var inBlock = new HashSet<GridPos>();
+            for (int i = 0; i < block.Count; i++)
+            {
+                inBlock.Add(block[i].Pos);
+            }
+            var steps = new Dictionary<GridPos, int>();
+            var frontier = new Queue<GridPos>();
+            steps[source] = 0;
+            frontier.Enqueue(source);
+            while (frontier.Count > 0)
+            {
+                GridPos at = frontier.Dequeue();
+                int next = steps[at] + 1;
+                GridPos[] around =
+                {
+                    new GridPos(at.X + 1, at.Y), new GridPos(at.X - 1, at.Y),
+                    new GridPos(at.X, at.Y + 1), new GridPos(at.X, at.Y - 1)
+                };
+                for (int i = 0; i < around.Length; i++)
+                {
+                    if (inBlock.Contains(around[i]) && !steps.ContainsKey(around[i]))
+                    {
+                        steps[around[i]] = next;
+                        frontier.Enqueue(around[i]);
+                    }
+                }
+            }
+
+            var ghosts = new List<InfectionBurstView.Ghost>();
+            for (int i = 0; i < block.Count; i++)
+            {
+                Cube cube = block[i].Cube;
+                // CardLookup rather than CardOf: this is not a repaint, and it must not be
+                // counted against the gallery's unresolved-cube diagnostic.
+                BlockCard card = CardLookup != null ? CardLookup(cube.SourceCardId) : null;
+                Sprite tile = ViewUtil.CubeTile(cube.Kind, card);
+                int step;
+                if (!steps.TryGetValue(block[i].Pos, out step))
+                {
+                    // Not joined to the source (a block always is) - plain distance, so it
+                    // still goes in a sensible order.
+                    step = Mathf.Abs(block[i].Pos.X - source.X)
+                        + Mathf.Abs(block[i].Pos.Y - source.Y);
+                }
+                ghosts.Add(new InfectionBurstView.Ghost
+                {
+                    Where = CellToWorld(block[i].Pos),
+                    Tile = tile,
+                    Colour = ViewUtil.CubeTileColor(cube, tile),
+                    // The size a cube is drawn at, so the ghost takes over without a jump.
+                    Size = cellSize * CubeFill,
+                    Steps = step
+                });
+            }
+            var carry = new List<Vector2>();
+            if (spreadTo != null)
+            {
+                for (int i = 0; i < spreadTo.Count; i++)
+                {
+                    carry.Add(CellToWorld(spreadTo[i]));
+                }
+            }
+            float rupture = infectionBurst.Play(ghosts, cellSize, hold, CellToWorld(source), carry);
+            if (infectionCores != null && spreadTo != null)
+            {
+                // Until the carriers LAND, not merely until the rupture: they do the travelling,
+                // and the core only has to bloom where they arrive.
+                infectionCores.HoldBirth(spreadTo, rupture + InfectionBurstView.Style.CarrierSeconds);
+            }
+            return rupture;
+        }
+
+        /// <summary>True while a detonation is still on screen.</summary>
+        public bool InfectionBursting
+        {
+            get { return infectionBurst != null && infectionBurst.Active; }
+        }
+
+        /// <summary>Clears a detonation mid-flight - the animation lab's RESET.</summary>
+        public void StopInfectionBurst()
+        {
+            if (infectionBurst != null)
+            {
+                infectionBurst.Stop();
+            }
+        }
+
+        private void EnsureInfectionBurst()
+        {
+            if (infectionBurst != null)
+            {
+                return;
+            }
+            var go = new GameObject("InfectionBurst");
+            go.transform.SetParent(transform, false);
+            infectionBurst = go.AddComponent<InfectionBurstView>();
         }
 
 
@@ -1409,38 +1621,72 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>
-        /// Draws "Matruşka"'s dolls as pips sitting ON their host cubes. Sized by how many splits
-        /// each has left, so a nearly-spent doll is visibly a small one - which is the only way
-        /// the player can tell how much of the ladder is behind them.
-        /// </summary>
-        public void ShowDolls(IReadOnlyList<GridPos> cells, IReadOnlyList<int> sizes)
+        /// <summary>"Matruşka"'s dolls as they stand, drawn without ceremony. Null clears them. The
+        /// drawing - and everything that happens to them - is MatryoshkaView's.</summary>
+        public void ShowDolls(IReadOnlyList<GridPos> cells, IReadOnlyList<int> generations,
+            int lastGeneration)
         {
-            for (int i = dollMarkers.Count - 1; i >= 0; i--)
+            if (cells == null || board == null)
             {
-                if (dollMarkers[i] != null)
+                if (matryoshka != null)
                 {
-                    Destroy(dollMarkers[i]);
+                    matryoshka.Clear();
                 }
+                return;
             }
-            dollMarkers.Clear();
-            if (board == null || cells == null)
+            EnsureMatryoshka();
+            matryoshka.Show(DollMarks(cells, generations), lastGeneration, board, CellToWorld, cellSize);
+        }
+
+        /// <summary>
+        /// A turn that did something to the dolls: its events and where the dolls end up, held until
+        /// ReleaseDolls - the moment the cubes under them go - so a doll opens as its cube breaks.
+        /// </summary>
+        public void HoldDolls(IReadOnlyList<DollEvent> events, IReadOnlyList<GridPos> cells,
+            IReadOnlyList<int> generations, int lastGeneration)
+        {
+            if (board == null || events == null)
             {
                 return;
             }
-            for (int i = 0; i < cells.Count; i++)
+            EnsureMatryoshka();
+            matryoshka.Hold(events, DollMarks(cells, generations), lastGeneration, board, CellToWorld,
+                cellSize);
+        }
+
+        /// <summary>Plays the held doll events, if any are held.</summary>
+        public void ReleaseDolls()
+        {
+            if (matryoshka != null)
             {
-                if (!board.IsInside(cells[i]))
-                {
-                    continue;
-                }
-                int left = sizes != null && i < sizes.Count ? sizes[i] : 1;
-                if (left < 1) { left = 1; }
-                float scale = cellSize * (0.22f + 0.09f * Mathf.Min(left, 4));
-                SpriteRenderer pip = ViewUtil.MakeRect(transform, "Doll_" + i,
-                    CellToWorld(cells[i]), new Vector2(scale, scale), DollColor, 6);
-                dollMarkers.Add(pip.gameObject);
+                matryoshka.Release();
             }
+        }
+
+        private List<MatryoshkaView.Mark> DollMarks(IReadOnlyList<GridPos> cells,
+            IReadOnlyList<int> generations)
+        {
+            var marks = new List<MatryoshkaView.Mark>();
+            for (int i = 0; cells != null && i < cells.Count; i++)
+            {
+                if (board.IsInside(cells[i]))
+                {
+                    int generation = generations != null && i < generations.Count ? generations[i] : 1;
+                    marks.Add(new MatryoshkaView.Mark(cells[i], Mathf.Max(1, generation)));
+                }
+            }
+            return marks;
+        }
+
+        private void EnsureMatryoshka()
+        {
+            if (matryoshka != null)
+            {
+                return;
+            }
+            var go = new GameObject("Matryoshka");
+            go.transform.SetParent(transform, false);
+            matryoshka = go.AddComponent<MatryoshkaView>();
         }
 
         /// <summary>The circuit path, IN ORDER. The drawing is CircuitTraceView's business: one

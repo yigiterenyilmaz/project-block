@@ -150,6 +150,26 @@ namespace ProjectBlock.View
             blastGo.transform.SetParent(transform, false);
             blastFx = blastGo.AddComponent<BlastFxView>();
 
+            var clusterGo = new GameObject("ClusterBurst");
+            clusterGo.transform.SetParent(transform, false);
+            clusterBurst = clusterGo.AddComponent<ClusterBurstView>();
+
+            var sinkGo = new GameObject("ColdSink");
+            sinkGo.transform.SetParent(transform, false);
+            coldSink = sinkGo.AddComponent<ColdSinkView>();
+
+            var foldGo = new GameObject("PhaseFold");
+            foldGo.transform.SetParent(transform, false);
+            phaseFold = foldGo.AddComponent<PhaseFoldView>();
+
+            var cryoGo = new GameObject("CryoSublimation");
+            cryoGo.transform.SetParent(transform, false);
+            cryoSublimation = cryoGo.AddComponent<CryoSublimationView>();
+
+            var peelGo = new GameObject("MomentumPeel");
+            peelGo.transform.SetParent(transform, false);
+            momentumPeel = peelGo.AddComponent<MomentumPeelView>();
+
             var lineSwapGo = new GameObject("LineSwapPicker");
             lineSwapGo.transform.SetParent(transform, false);
             lineSwapPicker = lineSwapGo.AddComponent<LineSwapPickerView>();

@@ -389,6 +389,11 @@ namespace ProjectBlock.View
             flameStreak.gameObject.SetActive(visible);
             overtimePressure.gameObject.SetActive(visible);
             blastFx.gameObject.SetActive(visible);
+            clusterBurst.gameObject.SetActive(visible);
+            coldSink.gameObject.SetActive(visible);
+            phaseFold.gameObject.SetActive(visible);
+            cryoSublimation.gameObject.SetActive(visible);
+            momentumPeel.gameObject.SetActive(visible);
             infoText.gameObject.SetActive(visible);
             messageText.gameObject.SetActive(visible);
             totalText.gameObject.SetActive(visible);
@@ -413,6 +418,11 @@ namespace ProjectBlock.View
             sweepSparks.Stop();
             boardCleanse.Stop();
             dynamiteBlast.Stop();
+            clusterBurst.Stop();
+            coldSink.Stop();
+            phaseFold.Stop();
+            cryoSublimation.Stop();
+            momentumPeel.Stop();
             marketView.Hide();
             deckOverlay.Hide();
             grantPicker.Hide();

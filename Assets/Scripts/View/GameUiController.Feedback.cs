@@ -58,7 +58,7 @@ namespace ProjectBlock.View
                 });
             }
             TriggerSupurgeBlast();
-            TriggerInfectionBlast();
+            TriggerInfectionBlast(report);
             ShowShellGameReveal(round);
             // A resolved turn is the natural save point: the per-turn scratch state is at rest,
             // which is exactly what the save format assumes (see RoundEngine.Save).
@@ -132,6 +132,9 @@ namespace ProjectBlock.View
         /// pre-explosion water falls when the flow is what completed the line.</summary>
         private void PlayExplosionFeedback(RoundEngine round, TurnReport report)
         {
+            // "Matruşka": the dolls held since the refresh open NOW - as the cubes under them go, not
+            // when the board was repainted before the water fell.
+            boardView.ReleaseDolls();
             if (report.CleanSweep)
             {
                 // the sweep bling rises in pitch with every sweep this round
@@ -227,7 +230,13 @@ namespace ProjectBlock.View
             }
             comboStreak++;
             EmitBlastParticles(round, report);
-            ShakeForBlast(report.DynamiteTriggered, report.CleanSweep, comboStreak);
+            // A turn whose only explosion was a loose group ("Hedefli" payout, a late reshape
+            // clear) does not shake: the group explosion keeps the screen still. A cleared line,
+            // TNT and a clean sweep keep theirs.
+            if (report.CubesExploded > 0 || report.DynamiteTriggered || report.CleanSweep)
+            {
+                ShakeForBlast(report.DynamiteTriggered, report.CleanSweep, comboStreak);
+            }
             if (report.DynamiteTriggered)
             {
                 FlashDynamite(DynamiteCenter(report));
@@ -416,16 +425,42 @@ namespace ProjectBlock.View
             // Late board-reshape clears (inflation deflate, board powers) blast their exact
             // absolute cells - ExplodedRows/Columns never covered them. The board has already
             // been rebuilt to its new size by RefreshAll, so CellToWorld maps these correctly.
-            FlashCells(report.ExtraExplodedCells, BlastColor, 4);
+            FlashCells(report.ExtraExplodedCells, BlastColor);
             // A "Hedefli" payout keeps its cells in a list of its own (so "Antimadde" cannot be
             // billed for them). It goes off in the lime that belongs to nothing else on the
             // board, so the cube the player was aiming at is what they see break.
             FlashCells(report.TargetedExplodedCells,
-                ViewUtil.ElementColor(BlockElement.Targeted), 4);
-            // Cells a BOSS lifted off rather than destroyed ("Alzheimer" forgetting a card,
-            // "Yürüyen merdiven" carrying a row away). Pale and COLD - it never strikes bright,
-            // because nothing blew up and nothing was earned.
-            FlashCells(report.LiftedCells, LiftedColor, 3, cold: true);
+                ViewUtil.ElementColor(BlockElement.Targeted));
+            // Cells a BOSS took off rather than destroyed. What happened to each cube decides how
+            // it is drawn: one that VANISHED where it stood ("Alzheimer", "Hidrolik pres") goes
+            // through a removal variant; one a MOVING board carried off ("Yürüyen merdiven",
+            // "Merkezkaç kuvveti") is torn away along the step Core says it was taking; one that
+            // changed in place ("Kangren") keeps the quiet cold mark - a pit would open under
+            // whatever cube stands in that cell now.
+            var removed = new List<GridPos>();
+            var carried = new List<GridPos>();
+            var carriedMotions = new List<LiftMotion>();
+            var marked = new List<GridPos>();
+            for (int i = 0; i < report.LiftedCells.Count; i++)
+            {
+                LiftMotion motion = report.LiftMotionAt(i);
+                if (report.LiftKindAt(i) == LiftKind.Removed)
+                {
+                    removed.Add(report.LiftedCells[i]);
+                }
+                else if (report.LiftKindAt(i) == LiftKind.Relocated && motion.Reason != LiftReason.None)
+                {
+                    carried.Add(report.LiftedCells[i]);
+                    carriedMotions.Add(motion);
+                }
+                else
+                {
+                    marked.Add(report.LiftedCells[i]);
+                }
+            }
+            PlayRemoval(removed);
+            PlayForcedExit(carried, carriedMotions);
+            LiftCells(marked, LiftedColor);
             // "Kaçakçı" defective goods: the cubes showed up and then let go. They fall through
             // the arena and off the bottom of the screen - nothing landed, so there is nothing to
             // blast, only something to drop.
@@ -521,30 +556,223 @@ namespace ProjectBlock.View
             // two can never disagree about which streak the player is on.
             int tier = LineBurstView.EffectiveTier(activeLineTier);
             Color tone = LineBlastColors[tier];
-            // A cleared LINE does not go through CellFlashFx and throws no code particles,
-            // unlike every other destruction. Both were built for a loose handful of cells: a
-            // whole row of struck squares is a rectangle, and the sheet already flies its own
-            // debris out of the middle. What a line gets instead is LineSweepView - energy
-            // leaving the centre for both ends, with each slot answering as it passes - under
-            // the drawn burst. FlashCells keeps the squares and the sparks, because a loose
-            // group has neither a direction nor a drawing of its own.
+            // A cleared LINE shares nothing with FlashCells. A whole row of cells going off one
+            // by one is a rectangle, and the sheet already flies its own debris out of the
+            // middle. What a line gets instead is LineSweepView - energy leaving the centre for
+            // both ends, with each slot answering as it passes - under the drawn burst. A loose
+            // group goes through ClusterBurstView, which has neither a direction nor a combo
+            // tier, so the two can never be mistaken for each other.
             lineSweep.Play(cells, boardView.CellWorldSize, row, tone);
             lineBurst.Play(cells, boardView.CellWorldSize, row, activeLineTier);
         }
 
         /// <summary>
-        /// EVERY destruction that is not a line: a late board-reshape clear, a "Hedefli" payout,
-        /// a power blast, the sweeper, an infection going off, cubes a boss lifted away. They
-        /// strike in the same language a cleared line does - the squares themselves going off -
-        /// only rippling out from the middle of the group instead of along an axis, and in the
-        /// colour that destruction already owns.
+        /// EVERY explosion that is not a line: a late board-reshape clear, a "Hedefli" payout, a
+        /// power blast, the sweeper. The group goes off from its own centre through
+        /// ClusterBurstView - each cell charging, bursting and letting go - in the colour that
+        /// destruction already owns. It leaves the camera alone unless its impulse setting is
+        /// raised from zero.
+        ///
+        /// <paramref name="onFirstPeak"/> is for a caller that owns its SOUND: it fires on the
+        /// frame the first cell bursts, so the bang lands with the flash instead of ahead of it.
         ///
         /// Cells outside the board are dropped: a turn that also eroded the arena can name a
-        /// cell that is no longer there. Returns whether anything was drawn, which is what the
-        /// callers that also make a sound or shake the camera decide on.
+        /// cell that is no longer there. A cell named twice goes off once. Returns whether
+        /// anything was drawn.
         /// </summary>
-        private bool FlashCells(IReadOnlyList<GridPos> cells, Color tone, int particlesPerCell,
-            bool cold = false)
+        private bool FlashCells(IReadOnlyList<GridPos> cells, Color tone,
+            System.Action onFirstPeak = null, IReadOnlyList<ClusterBurstView.Look> faces = null)
+        {
+            if (cells == null || cells.Count == 0 || boardView == null || boardView.Board == null)
+            {
+                return false;
+            }
+            GameBoard board = boardView.Board;
+            var group = new HashSet<GridPos>();
+            var world = new List<Vector2>(cells.Count);
+            var looks = new List<ClusterBurstView.Look>(cells.Count);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (board.IsInside(cells[i]) && group.Add(cells[i]))
+                {
+                    world.Add(boardView.CellToWorld(cells[i]));
+                    Sprite tile;
+                    Color colour;
+                    if (faces != null && faces.Count > 0)
+                    {
+                        // The lab's blocks, handed in whole: the cells it blasts hold none.
+                        looks.Add(faces[i % faces.Count]);
+                    }
+                    else
+                    {
+                        // The board repainted this cell empty a moment ago; the burst breaks the
+                        // cube that WAS there, so it asks what that cube looked like.
+                        looks.Add(boardView.TryCubeLook(cells[i], CubeLookMaxAge, out tile, out colour)
+                            ? new ClusterBurstView.Look { Tile = tile, Colour = colour }
+                            : new ClusterBurstView.Look());
+                    }
+                }
+            }
+            if (world.Count == 0)
+            {
+                return false;
+            }
+            // The screen stays still unless ClusterBurstView.Style.ScreenImpulseStrength is raised
+            // from its default of zero (the designer's call).
+            float impulse = ClusterBurstView.ImpulseFor(world.Count);
+            System.Action onImpact = null;
+            if (impulse > 0f)
+            {
+                onImpact = delegate
+                {
+                    ShakeCamera(impulse, ClusterBurstView.Style.ScreenImpulseDuration, 3f);
+                };
+            }
+            clusterBurst.Play(world, looks, boardView.CellWorldSize, boardView.CubeWorldSize, tone,
+                onFirstPeak, onImpact);
+            return true;
+        }
+
+        /// <summary>How long after a repaint emptied a cell FlashCells still breaks the cube that
+        /// stood there. Generous: the sweeper waits its own beat, and a turn's explosion can play
+        /// after the water has finished falling.</summary>
+        private const float CubeLookMaxAge = 2f;
+
+        /// <summary>The ways a cube a boss REMOVED can leave the board. Every removal draws one
+        /// at random - the same one twice is allowed - so the player keeps seeing it happen
+        /// differently. Add a variant here and in PlayRemoval; nothing else needs to know.</summary>
+        private enum RemovalVariant
+        {
+            ColdSink,
+            PhaseFold,
+            CryoSublimation
+        }
+
+        private static readonly RemovalVariant[] RemovalVariants =
+        {
+            RemovalVariant.ColdSink, RemovalVariant.PhaseFold, RemovalVariant.CryoSublimation
+        };
+
+        /// <summary>
+        /// Cubes a boss REMOVED - vanished where they stood, cells empty now. One variant, picked
+        /// at random, for the whole removal: half a group falling into pits and half doing
+        /// something else would read as two events. Visual only - the random pick never reaches
+        /// Core. <paramref name="variant"/> and <paramref name="faces"/> are the lab's: a variant
+        /// to force and the blocks to use on cells that hold none.
+        /// </summary>
+        private bool PlayRemoval(IReadOnlyList<GridPos> cells, RemovalVariant? variant = null,
+            IReadOnlyList<ClusterBurstView.Look> faces = null)
+        {
+            if (cells == null || cells.Count == 0 || boardView == null || boardView.Board == null)
+            {
+                return false;
+            }
+            GameBoard board = boardView.Board;
+            var seen = new HashSet<GridPos>();
+            var world = new List<Vector2>(cells.Count);
+            var looks = new List<ClusterBurstView.Look>(cells.Count);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (!board.IsInside(cells[i]) || !seen.Add(cells[i]))
+                {
+                    continue;
+                }
+                world.Add(boardView.CellToWorld(cells[i]));
+                Sprite tile;
+                Color colour;
+                if (faces != null && faces.Count > 0)
+                {
+                    looks.Add(faces[i % faces.Count]);
+                }
+                else
+                {
+                    looks.Add(boardView.TryCubeLook(cells[i], CubeLookMaxAge, out tile, out colour)
+                        ? new ClusterBurstView.Look { Tile = tile, Colour = colour }
+                        : new ClusterBurstView.Look());
+                }
+            }
+            if (world.Count == 0)
+            {
+                return false;
+            }
+            RemovalVariant chosen = variant.HasValue ? variant.Value
+                : RemovalVariants[Random.Range(0, RemovalVariants.Length)];
+            switch (chosen)
+            {
+                case RemovalVariant.PhaseFold:
+                    phaseFold.Play(world, looks, boardView.CellWorldSize, boardView.CubeWorldSize,
+                        boardView.EmptySlotSize);
+                    break;
+                case RemovalVariant.CryoSublimation:
+                    cryoSublimation.Play(world, looks, boardView.CellWorldSize, boardView.CubeWorldSize,
+                        boardView.EmptySlotSize);
+                    break;
+                default:
+                    coldSink.Play(world, looks, boardView.CellWorldSize, boardView.CubeWorldSize,
+                        boardView.EmptySlotSize);
+                    break;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Cubes a MOVING board carried off ("Yürüyen merdiven", "Merkezkaç kuvveti"): each is torn
+        /// off along the step Core reported it taking (LiftMotion) - never a direction worked out
+        /// here - through MomentumPeelView ("Soğuk sökülme"). Drawn from the cube Core says WENT,
+        /// since its cell may already hold the cube that slid in behind it, and from the cell it
+        /// stood in when the step began. A mirror-world cube plays over the mirror board. The
+        /// board's rect goes along, so a cube going over the edge is clipped by it.
+        /// </summary>
+        private bool PlayForcedExit(IReadOnlyList<GridPos> cells, IReadOnlyList<LiftMotion> motions)
+        {
+            if (cells == null || motions == null || cells.Count == 0 || momentumPeel == null)
+            {
+                return false;
+            }
+            bool any = false;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                bool mirror = pass == 1;
+                BoardView view = mirror ? mirrorBoardView : boardView;
+                if (view == null || view.Board == null)
+                {
+                    continue;
+                }
+                var from = new List<Vector2>();
+                var steps = new List<Vector2>();
+                var reasons = new List<LiftReason>();
+                var looks = new List<ClusterBurstView.Look>();
+                for (int i = 0; i < cells.Count && i < motions.Count; i++)
+                {
+                    LiftMotion m = motions[i];
+                    if (m.Mirror != mirror || m.Reason == LiftReason.None)
+                    {
+                        continue;
+                    }
+                    from.Add(view.CellToWorld(m.From));
+                    steps.Add(new Vector2(m.Step.X, m.Step.Y));
+                    reasons.Add(m.Reason);
+                    Sprite tile = ViewUtil.CubeTile(m.Cube.Kind, FindOwnedCard(m.Cube.SourceCardId));
+                    looks.Add(new ClusterBurstView.Look { Tile = tile, Colour = ViewUtil.CubeTileColor(m.Cube, tile) });
+                }
+                if (from.Count == 0)
+                {
+                    continue;
+                }
+                momentumPeel.Play(from, steps, reasons, looks, view.CellWorldSize, view.CubeWorldSize,
+                    view.WorldRect);
+                any = true;
+            }
+            return any;
+        }
+
+        /// <summary>
+        /// Cubes a boss took off WITHOUT them vanishing in place or being carried: changed where they
+        /// stand ("Kangren"). Deliberately NOT an explosion and not a removal: it keeps the quiet
+        /// language - CellFlashFx's cold palette, brightening a little and pinching out, with a
+        /// light puff - and never shakes.
+        /// </summary>
+        private bool LiftCells(IReadOnlyList<GridPos> cells, Color tone)
         {
             if (cells == null || cells.Count == 0 || boardView == null || boardView.Board == null)
             {
@@ -564,9 +792,8 @@ namespace ProjectBlock.View
             }
             float[] times = CellFlashFx.BurstTimes(world);
             CellFlashFx.Play(transform, world, times, boardView.CellWorldSize,
-                CellFlashFx.Pinch.Uniform,
-                cold ? CellFlashFx.Palette.Cold(tone) : CellFlashFx.Palette.Hot(tone));
-            StartCoroutine(BurstParticles(world, times, tone, particlesPerCell));
+                CellFlashFx.Pinch.Uniform, CellFlashFx.Palette.Cold(tone));
+            StartCoroutine(BurstParticles(world, times, tone, 3));
             return true;
         }
 
@@ -679,20 +906,89 @@ namespace ProjectBlock.View
             SpawnFallingCubes(mirrorBoardView, report.MirrorFellThroughCells, report.MirrorCard);
         }
 
+        /// <summary>
+        /// Drops a defective block's cubes off the screen, each wearing the face it had in the hand.
+        ///
+        /// They used to be flat squares in the block's element colour, which threw away the one
+        /// thing that tells block types apart - their art. Every cube now asks ViewUtil.CardCubeTile,
+        /// the question the hand asks, so a fox falls as a fox, a gear as a gear, and a targeted
+        /// block with its bullseye on the cube that carried it.
+        ///
+        /// The shape is the one the card was PLACED with (RoundEngine.EffectiveShape - rotated,
+        /// reshaped), and the reported cells leave out any that were outside the arena, so a cube's
+        /// place in the list is not its place in the shape: each is matched back through the shape.
+        /// </summary>
         private void SpawnFallingCubes(BoardView view, IReadOnlyList<GridPos> cells, BlockCard card)
         {
             if (view == null || cells == null || cells.Count == 0)
             {
                 return;
             }
-            Color color = card != null && card.Elements.Count > 0
-                ? ViewUtil.ElementColor(card.Elements[0])
-                : ViewUtil.ColorForCard(card != null ? card.Id : 0);
+            BlockShape shape = null;
+            if (card != null)
+            {
+                RoundEngine round = session != null ? session.CurrentRound : null;
+                shape = round != null ? round.EffectiveShape(card) : card.Shape;
+            }
+            GridPos origin = shape != null ? FallOrigin(cells, shape) : new GridPos(0, 0);
             for (int i = 0; i < cells.Count; i++)
             {
-                FallingCubeFx.Spawn(transform, view.CellToWorld(cells[i]),
-                    view.CellWorldSize * 0.86f, color, i * 0.045f);
+                Sprite tile = null;
+                Color tint = ViewUtil.ColorForCard(card != null ? card.Id : 0);
+                if (shape != null)
+                {
+                    int index = ShapeIndexOf(shape,
+                        new GridPos(cells[i].X - origin.X, cells[i].Y - origin.Y));
+                    if (index >= 0)
+                    {
+                        tile = ViewUtil.CardCubeTile(card, shape, index,
+                            ReferenceEquals(shape, card.Shape), out tint);
+                    }
+                    else
+                    {
+                        // Not a cube of the shape (it always should be) - still the card's own face.
+                        tile = ViewUtil.CubeTile(CubeKind.Normal, card);
+                        tint = ViewUtil.CubeTileColor(tile, tint);
+                    }
+                }
+                FallingCubeFx.Spawn(transform, view.CellToWorld(cells[i]), view.CubeWorldSize,
+                    tile, tint, i * 0.045f);
             }
+        }
+
+        /// <summary>Where the card was placed, recovered from the cells it covered: the offset at
+        /// which every reported cell is a cube of the shape. The first cell is tried against each
+        /// cube in turn, so cells missing past the edge of the arena cannot throw it off.</summary>
+        private static GridPos FallOrigin(IReadOnlyList<GridPos> cells, BlockShape shape)
+        {
+            GridPos first = cells[0];
+            for (int k = 0; k < shape.Cells.Count; k++)
+            {
+                var origin = new GridPos(first.X - shape.Cells[k].X, first.Y - shape.Cells[k].Y);
+                bool fits = true;
+                for (int i = 1; i < cells.Count && fits; i++)
+                {
+                    fits = ShapeIndexOf(shape,
+                        new GridPos(cells[i].X - origin.X, cells[i].Y - origin.Y)) >= 0;
+                }
+                if (fits)
+                {
+                    return origin;
+                }
+            }
+            return new GridPos(first.X - shape.Cells[0].X, first.Y - shape.Cells[0].Y);
+        }
+
+        private static int ShapeIndexOf(BlockShape shape, GridPos offset)
+        {
+            for (int i = 0; i < shape.Cells.Count; i++)
+            {
+                if (shape.Cells[i].Equals(offset))
+                {
+                    return i;
+                }
+            }
+            return -1;
         }
 
         /// <summary>
@@ -712,8 +1008,11 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // Everything after the first is a RE-reveal: the same language, held a little
+            // shorter, because by then the player knows the ritual and only needs the look.
+            bool again = mine.ShuffleCount > 1;
             lastMineShuffle = mine.ShuffleCount;
-            mineShuffle.Play(boardView, round.MainBoard, mine.ShufflePath);
+            mineShuffle.Play(boardView, round.MainBoard, mine.ShufflePath, again);
         }
 
         /// <summary>Very small camera shake for explosions (slightly bigger on clean sweeps).
@@ -892,7 +1191,7 @@ namespace ProjectBlock.View
                 boardView.ShowCircuit(null);
                 boardView.ShowQuarantine(null);
                 boardView.ShowCreature(null);
-                boardView.ShowDolls(null, null);
+                boardView.ShowDolls(null, null, 0);
                 boardView.ShowDoomedColumn(null, 0);
                 // The pull markers sit OUTSIDE the arena and say nothing about what is on it, so
                 // they are the one marker the dark does not have to swallow.
@@ -903,7 +1202,7 @@ namespace ProjectBlock.View
             RefreshCircuit(report);
             RefreshQuarantine();
             RefreshCreature();
-            RefreshBossBoardMarks();
+            RefreshBossBoardMarks(report);
             // "Kütleçekim merkezi": which way the arena is pulling water. A no-op on every board
             // that pulls it downward, which is nearly all of them.
             boardView.ShowGravity(session.CurrentRound.Board.WaterFlow);
@@ -912,7 +1211,7 @@ namespace ProjectBlock.View
         /// <summary>Hands the board view what the new bosses have put ON it: "Matruşka"'s dolls
         /// and "İstilacı"'s marked column. Both are marks on the arena rather than cubes in it,
         /// so neither belongs in the cube pass.</summary>
-        private void RefreshBossBoardMarks()
+        private void RefreshBossBoardMarks(TurnReport report)
         {
             RoundEngine round = session.CurrentRound;
             BossRound boss = round != null ? round.Boss : null;
@@ -921,16 +1220,26 @@ namespace ProjectBlock.View
             if (dolls != null)
             {
                 IReadOnlyList<GridPos> cells = dolls.DollCells;
-                var sizes = new List<int>(cells.Count);
+                var generations = new List<int>(cells.Count);
                 for (int i = 0; i < cells.Count; i++)
                 {
-                    sizes.Add(dolls.GenerationsLeftAt(cells[i]));
+                    generations.Add(dolls.GenerationAt(cells[i]));
                 }
-                boardView.ShowDolls(cells, sizes);
+                // A turn that DID something to the dolls is staged, not repainted: the board is told
+                // where they end up and what happened on the way, and keeps its picture until the
+                // cubes actually go (PlayExplosionFeedback releases it).
+                if (report != null && report.DollEvents.Count > 0)
+                {
+                    boardView.HoldDolls(report.DollEvents, cells, generations, dolls.Generations);
+                }
+                else
+                {
+                    boardView.ShowDolls(cells, generations, dolls.Generations);
+                }
             }
             else
             {
-                boardView.ShowDolls(null, null);
+                boardView.ShowDolls(null, null, 0);
             }
 
             var invader = boss as IstilaciBoss;

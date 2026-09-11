@@ -437,13 +437,28 @@ namespace ProjectBlock.Core
         /// </summary>
         public List<GridPos> ShiftRowsUp()
         {
+            return ShiftRowsUp(null);
+        }
+
+        /// <summary>As ShiftRowsUp, also writing into <paramref name="motions"/> - one entry per
+        /// returned cell, in the same order - how each cube was going when it went: up one, and
+        /// why it could not land. Reporting only; the ride itself is exactly the same.</summary>
+        public List<GridPos> ShiftRowsUp(List<LiftMotion> motions)
+        {
             var lost = new List<GridPos>();
+            var up = new GridPos(0, 1);
             for (int x = 0; x < Width; x++)
             {
                 // The top row rides off the end.
                 if (cells[x, Height - 1].HasValue)
                 {
-                    lost.Add(new GridPos(x + MinX, Height - 1 + MinY));
+                    var top = new GridPos(x + MinX, Height - 1 + MinY);
+                    lost.Add(top);
+                    if (motions != null)
+                    {
+                        motions.Add(new LiftMotion(top, up, LiftReason.ExitedBoard,
+                            cells[x, Height - 1].Value, false));
+                    }
                 }
                 for (int y = Height - 1; y >= 1; y--)
                 {
@@ -463,8 +478,15 @@ namespace ProjectBlock.Core
                     }
                     if (!playable[x, y])
                     {
+                        Cube rode = cells[x, y].Value;
                         cells[x, y] = null;
                         lost.Add(new GridPos(x + MinX, y + MinY));
+                        if (motions != null)
+                        {
+                            // Reported at the hole it rode into; it came from the cell below.
+                            motions.Add(new LiftMotion(new GridPos(x + MinX, y - 1 + MinY), up,
+                                LiftReason.NoGround, rode, false));
+                        }
                         continue;
                     }
                     occupied++;
@@ -490,6 +512,14 @@ namespace ProjectBlock.Core
         /// nowhere to stand and is lost with the rest.
         /// </summary>
         public List<GridPos> FlingCubesOutward()
+        {
+            return FlingCubesOutward(null);
+        }
+
+        /// <summary>As FlingCubesOutward, also writing into <paramref name="motions"/> - one entry
+        /// per returned cell, in the same order - the step each lost cube was taking and why it
+        /// could not land. Reporting only; the fling itself is exactly the same.</summary>
+        public List<GridPos> FlingCubesOutward(List<LiftMotion> motions)
         {
             var lost = new List<GridPos>();
             // Centre in half-cell units, so an even board's centre falls between cells and an odd
@@ -544,7 +574,14 @@ namespace ProjectBlock.Core
                 if (offBoard || !playable[tx, ty] || cells[tx, ty].HasValue)
                 {
                     // Off the edge, onto a hole, or into something that could not move: gone.
-                    lost.Add(new GridPos(from.X + MinX, from.Y + MinY));
+                    var lostAt = new GridPos(from.X + MinX, from.Y + MinY);
+                    lost.Add(lostAt);
+                    if (motions != null)
+                    {
+                        LiftReason why = offBoard ? LiftReason.ExitedBoard
+                            : !playable[tx, ty] ? LiftReason.NoGround : LiftReason.Blocked;
+                        motions.Add(new LiftMotion(lostAt, new GridPos(dx, dy), why, cube.Value, false));
+                    }
                     continue;
                 }
                 cells[tx, ty] = cube;

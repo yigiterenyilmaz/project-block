@@ -5,6 +5,10 @@
 // This is what a DEFECTIVE SMUGGLED block looks like ("Kaçakçı"): the play is legal, the cubes show
 // up for a moment, and then they are gone and so is the turn. Purely cosmetic - the rules already
 // decided nothing landed (RoundEngine never places the card), and this only shows the player why.
+//
+// Each cube wears the face it had in the hand - fire, glass, a fox, the targeted block's bullseye -
+// through ViewUtil.CardCubeTile, the rule the hand draws with. It used to be a flat square in the
+// block's colour, which made every block type fall as the same thing.
 
 using UnityEngine;
 
@@ -35,11 +39,20 @@ namespace ProjectBlock.View
         private float age;
         private float spinDirection;
 
-        public static void Spawn(Transform parent, Vector2 position, float size, Color color,
-            float delay)
+        /// <summary>
+        /// Drops one cube wearing <paramref name="tile"/> - the face its block had in the hand -
+        /// drawn in <paramref name="tint"/>. A null tile is the flat square, which is only what a
+        /// cube looks like when no block art loaded at all.
+        /// </summary>
+        public static void Spawn(Transform parent, Vector2 position, float size, Sprite tile,
+            Color tint, float delay)
         {
             SpriteRenderer renderer = ViewUtil.MakeCell(parent, "FallingCube", position, size,
-                color, 40);
+                tint, 40);
+            // ApplyTile brings the tile's own material, so water and lava keep moving on the way
+            // down exactly as they do in the hand.
+            ViewUtil.ApplyTile(renderer, tile, size);
+            Color color = tint;
             FallingCubeFx fx = renderer.gameObject.AddComponent<FallingCubeFx>();
             fx.sprite = renderer;
             fx.baseColor = color;

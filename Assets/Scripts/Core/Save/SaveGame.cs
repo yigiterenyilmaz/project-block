@@ -51,7 +51,11 @@ namespace ProjectBlock.Core
         // rebuilt from sealed lines into a moving patch of cells, and "Tutumluluk" remembers the
         // deck it started with - each changed which fields the reflection walk writes, so a 15's
         // content block no longer lines up.
-        public const int FormatVersion = 16;
+        // 17 (2026-09-10): "Enfeksiyon" reports which cells its one-time spread actually TOOK
+        // and where it spread from, so the detonation can be drawn against the infections that
+        // exist rather than the four a plus assumes. Two more fields on the joker, so a 16's
+        // content block no longer lines up.
+        public const int FormatVersion = 17;
 
         private const string VersionKey = "version";
 

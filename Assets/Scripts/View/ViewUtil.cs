@@ -499,6 +499,58 @@ namespace ProjectBlock.View
             return DefaultTile != null ? DefaultTile : WhiteSprite;
         }
 
+        /// <summary>
+        /// How ONE cube of a card is drawn off the board - in the hand, or falling off the screen as
+        /// a defective block: its tile, and the tint to draw that tile in.
+        ///
+        /// The hand's own rule, lifted out of CardVisual so everything that draws a card's cubes asks
+        /// the same question. The falling cubes did not: they fell as flat squares in the block's
+        /// colour while the hand showed the block's art, so a fox, a gear and a glass block all
+        /// dropped as the same square in three colours.
+        ///
+        ///   the TARGET cube       the bullseye, counted in the shape being drawn
+        ///   a per-cube cube       its OWN element's face - only when <paramref name="cellsAligned"/>,
+        ///                         because that array lines up with card.Shape and nothing else
+        ///   anything else         whatever the card says: its element's face, a targeted block's
+        ///                         body, or the default tile of a plain block
+        /// </summary>
+        public static Sprite CardCubeTile(BlockCard card, BlockShape shape, int index,
+            bool cellsAligned, out Color tint)
+        {
+            // "Hedefli" is a mark on one cube, not the block's colour, so it is skipped here -
+            // otherwise a plain targeted card would be lime from edge to edge.
+            Color color = ColorForCard(card.Id);
+            BlockElement? element = null;
+            for (int i = 0; i < card.Elements.Count; i++)
+            {
+                if (card.Elements[i] != BlockElement.Targeted)
+                {
+                    color = ElementColor(card.Elements[i]);
+                    element = card.Elements[i];
+                    break;
+                }
+            }
+            int targetCell = card.Has(BlockElement.Targeted) ? card.TargetIndexIn(shape) : -1;
+            bool perCube = card.HasPerCubeElements && cellsAligned;
+            if (perCube)
+            {
+                BlockElement? own = card.CellElement(index);
+                color = own.HasValue ? ElementColor(own.Value) : ColorForCard(card.Id);
+                element = own;
+            }
+            if (index == targetCell)
+            {
+                color = ElementColor(BlockElement.Targeted);
+            }
+            Sprite tile = index == targetCell
+                ? CubeTile(CubeKind.Target)
+                : element.HasValue && perCube
+                    ? CubeTile(element.Value)
+                    : CubeTile(CubeKind.Normal, card);
+            tint = CubeTileColor(tile, color);
+            return tile;
+        }
+
         /// <summary>What COLOUR to draw a cube in, given the tile it ended up on: white when
         /// the tile carries its own paint (the art speaks for itself), its usual colour when
         /// the tile is there to be tinted. The Parazit host tint survives either way - which

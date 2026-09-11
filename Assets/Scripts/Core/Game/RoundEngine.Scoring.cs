@@ -99,7 +99,7 @@ namespace ProjectBlock.Core
             ResyncSnapshot();
             if (currentReport != null && result.DetonatedCells.Count > 0)
             {
-                currentReport.AddLiftedCells(result.DetonatedCells);
+                currentReport.AddLiftedCells(result.DetonatedCells, LiftKind.Removed);
             }
             // An expansion can fill a line. Same path a deflating inflation power uses.
             LineExplosionResult lines = LineExplosionsSuppressed
@@ -590,7 +590,7 @@ namespace ProjectBlock.Core
                 ResyncSnapshot();
                 if (currentReport != null)
                 {
-                    currentReport.AddLiftedCells(cleared);
+                    currentReport.AddLiftedCells(cleared, LiftKind.Removed);
                 }
             }
             return cleared;
@@ -603,19 +603,33 @@ namespace ProjectBlock.Core
         /// </summary>
         internal IReadOnlyList<GridPos> EscalateBoards()
         {
-            var lost = new List<GridPos>(MainBoard.ShiftRowsUp());
+            // The motions are reporting only: which way each cube was going and why it could not
+            // land, for the View to draw it leaving along the step it really took.
+            var motions = new List<LiftMotion>();
+            var lost = new List<GridPos>(MainBoard.ShiftRowsUp(motions));
             if (MirrorBoard != null)
             {
-                lost.AddRange(MirrorBoard.ShiftRowsUp());
+                var mirrorMotions = new List<LiftMotion>();
+                lost.AddRange(MirrorBoard.ShiftRowsUp(mirrorMotions));
+                AddMirrorMotions(motions, mirrorMotions);
             }
             // ALWAYS re-baseline: the escalator moves cubes even when it carries none off, and a
             // moved cube would otherwise read as a destroyed one.
             ResyncSnapshot();
             if (lost.Count > 0 && currentReport != null)
             {
-                currentReport.AddLiftedCells(lost);
+                currentReport.AddLiftedCells(lost, LiftKind.Relocated, motions);
             }
             return lost;
+        }
+
+        /// <summary>Appends the mirror world's motions, marked as the mirror's.</summary>
+        private static void AddMirrorMotions(List<LiftMotion> into, List<LiftMotion> mirror)
+        {
+            for (int i = 0; i < mirror.Count; i++)
+            {
+                into.Add(mirror[i].OnMirror());
+            }
         }
 
         /// <summary>
@@ -626,15 +640,18 @@ namespace ProjectBlock.Core
         /// </summary>
         internal IReadOnlyList<GridPos> FlingBoardsOutward()
         {
-            var lost = new List<GridPos>(MainBoard.FlingCubesOutward());
+            var motions = new List<LiftMotion>();
+            var lost = new List<GridPos>(MainBoard.FlingCubesOutward(motions));
             if (MirrorBoard != null)
             {
-                lost.AddRange(MirrorBoard.FlingCubesOutward());
+                var mirrorMotions = new List<LiftMotion>();
+                lost.AddRange(MirrorBoard.FlingCubesOutward(mirrorMotions));
+                AddMirrorMotions(motions, mirrorMotions);
             }
             ResyncSnapshot();
             if (lost.Count > 0 && currentReport != null)
             {
-                currentReport.AddLiftedCells(lost);
+                currentReport.AddLiftedCells(lost, LiftKind.Relocated, motions);
             }
             return lost;
         }
@@ -660,7 +677,7 @@ namespace ProjectBlock.Core
             ResyncSnapshot();
             if (converted.Count > 0 && currentReport != null)
             {
-                currentReport.AddLiftedCells(converted);
+                currentReport.AddLiftedCells(converted, LiftKind.Transformed);
             }
             return spread;
         }

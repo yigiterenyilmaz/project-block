@@ -110,6 +110,16 @@ namespace ProjectBlock.View
         private int overtimeTurns;
 
         private BlastFxView blastFx;
+        /// <summary>"Patlama: N hücre" - every explosion that is a loose group, not a line.</summary>
+        private ClusterBurstView clusterBurst;
+        /// <summary>Removal variant 1 - a removed cube falls into its cell.</summary>
+        private ColdSinkView coldSink;
+        /// <summary>Removal variant 2 - a removed cube's volume is folded into a seam.</summary>
+        private PhaseFoldView phaseFold;
+        /// <summary>Removal variant 3 - a removed cube's heat is drawn out and it sublimates.</summary>
+        private CryoSublimationView cryoSublimation;
+        /// <summary>"Soğuk sökülme" - a cube a moving board carried off, torn away along its step.</summary>
+        private MomentumPeelView momentumPeel;
         private LineSwapPickerView lineSwapPicker;
 
         /// <summary>Quake count last seen per Deprem joker, so the shake fires once per collapse.</summary>
@@ -117,9 +127,6 @@ namespace ProjectBlock.View
             new System.Collections.Generic.Dictionary<int, int>();
         private int comboStreak;
         private readonly List<InfectedCell> infectionBuffer = new List<InfectedCell>();
-
-        /// <summary>Cells an "Enfeksiyon" detonation took this turn, gathered for its blast.</summary>
-        private readonly List<GridPos> infectionBlastBuffer = new List<GridPos>();
         private Text infoText;
         private Text messageText;
 

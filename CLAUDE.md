@@ -100,14 +100,65 @@ dropped that way once each.
   `ContentStateSerializer.cs` walks joker/power/boss fields by reflection so new content
   saves itself. See **Saving** below.
 - `Assets/Scripts/View/` — disposable debug UI (runtime-generated sprites + HUD).
-  Never put rules here. **Destruction has one shared language**: `CellFlashFx` strikes the
-  board's own squares bright, cools them back into the grid and pinches them out, and what
-  TRAVELS is which cells are in which beat — out from the middle of a cleared LINE (the ray) or
-  out from the middle of a loose group (a power, the sweeper, an infection, a lift). Every
-  blast goes through `FlashLine` / `FlashCells` / `FlashBoard` and passes its OWN colour, so a
-  green detonation still reads as the infection. It is drawn in flat hard-edged squares on the
-  same white sprite as everything else: this board has no gradients or glows anywhere, and a
-  soft texture is what would look imported.
+  Never put rules here. **Destruction is told apart by its language, and every blast passes
+  its OWN colour.** A cleared LINE goes through `FlashLine` (`LineSweepView` + `LineBurstView`:
+  a beam leaving the middle for both ends, escalating with the combo tier). A loose GROUP — a
+  power, the sweeper, a "Hedefli" payout, a late reshape clear — goes through `FlashCells` →
+  `ClusterBurstView`: a layered material break, not a particle spray. A pressure front runs out
+  from the group's centroid; each cube — its face kept from the repaint that emptied the cell
+  (`BoardView.TryCubeLook`) — darkens and trembles around a compact core, cracks along one of
+  five preset patterns, and breaks: a faint ghost of its outline, the inner core for a few
+  frames, then four debris families with their own size/speed/spin/life — major shell fragments
+  cut from the cube's OWN texture (`Sprite.OverrideGeometry`) with a hot rim, secondary chunks,
+  micro debris, hot specks — and a short heat residue. The shell wears the tile's own material
+  (`ViewUtil.TileMaterial`), so water and fire keep moving until they break. The lab's cells hold
+  no cubes, so its entries hand `FlashCells` real block faces (`AnimCubeFaces` →
+  `ViewUtil.CardCubeTile`) — never the default tile tinted a colour. Detail falls in tiers with N (≤5, ≤12,
+  ≤20, more) and every choice is deterministic per cell (no `Random`). **It does not move the
+  camera** (designer's call: `ScreenImpulseStrength` is 0), nor does a turn whose only explosion
+  it is; the 1–2 frame hit-stop freezes only the effect's own clock, never `Time.timeScale`.
+  A boss taking cubes away is not an explosion either, and `TurnReport.LiftKindAt` says what
+  became of each one (reporting only — `LiftedCells` itself is unchanged). A cube that VANISHED
+  in place (`Removed`: "Alzheimer", "Hidrolik pres") goes through `PlayRemoval`, which draws one
+  removal variant AT RANDOM per removal (repeats allowed) — variant 1 is `ColdSinkView`: the
+  slot's floor opens into a three-step slate recess and the cube falls in, clipped by a
+  `SpriteMask` mouth so it passes behind the front lip. Variant 2 is `PhaseFoldView`: no pit
+  and no fall — the cube's volume is flattened (its face pulled toward its own average colour),
+  peeled into two or three layers, pressed into a plate and folded into a narrow seam on one
+  inner edge (chosen from the cell). The plate is clipped at the seam PER RENDERER by
+  `Resources/Shaders/PhaseFold.shader` — a SpriteMask would show it inside the next cell's
+  mask — and without that shader it falls back to plain sprites squeezed into the seam. Variant 3 is `CryoSublimationView`: the cube
+  never moves — its heat is drawn out (highlights, contrast, a little saturation), frost walks in
+  from the corners and edges and pushes its own colour into a last warm core, then its mass
+  sublimates from its OUTLINE (never a hole in the middle: on a pale face that reads as a pit),
+  leaving a brief pale haze, a thin frost shell that gives way inward, and frost dust. Both masks
+  (five frost, five erosion, rank-equalised so the fronts move at a steady share of the face) are
+  baked once into one small linear texture that `Resources/Shaders/CryoSublimation.shader`
+  samples per renderer, turned/mirrored per cell; the vapour ribbons are pooled strip meshes on
+  `Resources/Shaders/CryoVapour.shader`. Without the first shader the cube tints and fades;
+  without the second there are no ribbons. A cube a MOVING board carried off
+  (`Relocated`: "Yürüyen merdiven", "Merkezkaç kuvveti") is torn off along the step it was
+  taking — `MomentumPeelView` ("Soğuk sökülme"): three or four laminae cut across the step
+  (rounded chevrons on a diagonal — a straight diagonal cut takes the corners off as shard-like
+  triangles), leading first, each stretching into a short cold streak, the trailing one snapping
+  free last; clipped by the board's rect when it went over the edge, by its own cell when blocked
+  (`Resources/Shaders/MomentumPeel.shader`). The direction is NEVER worked out in the View:
+  `TurnReport.LiftMotionAt` carries, per carried cube, where it stood (`From`), its one-cell
+  `Step`, why it could not land (`LiftReason`: ExitedBoard / NoGround / Blocked), the `Cube`
+  itself (its cell may hold the cube that slid in) and whether it was the mirror world's —
+  reporting only, written by `GameBoard.ShiftRowsUp(motions)` / `FlingCubesOutward(motions)`
+  (the parameterless calls are unchanged; the baseline is byte-identical). A cube CHANGED in
+  place (`Transformed`: "Kangren") keeps `CellFlashFx`'s cold squares (`LiftCells`): a pit
+  would open under whatever cube stands in that cell now. The clean sweep (`BoardCleanseView`) and TNT (`DynamiteBlastView`) have their
+  own, and so does **"Enfeksiyon"'s detonation** (`InfectionBurstView`): a block eaten from
+  inside is not an impact, so it has its own sequence and neither flash nor shake. The ghost
+  block goes up on the frame the cubes are removed and stands through the core's charge, veins
+  run out from the ripe cell, each cube dissolves from its centre (a `SpriteMask` cutoff, no
+  shader), and on the first detonation spores carry the spread to `LastSpreadCells`. The new
+  cores' arrival is held (`InfectionCoreView.HoldBirth`) until those spores land, and they
+  bloom without the core view's straight tendril. Light in these effects is always a gradient
+  clipped to a cell or fading to zero at its own edge — never a flat tinted square laid over
+  the grid, and never a full-board overlay.
 - `Assets/Scripts/View/Menus/` — the menu layer (title, pause, settings, how to play, run
   summary). Unlike the rest of View this is NOT disposable: it is the real UI shell, built
   on the HUD canvas. Every screen is `MenuScreenView` with different content — do not
@@ -373,8 +424,15 @@ animation without having to reach the game state that normally triggers it.
 The rule it follows: **it drives the real animation code, never a copy.** An entry calls the
 same method the game calls and only fabricates the ARGUMENTS, so a retimed animation shows its
 new timing there for free. That is why `CardLayerView.PlayDebugAnimation` and the small
-`FlashLine` / `FlashCells` / `FlashDynamite` / `ShakeForBlast` / `Spawn*Popup` /
+`FlashLine` / `FlashCells` / `PlayRemoval` / `PlayForcedExit` / `LiftCells` / `FlashDynamite` / `ShakeForBlast` / `Spawn*Popup` /
 `EmitSweepConfetti` seams in `GameUiController.Feedback.cs` exist — the lab and the game both
 go through them. Add an animation: add one line to
-`BuildAnimCatalogue`. Nothing the lab does touches Core (`TurnReport` cannot even be
-fabricated), and what it paints STAYS until the RESET entry or closing the lab resyncs.
+`BuildAnimCatalogue`. Nothing the lab does touches the round's Core state (`TurnReport` cannot
+even be fabricated), and what it paints STAYS until the RESET entry or closing the lab resyncs.
+The one place it runs board code is the three lift-boss scenes ("Yürüyen merdiven", "Merkezkaç
+kuvveti", "Kangren" — `AnimBossLift`): they put up a `GameBoard` of the lab's OWN in the view,
+run the real `ShiftRowsUp` / `FlingCubesOutward` on it (the rot's jump is staged — Core keeps
+`InfectFullLines` internal) and hand what they report — with the motions the board code wrote —
+to `PlayForcedExit` (the rot's cells to `LiftCells`), then `AnimResync` puts the round's board
+back. The "boss hareketiyle atılma" entries do the same for one step at a time (eight
+directions, a holed arena, a staged blocked target).

@@ -7,6 +7,79 @@ using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
+    /// <summary>What became of a cube a boss took off the board (TurnReport.LiftedCells).</summary>
+    public enum LiftKind
+    {
+        /// <summary>It vanished where it stood and its cell is empty now - "Alzheimer"
+        /// forgetting a card, "Hidrolik pres" going off.</summary>
+        Removed,
+
+        /// <summary>The board MOVED and carried it over the edge - "Yürüyen merdiven",
+        /// "Merkezkaç kuvveti". The cell it is reported at may hold another cube by now.</summary>
+        Relocated,
+
+        /// <summary>Nothing left: it changed in place - "Kangren".</summary>
+        Transformed
+    }
+
+    /// <summary>Why a cube a MOVING board carried could not land (LiftMotion.Reason).</summary>
+    public enum LiftReason
+    {
+        /// <summary>Not a move at all: the cube vanished or changed where it stood.</summary>
+        None,
+
+        /// <summary>Its step took it past the edge of the arena.</summary>
+        ExitedBoard,
+
+        /// <summary>Its step took it onto a cell that is not play area - a hole: there was
+        /// nothing to stand on.</summary>
+        NoGround,
+
+        /// <summary>Its step took it into a cell something still stood in.</summary>
+        Blocked
+    }
+
+    /// <summary>
+    /// How a cube a moving board carried off was going when it went - "Yürüyen merdiven",
+    /// "Merkezkaç kuvveti". REPORTING ONLY: the rules have already moved the board and dropped the
+    /// cube; this tells the View which way it was being pushed, why it could not land, where it
+    /// stood and what it was, so the View never works a direction out from where a cube stood.
+    /// </summary>
+    public readonly struct LiftMotion
+    {
+        /// <summary>The cell it stood in when the step began. Usually its lifted cell; for a cube
+        /// the escalator carried INTO a hole it is the cell below, since the lifted cell is the hole.</summary>
+        public readonly GridPos From;
+
+        /// <summary>The one-cell step it was taking: (0, 1) on the escalator; the sign of its
+        /// offset from the middle on both axes for the centrifuge, so possibly diagonal. The cell
+        /// it tried to reach is From plus Step. (0, 0) when Reason is None.</summary>
+        public readonly GridPos Step;
+
+        public readonly LiftReason Reason;
+
+        /// <summary>The cube that went. Its cell may hold another by the time the View looks.</summary>
+        public readonly Cube Cube;
+
+        /// <summary>It went from the MIRROR world's board ("Öteki dünya"), not the main one.</summary>
+        public readonly bool Mirror;
+
+        public LiftMotion(GridPos from, GridPos step, LiftReason reason, Cube cube, bool mirror)
+        {
+            From = from;
+            Step = step;
+            Reason = reason;
+            Cube = cube;
+            Mirror = mirror;
+        }
+
+        /// <summary>The same motion, marked as the mirror world's.</summary>
+        internal LiftMotion OnMirror()
+        {
+            return new LiftMotion(From, Step, Reason, Cube, true);
+        }
+    }
+
     /// <summary>Immutable-after-resolution record of one turn.</summary>
     public sealed class TurnReport
     {
@@ -44,18 +117,68 @@ namespace ProjectBlock.Core
 
         private readonly List<GridPos> liftedCells = new List<GridPos>();
 
-        /// <summary>Cells a BOSS lifted off the board this turn without destroying anything -
+        private readonly List<LiftKind> liftKinds = new List<LiftKind>();
+
+        /// <summary>Cells a BOSS took off the board this turn without destroying anything -
         /// "Alzheimer" forgetting a card, "Yürüyen merdiven" carrying a row off the top.
         /// Deliberately separate from every explosion list: nothing was destroyed, so no score,
-        /// no sweep and no tally are involved, and the View marks them its own way.</summary>
+        /// no sweep and no tally are involved, and the View marks them its own way - which way
+        /// depends on LiftKindAt, because not every entry here is a cube that vanished.</summary>
         public IReadOnlyList<GridPos> LiftedCells
         {
             get { return liftedCells; }
         }
 
-        internal void AddLiftedCells(IReadOnlyList<GridPos> cells)
+        /// <summary>What happened to the cube at LiftedCells[index]. Reporting only: the View asks
+        /// it so a cube that vanished, one the board carried off and one that changed in place
+        /// are not all drawn the same way.</summary>
+        public LiftKind LiftKindAt(int index)
+        {
+            return index >= 0 && index < liftKinds.Count ? liftKinds[index] : LiftKind.Removed;
+        }
+
+        private readonly List<LiftMotion> liftMotions = new List<LiftMotion>();
+
+        /// <summary>How the cube at LiftedCells[index] was moving when it went, for a cube a
+        /// moving board carried off; a motion whose Reason is None for everything else. Reporting
+        /// only, like LiftKindAt.</summary>
+        public LiftMotion LiftMotionAt(int index)
+        {
+            return index >= 0 && index < liftMotions.Count ? liftMotions[index] : default(LiftMotion);
+        }
+
+        internal void AddLiftedCells(IReadOnlyList<GridPos> cells, LiftKind kind)
+        {
+            AddLiftedCells(cells, kind, null);
+        }
+
+        /// <summary>As above, with how each cube was moving: one motion per cell, in order.</summary>
+        internal void AddLiftedCells(IReadOnlyList<GridPos> cells, LiftKind kind,
+            IReadOnlyList<LiftMotion> motions)
         {
             liftedCells.AddRange(cells);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                liftKinds.Add(kind);
+                liftMotions.Add(motions != null && i < motions.Count ? motions[i] : default(LiftMotion));
+            }
+        }
+
+        private readonly List<DollEvent> dollEvents = new List<DollEvent>();
+
+        /// <summary>"Matruşka": what happened to the dolls this turn, in the order the boss decided it -
+        /// the first doll set down, each doll that split and the cells its children went to, each
+        /// last-generation doll that opened on nothing, each doll water carried to another cube, and
+        /// the last doll going. Reporting only, like every list here: the View stages exactly this
+        /// rather than working any of it out. Empty on every turn of every other round.</summary>
+        public IReadOnlyList<DollEvent> DollEvents
+        {
+            get { return dollEvents; }
+        }
+
+        internal void AddDollEvent(DollEvent dollEvent)
+        {
+            dollEvents.Add(dollEvent);
         }
 
         /// <summary>Cells a DEFECTIVE SMUGGLED card ("Kaçakçı") passed through on its way out: it

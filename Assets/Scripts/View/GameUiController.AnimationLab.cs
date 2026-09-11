@@ -125,6 +125,14 @@ namespace ProjectBlock.View
             animDark = false;
             animRetro = false;
             jokerBar.SetVisible(true);
+            StopAnimFallSequence();
+            StopAnimBurstSequence();
+            // AnimResync below puts the real board back up if a boss scene was showing its own.
+            StopAnimBossLift();
+            MatryoshkaView.Layers.AllOn();
+            PhaseFoldView.Layers.AllOn();
+            CryoSublimationView.Layers.AllOn();
+            MomentumPeelView.Layers.AllOn();
             AnimResync();
         }
 
@@ -485,7 +493,35 @@ namespace ProjectBlock.View
                         boardView.PlayCreatureFeed(region[Random.Range(0, region.Count)]);
                     }
                 });
-            AddAnim("dolls (Matruşka)", "bebekler (Matruşka)", AnimDolls);
+            AddAnim("Matruşka: first doll arrives", "Matruşka: ilk bebek gelir", AnimDollArrives);
+            AddAnim("Matruşka: idle, every generation", "Matruşka: bekleme, tüm nesiller", AnimDollIdle);
+            AddAnim("Matruşka: large -> 2 medium", "Matruşka: büyük -> 2 orta",
+                delegate { AnimDollSplit(1); });
+            AddAnim("Matruşka: medium -> 2 small", "Matruşka: orta -> 2 küçük",
+                delegate { AnimDollSplit(2); });
+            AddAnim("Matruşka: small -> 2 tiny", "Matruşka: küçük -> 2 minik",
+                delegate { AnimDollSplit(3); });
+            AddAnim("Matruşka: tiny opens empty", "Matruşka: minik boş açılır", AnimDollEmptied);
+            AddAnim("Matruşka: three split at once", "Matruşka: aynı anda üç bölünme",
+                AnimDollManySplits);
+            AddAnim("Matruşka: water carries a doll", "Matruşka: su bebeği taşır", AnimDollCarried);
+            AddAnim("Matruşka: last doll - boss beaten", "Matruşka: son bebek - boss biter",
+                AnimDollLast);
+            AddAnim("Matruşka light: mixed 1-2-4-8", "Matruşka ışık: karışık nesiller 1-2-4-8",
+                AnimDollLightMixed);
+            AddAnim("Matruşka light: eight tiny", "Matruşka ışık: 8 minik", AnimDollLightTiny);
+            AddAnim("Matruşka light: body warmth on/off", "Matruşka ışık: gövde sıcaklığı aç/kapa",
+                delegate { AnimDollLayer(0); });
+            AddAnim("Matruşka light: gold response on/off", "Matruşka ışık: altın yanıtı aç/kapa",
+                delegate { AnimDollLayer(1); });
+            AddAnim("Matruşka light: lacquer sheen on/off", "Matruşka ışık: cila parlaması aç/kapa",
+                delegate { AnimDollLayer(2); });
+            AddAnim("Matruşka light: presence light on/off", "Matruşka ışık: zemin ışığı aç/kapa",
+                delegate { AnimDollLayer(3); });
+            AddAnim("Matruşka light: rim light on/off", "Matruşka ışık: kenar ışığı aç/kapa",
+                delegate { AnimDollLayer(4); });
+            AddAnim("Matruşka light: motion on/off", "Matruşka ışık: hareket aç/kapa",
+                delegate { AnimDollLayer(5); });
             AddAnim("doomed column (İstilacı)", "işaretli sütun (İstilacı)",
                 delegate
                 {
@@ -508,7 +544,8 @@ namespace ProjectBlock.View
             AddAnim("gravity field (down/right/up/left)",
                 "kütleçekim alanı (aşağı/sağ/yukarı/sol)", AnimGravityField);
             AddAnim("clear board markers", "işaretleri temizle", AnimClearMarkers);
-            AddAnim("mine shuffle dance (Mayın eşeği)", "mayın dansı (Mayın eşeği)", AnimMineDance);
+            AddAnim("mine shell game (hold open / reveal / one hop / full / re-reveal)",
+                "mayın dansı (açık tut / gösterim / tek hamle / tam / yeniden)", AnimMineDance);
 
             AddAnimHeader("blasts + shake", "patlama + sarsıntı");
             AddAnim("line clear ray: row (combo knob)", "satır ışını (kombo ayarı)",
@@ -517,25 +554,158 @@ namespace ProjectBlock.View
                 delegate { FlashLineAtKnob(AnimBoard(), AnimMiddleColumn(), false); });
             AddAnim("line clear ray: plus (row + column)", "artı ışını (satır + sütun)",
                 AnimPlusBlast);
-            AddAnim("blast: N cells (cells knob)", "patlama: N hücre (hücre ayarı)",
-                delegate { FlashCells(AnimCells(), BlastColor, 4); });
-            AddAnim("blast: element colour", "patlama: element rengi",
-                delegate { FlashCells(AnimCells(), ViewUtil.ElementColor(AnimElement()), 6); });
-            AddAnim("lifted cells (cold, a boss took them)", "kaldırılan hücreler (soğuk)",
-                delegate { FlashCells(AnimCells(), LiftedColor, 3, true); });
+            // With the bang on the first break - which is how a power blast plays it, so the
+            // separate "power blast" entry (the same call on the same cells) is gone.
+            AddAnim("blast: N cells of plain blocks (cells knob)", "patlama: N hücre (hücre ayarı)",
+                delegate
+                {
+                    FlashCells(AnimCells(), BlastColor, delegate { sfx.Explode(); },
+                        AnimCubeFaces(null));
+                });
+            AddAnim("blast: N cells of the element's blocks (element + cells knobs)",
+                "patlama: element blokları (element + hücre ayarı)",
+                delegate
+                {
+                    FlashCells(AnimCells(), ViewUtil.ElementColor(AnimElement()), null,
+                        AnimCubeFaces(AnimElement()));
+                });
+            AddAnim("blast: every element in turn, real blocks (cells knob)",
+                "patlama: her element sırayla (gerçek bloklar)", AnimClusterEveryElement);
+            AddAnim("blast: N scattered cells (cells knob)",
+                "patlama: dağınık N hücre (hücre ayarı)",
+                delegate { FlashCells(AnimScatteredCells(), BlastColor, null, AnimCubeFaces(null)); });
+            AddAnim("blast: every N in turn, neutral then element",
+                "patlama: tüm N'ler sırayla (nötr, sonra element)", AnimClusterEveryCount);
+            // A boss REMOVING cubes draws one of the removal variants at random, as the game
+            // does; each variant also has an entry of its own. The three bosses that take cubes
+            // WITHOUT them vanishing in place keep the old cold mark, and each is played as it
+            // happens in its round, on a board of the lab's own (see AnimBossLift).
+            AddAnim("removed cells: random variant, as in the game (cells knob)",
+                "kaldırılan hücreler: rastgele varyant (oyundaki gibi)",
+                delegate { PlayRemoval(AnimCells(), null, AnimCubeFaces(null)); });
+            AddAnim("removed cells 1: cold sink (cells knob)",
+                "kaldırılan hücreler 1: soğuk kuyu (hücre ayarı)",
+                delegate { PlayRemoval(AnimCells(), RemovalVariant.ColdSink, AnimCubeFaces(null)); });
+            AddAnim("removed cells 1: cold sink, the element's blocks (element + cells knobs)",
+                "kaldırılan hücreler 1: soğuk kuyu (element blokları)",
+                delegate
+                {
+                    PlayRemoval(AnimCells(), RemovalVariant.ColdSink, AnimCubeFaces(AnimElement()));
+                });
+            AddAnim("removed cells 2: phase fold (cells knob)",
+                "kaldırılan hücreler 2: soğuk katlama (hücre ayarı)",
+                delegate { PlayRemoval(AnimCells(), RemovalVariant.PhaseFold, AnimCubeFaces(null)); });
+            AddAnim("removed cells 2: phase fold, the element's blocks (element + cells knobs)",
+                "kaldırılan hücreler 2: soğuk katlama (element blokları)",
+                delegate
+                {
+                    PlayRemoval(AnimCells(), RemovalVariant.PhaseFold, AnimCubeFaces(AnimElement()));
+                });
+            AddAnim("phase fold debug: compression marks on/off",
+                "katlama hata ayıklama: sıkıştırma izleri aç/kapa",
+                delegate { AnimFoldToggle(ref PhaseFoldView.Layers.ShowCompressionMarks, "compression marks", "sıkıştırma izleri"); });
+            AddAnim("phase fold debug: layer split on/off",
+                "katlama hata ayıklama: katman ayrışması aç/kapa",
+                delegate { AnimFoldToggle(ref PhaseFoldView.Layers.ShowLayerSplit, "layer split", "katman ayrışması"); });
+            AddAnim("phase fold debug: flex on/off",
+                "katlama hata ayıklama: bükülme aç/kapa",
+                delegate { AnimFoldToggle(ref PhaseFoldView.Layers.ShowFlex, "flex", "bükülme"); });
+            AddAnim("phase fold debug: negative ghost on/off",
+                "katlama hata ayıklama: negatif iz aç/kapa",
+                delegate { AnimFoldToggle(ref PhaseFoldView.Layers.ShowNegativeGhost, "negative ghost", "negatif iz"); });
+            AddAnim("phase fold debug: seam mask on/off",
+                "katlama hata ayıklama: yarık maskesi aç/kapa",
+                delegate { AnimFoldToggle(ref PhaseFoldView.Layers.ShowSeamMask, "seam mask", "yarık maskesi"); });
+            AddAnim("removed cells 3: cryo sublimation (cells knob)",
+                "kaldırılan hücreler 3: soğuk süblimleşme (hücre ayarı)",
+                delegate { PlayRemoval(AnimCells(), RemovalVariant.CryoSublimation, AnimCubeFaces(null)); });
+            AddAnim("removed cells 3: cryo sublimation, the element's blocks (element + cells knobs)",
+                "kaldırılan hücreler 3: soğuk süblimleşme (element blokları)",
+                delegate
+                {
+                    PlayRemoval(AnimCells(), RemovalVariant.CryoSublimation, AnimCubeFaces(AnimElement()));
+                });
+            AddAnim("cryo debug: thermal drain on/off",
+                "süblimleşme hata ayıklama: ısı çekilmesi aç/kapa",
+                delegate { AnimCryoToggle(ref CryoSublimationView.Layers.ShowThermalDrain, "thermal drain", "ısı çekilmesi"); });
+            AddAnim("cryo debug: frost mask on/off",
+                "süblimleşme hata ayıklama: buz maskesi aç/kapa",
+                delegate { AnimCryoToggle(ref CryoSublimationView.Layers.ShowFrostMask, "frost mask", "buz maskesi"); });
+            AddAnim("cryo debug: last colour core on/off",
+                "süblimleşme hata ayıklama: son renk çekirdeği aç/kapa",
+                delegate { AnimCryoToggle(ref CryoSublimationView.Layers.ShowLastColorCore, "last colour core", "son renk çekirdeği"); });
+            AddAnim("cryo debug: sublimation erosion on/off",
+                "süblimleşme hata ayıklama: kütle aşınması aç/kapa",
+                delegate { AnimCryoToggle(ref CryoSublimationView.Layers.ShowSublimationErosion, "sublimation erosion", "kütle aşınması"); });
+            AddAnim("cryo debug: vapour ribbons on/off",
+                "süblimleşme hata ayıklama: buhar şeritleri aç/kapa",
+                delegate { AnimCryoToggle(ref CryoSublimationView.Layers.ShowVaporRibbons, "vapour ribbons", "buhar şeritleri"); });
+            AddAnim("cryo debug: frost shell on/off",
+                "süblimleşme hata ayıklama: buz kabuğu aç/kapa",
+                delegate { AnimCryoToggle(ref CryoSublimationView.Layers.ShowFrostShell, "frost shell", "buz kabuğu"); });
+            AddAnim("cryo debug: final dust on/off",
+                "süblimleşme hata ayıklama: buz tozu aç/kapa",
+                delegate { AnimCryoToggle(ref CryoSublimationView.Layers.ShowFinalDust, "final dust", "buz tozu"); });
+            AddAnim("cryo debug: cold residue on/off",
+                "süblimleşme hata ayıklama: soğuk iz aç/kapa",
+                delegate { AnimCryoToggle(ref CryoSublimationView.Layers.ShowColdResidue, "cold residue", "soğuk iz"); });
+            AddAnim("Yürüyen merdiven: the board rides up, the top row is torn off (momentum peel)",
+                "yürüyen merdiven: alan yukarı kayar, üst satır sökülür (soğuk sökülme)",
+                delegate { AnimBossLift(AnimBossScene.Escalator); });
+            AddAnim("Merkezkaç kuvveti: cubes flung outward, the rim is torn off (momentum peel)",
+                "merkezkaç kuvveti: küpler dışa itilir, kenardakiler sökülür (soğuk sökülme)",
+                delegate { AnimBossLift(AnimBossScene.Centrifuge); });
+            AddAnim("Kangren: a line dies, the rot jumps to the edge (old cold mark)",
+                "kangren: satır ölür, kangren kenara atlar (eski soğuk iz)",
+                delegate { AnimBossLift(AnimBossScene.Gangrene); });
+            AddAnim("thrown off by a boss's move: the next of 8 directions each press (cells knob)",
+                "boss hareketiyle atılma: her basışta sıradaki yön, 8 yön (hücre ayarı)",
+                AnimPeelDirection);
+            AddAnim("thrown off by a boss's move: riding into holes (escalator, a holed arena)",
+                "boss hareketiyle atılma: deliğe çıkış (merdiven, delikli alan)",
+                delegate { AnimBossLift(AnimBossScene.Holes); });
+            AddAnim("thrown off by a boss's move: blocked target (staged)",
+                "boss hareketiyle atılma: engelli hedef (sahnelenmiş)",
+                AnimPeelBlocked);
+            AddAnim("momentum peel debug: tension on/off",
+                "sökülme hata ayıklama: gerilme aç/kapa",
+                delegate { AnimPeelToggle(ref MomentumPeelView.Layers.ShowTension, "tension", "gerilme"); });
+            AddAnim("momentum peel debug: lamination on/off",
+                "sökülme hata ayıklama: katmanlar aç/kapa",
+                delegate { AnimPeelToggle(ref MomentumPeelView.Layers.ShowLamination, "lamination", "katmanlar"); });
+            AddAnim("momentum peel debug: flecks on/off",
+                "sökülme hata ayıklama: kıymıklar aç/kapa",
+                delegate { AnimPeelToggle(ref MomentumPeelView.Layers.ShowFlecks, "flecks", "kıymıklar"); });
+            AddAnim("momentum peel debug: residue on/off",
+                "sökülme hata ayıklama: hareket izi aç/kapa",
+                delegate { AnimPeelToggle(ref MomentumPeelView.Layers.ShowResidue, "residue", "hareket izi"); });
+            AddAnim("momentum peel debug: board clip on/off",
+                "sökülme hata ayıklama: tahta maskesi aç/kapa",
+                delegate { AnimPeelToggle(ref MomentumPeelView.Layers.ShowBoardClip, "board clip", "tahta maskesi"); });
             AddAnim("clean sweep: board flash + confetti", "temizlik: alan ışığı + yağmur",
                 delegate { EmitSweepConfetti(); });
             AddAnim("dynamite: blast + smoke", "dinamit: patlama + duman",
                 delegate { FlashDynamite(DynamiteCenter(null)); });
             AddAnim("dynamite smoke alone", "dinamit dumanı (tek başına)", PlayDynamiteSmoke);
-            AddAnim("power blast", "güç patlaması",
-                delegate { PlayPowerBlast(AnimCells()); });
             AddAnim("süpürge delayed blast", "süpürge gecikmeli patlama",
                 delegate { StartCoroutine(SupurgeBlastRoutine(AnimCells())); });
-            AddAnim("infection detonation (green)", "enfeksiyon patlaması (yeşil)",
-                delegate { FlashCells(AnimCells(), new Color(0.25f, 0.95f, 0.4f), 8); });
-            AddAnim("falling cubes (defective block)", "düşen küpler (defolu blok)",
-                AnimFallingCubes);
+            AddAnim("infection: 1-cell block ruptures", "enfeksiyon: tek hücreli blok patlar",
+                delegate { AnimInfectionBurst(1, false); });
+            // Only three, not the four you might expect: a LATER detonation is a block rupturing
+            // with no arms, which is exactly what the middle entry already is. A fourth entry
+            // running the same call would say the two differ when they do not.
+            AddAnim("infection: block ruptures, no spread",
+                "enfeksiyon: blok patlar, bulaşma yok",
+                delegate { AnimInfectionBurst(0, false); });
+            AddAnim("infection: FIRST burst + spread", "enfeksiyon: İLK patlama + bulaşma",
+                delegate { AnimInfectionBurst(0, true); });
+            // A defective smuggled block falls through the SAME way whatever it is - the rules
+            // check FallsThrough before anything else touches the board - so these are one
+            // animation on different blocks: the element knob's, and every type in turn.
+            AddAnim("falling cubes: defective block (element knob)",
+                "düşen küpler: defolu blok (element ayarı)", AnimFallingCubes);
+            AddAnim("falling cubes: every block type in turn",
+                "düşen küpler: tüm blok türleri sırayla", AnimFallingCubesEveryType);
             AddAnim("camera shake (combo knob)", "kamera sarsıntısı (kombo ayarı)",
                 delegate { ShakeForBlast(false, false, animCombo); });
             AddAnim("camera shake: sweep", "kamera sarsıntısı: temizlik",
@@ -666,6 +836,65 @@ namespace ProjectBlock.View
 
         private List<GridPos> AnimCells()
         {
+            return AnimCells(AnimCellCount());
+        }
+
+        /// <summary>
+        /// N cells spread across the WHOLE arena instead of packed in its middle - a power or a
+        /// "Hedefli" payout lands wherever it lands, and the burst still has to read as one event
+        /// across the gaps. Farthest-point picking: the middle first, then always the cell
+        /// furthest from everything taken so far, so the spread is even and the same every time.
+        /// </summary>
+        private List<GridPos> AnimScatteredCells()
+        {
+            List<GridPos> all = AnimCells(int.MaxValue);
+            int want = Mathf.Min(AnimCellCount(), all.Count);
+            var cells = new List<GridPos>(want);
+            if (want == 0)
+            {
+                return cells;
+            }
+            var gap = new float[all.Count];
+            for (int i = 0; i < all.Count; i++)
+            {
+                gap[i] = float.MaxValue;
+            }
+            int next = 0;
+            for (int n = 0; n < want; n++)
+            {
+                GridPos taken = all[next];
+                cells.Add(taken);
+                gap[next] = -1f;
+                int best = -1;
+                float bestGap = -1f;
+                for (int i = 0; i < all.Count; i++)
+                {
+                    if (gap[i] < 0f)
+                    {
+                        continue;
+                    }
+                    float dx = all[i].X - taken.X;
+                    float dy = all[i].Y - taken.Y;
+                    gap[i] = Mathf.Min(gap[i], dx * dx + dy * dy);
+                    if (gap[i] > bestGap)
+                    {
+                        bestGap = gap[i];
+                        best = i;
+                    }
+                }
+                if (best < 0)
+                {
+                    break;
+                }
+                next = best;
+            }
+            return cells;
+        }
+
+        /// <summary>The <paramref name="count"/> cells nearest the middle of the board, nearest
+        /// first.</summary>
+        private List<GridPos> AnimCells(int count)
+        {
             var cells = new List<GridPos>();
             GameBoard board = AnimBoard();
             if (board == null)
@@ -693,7 +922,7 @@ namespace ProjectBlock.View
             {
                 return a.Key.CompareTo(b.Key);
             });
-            int want = Mathf.Min(AnimCellCount(), ranked.Count);
+            int want = Mathf.Min(count, ranked.Count);
             for (int i = 0; i < want; i++)
             {
                 cells.Add(ranked[i].Value);
@@ -901,14 +1130,35 @@ namespace ProjectBlock.View
         /// animation that needs "a card" gets a plausible one.</summary>
         private BlockCard AnimScratchCard()
         {
+            return AnimScratchCard(AnimElement());
+        }
+
+        /// <summary>The same scratch block with a chosen element - or none, for a plain block,
+        /// which the element knob has no setting for.</summary>
+        private BlockCard AnimScratchCard(BlockElement? element)
+        {
             var cells = new List<GridPos>
             {
                 new GridPos(0, 0), new GridPos(0, 1), new GridPos(1, 0)
             };
-            var elements = new List<BlockElement> { AnimElement() };
+            BlockShape shape = BlockShape.FromCells(cells);
+            // "Hedefli" marks ONE cube, and the index saying which is set only by the rules when a
+            // card is minted - out of the view's reach. A designed block with the target on its
+            // first cube and plain cubes after it is drawn the very same way: the bullseye on one,
+            // the targeted body on the rest. Anything else falls as a targeted block with no target.
+            if (element == BlockElement.Targeted)
+            {
+                return BlockCard.Designed(-4242, shape,
+                    new BlockElement?[] { BlockElement.Targeted, null, null });
+            }
+            var elements = new List<BlockElement>();
+            if (element.HasValue)
+            {
+                elements.Add(element.Value);
+            }
             // A negative id keeps it clear of every real card in the run; nothing in the View
             // looks a card up by id, so this only ever picks its colour and its label.
-            return new BlockCard(-4242, BlockShape.FromCells(cells), elements);
+            return new BlockCard(-4242, shape, elements);
         }
 
         private void AnimCards(CardLayerView.DebugAnim which)
@@ -1067,6 +1317,69 @@ namespace ProjectBlock.View
             boardView.ClearPreview();
         }
 
+        /// <summary>
+        /// The infection detonation, through the very call a turn makes - PlayInfectionBlock -
+        /// with only its ARGUMENTS fabricated.
+        ///
+        /// A real turn arrives with the infection already on the board (RefreshAll put it there),
+        /// so this puts it there first: the source cell, and then - in a SECOND call, the way a
+        /// turn delivers it - the cells the spread took, which is what makes the core view treat
+        /// them as plus-spread seeds rather than as first infections.
+        ///
+        /// The spread list is built the way the rules build it: the four orthogonal neighbours,
+        /// minus any off the board (the rules also turn down an already-infected cell, and
+        /// nothing else is infected here). The block's own cells are NOT turned down - they are
+        /// empty by the time the spread runs - so an arm into the block's own ground is what a
+        /// real first detonation does too.
+        ///
+        /// <paramref name="cells"/> of 0 means "use the cell-count knob".
+        /// </summary>
+        private void AnimInfectionBurst(int cells, bool spread)
+        {
+            GameBoard board = AnimBoard();
+            List<GridPos> block = AnimCells();
+            if (board == null || block.Count == 0)
+            {
+                return;
+            }
+            if (cells > 0 && block.Count > cells)
+            {
+                block.RemoveRange(cells, block.Count - cells);
+            }
+            // A lab block has no card behind it, so it wears the default tile - which is what a
+            // plain block wears on the board too.
+            var destroyed = new List<DestroyedCube>(block.Count);
+            for (int i = 0; i < block.Count; i++)
+            {
+                destroyed.Add(new DestroyedCube(block[i], new Cube(CubeKind.Normal, -1)));
+            }
+            GridPos from = block[0];
+            const int Threshold = 3;
+            var marks = new List<InfectedCell> { new InfectedCell(from, 0, Threshold) };
+            boardView.ShowInfections(marks);
+            List<GridPos> arms = null;
+            if (spread)
+            {
+                arms = new List<GridPos>();
+                GridPos[] around =
+                {
+                    new GridPos(from.X + 1, from.Y), new GridPos(from.X - 1, from.Y),
+                    new GridPos(from.X, from.Y + 1), new GridPos(from.X, from.Y - 1)
+                };
+                for (int i = 0; i < around.Length; i++)
+                {
+                    if (board.IsInside(around[i]))
+                    {
+                        arms.Add(around[i]);
+                        marks.Add(new InfectedCell(around[i], 0, Threshold));
+                    }
+                }
+                boardView.ShowInfections(marks);
+            }
+            float charge = boardView.PlayInfectionCharge(from);
+            PlayInfectionBlock(destroyed, from, arms, charge * InfectionChargeDelay, true);
+        }
+
         private void AnimInfectionPips()
         {
             const int Threshold = 3;
@@ -1080,15 +1393,206 @@ namespace ProjectBlock.View
             boardView.ShowInfections(marks);
         }
 
-        private void AnimDolls()
+        // ------------------------------------------------------------------ Matruşka
+        //
+        // Every entry builds the dolls a real turn would have found, the events a real turn would have
+        // reported and where the dolls would have ended up - then hands them to the same Hold/Release
+        // the turn uses. Children go to cells well apart, so every arc can be followed. The lab's
+        // status line shows what was staged: parent generation and cell, children and their cells.
+
+        /// <summary>The generations the real boss has, so the lab's dolls wear the art they would.</summary>
+        private const int AnimDollGenerations = 4;
+
+        private GridPos AnimDollCell(int dx, int dy)
         {
-            List<GridPos> cells = AnimCells();
-            var sizes = new List<int>(cells.Count);
-            for (int i = 0; i < cells.Count; i++)
+            GameBoard board = AnimBoard();
+            if (board == null)
             {
-                sizes.Add(1 + (i % 4)); // one of each rung of the 1-2-4-8 ladder
+                return new GridPos(dx, dy);
             }
-            boardView.ShowDolls(cells, sizes);
+            return new GridPos(
+                Mathf.Clamp(AnimMiddleColumn() + dx, board.MinX, board.MinX + board.Width - 1),
+                Mathf.Clamp(AnimMiddleRow() + dy, board.MinY, board.MinY + board.Height - 1));
+        }
+
+        /// <summary>Shows the dolls a turn starts from, then stages that turn exactly as a real one is.</summary>
+        private void AnimDollTurn(List<GridPos> beforeCells, List<int> beforeGenerations,
+            List<DollEvent> events, List<GridPos> afterCells, List<int> afterGenerations, string debug)
+        {
+            boardView.ShowDolls(beforeCells, beforeGenerations, AnimDollGenerations);
+            boardView.HoldDolls(events, afterCells, afterGenerations, AnimDollGenerations);
+            boardView.ReleaseDolls();
+            animLastLabel = debug;
+        }
+
+        private static string AnimCellText(GridPos cell)
+        {
+            return "(" + cell.X + "," + cell.Y + ")";
+        }
+
+        private void AnimDollArrives()
+        {
+            GridPos cell = AnimDollCell(0, 0);
+            AnimDollTurn(new List<GridPos>(), new List<int>(),
+                new List<DollEvent> { DollEvent.Arrived(cell, 1, false) },
+                new List<GridPos> { cell }, new List<int> { 1 },
+                "g1 " + AnimCellText(cell));
+        }
+
+        private void AnimDollIdle()
+        {
+            var cells = new List<GridPos>
+            {
+                AnimDollCell(-3, 0), AnimDollCell(-1, 0), AnimDollCell(1, 0), AnimDollCell(3, 0)
+            };
+            boardView.ShowDolls(cells, new List<int> { 1, 2, 3, 4 }, AnimDollGenerations);
+        }
+
+        /// <summary>One doll of <paramref name="generation"/> opening, its two children sent to far
+        /// corners of the arena in opposite directions.</summary>
+        private void AnimDollSplit(int generation)
+        {
+            GridPos parent = AnimDollCell(0, 0);
+            GridPos a = AnimDollCell(-2, 2);
+            GridPos b = AnimDollCell(2, -2);
+            AnimDollTurn(new List<GridPos> { parent }, new List<int> { generation },
+                new List<DollEvent> { DollEvent.Split(parent, generation, new List<GridPos> { a, b }) },
+                new List<GridPos> { a, b }, new List<int> { generation + 1, generation + 1 },
+                "g" + generation + " " + AnimCellText(parent) + " -> g" + (generation + 1) + " "
+                    + AnimCellText(a) + " " + AnimCellText(b));
+        }
+
+        private void AnimDollEmptied()
+        {
+            GridPos cell = AnimDollCell(0, 0);
+            AnimDollTurn(new List<GridPos> { cell }, new List<int> { AnimDollGenerations },
+                new List<DollEvent> { DollEvent.Emptied(cell, AnimDollGenerations) },
+                new List<GridPos>(), new List<int>(),
+                "g" + AnimDollGenerations + " " + AnimCellText(cell) + " -> (boş)");
+        }
+
+        /// <summary>Three dolls of three generations opening on the same turn, their six children crossing
+        /// the arena - the case the crowd control exists for.</summary>
+        private void AnimDollManySplits()
+        {
+            GridPos p1 = AnimDollCell(-2, 0);
+            GridPos p2 = AnimDollCell(0, 0);
+            GridPos p3 = AnimDollCell(2, 0);
+            GridPos[] kids =
+            {
+                AnimDollCell(-3, 2), AnimDollCell(1, -2),
+                AnimDollCell(0, 2), AnimDollCell(-2, -2),
+                AnimDollCell(3, 2), AnimDollCell(2, -3)
+            };
+            AnimDollTurn(new List<GridPos> { p1, p2, p3 }, new List<int> { 1, 2, 3 },
+                new List<DollEvent>
+                {
+                    DollEvent.Split(p1, 1, new List<GridPos> { kids[0], kids[1] }),
+                    DollEvent.Split(p2, 2, new List<GridPos> { kids[2], kids[3] }),
+                    DollEvent.Split(p3, 3, new List<GridPos> { kids[4], kids[5] })
+                },
+                new List<GridPos>(kids), new List<int> { 2, 2, 3, 3, 4, 4 },
+                "g1 " + AnimCellText(p1) + " g2 " + AnimCellText(p2) + " g3 " + AnimCellText(p3)
+                    + " -> 6 çocuk");
+        }
+
+        private void AnimDollCarried()
+        {
+            GridPos from = AnimDollCell(-1, 0);
+            GridPos to = AnimDollCell(2, 1);
+            AnimDollTurn(new List<GridPos> { from }, new List<int> { 2 },
+                new List<DollEvent> { DollEvent.Moved(from, to, 2, false) },
+                new List<GridPos> { to }, new List<int> { 2 },
+                "g2 " + AnimCellText(from) + " su -> " + AnimCellText(to) + " (bölünme yok)");
+        }
+
+        private void AnimDollLast()
+        {
+            GridPos cell = AnimDollCell(0, 0);
+            AnimDollTurn(new List<GridPos> { cell }, new List<int> { AnimDollGenerations },
+                new List<DollEvent>
+                {
+                    DollEvent.Emptied(cell, AnimDollGenerations),
+                    DollEvent.AllCracked()
+                },
+                new List<GridPos>(), new List<int>(),
+                "g" + AnimDollGenerations + " " + AnimCellText(cell) + " -> son bebek, boss biter");
+        }
+
+        /// <summary>Every other cell of the arena, row by row from the top, so no two test dolls touch.</summary>
+        private GridPos AnimDollRestCell(int index)
+        {
+            GameBoard board = AnimBoard();
+            int columns = Mathf.Max(1, (board.Width + 1) / 2);
+            int x = board.MinX + (index % columns) * 2;
+            int y = board.MinY + board.Height - 1 - (index / columns) * 2;
+            return new GridPos(x, Mathf.Max(board.MinY, y));
+        }
+
+        /// <summary>The idle test: one large, two medium, four small and eight tiny, all at rest - for
+        /// watching the material and the light rather than any event.</summary>
+        private void AnimDollLightMixed()
+        {
+            if (AnimBoard() == null)
+            {
+                return;
+            }
+            var cells = new List<GridPos>();
+            var generations = new List<int>();
+            int[] counts = { 1, 2, 4, 8 };
+            int index = 0;
+            for (int generation = 1; generation <= counts.Length; generation++)
+            {
+                for (int k = 0; k < counts[generation - 1]; k++)
+                {
+                    cells.Add(AnimDollRestCell(index++));
+                    generations.Add(generation);
+                }
+            }
+            boardView.ShowDolls(cells, generations, AnimDollGenerations);
+            animLastLabel = AnimDollLayersText();
+        }
+
+        private void AnimDollLightTiny()
+        {
+            if (AnimBoard() == null)
+            {
+                return;
+            }
+            var cells = new List<GridPos>();
+            var generations = new List<int>();
+            for (int i = 0; i < 8; i++)
+            {
+                cells.Add(AnimDollRestCell(i));
+                generations.Add(AnimDollGenerations);
+            }
+            boardView.ShowDolls(cells, generations, AnimDollGenerations);
+            animLastLabel = AnimDollLayersText();
+        }
+
+        /// <summary>Switches one of the idle's layers. The switches last until the lab closes.</summary>
+        private void AnimDollLayer(int layer)
+        {
+            switch (layer)
+            {
+                case 0: MatryoshkaView.Layers.BodyWarmth = !MatryoshkaView.Layers.BodyWarmth; break;
+                case 1: MatryoshkaView.Layers.GoldResponse = !MatryoshkaView.Layers.GoldResponse; break;
+                case 2: MatryoshkaView.Layers.LacquerSheen = !MatryoshkaView.Layers.LacquerSheen; break;
+                case 3: MatryoshkaView.Layers.PresenceLight = !MatryoshkaView.Layers.PresenceLight; break;
+                case 4: MatryoshkaView.Layers.RimLight = !MatryoshkaView.Layers.RimLight; break;
+                default: MatryoshkaView.Layers.Motion = !MatryoshkaView.Layers.Motion; break;
+            }
+            animLastLabel = AnimDollLayersText();
+        }
+
+        private static string AnimDollLayersText()
+        {
+            return Loc.Pick("warmth ", "sıcaklık ") + OnOff(MatryoshkaView.Layers.BodyWarmth)
+                + Loc.Pick("  gold ", "  altın ") + OnOff(MatryoshkaView.Layers.GoldResponse)
+                + Loc.Pick("  sheen ", "  cila ") + OnOff(MatryoshkaView.Layers.LacquerSheen)
+                + Loc.Pick("  presence ", "  zemin ") + OnOff(MatryoshkaView.Layers.PresenceLight)
+                + Loc.Pick("  rim ", "  kenar ") + OnOff(MatryoshkaView.Layers.RimLight)
+                + Loc.Pick("  motion ", "  hareket ") + OnOff(MatryoshkaView.Layers.Motion);
         }
 
         /// <summary>
@@ -1127,9 +1631,11 @@ namespace ProjectBlock.View
         {
             // The marker-object overlays clear on their own...
             boardView.ShowInfections(null);
+            boardView.StopInfectionBurst();
+            StopAnimFallSequence();
             boardView.ShowCircuit(null);
             boardView.ClearCircuitBlocks();
-            boardView.ShowDolls(null, null);
+            boardView.ShowDolls(null, null, 0);
             boardView.ShowGravity(new GridPos(0, -1)); // the default draws no field
             animGravityStep = 0;
             boardView.ClearPreview();
@@ -1150,16 +1656,41 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            // A path that walks the middle band, so the cover is always somewhere visible.
+            // THE STAGES, one per press, because the parts of this are polished separately:
+            //
+            //   1 step   the REVEAL and the CLOSE on their own - the cover lifting, the two
+            //            beats on the mine, the hold, and the cover landing. No dance at all.
+            //   2 steps  ONE hop, which is where the lift, the shadow separation, the easing
+            //            and the landing can be read frame by frame (turn the lab's time scale
+            //            down to 0.25x for this one).
+            //   full     all twelve, for the TEMPO across the run.
+            //   again    the same twelve as a RE-reveal, which holds the look shorter.
+            //
+            // The path is the lab's own - the real one comes from the boss - but its SHAPE is the
+            // same: a walk the eye can follow, so what is being judged is the motion.
+            // Stage 0 holds the mine OPEN so its own look can be judged without racing the
+            // rest of the sequence; the others run the whole thing.
+            if (animMineStage == 0)
+            {
+                mineShuffle.PreviewMine(boardView, board,
+                    new GridPos(AnimMiddleColumn(), AnimMiddleRow()));
+                animMineStage = 1;
+                return;
+            }
             var path = new List<GridPos>();
             int y = AnimMiddleRow();
-            for (int i = 0; i < 6; i++)
+            int steps = animMineStage == 1 ? 1 : animMineStage == 2 ? 2 : 12;
+            for (int i = 0; i < steps; i++)
             {
-                int x = board.MinX + (i * 2) % Mathf.Max(1, board.Width);
+                int x = board.MinX + (i * 3 + 1) % Mathf.Max(1, board.Width);
                 path.Add(new GridPos(x, y));
             }
-            mineShuffle.Play(boardView, board, path);
+            mineShuffle.Play(boardView, board, path, animMineStage == 4);
+            animMineStage = (animMineStage + 1) % 5;
         }
+
+        /// <summary>Which part of the shell game the entry shows next (see AnimMineDance).</summary>
+        private int animMineStage;
 
         /// <summary>The combo knob's reading, and WHICH tier it will actually DRAW when the two
         /// differ. All three tiers are painted now, so today it always reads as a plain number;
@@ -1192,9 +1723,722 @@ namespace ProjectBlock.View
             FlashLineAtKnob(AnimBoard(), AnimMiddleColumn(), false);
         }
 
+        /// <summary>
+        /// A defective block falling through, via the same SpawnFallingCubes a turn calls.
+        ///
+        /// It drops a BLOCK - the scratch card's shape where a player would have put it, centred on
+        /// the board - because that is what a turn hands over: report.FellThroughCells is the placed
+        /// shape's own cells. It used to drop the cells nearest the middle, which is a blob no card
+        /// has, so the lab showed a fall no block ever takes.
+        /// </summary>
         private void AnimFallingCubes()
         {
-            SpawnFallingCubes(boardView, AnimCells(), AnimScratchCard());
+            BlockCard card = AnimScratchCard();
+            SpawnFallingCubes(boardView, AnimPlacedCells(card), card);
+        }
+
+        /// <summary>The cells a card would cover placed in the middle of the board - what a turn
+        /// would report for it. Nothing is clipped to the board: a block falling out of the frame
+        /// has no reason to lose a cube at the edge.</summary>
+        private List<GridPos> AnimPlacedCells(BlockCard card)
+        {
+            var cells = new List<GridPos>();
+            if (card == null)
+            {
+                return cells;
+            }
+            BlockShape shape = card.Shape;
+            int ox = AnimMiddleColumn() - shape.Width / 2;
+            int oy = AnimMiddleRow() - shape.Height / 2;
+            for (int i = 0; i < shape.Cells.Count; i++)
+            {
+                cells.Add(new GridPos(ox + shape.Cells[i].X, oy + shape.Cells[i].Y));
+            }
+            return cells;
+        }
+
+        /// <summary>Flips one of the fold's debug switches and says which way it went. The next
+        /// fold played shows the difference; closing the lab turns them all back on.</summary>
+        private void AnimFoldToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("phase fold " + english + ": ", "katlama " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>The same for the sublimation's debug switches.</summary>
+        private void AnimCryoToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("cryo sublimation " + english + ": ", "süblimleşme " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        // ------------------------------------------------------------------ boss lifts
+
+        /// <summary>The three bosses that take cubes off WITHOUT them vanishing where they stood,
+        /// and so keep the old cold mark (LiftCells) rather than a removal variant.</summary>
+        private enum AnimBossScene
+        {
+            Escalator,
+            Centrifuge,
+            Gangrene,
+            /// <summary>The escalator on an arena with holes in its top row.</summary>
+            Holes
+        }
+
+        /// <summary>The scene AnimBossLift has going, so pressing it again restarts it.</summary>
+        private Coroutine animBossLift;
+
+        /// <summary>How long the lab board stands before its first turn ends.</summary>
+        private const float AnimBossBeat = 0.9f;
+
+        /// <summary>Between the two turn ends, and after the second before the real board returns.</summary>
+        private const float AnimBossTurnGap = 1.6f;
+
+        /// <summary>
+        /// One of those bosses AS IT PLAYS IN ITS ROUND - not a cold mark on cells in the middle of
+        /// the arena, which no boss ever names. The lab puts up a board of its own, the real one's
+        /// size and about half full of the run's own blocks, and ends two turns on it, each the
+        /// game's own sequence: the board changes, it is repainted, and LiftCells plays on exactly
+        /// the cells the boss reported.
+        ///
+        ///   ESCALATOR   the real ShiftRowsUp: every row rides up one and the top row's cubes are
+        ///               torn off over the top edge (PlayForcedExit, with the motions Core wrote).
+        ///   CENTRIFUGE  the real FlingCubesOutward: every cube one cell further from the middle,
+        ///               the rim's torn off outward - each along its own step, eight ways.
+        ///   HOLES       the real ShiftRowsUp on an arena with holes in its top row: the cubes
+        ///               under them ride in and have no ground; the top row's go over the edge.
+        ///   GANGRENE    STAGED, because the rot's jump is Core's alone (InfectFullLines is
+        ///               internal): the rot takes the last cell of its row, the row dies, and every
+        ///               cube in the nearer edge row turns; next turn the same with its column and
+        ///               the nearer edge column. The cells that turn are the ones the rule would name;
+        ///               what the lab board cannot show is the dead line's wash, which only Core marks.
+        ///
+        /// The real board is never touched. AnimResync puts it back at the end - RefreshAll rebuilds
+        /// whenever the view shows a board that is not the round's.
+        /// </summary>
+        private void AnimBossLift(AnimBossScene scene)
+        {
+            StopAnimBossLift();
+            animBossLift = StartCoroutine(BossLiftRoutine(scene));
+        }
+
+        private void StopAnimBossLift()
+        {
+            if (animBossLift != null)
+            {
+                StopCoroutine(animBossLift);
+                animBossLift = null;
+            }
+        }
+
+        private IEnumerator BossLiftRoutine(AnimBossScene scene)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                animBossLift = null;
+                yield break;
+            }
+            // Never smaller than 6 x 6, so every scene has an inside, a rim and a line to kill.
+            int w = Mathf.Max(6, round.Board.Width);
+            int h = Mathf.Max(6, round.Board.Height);
+            GameBoard board = scene == AnimBossScene.Holes
+                ? new GameBoard(w, h - 1, AnimHoledTopRow(w, h))
+                : new GameBoard(w, h);
+            List<int> cards = AnimBossCards();
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    Cube? cube = AnimBossCell(scene, board.Width, board.Height, x, y, cards);
+                    if (cube.HasValue)
+                    {
+                        board.SetCubeAt(new GridPos(x, y), cube.Value);
+                    }
+                }
+            }
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            yield return new WaitForSeconds(AnimBossBeat);
+            for (int turn = 0; turn < 2; turn++)
+            {
+                var motions = new List<LiftMotion>();
+                List<GridPos> lifted = AnimBossTurn(board, scene, turn, motions);
+                boardView.Refresh();
+                if (scene == AnimBossScene.Gangrene)
+                {
+                    LiftCells(lifted, LiftedColor);
+                }
+                else
+                {
+                    // The seam the game hands a moving board's report to, with the motions the
+                    // real board code wrote.
+                    PlayForcedExit(lifted, motions);
+                }
+                yield return new WaitForSeconds(AnimBossTurnGap);
+            }
+            animBossLift = null;
+            AnimResync();
+        }
+
+        /// <summary>The top row of the holed arena: every cell but two, which are holes.</summary>
+        private static List<GridPos> AnimHoledTopRow(int w, int h)
+        {
+            var cells = new List<GridPos>();
+            for (int x = 0; x < w; x++)
+            {
+                if (x != 2 && x != w - 3)
+                {
+                    cells.Add(new GridPos(x, h - 1));
+                }
+            }
+            return cells;
+        }
+
+        /// <summary>The eight steps the direction entry walks, one per press: the four straight
+        /// ones, then the diagonals - every way the centrifuge can throw a cube off.</summary>
+        private static readonly GridPos[] AnimPeelSteps =
+        {
+            new GridPos(0, 1), new GridPos(1, 0), new GridPos(0, -1), new GridPos(-1, 0),
+            new GridPos(1, 1), new GridPos(1, -1), new GridPos(-1, -1), new GridPos(-1, 1)
+        };
+
+        private static readonly string[] AnimPeelStepEnglish =
+        {
+            "up", "right", "down", "left", "up-right", "down-right", "down-left", "up-left"
+        };
+
+        private static readonly string[] AnimPeelStepTurkish =
+        {
+            "yukarı", "sağ", "aşağı", "sol", "sağ üst", "sağ alt", "sol alt", "sol üst"
+        };
+
+        /// <summary>Which of AnimPeelSteps the direction entry plays next.</summary>
+        private int animPeelStep;
+
+        private void AnimPeelDirection()
+        {
+            int index = animPeelStep;
+            animPeelStep = (animPeelStep + 1) % AnimPeelSteps.Length;
+            StopAnimBossLift();
+            animBossLift = StartCoroutine(PeelTestRoutine(AnimPeelSteps[index], LiftReason.ExitedBoard,
+                Loc.Pick("thrown off: " + AnimPeelStepEnglish[index], "atılma yönü: " + AnimPeelStepTurkish[index])));
+        }
+
+        private void AnimPeelBlocked()
+        {
+            StopAnimBossLift();
+            animBossLift = StartCoroutine(PeelTestRoutine(new GridPos(1, 0), LiftReason.Blocked,
+                Loc.Pick("blocked, pushed right", "engelli hedef, sağa itilen")));
+        }
+
+        /// <summary>
+        /// One step of a moving board, on its own: a lab board with cubes where that step takes
+        /// them off - the edge or corner it points at, as many as the cells knob asks and the
+        /// edge holds - then the same board without them, and the peel along the step.
+        ///
+        /// EXITED is what the centrifuge does at a rim. BLOCKED is STAGED: on a board without
+        /// holes the rules never block a flung cube (every target is further out and was cleared
+        /// first), so it is shown as a column of cubes pushed right against a wall of obsidian.
+        /// The motions are the lab's own here - the boss scenes are where Core writes them.
+        /// </summary>
+        private IEnumerator PeelTestRoutine(GridPos step, LiftReason reason, string label)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                animBossLift = null;
+                yield break;
+            }
+            int w = Mathf.Max(6, round.Board.Width);
+            int h = Mathf.Max(6, round.Board.Height);
+            List<int> cards = AnimBossCards();
+            List<GridPos> going = reason == LiftReason.Blocked
+                ? AnimBlockedCells(h, AnimCellCount(), w - 4)
+                : AnimExitCells(w, h, step, AnimCellCount());
+            GameBoard before = AnimPeelBoard(w, h, cards, going, true, reason);
+            GameBoard after = AnimPeelBoard(w, h, cards, going, false, reason);
+            boardView.Rebuild(before, MainBoardWorldSize, MainBoardCenter);
+            animLastLabel = label;
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+            yield return new WaitForSeconds(0.6f);
+            var motions = new List<LiftMotion>();
+            for (int i = 0; i < going.Count; i++)
+            {
+                Cube? cube = before.GetCube(going[i]);
+                motions.Add(new LiftMotion(going[i], step, reason,
+                    cube.HasValue ? cube.Value : new Cube(CubeKind.Normal, 101), false));
+            }
+            boardView.Rebuild(after, MainBoardWorldSize, MainBoardCenter);
+            PlayForcedExit(going, motions);
+            yield return new WaitForSeconds(1.2f);
+            animBossLift = null;
+            AnimResync();
+        }
+
+        /// <summary>The cells a step takes off the board, nearest the point it aims at first -
+        /// the middle of that edge, or that corner - at most <paramref name="count"/>.</summary>
+        private static List<GridPos> AnimExitCells(int w, int h, GridPos step, int count)
+        {
+            var exits = new List<GridPos>();
+            for (int x = 0; x < w; x++)
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    int tx = x + step.X;
+                    int ty = y + step.Y;
+                    if (tx < 0 || tx >= w || ty < 0 || ty >= h)
+                    {
+                        exits.Add(new GridPos(x, y));
+                    }
+                }
+            }
+            float ax = (w - 1) * 0.5f + step.X * w * 0.5f;
+            float ay = (h - 1) * 0.5f + step.Y * h * 0.5f;
+            exits.Sort(delegate(GridPos a, GridPos b)
+            {
+                float da = (a.X - ax) * (a.X - ax) + (a.Y - ay) * (a.Y - ay);
+                float db = (b.X - ax) * (b.X - ax) + (b.Y - ay) * (b.Y - ay);
+                return da.CompareTo(db);
+            });
+            if (exits.Count > count)
+            {
+                exits.RemoveRange(count, exits.Count - count);
+            }
+            return exits;
+        }
+
+        /// <summary>A column of cubes to push right into a wall: up to <paramref name="count"/>,
+        /// centred on the board's height.</summary>
+        private static List<GridPos> AnimBlockedCells(int h, int count, int column)
+        {
+            var cells = new List<GridPos>();
+            int n = Mathf.Clamp(count, 1, h - 2);
+            int first = (h - n) / 2;
+            for (int i = 0; i < n; i++)
+            {
+                cells.Add(new GridPos(column, first + i));
+            }
+            return cells;
+        }
+
+        /// <summary>The lab board for PeelTestRoutine: sparse blocks of the run's own, the cubes
+        /// that go (or not, for the board after), and for BLOCKED the obsidian wall they meet.</summary>
+        private GameBoard AnimPeelBoard(int w, int h, List<int> cards, List<GridPos> going,
+            bool withGoing, LiftReason reason)
+        {
+            var board = new GameBoard(w, h);
+            var set = new HashSet<GridPos>(going);
+            for (int x = 0; x < w; x++)
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    var pos = new GridPos(x, y);
+                    if (set.Contains(pos))
+                    {
+                        if (withGoing)
+                        {
+                            board.SetCubeAt(pos, AnimCardCube(x, y, cards));
+                        }
+                        continue;
+                    }
+                    if (reason == LiftReason.Blocked && set.Contains(new GridPos(x - 1, y)))
+                    {
+                        board.SetCubeAt(pos, new Cube(CubeKind.Obsidian, -4243));
+                        continue;
+                    }
+                    if (AnimHash(x, y) % 100u < 30u)
+                    {
+                        board.SetCubeAt(pos, AnimCardCube(x, y, cards));
+                    }
+                }
+            }
+            return board;
+        }
+
+        /// <summary>Flips one of the peel's debug switches and says which way it went.</summary>
+        private void AnimPeelToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("momentum peel " + english + ": ", "sökülme " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>The run's own blocks, for the lab board to be built of - so the scene looks like
+        /// the player's board rather than a test pattern. Sorted, so the same run always builds the
+        /// same board. Made-up ids (a colour each) when there are none.</summary>
+        private List<int> AnimBossCards()
+        {
+            var ids = new List<int>(cardFaces.Keys);
+            ids.Sort();
+            if (ids.Count == 0)
+            {
+                ids.AddRange(new[] { 101, 102, 103, 104, 105 });
+            }
+            return ids;
+        }
+
+        /// <summary>What one cell of the lab board holds: about half full in block-sized clumps of
+        /// one card each, and each scene makes sure of the cells its boss is about to act on.</summary>
+        private Cube? AnimBossCell(AnimBossScene scene, int w, int h, int x, int y, List<int> cards)
+        {
+            uint roll = AnimHash(x, y) % 100u;
+            bool filled;
+            switch (scene)
+            {
+                case AnimBossScene.Escalator:
+                {
+                    // A bar along the top and an L under its right end: the two turns' cargo.
+                    // The rest of the top two rows is kept sparse so that cargo reads.
+                    bool cargo = (y == h - 1 && ((x >= 1 && x <= 3) || x == w - 2))
+                        || (y == h - 2 && x >= w - 4 && x <= w - 2);
+                    filled = cargo || roll < (y >= h - 2 ? 15u : 46u);
+                    break;
+                }
+                case AnimBossScene.Holes:
+                {
+                    // Under each of the two top-row holes a cube for each turn to ride into it, and
+                    // a few on the top row itself to go over the edge.
+                    bool rider = (y == h - 2 || y == h - 3) && (x == 2 || x == w - 3);
+                    bool top = y == h - 1 && (x == 0 || x == 1 || x == w - 1);
+                    filled = rider || top || roll < (y >= h - 3 ? 12u : 40u);
+                    break;
+                }
+                case AnimBossScene.Centrifuge:
+                {
+                    // A few cubes on the rim for the first fling and more on the ring inside it for
+                    // the second. Sparse on the rim, as in the round: every turn empties it.
+                    bool rim = x == 0 || y == 0 || x == w - 1 || y == h - 1;
+                    bool ring = !rim && (x == 1 || y == 1 || x == w - 2 || y == h - 2);
+                    filled = roll < (rim ? 30u : ring ? 55u : 35u);
+                    break;
+                }
+                default:
+                {
+                    // The rot: one patch, a whole row but one cell and a whole column but one.
+                    int column = w - 3;
+                    const int row = 2;
+                    if (x == column && (y == row || y == h - 2))
+                    {
+                        return null; // where the rot goes next, one turn each
+                    }
+                    if (y == row || x == column)
+                    {
+                        return new Cube(CubeKind.Gangrene, GameBoard.GangreneCardId);
+                    }
+                    // Full edges for the jump to turn - each with a gap, so the edge line is not
+                    // taken whole and does not die in its turn.
+                    if (y == 0)
+                    {
+                        filled = x != 1 && x != w - 2;
+                    }
+                    else if (x == w - 1)
+                    {
+                        filled = y != h - 3;
+                    }
+                    else
+                    {
+                        filled = roll < 38u;
+                    }
+                    break;
+                }
+            }
+            if (!filled)
+            {
+                return null;
+            }
+            return AnimCardCube(x, y, cards);
+        }
+
+        /// <summary>A cube of one of the run's blocks, in block-sized clumps of one card each.</summary>
+        private Cube AnimCardCube(int x, int y, List<int> cards)
+        {
+            int id = cards[(int)(AnimHash(x / 2 + 17, y / 2 + 31) % (uint)cards.Count)];
+            BlockCard card = FindOwnedCard(id);
+            return new Cube(card != null ? CubeRules.KindForCard(card) : CubeKind.Normal, id);
+        }
+
+        /// <summary>One turn end of the scene's boss on the lab board. Returns the cells it reports
+        /// as lifted - exactly what the game hands LiftCells.</summary>
+        private static List<GridPos> AnimBossTurn(GameBoard board, AnimBossScene scene, int turn,
+            List<LiftMotion> motions)
+        {
+            switch (scene)
+            {
+                case AnimBossScene.Escalator:
+                case AnimBossScene.Holes:
+                    return board.ShiftRowsUp(motions);
+                case AnimBossScene.Centrifuge:
+                    return board.FlingCubesOutward(motions);
+                default:
+                {
+                    int column = board.MinX + board.Width - 3;
+                    var rot = new Cube(CubeKind.Gangrene, GameBoard.GangreneCardId);
+                    if (turn == 0)
+                    {
+                        // The rot takes the last cell of its row: the row dies, and the infection
+                        // jumps to the nearer horizontal edge - the bottom one.
+                        board.SetCubeAt(new GridPos(column, board.MinY + 2), rot);
+                        return AnimRotEdge(board, true, board.MinY);
+                    }
+                    // Then the last cell of its column: that dies too, and the jump goes to the
+                    // nearer vertical edge - the right one.
+                    board.SetCubeAt(new GridPos(column, board.MinY + board.Height - 2), rot);
+                    return AnimRotEdge(board, false, board.MinX + board.Width - 1);
+                }
+            }
+        }
+
+        /// <summary>The rot's jump, staged: every cube in an edge line that the rot can take turns
+        /// where it stands. Converts only - an empty cell stays empty (see GameBoard.Gangrene).</summary>
+        private static List<GridPos> AnimRotEdge(GameBoard board, bool row, int line)
+        {
+            var turned = new List<GridPos>();
+            int count = row ? board.Width : board.Height;
+            for (int i = 0; i < count; i++)
+            {
+                GridPos pos = row ? new GridPos(board.MinX + i, line) : new GridPos(line, board.MinY + i);
+                Cube? cube = board.GetCube(pos);
+                if (cube.HasValue && cube.Value.Kind != CubeKind.Gangrene
+                    && CubeRules.IsExternallyDestructible(cube.Value))
+                {
+                    board.SetCubeKind(pos, CubeKind.Gangrene);
+                    turned.Add(pos);
+                }
+            }
+            return turned;
+        }
+
+        private static uint AnimHash(int x, int y)
+        {
+            unchecked
+            {
+                uint h = (uint)(x * 73856093) ^ (uint)(y * 19349663);
+                h ^= h >> 15;
+                h *= 2246822519u;
+                h ^= h >> 13;
+                h *= 3266489917u;
+                h ^= h >> 16;
+                return h;
+            }
+        }
+
+        /// <summary>The run AnimClusterEveryCount has going, so pressing it again restarts it.</summary>
+        private Coroutine animBurstSequence;
+
+        /// <summary>Long enough for one blast's afterglow and debris to be gone before the next.
+        /// </summary>
+        private const float AnimBurstGap = 0.95f;
+
+        /// <summary>
+        /// "Patlama: N hücre" at every size the cells knob offers, smallest first, each played in
+        /// the neutral orange and then in the element knob's colour - the whole acceptance sweep in
+        /// one press. Every blast is the same FlashCells call the game makes.
+        /// </summary>
+        private void AnimClusterEveryCount()
+        {
+            StopAnimBurstSequence();
+            animBurstSequence = StartCoroutine(ClusterEveryCountRoutine());
+        }
+
+        private void StopAnimBurstSequence()
+        {
+            if (animBurstSequence != null)
+            {
+                StopCoroutine(animBurstSequence);
+                animBurstSequence = null;
+            }
+        }
+
+        private IEnumerator ClusterEveryCountRoutine()
+        {
+            GameBoard board = AnimBoard();
+            if (board == null)
+            {
+                animBurstSequence = null;
+                yield break;
+            }
+            BlockElement element = AnimElement();
+            int total = AnimCellCounts.Length * 2;
+            for (int i = 0; i < AnimCellCounts.Length; i++)
+            {
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    bool neutral = pass == 0;
+                    FlashCells(AnimCells(AnimCellCounts[i]),
+                        neutral ? BlastColor : ViewUtil.ElementColor(element), null,
+                        AnimCubeFaces(neutral ? (BlockElement?)null : element));
+                    string name = "N=" + AnimCellCounts[i] + "  "
+                        + (neutral ? Loc.Pick("neutral", "nötr") : ViewUtil.ElementLabel(element));
+                    // Over the board rather than over the middle: forty cells cover the middle.
+                    Vector2 above = boardView.CellToWorld(new GridPos(AnimMiddleColumn(),
+                        board.MinY + board.Height - 1)) + Vector2.up * boardView.CellWorldSize;
+                    FloatingTextFx.Spawn(transform, above, name, Color.white, 50, 0.045f);
+                    animLastLabel = Loc.Pick("blast: ", "patlama: ") + name
+                        + "  (" + (i * 2 + pass + 1) + "/" + total + ")";
+                    if (AnimLabOpen)
+                    {
+                        RedrawAnimationLab();
+                    }
+                    yield return new WaitForSeconds(AnimBurstGap);
+                }
+            }
+            animBurstSequence = null;
+        }
+
+        /// <summary>
+        /// The faces of a block of <paramref name="element"/> (null: a plain block), one per cube,
+        /// by the rule the hand and the board draw that block's cubes with (ViewUtil.CardCubeTile)
+        /// - so the lab blasts a water block made of water tiles, a fox of fox tiles and a
+        /// "Hedefli" block with its one bullseye, never the default tile tinted a colour.
+        /// FlashCells cycles through them over as many cells as the blast has.
+        /// </summary>
+        private List<ClusterBurstView.Look> AnimCubeFaces(BlockElement? element)
+        {
+            var faces = new List<ClusterBurstView.Look>();
+            BlockCard card = AnimScratchCard(element);
+            if (card == null || card.Shape == null)
+            {
+                return faces;
+            }
+            for (int i = 0; i < card.Shape.Cells.Count; i++)
+            {
+                Color tint;
+                Sprite tile = ViewUtil.CardCubeTile(card, card.Shape, i, true, out tint);
+                faces.Add(new ClusterBurstView.Look { Tile = tile, Colour = tint });
+            }
+            return faces;
+        }
+
+        /// <summary>
+        /// "Patlama: N hücre" on a block of EVERY type, one after another - a plain block first,
+        /// then every element the market sells - each in its own colour and made of its own
+        /// tiles, with its name above the board. Walked from the enum, not the element knob, so a
+        /// new block type shows up here the day it exists.
+        /// </summary>
+        private void AnimClusterEveryElement()
+        {
+            StopAnimBurstSequence();
+            animBurstSequence = StartCoroutine(ClusterEveryElementRoutine());
+        }
+
+        private IEnumerator ClusterEveryElementRoutine()
+        {
+            GameBoard board = AnimBoard();
+            if (board == null)
+            {
+                animBurstSequence = null;
+                yield break;
+            }
+            var types = new List<BlockElement?> { null };
+            foreach (BlockElement element in System.Enum.GetValues(typeof(BlockElement)))
+            {
+                // Kara delik is a trap a joker lays, never a block anyone owns.
+                if (element != BlockElement.Void)
+                {
+                    types.Add(element);
+                }
+            }
+            for (int i = 0; i < types.Count; i++)
+            {
+                BlockElement? element = types[i];
+                FlashCells(AnimCells(), element.HasValue ? ViewUtil.ElementColor(element.Value)
+                    : BlastColor, null, AnimCubeFaces(element));
+                string name = element.HasValue ? ViewUtil.ElementLabel(element.Value)
+                    : Loc.Pick("PLAIN", "DÜZ");
+                Vector2 above = boardView.CellToWorld(new GridPos(AnimMiddleColumn(),
+                    board.MinY + board.Height - 1)) + Vector2.up * boardView.CellWorldSize;
+                FloatingTextFx.Spawn(transform, above, name, Color.white, 50, 0.045f);
+                animLastLabel = Loc.Pick("blast: ", "patlama: ") + name
+                    + "  (" + (i + 1) + "/" + types.Count + ")";
+                if (AnimLabOpen)
+                {
+                    RedrawAnimationLab();
+                }
+                yield return new WaitForSeconds(AnimBurstGap);
+            }
+            animBurstSequence = null;
+        }
+
+        /// <summary>The run AnimFallingCubesEveryType has going, so pressing it again restarts the
+        /// run instead of stacking a second one on top of it.</summary>
+        private Coroutine animFallSequence;
+
+        /// <summary>How long each type is given before the next one drops: long enough for its
+        /// cubes to be clearly gone.</summary>
+        private const float AnimFallGap = 0.9f;
+
+        /// <summary>
+        /// A defective block of EVERY type, one after another in the middle of the board, each with
+        /// its name floating above it - a plain block first, then every element the market sells.
+        ///
+        /// All of them are the same SpawnFallingCubes call with a different card, which is the
+        /// honest picture: the rules drop every type the same way, so the only thing that can
+        /// differ on screen is how the view draws it. The elements are walked from the enum rather
+        /// than from the element knob's list, so a new block type shows up here the day it exists.
+        /// </summary>
+        private void AnimFallingCubesEveryType()
+        {
+            StopAnimFallSequence();
+            animFallSequence = StartCoroutine(FallingCubesEveryTypeRoutine());
+        }
+
+        private void StopAnimFallSequence()
+        {
+            if (animFallSequence != null)
+            {
+                StopCoroutine(animFallSequence);
+                animFallSequence = null;
+            }
+        }
+
+        private IEnumerator FallingCubesEveryTypeRoutine()
+        {
+            var types = new List<BlockElement?> { null };
+            foreach (BlockElement element in System.Enum.GetValues(typeof(BlockElement)))
+            {
+                // Kara delik is a trap the joker lays for one round. It is never sold, so it can
+                // never be smuggled, and a defective one cannot exist to fall.
+                if (element != BlockElement.Void)
+                {
+                    types.Add(element);
+                }
+            }
+            for (int i = 0; i < types.Count; i++)
+            {
+                BlockCard card = AnimScratchCard(types[i]);
+                SpawnFallingCubes(boardView, AnimPlacedCells(card), card);
+                string name = types[i].HasValue
+                    ? ViewUtil.ElementLabel(types[i].Value)
+                    : Loc.Pick("PLAIN", "DÜZ");
+                Vector2 above = boardView.CellToWorld(
+                    new GridPos(AnimMiddleColumn(), AnimMiddleRow() + 2));
+                FloatingTextFx.Spawn(transform, above, name, Color.white, 50, 0.045f);
+                animLastLabel = Loc.Pick("falling: ", "düşüyor: ") + name
+                    + "  (" + (i + 1) + "/" + types.Count + ")";
+                if (AnimLabOpen)
+                {
+                    RedrawAnimationLab();
+                }
+                yield return new WaitForSeconds(AnimFallGap);
+            }
+            animFallSequence = null;
         }
 
         /// <summary>Brings the joker strip back out from behind the panel so its own animation
