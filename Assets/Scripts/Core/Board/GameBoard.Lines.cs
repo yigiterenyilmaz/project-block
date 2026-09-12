@@ -445,6 +445,13 @@ namespace ProjectBlock.Core
         /// why it could not land. Reporting only; the ride itself is exactly the same.</summary>
         public List<GridPos> ShiftRowsUp(List<LiftMotion> motions)
         {
+            return ShiftRowsUp(motions, null);
+        }
+
+        /// <summary>As above, also writing into <paramref name="moves"/> every cube that rode up one
+        /// and is still on the board: from the cell below to the cell it stands in now.</summary>
+        public List<GridPos> ShiftRowsUp(List<LiftMotion> motions, List<CellMove> moves)
+        {
             var lost = new List<GridPos>();
             var up = new GridPos(0, 1);
             for (int x = 0; x < Width; x++)
@@ -457,7 +464,7 @@ namespace ProjectBlock.Core
                     if (motions != null)
                     {
                         motions.Add(new LiftMotion(top, up, LiftReason.ExitedBoard,
-                            cells[x, Height - 1].Value, false));
+                            cells[x, Height - 1].Value, false, BoardMotionSource.Escalator));
                     }
                 }
                 for (int y = Height - 1; y >= 1; y--)
@@ -485,9 +492,16 @@ namespace ProjectBlock.Core
                         {
                             // Reported at the hole it rode into; it came from the cell below.
                             motions.Add(new LiftMotion(new GridPos(x + MinX, y - 1 + MinY), up,
-                                LiftReason.NoGround, rode, false));
+                                LiftReason.NoGround, rode, false, BoardMotionSource.Escalator));
                         }
                         continue;
+                    }
+                    if (moves != null)
+                    {
+                        // Every cube standing here now rode up from the cell below.
+                        moves.Add(new CellMove(new GridPos(x + MinX, y - 1 + MinY),
+                            new GridPos(x + MinX, y + MinY), cells[x, y].Value,
+                            BoardMotionSource.Escalator, false));
                     }
                     occupied++;
                 }
@@ -520,6 +534,13 @@ namespace ProjectBlock.Core
         /// per returned cell, in the same order - the step each lost cube was taking and why it
         /// could not land. Reporting only; the fling itself is exactly the same.</summary>
         public List<GridPos> FlingCubesOutward(List<LiftMotion> motions)
+        {
+            return FlingCubesOutward(motions, null);
+        }
+
+        /// <summary>As above, also writing into <paramref name="moves"/> every cube that was pushed
+        /// one cell out and is still on the board.</summary>
+        public List<GridPos> FlingCubesOutward(List<LiftMotion> motions, List<CellMove> moves)
         {
             var lost = new List<GridPos>();
             // Centre in half-cell units, so an even board's centre falls between cells and an odd
@@ -580,11 +601,17 @@ namespace ProjectBlock.Core
                     {
                         LiftReason why = offBoard ? LiftReason.ExitedBoard
                             : !playable[tx, ty] ? LiftReason.NoGround : LiftReason.Blocked;
-                        motions.Add(new LiftMotion(lostAt, new GridPos(dx, dy), why, cube.Value, false));
+                        motions.Add(new LiftMotion(lostAt, new GridPos(dx, dy), why, cube.Value, false,
+                            BoardMotionSource.Centrifuge));
                     }
                     continue;
                 }
                 cells[tx, ty] = cube;
+                if (moves != null)
+                {
+                    moves.Add(new CellMove(new GridPos(from.X + MinX, from.Y + MinY),
+                        new GridPos(tx + MinX, ty + MinY), cube.Value, BoardMotionSource.Centrifuge, false));
+                }
             }
 
             int occupied = 0;

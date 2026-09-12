@@ -606,12 +606,15 @@ namespace ProjectBlock.Core
             // The motions are reporting only: which way each cube was going and why it could not
             // land, for the View to draw it leaving along the step it really took.
             var motions = new List<LiftMotion>();
-            var lost = new List<GridPos>(MainBoard.ShiftRowsUp(motions));
+            var moves = new List<CellMove>();
+            var lost = new List<GridPos>(MainBoard.ShiftRowsUp(motions, moves));
             if (MirrorBoard != null)
             {
                 var mirrorMotions = new List<LiftMotion>();
-                lost.AddRange(MirrorBoard.ShiftRowsUp(mirrorMotions));
+                var mirrorMoves = new List<CellMove>();
+                lost.AddRange(MirrorBoard.ShiftRowsUp(mirrorMotions, mirrorMoves));
                 AddMirrorMotions(motions, mirrorMotions);
+                AddMirrorMoves(moves, mirrorMoves);
             }
             // ALWAYS re-baseline: the escalator moves cubes even when it carries none off, and a
             // moved cube would otherwise read as a destroyed one.
@@ -620,11 +623,24 @@ namespace ProjectBlock.Core
             {
                 currentReport.AddLiftedCells(lost, LiftKind.Relocated, motions);
             }
+            if (moves.Count > 0 && currentReport != null)
+            {
+                currentReport.AddBoardMoves(moves);
+            }
             return lost;
         }
 
         /// <summary>Appends the mirror world's motions, marked as the mirror's.</summary>
         private static void AddMirrorMotions(List<LiftMotion> into, List<LiftMotion> mirror)
+        {
+            for (int i = 0; i < mirror.Count; i++)
+            {
+                into.Add(mirror[i].OnMirror());
+            }
+        }
+
+        /// <summary>Appends the mirror world's surviving moves, marked as the mirror's.</summary>
+        private static void AddMirrorMoves(List<CellMove> into, List<CellMove> mirror)
         {
             for (int i = 0; i < mirror.Count; i++)
             {
@@ -641,17 +657,24 @@ namespace ProjectBlock.Core
         internal IReadOnlyList<GridPos> FlingBoardsOutward()
         {
             var motions = new List<LiftMotion>();
-            var lost = new List<GridPos>(MainBoard.FlingCubesOutward(motions));
+            var moves = new List<CellMove>();
+            var lost = new List<GridPos>(MainBoard.FlingCubesOutward(motions, moves));
             if (MirrorBoard != null)
             {
                 var mirrorMotions = new List<LiftMotion>();
-                lost.AddRange(MirrorBoard.FlingCubesOutward(mirrorMotions));
+                var mirrorMoves = new List<CellMove>();
+                lost.AddRange(MirrorBoard.FlingCubesOutward(mirrorMotions, mirrorMoves));
                 AddMirrorMotions(motions, mirrorMotions);
+                AddMirrorMoves(moves, mirrorMoves);
             }
             ResyncSnapshot();
             if (lost.Count > 0 && currentReport != null)
             {
                 currentReport.AddLiftedCells(lost, LiftKind.Relocated, motions);
+            }
+            if (moves.Count > 0 && currentReport != null)
+            {
+                currentReport.AddBoardMoves(moves);
             }
             return lost;
         }
@@ -670,14 +693,29 @@ namespace ProjectBlock.Core
         /// </summary>
         internal GridPos? SpreadGangrene()
         {
-            GridPos? spread = MainBoard.SpreadGangrene(rng);
-            List<GridPos> converted = MainBoard.InfectFullLines();
+            // The events are reporting only: which cell, from where, what stood there, which lines
+            // died and where the rot jumped - for the View to stage exactly that.
+            GangreneSpread spreadEvent;
+            GridPos? spread = MainBoard.SpreadGangrene(rng, out spreadEvent);
+            var deaths = new List<GangreneLineDeath>();
+            List<GridPos> converted = MainBoard.InfectFullLines(deaths);
             // The infection changes cubes in place; a converted cube is not a destroyed one, so the
             // destruction diff has to be re-baselined or it would read as a killing.
             ResyncSnapshot();
             if (converted.Count > 0 && currentReport != null)
             {
                 currentReport.AddLiftedCells(converted, LiftKind.Transformed);
+            }
+            if (currentReport != null)
+            {
+                if (spreadEvent != null)
+                {
+                    currentReport.GangreneSpread = spreadEvent;
+                }
+                if (deaths.Count > 0)
+                {
+                    currentReport.AddGangreneLineDeaths(deaths);
+                }
             }
             return spread;
         }

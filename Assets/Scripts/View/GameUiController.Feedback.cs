@@ -33,6 +33,13 @@ namespace ProjectBlock.View
                 sfx.Shuffle();
             }
             RefreshAll(report);
+            // A moving board's turn end is drawn on THIS frame, the one the board was repainted in
+            // - never behind the water below, or its cubes would be seen at their new cells before
+            // they had set off.
+            PlayBoardMotion(report);
+            // "Kangren" for the same reason: the cells it takes are held back to what stood in them
+            // on this frame, before anything is drawn.
+            PlayGangrene(round, report);
             IReadOnlyList<IReadOnlyList<WaterMove>> frames = report.WaterFallFrames;
             if (frames.Count == 0)
             {
@@ -435,11 +442,9 @@ namespace ProjectBlock.View
             // it is drawn: one that VANISHED where it stood ("Alzheimer", "Hidrolik pres") goes
             // through a removal variant; one a MOVING board carried off ("Yürüyen merdiven",
             // "Merkezkaç kuvveti") is torn away along the step Core says it was taking; one that
-            // changed in place ("Kangren") keeps the quiet cold mark - a pit would open under
-            // whatever cube stands in that cell now.
+            // CHANGED in place ("Kangren") is drawn turning by the rot's own system, on the frame
+            // the board was repainted - not here.
             var removed = new List<GridPos>();
-            var carried = new List<GridPos>();
-            var carriedMotions = new List<LiftMotion>();
             var marked = new List<GridPos>();
             for (int i = 0; i < report.LiftedCells.Count; i++)
             {
@@ -450,8 +455,15 @@ namespace ProjectBlock.View
                 }
                 else if (report.LiftKindAt(i) == LiftKind.Relocated && motion.Reason != LiftReason.None)
                 {
-                    carried.Add(report.LiftedCells[i]);
-                    carriedMotions.Add(motion);
+                    // Already torn off with the board's move, on the frame it was repainted
+                    // (PlayBoardMotion) - this can run later, behind the water.
+                    continue;
+                }
+                else if (report.LiftKindAt(i) == LiftKind.Transformed)
+                {
+                    // "Kangren": the cube turned where it stands, and PlayGangrene drew it turning
+                    // on the repaint frame - from the side Core says the rot came in from.
+                    continue;
                 }
                 else
                 {
@@ -459,7 +471,6 @@ namespace ProjectBlock.View
                 }
             }
             PlayRemoval(removed);
-            PlayForcedExit(carried, carriedMotions);
             LiftCells(marked, LiftedColor);
             // "Kaçakçı" defective goods: the cubes showed up and then let go. They fall through
             // the arena and off the bottom of the screen - nothing landed, so there is nothing to
@@ -716,6 +727,84 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
+        /// A moving board's turn end ("Yürüyen merdiven", "Merkezkaç kuvveti"), drawn on the frame
+        /// the board was repainted in its new state: every cube that stays rides to its new cell
+        /// (PlayBoardMoves), every one that does not is torn off (PlayForcedExit) - both on the same
+        /// board's launch, so a row's survivors and casualties set off together.
+        /// </summary>
+        private void PlayBoardMotion(TurnReport report)
+        {
+            if (report == null)
+            {
+                return;
+            }
+            PlayBoardMoves(report.BoardMoves);
+            var carried = new List<GridPos>();
+            var motions = new List<LiftMotion>();
+            for (int i = 0; i < report.LiftedCells.Count; i++)
+            {
+                LiftMotion motion = report.LiftMotionAt(i);
+                if (report.LiftKindAt(i) == LiftKind.Relocated && motion.Reason != LiftReason.None)
+                {
+                    carried.Add(report.LiftedCells[i]);
+                    motions.Add(motion);
+                }
+            }
+            PlayForcedExit(carried, motions);
+        }
+
+        /// <summary>
+        /// Cubes a moving board carried to another cell and that SURVIVED: each rides from the cell
+        /// Core says it left to the cell Core says it reached - never a destination worked out here -
+        /// through BossMoveView, on the profile of the board that moved it. The board view keeps the
+        /// destinations blank until they land. A mirror-world move plays over the mirror board.
+        /// </summary>
+        private bool PlayBoardMoves(IReadOnlyList<CellMove> moves)
+        {
+            if (moves == null || moves.Count == 0 || bossMove == null)
+            {
+                return false;
+            }
+            bool any = false;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                bool mirror = pass == 1;
+                BoardView view = mirror ? mirrorBoardView : boardView;
+                if (view == null || view.Board == null)
+                {
+                    continue;
+                }
+                var from = new List<Vector2>();
+                var to = new List<Vector2>();
+                var targets = new List<GridPos>();
+                var sources = new List<BoardMotionSource>();
+                var looks = new List<ClusterBurstView.Look>();
+                for (int i = 0; i < moves.Count; i++)
+                {
+                    CellMove m = moves[i];
+                    if (m.Mirror != mirror || !view.Board.IsInside(m.To))
+                    {
+                        continue;
+                    }
+                    from.Add(view.CellToWorld(m.From));
+                    to.Add(view.CellToWorld(m.To));
+                    targets.Add(m.To);
+                    sources.Add(m.Source);
+                    Sprite tile = ViewUtil.CubeTile(m.Cube.Kind, FindOwnedCard(m.Cube.SourceCardId));
+                    looks.Add(new ClusterBurstView.Look { Tile = tile, Colour = ViewUtil.CubeTileColor(m.Cube, tile) });
+                }
+                if (from.Count == 0)
+                {
+                    continue;
+                }
+                bossMove.Play(view, from, to, targets, sources, looks, view.CellWorldSize, view.CubeWorldSize,
+                    view.WorldRect);
+                any = true;
+            }
+            return any;
+        }
+
+        /// <summary>
         /// Cubes a MOVING board carried off ("Yürüyen merdiven", "Merkezkaç kuvveti"): each is torn
         /// off along the step Core reported it taking (LiftMotion) - never a direction worked out
         /// here - through MomentumPeelView ("Soğuk sökülme"). Drawn from the cube Core says WENT,
@@ -741,6 +830,7 @@ namespace ProjectBlock.View
                 var from = new List<Vector2>();
                 var steps = new List<Vector2>();
                 var reasons = new List<LiftReason>();
+                var sources = new List<BoardMotionSource>();
                 var looks = new List<ClusterBurstView.Look>();
                 for (int i = 0; i < cells.Count && i < motions.Count; i++)
                 {
@@ -752,6 +842,7 @@ namespace ProjectBlock.View
                     from.Add(view.CellToWorld(m.From));
                     steps.Add(new Vector2(m.Step.X, m.Step.Y));
                     reasons.Add(m.Reason);
+                    sources.Add(m.Source);
                     Sprite tile = ViewUtil.CubeTile(m.Cube.Kind, FindOwnedCard(m.Cube.SourceCardId));
                     looks.Add(new ClusterBurstView.Look { Tile = tile, Colour = ViewUtil.CubeTileColor(m.Cube, tile) });
                 }
@@ -759,7 +850,7 @@ namespace ProjectBlock.View
                 {
                     continue;
                 }
-                momentumPeel.Play(from, steps, reasons, looks, view.CellWorldSize, view.CubeWorldSize,
+                momentumPeel.Play(from, steps, reasons, sources, looks, view.CellWorldSize, view.CubeWorldSize,
                     view.WorldRect);
                 any = true;
             }
@@ -767,10 +858,106 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// Cubes a boss took off WITHOUT them vanishing in place or being carried: changed where they
-        /// stand ("Kangren"). Deliberately NOT an explosion and not a removal: it keeps the quiet
-        /// language - CellFlashFx's cold palette, brightening a little and pinching out, with a
-        /// light puff - and never shakes.
+        /// "Kangren" - the rot's whole turn, exactly as Core reported it: the cell it took and the
+        /// side it crept in from, the cubes beside it it could not take, every line it took whole in
+        /// the order they died, and the cubes each jump turned on the nearer edge. Nothing here is
+        /// worked out from the board; the View is told all of it (TurnReport.GangreneSpread /
+        /// GangreneLineDeaths) and only decides how it LOOKS.
+        /// </summary>
+        private bool PlayGangrene(RoundEngine round, TurnReport report)
+        {
+            if (report == null || (report.GangreneSpread == null && report.GangreneLineDeaths.Count == 0))
+            {
+                return false;
+            }
+            var scene = new GangreneView.TurnScene();
+            GangreneSpread spread = report.GangreneSpread;
+            if (spread != null)
+            {
+                scene.Cell = spread.Cell;
+                scene.Source = spread.Source;
+                scene.HadCube = spread.Before.HasValue;
+                if (spread.Before.HasValue)
+                {
+                    scene.Before = LookOf(spread.Before.Value);
+                }
+                for (int i = 0; i < spread.Immune.Count; i++)
+                {
+                    scene.Immune.Add(spread.Immune[i]);
+                }
+            }
+            for (int d = 0; d < report.GangreneLineDeaths.Count; d++)
+            {
+                GangreneLineDeath death = report.GangreneLineDeaths[d];
+                var line = new GangreneView.LineDeath
+                {
+                    IsRow = death.IsRow,
+                    Line = death.Line,
+                    EdgeLine = death.EdgeLine
+                };
+                for (int i = 0; i < death.Converted.Count; i++)
+                {
+                    line.Converted.Add(new GangreneView.Converted
+                    {
+                        Cell = death.Converted[i],
+                        Before = i < death.Before.Count
+                            ? LookOf(death.Before[i])
+                            : default(ClusterBurstView.Look)
+                    });
+                }
+                scene.Deaths.Add(line);
+            }
+            // The turn's bill, felt once through every rotten cube - taken from the breakdown the
+            // boss actually wrote, never assumed from the board.
+            var boss = round != null ? round.Boss as KangrenBoss : null;
+            if (boss != null)
+            {
+                foreach (ScoreContribution c in report.Score.Contributions)
+                {
+                    if (c.Source == boss.DefId && c.Flat < 0)
+                    {
+                        scene.Billed = true;
+                        break;
+                    }
+                }
+            }
+            // A turn that cleared something gets its own blast read first; a quiet one does not.
+            bool cleared = report.ExplodedRows.Count > 0 || report.ExplodedColumns.Count > 0
+                || report.ExtraExplodedCells.Count > 0;
+            scene.Delay = cleared ? GangreneView.Style.TurnStartDelay
+                : GangreneView.Style.TurnStartDelayQuiet;
+            return PlayGangreneScene(scene);
+        }
+
+        /// <summary>The seam the rot is played through - the game from its report above, the
+        /// animation lab from what the same board code wrote on a board of its own.</summary>
+        private bool PlayGangreneScene(GangreneView.TurnScene scene)
+        {
+            if (scene == null || boardView == null || boardView.Board == null)
+            {
+                return false;
+            }
+            boardView.Gangrene.Sync(boardView);
+            boardView.Gangrene.PlayTurn(scene);
+            return true;
+        }
+
+        /// <summary>The face and colour a cube is drawn with - the board's own rule, so a cube that
+        /// is about to die on screen looks exactly like the one that was standing there.</summary>
+        private ClusterBurstView.Look LookOf(Cube cube)
+        {
+            Sprite tile = ViewUtil.CubeTile(cube.Kind, FindOwnedCard(cube.SourceCardId));
+            return new ClusterBurstView.Look
+            {
+                Tile = tile,
+                Colour = ViewUtil.CubeTileColor(cube, tile)
+            };
+        }
+
+        /// <summary>
+        /// Cubes a boss took off WITHOUT them vanishing in place or being carried. Deliberately NOT
+        /// an explosion and not a removal: it keeps the quiet language - CellFlashFx's cold palette,
+        /// brightening a little and pinching out, with a light puff - and never shakes.
         /// </summary>
         private bool LiftCells(IReadOnlyList<GridPos> cells, Color tone)
         {

@@ -120,6 +120,8 @@ namespace ProjectBlock.View
         private CryoSublimationView cryoSublimation;
         /// <summary>"Soğuk sökülme" - a cube a moving board carried off, torn away along its step.</summary>
         private MomentumPeelView momentumPeel;
+        /// <summary>A moving board's surviving cubes riding to their new cells.</summary>
+        private BossMoveView bossMove;
         private LineSwapPickerView lineSwapPicker;
 
         /// <summary>Quake count last seen per Deprem joker, so the shake fires once per collapse.</summary>

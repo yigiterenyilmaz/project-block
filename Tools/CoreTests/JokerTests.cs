@@ -222,6 +222,7 @@ public static class JokerTests
         Kangren_SpreadsAsOneGrowingPatch();
         Kangren_RottenCubesStillExplode();
         Kangren_AFullyRottenLineDiesAndTheRotJumps();
+        Kangren_TheReportSaysWhatTheRotTook();
         Kangren_ChargesRentForEveryRottenCube();
         Kacakci_TakesOneItemPerVisitForFree();
         Kacakci_SoundGoodsAreJustGoods();
@@ -7079,6 +7080,35 @@ public static class JokerTests
             && holeMotions[0].Step.X == 0 && holeMotions[0].Step.Y == 1,
             "a cube flung onto a hole is reported as having no ground, stepping toward it",
             fell.Count + " lost, " + (holeMotions.Count > 0 ? holeMotions[0].Reason.ToString() : "-"));
+
+        // The cubes that SURVIVE the push are reported too - from, to, and which board moved them -
+        // and the dead centre, which does not move, is not among them.
+        var pushed = new GameBoard(5, 5);
+        pushed.SetCubeAt(new GridPos(2, 2), new Cube(CubeKind.Normal, 41));   // dead centre
+        pushed.SetCubeAt(new GridPos(3, 3), new Cube(CubeKind.Normal, 42));   // up-right, onto (4, 4)
+        pushed.SetCubeAt(new GridPos(1, 2), new Cube(CubeKind.Obsidian, 43)); // left, onto (0, 2)
+        var pushMotions = new List<LiftMotion>();
+        var pushMoves = new List<CellMove>();
+        List<GridPos> pushLost = pushed.FlingCubesOutward(pushMotions, pushMoves);
+        bool movesRight = pushLost.Count == 0 && pushMoves.Count == 2;
+        for (int i = 0; movesRight && i < pushMoves.Count; i++)
+        {
+            CellMove m = pushMoves[i];
+            bool upRight = m.Cube.SourceCardId == 42 && m.From.X == 3 && m.From.Y == 3 && m.To.X == 4 && m.To.Y == 4;
+            bool left = m.Cube.SourceCardId == 43 && m.From.X == 1 && m.From.Y == 2 && m.To.X == 0 && m.To.Y == 2;
+            Cube? landed = pushed.GetCube(m.To);
+            movesRight &= (upRight || left) && m.Step.X == m.To.X - m.From.X && m.Step.Y == m.To.Y - m.From.Y
+                && m.Source == BoardMotionSource.Centrifuge && !m.Mirror
+                && landed.HasValue && landed.Value.SourceCardId == m.Cube.SourceCardId;
+        }
+        Check(movesRight, "every cube that survived the push is reported from its cell to where it stands now - "
+            + "and the dead centre is not", pushMoves.Count + " moves, " + pushLost.Count + " lost");
+        bool pushTagged = motions.Count > 0;
+        for (int i = 0; i < motions.Count; i++)
+        {
+            pushTagged &= motions[i].Source == BoardMotionSource.Centrifuge;
+        }
+        Check(pushTagged, "and the cubes it threw off say it was the centrifuge that threw them");
     }
 
     private static void Merkezkac_WhatGoesOverTheEdgePaysNothing()
@@ -7115,6 +7145,16 @@ public static class JokerTests
                 && m.Step.X * m.Step.X <= 1 && m.Step.Y * m.Step.Y <= 1;
         }
         Check(outward, "each with the one-cell outward step it was taking and why it could not land");
+        bool movesConsistent = true;
+        for (int i = 0; i < report.BoardMoves.Count; i++)
+        {
+            CellMove m = report.BoardMoves[i];
+            movesConsistent &= m.To.X == m.From.X + m.Step.X && m.To.Y == m.From.Y + m.Step.Y
+                && m.Step.X * m.Step.X <= 1 && m.Step.Y * m.Step.Y <= 1 && (m.Step.X != 0 || m.Step.Y != 0)
+                && m.Source == BoardMotionSource.Centrifuge;
+        }
+        Check(movesConsistent, "and every cube it pushed and kept is reported from its cell to its new one, one step out",
+            report.BoardMoves.Count + " moves");
         Check(!report.CleanSweep, "and clearing the board this way is not a clean sweep");
     }
 
@@ -7248,6 +7288,127 @@ public static class JokerTests
             if (!touches) { allTouch = false; }
         }
         Check(allTouch, "and every rotten cube touches another - one patch, one origin");
+
+        // THE REPORT the View draws from. It must cost the rules nothing: the same draws, the same
+        // cells - and it says which rotten cell each spread crept out of.
+        var plain = new GameBoard(5, 5);
+        var told = new GameBoard(5, 5);
+        var plainRng = new SeededRandom(9001);
+        var toldRng = new SeededRandom(9001);
+        bool sameSpread = true;
+        bool sourcesTouch = true;
+        for (int i = 0; i < 8; i++)
+        {
+            GangreneSpread step;
+            GridPos? quiet = plain.SpreadGangrene(plainRng);
+            GridPos? spoken = told.SpreadGangrene(toldRng, out step);
+            if (!quiet.HasValue || !spoken.HasValue || quiet.Value.X != spoken.Value.X
+                || quiet.Value.Y != spoken.Value.Y || step == null
+                || step.Cell.X != spoken.Value.X || step.Cell.Y != spoken.Value.Y)
+            {
+                sameSpread = false;
+                break;
+            }
+            if (i == 0)
+            {
+                if (step.Source.HasValue) { sourcesTouch = false; }
+            }
+            else if (!step.Source.HasValue
+                || System.Math.Abs(step.Source.Value.X - step.Cell.X)
+                    + System.Math.Abs(step.Source.Value.Y - step.Cell.Y) != 1
+                || told.GetCube(step.Source.Value).Value.Kind != CubeKind.Gangrene)
+            {
+                sourcesTouch = false;
+            }
+        }
+        Check(sameSpread, "reporting the spread changes neither the draw nor where it went");
+        Check(sourcesTouch, "the seed came from nowhere, every spread after it from a rotten neighbour");
+    }
+
+    /// <summary>What the VIEW is told, so it never has to work out the rot for itself: which cell
+    /// was taken, from which side, what stood there, what it could not take - and every line that
+    /// died, in order, with the cubes its jump turned.</summary>
+    private static void Kangren_TheReportSaysWhatTheRotTook()
+    {
+        Section("kangren / the report: the cell, the side it came from, the cube, the dead lines");
+        // One candidate and one only, so the draw has nothing to choose and the scene is fixed:
+        // the rot at (0,0) touches (1,0) and (0,1), and obsidian it cannot take at all.
+        var board = new GameBoard(5, 5);
+        board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Gangrene, GameBoard.GangreneCardId));
+        board.SetCubeAt(new GridPos(0, 1), new Cube(CubeKind.Obsidian, 1));
+        board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Fire, 2));
+        board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Obsidian, 3));
+        board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Gold, 4));
+        GangreneSpread ev;
+        GridPos? took = board.SpreadGangrene(new SeededRandom(77), out ev);
+        Check(took.HasValue && took.Value.X == 1 && took.Value.Y == 0,
+            "it took the one cell it could",
+            took.HasValue ? took.Value.X + "," + took.Value.Y : "nowhere");
+        Check(ev != null && ev.Source.HasValue && ev.Source.Value.X == 0 && ev.Source.Value.Y == 0,
+            "and says which rotten cell it crept out of - the View never guesses the side");
+        Check(ev.Before.HasValue && ev.Before.Value.Kind == CubeKind.Fire,
+            "what stood there, so what dies on screen is that cube");
+        bool immune = ev.Immune.Count == 2;
+        foreach (GridPos cell in ev.Immune)
+        {
+            Cube? cube = board.GetCube(cell);
+            if (!cube.HasValue || CubeRules.IsExternallyDestructible(cube.Value)) { immune = false; }
+        }
+        Check(immune, "and the cubes beside it that nothing can infect", "" + ev.Immune.Count);
+
+        // An EMPTY cell: nothing stood there, so a rotten cube GREW instead of a cube converting.
+        var empty = new GameBoard(3, 3);
+        empty.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Gangrene, GameBoard.GangreneCardId));
+        empty.SetCubeAt(new GridPos(0, 1), new Cube(CubeKind.Obsidian, 1));
+        GangreneSpread grew;
+        empty.SpreadGangrene(new SeededRandom(78), out grew);
+        Check(grew != null && !grew.Before.HasValue,
+            "nothing stood in the cell the rot grew a cube in");
+
+        // A CASCADE, in the order it happened: the rotten row dies and its jump turns the bottom
+        // row, that completes a column, the column's jump turns cubes on the right edge, and the
+        // bottom row - full of rot now - dies on the next pass.
+        var chain = new GameBoard(7, 7);
+        for (int x = 0; x < 7; x++)
+        {
+            chain.SetCubeAt(new GridPos(x, 3), new Cube(CubeKind.Gangrene, GameBoard.GangreneCardId));
+            chain.SetCubeAt(new GridPos(x, 0), new Cube(CubeKind.Normal, 5));
+        }
+        foreach (int y in new[] { 1, 2, 4, 5, 6 })
+        {
+            chain.SetCubeAt(new GridPos(5, y), new Cube(CubeKind.Gangrene, GameBoard.GangreneCardId));
+        }
+        chain.SetCubeAt(new GridPos(6, 1), new Cube(CubeKind.Normal, 6));
+        chain.SetCubeAt(new GridPos(6, 2), new Cube(CubeKind.Normal, 6));
+        chain.SetCubeAt(new GridPos(6, 4), new Cube(CubeKind.Normal, 6));
+        var deaths = new List<GangreneLineDeath>();
+        List<GridPos> turned = chain.InfectFullLines(deaths);
+        Check(deaths.Count == 3, "three lines died, in three steps", "" + deaths.Count);
+        if (deaths.Count != 3)
+        {
+            return;
+        }
+        Check(deaths[0].IsRow && deaths[0].Line == 3 && deaths[0].EdgeLine == 0
+            && deaths[0].Converted.Count == 7 && deaths[0].Before.Count == 7 && deaths[0].Pass == 0,
+            "the rotten row went first, and its jump turned the whole bottom row",
+            "row " + deaths[0].Line + " -> " + deaths[0].EdgeLine + ", "
+                + deaths[0].Converted.Count + " turned");
+        Check(!deaths[1].IsRow && deaths[1].Line == 5 && deaths[1].EdgeLine == 6
+            && deaths[1].Converted.Count == 3,
+            "then the column that jump completed, and its own jump to the right edge",
+            "column " + deaths[1].Line + " -> " + deaths[1].EdgeLine + ", " + deaths[1].Converted.Count);
+        Check(deaths[2].Pass == 1 && deaths[2].IsRow && deaths[2].Line == 0,
+            "and the bottom row last, on the pass after the one that filled it",
+            "pass " + deaths[2].Pass);
+        int reported = 0;
+        for (int i = 0; i < deaths.Count; i++)
+        {
+            reported += deaths[i].Converted.Count;
+        }
+        Check(reported == turned.Count, "every cube the jumps turned is in the report, once",
+            reported + " / " + turned.Count);
+        Check(deaths[0].Before[0].Kind != CubeKind.Gangrene,
+            "with what each of them was before, so the View drains that cube's own colour");
     }
 
     private static void Kangren_RottenCubesStillExplode()
@@ -7323,6 +7484,10 @@ public static class JokerTests
         Check(BreakdownCharged(report, boss.DefId, rotten * boss.RentPerCube),
             "and the rent was billed under the boss's own name",
             "expected -" + (rotten * boss.RentPerCube));
+        Check(report.GangreneSpread != null
+            && round.Board.GetCube(report.GangreneSpread.Cell).HasValue
+            && round.Board.GetCube(report.GangreneSpread.Cell).Value.Kind == CubeKind.Gangrene,
+            "the turn report names the cell it took, for the View to play the rot exactly there");
         Check(round.RoundScore >= 0, "the round score never goes negative",
             "" + round.RoundScore);
     }
@@ -8500,6 +8665,29 @@ public static class JokerTests
         }
         Check(holeRight, "off the top it EXITED; into the hole above it had NO GROUND, coming from "
             + "the cell below", rode.Count + " lost");
+
+        // The cubes that SURVIVE the ride are reported from the cell below to the cell they stand in.
+        bool rodeUp = report.BoardMoves.Count > 0;
+        bool bottomCubeRode = false;
+        for (int i = 0; i < report.BoardMoves.Count; i++)
+        {
+            CellMove m = report.BoardMoves[i];
+            rodeUp &= m.Step.X == 0 && m.Step.Y == 1 && m.To.X == m.From.X && m.To.Y == m.From.Y + 1
+                && m.Source == BoardMotionSource.Escalator;
+            bottomCubeRode |= m.Cube.SourceCardId == 9900 && m.From.X == board.MinX && m.From.Y == board.MinY;
+        }
+        Check(rodeUp, "every surviving cube is reported riding up one, from the cell below",
+            report.BoardMoves.Count + " moves");
+        Check(bottomCubeRode, "the bottom row's cube among them, from where it stood");
+        var riding = new GameBoard(5, 5);
+        riding.SetCubeAt(new GridPos(1, 4), new Cube(CubeKind.Normal, 51)); // top row: carried off
+        riding.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Gold, 52));   // rides up onto (1, 2)
+        var rideMoves = new List<CellMove>();
+        List<GridPos> rideLost = riding.ShiftRowsUp(new List<LiftMotion>(), rideMoves);
+        Check(rideLost.Count == 1 && rideMoves.Count == 1 && rideMoves[0].From.X == 1 && rideMoves[0].From.Y == 1
+            && rideMoves[0].To.X == 1 && rideMoves[0].To.Y == 2 && rideMoves[0].Cube.SourceCardId == 52,
+            "a board-level ride reports the survivor, and not the cube it carried off",
+            rideLost.Count + " lost, " + rideMoves.Count + " moves");
     }
 
     private static void Boss_YuruyenMerdivenLeavesTheBottomRowEmpty()

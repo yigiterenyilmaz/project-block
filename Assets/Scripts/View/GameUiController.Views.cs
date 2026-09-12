@@ -170,6 +170,10 @@ namespace ProjectBlock.View
             peelGo.transform.SetParent(transform, false);
             momentumPeel = peelGo.AddComponent<MomentumPeelView>();
 
+            var moveGo = new GameObject("BossMove");
+            moveGo.transform.SetParent(transform, false);
+            bossMove = moveGo.AddComponent<BossMoveView>();
+
             var lineSwapGo = new GameObject("LineSwapPicker");
             lineSwapGo.transform.SetParent(transform, false);
             lineSwapPicker = lineSwapGo.AddComponent<LineSwapPickerView>();

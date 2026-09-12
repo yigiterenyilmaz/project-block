@@ -129,10 +129,15 @@ namespace ProjectBlock.View
             StopAnimBurstSequence();
             // AnimResync below puts the real board back up if a boss scene was showing its own.
             StopAnimBossLift();
+            StopAnimRot();
+            GangreneView.Layers.Defaults();
             MatryoshkaView.Layers.AllOn();
             PhaseFoldView.Layers.AllOn();
             CryoSublimationView.Layers.AllOn();
             MomentumPeelView.Layers.AllOn();
+            // Landed at once, before the real board comes back: its cells belong to the lab's board.
+            bossMove.Stop();
+            BossMoveView.Layers.Defaults();
             AnimResync();
         }
 
@@ -655,9 +660,62 @@ namespace ProjectBlock.View
             AddAnim("Merkezkaç kuvveti: cubes flung outward, the rim is torn off (momentum peel)",
                 "merkezkaç kuvveti: küpler dışa itilir, kenardakiler sökülür (soğuk sökülme)",
                 delegate { AnimBossLift(AnimBossScene.Centrifuge); });
-            AddAnim("Kangren: a line dies, the rot jumps to the edge (old cold mark)",
-                "kangren: satır ölür, kangren kenara atlar (eski soğuk iz)",
-                delegate { AnimBossLift(AnimBossScene.Gangrene); });
+            // "Kangren" - NECROTIC TAKEOVER. Nine scenes, each about ONE thing the rot does, all on
+            // a board of the lab's own and all running the REAL rules on it: the spread picks its
+            // own cell (there is only one it can take), and the deaths, the jumps and the cascade
+            // are GameBoard.InfectFullLines. The lab only fabricates which cell it finishes a line
+            // at. See AnimRot.
+            AddAnim("Kangren: the rot takes an EMPTY cell (each press from another side)",
+                "kangren: boş hücreye yayılma (her basışta başka yönden)",
+                delegate { AnimRot(AnimRotScene.Empty); });
+            AddAnim("Kangren: it CONVERTS the cube standing there (each press from another side)",
+                "kangren: dolu küpü dönüştürme (her basışta başka yönden)",
+                delegate { AnimRot(AnimRotScene.Occupied); });
+            AddAnim("Kangren: what it presses against and cannot take (immune cubes)",
+                "kangren: bağışık hedef (alamadığı küpler)",
+                delegate { AnimRot(AnimRotScene.Immune); });
+            AddAnim("Kangren: presence - standing rot and a dead line, nothing happening",
+                "kangren: varlık / bekleme (duran kangren ve ölü hat)",
+                delegate { AnimRot(AnimRotScene.Presence); });
+            AddAnim("Kangren: the turn's bill, felt once through every rotten cube",
+                "kangren: tur sonu hasar nabzı",
+                delegate { AnimRot(AnimRotScene.Billed); });
+            AddAnim("Kangren: a full ROW dies (the bottom row - the jump has nowhere to go)",
+                "kangren: tam satır ölümü (en alt satır, atlayacak yer yok)",
+                delegate { AnimRot(AnimRotScene.DeadRow); });
+            AddAnim("Kangren: a full COLUMN dies (the left column - the jump has nowhere to go)",
+                "kangren: tam sütun ölümü (en sol sütun, atlayacak yer yok)",
+                delegate { AnimRot(AnimRotScene.DeadColumn); });
+            AddAnim("Kangren: a row dies and the rot JUMPS to the edge row (gaps stay empty)",
+                "kangren: satır ölür, kangren kenara atlar (boşluklar boş kalır)",
+                delegate { AnimRot(AnimRotScene.EdgeJump); });
+            AddAnim("Kangren: a CASCADE - row, jump, column, jump, row",
+                "kangren: zincirleme atlama (satır → sütun → satır)",
+                delegate { AnimRot(AnimRotScene.Chain); });
+            AddAnim("rot debug: source direction on/off",
+                "kangren hata ayıklama: kaynak yönü aç/kapa",
+                delegate { AnimRotToggle(ref GangreneView.Layers.ShowSourceDirection, "source direction", "kaynak yönü"); });
+            AddAnim("rot debug: vein layer on/off",
+                "kangren hata ayıklama: damar katmanı aç/kapa",
+                delegate { AnimRotToggle(ref GangreneView.Layers.ShowVeinLayer, "vein layer", "damar katmanı"); });
+            AddAnim("rot debug: crack layer on/off",
+                "kangren hata ayıklama: çatlak katmanı aç/kapa",
+                delegate { AnimRotToggle(ref GangreneView.Layers.ShowCrackLayer, "crack layer", "çatlak katmanı"); });
+            AddAnim("rot debug: cell floor contamination on/off",
+                "kangren hata ayıklama: hücre zemini bulaşması aç/kapa",
+                delegate { AnimRotToggle(ref GangreneView.Layers.ShowCellFloorContamination, "cell floor contamination", "hücre zemini bulaşması"); });
+            AddAnim("rot debug: dead line underlay on/off",
+                "kangren hata ayıklama: ölü hat bandı aç/kapa",
+                delegate { AnimRotToggle(ref GangreneView.Layers.ShowDeadLineUnderlay, "dead line underlay", "ölü hat bandı"); });
+            AddAnim("rot debug: edge transfer path on/off",
+                "kangren hata ayıklama: kenara aktarım yolu aç/kapa",
+                delegate { AnimRotToggle(ref GangreneView.Layers.ShowEdgeTransferPath, "edge transfer path", "kenara aktarım yolu"); });
+            AddAnim("rot debug: target edge conversion on/off",
+                "kangren hata ayıklama: kenar küplerinin dönüşümü aç/kapa",
+                delegate { AnimRotToggle(ref GangreneView.Layers.ShowTargetEdgeConversion, "target edge conversion", "kenar küplerinin dönüşümü"); });
+            AddAnim("rot debug: chain step breaks on/off",
+                "kangren hata ayıklama: zincir adım işaretleri aç/kapa",
+                delegate { AnimRotToggle(ref GangreneView.Layers.ShowChainStepBreaks, "chain step breaks", "zincir adım işaretleri"); });
             AddAnim("thrown off by a boss's move: the next of 8 directions each press (cells knob)",
                 "boss hareketiyle atılma: her basışta sıradaki yön, 8 yön (hücre ayarı)",
                 AnimPeelDirection);
@@ -667,6 +725,27 @@ namespace ProjectBlock.View
             AddAnim("thrown off by a boss's move: blocked target (staged)",
                 "boss hareketiyle atılma: engelli hedef (sahnelenmiş)",
                 AnimPeelBlocked);
+            AddAnim("Yürüyen merdiven — inner movement: each press sparse / dense / nearly full",
+                "Yürüyen Merdiven — İç Hareket (her basışta: seyrek / yoğun / neredeyse dolu)",
+                delegate { AnimBoardMoveTest(true); });
+            AddAnim("Merkezkaç — inner movement: each press round the centre / mixed / dense",
+                "Merkezkaç — İç Hareket (her basışta: merkez çevresi / karışık / yoğun)",
+                delegate { AnimBoardMoveTest(false); });
+            AddAnim("inner movement debug: contact shadow response on/off",
+                "iç hareket hata ayıklama: gölge tepkisi aç/kapa",
+                delegate { AnimMoveToggle(ref BossMoveView.Layers.ShowContactShadowResponse, "contact shadow response", "gölge tepkisi"); });
+            AddAnim("inner movement debug: scale response on/off",
+                "iç hareket hata ayıklama: ölçek tepkisi aç/kapa",
+                delegate { AnimMoveToggle(ref BossMoveView.Layers.ShowScaleResponse, "scale response", "ölçek tepkisi"); });
+            AddAnim("inner movement debug: movement vector on/off",
+                "iç hareket hata ayıklama: hareket vektörü aç/kapa",
+                delegate { AnimMoveToggle(ref BossMoveView.Layers.ShowMovementVector, "movement vector", "hareket vektörü"); });
+            AddAnim("inner movement debug: destination cell on/off",
+                "iç hareket hata ayıklama: hedef hücre aç/kapa",
+                delegate { AnimMoveToggle(ref BossMoveView.Layers.ShowDestinationCell, "destination cell", "hedef hücre"); });
+            AddAnim("inner movement debug: movement proxy on/off",
+                "iç hareket hata ayıklama: hareket proxy'si aç/kapa",
+                delegate { AnimMoveToggle(ref BossMoveView.Layers.ShowMovementProxy, "movement proxy", "hareket proxy'si"); });
             AddAnim("momentum peel debug: tension on/off",
                 "sökülme hata ayıklama: gerilme aç/kapa",
                 delegate { AnimPeelToggle(ref MomentumPeelView.Layers.ShowTension, "tension", "gerilme"); });
@@ -1784,13 +1863,12 @@ namespace ProjectBlock.View
 
         // ------------------------------------------------------------------ boss lifts
 
-        /// <summary>The three bosses that take cubes off WITHOUT them vanishing where they stood,
-        /// and so keep the old cold mark (LiftCells) rather than a removal variant.</summary>
+        /// <summary>The two bosses that take cubes off by MOVING the board under them, so what they
+        /// take is torn off along its step rather than removed where it stood.</summary>
         private enum AnimBossScene
         {
             Escalator,
             Centrifuge,
-            Gangrene,
             /// <summary>The escalator on an arena with holes in its top row.</summary>
             Holes
         }
@@ -1811,17 +1889,16 @@ namespace ProjectBlock.View
         /// game's own sequence: the board changes, it is repainted, and LiftCells plays on exactly
         /// the cells the boss reported.
         ///
-        ///   ESCALATOR   the real ShiftRowsUp: every row rides up one and the top row's cubes are
-        ///               torn off over the top edge (PlayForcedExit, with the motions Core wrote).
+        ///   ESCALATOR   the real ShiftRowsUp: every row rides up one (PlayBoardMoves) and the top
+        ///               row's cubes are torn off over the top edge (PlayForcedExit) - both from what
+        ///               the board code wrote.
         ///   CENTRIFUGE  the real FlingCubesOutward: every cube one cell further from the middle,
         ///               the rim's torn off outward - each along its own step, eight ways.
         ///   HOLES       the real ShiftRowsUp on an arena with holes in its top row: the cubes
         ///               under them ride in and have no ground; the top row's go over the edge.
-        ///   GANGRENE    STAGED, because the rot's jump is Core's alone (InfectFullLines is
-        ///               internal): the rot takes the last cell of its row, the row dies, and every
-        ///               cube in the nearer edge row turns; next turn the same with its column and
-        ///               the nearer edge column. The cells that turn are the ones the rule would name;
-        ///               what the lab board cannot show is the dead line's wash, which only Core marks.
+        ///
+        /// "Kangren" has nine scenes of its own (AnimRot) - it moves nothing, so it shares none of
+        /// this machinery.
         ///
         /// The real board is never touched. AnimResync puts it back at the end - RefreshAll rebuilds
         /// whenever the view shows a board that is not the round's.
@@ -1872,18 +1949,13 @@ namespace ProjectBlock.View
             for (int turn = 0; turn < 2; turn++)
             {
                 var motions = new List<LiftMotion>();
-                List<GridPos> lifted = AnimBossTurn(board, scene, turn, motions);
+                var moves = new List<CellMove>();
+                List<GridPos> lifted = AnimBossTurn(board, scene, turn, motions, moves);
                 boardView.Refresh();
-                if (scene == AnimBossScene.Gangrene)
-                {
-                    LiftCells(lifted, LiftedColor);
-                }
-                else
-                {
-                    // The seam the game hands a moving board's report to, with the motions the
-                    // real board code wrote.
-                    PlayForcedExit(lifted, motions);
-                }
+                // The seams the game hands a moving board's report to, with what the real board
+                // code wrote: the survivors ride, the rest are torn off.
+                PlayBoardMoves(moves);
+                PlayForcedExit(lifted, motions);
                 yield return new WaitForSeconds(AnimBossTurnGap);
             }
             animBossLift = null;
@@ -2068,6 +2140,116 @@ namespace ProjectBlock.View
             return board;
         }
 
+        /// <summary>Which board each inner-movement entry plays next (0, 1, 2).</summary>
+        private int animMoveEscalatorStage;
+
+        private int animMoveCentrifugeStage;
+
+        /// <summary>
+        /// A moving board's turn end on a lab board, for its SURVIVORS: the real ShiftRowsUp or
+        /// FlingCubesOutward, and what it writes handed to the same two seams the game uses - every
+        /// cube that stays rides to its cell, every one that does not is torn off. Each press the
+        /// next board: the escalator sparse, dense and nearly full; the centrifuge on an ODD board, so
+        /// its centre stands still, first with a full ring round the middle (straight and diagonal
+        /// pushes) and a few further out, then mixed, then dense. Two turns each.
+        /// </summary>
+        private void AnimBoardMoveTest(bool escalator)
+        {
+            int stage;
+            if (escalator)
+            {
+                stage = animMoveEscalatorStage;
+                animMoveEscalatorStage = (stage + 1) % 3;
+            }
+            else
+            {
+                stage = animMoveCentrifugeStage;
+                animMoveCentrifugeStage = (stage + 1) % 3;
+            }
+            StopAnimBossLift();
+            animBossLift = StartCoroutine(BoardMoveTestRoutine(escalator, stage));
+        }
+
+        private IEnumerator BoardMoveTestRoutine(bool escalator, int stage)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                animBossLift = null;
+                yield break;
+            }
+            int w = escalator ? Mathf.Max(6, round.Board.Width) : 7;
+            int h = escalator ? Mathf.Max(6, round.Board.Height) : 7;
+            var board = new GameBoard(w, h);
+            List<int> cards = AnimBossCards();
+            for (int x = 0; x < w; x++)
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    if (AnimMoveCell(escalator, stage, w, h, x, y))
+                    {
+                        board.SetCubeAt(new GridPos(x, y), AnimCardCube(x, y, cards));
+                    }
+                }
+            }
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            string[] english = escalator
+                ? new[] { "sparse", "dense", "nearly full" }
+                : new[] { "round the centre", "mixed", "dense" };
+            string[] turkish = escalator
+                ? new[] { "seyrek", "yoğun", "neredeyse dolu" }
+                : new[] { "merkez çevresi", "karışık", "yoğun" };
+            animLastLabel = Loc.Pick("inner movement: " + english[stage], "iç hareket: " + turkish[stage]);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+            yield return new WaitForSeconds(0.7f);
+            for (int turn = 0; turn < 2; turn++)
+            {
+                var motions = new List<LiftMotion>();
+                var moves = new List<CellMove>();
+                List<GridPos> lifted = escalator
+                    ? board.ShiftRowsUp(motions, moves)
+                    : board.FlingCubesOutward(motions, moves);
+                boardView.Refresh();
+                PlayBoardMoves(moves);
+                PlayForcedExit(lifted, motions);
+                yield return new WaitForSeconds(0.9f);
+            }
+            animBossLift = null;
+            AnimResync();
+        }
+
+        /// <summary>Whether a cell of the inner-movement board starts with a cube.</summary>
+        private static bool AnimMoveCell(bool escalator, int stage, int w, int h, int x, int y)
+        {
+            uint roll = AnimHash(x * 3 + 7, y * 5 + 11) % 100u;
+            if (escalator)
+            {
+                return roll < (stage == 0 ? 25u : stage == 1 ? 55u : 88u);
+            }
+            int ring = Mathf.Max(Mathf.Abs(x - w / 2), Mathf.Abs(y - h / 2));
+            if (stage == 0)
+            {
+                // The centre, which stays; all eight round it; a few further out, and on the rim.
+                return ring <= 1 || (ring == 2 && roll < 25u) || (ring == 3 && roll < 30u);
+            }
+            return roll < (stage == 1 ? 45u : 80u);
+        }
+
+        /// <summary>Flips one of the inner movement's debug switches and says which way it went.</summary>
+        private void AnimMoveToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("inner movement " + english + ": ", "iç hareket " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
         /// <summary>Flips one of the peel's debug switches and says which way it went.</summary>
         private void AnimPeelToggle(ref bool flag, string english, string turkish)
         {
@@ -2120,42 +2302,14 @@ namespace ProjectBlock.View
                     filled = rider || top || roll < (y >= h - 3 ? 12u : 40u);
                     break;
                 }
-                case AnimBossScene.Centrifuge:
+                default:
                 {
-                    // A few cubes on the rim for the first fling and more on the ring inside it for
-                    // the second. Sparse on the rim, as in the round: every turn empties it.
+                    // The centrifuge: a few cubes on the rim for the first fling and more on the
+                    // ring inside it for the second. Sparse on the rim, as in the round: every
+                    // turn empties it.
                     bool rim = x == 0 || y == 0 || x == w - 1 || y == h - 1;
                     bool ring = !rim && (x == 1 || y == 1 || x == w - 2 || y == h - 2);
                     filled = roll < (rim ? 30u : ring ? 55u : 35u);
-                    break;
-                }
-                default:
-                {
-                    // The rot: one patch, a whole row but one cell and a whole column but one.
-                    int column = w - 3;
-                    const int row = 2;
-                    if (x == column && (y == row || y == h - 2))
-                    {
-                        return null; // where the rot goes next, one turn each
-                    }
-                    if (y == row || x == column)
-                    {
-                        return new Cube(CubeKind.Gangrene, GameBoard.GangreneCardId);
-                    }
-                    // Full edges for the jump to turn - each with a gap, so the edge line is not
-                    // taken whole and does not die in its turn.
-                    if (y == 0)
-                    {
-                        filled = x != 1 && x != w - 2;
-                    }
-                    else if (x == w - 1)
-                    {
-                        filled = y != h - 3;
-                    }
-                    else
-                    {
-                        filled = roll < 38u;
-                    }
                     break;
                 }
             }
@@ -2177,52 +2331,440 @@ namespace ProjectBlock.View
         /// <summary>One turn end of the scene's boss on the lab board. Returns the cells it reports
         /// as lifted - exactly what the game hands LiftCells.</summary>
         private static List<GridPos> AnimBossTurn(GameBoard board, AnimBossScene scene, int turn,
-            List<LiftMotion> motions)
+            List<LiftMotion> motions, List<CellMove> moves)
         {
             switch (scene)
             {
                 case AnimBossScene.Escalator:
                 case AnimBossScene.Holes:
-                    return board.ShiftRowsUp(motions);
-                case AnimBossScene.Centrifuge:
-                    return board.FlingCubesOutward(motions);
+                    return board.ShiftRowsUp(motions, moves);
+                default:
+                    return board.FlingCubesOutward(motions, moves);
+            }
+        }
+
+        // ------------------------------------------------------------------ kangren
+
+        /// <summary>The nine things the rot does, one entry each.</summary>
+        private enum AnimRotScene
+        {
+            /// <summary>It takes an empty cell: the floor is contaminated, the dead mass rises.</summary>
+            Empty,
+
+            /// <summary>It converts the cube standing there, from the side it came in on.</summary>
+            Occupied,
+
+            /// <summary>And what it pressed against and could not take.</summary>
+            Immune,
+
+            /// <summary>Nothing happens: this is what standing rot and a dead line look like.</summary>
+            Presence,
+
+            /// <summary>The turn it bills the player, felt through every rotten cube at once.</summary>
+            Billed,
+
+            /// <summary>A row taken whole - the bottom one, so there is no jump to distract.</summary>
+            DeadRow,
+
+            /// <summary>The same for a column.</summary>
+            DeadColumn,
+
+            /// <summary>A row dies and the rot jumps to the edge row, turning what stands there.</summary>
+            EdgeJump,
+
+            /// <summary>A cascade: row, jump, column, jump, row - three steps.</summary>
+            Chain
+        }
+
+        /// <summary>The rot scene playing, so pressing it again restarts it.</summary>
+        private Coroutine animRot;
+
+        /// <summary>Which side the spread scenes bring the rot in from, one on per press.</summary>
+        private int animRotSide;
+
+        /// <summary>The cell a staged scene finishes its line at, and the rotten cell feeding it -
+        /// the only things the lab decides. Everything that follows is the rules'.</summary>
+        private GridPos animRotTarget;
+
+        private GridPos animRotSource;
+
+        /// <summary>Right, up, left, down - the four sides the rot can come in from.</summary>
+        private static readonly GridPos[] AnimRotSides =
+        {
+            new GridPos(1, 0), new GridPos(0, 1), new GridPos(-1, 0), new GridPos(0, -1)
+        };
+
+        /// <summary>A patch that has been standing a while, around the middle of the board.</summary>
+        private static readonly GridPos[] AnimRotPatch =
+        {
+            new GridPos(0, 0), new GridPos(1, 0), new GridPos(-1, 0), new GridPos(0, 1),
+            new GridPos(1, 1), new GridPos(0, -1), new GridPos(-1, 1), new GridPos(2, 0)
+        };
+
+        /// <summary>Card id for the walls the spread scenes are fenced with: negative, so no card is
+        /// ever found for them and they wear obsidian's and gold's own faces.</summary>
+        private const int AnimRotWallCard = -11;
+
+        /// <summary>How long a rot scene is left standing before the round's board comes back.</summary>
+        private const float AnimRotWatch = 3.2f;
+
+        /// <summary>A cascade is three steps long, so it needs longer.</summary>
+        private const float AnimRotChainWatch = 6.5f;
+
+        /// <summary>
+        /// One thing the rot does, on a board of the lab's OWN and through the same seam the game
+        /// plays it through (PlayGangreneScene). What the lab fabricates is the ARGUMENTS: the shape
+        /// of the board, and for the staged scenes which cell finishes the line. The spread itself is
+        /// the real GameBoard.SpreadGangrene (the board is built so it has exactly one cell it can
+        /// take, which is what makes a press repeatable), and every death, jump and cascade is the
+        /// real GameBoard.InfectFullLines - so the dead lines are really dead and their bands and
+        /// washes are the rules', not a drawing of them.
+        ///
+        /// The round's own board is never touched; AnimResync puts it back at the end.
+        /// </summary>
+        private void AnimRot(AnimRotScene scene)
+        {
+            StopAnimRot();
+            if (scene == AnimRotScene.Empty || scene == AnimRotScene.Occupied
+                || scene == AnimRotScene.Immune)
+            {
+                animRotSide = (animRotSide + 1) & 3;
+                animLastLabel = Loc.Pick("rot from the ", "kangren şu yönden: ")
+                    + AnimRotSideName(animRotSide);
+            }
+            animRot = StartCoroutine(RotRoutine(scene));
+        }
+
+        private void StopAnimRot()
+        {
+            if (animRot != null)
+            {
+                StopCoroutine(animRot);
+                animRot = null;
+            }
+            boardView.StopGangrene();
+        }
+
+        private static string AnimRotSideName(int side)
+        {
+            switch (side & 3)
+            {
+                case 0: return Loc.Pick("right", "sağdan");
+                case 1: return Loc.Pick("above", "yukarıdan");
+                case 2: return Loc.Pick("left", "soldan");
+                default: return Loc.Pick("below", "aşağıdan");
+            }
+        }
+
+        private IEnumerator RotRoutine(AnimRotScene scene)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                animRot = null;
+                yield break;
+            }
+            // Never smaller than 7 x 7: the cascade needs a row with an edge row under it, a column
+            // and an edge column beside it.
+            int w = Mathf.Max(7, round.Board.Width);
+            int h = Mathf.Max(7, round.Board.Height);
+            var board = new GameBoard(w, h);
+            List<int> cards = AnimBossCards();
+            AnimRotBoard(board, scene, cards);
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            yield return new WaitForSeconds(AnimBossBeat);
+            var turn = new GangreneView.TurnScene { Delay = 0.06f };
+            AnimRotTurn(board, scene, turn);
+            boardView.Refresh();
+            PlayGangreneScene(turn);
+            yield return new WaitForSeconds(scene == AnimRotScene.Chain
+                ? AnimRotChainWatch : AnimRotWatch);
+            animRot = null;
+            AnimResync();
+        }
+
+        /// <summary>Lays the lab board out for one scene, and marks the cell a staged one finishes
+        /// its line at. Nothing here kills a line: that is AnimRotTurn's, through the rules.</summary>
+        private void AnimRotBoard(GameBoard board, AnimRotScene scene, List<int> cards)
+        {
+            int w = board.Width;
+            int h = board.Height;
+            var rot = new Cube(CubeKind.Gangrene, GameBoard.GangreneCardId);
+            var reserved = new HashSet<GridPos>();
+            animRotTarget = new GridPos(w / 2, h / 2);
+            animRotSource = animRotTarget;
+            switch (scene)
+            {
+                case AnimRotScene.Empty:
+                case AnimRotScene.Occupied:
+                case AnimRotScene.Immune:
+                {
+                    // ONE cell it can take, so the real spread has nothing to choose and a press
+                    // always shows the same thing: everything else round the patch is obsidian,
+                    // which nothing can infect.
+                    GridPos step = AnimRotSides[animRotSide & 3];
+                    var source = new GridPos(animRotTarget.X + step.X, animRotTarget.Y + step.Y);
+                    animRotSource = source;
+                    reserved.Add(animRotTarget);
+                    reserved.Add(source);
+                    board.SetCubeAt(source, rot);
+                    for (int i = 0; i < AnimRotSides.Length; i++)
+                    {
+                        var n = new GridPos(source.X + AnimRotSides[i].X, source.Y + AnimRotSides[i].Y);
+                        if (!board.IsInside(n) || (n.X == animRotTarget.X && n.Y == animRotTarget.Y))
+                        {
+                            continue;
+                        }
+                        board.SetCubeAt(n, new Cube(CubeKind.Obsidian, AnimRotWallCard));
+                        reserved.Add(n);
+                    }
+                    if (scene != AnimRotScene.Empty)
+                    {
+                        board.SetCubeAt(animRotTarget,
+                            AnimCardCube(animRotTarget.X, animRotTarget.Y, cards));
+                    }
+                    if (scene == AnimRotScene.Immune)
+                    {
+                        // And what it will be pressing against once it is in: gold and obsidian,
+                        // the two things it can never take.
+                        for (int i = 0; i < AnimRotSides.Length; i++)
+                        {
+                            var n = new GridPos(animRotTarget.X + AnimRotSides[i].X,
+                                animRotTarget.Y + AnimRotSides[i].Y);
+                            if (!board.IsInside(n) || (n.X == source.X && n.Y == source.Y))
+                            {
+                                continue;
+                            }
+                            board.SetCubeAt(n, new Cube(
+                                i % 2 == 0 ? CubeKind.Gold : CubeKind.Obsidian, AnimRotWallCard));
+                            reserved.Add(n);
+                        }
+                    }
+                    break;
+                }
+                case AnimRotScene.Presence:
+                case AnimRotScene.Billed:
+                {
+                    // A patch that has been standing a while, and a row the rot already took whole.
+                    // AnimRotTurn kills that line through the RULES before the board goes up, so
+                    // its band and its wash are real and there is nothing to watch - the point.
+                    for (int x = 0; x < w; x++)
+                    {
+                        var cell = new GridPos(x, 2);
+                        board.SetCubeAt(cell, rot);
+                        reserved.Add(cell);
+                    }
+                    for (int i = 0; i < AnimRotPatch.Length; i++)
+                    {
+                        var cell = new GridPos(w / 2 + AnimRotPatch[i].X, h / 2 + AnimRotPatch[i].Y);
+                        if (!board.IsInside(cell))
+                        {
+                            continue;
+                        }
+                        board.SetCubeAt(cell, rot);
+                        reserved.Add(cell);
+                    }
+                    break;
+                }
+                case AnimRotScene.DeadRow:
+                {
+                    // The BOTTOM row: the nearer edge of a row that low is itself, so the rot has
+                    // nowhere to jump and this entry is the death and nothing else.
+                    animRotTarget = new GridPos(w / 2, 0);
+                    animRotSource = new GridPos(w / 2 - 1, 0);
+                    for (int x = 0; x < w; x++)
+                    {
+                        var cell = new GridPos(x, 0);
+                        reserved.Add(cell);
+                        board.SetCubeAt(cell, x == animRotTarget.X
+                            ? AnimCardCube(x, 0, cards) : rot);
+                    }
+                    break;
+                }
+                case AnimRotScene.DeadColumn:
+                {
+                    animRotTarget = new GridPos(0, h / 2);
+                    animRotSource = new GridPos(0, h / 2 - 1);
+                    for (int y = 0; y < h; y++)
+                    {
+                        var cell = new GridPos(0, y);
+                        reserved.Add(cell);
+                        board.SetCubeAt(cell, y == animRotTarget.Y
+                            ? AnimCardCube(0, y, cards) : rot);
+                    }
+                    break;
+                }
+                case AnimRotScene.EdgeJump:
+                {
+                    // Two rows up from the bottom: it dies, and the rot jumps to the bottom row,
+                    // turning the cubes standing there. Two gaps in that row, so it is not taken
+                    // whole itself - and so the empty cells can be seen staying empty.
+                    animRotTarget = new GridPos(w / 2, 2);
+                    animRotSource = new GridPos(w / 2 - 1, 2);
+                    for (int x = 0; x < w; x++)
+                    {
+                        var line = new GridPos(x, 2);
+                        reserved.Add(line);
+                        board.SetCubeAt(line, x == animRotTarget.X
+                            ? AnimCardCube(x, 2, cards) : rot);
+                        var edge = new GridPos(x, 0);
+                        reserved.Add(edge);
+                        if (x != 1 && x != w - 2)
+                        {
+                            board.SetCubeAt(edge, AnimCardCube(x, 0, cards));
+                        }
+                        // The row between them is left clear, so the pressure paths read.
+                        reserved.Add(new GridPos(x, 1));
+                    }
+                    break;
+                }
                 default:
                 {
-                    int column = board.MinX + board.Width - 3;
-                    var rot = new Cube(CubeKind.Gangrene, GameBoard.GangreneCardId);
-                    if (turn == 0)
+                    // THE CASCADE. Row 3 dies and its jump turns the whole bottom row; that
+                    // completes the column two in from the right, whose own jump turns the cubes on
+                    // the right edge; and the bottom row - all rot by then - dies on the next pass.
+                    int column = w - 2;
+                    animRotTarget = new GridPos(0, 3);
+                    animRotSource = new GridPos(1, 3);
+                    for (int x = 0; x < w; x++)
                     {
-                        // The rot takes the last cell of its row: the row dies, and the infection
-                        // jumps to the nearer horizontal edge - the bottom one.
-                        board.SetCubeAt(new GridPos(column, board.MinY + 2), rot);
-                        return AnimRotEdge(board, true, board.MinY);
+                        var line = new GridPos(x, 3);
+                        reserved.Add(line);
+                        board.SetCubeAt(line, x == animRotTarget.X
+                            ? AnimCardCube(x, 3, cards) : rot);
+                        var bottom = new GridPos(x, 0);
+                        reserved.Add(bottom);
+                        board.SetCubeAt(bottom, AnimCardCube(x, 0, cards));
                     }
-                    // Then the last cell of its column: that dies too, and the jump goes to the
-                    // nearer vertical edge - the right one.
-                    board.SetCubeAt(new GridPos(column, board.MinY + board.Height - 2), rot);
-                    return AnimRotEdge(board, false, board.MinX + board.Width - 1);
+                    for (int y = 1; y < h; y++)
+                    {
+                        var cell = new GridPos(column, y);
+                        reserved.Add(cell);
+                        if (y != 3)
+                        {
+                            board.SetCubeAt(cell, rot);
+                        }
+                    }
+                    for (int y = 1; y < h; y++)
+                    {
+                        // Three cubes for the column's jump to turn, and the rest of the edge column
+                        // left empty so IT does not die as well.
+                        var cell = new GridPos(w - 1, y);
+                        reserved.Add(cell);
+                        if (y == 1 || y == 2 || y == 4)
+                        {
+                            board.SetCubeAt(cell, AnimCardCube(w - 1, y, cards));
+                        }
+                    }
+                    break;
+                }
+            }
+            AnimRotFill(board, cards, scene == AnimRotScene.Chain ? 22u : 34u, reserved);
+        }
+
+        /// <summary>The rest of the lab board in the run's own blocks, in block-sized clumps, so the
+        /// scene looks like a real arena. Never a reserved cell: those belong to the rot.</summary>
+        private void AnimRotFill(GameBoard board, List<int> cards, uint density,
+            HashSet<GridPos> reserved)
+        {
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    var cell = new GridPos(x, y);
+                    if (reserved.Contains(cell) || AnimHash(x, y) % 100u >= density)
+                    {
+                        continue;
+                    }
+                    board.SetCubeAt(cell, AnimCardCube(x, y, cards));
                 }
             }
         }
 
-        /// <summary>The rot's jump, staged: every cube in an edge line that the rot can take turns
-        /// where it stands. Converts only - an empty cell stays empty (see GameBoard.Gangrene).</summary>
-        private static List<GridPos> AnimRotEdge(GameBoard board, bool row, int line)
+        /// <summary>Runs the REAL rot rules on the lab board and fills in the scene from what they
+        /// reported - the same thing RoundEngine hands the game's own PlayGangrene.</summary>
+        private void AnimRotTurn(GameBoard board, AnimRotScene scene, GangreneView.TurnScene turn)
         {
-            var turned = new List<GridPos>();
-            int count = row ? board.Width : board.Height;
-            for (int i = 0; i < count; i++)
+            var deaths = new List<GangreneLineDeath>();
+            if (scene == AnimRotScene.Presence || scene == AnimRotScene.Billed)
             {
-                GridPos pos = row ? new GridPos(board.MinX + i, line) : new GridPos(line, board.MinY + i);
-                Cube? cube = board.GetCube(pos);
-                if (cube.HasValue && cube.Value.Kind != CubeKind.Gangrene
-                    && CubeRules.IsExternallyDestructible(cube.Value))
+                // The line dies before anyone is looking: this is the standing state, not an event.
+                board.InfectFullLines(null);
+                turn.Billed = scene == AnimRotScene.Billed;
+                return;
+            }
+            if (scene == AnimRotScene.Empty || scene == AnimRotScene.Occupied
+                || scene == AnimRotScene.Immune)
+            {
+                GangreneSpread spread;
+                board.SpreadGangrene(new SeededRandom(4041 + animRotSide), out spread);
+                if (spread != null)
                 {
-                    board.SetCubeKind(pos, CubeKind.Gangrene);
-                    turned.Add(pos);
+                    turn.Cell = spread.Cell;
+                    turn.Source = spread.Source;
+                    turn.HadCube = spread.Before.HasValue;
+                    if (spread.Before.HasValue)
+                    {
+                        turn.Before = LookOf(spread.Before.Value);
+                    }
+                    for (int i = 0; i < spread.Immune.Count; i++)
+                    {
+                        turn.Immune.Add(spread.Immune[i]);
+                    }
                 }
             }
-            return turned;
+            else
+            {
+                // The staged scenes: the lab puts the last cell of the line in itself, since a board
+                // with a row of rot on it has far too many cells the spread could take.
+                Cube? before = board.GetCube(animRotTarget);
+                turn.Cell = animRotTarget;
+                turn.Source = animRotSource;
+                turn.HadCube = before.HasValue;
+                if (before.HasValue)
+                {
+                    turn.Before = LookOf(before.Value);
+                    board.SetCubeKind(animRotTarget, CubeKind.Gangrene);
+                }
+                else
+                {
+                    board.SetCubeAt(animRotTarget, new Cube(CubeKind.Gangrene, GameBoard.GangreneCardId));
+                }
+            }
+            board.InfectFullLines(deaths);
+            for (int d = 0; d < deaths.Count; d++)
+            {
+                GangreneLineDeath death = deaths[d];
+                var line = new GangreneView.LineDeath
+                {
+                    IsRow = death.IsRow,
+                    Line = death.Line,
+                    EdgeLine = death.EdgeLine
+                };
+                for (int i = 0; i < death.Converted.Count; i++)
+                {
+                    line.Converted.Add(new GangreneView.Converted
+                    {
+                        Cell = death.Converted[i],
+                        Before = i < death.Before.Count
+                            ? LookOf(death.Before[i])
+                            : default(ClusterBurstView.Look)
+                    });
+                }
+                turn.Deaths.Add(line);
+            }
+        }
+
+        /// <summary>Flips one of the rot's debug switches and says which way it went.</summary>
+        private void AnimRotToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("rot " + english + ": ", "kangren " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
         }
 
         private static uint AnimHash(int x, int y)

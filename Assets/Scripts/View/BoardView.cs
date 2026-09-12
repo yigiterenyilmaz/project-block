@@ -207,6 +207,11 @@ namespace ProjectBlock.View
 
         private InvaderColumnView invaderColumn;
 
+        /// <summary>"Kangren"'s dead tissue, its dead-line bands and its turn animations. Like the
+        /// nest, it is a layer over the board rather than part of its contents - a dead line has to
+        /// outlive every repaint and every rebuild.</summary>
+        private GangreneView gangrene;
+
         private CircuitTraceView circuitTrace;
 
         private CircuitOverloadView circuitOverload;
@@ -284,6 +289,181 @@ namespace ProjectBlock.View
         /// effect's copy is drawn on top of a cube that never leaves.
         /// </summary>
         private readonly List<GridPos> borrowedCells = new List<GridPos>();
+
+        /// <summary>Cells a moving-cube effect (BossMoveView) is drawing its travelling copies into.
+        /// Blanked while it holds them - and again after every repaint in the meantime, as the
+        /// water's are - so the cube already standing at its new cell never shows under the copy
+        /// still on its way there.</summary>
+        private readonly HashSet<GridPos> heldCells = new HashSet<GridPos>();
+
+        /// <summary>Blanks these cells until ReleaseCells gives them back.</summary>
+        public void HoldCells(IEnumerable<GridPos> cells)
+        {
+            if (board == null || cells == null)
+            {
+                return;
+            }
+            foreach (GridPos cell in cells)
+            {
+                if (board.IsInside(cell) && heldCells.Add(cell))
+                {
+                    BlankHeld(cell);
+                }
+            }
+        }
+
+        /// <summary>Gives held cells back, repainted as they really are.</summary>
+        public void ReleaseCells(IEnumerable<GridPos> cells)
+        {
+            if (cells == null)
+            {
+                return;
+            }
+            bool any = false;
+            foreach (GridPos cell in cells)
+            {
+                any |= heldCells.Remove(cell);
+            }
+            if (any)
+            {
+                Refresh();
+            }
+        }
+
+        private void BlankHeld(GridPos cell)
+        {
+            BlankCell(cell);
+            // Nor may the element pulse paint a cube back in (AnimateElementCubes reads this).
+            kindCache[cell.X - board.MinX, cell.Y - board.MinY] = null;
+        }
+
+        // ---- "Kangren" ---------------------------------------------------------------------
+
+        /// <summary>
+        /// The rot's own layer: dead tissue on every rotten cube, a band under every line it took
+        /// whole, and a turn's spread, deaths and jumps. Made on first use and kept through a
+        /// rebuild (see Rebuild), because a dead line lasts the round.
+        /// </summary>
+        public GangreneView Gangrene
+        {
+            get
+            {
+                if (gangrene == null)
+                {
+                    var go = new GameObject("Gangrene");
+                    go.transform.SetParent(transform, false);
+                    gangrene = go.AddComponent<GangreneView>();
+                }
+                return gangrene;
+            }
+        }
+
+        /// <summary>Ends anything the rot is playing, without making the view if there is none.</summary>
+        public void StopGangrene()
+        {
+            if (gangrene != null)
+            {
+                gangrene.Stop();
+            }
+        }
+
+        /// <summary>True on the last repaint that drew at least one rotten cube - what decides
+        /// whether the rot's layer is worth asking for at all.</summary>
+        private bool sawRot;
+
+        /// <summary>Each cell's colour as it was BEFORE the dead-line wash, so one cell can be
+        /// repainted at a new wash without repainting the board.</summary>
+        private Color[,] preWashCache;
+
+        /// <summary>Cells whose dead-line wash is being walked in by the rot's sweep, 0..1. A cell
+        /// that is not in here is washed fully, exactly as it always was.</summary>
+        private readonly Dictionary<GridPos, float> rotWash = new Dictionary<GridPos, float>();
+
+        /// <summary>
+        /// How much of the dead-line wash a cell shows. The rules kill a line in one go; the sweep
+        /// that puts its life out brings the wash in behind its own front, so it winds it back to
+        /// nothing first and then walks it up. Cheap enough to call every frame on a whole line.
+        /// </summary>
+        public void SetRotWash(GridPos cell, float amount)
+        {
+            if (board == null || !board.IsInside(cell))
+            {
+                return;
+            }
+            amount = Mathf.Clamp01(amount);
+            float now;
+            if (rotWash.TryGetValue(cell, out now) && Mathf.Abs(now - amount) < 0.002f)
+            {
+                return;
+            }
+            rotWash[cell] = amount;
+            RepaintWash(cell);
+        }
+
+        /// <summary>Every cell goes back to the full wash: the sweep is done, or the round is.</summary>
+        public void ClearRotWash()
+        {
+            if (rotWash.Count == 0)
+            {
+                return;
+            }
+            rotWash.Clear();
+            Refresh();
+        }
+
+        private float RotWashAt(GridPos cell)
+        {
+            float amount;
+            return rotWash.TryGetValue(cell, out amount) ? amount : 1f;
+        }
+
+        /// <summary>One cell repainted at its current wash. Cells something else is drawing (a held
+        /// cell, a water cube in flight) are left alone - they are not the board's to paint.</summary>
+        private void RepaintWash(GridPos cell)
+        {
+            int x = cell.X - board.MinX;
+            int y = cell.Y - board.MinY;
+            if (cellRenderers == null || preWashCache == null || cellRenderers[x, y] == null
+                || heldCells.Contains(cell) || waterHiddenCells.Contains(cell))
+            {
+                return;
+            }
+            float light = LightAt(x, y);
+            if (light <= 0f)
+            {
+                return;
+            }
+            Color color = preWashCache[x, y];
+            if (board.RowIsInfectionDead(cell.Y) || board.ColumnIsInfectionDead(cell.X))
+            {
+                color = Color.Lerp(color, RotDeadLineColor,
+                    RotWashAt(cell) * (kindCache[x, y].HasValue ? 0.4f : 0.66f));
+            }
+            if (dark)
+            {
+                color = Color.Lerp(DarkCellColor, color, light);
+            }
+            cellRenderers[x, y].color = color;
+            baseColorCache[x, y] = color;
+        }
+
+        /// <summary>How brightly a ROTTEN cube is being drawn at this cell: 0 where there is none,
+        /// where an animation is holding the cell, or where the dark has it. The rot's tissue hangs
+        /// on exactly this, so the overlay and the cube under it can never disagree.</summary>
+        public float RotLight(GridPos cell)
+        {
+            if (board == null || kindCache == null || !board.IsInside(cell))
+            {
+                return 0f;
+            }
+            int x = cell.X - board.MinX;
+            int y = cell.Y - board.MinY;
+            if (!kindCache[x, y].HasValue || kindCache[x, y].Value != CubeKind.Gangrene)
+            {
+                return 0f;
+            }
+            return LightAt(x, y);
+        }
 
         private void Awake()
         {
@@ -723,6 +903,7 @@ namespace ProjectBlock.View
             animatingWater = false;
             waterHiddenCells.Clear(); // the drop sprites go with the children below
             borrowedCells.Clear(); // the renderers below are rebuilt enabled anyway
+            heldCells.Clear(); // a new board: nothing is on its way to any of its cells
             // EXCEPT the overtime glow, which outlives a rebuild. It is not part of the board's
             // contents: it is a light over them, its texture costs real time to generate, and
             // sweeping it up with everything else meant the overtime effect was torn down and
@@ -747,6 +928,9 @@ namespace ProjectBlock.View
             // distance field on every placement would be pure waste.
             Transform keepNest = creatureNest != null ? creatureNest.transform : null;
             Transform keepLane = invaderColumn != null ? invaderColumn.transform : null;
+            // The rot is a property of the ROUND: its bands and tissue are put back in step with
+            // Core by the Refresh below, and a new arena clears them (GangreneView.Sync).
+            Transform keepRot = gangrene != null ? gangrene.transform : null;
             // The gravity field is a property of the ROUND, not of the board's contents, so it
             // survives the rebuild and is CLEARED below - a new arena starts under ordinary
             // gravity, which is the rules' own behaviour and not something this decides.
@@ -761,7 +945,7 @@ namespace ProjectBlock.View
                     || child == keepInfection || child == keepBurst || child == keepCircuit
                     || child == keepOverload || child == keepQuarantine
                     || child == keepHeat || child == keepNest || child == keepLane
-                    || child == keepGravity || child == keepDolls)
+                    || child == keepGravity || child == keepDolls || child == keepRot)
                 {
                     continue;
                 }
@@ -798,6 +982,8 @@ namespace ProjectBlock.View
             kindCache = new CubeKind?[board.Width, board.Height];
             litFor = new float[board.Width, board.Height];
             baseColorCache = new Color[board.Width, board.Height];
+            preWashCache = new Color[board.Width, board.Height];
+            rotWash.Clear();
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -863,6 +1049,7 @@ namespace ProjectBlock.View
             Shader.SetGlobalVector("_BlockFlowDir",
                 new Vector4(board.WaterFlow.X, board.WaterFlow.Y, 0f, 0f));
             UnresolvedCubes = 0;
+            sawRot = false;
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -953,10 +1140,14 @@ namespace ProjectBlock.View
                     }
                     // "Kangren": a line the rot took WHOLE can never explode again, which the
                     // player has to be able to see - an unexplodable full line otherwise reads as
-                    // a bug. Washed like the erosion scar it behaves like.
+                    // a bug. Washed like the erosion scar it behaves like. The colour BEFORE the
+                    // wash is kept so the sweep that kills a line can walk the wash in a cell at a
+                    // time (SetRotWash) without a full repaint per frame.
+                    preWashCache[x, y] = color;
                     if (board.RowIsInfectionDead(gp.Y) || board.ColumnIsInfectionDead(gp.X))
                     {
-                        color = Color.Lerp(color, RotDeadLineColor, cube.HasValue ? 0.4f : 0.66f);
+                        color = Color.Lerp(color, RotDeadLineColor,
+                            RotWashAt(gp) * (cube.HasValue ? 0.4f : 0.66f));
                     }
                     // NOT painted here, on purpose: "Besleme"'s creature patch and "İstilacı"'s
                     // doomed column both draw themselves in their own views (CreatureNestView,
@@ -972,12 +1163,25 @@ namespace ProjectBlock.View
                     cellRenderers[x, y].color = color;
                     kindCache[x, y] = cube.HasValue ? cube.Value.Kind : (CubeKind?)null;
                     baseColorCache[x, y] = color;
+                    sawRot |= cube.HasValue && cube.Value.Kind == CubeKind.Gangrene;
                 }
             }
             RefreshGhostTraces();
             if (animatingWater)
             {
                 HideWaterCells();
+            }
+            foreach (GridPos cell in heldCells)
+            {
+                BlankHeld(cell);
+            }
+            // "Kangren": the standing tissue and the dead lines' bands follow every repaint, so
+            // what they draw is what the rules say rather than a memory of it. Asked for only once
+            // there is rot to draw - or once there is a view holding some.
+            if (sawRot || gangrene != null || board.InfectionDeadRows.Count > 0
+                || board.InfectionDeadColumns.Count > 0)
+            {
+                Gangrene.Sync(this);
             }
         }
 

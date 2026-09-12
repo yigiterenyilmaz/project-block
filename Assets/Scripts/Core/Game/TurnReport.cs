@@ -39,6 +39,19 @@ namespace ProjectBlock.Core
         Blocked
     }
 
+    /// <summary>Which moving board carried a cube: the pace and character it is drawn with.</summary>
+    public enum BoardMotionSource
+    {
+        /// <summary>Not a board's move.</summary>
+        None,
+
+        /// <summary>"Yürüyen merdiven": every row up one, as one mechanism.</summary>
+        Escalator,
+
+        /// <summary>"Merkezkaç kuvveti": every cube pushed one cell out from the middle.</summary>
+        Centrifuge
+    }
+
     /// <summary>
     /// How a cube a moving board carried off was going when it went - "Yürüyen merdiven",
     /// "Merkezkaç kuvveti". REPORTING ONLY: the rules have already moved the board and dropped the
@@ -64,20 +77,137 @@ namespace ProjectBlock.Core
         /// <summary>It went from the MIRROR world's board ("Öteki dünya"), not the main one.</summary>
         public readonly bool Mirror;
 
+        /// <summary>Which moving board carried it - the pace it set off at.</summary>
+        public readonly BoardMotionSource Source;
+
         public LiftMotion(GridPos from, GridPos step, LiftReason reason, Cube cube, bool mirror)
+            : this(from, step, reason, cube, mirror, BoardMotionSource.None)
+        {
+        }
+
+        public LiftMotion(GridPos from, GridPos step, LiftReason reason, Cube cube, bool mirror,
+            BoardMotionSource source)
         {
             From = from;
             Step = step;
             Reason = reason;
             Cube = cube;
             Mirror = mirror;
+            Source = source;
         }
 
         /// <summary>The same motion, marked as the mirror world's.</summary>
         internal LiftMotion OnMirror()
         {
-            return new LiftMotion(From, Step, Reason, Cube, true);
+            return new LiftMotion(From, Step, Reason, Cube, true, Source);
         }
+    }
+
+    /// <summary>
+    /// A cube a moving board carried from one cell to another and that SURVIVED the move -
+    /// "Yürüyen merdiven" riding its row up, "Merkezkaç kuvveti" pushing it one cell out.
+    /// REPORTING ONLY: the board already stands in its new state; this tells the View where each
+    /// cube was, where it is now and which board moved it, so the View draws the move without
+    /// working out any of it.
+    /// </summary>
+    public readonly struct CellMove
+    {
+        public readonly GridPos From;
+
+        public readonly GridPos To;
+
+        /// <summary>To minus From: one cell, possibly diagonal.</summary>
+        public readonly GridPos Step;
+
+        public readonly Cube Cube;
+
+        public readonly BoardMotionSource Source;
+
+        /// <summary>On the MIRROR world's board ("Öteki dünya").</summary>
+        public readonly bool Mirror;
+
+        public CellMove(GridPos from, GridPos to, Cube cube, BoardMotionSource source, bool mirror)
+        {
+            From = from;
+            To = to;
+            Step = new GridPos(to.X - from.X, to.Y - from.Y);
+            Cube = cube;
+            Source = source;
+            Mirror = mirror;
+        }
+
+        /// <summary>The same move, marked as the mirror world's.</summary>
+        internal CellMove OnMirror()
+        {
+            return new CellMove(From, To, Cube, Source, true);
+        }
+    }
+
+    /// <summary>
+    /// "Kangren": the rot taking one more cell. REPORTING ONLY - the rules have already taken it;
+    /// this tells the View which cell, which rotten neighbour it crept in from, what stood there
+    /// and what it pressed against and could not take, so the View never works any of it out.
+    /// </summary>
+    public sealed class GangreneSpread
+    {
+        public GangreneSpread(GridPos cell, GridPos? source, Cube? before, IReadOnlyList<GridPos> immune)
+        {
+            Cell = cell;
+            Source = source;
+            Before = before;
+            Immune = immune ?? Array.Empty<GridPos>();
+        }
+
+        /// <summary>The cell the rot took.</summary>
+        public GridPos Cell { get; }
+
+        /// <summary>The rotten neighbour it crept in from - the first of them right, up, left,
+        /// down. Null for the seed, which touches nothing.</summary>
+        public GridPos? Source { get; }
+
+        /// <summary>The cube that stood there and turned where it stood; null for an empty cell,
+        /// where a rotten cube grew.</summary>
+        public Cube? Before { get; }
+
+        /// <summary>The cubes next to the cell the rot could not take: obsidian, gold, a void trap,
+        /// a parasite host.</summary>
+        public IReadOnlyList<GridPos> Immune { get; }
+    }
+
+    /// <summary>
+    /// "Kangren": a line the rot took whole, dying - and the jump it made to the nearer edge line,
+    /// with the cubes it turned there. REPORTING ONLY, in the order the lines died.
+    /// </summary>
+    public sealed class GangreneLineDeath
+    {
+        public GangreneLineDeath(bool isRow, int line, int edgeLine, IReadOnlyList<GridPos> converted,
+            IReadOnlyList<Cube> before, int pass)
+        {
+            IsRow = isRow;
+            Line = line;
+            EdgeLine = edgeLine;
+            Converted = converted ?? Array.Empty<GridPos>();
+            Before = before ?? Array.Empty<Cube>();
+            Pass = pass;
+        }
+
+        /// <summary>A row (the line is an absolute y) or a column (an absolute x).</summary>
+        public bool IsRow { get; }
+
+        public int Line { get; }
+
+        /// <summary>The edge line the rot jumped to, the same way round as the dead one.</summary>
+        public int EdgeLine { get; }
+
+        /// <summary>The cubes the jump turned where they stood; an empty edge cell stays empty.</summary>
+        public IReadOnlyList<GridPos> Converted { get; }
+
+        /// <summary>What each of them was before, index for index with Converted.</summary>
+        public IReadOnlyList<Cube> Before { get; }
+
+        /// <summary>Which pass of the cascade killed it: 0 for a line the spread completed, 1 for a
+        /// line an earlier jump completed, and so on.</summary>
+        public int Pass { get; }
     }
 
     /// <summary>Immutable-after-resolution record of one turn.</summary>
@@ -161,6 +291,45 @@ namespace ProjectBlock.Core
             {
                 liftKinds.Add(kind);
                 liftMotions.Add(motions != null && i < motions.Count ? motions[i] : default(LiftMotion));
+            }
+        }
+
+        private readonly List<CellMove> boardMoves = new List<CellMove>();
+
+        /// <summary>Cubes a moving board carried to another cell this turn that are still on the
+        /// board, each with where it was and where it is. Reporting only; the cubes that did NOT
+        /// survive the move are in LiftedCells, with their motions.</summary>
+        public IReadOnlyList<CellMove> BoardMoves
+        {
+            get { return boardMoves; }
+        }
+
+        internal void AddBoardMoves(IReadOnlyList<CellMove> moves)
+        {
+            for (int i = 0; i < moves.Count; i++)
+            {
+                boardMoves.Add(moves[i]);
+            }
+        }
+
+        /// <summary>"Kangren": the cell the rot took this turn, where it crept in from and what stood
+        /// there - null on a turn it did not spread. Reporting only.</summary>
+        public GangreneSpread GangreneSpread { get; internal set; }
+
+        private readonly List<GangreneLineDeath> gangreneLineDeaths = new List<GangreneLineDeath>();
+
+        /// <summary>"Kangren": every line the rot took whole this turn, in the order they died, each with
+        /// the edge line the rot jumped to and the cubes it turned there. Reporting only.</summary>
+        public IReadOnlyList<GangreneLineDeath> GangreneLineDeaths
+        {
+            get { return gangreneLineDeaths; }
+        }
+
+        internal void AddGangreneLineDeaths(IReadOnlyList<GangreneLineDeath> deaths)
+        {
+            for (int i = 0; i < deaths.Count; i++)
+            {
+                gangreneLineDeaths.Add(deaths[i]);
             }
         }
 

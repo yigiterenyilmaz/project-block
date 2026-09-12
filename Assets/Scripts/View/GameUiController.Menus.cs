@@ -394,6 +394,7 @@ namespace ProjectBlock.View
             phaseFold.gameObject.SetActive(visible);
             cryoSublimation.gameObject.SetActive(visible);
             momentumPeel.gameObject.SetActive(visible);
+            bossMove.gameObject.SetActive(visible);
             infoText.gameObject.SetActive(visible);
             messageText.gameObject.SetActive(visible);
             totalText.gameObject.SetActive(visible);
@@ -423,6 +424,8 @@ namespace ProjectBlock.View
             phaseFold.Stop();
             cryoSublimation.Stop();
             momentumPeel.Stop();
+            bossMove.Stop();
+            boardView.StopGangrene();
             marketView.Hide();
             deckOverlay.Hide();
             grantPicker.Hide();

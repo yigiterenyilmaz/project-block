@@ -79,8 +79,8 @@ check('LiftMotion: From, Step, Reason, Cube, Mirror', 'public readonly struct Li
       'hareket kaydi eksik')
 check('rapor: LiftMotionAt, hucreyle ayni sirada', 'public LiftMotion LiftMotionAt(' in report
       and 'liftMotions.Add(' in report, 'rapor hareketi tasimiyor')
-shift = method(lines, 'public List<GridPos> ShiftRowsUp(List<LiftMotion> motions)')
-fling = method(lines, 'public List<GridPos> FlingCubesOutward(List<LiftMotion> motions)')
+shift = method(lines, 'public List<GridPos> ShiftRowsUp(List<LiftMotion> motions, List<CellMove> moves)')
+fling = method(lines, 'public List<GridPos> FlingCubesOutward(List<LiftMotion> motions, List<CellMove> moves)')
 check('eski cagrilar aynen (ShiftRowsUp() / FlingCubesOutward() yeniye null verir)',
       'return ShiftRowsUp(null);' in lines and 'return FlingCubesOutward(null);' in lines, 'eski cagri degisti')
 check('merdiven: kenardan cikan + delige binen icin kayit (2 yer)', shift.count('motions.Add(') == 2
@@ -98,9 +98,10 @@ check('Core testleri hareketi dogruluyor', 'LiftMotionAt(' in tests and 'LiftRea
 print()
 print('=== 3. YONLENDIRME ===')
 emit = method(fb, 'private void EmitBlastParticles(')
-check('yok olan -> kaldirma varyanti; tasinan+hareketli -> sokulme; gerisi -> eski iz',
-      'PlayRemoval(removed)' in emit and 'PlayForcedExit(carried, carriedMotions)' in emit
-      and 'LiftCells(marked' in emit and 'motion.Reason != LiftReason.None' in emit, 'yonlendirme eksik')
+motion_fn = method(fb, 'private void PlayBoardMotion(')
+check('yok olan -> kaldirma varyanti; tasinan+hareketli -> sokulme (tahtanin hareketiyle); gerisi -> eski iz',
+      'PlayRemoval(removed)' in emit and 'LiftCells(marked' in emit and 'motion.Reason != LiftReason.None' in emit
+      and 'PlayForcedExit(' not in emit and 'PlayForcedExit(carried, motions)' in motion_fn, 'yonlendirme eksik')
 exitm = method(fb, 'private bool PlayForcedExit(')
 check('yon Core\'dan (m.Step), kup Core\'dan (m.Cube), baslangic hucresi m.From',
       'm.Step.X' in exitm and 'FindOwnedCard(m.Cube.SourceCardId)' in exitm and 'CellToWorld(m.From)' in exitm,
@@ -172,8 +173,8 @@ labels = ['yürüyen merdiven: alan yukarı kayar, üst satır sökülür', 'mer
           'boss hareketiyle atılma: engelli hedef', 'sökülme hata ayıklama: gerilme', 'sökülme hata ayıklama: katmanlar',
           'sökülme hata ayıklama: kıymıklar', 'sökülme hata ayıklama: hareket izi', 'sökülme hata ayıklama: tahta maskesi']
 check('lab girisleri', all(w in lab_raw for w in labels), 'labda eksik: %s' % [w for w in labels if w not in lab_raw])
-check('lab sahneleri gercek tahta koduyla ve ayni kapidan (PlayForcedExit)', 'board.ShiftRowsUp(motions)' in lab
-      and 'board.FlingCubesOutward(motions)' in lab and 'PlayForcedExit(lifted, motions)' in lab, 'lab ayri yol')
+check('lab sahneleri gercek tahta koduyla ve ayni kapidan (PlayForcedExit)', 'board.ShiftRowsUp(motions, moves)' in lab
+      and 'board.FlingCubesOutward(motions, moves)' in lab and 'PlayForcedExit(lifted, motions)' in lab, 'lab ayri yol')
 check('8 yon', lab.count('new GridPos(') >= 8 and 'AnimPeelSteps' in lab, '8 yon yok')
 layers = view[view.index('public static class Layers'):]
 keys = ('ShowTension', 'ShowLamination', 'ShowFlecks', 'ShowResidue', 'ShowBoardClip')

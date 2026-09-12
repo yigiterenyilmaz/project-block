@@ -334,6 +334,14 @@ namespace ProjectBlock.View
             {
                 return own;
             }
+            // "Kangren": a converted cube KEEPS its card - the rules still count it for whatever
+            // minted it - but dead tissue must not go on wearing that card's face. A fox's muzzle
+            // or a gear on rot reads as the art having failed, and the rot's own look (GangreneView)
+            // is drawn on the plain tile.
+            if (kind == CubeKind.Gangrene)
+            {
+                return DefaultTile != null ? DefaultTile : WhiteSprite;
+            }
             if (sourceCard != null)
             {
                 // A targeted block's plain cubes get its body tile - the marked one came back
@@ -660,9 +668,11 @@ namespace ProjectBlock.View
                 case CubeKind.Ice: return new Color(0.62f, 0.86f, 0.95f);
                 case CubeKind.Void: return new Color(0.10f, 0.07f, 0.16f);
                 case CubeKind.Mine: return new Color(0.42f, 0.12f, 0.12f);
-                // "Kangren" rot: a sickly grey-green, so a rotten cube is never mistaken for a
-                // healthy one however full the board is.
-                case CubeKind.Gangrene: return new Color(0.38f, 0.44f, 0.28f);
+                // "Kangren" rot: a muted DEAD olive - ashen, never a toxic or lime green, which
+                // would read as something to collect. Dead tissue, so a rotten cube can never be
+                // mistaken for a healthy one however full the board is. GangreneView draws its
+                // veins and cracks on top and must use this same colour underneath.
+                case CubeKind.Gangrene: return new Color(0.36f, 0.40f, 0.30f);
                 // "Hidrolik pres": a hard industrial slate, so four cubes squeezed into one never
                 // reads as an ordinary block.
                 case CubeKind.Compressed: return new Color(0.30f, 0.34f, 0.42f);

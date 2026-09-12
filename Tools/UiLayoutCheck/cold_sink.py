@@ -152,7 +152,7 @@ labels = ['kaldırılan hücreler: rastgele varyant', 'kaldırılan hücreler 1:
           'yürüyen merdiven: alan yukarı kayar', 'merkezkaç kuvveti: küpler dışa itilir', 'kangren: satır ölür']
 check('lab girisleri', all(w in lab_raw for w in labels), 'labda eksik: %s' % [w for w in labels if w not in lab_raw])
 check('boss sahneleri kendi tahtasinda, gercek tahta koduyla (ShiftRowsUp, FlingCubesOutward)',
-      'board.ShiftRowsUp(motions)' in lab_raw and 'board.FlingCubesOutward(motions)' in lab_raw
+      'board.ShiftRowsUp(motions, moves)' in lab_raw and 'board.FlingCubesOutward(motions, moves)' in lab_raw
       and 'boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter)' in lab_raw
       and 'StopAnimBossLift();' in lab_raw, 'boss sahnesi uydurma ya da gercek tahtaya dokunuyor')
 check('eski iz artik ortadaki hucrelerde oynamiyor', 'LiftCells(AnimCells()' not in lab_raw, 'ortada yok olan kupler')

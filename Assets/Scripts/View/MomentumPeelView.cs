@@ -260,6 +260,11 @@ namespace ProjectBlock.View
             /// <summary>What it is clipped by: the board's rect when it went over the edge, its own
             /// cell when it was blocked - it must never be drawn into the cube that stopped it.</summary>
             public Rect Clip;
+            /// <summary>The moving board that carried it, if any: it then sets off on that board's own
+            /// launch (BossMoveView.Launch), in step with the cubes that survive the same move.</summary>
+            public BoardMotionSource Source;
+            /// <summary>How much faster than the Style speeds its laminae go, to keep the launch's pace.</summary>
+            public float LaunchScale = 1f;
             public float Start;
             public float Tension;
             public ClusterBurstView.Look Look;
@@ -328,8 +333,8 @@ namespace ProjectBlock.View
         /// EXITED is clipped by it.
         /// </summary>
         public void Play(IReadOnlyList<Vector2> cells, IReadOnlyList<Vector2> steps,
-            IReadOnlyList<LiftReason> reasons, IReadOnlyList<ClusterBurstView.Look> looks,
-            float cellSize, float cubeSize, Rect board)
+            IReadOnlyList<LiftReason> reasons, IReadOnlyList<BoardMotionSource> sources,
+            IReadOnlyList<ClusterBurstView.Look> looks, float cellSize, float cubeSize, Rect board)
         {
             if (cells == null || steps == null || cells.Count == 0 || cellSize <= 0f)
             {
@@ -364,6 +369,7 @@ namespace ProjectBlock.View
                 p.Clip = p.Reason == LiftReason.Blocked
                     ? new Rect(p.At.x - cellSize * 0.5f, p.At.y - cellSize * 0.5f, cellSize, cellSize)
                     : board;
+                p.Source = sources != null && i < sources.Count ? sources[i] : BoardMotionSource.None;
                 // A row the escalator carries off is ONE event: a few tens of milliseconds
                 // between its cubes, never a wave.
                 p.Start = n > 1 ? dice.Range(0f, 2f) * Style.TimingJitter : 0f;
@@ -423,6 +429,15 @@ namespace ProjectBlock.View
             bool blocked = p.Reason == LiftReason.Blocked;
             float cursor = 1f;
             float release = Style.LayerStartDelay;
+            if (p.Source != BoardMotionSource.None)
+            {
+                // Carried by a moving board: it comes apart a third of a cell into the board's own
+                // launch, and its laminae keep that launch's pace rather than dropping to their own.
+                release = BossMoveView.LaunchRelease(p.Source);
+                float launchSpeed;
+                BossMoveView.Launch(p.Source, release, out launchSpeed);
+                p.LaunchScale = Mathf.Max(1f, launchSpeed / Mathf.Max(Style.SecondarySpeed, 0.01f));
+            }
             for (int k = 0; k < count; k++)
             {
                 float width = weights[k] / sum * 2f;
@@ -436,7 +451,7 @@ namespace ProjectBlock.View
                 lam.Trailing = k == count - 1 && count > 1;
                 if (count == 1)
                 {
-                    lam.Release = Style.LayerStartDelay + Style.TrailingLag * 0.5f;
+                    lam.Release = release + Style.TrailingLag * 0.5f;
                 }
                 else if (lam.Trailing)
                 {
@@ -450,10 +465,10 @@ namespace ProjectBlock.View
                 }
                 float speed = k == 0 ? Style.LeadingSpeed
                     : lam.Trailing ? Style.TrailingSpeed : Style.SecondarySpeed;
-                lam.Speed = speed * batch.Cell * dice.Range(0.9f, 1.1f) * (blocked ? 0.55f : 1f);
+                lam.Speed = speed * batch.Cell * dice.Range(0.9f, 1.1f) * (blocked ? 0.55f : 1f) * p.LaunchScale;
                 // The leading lamina is quickest and gone soonest; the trailing one lingers.
                 lam.Life = Style.StreakLifetime * (k == 0 && count > 1 ? 0.8f : lam.Trailing ? 1.1f : 1f)
-                    * dice.Range(0.9f, 1.1f) * (blocked ? 0.8f : 1f);
+                    * dice.Range(0.9f, 1.1f) * (blocked ? 0.8f : 1f) / p.LaunchScale;
                 lam.Opacity = k == 0 ? 1f : lam.Trailing ? 0.8f : 0.9f;
                 lam.Thickness = Mathf.Max(width * half, 0.02f * batch.Cell);
                 lam.Stretch = Mathf.Max(1f, Mathf.Min(Style.StreakStretch * dice.Range(0.9f, 1.1f),
@@ -463,7 +478,6 @@ namespace ProjectBlock.View
                 lam.Side = (k % 2 == 0 ? 1f : -1f) * Style.LayerPerpendicularOffset * (k == 0 ? 0.5f : 1f);
                 p.Laminae.Add(lam);
             }
-            float carry = Carry(batch, p);
             for (int k = 0; k < p.Laminae.Count; k++)
             {
                 Lamina lam = p.Laminae[k];
@@ -471,12 +485,12 @@ namespace ProjectBlock.View
                 float cross;
                 BodyShape(batch, p, lam.Release, out stretch, out cross);
                 // Exactly where the attached body had it when it let go, so nothing jumps.
-                lam.StartTravel = BodyTravel(p, lam.Release, carry)
+                lam.StartTravel = BodyTravel(batch, p, lam.Release)
                     + (lam.Anchor + p.Extent) * half * (stretch - 1f);
                 lam.StartStretch = stretch;
                 lam.StartCross = cross;
                 // The trailing lamina SNAPS free: it lets go faster than it will travel.
-                lam.StartSpeed = lam.Trailing ? lam.Speed * 1.8f : BodySpeed(p, lam.Release, carry);
+                lam.StartSpeed = lam.Trailing ? lam.Speed * 1.8f : BodySpeed(batch, p, lam.Release);
                 lam.Renderer = Rent(p.Look.Tile, LaminaOrder, peel != null ? peel : ViewUtil.TileMaterial(p.Look.Tile));
             }
         }
@@ -492,7 +506,7 @@ namespace ProjectBlock.View
             }
             float half = batch.CubeSize * 0.5f;
             float from = p.Laminae[0].Release;
-            float travel = BodyTravel(p, from, Carry(batch, p));
+            float travel = BodyTravel(batch, p, from);
             var across = new Vector2(-p.Dir.y, p.Dir.x);
             float cone = Style.FleckConeAngle * Mathf.Deg2Rad;
             for (int f = 0; f < count; f++)
@@ -562,8 +576,16 @@ namespace ProjectBlock.View
 
         /// <summary>How far what is still attached has gone: at the carry speed until the first
         /// lamina lets go, then braking hard - the part that is left resists.</summary>
-        private static float BodyTravel(Peel p, float t, float carry)
+        private static float BodyTravel(Batch batch, Peel p, float t)
         {
+            float ignored;
+            if (p.Source != BoardMotionSource.None)
+            {
+                // Riding the board's own launch, and NEVER braking: the cubes behind it ride on at
+                // that pace, and what is left of this one must not let them catch it up.
+                return BossMoveView.Launch(p.Source, t, out ignored) * batch.Cell;
+            }
+            float carry = Carry(batch, p);
             float first = p.Laminae.Count > 0 ? p.Laminae[0].Release : 0f;
             if (t <= first)
             {
@@ -572,8 +594,15 @@ namespace ProjectBlock.View
             return carry * first + carry * BodyBrake * (1f - Mathf.Exp(-(t - first) / BodyBrake));
         }
 
-        private static float BodySpeed(Peel p, float t, float carry)
+        private static float BodySpeed(Batch batch, Peel p, float t)
         {
+            if (p.Source != BoardMotionSource.None)
+            {
+                float speed;
+                BossMoveView.Launch(p.Source, t, out speed);
+                return speed * batch.Cell;
+            }
+            float carry = Carry(batch, p);
             float first = p.Laminae.Count > 0 ? p.Laminae[0].Release : 0f;
             return t <= first ? carry : carry * Mathf.Exp(-(t - first) / BodyBrake);
         }
@@ -585,7 +614,10 @@ namespace ProjectBlock.View
         {
             float tension = Layers.ShowTension ? p.Tension : 0f;
             float d = Mathf.Max(Style.TensionDuration, 0.0001f);
-            float a = Smooth(t / d);
+            // Carried by a moving board, the pull builds over the last moments before it comes apart;
+            // on its own, from the start.
+            float from = p.Source != BoardMotionSource.None && p.Laminae.Count > 0 ? p.Laminae[0].Release - d : 0f;
+            float a = Smooth((t - from) / d);
             if (p.Reason == LiftReason.Blocked)
             {
                 stretch = 1f - 0.03f * Mathf.Sin(Mathf.PI * Mathf.Clamp01(t / 0.1f))
@@ -644,7 +676,6 @@ namespace ProjectBlock.View
             float cell = batch.Cell;
             bool clip = p.Reason == LiftReason.ExitedBoard && Layers.ShowBoardClip;
             bool walled = p.Reason == LiftReason.Blocked;
-            float carry = Carry(batch, p);
             int released = 0;
             while (released < p.Laminae.Count && t >= p.Laminae[released].Release)
             {
@@ -661,7 +692,7 @@ namespace ProjectBlock.View
                 float stretch;
                 float cross;
                 BodyShape(batch, p, t, out stretch, out cross);
-                float travel = BodyTravel(p, t, carry);
+                float travel = BodyTravel(batch, p, t);
                 float front = p.Laminae[released].Max;
                 float cool = released > 0 ? 0.12f * Smooth((t - p.Laminae[0].Release) / 0.12f) : 0f;
                 if (peelMaterial != null)

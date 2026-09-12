@@ -147,9 +147,38 @@ dropped that way once each.
   `Step`, why it could not land (`LiftReason`: ExitedBoard / NoGround / Blocked), the `Cube`
   itself (its cell may hold the cube that slid in) and whether it was the mirror world's —
   reporting only, written by `GameBoard.ShiftRowsUp(motions)` / `FlingCubesOutward(motions)`
-  (the parameterless calls are unchanged; the baseline is byte-identical). A cube CHANGED in
-  place (`Transformed`: "Kangren") keeps `CellFlashFx`'s cold squares (`LiftCells`): a pit
-  would open under whatever cube stands in that cell now. The clean sweep (`BoardCleanseView`) and TNT (`DynamiteBlastView`) have their
+  (the parameterless calls are unchanged; the baseline is byte-identical). The cubes the same
+  move KEEPS ride to their new cells through `BossMoveView`: `TurnReport.BoardMoves` gives each
+  one's `From` / `To` / `Step` / `Source` (reporting only, written by `ShiftRowsUp(motions, moves)`
+  / `FlingCubesOutward(motions, moves)`). The escalator is a synchronized STEP CARRY (a tiny load,
+  an eased carry, a sub-pixel overshoot), the centrifuge a RADIAL PUSH (a pixel of preload, a
+  hard launch, a longer drag, a pixel of overshoot); both lift 1–2 px over a contact shadow that
+  exists only while moving. `BoardView.HoldCells` keeps the destination cells blank through any
+  repaint until the copies land, then `ReleaseCells` repaints them — never two cubes at once. Both
+  start from `FinalizePlacement` on the repaint frame (`PlayBoardMotion`), never deferred behind
+  the water, and a cube that does not survive starts its peel on the same board's launch curve
+  (`BossMoveView.Launch`, no brake), so a row's survivors and casualties set off together. A cube CHANGED in
+  place ("Kangren") is not drawn here at all: the rot has a system of its own, **`GangreneView`**
+  (NECROTIC TAKEOVER / KURU ÇÜRÜME), owned by `BoardView` because half of it is PRESENCE — dead
+  tissue on every rotten cube and a permanent band under every line the rot took whole, both of
+  which outlive every repaint and every rebuild. A necrotic front crosses a cube from the side
+  Core says the rot came in from (`TurnReport.GangreneSpread`: the cell, the rotten neighbour it
+  crept out of, the cube that stood there, and the cubes beside it nothing can infect) and a
+  little sooner at its edges than through its middle, so the last living colour is in the centre;
+  the face never swaps — it drains, goes matte, cracks and gives its material up to the dead layer
+  under it. An EMPTY cell is contaminated from that same side first, and then the dead mass rises
+  a couple of pixels out of the floor and settles. `TurnReport.GangreneLineDeaths` reports every
+  line that died in the ORDER they died, with the edge line each jump went to and the cubes it
+  turned there, so a cascade plays step by step: the life goes out along the line and the cells'
+  wash is swept in behind that front (`BoardView.SetRotWash` — which is why the board can withhold
+  the wash the rules applied all at once), necrotic pressure travels to the edge, those cubes
+  convert in place with a small stagger (an empty edge cell stays empty — the jump converts, it
+  never creates), and a breath passes before the next step. Two shaders
+  (`Resources/Shaders/Gangrene`, `GangreneStreak`) and ONE baked surface texture that the standing
+  tissue and a conversion share pixel for pixel, so the hand-off at the end of a conversion shows
+  nothing at all; without the shaders the cube cross-fades and the band is a flat plate. Palette:
+  ash, charcoal and a muted dead olive — never a toxic or lime green, which would read as
+  something to collect. The clean sweep (`BoardCleanseView`) and TNT (`DynamiteBlastView`) have their
   own, and so does **"Enfeksiyon"'s detonation** (`InfectionBurstView`): a block eaten from
   inside is not an impact, so it has its own sequence and neither flash nor shake. The ghost
   block goes up on the frame the cubes are removed and stands through the core's charge, veins
@@ -424,15 +453,21 @@ animation without having to reach the game state that normally triggers it.
 The rule it follows: **it drives the real animation code, never a copy.** An entry calls the
 same method the game calls and only fabricates the ARGUMENTS, so a retimed animation shows its
 new timing there for free. That is why `CardLayerView.PlayDebugAnimation` and the small
-`FlashLine` / `FlashCells` / `PlayRemoval` / `PlayForcedExit` / `LiftCells` / `FlashDynamite` / `ShakeForBlast` / `Spawn*Popup` /
+`FlashLine` / `FlashCells` / `PlayRemoval` / `PlayForcedExit` / `PlayBoardMoves` / `PlayGangreneScene` / `LiftCells` / `FlashDynamite` / `ShakeForBlast` / `Spawn*Popup` /
 `EmitSweepConfetti` seams in `GameUiController.Feedback.cs` exist — the lab and the game both
 go through them. Add an animation: add one line to
 `BuildAnimCatalogue`. Nothing the lab does touches the round's Core state (`TurnReport` cannot
 even be fabricated), and what it paints STAYS until the RESET entry or closing the lab resyncs.
-The one place it runs board code is the three lift-boss scenes ("Yürüyen merdiven", "Merkezkaç
-kuvveti", "Kangren" — `AnimBossLift`): they put up a `GameBoard` of the lab's OWN in the view,
-run the real `ShiftRowsUp` / `FlingCubesOutward` on it (the rot's jump is staged — Core keeps
-`InfectFullLines` internal) and hand what they report — with the motions the board code wrote —
-to `PlayForcedExit` (the rot's cells to `LiftCells`), then `AnimResync` puts the round's board
-back. The "boss hareketiyle atılma" entries do the same for one step at a time (eight
-directions, a holed arena, a staged blocked target).
+The one place it runs board code is the boss scenes, which put up a `GameBoard` of the lab's OWN
+in the view and run the real rules on it. The two MOVING boards ("Yürüyen merdiven", "Merkezkaç
+kuvveti" — `AnimBossLift`) run `ShiftRowsUp` / `FlingCubesOutward` and hand what they report — with
+the motions the board code wrote — to `PlayForcedExit` and `PlayBoardMoves`. "Kangren" has nine
+scenes of its own (`AnimRot`): one per thing the rot does, each running `GameBoard.SpreadGangrene`
+(the board is built so the rot has exactly ONE cell it can take, which is what makes a press
+repeatable) and `GameBoard.InfectFullLines`, whose reporting overloads are public for exactly this
+— so the lab's dead lines are really dead and their bands and washes are the rules' own rather than
+a drawing of them. What the lab fabricates is only the ARGUMENTS: the shape of the board, and for
+the staged scenes which cell finishes the line. Then `AnimResync` puts the round's board back. The "boss hareketiyle atılma" entries do the same for one step at a time (eight
+directions, a holed arena, a staged blocked target). The two "İç Hareket" entries run a moving board's turn
+end for its survivors (sparse to nearly full; the centrifuge on an odd board so its centre stays
+put), and their debug switches can draw each move's vector and destination cell.
