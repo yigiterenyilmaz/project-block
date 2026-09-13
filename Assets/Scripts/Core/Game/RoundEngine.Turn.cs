@@ -34,6 +34,8 @@ namespace ProjectBlock.Core
             breakdown.Reset();
             breakdown.ScoreScale = scorer.ScoreScale; // whole-economy x scale, applied to Total
             var report = new TurnReport();
+            // "Parazit": last turn's refusals are last turn's. Reporting only.
+            MainBoard.HostRefusals.Clear();
             report.TurnNumber = TurnNumber;
             report.Card = card;
             report.PlayedFromBonusHand = fromBonus;

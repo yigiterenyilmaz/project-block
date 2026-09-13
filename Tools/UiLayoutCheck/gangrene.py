@@ -148,9 +148,8 @@ check('view kendi hat / kenar hesabi yapmiyor',
       'RowIsInfectionDead' not in play and 'InfectionDeadRows' not in play
       and 'Width - 1' not in play, 'view hesapliyor')
 emit = method(fb, 'private void EmitBlastParticles(')
-check('DONUSEN hucreler artik eski soguk ize gitmiyor',
-      'LiftKind.Transformed' in emit
-      and emit.index('LiftKind.Transformed') < emit.index('LiftCells('),
+check('DONUSEN hucreler patlama yolundan tamamen cikti',
+      'LiftKind.Removed' in emit and 'LiftKind.Transformed' not in emit and 'LiftCells' not in emit,
       'donusen hucre iki kez oynatiliyor')
 turn = method(view, 'public void PlayTurn(TurnScene turn)')
 check('zincir sirali: supurme -> aktarim -> donusum -> duraklama',

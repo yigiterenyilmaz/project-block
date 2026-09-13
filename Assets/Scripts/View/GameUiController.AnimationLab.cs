@@ -130,7 +130,18 @@ namespace ProjectBlock.View
             // AnimResync below puts the real board back up if a boss scene was showing its own.
             StopAnimBossLift();
             StopAnimRot();
+            StopAnimRaw();
+            StopAnimSnake();
             GangreneView.Layers.Defaults();
+            SnakeView.Layers.Defaults();
+            SnakeVfxController.Layers.AllOn();
+            SnakeEatView.Layers.Defaults();
+            SnakeDefeatView.Layers.Defaults();
+            // The raw entries reach outside the board: the overtime look is driven from the round
+            // by the resync below, so it is wound back to nothing first.
+            overtimePressure.Stop();
+            overtimeVignette.SetActive(false);
+            boardView.SetOvertimeGlow(0);
             MatryoshkaView.Layers.AllOn();
             PhaseFoldView.Layers.AllOn();
             CryoSublimationView.Layers.AllOn();
@@ -150,6 +161,8 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            StopAnimPress();
+            StopAnimHost();
             boardView.ClearPreview();
             RefreshAll(null);
             SyncRetroPresentation();
@@ -842,6 +855,585 @@ namespace ProjectBlock.View
             AddAnim("explosion sound", "patlama sesi", delegate { sfx.Explode(); });
             AddAnim("flame sound", "alev sesi", delegate { sfx.Flame(); });
 
+            AddAnimHeader("yılan", "yılan");
+            // "YILAN" - every scenario on a board of the lab's own, played through the same seams
+            // the game plays it through (PlaySnakeBody / PlaySnakeScene). The lab fabricates the
+            // ARGUMENTS - the shape of the snake, what is standing in front of it, how many lines
+            // crossed it - and the animation is then exactly the one a real turn would get.
+            AddAnim("Yılan: wakes up, 8 segments", "yılan: uyanıyor, 8 segment",
+                delegate { AnimSnake(AnimSnakeScene.Spawn8); });
+            AddAnim("Yılan: wakes up, 12 segments", "yılan: uyanıyor, 12 segment",
+                delegate { AnimSnake(AnimSnakeScene.Spawn12); });
+            AddAnim("Yılan: wakes up, 20 segments", "yılan: uyanıyor, 20 segment",
+                delegate { AnimSnake(AnimSnakeScene.Spawn20); });
+            AddAnim("Yılan: idle - the body's own slow wave", "yılan: bekleme (gövdenin kas dalgası)",
+                delegate { AnimSnake(AnimSnakeScene.Idle); });
+            AddAnim("Yılan: slides ONE cell", "yılan: bir hücre kayar",
+                delegate { AnimSnake(AnimSnakeScene.Slide1); });
+            AddAnim("Yılan: slides THREE cells", "yılan: üç hücre kayar",
+                delegate { AnimSnake(AnimSnakeScene.Slide3); });
+            AddAnim("Yılan: a long slide, right across the arena", "yılan: uzun kayma (alanın boyu)",
+                delegate { AnimSnake(AnimSnakeScene.SlideLong); });
+            AddAnim("Yılan: slides off in a NEW direction (the head comes round)",
+                "yılan: yön değiştirerek kayar (baş dönüyor)",
+                delegate { AnimSnake(AnimSnakeScene.SlideTurn); });
+            AddAnim("Yılan: boxed in - it tries and cannot move", "yılan: sıkıştı, gidecek yer yok",
+                delegate { AnimSnake(AnimSnakeScene.Stuck); });
+            AddAnim("Yılan: eats a plain block", "yılan: sade blok yer",
+                delegate { AnimSnake(AnimSnakeScene.EatNormal); });
+            AddAnim("Yılan: eats OBSIDIAN (it does not care)", "yılan: obsidyen yer (umurunda değil)",
+                delegate { AnimSnake(AnimSnakeScene.EatObsidian); });
+            AddAnim("Yılan: eats GOLD (no coins, no melt - swallowed)",
+                "yılan: altın yer (erime yok, yutuyor)",
+                delegate { AnimSnake(AnimSnakeScene.EatGold); });
+            AddAnim("Yılan: eats and GROWS (the swelling behind the head)",
+                "yılan: yer ve uzar (başın arkasındaki şişkinlik)",
+                delegate { AnimSnake(AnimSnakeScene.EatAndGrow); });
+            AddAnim("Yılan: ONE tail segment cut", "yılan: bir kuyruk kesilir",
+                delegate { AnimSnake(AnimSnakeScene.Cut1); });
+            AddAnim("Yılan: TWO cut in one turn", "yılan: aynı turda iki kesik",
+                delegate { AnimSnake(AnimSnakeScene.Cut2); });
+            AddAnim("Yılan: THREE cut in one turn", "yılan: aynı turda üç kesik",
+                delegate { AnimSnake(AnimSnakeScene.Cut3); });
+            AddAnim("Yılan: the last segment - the boss is beaten",
+                "yılan: son segment (boss yenildi)",
+                delegate { AnimSnake(AnimSnakeScene.Defeat); });
+            AddAnim("Yılan: a whole turn - slide, bite, growth",
+                "yılan: tam tur dizisi (kayma → yeme → uzama)",
+                delegate { AnimSnake(AnimSnakeScene.FullTurn); });
+            AddAnim("Yılan: a whole line-clear - the line, the signal, the tail",
+                "yılan: hat dizisi (patlama → sinyal → kuyruk)",
+                delegate { AnimSnake(AnimSnakeScene.LineClear); });
+            AddAnim("Yılan test: the four directions, one per press",
+                "yılan testi: dört yön (her basışta biri)",
+                delegate { AnimSnake(AnimSnakeScene.Directions); });
+            AddAnim("Yılan test: body shapes - straight, one corner, several, S, serpentine",
+                "yılan testi: gövde şekilleri (düz, tek köşe, çoklu, S, yılanvari)",
+                delegate { AnimSnake(AnimSnakeScene.Shapes); });
+            AddAnim("Yılan test: the bite in all four directions",
+                "yılan testi: dört yönde ısırma",
+                delegate { AnimSnake(AnimSnakeScene.BiteDirections); });
+            AddAnimHeader("snake: beaten - the stolen colours let go",
+                "yılan: yenilgi - çalınan renklerin serbest kalması");
+            // THE BOSS'S END, and the one animation whose subject is what it TOOK. Each entry
+            // hands in a different round's worth of swallowed colour, because an animation that
+            // looked the same every time would be saying nothing about the round it ended.
+            AddAnim("Yılan beaten: whatever THIS round actually ate",
+                "yılan yenilgi: bu raundun gerçekten yediği",
+                delegate { AnimSnakeDefeat(null); });
+            AddAnim("Yılan beaten: the snake's own colours (it ate nothing)",
+                "yılan yenilgi: yılanın kendi renkleri (hiç yememiş)",
+                delegate { AnimSnakeDefeat(new Color[0]); });
+            AddAnim("Yılan beaten: red + blue + gold",
+                "yılan yenilgi: kırmızı + mavi + altın",
+                delegate
+                {
+                    AnimSnakeDefeat(new[] { new Color(0.93f, 0.36f, 0.42f),
+                        new Color(0.35f, 0.6f, 1f), new Color(1f, 0.8f, 0.25f) });
+                });
+            AddAnim("Yılan beaten: purple + cyan + green",
+                "yılan yenilgi: mor + camgöbeği + yeşil",
+                delegate
+                {
+                    AnimSnakeDefeat(new[] { new Color(0.68f, 0.42f, 0.9f),
+                        new Color(0.35f, 0.85f, 0.88f), new Color(0.38f, 0.82f, 0.45f) });
+                });
+            AddAnim("Yılan beaten: gold + obsidian + red",
+                "yılan yenilgi: altın + obsidyen + kırmızı",
+                delegate
+                {
+                    AnimSnakeDefeat(new[] { new Color(1f, 0.8f, 0.25f),
+                        new Color(0.25f, 0.22f, 0.3f), new Color(0.88f, 0.2f, 0.15f) });
+                });
+            AddAnim("Yılan beaten: six colours, as a stress test",
+                "yılan yenilgi: altı renk, zorlama testi",
+                delegate
+                {
+                    AnimSnakeDefeat(new[] { new Color(0.93f, 0.36f, 0.42f),
+                        new Color(1f, 0.62f, 0.2f), new Color(1f, 0.8f, 0.25f),
+                        new Color(0.38f, 0.82f, 0.45f), new Color(0.35f, 0.6f, 1f),
+                        new Color(0.68f, 0.42f, 0.9f) });
+                });
+            AddAnim("Yılan beaten: QUARTER speed (RESET puts it back)",
+                "yılan yenilgi: ÇEYREK hız (RESET geri alır)",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    animSpeedIndex = 1;
+                    AnimSnakeDefeat(new[] { new Color(1f, 0.8f, 0.25f),
+                        new Color(0.35f, 0.6f, 1f), new Color(0.68f, 0.42f, 0.9f) });
+                });
+            AddAnim("snake defeat debug: colour pockets on/off",
+                "yılan yenilgi hata ayıklama: renk cepleri aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowColorPockets,
+                    "colour pockets", "renk cepleri"); });
+            AddAnim("snake defeat debug: the flow to the middle on/off",
+                "yılan yenilgi hata ayıklama: merkeze akış aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowColorFlow,
+                    "colour flow", "renk akışı"); });
+            AddAnim("snake defeat debug: the collapse on/off",
+                "yılan yenilgi hata ayıklama: çöküş aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowCollapse,
+                    "collapse", "çöküş"); });
+            AddAnim("snake defeat debug: the colour knot on/off",
+                "yılan yenilgi hata ayıklama: renk yumağı aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowKnot,
+                    "knot", "yumak"); });
+            AddAnim("snake defeat debug: the ribbons on/off",
+                "yılan yenilgi hata ayıklama: hüzmeler aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowRibbons,
+                    "ribbons", "hüzmeler"); });
+            AddAnim("snake defeat debug: the secondary threads on/off",
+                "yılan yenilgi hata ayıklama: ince iplikler aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowThreads,
+                    "threads", "iplikler"); });
+            AddAnim("snake defeat debug: the motes on/off",
+                "yılan yenilgi hata ayıklama: moteler aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowMotes,
+                    "motes", "moteler"); });
+            AddAnim("snake defeat debug: the board's wave on/off",
+                "yılan yenilgi hata ayıklama: tahtanın dalgası aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowBoardWave,
+                    "board wave", "tahta dalgası"); });
+            AddAnim("snake defeat debug: the cell reflections on/off",
+                "yılan yenilgi hata ayıklama: hücre yansımaları aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowCellReflections,
+                    "cell reflections", "hücre yansımaları"); });
+            AddAnim("snake defeat debug: the final glint on/off",
+                "yılan yenilgi hata ayıklama: son parıltı aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowFinalGlint,
+                    "final glint", "son parıltı"); });
+            AddAnimHeader("snake: the bite, one block at a time",
+                "yılan: ısırma (hero) - blok blok");
+            // THE BLOCK'S MATTER, not the block. Everything under this heading is one hero event
+            // seen from a different side: a different block type, a different direction, or slowed
+            // down far enough to see whether the block is really coming apart or just shrinking.
+            AddAnim("Yılan bite: a plain block, a new colour each press",
+                "yılan ısırma: sıradan blok, her basışta başka renk",
+                delegate
+                {
+                    animEatColour++;
+                    AnimSnake(AnimSnakeScene.EatColour);
+                });
+            AddAnim("Yılan bite: water", "yılan ısırma: su",
+                delegate { AnimSnake(AnimSnakeScene.EatWater); });
+            AddAnim("Yılan bite: fire", "yılan ısırma: ateş",
+                delegate { AnimSnake(AnimSnakeScene.EatFire); });
+            AddAnim("Yılan bite: gold", "yılan ısırma: altın",
+                delegate { AnimSnake(AnimSnakeScene.EatGold); });
+            AddAnim("Yılan bite: obsidian", "yılan ısırma: obsidyen",
+                delegate { AnimSnake(AnimSnakeScene.EatObsidian); });
+            AddAnim("Yılan bite: every direction in turn",
+                "yılan ısırma: sırayla her yön",
+                delegate { AnimSnake(AnimSnakeScene.BiteDirections); });
+            AddAnim("Yılan bite: HALF speed (RESET puts it back)",
+                "yılan ısırma: YARIM hız (RESET geri alır)",
+                delegate
+                {
+                    Time.timeScale = 0.5f;
+                    animSpeedIndex = 1;
+                    AnimSnake(AnimSnakeScene.EatColour);
+                });
+            AddAnim("Yılan bite: QUARTER speed - is the block really coming apart?",
+                "yılan ısırma: ÇEYREK hız - blok gerçekten sökülüyor mu?",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    animSpeedIndex = 1;
+                    AnimSnake(AnimSnakeScene.EatColour);
+                });
+            AddAnim("snake bite debug: the extraction front",
+                "yılan ısırma hata ayıklama: çıkarma cephesi",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowExtractionMask,
+                    "extraction front", "çıkarma cephesi"); });
+            AddAnim("snake bite debug: filament paths",
+                "yılan ısırma hata ayıklama: filament yolları",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowFilamentPaths,
+                    "filament paths", "filament yolları"); });
+            AddAnim("snake bite debug: where the light is on each filament",
+                "yılan ısırma hata ayıklama: filamentteki ışığın yeri",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowFilamentFlow,
+                    "filament flow", "filament akışı"); });
+            AddAnim("snake bite debug: motes on/off",
+                "yılan ısırma hata ayıklama: moteler aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowMotes,
+                    "motes", "moteler"); });
+            AddAnim("snake bite debug: the mouth cavity",
+                "yılan ısırma hata ayıklama: ağız boşluğu",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowMouthMask,
+                    "mouth cavity", "ağız boşluğu"); });
+            AddAnim("snake bite debug: the gulp package",
+                "yılan ısırma hata ayıklama: yutma paketi",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowGulpPackage,
+                    "gulp package", "yutma paketi"); });
+            AddAnim("snake bite debug: the three colours taken off the block",
+                "yılan ısırma hata ayıklama: bloktan alınan üç renk",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowBlockColorSampling,
+                    "block colours", "blok renkleri"); });
+            AddAnim("snake bite debug: the final core on/off",
+                "yılan ısırma hata ayıklama: son çekirdek aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowFinalCore,
+                    "final core", "son çekirdek"); });
+            AddAnim("snake bite debug: the erosion edge light on/off",
+                "yılan ısırma hata ayıklama: erozyon kenar ışığı aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowErosionEdge,
+                    "erosion edge", "erozyon kenarı"); });
+            AddAnim("snake bite debug: the main ribbon on/off",
+                "yılan ısırma hata ayıklama: ana hüzme aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowMainRibbon,
+                    "main ribbon", "ana hüzme"); });
+            AddAnim("snake bite debug: the secondary ribbons on/off",
+                "yılan ısırma hata ayıklama: ikincil hüzmeler aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowSecondaryRibbons,
+                    "secondary ribbons", "ikincil hüzmeler"); });
+            AddAnim("snake bite debug: the mouth collector on/off",
+                "yılan ısırma hata ayıklama: ağız toplayıcısı aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowMouthCollector,
+                    "mouth collector", "ağız toplayıcısı"); });
+            AddAnim("snake bite debug: the head's reflected light on/off",
+                "yılan ısırma hata ayıklama: kafadaki yansıyan ışık aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeEatView.Layers.ShowHeadReflection,
+                    "head reflection", "kafa yansıması"); });
+            AddAnim("Yılan: the bite, in slow motion (RESET puts the speed back)",
+                "yılan: ısırma hero, yavaş çekim (hız RESET ile geri döner)",
+                delegate
+                {
+                    Time.timeScale = 0.3f;
+                    animSpeedIndex = 1;
+                    AnimSnake(AnimSnakeScene.EatNormal);
+                });
+            // THE VFX LAYERS, one at a time. The point of these is to be able to SEE what each
+            // layer is worth: turn the motion off and the surface, shadow and contact work is all
+            // that is left; turn the material off and the motion has to carry it alone.
+            AddAnim("snake vfx: motion on/off", "yılan vfx: hareket aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeView.Layers.ShowSnakeMotion, "motion", "hareket"); });
+            AddAnim("snake vfx: contact shadows on/off", "yılan vfx: temas gölgeleri aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeVfxController.Layers.ShowSnakeShadows, "shadows", "gölgeler"); });
+            AddAnim("snake vfx: material response on/off", "yılan vfx: materyal tepkisi aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeVfxController.Layers.ShowSnakeMaterialFx, "material response", "materyal tepkisi"); });
+            AddAnim("snake vfx: particles on/off", "yılan vfx: parçacıklar aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeVfxController.Layers.ShowSnakeParticles, "particles", "parçacıklar"); });
+            AddAnim("snake vfx: board contact on/off", "yılan vfx: tahta teması aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeVfxController.Layers.ShowSnakeBoardContact, "board contact", "tahta teması"); });
+            AddAnim("snake vfx: every layer back on", "yılan vfx: bütün katmanları geri aç",
+                delegate
+                {
+                    SnakeVfxController.Layers.AllOn();
+                    SnakeView.Layers.ShowSnakeMotion = true;
+                    animLastLabel = Loc.Pick("snake vfx: all layers on",
+                        "yılan vfx: bütün katmanlar açık");
+                    if (AnimLabOpen)
+                    {
+                        RedrawAnimationLab();
+                    }
+                });
+            AddAnim("snake debug: body indices on/off",
+                "yılan hata ayıklama: segment numaraları aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeView.Layers.ShowSnakeBodyIndices, "body indices", "segment numaraları"); });
+            AddAnim("snake debug: head path on/off",
+                "yılan hata ayıklama: başın yolu aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeView.Layers.ShowSnakeHeadPath, "head path", "başın yolu"); });
+            AddAnim("snake debug: movement direction on/off",
+                "yılan hata ayıklama: hareket yönü aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeView.Layers.ShowSnakeMovementDirection, "movement direction", "hareket yönü"); });
+            AddAnim("snake debug: topology on/off",
+                "yılan hata ayıklama: topoloji aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeView.Layers.ShowSnakeTopology, "topology", "topoloji"); });
+            AddAnim("snake debug: eaten cell on/off",
+                "yılan hata ayıklama: yenen hücre aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeView.Layers.ShowSnakeEatenCell, "eaten cell", "yenen hücre"); });
+            AddAnim("snake debug: cut trigger on/off",
+                "yılan hata ayıklama: kesik tetikleyicisi aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeView.Layers.ShowSnakeCutTrigger, "cut trigger", "kesik tetikleyicisi"); });
+            AddAnim("snake debug: proxy positions on/off",
+                "yılan hata ayıklama: vekil konumlar aç/kapa",
+                delegate { AnimSnakeToggle(ref SnakeView.Layers.ShowSnakeVisualProxyPositions, "proxy positions", "vekil konumlar"); });
+            AddAnimHeader("hidrolik pres", "hidrolik pres");
+            // "HIDROLIK PRES" - every scenario, on a board of the lab's own, with the REAL rules
+            // run on it (GameBoard.Compress / GameBoard.Expand through their reporting overloads).
+            // The lab fabricates the ARGUMENTS - what is in the four cells, what is standing in the
+            // way when it opens - and the animation is then exactly the one a real press would get.
+            // Each entry HOLDS what it ends on, like every other entry, until RESET or closing the
+            // lab puts the round back.
+            AddAnim("Pres: four cubes -> one (the squeeze, end to end)",
+                "pres: dört küp → bir (sıkıştırma, baştan sona)",
+                delegate { AnimPress(AnimPressScene.Full4); });
+            AddAnim("Pres: three cubes and ONE HOLE (the hole is stored too)",
+                "pres: üç küp ve BİR BOŞLUK (boşluk da saklanıyor)",
+                delegate { AnimPress(AnimPressScene.Three); });
+            AddAnim("Pres: two cubes, two holes", "pres: iki küp, iki boşluk",
+                delegate { AnimPress(AnimPressScene.Two); });
+            AddAnim("Pres: one cube, three holes", "pres: bir küp, üç boşluk",
+                delegate { AnimPress(AnimPressScene.One); });
+            AddAnim("Pres: FOUR HOLES - it presses nothing and still shuts",
+                "pres: DÖRT BOŞLUK - hiçbir şeyi preslemeden kapanıyor",
+                delegate { AnimPress(AnimPressScene.Empty); });
+            AddAnim("Pres: mixed materials (each lamina keeps its own)",
+                "pres: karışık materyal (her katman kendi materyalini koruyor)",
+                delegate { AnimPress(AnimPressScene.Mixed); });
+            AddAnim("Pres: GOLD and OBSIDIAN stored inside it",
+                "pres: içinde ALTIN ve OBSİDYEN saklanıyor",
+                delegate { AnimPress(AnimPressScene.Stone); });
+            AddAnim("Pres wait 1: just locked - shallow dimple, calm seams, one crease",
+                "pres bekleme 1: yeni kilitlendi - sığ çukur, sakin dikişler, tek çizik",
+                delegate { AnimPress(AnimPressScene.Idle1); });
+            AddAnim("Pres wait 2: pressure settling into the shell",
+                "pres bekleme 2: basınç kabuğa yerleşiyor",
+                delegate { AnimPress(AnimPressScene.Idle2); });
+            AddAnim("Pres wait 3: the shell is carrying real load",
+                "pres bekleme 3: kabuk gerçekten yük taşıyor",
+                delegate { AnimPress(AnimPressScene.Idle3); });
+            AddAnim("Pres wait FINAL: at the limit, close to release",
+                "pres bekleme SON: sınırda, açılmaya yakın",
+                delegate { AnimPress(AnimPressScene.Idle4); });
+            AddAnim("Pres: ADVANCE A TURN (the pressure tick)",
+                "pres: BİR TUR İLERLET (basınç tıkı)", AnimPressAdvanceTurn);
+            AddAnim("Pres: CLEAN release - nothing in the way",
+                "pres: TEMİZ açılma - önünde hiçbir şey yok",
+                delegate { AnimPress(AnimPressScene.CleanRelease); });
+            AddAnim("Pres: release shoving ONE cube", "pres: açılırken BİR küpü itiyor",
+                delegate { AnimPress(AnimPressScene.PushOne); });
+            AddAnim("Pres: release shoving a LONG CHAIN", "pres: açılırken UZUN ZİNCİR itiyor",
+                delegate { AnimPress(AnimPressScene.PushChain); });
+            AddAnim("Pres: a cube shoved OFF THE BOARD (one movement, no stop at the rim)",
+                "pres: bir küp ALANDAN TAŞIYOR (tek hareket, kenarda durmuyor)",
+                delegate { AnimPress(AnimPressScene.PushOffBoard); });
+            AddAnim("Pres: a straight side shut by GOLD (no reroute exists there - it fails)",
+                "pres: düz yönü ALTIN kapatıyor (orada yön değiştirme yok - patlıyor)",
+                delegate { AnimPress(AnimPressScene.BlockedGold); });
+            AddAnim("Pres: a straight side shut by OBSIDIAN",
+                "pres: düz yönü OBSİDYEN kapatıyor",
+                delegate { AnimPress(AnimPressScene.BlockedObsidian); });
+            AddAnim("Pres: the CORNER shut one way - the pressure reroutes and it opens the other",
+                "pres: KÖŞE bir yönden kapalı - basınç yön değiştirip öbür yöne açılıyor",
+                delegate { AnimPress(AnimPressScene.Rerouted); });
+            AddAnim("Pres: BOTH of the corner's ways shut - PRESSURE VESSEL FAILURE",
+                "pres: köşenin İKİ yönü de kapalı - BASINÇ KABI ÇÖKÜYOR",
+                delegate { AnimPress(AnimPressScene.Failure); });
+            AddAnim("Pres: the failure SHEARS the gold and obsidian around it",
+                "pres: çöküş etrafındaki altın ve obsidyeni EZİYOR",
+                delegate { AnimPress(AnimPressScene.FailureStone); });
+            AddAnim("Pres: BROKEN while shut - no release, the stored picture is gone",
+                "pres: sıkışıkken KIRILDI - açılma yok, saklanan resim gitti",
+                delegate { AnimPress(AnimPressScene.DestroyedShut); });
+            AddAnim("Pres: the WHOLE life - squeeze, four turns, release",
+                "pres: TÜM yaşam - sıkıştırma, dört tur, açılma",
+                delegate { AnimPress(AnimPressScene.Lifecycle); });
+            AddAnim("Pres: the whole life, ending in FAILURE",
+                "pres: tüm yaşam, sonu ÇÖKÜŞ",
+                delegate { AnimPress(AnimPressScene.FailureLifecycle); });
+            AddAnim("Pres switch: the four pressure jaws", "pres anahtarı: dört basınç çenesi",
+                delegate { AnimPressToggle(ref HydraulicPressView.Layers.ShowJaws,
+                    "jaws", "çeneler"); });
+            AddAnim("Pres switch: the laminae themselves", "pres anahtarı: katmanların kendisi",
+                delegate { AnimPressToggle(ref HydraulicPressView.Layers.ShowLaminae,
+                    "laminae", "katmanlar"); });
+            AddAnim("Pres switch: the empty quadrants' imprints",
+                "pres anahtarı: boş bölmelerin izleri",
+                delegate { AnimPressToggle(ref HydraulicPressView.Layers.ShowNullImprints,
+                    "null imprints", "boşluk izleri"); });
+            AddAnim("Pres switch: the slate shell", "pres anahtarı: slate kabuk",
+                delegate { AnimPressToggle(ref HydraulicPressView.Layers.ShowShell,
+                    "shell", "kabuk"); });
+            AddAnim("Pres switch: the directional pressure front",
+                "pres anahtarı: yönlü basınç cephesi",
+                delegate { AnimPressToggle(ref HydraulicPressView.Layers.ShowPressureFront,
+                    "pressure front", "basınç cephesi"); });
+            AddAnim("Pres switch: the pushed cubes' own response",
+                "pres anahtarı: itilen küplerin kendi tepkisi",
+                delegate { AnimPressToggle(ref HydraulicPressView.Layers.ShowPushResponse,
+                    "push response", "itme tepkisi"); });
+            AddAnim("Pres switch: the quadrant seams + stored-colour memory",
+                "pres anahtarı: bölme dikişleri + saklanan renk hafızası",
+                delegate { AnimPressToggle(ref CompressedCubeView.Layers.ShowSeams,
+                    "seams", "dikişler"); });
+            AddAnim("Pres switch: the central pressure dimple",
+                "pres anahtarı: merkezdeki basınç çukuru",
+                delegate { AnimPressToggle(ref CompressedCubeView.Layers.ShowDimple,
+                    "dimple", "çukur"); });
+            AddAnim("Pres switch: the quadrant pressure scars (the countdown)",
+                "pres anahtarı: bölme basınç çizikleri (geri sayım)",
+                delegate { AnimPressToggle(ref CompressedCubeView.Layers.ShowScars,
+                    "pressure scars", "basınç çizikleri"); });
+            AddAnim("Pres switch: the compressed cube's contact shadow",
+                "pres anahtarı: preslenmiş küpün temas gölgesi",
+                delegate { AnimPressToggle(ref CompressedCubeView.Layers.ShowShadow,
+                    "contact shadow", "temas gölgesi"); });
+            AddAnim("Pres switch: the failure's inward collapse",
+                "pres anahtarı: çöküşün içe göçmesi",
+                delegate { AnimPressToggle(ref PressureVesselView.Layers.ShowCollapse,
+                    "inward collapse", "içe göçme"); });
+            AddAnim("Pres switch: the failure's overpressure burst",
+                "pres anahtarı: çöküşün aşırı basınç dalgası",
+                delegate { AnimPressToggle(ref PressureVesselView.Layers.ShowBurst,
+                    "burst", "dalga"); });
+            AddAnim("Pres switch: the indestructible shear",
+                "pres anahtarı: kırılmaz küplerin ezilmesi",
+                delegate { AnimPressToggle(ref PressureVesselView.Layers.ShowShear,
+                    "shear", "ezilme"); });
+            AddAnim("Pres switch: the failure's residue", "pres anahtarı: çöküş kalıntısı",
+                delegate { AnimPressToggle(ref PressureVesselView.Layers.ShowResidue,
+                    "residue", "kalıntı"); });
+            AddAnim("Pres switch: ALL press layers back on",
+                "pres anahtarı: TÜM pres katmanları geri açık",
+                delegate
+                {
+                    HydraulicPressView.Layers.AllOn();
+                    CompressedCubeView.Layers.AllOn();
+                    PressureVesselView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("every press layer on", "tüm pres katmanları açık");
+                    if (AnimLabOpen)
+                    {
+                        RedrawAnimationLab();
+                    }
+                });
+            AddAnimHeader("parazit / konak küp", "parazit / konak küp");
+            // "PARAZIT" - the clasp on a host cube, on a board of the lab's own, with the REAL
+            // rules run on it: the refusals come from GameBoard.DestroyCube / DestroyCubeForced
+            // writing them down, exactly as they do in a turn.
+            AddAnim("Konak: blue cube under the clasp", "konak: mavi küp kenedin altında",
+                delegate { AnimHost(AnimHostScene.Blue); });
+            AddAnim("Konak: red cube (its own colour survives)",
+                "konak: kırmızı küp (kendi rengi duruyor)",
+                delegate { AnimHost(AnimHostScene.Red); });
+            AddAnim("Konak HERO: OBSIDIAN - dark on dark, the parasite must still read",
+                "konak HERO: OBSİDYEN - koyu üstüne koyu, parazit yine de okunmalı",
+                delegate { AnimHost(AnimHostScene.Purple); });
+            AddAnim("Konak HERO: GOLD - still gold, but drained and dusty",
+                "konak HERO: ALTIN - hâlâ altın, ama emilmiş ve tozlu",
+                delegate { AnimHost(AnimHostScene.Special); });
+            AddAnim("Konak test: the passenger's identity (press to cycle jokers)",
+                "konak testi: yolcunun kimliği (her basışta başka joker)",
+                delegate { AnimHost(AnimHostScene.PassengerColours); });
+            AddAnim("Konak: SEATING - the clasp locks on", "konak: KENETLENME - kenet oturuyor",
+                delegate { AnimHost(AnimHostScene.Seating); });
+            AddAnim("Konak: idle - the cube tries to get out", "konak: bekleme - küp çıkmaya çalışıyor",
+                delegate { AnimHost(AnimHostScene.IdlePulse); });
+            AddAnim("Konak: idle on OBSIDIAN (readability test)",
+                "konak: OBSİDYEN üzerinde bekleme (okunurluk testi)",
+                delegate { AnimHost(AnimHostScene.IdleObsidian); });
+            AddAnim("Konak: line tear on OBSIDIAN", "konak: OBSİDYEN üzerinde hat yırtığı",
+                delegate { AnimHost(AnimHostScene.TearObsidian); });
+            AddAnim("Konak: a power tries to destroy it and is REFUSED",
+                "konak: bir güç kırmayı deniyor ve REDDEDİLİYOR",
+                delegate { AnimHost(AnimHostScene.ResistDestroy); });
+            AddAnim("Konak: a moving board tries to carry it RIGHT",
+                "konak: hareketli tahta onu SAĞA taşımaya çalışıyor",
+                delegate { AnimHost(AnimHostScene.ForcedRight); });
+            AddAnim("Konak: a moving board tries to carry it UP",
+                "konak: hareketli tahta onu YUKARI taşımaya çalışıyor",
+                delegate { AnimHost(AnimHostScene.ForcedUp); });
+            AddAnim("Konak: the sweep passes over and cannot take it",
+                "konak: temizlik üstünden geçiyor ama alamıyor",
+                delegate { AnimHost(AnimHostScene.SweepPass); });
+            AddAnim("Konak: a HORIZONTAL line takes it - bond severance",
+                "konak: YATAY hat onu alıyor - bağ kopması",
+                delegate { AnimHost(AnimHostScene.LineHorizontal); });
+            AddAnim("Konak: a VERTICAL line takes it", "konak: DİKEY hat onu alıyor",
+                delegate { AnimHost(AnimHostScene.LineVertical); });
+            AddAnim("Konak: the passenger's own death beat",
+                "konak: yolcunun kendi ölüm anı",
+                delegate { AnimHost(AnimHostScene.PassengerLoss); });
+            AddAnim("Konak: the WHOLE life - seat, resist, resist, die",
+                "konak: TÜM yaşam - kenetlen, diren, diren, öl",
+                delegate { AnimHost(AnimHostScene.Lifecycle); });
+            AddAnim("Konak HERO: the whole life on OBSIDIAN",
+                "konak HERO: OBSİDYEN üzerinde tüm yaşam",
+                delegate { AnimHost(AnimHostScene.LifecycleObsidian); });
+            AddAnim("Konak test: colour drain OFF (the film alone says nothing)",
+                "konak testi: renk emme KAPALI (zar tek başına bir şey söylemiyor)",
+                delegate { AnimHost(AnimHostScene.DrainNone); });
+            AddAnim("Konak test: colour drain THIN", "konak testi: renk emme İNCE",
+                delegate { AnimHost(AnimHostScene.DrainThin); });
+            AddAnim("Konak test: colour drain MEDIUM (the tuned value)",
+                "konak testi: renk emme ORTA (ayarlı değer)",
+                delegate { AnimHost(AnimHostScene.DrainMedium); });
+            AddAnim("Konak test: colour drain HEAVY", "konak testi: renk emme AĞIR",
+                delegate { AnimHost(AnimHostScene.DrainHeavy); });
+            AddAnim("Konak test: the MEMBRANE alone", "konak testi: yalnızca ZAR",
+                delegate { AnimHost(AnimHostScene.MembraneOnly); });
+            AddAnim("Konak test: the NECROTIC CRUST alone", "konak testi: yalnızca ÖLÜ KABUK",
+                delegate { AnimHost(AnimHostScene.PatchesOnly); });
+            AddAnim("Konak test: the WRAP FOLDS alone", "konak testi: yalnızca SARGI KIVRIMLARI",
+                delegate { AnimHost(AnimHostScene.FoldsOnly); });
+            AddAnim("Konak test: the NEST and its passenger alone",
+                "konak testi: yalnızca YUVA ve yolcusu",
+                delegate { AnimHost(AnimHostScene.NestOnly); });
+            AddAnim("Konak switch: the binding strands",
+                "konak anahtarı: sarma bantları",
+                delegate { AnimHostToggle(ref ParasiteHostView.Layers.ShowRibs,
+                    "ribs", "bantlar"); });
+            AddAnim("Konak switch: the membrane",
+                "konak anahtarı: zar",
+                delegate { AnimHostToggle(ref ParasiteHostView.Layers.ShowMembrane,
+                    "membrane", "zar"); });
+            AddAnim("Konak switch: the thick wrap folds",
+                "konak anahtarı: kalın sargı kıvrımları",
+                delegate { AnimHostToggle(ref ParasiteHostView.Layers.ShowFolds,
+                    "folds", "kıvrımlar"); });
+            AddAnim("Konak switch: the film's holes (negative space)",
+                "konak anahtarı: zarın delikleri (negatif alan)",
+                delegate { AnimHostToggle(ref ParasiteHostView.Layers.ShowWindows,
+                    "windows", "delikler"); });
+            AddAnim("Konak switch: the necrotic crust",
+                "konak anahtarı: ölü kabuk",
+                delegate { AnimHostToggle(ref ParasiteHostView.Layers.ShowPatches,
+                    "crust", "kabuk"); });
+            AddAnim("Konak switch: the veins", "konak anahtarı: damarlar",
+                delegate { AnimHostToggle(ref ParasiteHostView.Layers.ShowVeins,
+                    "veins", "damarlar"); });
+            AddAnim("Konak switch: the nest core", "konak anahtarı: yuva çekirdeği",
+                delegate { AnimHostToggle(ref ParasiteHostView.Layers.ShowCore,
+                    "core", "çekirdek"); });
+            AddAnim("Konak switch: the passenger's essence",
+                "konak anahtarı: yolcunun özü",
+                delegate { AnimHostToggle(ref ParasiteHostView.Layers.ShowEssence,
+                    "essence", "öz"); });
+            AddAnim("Konak switch: the membrane's deformation (the cube pushing out)",
+                "konak anahtarı: zarın deformasyonu (kübün dışarı bastırması)",
+                delegate { AnimHostToggle(ref ParasiteHostView.Layers.ShowDeformation,
+                    "deformation", "deformasyon"); });
+            AddAnim("Konak switch: the harness's contact shadows",
+                "konak anahtarı: kenedin temas gölgeleri",
+                delegate { AnimHostToggle(ref ParasiteHostView.Layers.ShowShadows,
+                    "shadows", "gölgeler"); });
+            AddAnim("Konak switch: ALL parasite layers back on",
+                "konak anahtarı: TÜM parazit katmanları geri açık",
+                delegate
+                {
+                    ParasiteHostView.Layers.AllOn();
+                    animLastLabel = Loc.Pick(
+                        "every parasite layer on, drain back to its tuned value",
+                        "tüm parazit katmanları açık, emme ayarlı değerine döndü");
+                    if (AnimLabOpen)
+                    {
+                        RedrawAnimationLab();
+                    }
+                });
+            AddAnimHeader("raw - not reworked yet", "ham - henüz elden geçirilmedi");
+            // Everything under this heading is the CURRENT state of something nobody has designed
+            // yet: a mechanic with no visual language of its own, or a look that exists in the game
+            // but had no way of being reached from here. They are deliberately plain - the point is
+            // to have a BEFORE to hold the next pass against.
+            AddAnim("RAW - Mapus sealed cell and Tılsım bonus ground (a tint, nothing else)",
+                "ham - Mapus mühürlü hücre ve Tılsım bonus zemini (yalnız renk)",
+                delegate { AnimRawBoard(AnimRawScene.CellStates); });
+            AddAnim("RAW - overtime: the board's pressure squeeze (overtime knob)",
+                "ham - uzatma: alanın basınç sıkışması (uzatma ayarı)", AnimRawPressure);
+            AddAnim("RAW - overtime: the screen vignette (overtime knob)",
+                "ham - uzatma: ekran vinyeti (uzatma ayarı)", AnimRawVignette);
+            AddAnim("RAW - overtime: the glow under the grid (overtime knob)",
+                "ham - uzatma: ızgara altındaki hat parıltısı (uzatma ayarı)", AnimRawGlow);
+            AddAnim("RAW - Öteki dünya: two boards on one screen",
+                "ham - Öteki dünya: tek ekranda iki tahta", AnimRawMirror);
+            AddAnim("RAW - the backdrop alone (everything else hidden for a beat)",
+                "ham - yalnız arka plan (gerisi bir an için gizlenir)", AnimRawBackdrop);
+            AddAnim("RAW - retro skin: CRT scanlines + bit crush on/off",
+                "ham - retro deri: CRT tarama çizgileri + bit-crush aç/kapa", AnimRawRetro);
+            AddAnim("RAW - a card in the hand: lift, drag, drop back",
+                "ham - eldeki kart: kaldır, sürükle, yerine bırak", AnimRawCardFeel);
+            AddAnim("RAW - Devre cooking, slowed right down (heat, cracks, ash)",
+                "ham - Devre pişmesi, iyice yavaşlatılmış (ısı, çatlak, kül)", AnimRawCircuitSlow);
             AddAnimHeader("full sequences", "tam diziler");
             AddAnim("TURN: line clear", "TUR: satır patlaması", AnimTurnLineClear);
             AddAnim("TURN: clean sweep", "TUR: temizlik", AnimTurnCleanSweep);
@@ -1886,7 +2478,7 @@ namespace ProjectBlock.View
         /// One of those bosses AS IT PLAYS IN ITS ROUND - not a cold mark on cells in the middle of
         /// the arena, which no boss ever names. The lab puts up a board of its own, the real one's
         /// size and about half full of the run's own blocks, and ends two turns on it, each the
-        /// game's own sequence: the board changes, it is repainted, and LiftCells plays on exactly
+        /// game's own sequence: the board changes, it is repainted, and the move's own seams play on exactly
         /// the cells the boss reported.
         ///
         ///   ESCALATOR   the real ShiftRowsUp: every row rides up one (PlayBoardMoves) and the top
@@ -2329,7 +2921,7 @@ namespace ProjectBlock.View
         }
 
         /// <summary>One turn end of the scene's boss on the lab board. Returns the cells it reports
-        /// as lifted - exactly what the game hands LiftCells.</summary>
+        /// as lifted - exactly what the game hands PlayForcedExit.</summary>
         private static List<GridPos> AnimBossTurn(GameBoard board, AnimBossScene scene, int turn,
             List<LiftMotion> motions, List<CellMove> moves)
         {
@@ -2752,6 +3344,1697 @@ namespace ProjectBlock.View
                     });
                 }
                 turn.Deaths.Add(line);
+            }
+        }
+
+
+
+        // ------------------------------------------------------------------ yılan
+
+        /// <summary>Every snake scenario the lab can put up.</summary>
+        private enum AnimSnakeScene
+        {
+            Spawn8,
+            Spawn12,
+            Spawn20,
+            Idle,
+            Slide1,
+            Slide3,
+            SlideLong,
+            SlideTurn,
+            Stuck,
+            EatNormal,
+            EatColour,
+            EatWater,
+            EatFire,
+            EatObsidian,
+            EatGold,
+            EatAndGrow,
+            Cut1,
+            Cut2,
+            Cut3,
+            Defeat,
+            FullTurn,
+            LineClear,
+            Directions,
+            Shapes,
+            BiteDirections
+        }
+
+        private Coroutine animSnake;
+
+        /// <summary>Which way the direction and bite tests go next, one per press.</summary>
+        private int animSnakeDirection;
+
+        /// <summary>Which body shape the shape test shows next.</summary>
+        private int animSnakeShape;
+
+        /// <summary>Which plain block the bite row is feeding it - one press, one colour. Static
+        /// because the food is chosen in AnimSnakeFood, which has no instance to ask.</summary>
+        private static int animEatColour;
+
+        /// <summary>Right, up, left, down - the four ways a snake can go.</summary>
+        private static readonly GridPos[] AnimSnakeSteps =
+        {
+            new GridPos(1, 0), new GridPos(0, 1), new GridPos(-1, 0), new GridPos(0, -1)
+        };
+
+        private static readonly string[] AnimSnakeStepNames = { "sağa", "yukarı", "sola", "aşağı" };
+
+        /// <summary>
+        /// One snake scenario, on a board of the lab's own and through the same seams the game uses:
+        /// PlaySnakeBody puts it there, PlaySnakeScene plays what it did. The lab fabricates the
+        /// ARGUMENTS only - the shape, the food, the number of lines that crossed it - exactly as
+        /// Core would have reported them, so what plays is the real animation.
+        /// </summary>
+        private void AnimSnake(AnimSnakeScene scene)
+        {
+            StopAnimSnake();
+            StopAnimBossLift();
+            StopAnimRot();
+            StopAnimRaw();
+            if (scene == AnimSnakeScene.Directions || scene == AnimSnakeScene.BiteDirections)
+            {
+                animSnakeDirection = (animSnakeDirection + 1) & 3;
+                animLastLabel = Loc.Pick("snake: ", "yılan: ") + AnimSnakeStepNames[animSnakeDirection];
+            }
+            if (scene == AnimSnakeScene.Shapes)
+            {
+                animSnakeShape = (animSnakeShape + 1) % 5;
+            }
+            animSnake = StartCoroutine(SnakeRoutine(scene));
+        }
+
+        private void StopAnimSnake()
+        {
+            if (animSnake != null)
+            {
+                StopCoroutine(animSnake);
+                animSnake = null;
+            }
+            boardView.StopSnake();
+        }
+
+        private IEnumerator SnakeRoutine(AnimSnakeScene scene)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                animSnake = null;
+                yield break;
+            }
+            // Nine wide, so a long slide has somewhere to go and a 20-segment snake still fits.
+            int w = Mathf.Max(9, round.Board.Width);
+            int h = Mathf.Max(9, round.Board.Height);
+            var board = new GameBoard(w, h);
+            List<int> cards = AnimBossCards();
+            var body = new List<GridPos>();
+            GridPos step = AnimSnakeSteps[animSnakeDirection];
+            AnimSnakeSetup(board, scene, cards, body, ref step);
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            bool waking = scene == AnimSnakeScene.Spawn8 || scene == AnimSnakeScene.Spawn12
+                || scene == AnimSnakeScene.Spawn20;
+            PlaySnakeBody(body, waking);
+            yield return new WaitForSeconds(waking ? 0.1f : AnimBossBeat);
+            SnakeView.TurnScene turn = AnimSnakeTurn(board, scene, body, step);
+            if (turn != null)
+            {
+                if (scene == AnimSnakeScene.LineClear)
+                {
+                    // The player's own line goes off FIRST: that is the cause the cut answers.
+                    FlashLine(board, turn.Cuts[0].Trigger.Y, true);
+                    yield return new WaitForSeconds(0.12f);
+                }
+                AnimSnakeApply(board, turn);
+                boardView.Refresh();
+                PlaySnakeScene(turn);
+            }
+            float guard = 0f;
+            while (boardView.Snake.Busy && guard < 8f)
+            {
+                guard += Time.deltaTime;
+                yield return null;
+            }
+            // AND IT STAYS. The state worth looking at in a snake scene is the one the turn
+            // ENDS in - a segment longer, the head in the cell it emptied - so the lab holds it
+            // like every other entry does, until RESET or closing the lab puts the round back.
+            // It used to resync itself a breath later, which read as the snake biting and then
+            // going straight back to how it was.
+            if (turn != null)
+            {
+                AnimSnakeSayResult(turn);
+            }
+            animSnake = null;
+        }
+
+        /// <summary>Lays the snake and whatever is standing in front of it, and says which way the
+        /// scene's move goes.</summary>
+        private void AnimSnakeSetup(GameBoard board, AnimSnakeScene scene, List<int> cards,
+            List<GridPos> body, ref GridPos step)
+        {
+            int w = board.Width;
+            int h = board.Height;
+            int row = h / 2;
+            switch (scene)
+            {
+                case AnimSnakeScene.Spawn8:
+                    AnimSnakeCoil(board, body, 8);
+                    break;
+                case AnimSnakeScene.Spawn12:
+                    AnimSnakeCoil(board, body, 12);
+                    break;
+                case AnimSnakeScene.Spawn20:
+                    AnimSnakeCoil(board, body, 20);
+                    break;
+                case AnimSnakeScene.Idle:
+                    AnimSnakeShape(board, body, 3, 1);
+                    break;
+                case AnimSnakeScene.Shapes:
+                    AnimSnakeShape(board, body, 2, animSnakeShape);
+                    break;
+                case AnimSnakeScene.Slide1:
+                    // Two cells from the wall: it slides one and the wall stops it.
+                    AnimSnakeRun(board, body, new GridPos(w - 2, row), new GridPos(-1, 0), 7);
+                    step = new GridPos(1, 0);
+                    break;
+                case AnimSnakeScene.Slide3:
+                    AnimSnakeRun(board, body, new GridPos(w - 4, row), new GridPos(-1, 0), 6);
+                    step = new GridPos(1, 0);
+                    break;
+                case AnimSnakeScene.SlideLong:
+                    AnimSnakeRun(board, body, new GridPos(2, row), new GridPos(-1, 0), 2);
+                    step = new GridPos(1, 0);
+                    break;
+                case AnimSnakeScene.SlideTurn:
+                    // Lying along the row, and the move goes UP: the head comes round and a corner
+                    // forms behind it.
+                    AnimSnakeRun(board, body, new GridPos(w / 2, 1), new GridPos(-1, 0), 7);
+                    step = new GridPos(0, 1);
+                    break;
+                case AnimSnakeScene.Stuck:
+                    // Its own body on one side, the arena's corner on the other two.
+                    body.Add(new GridPos(0, 0));
+                    body.Add(new GridPos(1, 0));
+                    body.Add(new GridPos(1, 1));
+                    body.Add(new GridPos(0, 1));
+                    body.Add(new GridPos(0, 2));
+                    body.Add(new GridPos(1, 2));
+                    AnimSnakePlace(board, body);
+                    step = new GridPos(1, 0);
+                    break;
+                case AnimSnakeScene.EatNormal:
+                case AnimSnakeScene.EatColour:
+                case AnimSnakeScene.EatWater:
+                case AnimSnakeScene.EatFire:
+                case AnimSnakeScene.EatObsidian:
+                case AnimSnakeScene.EatGold:
+                {
+                    AnimSnakeRun(board, body, new GridPos(w / 2, row), new GridPos(-1, 0), 7);
+                    step = new GridPos(1, 0);
+                    var food = new GridPos(w / 2 + 1, row);
+                    board.SetCubeAt(food, AnimSnakeFood(scene, food, cards));
+                    break;
+                }
+                case AnimSnakeScene.EatAndGrow:
+                case AnimSnakeScene.FullTurn:
+                {
+                    AnimSnakeRun(board, body, new GridPos(w - 6, row), new GridPos(-1, 0), 6);
+                    step = new GridPos(1, 0);
+                    var food = new GridPos(w - 2, row);
+                    board.SetCubeAt(food, AnimSnakeFood(AnimSnakeScene.EatNormal, food, cards));
+                    break;
+                }
+                case AnimSnakeScene.BiteDirections:
+                {
+                    var head = new GridPos(w / 2, h / 2);
+                    GridPos back = new GridPos(-step.X, -step.Y);
+                    AnimSnakeRun(board, body, head, back, 6);
+                    var food = new GridPos(head.X + step.X, head.Y + step.Y);
+                    board.SetCubeAt(food, AnimSnakeFood(AnimSnakeScene.EatNormal, food, cards));
+                    break;
+                }
+                case AnimSnakeScene.Directions:
+                {
+                    var head = new GridPos(w / 2, h / 2);
+                    AnimSnakeRun(board, body, head, new GridPos(-step.X, -step.Y), 6);
+                    break;
+                }
+                case AnimSnakeScene.Defeat:
+                    AnimSnakeRun(board, body, new GridPos(w / 2, row), new GridPos(-1, 0), 3);
+                    break;
+                default:
+                    AnimSnakeRun(board, body, new GridPos(w / 2 + 2, row), new GridPos(-1, 0), 8);
+                    break;
+            }
+            // A board with something on it: the snake is not floating in an empty arena.
+            var reserved = new HashSet<GridPos>(body);
+            for (int x = 0; x < w; x++)
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    var cell = new GridPos(x, y);
+                    if (!reserved.Contains(cell) && board.GetCube(cell).HasValue)
+                    {
+                        reserved.Add(cell);
+                    }
+                }
+            }
+            // AND ITS PATH STAYS CLEAR. Without this the fill drops blocks in front of the snake,
+            // so "slides three cells" slides one and eats instead - the entry stops doing what its
+            // name says, and a bug cannot be told apart from the dice. Whatever a scene WANTS in
+            // the way it has already put there, and an existing cube is reserved above.
+            if (body.Count > 0 && (step.X != 0 || step.Y != 0))
+            {
+                var ahead = body[0];
+                for (int i = 0; i < w + h; i++)
+                {
+                    ahead = new GridPos(ahead.X + step.X, ahead.Y + step.Y);
+                    if (!board.IsInside(ahead))
+                    {
+                        break;
+                    }
+                    reserved.Add(ahead);
+                }
+            }
+            AnimRotFill(board, cards, 16u, reserved);
+        }
+
+        private static Cube AnimSnakeFood(AnimSnakeScene scene, GridPos cell, List<int> cards)
+        {
+            switch (scene)
+            {
+                case AnimSnakeScene.EatObsidian:
+                    return new Cube(CubeKind.Obsidian, AnimRotWallCard);
+                case AnimSnakeScene.EatGold:
+                    return new Cube(CubeKind.Gold, AnimRotWallCard);
+                case AnimSnakeScene.EatWater:
+                    return new Cube(CubeKind.Water, cards.Count > 0 ? cards[0] : 101);
+                case AnimSnakeScene.EatFire:
+                    return new Cube(CubeKind.Fire, cards.Count > 0 ? cards[0] : 101);
+                case AnimSnakeScene.EatColour:
+                    // A DIFFERENT plain block every press. Nothing in the effect knows about
+                    // block types, so each of these has to come out its own colour - and if two
+                    // of them look the same, the colour is not being taken off the block.
+                    return new Cube(CubeKind.Normal, cards.Count > 0
+                        ? cards[animEatColour % cards.Count] : 101);
+                default:
+                    return new Cube(CubeKind.Normal, cards.Count > 0 ? cards[0] : 101);
+            }
+        }
+
+        /// <summary>A straight snake: the head at <paramref name="head"/> and the body running away
+        /// from it along <paramref name="back"/>, clipped to the arena.</summary>
+        private static void AnimSnakeRun(GameBoard board, List<GridPos> body, GridPos head,
+            GridPos back, int length)
+        {
+            var at = head;
+            for (int i = 0; i < length; i++)
+            {
+                if (!board.IsInside(at))
+                {
+                    break;
+                }
+                body.Add(at);
+                at = new GridPos(at.X + back.X, at.Y + back.Y);
+            }
+            AnimSnakePlace(board, body);
+        }
+
+        /// <summary>The serpentine the rules lay a snake in at the start of a round, so the wake-up
+        /// is watched on the shape it really has.</summary>
+        private static void AnimSnakeCoil(GameBoard board, List<GridPos> body, int length)
+        {
+            for (int y = 0; y < board.Height && body.Count < length; y++)
+            {
+                bool leftToRight = (y % 2) == 0;
+                for (int i = 0; i < board.Width && body.Count < length; i++)
+                {
+                    int x = leftToRight ? i : board.Width - 1 - i;
+                    body.Add(new GridPos(x, y));
+                }
+            }
+            body.Reverse();
+            AnimSnakePlace(board, body);
+        }
+
+        /// <summary>The five shapes the topology has to survive: straight, one corner, several, an
+        /// S, and a long serpentine.</summary>
+        private static void AnimSnakeShape(GameBoard board, List<GridPos> body, int y0, int shape)
+        {
+            var path = new List<GridPos>();
+            var at = new GridPos(1, y0);
+            var moves = new List<GridPos>();
+            switch (shape)
+            {
+                case 0:
+                    moves.AddRange(new[] { new GridPos(1, 0), new GridPos(1, 0), new GridPos(1, 0),
+                        new GridPos(1, 0), new GridPos(1, 0), new GridPos(1, 0) });
+                    break;
+                case 1:
+                    moves.AddRange(new[] { new GridPos(1, 0), new GridPos(1, 0), new GridPos(1, 0),
+                        new GridPos(0, 1), new GridPos(0, 1), new GridPos(0, 1) });
+                    break;
+                case 2:
+                    moves.AddRange(new[] { new GridPos(1, 0), new GridPos(0, 1), new GridPos(1, 0),
+                        new GridPos(0, 1), new GridPos(1, 0), new GridPos(0, 1), new GridPos(1, 0) });
+                    break;
+                case 3:
+                    moves.AddRange(new[] { new GridPos(1, 0), new GridPos(1, 0), new GridPos(0, 1),
+                        new GridPos(0, 1), new GridPos(1, 0), new GridPos(1, 0), new GridPos(0, 1),
+                        new GridPos(0, 1), new GridPos(1, 0) });
+                    break;
+                default:
+                    for (int i = 0; i < 4; i++)
+                    {
+                        moves.Add(new GridPos(1, 0));
+                    }
+                    moves.Add(new GridPos(0, 1));
+                    for (int i = 0; i < 4; i++)
+                    {
+                        moves.Add(new GridPos(-1, 0));
+                    }
+                    moves.Add(new GridPos(0, 1));
+                    for (int i = 0; i < 4; i++)
+                    {
+                        moves.Add(new GridPos(1, 0));
+                    }
+                    break;
+            }
+            path.Add(at);
+            for (int i = 0; i < moves.Count; i++)
+            {
+                at = new GridPos(at.X + moves[i].X, at.Y + moves[i].Y);
+                if (!board.IsInside(at))
+                {
+                    break;
+                }
+                path.Add(at);
+            }
+            path.Reverse();                // head first, as the rules keep it
+            body.AddRange(path);
+            AnimSnakePlace(board, body);
+        }
+
+        private static void AnimSnakePlace(GameBoard board, List<GridPos> body)
+        {
+            for (int i = 0; i < body.Count; i++)
+            {
+                if (board.IsInside(body[i]))
+                {
+                    board.SetCubeAt(body[i], new Cube(CubeKind.Snake, SnakeBoss.SnakeCardId));
+                }
+            }
+        }
+
+        /// <summary>
+        /// What the scene's turn WAS: the same shape of report Core writes - the cuts in order with
+        /// the tail cell each one took, and the slide cell by cell with what it ate at the end.
+        /// The slide is walked by the same rule the boss uses (on it goes until a wall, its own body
+        /// or a block stops it, and a block that stops it is eaten).
+        /// </summary>
+        private SnakeView.TurnScene AnimSnakeTurn(GameBoard board, AnimSnakeScene scene,
+            List<GridPos> body, GridPos step)
+        {
+            if (scene == AnimSnakeScene.Idle || scene == AnimSnakeScene.Shapes
+                || scene == AnimSnakeScene.Spawn8 || scene == AnimSnakeScene.Spawn12
+                || scene == AnimSnakeScene.Spawn20)
+            {
+                return null;
+            }
+            var turn = new SnakeView.TurnScene();
+            turn.BodyBefore.AddRange(body);
+            var standing = new List<GridPos>(body);
+            int cuts = scene == AnimSnakeScene.Cut1 || scene == AnimSnakeScene.LineClear ? 1
+                : scene == AnimSnakeScene.Cut2 ? 2
+                : scene == AnimSnakeScene.Cut3 ? 3
+                : scene == AnimSnakeScene.Defeat ? standing.Count : 0;
+            for (int i = 0; i < cuts && standing.Count > 0; i++)
+            {
+                var after = new List<GridPos>(standing);
+                GridPos tail = after[after.Count - 1];
+                after.RemoveAt(after.Count - 1);
+                // The line that did it crosses the snake where the head is: the signal then has the
+                // whole body to travel down, which is the thing worth watching.
+                turn.Cuts.Add(new SnakeView.CutStep
+                {
+                    Trigger = standing[Mathf.Min(i, standing.Count - 1)],
+                    RemovedTail = tail,
+                    BodyAfter = after
+                });
+                standing = after;
+            }
+            if (standing.Count == 0)
+            {
+                turn.Defeated = true;
+                turn.BodyAfter.AddRange(standing);
+                return turn;
+            }
+            if (cuts > 0)
+            {
+                // A cut turn in the lab is about the cut: nothing slides afterwards.
+                turn.BodyAfter.AddRange(standing);
+                return turn;
+            }
+            if (scene == AnimSnakeScene.Stuck)
+            {
+                turn.Stuck = true;
+                turn.BodyAfter.AddRange(standing);
+                return turn;
+            }
+            // The slide, by the boss's own rule.
+            var live = new List<GridPos>(standing);
+            for (int guard = 0; guard < board.Width + board.Height; guard++)
+            {
+                var next = new GridPos(live[0].X + step.X, live[0].Y + step.Y);
+                if (!board.IsInside(next) || live.Contains(next))
+                {
+                    break;
+                }
+                Cube? food = board.GetCube(next);
+                bool ate = food.HasValue;
+                live.Insert(0, next);
+                if (!ate)
+                {
+                    live.RemoveAt(live.Count - 1);
+                }
+                turn.Steps.Add(new List<GridPos>(live));
+                if (ate)
+                {
+                    turn.EatenCell = next;
+                    turn.EatenLook = LookOf(food.Value);
+                    turn.Grew = true;
+                    break;
+                }
+            }
+            turn.BodyAfter.AddRange(live);
+            return turn;
+        }
+
+        /// <summary>Leaves the lab board where the turn leaves it: the snake in its new cells, and
+        /// whatever it ate gone - exactly the state Core would have handed the View.</summary>
+        private static void AnimSnakeApply(GameBoard board, SnakeView.TurnScene turn)
+        {
+            for (int i = 0; i < turn.BodyBefore.Count; i++)
+            {
+                board.DestroyCubeForced(turn.BodyBefore[i]);
+            }
+            if (turn.EatenCell.HasValue)
+            {
+                board.DestroyCubeForced(turn.EatenCell.Value);
+            }
+            for (int i = 0; i < turn.BodyAfter.Count; i++)
+            {
+                if (board.IsInside(turn.BodyAfter[i]))
+                {
+                    board.SetCubeAt(turn.BodyAfter[i], new Cube(CubeKind.Snake, SnakeBoss.SnakeCardId));
+                }
+            }
+        }
+
+        /// <summary>What the turn ENDED as, against what actually got drawn. The rules and the
+        /// drawing agreeing is the whole contract of this boss, so the lab states it out loud
+        /// rather than leaving it to be measured off the screen by eye.</summary>
+        private void AnimSnakeSayResult(SnakeView.TurnScene turn)
+        {
+            List<GridPos> said = turn.BodyAfter;
+            IReadOnlyList<GridPos> drew = boardView.Snake.DrawnBody;
+            string eaten = turn.EatenCell.HasValue
+                ? string.Format("{0},{1}", turn.EatenCell.Value.X, turn.EatenCell.Value.Y) : "-";
+            string head = said.Count > 0
+                ? string.Format("{0},{1}", said[0].X, said[0].Y) : "-";
+            string at = drew != null && drew.Count > 0
+                ? string.Format("{0},{1}", drew[0].X, drew[0].Y) : "-";
+            bool agree = drew != null && drew.Count == said.Count && head == at;
+            animLastLabel = Loc.Pick(
+                string.Format("snake: rules say head {0}, {1} segments, ate {2} - drawn head {3}"
+                    + ", {4} segments{5}", head, said.Count, eaten, at,
+                    drew != null ? drew.Count : 0, agree ? "" : "  <-- DISAGREE"),
+                string.Format("yılan: kurallar kafa {0}, {1} segment, yenen {2} - çizilen kafa {3}"
+                    + ", {4} segment{5}", head, said.Count, eaten, at,
+                    drew != null ? drew.Count : 0, agree ? "" : "  <-- UYUŞMUYOR"));
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>The boss's end, on a palette handed in by hand - null means "whatever this
+        /// round actually ate", an empty array means "it ate nothing", and anything else stands in
+        /// for a round that swallowed those colours.</summary>
+        private void AnimSnakeDefeat(Color[] palette)
+        {
+            if (palette != null)
+            {
+                SnakeDefeatView.OverrideHistory(palette);
+            }
+            animLastLabel = Loc.Pick(
+                string.Format("snake beaten: {0} colours in its palette",
+                    palette == null ? SnakeDefeatView.RememberedCount : palette.Length),
+                string.Format("yılan yenilgi: paletinde {0} renk",
+                    palette == null ? SnakeDefeatView.RememberedCount : palette.Length));
+            AnimSnake(AnimSnakeScene.Defeat);
+        }
+
+        /// <summary>Flips one of the snake's debug switches and says which way it went.</summary>
+        private void AnimSnakeToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("snake " + english + ": ", "yılan " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        // ------------------------------------------------------------------ hidrolik pres
+        //
+        // "HIDROLIK PRES", every scenario, on a board of the lab's OWN - and it RUNS THE REAL RULES
+        // on it: GameBoard.Compress and GameBoard.Expand, through their reporting overloads, exactly
+        // as the power calls them. So the laminae, the push chain, the side that refuses, the axis
+        // the corner opens on and the failure's footprint are the rules' own answers here, not a
+        // drawing of them. What the lab fabricates is only the ARGUMENTS: the shape of the board,
+        // what is standing in the way, and which turn of the countdown to hold.
+
+        private enum AnimPressScene
+        {
+            Full4,
+            Three,
+            Two,
+            One,
+            Empty,
+            Mixed,
+            Stone,
+            Idle1,
+            Idle2,
+            Idle3,
+            Idle4,
+            CleanRelease,
+            PushOne,
+            PushChain,
+            PushOffBoard,
+            BlockedGold,
+            BlockedObsidian,
+            Rerouted,
+            Failure,
+            FailureStone,
+            DestroyedShut,
+            Lifecycle,
+            FailureLifecycle
+        }
+
+        /// <summary>The press scene playing, so pressing another one stops it.</summary>
+        private Coroutine animPress;
+
+        /// <summary>Which wait turn the lab is currently showing, so ADVANCE A TURN can step it and
+        /// the pressure tick can be watched on its own rather than only in a whole lifecycle.
+        /// </summary>
+        private int animPressWaitTurn;
+
+        private void AnimPress(AnimPressScene scene)
+        {
+            StopAnimPress();
+            StopAnimSnake();
+            StopAnimBossLift();
+            StopAnimRot();
+            StopAnimRaw();
+            animPress = StartCoroutine(PressRoutine(scene));
+        }
+
+        private void StopAnimPress()
+        {
+            if (animPress != null)
+            {
+                StopCoroutine(animPress);
+                animPress = null;
+            }
+            if (hydraulicPress != null)
+            {
+                hydraulicPress.Stop();
+            }
+            if (pressureVessel != null)
+            {
+                pressureVessel.Stop();
+            }
+            boardView.StopPress();
+        }
+
+        /// <summary>Which turn of the countdown an idle scene holds, or 0 when it is not an idle
+        /// scene. The press is shut for TurnsCompressed turn-ends, so the marks a standing press
+        /// shows run 1..3 and the fourth is the release's own.</summary>
+        private static int AnimPressIdleTurn(AnimPressScene scene)
+        {
+            switch (scene)
+            {
+                case AnimPressScene.Idle1: return 1;
+                case AnimPressScene.Idle2: return 2;
+                case AnimPressScene.Idle3: return 3;
+                case AnimPressScene.Idle4: return 4;
+                default: return 0;
+            }
+        }
+
+        private static bool AnimPressReleases(AnimPressScene scene)
+        {
+            switch (scene)
+            {
+                case AnimPressScene.CleanRelease:
+                case AnimPressScene.PushOne:
+                case AnimPressScene.PushChain:
+                case AnimPressScene.PushOffBoard:
+                case AnimPressScene.BlockedGold:
+                case AnimPressScene.BlockedObsidian:
+                case AnimPressScene.Rerouted:
+                case AnimPressScene.Failure:
+                case AnimPressScene.FailureStone:
+                case AnimPressScene.Lifecycle:
+                case AnimPressScene.FailureLifecycle:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private IEnumerator PressRoutine(AnimPressScene scene)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                animPress = null;
+                yield break;
+            }
+            // Seven wide is enough for a long push chain to the rim with the press left of middle.
+            int w = Mathf.Max(7, round.Board.Width);
+            int h = Mathf.Max(7, round.Board.Height);
+            var board = new GameBoard(w, h);
+            List<int> cards = AnimBossCards();
+            var anchor = new GridPos(2, h / 2 - 1);
+            var reserved = new HashSet<GridPos>();
+            AnimPressSetup(board, scene, cards, anchor, reserved);
+            AnimRotFill(board, cards, AnimPressDensity(scene), reserved);
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            yield return new WaitForSeconds(AnimBossBeat * 0.5f);
+
+            // ---- THE SQUEEZE, through the real rules ----
+            PressCompressionVisuals squeeze;
+            Cube?[] swallowed = board.Compress(anchor, out squeeze);
+            if (swallowed == null || squeeze == null)
+            {
+                animPress = null;
+                yield break;
+            }
+            boardView.Refresh();
+            boardView.Press.SetMemory(AnimPressMemory(squeeze, 0), AnimPressMemory(squeeze, 1),
+                AnimPressMemory(squeeze, 2), AnimPressMemory(squeeze, 3));
+            PlayPressScene(PressSqueezeSceneOf(squeeze));
+            animLastLabel = AnimPressLabel(scene, squeeze, null);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+            float guard = 0f;
+            while (hydraulicPress != null && hydraulicPress.Busy && guard < 4f)
+            {
+                guard += Time.deltaTime;
+                yield return null;
+            }
+
+            // ---- an IDLE scene holds the countdown where it is and stops there ----
+            int idle = AnimPressIdleTurn(scene);
+            if (idle > 0)
+            {
+                // TurnsLeft as the rules really have it on that turn. The power sets it mid-turn
+                // and decrements at the END of that turn, so the states the player sees are
+                // 4, 3, 2, 1 - four of them, one mark each.
+                animPressWaitTurn = idle;
+                boardView.Press.SetCountdown(Mathf.Max(1, 4 - idle + 1), 4);
+                // A crease is a few pixels of recess, so an entry that "looks the same" as its
+                // neighbour has to be able to prove which it is. The label says what is live.
+                yield return null;
+                animLastLabel = Loc.Pick("turn " + idle + " - ", idle + ". tur - ")
+                    + boardView.Press.DebugState();
+                if (AnimLabOpen)
+                {
+                    RedrawAnimationLab();
+                }
+                animPress = null;
+                yield break;
+            }
+            // ---- BROKEN WHILE SHUT: no release at all, and the stored picture goes with it ----
+            if (scene == AnimPressScene.DestroyedShut)
+            {
+                boardView.Press.SetCountdown(2, 4);
+                yield return new WaitForSeconds(AnimBossBeat);
+                var faces = new List<ClusterBurstView.Look>();
+                Sprite tile;
+                Color colour;
+                faces.Add(boardView.TryCubeLook(anchor, CubeLookMaxAge, out tile, out colour)
+                    ? new ClusterBurstView.Look { Tile = tile, Colour = colour }
+                    : new ClusterBurstView.Look());
+                // A second board, because the lab cannot take a cube off one any more than the
+                // press can put one back - the same trick the raw scenes use.
+                var after = new GameBoard(board.Width, board.Height);
+                for (int x = 0; x < board.Width; x++)
+                {
+                    for (int y = 0; y < board.Height; y++)
+                    {
+                        var cell = new GridPos(x, y);
+                        Cube? had = board.GetCube(cell);
+                        if (had.HasValue && !cell.Equals(anchor))
+                        {
+                            after.SetCubeAt(cell, had.Value);
+                        }
+                    }
+                }
+                boardView.Rebuild(after, MainBoardWorldSize, MainBoardCenter);
+                // The game's own line language: it was cleared, not opened.
+                FlashCells(new List<GridPos> { anchor }, BlastColor, null, faces);
+                animLastLabel = Loc.Pick(
+                    "broken while shut: four cubes' worth of score, and the stored picture is gone",
+                    "sıkışıkken kırıldı: dört küp puanı, saklanan resim gitti");
+                if (AnimLabOpen)
+                {
+                    RedrawAnimationLab();
+                }
+                animPress = null;
+                yield break;
+            }
+            if (!AnimPressReleases(scene))
+            {
+                animPress = null;
+                yield break;
+            }
+
+            // ---- the turns it stands there, so a lifecycle really waits ----
+            bool lifecycle = scene == AnimPressScene.Lifecycle
+                || scene == AnimPressScene.FailureLifecycle;
+            int turns = lifecycle ? 3 : 1;
+            for (int turn = 1; turn <= turns; turn++)
+            {
+                boardView.Press.SetCountdown(4 - turn, 4);
+                animLastLabel = Loc.Pick("shut, " + (4 - turn) + " turn(s) to go",
+                    "sıkışık, " + (4 - turn) + " tur kaldı");
+                if (AnimLabOpen)
+                {
+                    RedrawAnimationLab();
+                }
+                yield return new WaitForSeconds(lifecycle ? AnimBossBeat : AnimBossBeat * 0.6f);
+            }
+
+            // ---- whatever has to be standing in the way goes in now ----
+            AnimPressObstacles(board, scene, cards, anchor);
+            boardView.Refresh();
+            if (AnimPressObstacleBeat(scene))
+            {
+                yield return new WaitForSeconds(AnimBossBeat * 0.6f);
+            }
+
+            // ---- THE RELEASE, through the real rules ----
+            PressReleaseVisuals open;
+            PressExpansion result = board.Expand(anchor, swallowed, out open);
+            if (result == null || open == null)
+            {
+                animPress = null;
+                yield break;
+            }
+            boardView.Refresh();
+            PlayPressReleaseReport(open);
+            animLastLabel = AnimPressLabel(scene, squeeze, open);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+            // AND IT STAYS, like every other lab entry: the state worth looking at is the one the
+            // release ENDS in - the 2x2 back, the cubes shoved, or the hole the failure left.
+            animPress = null;
+        }
+
+        /// <summary>How full the lab board is around the press. A push scene lays its own chain, so
+        /// the filler stays out of its way; a failure scene wants room to read.</summary>
+        private static uint AnimPressDensity(AnimPressScene scene)
+        {
+            switch (scene)
+            {
+                case AnimPressScene.PushChain:
+                case AnimPressScene.PushOffBoard:
+                case AnimPressScene.Failure:
+                case AnimPressScene.FailureStone:
+                case AnimPressScene.FailureLifecycle:
+                    return 0u;
+                case AnimPressScene.CleanRelease:
+                    return 12u;
+                default:
+                    return 26u;
+            }
+        }
+
+        /// <summary>
+        /// What stands in the four cells the press is about to take. The patch order the rules use
+        /// is anchor, right, up, up-right - so "three cubes and a hole" means leaving ONE of those
+        /// four empty, and which one is the lab's choice.
+        /// </summary>
+        private void AnimPressSetup(GameBoard board, AnimPressScene scene, List<int> cards,
+            GridPos anchor, HashSet<GridPos> reserved)
+        {
+            var patch = new List<GridPos>
+            {
+                anchor,
+                new GridPos(anchor.X + 1, anchor.Y),
+                new GridPos(anchor.X, anchor.Y + 1),
+                new GridPos(anchor.X + 1, anchor.Y + 1)
+            };
+            for (int i = 0; i < patch.Count; i++)
+            {
+                reserved.Add(patch[i]);
+            }
+            // The three cells it will want back, and the lane it may shove along: kept clear here so
+            // only what a scene deliberately puts there is in the way.
+            for (int i = 1; i < patch.Count; i++)
+            {
+                reserved.Add(patch[i]);
+            }
+            for (int x = anchor.X; x < board.Width; x++)
+            {
+                reserved.Add(new GridPos(x, anchor.Y));
+                reserved.Add(new GridPos(x, anchor.Y + 1));
+            }
+            for (int y = anchor.Y; y < board.Height; y++)
+            {
+                reserved.Add(new GridPos(anchor.X, y));
+                reserved.Add(new GridPos(anchor.X + 1, y));
+            }
+            int fill;
+            switch (scene)
+            {
+                case AnimPressScene.Three: fill = 3; break;
+                case AnimPressScene.Two: fill = 2; break;
+                case AnimPressScene.One: fill = 1; break;
+                case AnimPressScene.Empty: fill = 0; break;
+                default: fill = 4; break;
+            }
+            for (int i = 0; i < fill; i++)
+            {
+                GridPos cell = patch[i];
+                if (scene == AnimPressScene.Mixed)
+                {
+                    // FOUR DIFFERENT MATERIALS, fixed - this is the test that proves each lamina
+                    // keeps its OWN colour. If the four come out the same the effect has failed,
+                    // and a random fill could hide that by handing out four of the same card.
+                    board.SetCubeAt(cell, AnimCardCube(cell.X, cell.Y, cards));
+                    board.SetCubeKind(cell, AnimPressMixedKinds[i]);
+                }
+                else if (scene == AnimPressScene.Stone)
+                {
+                    // GOLD AND OBSIDIAN INSIDE the press: the rules store them like anything else,
+                    // so their laminae have to go in as gold and obsidian.
+                    board.SetCubeAt(cell, AnimCardCube(cell.X, cell.Y, cards));
+                    board.SetCubeKind(cell, i % 2 == 0 ? CubeKind.Gold : CubeKind.Obsidian);
+                }
+                else
+                {
+                    board.SetCubeAt(cell, AnimCardCube(cell.X, cell.Y, cards));
+                }
+            }
+        }
+
+        /// <summary>What the press finds in its way when it opens. Laid AFTER the squeeze, which is
+        /// exactly how it happens in a game: the player used the room.</summary>
+        private void AnimPressObstacles(GameBoard board, AnimPressScene scene, List<int> cards,
+            GridPos anchor)
+        {
+            var right = new GridPos(anchor.X + 1, anchor.Y);
+            var up = new GridPos(anchor.X, anchor.Y + 1);
+            var corner = new GridPos(anchor.X + 1, anchor.Y + 1);
+            switch (scene)
+            {
+                case AnimPressScene.PushOne:
+                    // ONE cube in the cell to the right: one shove, one cell.
+                    board.SetCubeAt(right, AnimCardCube(right.X, right.Y, cards));
+                    break;
+                case AnimPressScene.PushChain:
+                    // A run of cubes along the row, stopping short of the rim so they all land.
+                    for (int x = right.X; x < board.Width - 1; x++)
+                    {
+                        var cell = new GridPos(x, anchor.Y);
+                        board.SetCubeAt(cell, AnimCardCube(cell.X, cell.Y, cards));
+                    }
+                    break;
+                case AnimPressScene.PushOffBoard:
+                    // All the way TO the rim: the last one has nowhere to land and goes over.
+                    for (int x = right.X; x < board.Width; x++)
+                    {
+                        var cell = new GridPos(x, anchor.Y);
+                        board.SetCubeAt(cell, AnimCardCube(cell.X, cell.Y, cards));
+                    }
+                    break;
+                case AnimPressScene.BlockedGold:
+                case AnimPressScene.BlockedObsidian:
+                    // A STRAIGHT side shut. There is no reroute for those in the rules, so this is
+                    // the shape that detonates - which is the honest thing to show.
+                    board.SetCubeAt(right, AnimCardCube(right.X, right.Y, cards));
+                    var stone = new GridPos(anchor.X + 2, anchor.Y);
+                    board.SetCubeAt(stone, AnimCardCube(stone.X, stone.Y, cards));
+                    board.SetCubeKind(stone, scene == AnimPressScene.BlockedGold
+                        ? CubeKind.Gold : CubeKind.Obsidian);
+                    break;
+                case AnimPressScene.Rerouted:
+                    // THE ONE REROUTE IN THE POWER: the CORNER's horizontal is shut by gold, so the
+                    // rules try its vertical and open that way instead.
+                    board.SetCubeAt(corner, AnimCardCube(corner.X, corner.Y, cards));
+                    var shut = new GridPos(anchor.X + 2, anchor.Y + 1);
+                    board.SetCubeAt(shut, AnimCardCube(shut.X, shut.Y, cards));
+                    board.SetCubeKind(shut, CubeKind.Gold);
+                    break;
+                case AnimPressScene.Failure:
+                case AnimPressScene.FailureLifecycle:
+                    // BOTH of the corner's axes shut: two refusals, and then the vessel fails.
+                    board.SetCubeAt(corner, AnimCardCube(corner.X, corner.Y, cards));
+                    var shutX = new GridPos(anchor.X + 2, anchor.Y + 1);
+                    var shutY = new GridPos(anchor.X + 1, anchor.Y + 2);
+                    board.SetCubeAt(shutX, AnimCardCube(shutX.X, shutX.Y, cards));
+                    board.SetCubeKind(shutX, CubeKind.Gold);
+                    board.SetCubeAt(shutY, AnimCardCube(shutY.X, shutY.Y, cards));
+                    board.SetCubeKind(shutY, CubeKind.Obsidian);
+                    break;
+                case AnimPressScene.FailureStone:
+                    // The same failure, RINGED with gold and obsidian, so what the blast takes is
+                    // unmistakable: these are the two cubes nothing else in the game removes.
+                    board.SetCubeAt(corner, AnimCardCube(corner.X, corner.Y, cards));
+                    for (int x = anchor.X - 1; x <= anchor.X + 2; x++)
+                    {
+                        for (int y = anchor.Y - 1; y <= anchor.Y + 2; y++)
+                        {
+                            var cell = new GridPos(x, y);
+                            if (!board.IsInside(cell) || cell.Equals(anchor)
+                                || cell.Equals(corner))
+                            {
+                                continue;
+                            }
+                            bool ring = x < anchor.X || x > anchor.X + 1
+                                || y < anchor.Y || y > anchor.Y + 1;
+                            if (!ring)
+                            {
+                                continue;
+                            }
+                            board.SetCubeAt(cell, AnimCardCube(cell.X, cell.Y, cards));
+                            board.SetCubeKind(cell, (x + y) % 2 == 0
+                                ? CubeKind.Gold : CubeKind.Obsidian);
+                        }
+                    }
+                    break;
+                default:
+                    break; // a clean release: nothing is in the way, which is the scene
+            }
+        }
+
+        /// <summary>The four materials the mixed test presses, in patch order: red, blue, olive
+        /// and gold. Four unmistakably different things, so "they all came out the same colour" is
+        /// impossible to miss.</summary>
+        private static readonly CubeKind[] AnimPressMixedKinds =
+        {
+            CubeKind.Fire, CubeKind.Water, CubeKind.Gangrene, CubeKind.Gold
+        };
+
+        private static bool AnimPressObstacleBeat(AnimPressScene scene)
+        {
+            return scene != AnimPressScene.CleanRelease;
+        }
+
+        /// <summary>A stored quadrant's colour for the shell's memory, off the lab's own report.
+        /// </summary>
+        private static Color AnimPressMemory(PressCompressionVisuals report, int index)
+        {
+            Cube? cube = index < report.Swallowed.Count ? report.Swallowed[index] : null;
+            if (!cube.HasValue)
+            {
+                return new Color(0f, 0f, 0f, 0f);
+            }
+            Color paint = ViewUtil.CubeMaterialColor(cube.Value);
+            return new Color(paint.r, paint.g, paint.b, 1f);
+        }
+
+        /// <summary>What the rules actually did, said in words under the board - so a scene that
+        /// looks wrong can be checked against the report rather than against a memory of the brief.
+        /// </summary>
+        private static string AnimPressLabel(AnimPressScene scene, PressCompressionVisuals squeeze,
+            PressReleaseVisuals open)
+        {
+            if (open == null)
+            {
+                return Loc.Pick(
+                    squeeze.OccupiedCount + " of 4 quadrants held a cube; "
+                        + (4 - squeeze.OccupiedCount) + " travelled as holes",
+                    "4 bölmeden " + squeeze.OccupiedCount + " dolu; "
+                        + (4 - squeeze.OccupiedCount) + " boşluk olarak saklandı");
+            }
+            if (open.Detonated)
+            {
+                int refused = 0;
+                for (int i = 0; i < open.Tests.Count; i++)
+                {
+                    if (!open.Tests[i].Succeeded)
+                    {
+                        refused++;
+                    }
+                }
+                return Loc.Pick(
+                    "FAILED: " + refused + " side(s) refused, " + open.DetonatedCells.Count
+                        + " cell(s) taken, no score",
+                    "PATLADI: " + refused + " yön reddetti, " + open.DetonatedCells.Count
+                        + " hücre gitti, puan yok");
+            }
+            string axis = open.DiagonalAxis.HasValue
+                ? (open.DiagonalAxis.Value == PressAxis.Horizontal
+                    ? Loc.Pick("horizontal", "yatay")
+                    : Loc.Pick("vertical", "dikey"))
+                : Loc.Pick("none needed", "gerek yok");
+            return Loc.Pick(
+                "opened: " + open.Pushes.Count + " cube(s) shoved, " + open.CubesPushedOff
+                    + " over the edge, corner axis " + axis
+                    + (open.Rerouted ? " (REROUTED)" : ""),
+                "açıldı: " + open.Pushes.Count + " küp itildi, " + open.CubesPushedOff
+                    + " kenardan taştı, köşe ekseni " + axis
+                    + (open.Rerouted ? " (YÖN DEĞİŞTİ)" : ""));
+        }
+
+        /// <summary>
+        /// ONE TURN ARRIVING, on the press already standing there. This is the entry to watch at
+        /// 0.25x: the shell loads, the dimple bites, the seams contract, the new crease locks with
+        /// a short strain running along it, the shadow tightens and it settles - all of it, rather
+        /// than a light coming on.
+        /// </summary>
+        private void AnimPressAdvanceTurn()
+        {
+            if (boardView == null || !boardView.Press.Holds(AnimPressAnchor()))
+            {
+                animLastLabel = Loc.Pick("no press standing - play a wait entry first",
+                    "ortada pres yok - önce bir bekleme girişi oynat");
+                if (AnimLabOpen)
+                {
+                    RedrawAnimationLab();
+                }
+                return;
+            }
+            animPressWaitTurn = animPressWaitTurn >= 4 ? 1 : animPressWaitTurn + 1;
+            boardView.Press.SetCountdown(Mathf.Max(1, 4 - animPressWaitTurn + 1), 4);
+            animLastLabel = Loc.Pick("turn " + animPressWaitTurn + " - ",
+                animPressWaitTurn + ". tur - ") + boardView.Press.DebugState();
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>Where the lab's own press stands.</summary>
+        private GridPos AnimPressAnchor()
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            int h = round != null && round.Board != null ? Mathf.Max(7, round.Board.Height) : 7;
+            return new GridPos(2, h / 2 - 1);
+        }
+
+        private void AnimPressToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("press " + english + ": ", "pres " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        // ------------------------------------------------------------------ parazit / konak kup
+        //
+        // "PARAZIT"'s HOST CUBE, on a board of the lab's own. The harness is driven through the
+        // same seams the game drives it through, and the REFUSALS come from the real rules: the lab
+        // calls GameBoard.DestroyCube / DestroyCubeForced on the host and the board writes down the
+        // refusal itself, exactly as it does in a turn. What the lab fabricates is only the
+        // ARGUMENTS - which cube is the host, which joker is riding it, and what tries it.
+
+        private enum AnimHostScene
+        {
+            Blue,
+            Red,
+            Purple,
+            Special,
+            PassengerColours,
+            Seating,
+            IdlePulse,
+            ResistDestroy,
+            ForcedRight,
+            ForcedUp,
+            SweepPass,
+            IdleObsidian,
+            TearObsidian,
+            LineHorizontal,
+            LineVertical,
+            PassengerLoss,
+            Lifecycle,
+            LifecycleObsidian,
+            /// <summary>THE WITHERING, AT FOUR STRENGTHS. The one thing that turns a translucent
+            /// film into a parasite is that the block under it is dying, so it has to be judgeable
+            /// on its own: none at all, a little, the tuned value, and all the way.</summary>
+            DrainNone,
+            DrainThin,
+            DrainMedium,
+            DrainHeavy,
+            /// <summary>ONE LAYER AT A TIME. Each of these leaves exactly one of the wrap's parts
+            /// standing, which is the only way to see what that part is actually worth.</summary>
+            MembraneOnly,
+            PatchesOnly,
+            FoldsOnly,
+            NestOnly
+        }
+
+        private Coroutine animHost;
+
+        /// <summary>Which passenger the colour test is showing, so pressing it again steps on.
+        /// </summary>
+        private int animHostPassenger;
+
+        /// <summary>The def ids the passenger test cycles, so the core really has to carry an
+        /// identity rather than one fixed accent.</summary>
+        private static readonly string[] AnimHostPassengers =
+        {
+            "robot_supurge", "buzluk", "kazi_calismasi", "tamagotchi", "antimadde"
+        };
+
+        private void AnimHost(AnimHostScene scene)
+        {
+            StopAnimHost();
+            StopAnimPress();
+            StopAnimSnake();
+            StopAnimBossLift();
+            StopAnimRot();
+            StopAnimRaw();
+            if (scene == AnimHostScene.PassengerColours)
+            {
+                animHostPassenger = (animHostPassenger + 1) % AnimHostPassengers.Length;
+            }
+            animHost = StartCoroutine(HostRoutine(scene));
+        }
+
+        private void StopAnimHost()
+        {
+            if (animHost != null)
+            {
+                StopCoroutine(animHost);
+                animHost = null;
+            }
+            boardView.StopParasite();
+        }
+
+        private static CubeKind AnimHostKind(AnimHostScene scene)
+        {
+            switch (scene)
+            {
+                case AnimHostScene.Red: return CubeKind.Fire;
+                case AnimHostScene.IdleObsidian: return CubeKind.Obsidian;
+                case AnimHostScene.TearObsidian: return CubeKind.Obsidian;
+                case AnimHostScene.LifecycleObsidian: return CubeKind.Obsidian;
+                case AnimHostScene.Purple: return CubeKind.Obsidian;
+                case AnimHostScene.Special: return CubeKind.Gold;
+                default: return CubeKind.Water;
+            }
+        }
+
+        private IEnumerator HostRoutine(AnimHostScene scene)
+        {
+            // THE LAYER AND DRAIN TESTS ARE SET UP BEFORE THE HOST IS BUILT, because a piece the
+            // switches turned off is a piece that is never rented. Like every other lab entry this
+            // one HOLDS what it leaves behind: the "all layers back on" switch is the reset.
+            AnimHostSetup(scene);
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                animHost = null;
+                yield break;
+            }
+            int w = Mathf.Max(7, round.Board.Width);
+            int h = Mathf.Max(7, round.Board.Height);
+            var board = new GameBoard(w, h);
+            List<int> cards = AnimBossCards();
+            var cell = new GridPos(w / 2, h / 2);
+            var reserved = new HashSet<GridPos> { cell };
+            board.SetCubeAt(cell, AnimCardCube(cell.X, cell.Y, cards));
+            CubeKind kind = AnimHostKind(scene);
+            if (kind != CubeKind.Normal)
+            {
+                board.SetCubeKind(cell, kind);
+            }
+            // THE RULES MARK IT, not the View: this is the same call the joker makes.
+            board.SetCubeProtected(cell);
+            AnimRotFill(board, cards, scene == AnimHostScene.SweepPass ? 34u : 22u, reserved);
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+
+            Cube? hostCube = board.GetCube(cell);
+            var host = new ParasiteHostView.Host
+            {
+                Cell = cell,
+                Look = hostCube.HasValue ? LookOf(hostCube.Value) : new ClusterBurstView.Look(),
+                Passenger = new BoundJokerIdentity
+                {
+                    Bound = true,
+                    InstanceId = 1,
+                    DefId = AnimHostPassengers[animHostPassenger],
+                    DisplayName = AnimHostPassengers[animHostPassenger]
+                }
+            };
+            var live = new List<ParasiteHostView.Host> { host };
+            boardView.Parasite.Sync(boardView, live);
+            animLastLabel = AnimHostLabel(scene, host);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+            // Let the seating play out - the harness locking on is its own beat.
+            yield return new WaitForSeconds(ParasiteHostView.Style.SeatTotal + 0.1f);
+
+            switch (scene)
+            {
+                case AnimHostScene.ResistDestroy:
+                    // THE REAL RULE: the board refuses, and writes the refusal down itself.
+                    board.HostRefusals.Clear();
+                    board.DestroyCube(cell);
+                    PlayHostRefusals(board);
+                    break;
+                case AnimHostScene.ForcedRight:
+                case AnimHostScene.ForcedUp:
+                    board.HostRefusals.Clear();
+                    board.SetForcedStep(scene == AnimHostScene.ForcedRight
+                        ? new GridPos(1, 0) : new GridPos(0, 1));
+                    board.DestroyCubeForced(cell);
+                    PlayHostRefusals(board);
+                    break;
+                case AnimHostScene.SweepPass:
+                    boardView.Parasite.PlaySweepPass(cell);
+                    animLastLabel = Loc.Pick("the sweep could not take this one",
+                        "temizlik bunu alamadı");
+                    break;
+                case AnimHostScene.TearObsidian:
+                case AnimHostScene.LineHorizontal:
+                    FlashLine(board, cell.Y, true);
+                    yield return new WaitForSeconds(0.12f);
+                    PlayParasiteSeveranceScene(cell, true);
+                    break;
+                case AnimHostScene.LineVertical:
+                    FlashLine(board, cell.X, false);
+                    yield return new WaitForSeconds(0.12f);
+                    PlayParasiteSeveranceScene(cell, false);
+                    break;
+                case AnimHostScene.PassengerLoss:
+                    PlayParasiteSeveranceScene(cell, true);
+                    break;
+                case AnimHostScene.Lifecycle:
+                case AnimHostScene.LifecycleObsidian:
+                    yield return new WaitForSeconds(AnimBossBeat);
+                    board.HostRefusals.Clear();
+                    board.DestroyCube(cell);
+                    PlayHostRefusals(board);
+                    yield return new WaitForSeconds(ParasiteHostView.Style.ClampDuration + 0.3f);
+                    board.HostRefusals.Clear();
+                    board.SetForcedStep(new GridPos(1, 0));
+                    board.DestroyCubeForced(cell);
+                    PlayHostRefusals(board);
+                    yield return new WaitForSeconds(ParasiteHostView.Style.ClampDuration + 0.5f);
+                    FlashLine(board, cell.Y, true);
+                    yield return new WaitForSeconds(0.12f);
+                    PlayParasiteSeveranceScene(cell, true);
+                    break;
+                default:
+                    break; // the still scenes: the harness standing there is the entry
+            }
+            animHost = null;
+        }
+
+        /// <summary>
+        /// What a test scene switches before the host is built. The drain tiers force one value
+        /// (Layers.DrainOverride); the "alone" scenes leave exactly ONE part of the wrap standing,
+        /// which is the only honest way to ask what that part is worth - a layer judged with every
+        /// other layer over it is being judged by the layers over it.
+        /// </summary>
+        private static void AnimHostSetup(AnimHostScene scene)
+        {
+            ParasiteHostView.Layers.AllOn();
+            switch (scene)
+            {
+                case AnimHostScene.DrainNone:
+                    ParasiteHostView.Layers.DrainOverride = 0f;
+                    break;
+                case AnimHostScene.DrainThin:
+                    ParasiteHostView.Layers.DrainOverride = 0.3f;
+                    break;
+                case AnimHostScene.DrainMedium:
+                    ParasiteHostView.Layers.DrainOverride = 0.6f;
+                    break;
+                case AnimHostScene.DrainHeavy:
+                    ParasiteHostView.Layers.DrainOverride = 1f;
+                    break;
+                case AnimHostScene.MembraneOnly:
+                    // The film and what it is taking out of the block - nothing on top of it.
+                    AnimHostOnly(membrane: true, folds: false, patches: false, veins: false,
+                        ribs: false, core: false);
+                    break;
+                case AnimHostScene.PatchesOnly:
+                    AnimHostOnly(membrane: false, folds: false, patches: true, veins: false,
+                        ribs: false, core: false);
+                    break;
+                case AnimHostScene.FoldsOnly:
+                    AnimHostOnly(membrane: false, folds: true, patches: false, veins: false,
+                        ribs: false, core: false);
+                    break;
+                case AnimHostScene.NestOnly:
+                    AnimHostOnly(membrane: false, folds: false, patches: false, veins: false,
+                        ribs: false, core: true);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private static void AnimHostOnly(bool membrane, bool folds, bool patches, bool veins,
+            bool ribs, bool core)
+        {
+            ParasiteHostView.Layers.ShowMembrane = membrane;
+            ParasiteHostView.Layers.ShowWindows = membrane;
+            ParasiteHostView.Layers.ShowFolds = folds;
+            ParasiteHostView.Layers.ShowPatches = patches;
+            ParasiteHostView.Layers.ShowVeins = veins;
+            ParasiteHostView.Layers.ShowRibs = ribs;
+            ParasiteHostView.Layers.ShowCore = core;
+            ParasiteHostView.Layers.ShowEssence = core;
+        }
+
+        /// <summary>Hands the board's OWN refusal log to the harness - the same path the turn uses.
+        /// </summary>
+        private void PlayHostRefusals(GameBoard board)
+        {
+            IReadOnlyList<HostRefusal> refusals = board.HostRefusals.Refusals;
+            for (int i = 0; i < refusals.Count; i++)
+            {
+                HostRefusal r = refusals[i];
+                boardView.Parasite.PlayRefusal(new ParasiteHostView.Refusal
+                {
+                    Cell = r.Cell,
+                    Kind = r.Kind,
+                    Step = new Vector2(r.Step.X, r.Step.Y),
+                    HasDirection = r.HasDirection
+                });
+            }
+            animLastLabel = Loc.Pick(
+                "the rules refused " + refusals.Count + " attempt(s) - the clasp gripped",
+                "kurallar " + refusals.Count + " denemeyi reddetti - kenet sıktı");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        private static string AnimHostLabel(AnimHostScene scene, ParasiteHostView.Host host)
+        {
+            return Loc.Pick(
+                "host: " + ViewUtil.KindLabel(AnimHostKind(scene)) + " cube, passenger \""
+                    + host.Passenger.DefId + "\"",
+                "konak: " + ViewUtil.KindLabel(AnimHostKind(scene)) + " küp, yolcu \""
+                    + host.Passenger.DefId + "\"");
+        }
+
+        private void AnimHostToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("host " + english + ": ", "konak " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        // ------------------------------------------------------------------ raw / not reworked
+        //
+        // THE POINT OF THESE IS THAT THEY ARE PLAIN. Each one is either a mechanic the game really
+        // has and nobody has drawn yet (a sealed cell, a bonus ground) - the snake, the press and
+        // the parasite's host have all been through a pass since and have sections of their own -
+        // or a look that exists but had no entry of its own (the overtime squeeze, the vignette,
+        // the glow under the grid, the mirror world, the backdrop, the retro skin, a card being
+        // picked up, the circuit cooking). Nothing here is an animation anyone designed: it is the
+        // BEFORE, so a later pass has something honest to be held against.
+
+        private enum AnimRawScene
+        {
+            /// <summary>"Mapus" and "Tılsım": cell states that are only a tint.</summary>
+            CellStates
+        }
+
+        /// <summary>The raw scene playing, so pressing another one stops it.</summary>
+        private Coroutine animRaw;
+
+        /// <summary>The lab's own mirror board, torn down with the scene.</summary>
+        private BoardView animRawMirrorBoard;
+
+        private void AnimRawBoard(AnimRawScene scene)
+        {
+            StopAnimBossLift();
+            StopAnimRot();
+            StopAnimRaw();
+            animRaw = StartCoroutine(RawBoardRoutine(scene));
+        }
+
+        private void StopAnimRaw()
+        {
+            if (animRaw != null)
+            {
+                StopCoroutine(animRaw);
+                animRaw = null;
+            }
+            if (animRawMirrorBoard != null)
+            {
+                Destroy(animRawMirrorBoard.gameObject);
+                animRawMirrorBoard = null;
+            }
+        }
+
+        private IEnumerator RawBoardRoutine(AnimRawScene scene)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                animRaw = null;
+                yield break;
+            }
+            int w = Mathf.Max(7, round.Board.Width);
+            int h = Mathf.Max(7, round.Board.Height);
+            var board = new GameBoard(w, h);
+            List<int> cards = AnimBossCards();
+            var reserved = new HashSet<GridPos>();
+            switch (scene)
+            {
+                default:
+                    // The two cell states are the BOARD's own colours, so the cells are left empty
+                    // and painted below - the rules make no sealed cell on a lab board.
+                    for (int x = 1; x <= 4; x++)
+                    {
+                        reserved.Add(new GridPos(x, h / 2));
+                        reserved.Add(new GridPos(x, h / 2 - 2));
+                    }
+                    break;
+            }
+            AnimRotFill(board, cards, 30u, reserved);
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            if (scene == AnimRawScene.CellStates)
+            {
+                for (int x = 1; x <= 4; x++)
+                {
+                    boardView.PaintCellState(new GridPos(x, h / 2), true);
+                    boardView.PaintCellState(new GridPos(x, h / 2 - 2), false);
+                }
+                animLastLabel = Loc.Pick("above: sealed (Mapus). below: bonus ground (Tılsım)",
+                    "üstte: mühürlü (Mapus), altta: bonus zemin (Tılsım)");
+            }
+            yield return new WaitForSeconds(AnimBossBeat);
+            yield return new WaitForSeconds(AnimRawWatch);
+            animRaw = null;
+            AnimResync();
+        }
+
+        /// <summary>How long a raw scene is left standing before the round's board comes back.</summary>
+        private const float AnimRawWatch = 3.0f;
+
+        /// <summary>"Uzatma": the squeeze on the board itself, at the knob's level.</summary>
+        private void AnimRawPressure()
+        {
+            if (boardView == null || boardView.Board == null)
+            {
+                return;
+            }
+            int level = Mathf.Max(1, animOvertime);
+            overtimePressure.SetState(true, level, level * OvertimePressureView.Style.TurnsPerStage,
+                boardView.WorldRect, boardView.CellWorldSize,
+                boardView.Board.Width, boardView.Board.Height);
+            animLastLabel = Loc.Pick("overtime pressure, stage ", "uzatma basıncı, kademe ") + level;
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>"Uzatma": the screen's own vignette, which hangs off the camera.</summary>
+        private void AnimRawVignette()
+        {
+            int level = Mathf.Max(1, animOvertime);
+            overtimeVignette.SetActive(true);
+            overtimeVignette.Creep(OvertimeVignetteView.Style.CreepPerContinue * level);
+            overtimeVignette.SetPulse(1f);
+            animLastLabel = Loc.Pick("overtime vignette, creep x", "uzatma vinyeti, sıkışma x") + level;
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>"Uzatma": the light under the grid's own lines.</summary>
+        private void AnimRawGlow()
+        {
+            boardView.SetOvertimeGlow(Mathf.Max(1, animOvertime));
+            animLastLabel = Loc.Pick("line glow, level ", "hat parıltısı, seviye ")
+                + Mathf.Max(1, animOvertime);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>
+        /// "Öteki dünya": the two-board layout, which no run in the lab has. The round's own mirror
+        /// is built from its state (RefreshMirrorWorld), so the lab puts up two boards of its OWN in
+        /// the same places the real thing uses - the main one shrunk and lifted, the mirror under it
+        /// - and takes them down again. It shows the layout; there is nothing else to show.
+        /// </summary>
+        private void AnimRawMirror()
+        {
+            StopAnimBossLift();
+            StopAnimRot();
+            StopAnimRaw();
+            animRaw = StartCoroutine(RawMirrorRoutine());
+        }
+
+        private IEnumerator RawMirrorRoutine()
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                animRaw = null;
+                yield break;
+            }
+            int w = Mathf.Max(6, round.Board.Width);
+            int h = Mathf.Max(6, round.Board.Height);
+            List<int> cards = AnimBossCards();
+            var here = new GameBoard(w, h);
+            var there = new GameBoard(w, h);
+            AnimRotFill(here, cards, 38u, new HashSet<GridPos>());
+            AnimRotFill(there, cards, 22u, new HashSet<GridPos>());
+            boardView.Rebuild(here, MirrorBoardWorldSize, MainWorldCenter);
+            var go = new GameObject("LabMirrorBoardView");
+            go.transform.SetParent(transform, false);
+            animRawMirrorBoard = go.AddComponent<BoardView>();
+            animRawMirrorBoard.CardLookup = boardView.CardLookup;
+            animRawMirrorBoard.Rebuild(there, MirrorBoardWorldSize, MirrorWorldCenter);
+            animLastLabel = Loc.Pick("main world above, mirror below",
+                "üstte ana dünya, altta ayna");
+            yield return new WaitForSeconds(AnimRawWatch + 1f);
+            animRaw = null;
+            StopAnimRaw();
+            AnimResync();
+        }
+
+        /// <summary>The backdrop on its own: everything the run draws is put away for a beat, so
+        /// what is left on screen is the ground, its pool of light, the dither and the vignette.</summary>
+        private void AnimRawBackdrop()
+        {
+            StopAnimRaw();
+            animRaw = StartCoroutine(RawBackdropRoutine());
+        }
+
+        private IEnumerator RawBackdropRoutine()
+        {
+            SetRunPresentationVisible(false);
+            animLastLabel = Loc.Pick("the backdrop, alone", "yalnız arka plan");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+            yield return new WaitForSeconds(1.8f);
+            SetRunPresentationVisible(true);
+            if (AnimLabOpen)
+            {
+                // The joker strip draws over the panel, so the lab keeps it away (see OpenAnimationLab).
+                jokerBar.SetVisible(false);
+            }
+            animRaw = null;
+            AnimResync();
+        }
+
+        /// <summary>The retro skin by itself: the CRT overlay, the bit crush and the retro mix.</summary>
+        private void AnimRawRetro()
+        {
+            animRetro = !animRetro;
+            ApplyAnimRetroSkin();
+            animLastLabel = Loc.Pick("retro skin: ", "retro deri: ") + OnOff(animRetro);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>
+        /// What a card in the hand does today, built from the only primitives it has: hover, a
+        /// sorting boost, MoveTo and SnapTo. There is no pick-up weight, no tilt and no drop
+        /// settle - which is the thing worth seeing.
+        /// </summary>
+        private void AnimRawCardFeel()
+        {
+            StopAnimRaw();
+            animRaw = StartCoroutine(RawCardFeelRoutine());
+        }
+
+        private IEnumerator RawCardFeelRoutine()
+        {
+            CardVisual card = cardLayer != null ? cardLayer.VisualOfSlot(0) : null;
+            if (card == null)
+            {
+                animLastLabel = Loc.Pick("no card in the hand", "elde kart yok");
+                animRaw = null;
+                yield break;
+            }
+            Vector2 home = card.HomePosition;
+            card.SetHovered(true);
+            card.SetSortingBoost(20);
+            yield return new WaitForSeconds(0.3f);
+            card.MoveTo(home + new Vector2(0f, 0.9f), 0.16f, null);
+            yield return new WaitForSeconds(0.45f);
+            card.MoveTo(home + new Vector2(1.5f, 2.1f), 0.32f, null);
+            yield return new WaitForSeconds(0.6f);
+            card.MoveTo(home, 0.2f, null);
+            yield return new WaitForSeconds(0.35f);
+            card.SetHovered(false);
+            card.SetSortingBoost(0);
+            card.SnapTo(home);
+            animRaw = null;
+        }
+
+        /// <summary>"Devre" cooking at three and a half times the length, so the stages it goes
+        /// through - heat, the band, the core, cracks, ash - can be told apart at all.</summary>
+        private void AnimRawCircuitSlow()
+        {
+            IReadOnlyList<GridPos> path = AnimCircuitPath();
+            boardView.DetonateCircuit();
+            boardView.PlayCircuitHeat(AnimCircuitCubes(path), CircuitOverloadView.RuptureTime * 3.5f);
+            animLastLabel = Loc.Pick("circuit cooking, 3.5x its own time",
+                "devre pişmesi, kendi süresinin 3,5 katı");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
             }
         }
 

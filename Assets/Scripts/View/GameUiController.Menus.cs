@@ -395,6 +395,8 @@ namespace ProjectBlock.View
             cryoSublimation.gameObject.SetActive(visible);
             momentumPeel.gameObject.SetActive(visible);
             bossMove.gameObject.SetActive(visible);
+            hydraulicPress.gameObject.SetActive(visible);
+            pressureVessel.gameObject.SetActive(visible);
             infoText.gameObject.SetActive(visible);
             messageText.gameObject.SetActive(visible);
             totalText.gameObject.SetActive(visible);
@@ -425,7 +427,11 @@ namespace ProjectBlock.View
             cryoSublimation.Stop();
             momentumPeel.Stop();
             bossMove.Stop();
+            hydraulicPress.Stop();
+            pressureVessel.Stop();
             boardView.StopGangrene();
+            boardView.StopSnake();
+            boardView.StopPress();
             marketView.Hide();
             deckOverlay.Hide();
             grantPicker.Hide();

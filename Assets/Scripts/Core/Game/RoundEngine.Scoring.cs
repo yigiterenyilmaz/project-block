@@ -88,10 +88,17 @@ namespace ProjectBlock.Core
 
         /// <summary>"Hidrolik pres" letting go. Reports the cells it changed as LIFTED - nothing
         /// was destroyed in the scoring sense - and re-checks the lines, because an expansion can
-        /// complete one exactly as a board-reshaping power can.</summary>
-        internal PressExpansion ReleasePress(GridPos anchor, Cube?[] swallowed)
+        /// complete one exactly as a board-reshaping power can. <paramref name="visuals"/> is what
+        /// the board wrote down for the View (see HydraulicPressVisuals); the overload without it
+        /// is the one the rules have always called, and the two do the same thing.
+        ///
+        /// THE REAL BODY COMES FIRST on purpose: Tools/UiLayoutCheck/cold_sink.py proves every
+        /// board-change here is tagged with the right LiftKind by reading the FIRST method of this
+        /// name, and putting the delegating stub above it hid the tag from that check.</summary>
+        internal PressExpansion ReleasePress(GridPos anchor, Cube?[] swallowed,
+            out PressReleaseVisuals visuals)
         {
-            PressExpansion result = MainBoard.Expand(anchor, swallowed);
+            PressExpansion result = MainBoard.Expand(anchor, swallowed, out visuals);
             if (result == null)
             {
                 return null;
@@ -117,6 +124,14 @@ namespace ProjectBlock.Core
                 TryResolveCleanSweep();
             }
             return result;
+        }
+
+        /// <summary>ReleasePress without the View's report - the call the rules have always made.
+        /// </summary>
+        internal PressExpansion ReleasePress(GridPos anchor, Cube?[] swallowed)
+        {
+            PressReleaseVisuals ignored;
+            return ReleasePress(anchor, swallowed, out ignored);
         }
 
         /// <summary>True while that card id is sitting in the bonus hand ("Antimadde" checking

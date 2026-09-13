@@ -212,6 +212,16 @@ namespace ProjectBlock.View
         /// outlive every repaint and every rebuild.</summary>
         private GangreneView gangrene;
 
+        /// <summary>"Yılan": the snake DRAWS ITSELF from the six pieces painted for it, so the
+        /// board leaves its cells blank (see Refresh) and this layer puts the snake in them. Like
+        /// the rot, it outlives a repaint and a rebuild - the snake is not board contents, it is a
+        /// thing standing on the board.</summary>
+        private SnakeView snake;
+
+        private CompressedCubeView press;
+
+        private ParasiteHostView parasite;
+
         private CircuitTraceView circuitTrace;
 
         private CircuitOverloadView circuitOverload;
@@ -366,6 +376,92 @@ namespace ProjectBlock.View
                 gangrene.Stop();
             }
         }
+
+        /// <summary>"Yılan"'s own layer: the six pieces, its slides, its bites and its cuts. Made on
+        /// first use and kept through a rebuild, like the rot.</summary>
+        public SnakeView Snake
+        {
+            get
+            {
+                if (snake == null)
+                {
+                    var go = new GameObject("Snake");
+                    go.transform.SetParent(transform, false);
+                    snake = go.AddComponent<SnakeView>();
+                }
+                return snake;
+            }
+        }
+
+        /// <summary>Ends anything the snake is playing, without making the view if there is none.</summary>
+        public void StopSnake()
+        {
+            if (snake != null)
+            {
+                snake.Stop();
+            }
+        }
+
+        /// <summary>"Hidrolik pres"'s own layer: the compressed cube's shell, its contained-pressure
+        /// idle and its turn countdown. Made on first use and kept through a rebuild, like the rot
+        /// and the snake - a press stands for four turns and the board is repainted many times in
+        /// them. It draws OVER the board's own slate cube rather than replacing it, so without its
+        /// shader the press is still a readable block.</summary>
+        public CompressedCubeView Press
+        {
+            get
+            {
+                if (press == null)
+                {
+                    var go = new GameObject("Press");
+                    go.transform.SetParent(transform, false);
+                    press = go.AddComponent<CompressedCubeView>();
+                }
+                return press;
+            }
+        }
+
+        /// <summary>Takes every press plate down, without making the view if there is none.</summary>
+        public void StopPress()
+        {
+            if (press != null)
+            {
+                press.Stop();
+            }
+        }
+
+        /// <summary>"Parazit"'s own layer: the clasp on every host cube, its bonds and the joker
+        /// riding in its middle. Made on first use and kept through a rebuild, like the rest - a
+        /// host stands for as long as its block does.</summary>
+        public ParasiteHostView Parasite
+        {
+            get
+            {
+                if (parasite == null)
+                {
+                    var go = new GameObject("Parasite");
+                    go.transform.SetParent(transform, false);
+                    parasite = go.AddComponent<ParasiteHostView>();
+                }
+                return parasite;
+            }
+        }
+
+        /// <summary>Takes every harness down, without making the view if there is none.</summary>
+        public void StopParasite()
+        {
+            if (parasite != null)
+            {
+                parasite.Stop();
+            }
+        }
+
+        /// <summary>True on the last repaint that drew at least one compressed cube - what decides
+        /// whether the press's layer is worth asking for at all.</summary>
+        private bool sawPress;
+
+        /// <summary>True on the last repaint that left a cell blank for the snake.</summary>
+        private bool sawSnake;
 
         /// <summary>True on the last repaint that drew at least one rotten cube - what decides
         /// whether the rot's layer is worth asking for at all.</summary>
@@ -931,6 +1027,11 @@ namespace ProjectBlock.View
             // The rot is a property of the ROUND: its bands and tissue are put back in step with
             // Core by the Refresh below, and a new arena clears them (GangreneView.Sync).
             Transform keepRot = gangrene != null ? gangrene.transform : null;
+            Transform keepSnake = snake != null ? snake.transform : null;
+            // The press is a property of the ROUND too: its plates are put back in step with Core
+            // by the Refresh below, and a new arena has no press on it.
+            Transform keepPress = press != null ? press.transform : null;
+            Transform keepParasite = parasite != null ? parasite.transform : null;
             // The gravity field is a property of the ROUND, not of the board's contents, so it
             // survives the rebuild and is CLEARED below - a new arena starts under ordinary
             // gravity, which is the rules' own behaviour and not something this decides.
@@ -945,7 +1046,9 @@ namespace ProjectBlock.View
                     || child == keepInfection || child == keepBurst || child == keepCircuit
                     || child == keepOverload || child == keepQuarantine
                     || child == keepHeat || child == keepNest || child == keepLane
-                    || child == keepGravity || child == keepDolls || child == keepRot)
+                    || child == keepGravity || child == keepDolls || child == keepRot
+                    || child == keepSnake || child == keepPress
+                    || child == keepParasite)
                 {
                     continue;
                 }
@@ -956,6 +1059,7 @@ namespace ProjectBlock.View
                 gravityField.Clear();
             }
             ghostSprites.Clear();
+            pressPreview.Clear();
             outsidePreviewSprites.Clear();
             outsidePreviewBaseColors.Clear();
             outsidePreviewBreathes.Clear();
@@ -1050,6 +1154,8 @@ namespace ProjectBlock.View
                 new Vector4(board.WaterFlow.X, board.WaterFlow.Y, 0f, 0f));
             UnresolvedCubes = 0;
             sawRot = false;
+            sawSnake = false;
+            sawPress = false;
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -1092,6 +1198,19 @@ namespace ProjectBlock.View
                         cellRenderers[x, y].color = DarkCellColor;
                         kindCache[x, y] = null;
                         baseColorCache[x, y] = DarkCellColor;
+                        continue;
+                    }
+                    // "YILAN" DRAWS ITSELF. Its segments are the six pieces painted for it and
+                    // they are placed on these cells by SnakeView, so the board must not put a cube
+                    // here: a green square under the snake is exactly what that art replaces.
+                    if (cube.HasValue && cube.Value.Kind == CubeKind.Snake)
+                    {
+                        ViewUtil.ApplyTile(cellRenderers[x, y], null, cellSize * EmptyFill);
+                        cellRenderers[x, y].color = EmptyColor;
+                        kindCache[x, y] = null;
+                        baseColorCache[x, y] = EmptyColor;
+                        preWashCache[x, y] = EmptyColor;
+                        sawSnake = true;
                         continue;
                     }
                     // A CUBE is a painted tile and fills its cell; an EMPTY cell stays the flat
@@ -1164,6 +1283,7 @@ namespace ProjectBlock.View
                     kindCache[x, y] = cube.HasValue ? cube.Value.Kind : (CubeKind?)null;
                     baseColorCache[x, y] = color;
                     sawRot |= cube.HasValue && cube.Value.Kind == CubeKind.Gangrene;
+                    sawPress |= cube.HasValue && cube.Value.Kind == CubeKind.Compressed;
                 }
             }
             RefreshGhostTraces();
@@ -1182,6 +1302,17 @@ namespace ProjectBlock.View
                 || board.InfectionDeadColumns.Count > 0)
             {
                 Gangrene.Sync(this);
+            }
+            // And the snake, for the same reason: the cells above were left blank for it.
+            if (sawSnake || snake != null)
+            {
+                Snake.Sync(this);
+            }
+            // And the press, for the same reason: its shell, its idle and its countdown have to
+            // follow the rules' own board rather than a memory of it.
+            if (sawPress || press != null)
+            {
+                Press.Sync(this);
             }
         }
 
@@ -2043,6 +2174,109 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>
+        /// "HIDROLIK PRES" AIMED. The four cells are ONE MECHANICAL AREA, so they are not tinted
+        /// one at a time and never with the explosion colour - nothing here explodes. What is drawn
+        /// is a single very thin slate pressure frame around the whole 2x2, four small INWARD-facing
+        /// corner brackets, and a faint inner shadow. No arrows: four big arrows over the board is
+        /// the thing this replaces, and brackets plus a shadow already say "this is about to be
+        /// squeezed".
+        ///
+        /// Invalid targets keep the game's existing language (the red preview tint), so a refusal
+        /// reads the way every other refusal in the game does.
+        /// </summary>
+        public void ShowPressPreview(IReadOnlyList<GridPos> cells, bool valid)
+        {
+            ClearPreview();
+            if (board == null || cells == null || cells.Count == 0)
+            {
+                return;
+            }
+            if (!valid)
+            {
+                for (int i = 0; i < cells.Count; i++)
+                {
+                    if (board.IsInside(cells[i]))
+                    {
+                        PaintPreviewCell(cells[i], InvalidPreviewColor, true);
+                    }
+                }
+                return;
+            }
+            // The patch's own middle and extent, taken from the cells rather than assumed, so a
+            // differently shaped patch one day draws its own frame.
+            var min = new Vector2(float.MaxValue, float.MaxValue);
+            var max = new Vector2(float.MinValue, float.MinValue);
+            int inside = 0;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (!board.IsInside(cells[i]))
+                {
+                    continue;
+                }
+                Vector2 at = CellToWorld(cells[i]);
+                min = Vector2.Min(min, at);
+                max = Vector2.Max(max, at);
+                inside++;
+            }
+            if (inside == 0)
+            {
+                return;
+            }
+            Vector2 centre = (min + max) * 0.5f;
+            Vector2 span = (max - min) + new Vector2(cellSize, cellSize);
+            float line = Mathf.Max(cellSize * 0.035f, 0.01f);
+            float bracket = cellSize * 0.26f;
+            // ONE frame: four thin edges of a single rectangle, muted steel.
+            pressPreview.Add(ViewUtil.MakeRounded(transform, "PressFrame",
+                centre + new Vector2(0f, span.y * 0.5f - line * 0.5f),
+                new Vector2(span.x, line), PressFrameColor, PressPreviewOrder));
+            pressPreview.Add(ViewUtil.MakeRounded(transform, "PressFrame",
+                centre - new Vector2(0f, span.y * 0.5f - line * 0.5f),
+                new Vector2(span.x, line), PressFrameColor, PressPreviewOrder));
+            pressPreview.Add(ViewUtil.MakeRounded(transform, "PressFrame",
+                centre + new Vector2(span.x * 0.5f - line * 0.5f, 0f),
+                new Vector2(line, span.y), PressFrameColor, PressPreviewOrder));
+            pressPreview.Add(ViewUtil.MakeRounded(transform, "PressFrame",
+                centre - new Vector2(span.x * 0.5f - line * 0.5f, 0f),
+                new Vector2(line, span.y), PressFrameColor, PressPreviewOrder));
+            // Four corner brackets, each pointing IN - the game's own rounded language rather than
+            // hard typographic corners.
+            float bx = span.x * 0.5f - line * 1.6f;
+            float by = span.y * 0.5f - line * 1.6f;
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                for (int sy = -1; sy <= 1; sy += 2)
+                {
+                    Vector2 corner = centre + new Vector2(bx * sx, by * sy);
+                    pressPreview.Add(ViewUtil.MakeRounded(transform, "PressBracket",
+                        corner - new Vector2(bracket * 0.5f * sx, 0f),
+                        new Vector2(bracket, line * 1.6f), PressBracketColor,
+                        PressPreviewOrder));
+                    pressPreview.Add(ViewUtil.MakeRounded(transform, "PressBracket",
+                        corner - new Vector2(0f, bracket * 0.5f * sy),
+                        new Vector2(line * 1.6f, bracket), PressBracketColor,
+                        PressPreviewOrder));
+                }
+            }
+            // And the faintest inner shadow, so the area reads as recessed under the jaws.
+            pressPreview.Add(ViewUtil.MakeRounded(transform, "PressInner", centre,
+                span - new Vector2(line * 3f, line * 3f), PressInnerColor,
+                PressPreviewOrder - 1));
+        }
+
+        /// <summary>The frame's muted steel, the brackets a shade brighter, and a very faint inner
+        /// shadow. Slate-grey throughout: the press is industrial, not an alert.</summary>
+        private static readonly Color PressFrameColor = new Color(0.56f, 0.60f, 0.67f, 0.55f);
+
+        private static readonly Color PressBracketColor = new Color(0.70f, 0.74f, 0.80f, 0.7f);
+
+        private static readonly Color PressInnerColor = new Color(0f, 0f, 0f, 0.1f);
+
+        private const int PressPreviewOrder = 4;
+
+        private readonly List<SpriteRenderer> pressPreview = new List<SpriteRenderer>();
+
         /// <summary>Draws (or hides) the red line separating the game area from the retro dead
         /// zone - the top <paramref name="deadZoneRows"/> rows. Recreated on demand; the controller
         /// calls it after each refresh (the board may have been rebuilt/resized).</summary>
@@ -2198,6 +2432,14 @@ namespace ProjectBlock.View
             outsidePreviewSprites.Clear();
             outsidePreviewBaseColors.Clear();
             outsidePreviewBreathes.Clear();
+            for (int i = 0; i < pressPreview.Count; i++)
+            {
+                if (pressPreview[i] != null)
+                {
+                    Destroy(pressPreview[i].gameObject);
+                }
+            }
+            pressPreview.Clear();
         }
 
         /// <summary>Replays the water fall frames, then restores the true board state and
@@ -2468,6 +2710,15 @@ namespace ProjectBlock.View
             SpriteRenderer renderer = cellRenderers[pos.X - board.MinX, pos.Y - board.MinY];
             ViewUtil.ApplyTile(renderer, null, cellSize * EmptyFill);
             renderer.color = board.IsSealed(pos) ? SealedColor : EmptyColor;
+        }
+
+        /// <summary>THE ANIMATION LAB ONLY: paints one cell in a state colour the board itself
+        /// uses - "Mapus" sealed, or "Tılsım" bonus ground - so the lab can show what they look
+        /// like without the rules having to make one on a board of its own. Any repaint takes it
+        /// straight back; nothing here is state.</summary>
+        public void PaintCellState(GridPos cell, bool sealedCell)
+        {
+            PaintCell(cell, sealedCell ? SealedColor : BonusGroundColor);
         }
 
         private void PaintCell(GridPos pos, Color color)

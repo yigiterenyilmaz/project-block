@@ -576,6 +576,14 @@ namespace ProjectBlock.View
                 waterAnimating = true;
                 boardView.PlayWaterAnimation(flow, delegate { waterAnimating = false; });
             }
+            // "HIDROLIK PRES" DESTROYS NOTHING. It takes four cubes into storage under pressure, so
+            // the cluster burst a board-targeting power would otherwise get here is the wrong
+            // sentence entirely - four cubes breaking where they stood. The compression plays
+            // instead, on THIS frame, the one the board was repainted in.
+            if (PlayPressCompression(round))
+            {
+                return;
+            }
             PlayPowerBlast(blastCells);
         }
 

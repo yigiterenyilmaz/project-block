@@ -83,8 +83,9 @@ check('secilirse cryoSublimation.Play', 'case RemovalVariant.CryoSublimation:' i
       and 'cryoSublimation.Play(' in removal, 'varyant oynatilmiyor')
 check('secim her kaldirmada rastgele', 'Random.Range(0, RemovalVariants.Length)' in removal, 'rastgele secim yok')
 emit = method(fb, 'private void EmitBlastParticles(')
-check('yalnizca YOK OLANLAR (tasinan/donusen eski izde)', 'LiftKindAt(i) == LiftKind.Removed' in emit
-      and 'PlayRemoval(removed)' in emit and 'LiftCells(marked' in emit, 'ayrim yok')
+check('yalnizca YOK OLANLAR (tasinan sokulmede, donusen kangrende)',
+      'LiftKindAt(i) == LiftKind.Removed' in emit and 'PlayRemoval(removed)' in emit
+      and 'LiftCells' not in emit, 'ayrim yok')
 check('kupun kendi yuzu (TryCubeLook) - vekil kup', 'TryCubeLook(' in removal, 'kup yuzu yok')
 
 print()

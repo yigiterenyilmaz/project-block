@@ -15,6 +15,13 @@
 //   4. If NO direction is open, the press detonates: it takes the surrounding gold and obsidian
 //      with it and pays nothing. That is the one thing in the game that removes them, and it costs
 //      you the press and the score.
+//
+// REPORTING (PressCompressionVisuals / PressReleaseVisuals) rides along beside all of that and
+// changes none of it: the overloads that take no report are the ones the rules have always called,
+// and the ones that do fill a report while the SAME code runs. Every branch below writes down what
+// it just did - which quadrant was empty, which side was pressed and refused, which cube moved
+// where - so the View can play the middle of the event instead of guessing it. The reports are
+// PUBLIC because the Animation Lab drives the real rules on a board of its own.
 
 using System.Collections.Generic;
 
@@ -49,16 +56,29 @@ namespace ProjectBlock.Core
         /// </summary>
         internal Cube?[] Compress(GridPos anchor)
         {
+            PressCompressionVisuals ignored;
+            return Compress(anchor, out ignored);
+        }
+
+        /// <summary>Compress, writing down what it swallowed for the View. Same rules, same result;
+        /// see HydraulicPressVisuals.</summary>
+        public Cube?[] Compress(GridPos anchor, out PressCompressionVisuals visuals)
+        {
+            visuals = null;
             List<GridPos> patch = PatchAt(anchor);
             if (patch == null)
             {
                 return null;
             }
+            var report = new PressCompressionVisuals(anchor);
             var swallowed = new Cube?[4];
             for (int i = 0; i < 4; i++)
             {
                 GridPos cell = patch[i];
                 swallowed[i] = cells[cell.X - MinX, cell.Y - MinY];
+                // Written down BEFORE the cell is emptied - the face the View flattens into a
+                // lamina is this one, and a moment later there is nothing left to ask.
+                report.Add(cell, swallowed[i]);
                 if (swallowed[i].HasValue)
                 {
                     cells[cell.X - MinX, cell.Y - MinY] = null;
@@ -67,6 +87,7 @@ namespace ProjectBlock.Core
             }
             cells[anchor.X - MinX, anchor.Y - MinY] = new Cube(CubeKind.Compressed, PressCardId);
             OccupiedCount++;
+            visuals = report;
             return swallowed;
         }
 
@@ -81,6 +102,16 @@ namespace ProjectBlock.Core
         /// </summary>
         internal PressExpansion Expand(GridPos anchor, Cube?[] swallowed)
         {
+            PressReleaseVisuals ignored;
+            return Expand(anchor, swallowed, out ignored);
+        }
+
+        /// <summary>Expand, writing down every test it made and every cube it moved, for the View.
+        /// Same rules, same result; see HydraulicPressVisuals.</summary>
+        public PressExpansion Expand(GridPos anchor, Cube?[] swallowed,
+            out PressReleaseVisuals visuals)
+        {
+            visuals = null;
             List<GridPos> patch = PatchAt(anchor);
             if (patch == null || swallowed == null || swallowed.Length != 4)
             {
@@ -92,6 +123,12 @@ namespace ProjectBlock.Core
                 return null;
             }
             var result = new PressExpansion();
+            var report = new PressReleaseVisuals(anchor);
+            for (int i = 0; i < 4; i++)
+            {
+                report.AddCell(patch[i], swallowed[i]);
+            }
+            visuals = report;
 
             // The three cells it wants back, and what is in the way.
             var wanted = new List<GridPos>();
@@ -99,9 +136,11 @@ namespace ProjectBlock.Core
             {
                 wanted.Add(patch[i]);
             }
-            if (!ClearTheWay(anchor, wanted, result))
+            if (!ClearTheWay(anchor, wanted, result, report))
             {
-                Detonate(anchor, result);
+                Detonate(anchor, result, report);
+                report.Detonated = true;
+                report.CubesPushedOff = result.CubesPushedOff;
                 return result;
             }
 
@@ -118,23 +157,29 @@ namespace ProjectBlock.Core
                 }
                 result.Restored.Add(cell);
             }
+            report.CubesPushedOff = result.CubesPushedOff;
             return result;
         }
 
         /// <summary>Empties the three cells the press wants, pushing what is in them away from the
         /// anchor. False when a cell cannot be emptied at all - which is what makes it detonate.
         /// </summary>
-        private bool ClearTheWay(GridPos anchor, List<GridPos> wanted, PressExpansion result)
+        private bool ClearTheWay(GridPos anchor, List<GridPos> wanted, PressExpansion result,
+            PressReleaseVisuals report)
         {
             foreach (GridPos cell in wanted)
             {
                 if (!cells[cell.X - MinX, cell.Y - MinY].HasValue)
                 {
+                    if (report != null)
+                    {
+                        report.AddAlreadyFree(cell);
+                    }
                     continue; // already free
                 }
                 int dx = cell.X > anchor.X ? 1 : (cell.X < anchor.X ? -1 : 0);
                 int dy = cell.Y > anchor.Y ? 1 : (cell.Y < anchor.Y ? -1 : 0);
-                if (!PushAway(cell, dx, dy, result))
+                if (!PushAway(cell, dx, dy, result, report, cell))
                 {
                     return false;
                 }
@@ -151,11 +196,30 @@ namespace ProjectBlock.Core
         /// A diagonal want (the far corner of the patch) is pushed on whichever single axis is
         /// open, preferring the horizontal, so the shove is always a straight line.
         /// </summary>
-        private bool PushAway(GridPos from, int dx, int dy, PressExpansion result)
+        private bool PushAway(GridPos from, int dx, int dy, PressExpansion result,
+            PressReleaseVisuals report, GridPos wantedCell)
         {
             if (dx != 0 && dy != 0)
             {
-                return PushAway(from, dx, 0, result) || PushAway(from, 0, dy, result);
+                // THE ONE CHOICE IN THE POWER: horizontal, and the vertical only if that is shut.
+                // The second attempt is the reroute the View is allowed to stage - nowhere else.
+                if (PushAway(from, dx, 0, result, report, wantedCell))
+                {
+                    if (report != null)
+                    {
+                        report.DiagonalAxis = PressAxis.Horizontal;
+                    }
+                    return true;
+                }
+                if (PushAway(from, 0, dy, result, report, wantedCell))
+                {
+                    if (report != null)
+                    {
+                        report.DiagonalAxis = PressAxis.Vertical;
+                    }
+                    return true;
+                }
+                return false;
             }
             // Walk out to the edge collecting what has to move, and refuse on an immovable cube.
             var line = new List<GridPos>();
@@ -165,11 +229,15 @@ namespace ProjectBlock.Core
                 Cube cube = cells[at.X - MinX, at.Y - MinY].Value;
                 if (cube.Kind == CubeKind.Obsidian || cube.Kind == CubeKind.Gold)
                 {
+                    ReportTest(report, wantedCell, dx, dy, false, at, cube.Kind,
+                        IsRerouteAttempt(report, wantedCell));
                     return false; // nothing may shift these, so this way is shut
                 }
                 line.Add(at);
                 at = new GridPos(at.X + dx, at.Y + dy);
             }
+            ReportTest(report, wantedCell, dx, dy, true, from, CubeKind.Normal,
+                IsRerouteAttempt(report, wantedCell));
             // Move from the far end back, so nothing overwrites a cube that has not moved yet.
             for (int i = line.Count - 1; i >= 0; i--)
             {
@@ -178,7 +246,23 @@ namespace ProjectBlock.Core
                 Cube cube = cells[cell.X - MinX, cell.Y - MinY].Value;
                 cells[cell.X - MinX, cell.Y - MinY] = null;
                 OccupiedCount--;
-                if (!IsInside(target))
+                bool off = !IsInside(target);
+                if (report != null)
+                {
+                    // i is this cube's place in the line counted FROM THE PRESS, which is the
+                    // order the pressure reaches them in.
+                    report.AddPush(new PressPush
+                    {
+                        From = cell,
+                        To = target,
+                        Step = new GridPos(dx, dy),
+                        LeftBoard = off,
+                        Cube = cube,
+                        ForWantedCell = wantedCell,
+                        Order = i
+                    });
+                }
+                if (off)
                 {
                     result.CubesPushedOff++; // over the edge and gone
                     continue;
@@ -189,9 +273,46 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>The diagonal's second attempt: a test already stands against this wanted cell,
+        /// so this one is the reroute.</summary>
+        private static bool IsRerouteAttempt(PressReleaseVisuals report, GridPos wantedCell)
+        {
+            if (report == null)
+            {
+                return false;
+            }
+            for (int i = 0; i < report.Tests.Count; i++)
+            {
+                if (report.Tests[i].WantedCell.Equals(wantedCell))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static void ReportTest(PressReleaseVisuals report, GridPos wantedCell, int dx,
+            int dy, bool ok, GridPos at, CubeKind kind, bool reroute)
+        {
+            if (report == null)
+            {
+                return;
+            }
+            report.AddTest(new PressureTest
+            {
+                WantedCell = wantedCell,
+                Axis = dx != 0 ? PressAxis.Horizontal : PressAxis.Vertical,
+                Step = new GridPos(dx, dy),
+                Succeeded = ok,
+                BlockedAt = at,
+                BlockedKind = ok ? CubeKind.Normal : kind,
+                IsReroute = reroute
+            });
+        }
+
         /// <summary>Nothing could move: the press goes up and takes the gold and obsidian around it
         /// with it. The one thing in the game that removes those - and it pays nothing.</summary>
-        private void Detonate(GridPos anchor, PressExpansion result)
+        private void Detonate(GridPos anchor, PressExpansion result, PressReleaseVisuals report)
         {
             result.Detonated = true;
             for (int x = anchor.X - 1; x <= anchor.X + 2; x++)
@@ -218,6 +339,10 @@ namespace ProjectBlock.Core
                     cells[x - MinX, y - MinY] = null;
                     OccupiedCount--;
                     result.DetonatedCells.Add(cell);
+                    if (report != null)
+                    {
+                        report.AddDetonated(cell, cube.Value.Kind);
+                    }
                 }
             }
         }

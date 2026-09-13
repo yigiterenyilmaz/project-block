@@ -83,6 +83,15 @@ namespace ProjectBlock.Core
             get { return blocksEaten; }
         }
 
+        /// <summary>THE LAST TURN AS IT HAPPENED, for the View to play: the cuts in order, whether
+        /// it had anywhere to go, the body after every single cell of the slide, and what it ate.
+        /// Presentation only - replaced every turn, and nothing in the rules reads it (see
+        /// SnakeVisuals).</summary>
+        [field: NotSaved]
+        public SnakeTurnVisuals LastTurn { get; private set; }
+
+        private int turnsPlayed;
+
         public override string StatusText
         {
             get
@@ -111,6 +120,8 @@ namespace ProjectBlock.Core
             body.Clear();
             segmentsEaten = 0;
             blocksEaten = 0;
+            LastTurn = null;
+            turnsPlayed = 0;
             RoundEngine round = ctx.Round;
             if (round == null)
             {
@@ -152,13 +163,15 @@ namespace ProjectBlock.Core
             {
                 return;
             }
+            var visuals = new SnakeTurnVisuals(++turnsPlayed, body);
+            LastTurn = visuals;
             // 1. Every line that went off with the snake standing in it takes a segment off its
             //    tail. The line could not break the segments themselves, so they are still there
             //    to be counted.
-            int cuts = CountCutsFrom(turn.Report, round.Board);
+            int cuts = CountCutsFrom(turn.Report, round.Board, visuals);
             for (int i = 0; i < cuts && body.Count > 0; i++)
             {
-                CutTail(round);
+                CutTail(round, visuals);
             }
             if (cuts > 0)
             {
@@ -167,11 +180,14 @@ namespace ProjectBlock.Core
             }
             if (body.Count == 0)
             {
+                visuals.NoteDefeated();
+                visuals.NoteBodyAfter(body);
                 round.DeclareRoundWon();
                 return;
             }
             // 2. And then it moves.
-            Slide(round, turn.Rng);
+            Slide(round, turn.Rng, visuals);
+            visuals.NoteBodyAfter(body);
             round.NoteBoardRearranged();
         }
 
@@ -184,21 +200,27 @@ namespace ProjectBlock.Core
         /// negative - so without the shift below the snake would stop being cut on an inflated
         /// arena, and the round could no longer be won by killing it.
         /// </summary>
-        private int CountCutsFrom(TurnReport report, GameBoard board)
+        private int CountCutsFrom(TurnReport report, GameBoard board, SnakeTurnVisuals visuals)
         {
             int cuts = 0;
             for (int i = 0; i < report.ExplodedRows.Count; i++)
             {
-                if (OccupiesRow(board.MinY + report.ExplodedRows[i]))
+                int absolute = board.MinY + report.ExplodedRows[i];
+                if (OccupiesRow(absolute))
                 {
                     cuts++;
+                    // Which line did it, so the View can start the cut where the player's own
+                    // explosion crossed the snake instead of somewhere it chose.
+                    visuals.NoteCutLine(true, absolute);
                 }
             }
             for (int i = 0; i < report.ExplodedColumns.Count; i++)
             {
-                if (OccupiesColumn(board.MinX + report.ExplodedColumns[i]))
+                int absolute = board.MinX + report.ExplodedColumns[i];
+                if (OccupiesColumn(absolute))
                 {
                     cuts++;
+                    visuals.NoteCutLine(false, absolute);
                 }
             }
             return cuts;
@@ -230,12 +252,13 @@ namespace ProjectBlock.Core
 
         /// <summary>Takes the last segment off the tail. Forced, because a snake segment refuses
         /// every ordinary destruction - this rule is the only thing that may remove one.</summary>
-        private void CutTail(RoundEngine round)
+        private void CutTail(RoundEngine round, SnakeTurnVisuals visuals)
         {
             GridPos tail = body[body.Count - 1];
             body.RemoveAt(body.Count - 1);
             round.Board.DestroyCubeForced(tail);
             segmentsEaten++;
+            visuals.NoteTailCut(tail, body);
         }
 
         /// <summary>
@@ -244,7 +267,7 @@ namespace ProjectBlock.Core
         /// grow. Directions it cannot move in at all are not offered, so a boxed-in snake simply
         /// stays put instead of picking a wall four times over.
         /// </summary>
-        private void Slide(RoundEngine round, IRandomSource rng)
+        private void Slide(RoundEngine round, IRandomSource rng, SnakeTurnVisuals visuals)
         {
             GameBoard board = round.Board;
             var open = new List<GridPos>();
@@ -258,9 +281,11 @@ namespace ProjectBlock.Core
             }
             if (open.Count == 0)
             {
+                visuals.NoteStuck();
                 return; // nowhere to go: it waits
             }
             GridPos direction = open[rng.NextInt(0, open.Count)];
+            visuals.NoteDirection(direction);
             // Bounded by the board: it can never take more steps than there are cells in a line.
             int guard = board.Width + board.Height;
             while (guard-- > 0)
@@ -270,9 +295,13 @@ namespace ProjectBlock.Core
                 {
                     return; // a wall, or its own flank
                 }
-                bool food = board.GetCube(next).HasValue;
+                Cube? standing = board.GetCube(next);
+                bool food = standing.HasValue;
                 if (food)
                 {
+                    // Taken BEFORE the rules remove it: the View shows that block, with its own
+                    // face, being pulled into the mouth.
+                    visuals.NoteEaten(next, standing.Value);
                     // The segments moved so far are not casualties, so the diff is re-baselined
                     // before the one destruction that IS real goes through the engine.
                     round.NoteBoardRearranged();
@@ -282,6 +311,8 @@ namespace ProjectBlock.Core
                     blocksEaten++;
                 }
                 Advance(board, next, food);
+                // One cell of the slide, written down as the rules made it.
+                visuals.NoteStep(body);
                 if (food)
                 {
                     return; // it stops where it fed

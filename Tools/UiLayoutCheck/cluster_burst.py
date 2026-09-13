@@ -83,11 +83,9 @@ check('FlashCells icinde eski kare/parcacik YOK',
 line = method(fb, 'private void FlashLine(')
 check('FlashLine hala isin, kume YOK', 'lineSweep.Play(' in line and 'lineBurst.Play(' in line
       and 'clusterBurst' not in line, 'satir yolu degismis')
-lift = method(fb, 'private bool LiftCells(')
-check('kaldirma soguk ve sessiz', 'Palette.Cold' in lift and 'Shake' not in lift, 'LiftCells soguk degil')
 emit = method(fb, 'private void EmitBlastParticles(')
-check('tur raporu: kaldirilanlar patlama degil (yok olan -> PlayRemoval, kalan -> LiftCells)',
-      'LiftKindAt(' in emit and 'PlayRemoval(removed)' in emit and 'LiftCells(marked' in emit,
+check('tur raporu: kaldirilanlar patlama degil (yalniz YOK OLAN -> PlayRemoval)',
+      'LiftKindAt(' in emit and 'PlayRemoval(removed)' in emit and 'LiftCells' not in emit,
       'LiftedCells patlama gibi ciziliyor')
 check('eski imza hicbir yerde kalmadi', not re.findall(r'FlashCells\([^;]*?,\s*\d+\s*(?:,|\))', fb + act + lab),
       'eski FlashCells cagrisi')

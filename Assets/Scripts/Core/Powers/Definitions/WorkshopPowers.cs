@@ -434,6 +434,27 @@ namespace ProjectBlock.Core
             get { return turnsLeft; }
         }
 
+        /// <summary>THE SQUEEZE AS IT HAPPENED, for the View to play: the four cells in patch
+        /// order, what stood in each (null for an empty quadrant) and the cell the compressed cube
+        /// now fills. Presentation only - nothing in the rules reads it, and it is not state, so it
+        /// is never saved (see HydraulicPressVisuals).</summary>
+        [field: NotSaved]
+        public PressCompressionVisuals LastCompression { get; private set; }
+
+        /// <summary>THE RELEASE AS IT HAPPENED: every side it pressed and every one that refused,
+        /// every cube it moved and where to, the axis the corner finally opened on, and - when it
+        /// could not open at all - the cells the failure took. Presentation only, never saved.
+        /// </summary>
+        [field: NotSaved]
+        public PressReleaseVisuals LastRelease { get; private set; }
+
+        /// <summary>True when the pressed cube was BROKEN while it was still shut, so there was
+        /// never a release: the player took the four-cube payout and the stored picture went with
+        /// it. The View must tell this apart from an opening - reported, never inferred from
+        /// "IsPressing went false and there is no release". Presentation only, never saved.</summary>
+        [field: NotSaved]
+        public bool BrokenWhileShut { get; private set; }
+
         public override string StatusText
         {
             get
@@ -485,11 +506,15 @@ namespace ProjectBlock.Core
                 return false;
             }
             anchor = target.Cell.Value;
-            swallowed = ctx.Round.MainBoard.Compress(anchor);
+            PressCompressionVisuals report;
+            swallowed = ctx.Round.MainBoard.Compress(anchor, out report);
             if (swallowed == null)
             {
                 return false;
             }
+            LastCompression = report;
+            LastRelease = null;
+            BrokenWhileShut = false;
             turnsLeft = TurnsCompressed;
             return true;
         }
@@ -508,6 +533,7 @@ namespace ProjectBlock.Core
             {
                 swallowed = null; // broken while shut: the player took the four-cube payout
                 turnsLeft = 0;
+                BrokenWhileShut = true;
                 return;
             }
             turnsLeft--;
@@ -515,7 +541,9 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            PressExpansion result = turn.Round.ReleasePress(anchor, swallowed);
+            PressReleaseVisuals report;
+            PressExpansion result = turn.Round.ReleasePress(anchor, swallowed, out report);
+            LastRelease = report;
             swallowed = null;
             if (result != null && !result.Detonated && result.CubesPushedOff > 0)
             {

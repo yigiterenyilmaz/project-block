@@ -122,6 +122,10 @@ namespace ProjectBlock.View
         private MomentumPeelView momentumPeel;
         /// <summary>A moving board's surviving cubes riding to their new cells.</summary>
         private BossMoveView bossMove;
+        /// <summary>"Hidrolik pres" - the squeeze, and the release with its pushes.</summary>
+        private HydraulicPressView hydraulicPress;
+        /// <summary>"Hidrolik pres" failing - a pressure vessel that could not vent.</summary>
+        private PressureVesselView pressureVessel;
         private LineSwapPickerView lineSwapPicker;
 
         /// <summary>Quake count last seen per Deprem joker, so the shake fires once per collapse.</summary>

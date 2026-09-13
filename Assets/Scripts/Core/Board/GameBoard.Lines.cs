@@ -662,6 +662,19 @@ namespace ProjectBlock.Core
             Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
             if (!cube.HasValue || !CubeRules.IsExternallyDestructible(cube.Value))
             {
+                // A "Parazit" HOST held. Written down for the View so the parasite can be seen
+                // clamping down rather than the cube simply not breaking - reporting only, and
+                // only for a host: obsidian and gold refusing here is their own language.
+                if (cube.HasValue && cube.Value.Protected)
+                {
+                    HostRefusals.Add(new HostRefusal
+                    {
+                        Cell = pos,
+                        Kind = HostRefusalKind.Destroy,
+                        HasDirection = false,
+                        Cube = cube.Value
+                    });
+                }
                 return false;
             }
             cells[pos.X - MinX, pos.Y - MinY] = null;
@@ -681,11 +694,43 @@ namespace ProjectBlock.Core
             Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
             if (!cube.HasValue || cube.Value.Protected)
             {
+                // The forced pickup a relocation starts with, refused: the board is carrying
+                // everything else away and this one is staying where it is.
+                if (cube.HasValue && cube.Value.Protected)
+                {
+                    HostRefusals.Add(new HostRefusal
+                    {
+                        Cell = pos,
+                        Kind = HostRefusalKind.ForcedMove,
+                        Step = forcedStep,
+                        HasDirection = forcedStep.X != 0 || forcedStep.Y != 0,
+                        Cube = cube.Value
+                    });
+                }
                 return false;
             }
             cells[pos.X - MinX, pos.Y - MinY] = null;
             OccupiedCount--;
             return true;
+        }
+
+        /// <summary>
+        /// Every attempt on a "Parazit" host cube the rules refused this turn, in order.
+        /// REPORTING ONLY (see ParasiteVisuals): nothing in the rules reads it, and the engine
+        /// clears it at the top of each turn.
+        /// </summary>
+        public readonly HostRefusalLog HostRefusals = new HostRefusalLog();
+
+        /// <summary>The step a forced relocation is taking while it runs, so a refusal can say
+        /// which side the force came from. Set by the callers that HAVE a direction; zero
+        /// otherwise, and a refusal then reports no direction rather than a guessed one.</summary>
+        private GridPos forcedStep;
+
+        /// <summary>Tells the board which way the forced movement it is about to run goes. Pure
+        /// reporting: nothing about the move itself changes.</summary>
+        public void SetForcedStep(GridPos step)
+        {
+            forcedStep = step;
         }
     }
 }

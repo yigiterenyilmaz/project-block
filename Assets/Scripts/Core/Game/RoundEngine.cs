@@ -648,6 +648,9 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
+                // Which way this pickup is going, so a "Parazit" host refusing it can be seen
+                // clamping on the side the force came from. Reporting only.
+                Board.SetForcedStep(new GridPos(step, 0));
                 // A protected (Parazit) cube refuses the forced pickup, so relocating it
                 // would duplicate it - leave it in place instead.
                 if (!Board.DestroyCubeForced(from))
@@ -680,6 +683,7 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
+                Board.SetForcedStep(new GridPos(0, step));
                 // A protected (Parazit) cube refuses the forced pickup, so relocating it
                 // would duplicate it - leave it in place instead.
                 if (!Board.DestroyCubeForced(from))

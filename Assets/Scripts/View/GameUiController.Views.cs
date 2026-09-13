@@ -174,6 +174,14 @@ namespace ProjectBlock.View
             moveGo.transform.SetParent(transform, false);
             bossMove = moveGo.AddComponent<BossMoveView>();
 
+            var pressGo = new GameObject("HydraulicPress");
+            pressGo.transform.SetParent(transform, false);
+            hydraulicPress = pressGo.AddComponent<HydraulicPressView>();
+
+            var vesselGo = new GameObject("PressureVessel");
+            vesselGo.transform.SetParent(transform, false);
+            pressureVessel = vesselGo.AddComponent<PressureVesselView>();
+
             var lineSwapGo = new GameObject("LineSwapPicker");
             lineSwapGo.transform.SetParent(transform, false);
             lineSwapPicker = lineSwapGo.AddComponent<LineSwapPickerView>();

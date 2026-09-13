@@ -63,7 +63,20 @@ namespace ProjectBlock.View
                     GridPos hoverCell;
                     if (boardView.TryWorldToCell(world, out hoverCell))
                     {
-                        boardView.ShowPowerPreview(aiming.PreviewCells(ActivationTarget.Board(hoverCell)));
+                        ActivationTarget at = ActivationTarget.Board(hoverCell);
+                        // "Hidrolik pres" has its own aiming language: the 2x2 is ONE mechanical
+                        // area under a thin pressure frame, not four cells tinted the colour of an
+                        // explosion - it destroys nothing.
+                        if (aiming is HidrolikPresPower)
+                        {
+                            boardView.ShowPressPreview(aiming.PreviewCells(at),
+                                aiming.CanRun(new RoundContext(session, session.Rng,
+                                    session.CurrentRound), at));
+                        }
+                        else
+                        {
+                            boardView.ShowPowerPreview(aiming.PreviewCells(at));
+                        }
                     }
                     else
                     {

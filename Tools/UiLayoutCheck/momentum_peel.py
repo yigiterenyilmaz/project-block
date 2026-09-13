@@ -99,8 +99,9 @@ print()
 print('=== 3. YONLENDIRME ===')
 emit = method(fb, 'private void EmitBlastParticles(')
 motion_fn = method(fb, 'private void PlayBoardMotion(')
-check('yok olan -> kaldirma varyanti; tasinan+hareketli -> sokulme (tahtanin hareketiyle); gerisi -> eski iz',
-      'PlayRemoval(removed)' in emit and 'LiftCells(marked' in emit and 'motion.Reason != LiftReason.None' in emit
+check('yok olan -> kaldirma varyanti; tasinan+hareketli -> sokulme (tahtanin hareketiyle)',
+      'PlayRemoval(removed)' in emit and 'LiftCells' not in emit
+      and 'motion.Reason != LiftReason.None' in motion_fn
       and 'PlayForcedExit(' not in emit and 'PlayForcedExit(carried, motions)' in motion_fn, 'yonlendirme eksik')
 exitm = method(fb, 'private bool PlayForcedExit(')
 check('yon Core\'dan (m.Step), kup Core\'dan (m.Cube), baslangic hucresi m.From',

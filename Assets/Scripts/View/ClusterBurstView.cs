@@ -308,7 +308,14 @@ namespace ProjectBlock.View
         public struct Look
         {
             public Sprite Tile;
+
+            /// <summary>The TINT the renderer needs - white on a tile that paints itself.</summary>
             public Color Colour;
+
+            /// <summary>And what the block is actually MADE OF. A painted tile's tint is white,
+            /// so anything deriving a palette from Colour derives it from white: gold ate pink
+            /// until this existed. Alpha 0 means nobody filled it in.</summary>
+            public Color Paint;
         }
 
         /// <summary>A tiny deterministic random source (xorshift). Seeded from the cells, so a

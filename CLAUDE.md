@@ -119,7 +119,7 @@ dropped that way once each.
   it is; the 1–2 frame hit-stop freezes only the effect's own clock, never `Time.timeScale`.
   A boss taking cubes away is not an explosion either, and `TurnReport.LiftKindAt` says what
   became of each one (reporting only — `LiftedCells` itself is unchanged). A cube that VANISHED
-  in place (`Removed`: "Alzheimer", "Hidrolik pres") goes through `PlayRemoval`, which draws one
+  in place (`Removed`: "Alzheimer") goes through `PlayRemoval`, which draws one
   removal variant AT RANDOM per removal (repeats allowed) — variant 1 is `ColdSinkView`: the
   slot's floor opens into a three-step slate recess and the cube falls in, clipped by a
   `SpriteMask` mouth so it passes behind the front lip. Variant 2 is `PhaseFoldView`: no pit
@@ -188,6 +188,319 @@ dropped that way once each.
   bloom without the core view's straight tendril. Light in these effects is always a gradient
   clipped to a cell or fading to zero at its own edge — never a flat tinted square laid over
   the grid, and never a full-board overlay.
+- **"Yılan" (`SnakeView`)** — the one boss that is a LIVING THING on the board, and the first
+  drawn from painted art rather than generated shapes. Six tiles in `Resources/Art/Blocks`
+  (`snake_head`, `snake_head_open`, `snake_body`, `snake_bend`, `snake_tail`,
+  `snake_body_swollen`), cut from one sheet at import time, and the whole system hangs off ONE
+  property of them: each tile's PIVOT is on the cell centre its tube belongs to (custom pivot,
+  one unit per cell in the `.meta`), so a segment is placed at a cell centre, turned in quarter
+  steps, and its mouths land on the cell boundaries by themselves. The topology is DERIVED from
+  the art's own connections - the bend is drawn LEFT + DOWN, and rotating it anticlockwise gives
+  all four elbows, so nothing is ever mirrored and no hand-written table can rot (`TurnForBend`).
+  The board does not draw snake cells at all (`BoardView.Refresh` blanks them): these sprites are
+  the snake. MOTION IS ONE SPINE: Core reports the body after EVERY CELL of a slide
+  (`SnakeBoss.LastTurn` → `SnakeTurnVisuals.StepSnapshots`), those cells are strung into a single
+  polyline with the head's path in front, and every segment rides it at one cell's spacing - so
+  the head leads, the body follows through its own shape, the tail comes last, and at the end each
+  segment is exactly on the cell Core says it is in. A bend is NEVER snapped to its corner: pieces
+  stay where the spine puts them, one cell of arc apart, which is the only way the body cannot come
+  apart (the first version snapped, and the snake broke into floating tiles at every corner - see
+  `docs/yilan-kayma.png`). A TAIL takes its direction from the tangent HALFWAY to its neighbour,
+  never from the tangent at its own arc: that is the end of the polyline, and a tail just past a
+  corner got a tangent across the turn, pointed off into nothing and left a gap. THE BITE IS THE END OF THE SLIDE, not a second clip, and it
+  happens at the block's OWN FACE: the head comes to a stop with its snout on the block
+  (`BiteLungeDistance`, nearly a whole cell short of the cell centre), draws back, opens
+  (`snake_head_open`), and STRIKES over the block's near half (`BiteLungeCloseShare`) - it does not
+  arrive in the cell on the lunge. The BLOCK ITSELF - its own face, kept from the report before the
+  rules removed it - is pulled into the MOUTH, wherever the head has got to, and occluded by it,
+  which is why it never goes through a removal variant. Then the mouth closes, a gulp passes into
+  the neck, the snake pulls ITSELF the rest of the way onto the cell it has just emptied, and the
+  segment behind the head swells: the snake grew. The first pass parked the head a quarter cell
+  short instead, so at the moment of the bite it covered three quarters of the block: there was no
+  block left to see, no contact line for an arc or a light to sit on, and every effect landed on
+  the head's own snout - which is exactly what "a few sprite tweens" looks like. A cut is the
+  player's line sending a constriction down the body from where it crossed
+  (`CutRows`/`CutColumns`) to the tail, which lets go with a recoil and a few flecks while the new
+  last segment morphs into a tail. Nothing here decides anything: which way it went, how far, what
+  it ate, how many segments the lines cut and which cells left the tail all come from Core.
+- **THE BITE IS ITS OWN SYSTEM** (`SnakeEatView`, `Resources/Shaders/SnakeEat` +
+  `SnakeFilament`), because eating is the boss's hero moment and it turns on one distinction: we
+  are not carrying the BLOCK to the mouth, we are carrying the block's MATTER there. A block that
+  shrinks and slides into a jaw reads as a tile being deleted with a tween on it - which is what
+  this replaced. Now its silhouette is taken away from the side the snake is on, in a few big soft
+  lobes (two low-frequency cosines, never a straight wipe and never a noise dissolve), with a thin
+  rim of its own energy colour where the front works and the light drawn out of the mass still
+  standing; it is never scaled and never faded. What leaves it leaves along FILAMENTS - pooled
+  strip meshes, one main thread and a few finer ones, each a bezier rooted in the matter that is
+  STILL THERE (beyond the front, on the far side), curving into the mouth and ending BEHIND the
+  head so the energy goes *into* it rather than across its face. The flow along them is baked into
+  the mesh colours, so nothing scrolls a texture. How many and how bright follows how fast the
+  block is actually coming apart, which is what sells the mass as conserved. The last fifth
+  becomes a dense core that holds for a breath and is drunk by a final strand; a small light
+  gathers INSIDE the open jaw and is shut in, never released. THE COLOURS ARE THE BLOCK'S OWN, AND THE
+  SOURCE OF THEM MATTERS: a painted tile's TINT is `Color.white` (that is the whole point of a
+  tile that paints itself) and on a protected cube it is a magenta wash, so a palette derived from
+  `Look.Colour` came out white on everything and PINK on some of it - which is exactly what "gold
+  eats magenta" was. `Look.Paint` carries what the block is actually made of
+  (`ViewUtil.CubeMaterialColor`, without the protected cube's magenta state wash) and `Colours()`
+  derives material / energy / hot core from THAT. There is no table of block types anywhere in it:
+  gold eats gold, obsidian a deep violet, water blue - one eating language with the nuance carried
+  by the colour it already wore, and nothing is ever taken to white (the ribbon's core is the same
+  hue SCALED, because multiplying keeps the ratio between the channels). The old
+  `BlockIngestStart` smears - three straight tapered marks at the jaw in that same white-or-pink
+  tint - are gone: a straight smear IS the debug-laser look, and the filaments replaced it. The swallow then carries that colour through the snake itself: head, neck, first
+  segment, each a beat behind the last, as a bulge and a tint UNDER the skin
+  (`SegmentPose.AccentColour`), leaving a trace on the swollen segment - which is why "that went
+  into it" reads at all. ONE CLOCK: the coil, the mouth, the lunge, the extraction, the core, the
+  jaw and the gulp are one overlapping timeline in `SnakeEatView.Style`, and `SnakeView` reads the
+  head's own motion off it (`HeadOffset`, `NeckGather`, `BiteClock`) - the head cannot be lunging
+  while the matter waits. Nine moments are announced through `Sounded` for audio. See
+  `docs/yilan-yeme-*.png`.
+- **BEATEN, IT LETS GO OF WHAT IT TOOK** (`SnakeDefeatView`): the boss round won, and the only
+  animation in the game whose subject is what the boss TOOK rather than what it is. It does not
+  burst. Its own teal and cream go quiet, the colours of the blocks it ate this round wake up
+  UNDER its surface (three pockets in `SnakeSkin`, mixed beneath the artwork so its shading and
+  highlight survive - a coloured sprite laid over the segment would be a sticker, and a sticker
+  says nothing about the colour having been inside), run to the middle as the body folds in
+  UNEVENLY (the ends before the middle, every segment still reaching zero - scaling all of them
+  faster instead left the ends gone a third of the way in and the middle never vanishing at all),
+  and gather into one dense knot of a few wound strands. The knot does not explode either: it
+  UNCOILS into three to six soft curved tapered ribbons - pooled strip meshes on the same
+  `SnakeFilament` shader as the bite's - each one a colour it ACTUALLY ATE, each on its own arc,
+  breaking into motes at their ends, with a very faint chromatic answer running out across the
+  board as its cells' RIMS catch the round's dominant colour for a moment (drawn as marks of our
+  own over the board, so no cell state is ever touched and there is nothing to restore). THE
+  PALETTE IS THE ROUND'S: every bite calls `Remember` with the colours it derived off the block's
+  own material, near colours become one family, and the one it ate most of gets the hero ribbon -
+  so gold-purple-blue ends gold, purple, blue and there is no rainbow anywhere. That history is
+  presentation only (no score, no behaviour, nothing saved) and is dropped when a new snake
+  appears; beaten without eating anything, it falls back to the snake's own teal, cream and amber
+  with two controlled accents. No flash, no shake, no confetti, and nothing is ever taken to
+  white - the peak is the moment the knot opens, and it is made of colour rather than brightness.
+  Six moments are announced through `Sounded`. See `docs/yilan-yenilgi-*.png`.
+- **The snake's VFX are a layer of their own** (`SnakeVfxController`, `Resources/Shaders/SnakeSkin`):
+  `SnakeView` owns POSES and drives it two ways - a `SegmentPose` per segment per frame, and ~20
+  one-shot `Hook` signals (`MouthOpen`, `BiteContact`, `BlockIngestStart`, `GulpPass`, `CutImpact`,
+  `TailDetach`, ...). Split that way because the two answer different questions: where a segment is
+  this frame, and what just happened to it. Three kinds, and they do not mix. BODY is the surface
+  itself, through ONE material and a `MaterialPropertyBlock` per renderer: a sheen biased to the
+  art's own upper-left light in WORLD space (so a quarter turn does not turn the light), a leading
+  edge while it moves, a warm accent found by the pixel's own warmth, a travelling band, squeeze,
+  and the colour drained out of it. The shader only ever lerps a pixel toward its OWN brighter or
+  deeper colour - that is what makes a strong response impossible to read as glow. CONTACT is what
+  the board feels: shadows shaped per part and per orientation, pressure marks, and a light that
+  POOLS ON THE FLOOR under a contact (`LocalLightGroundDrop`/`Flatten`) - centred on the head it was
+  a halo, which is the one thing forbidden here. ACTION is the few controlled flecks a hero moment
+  throws, on a budget that never grows with the snake. Sorting is the whole trick: light 1, board
+  marks 2, shadows 3, proxy 4, body 5, head 6, **contact marks 7** and flecks 8 - a contact arc or
+  an ingestion smear belongs OVER the jaw that makes it, and the first pass drew them under the
+  head, where all that was ever seen of them was a sliver. Intensity is a hierarchy: idle barely
+  there, the bite and the cut carrying real weight. The lab can switch each layer off on its own
+  (motion / shadows / material / particles / board contact), which is the only way to see what each
+  one is worth. See `docs/yilan-vfx-*.png`.
+- **"Hidrolik pres" is a COMPRESSION, not a disappearance** (`HydraulicPressView`,
+  `CompressedCubeView`, `PressureVesselView`, `Resources/Shaders/PressLamina` + `PressShell`).
+  Four cubes going into one cell used to be a repaint — the cubes gone, a slate cube standing
+  there, nothing in between — and the whole point of this system is that the middle of the event
+  is now drawn: a 2x2 patch is taken under pressure, each occupied cube loses its VOLUME (bevel,
+  contact depth, soft-3D shading suppressed by `PressLamina`, its face pulled toward its OWN
+  average — never a `scaleY`, and never toward white: the average comes from `Look.Paint`, which
+  is the trap the snake's palette already fell into once), becomes a thin PRESSED LAMINA that
+  still wears its own material, and is drawn along a guide rail to the cell Core compressed into.
+  **A PRESSED CUBE KEEPS ITS FOOTPRINT.** This is a top-down board, so "it lost its thickness" is
+  said with SHADING, not with height: the first pass squashed each sprite to a fifth of its height
+  and the result was a coloured bar with no relation to the cube it came from - a UI strip. The
+  silhouette now stays a rounded square pressed down a few percent (`LaminaThickness` 0.86), the
+  bevel is taken out of the shading (`PressLamina._Volume`: the light band on top and the dark one
+  below, which are what a cube has and a plate does not), and the one piece of depth a plate really
+  has is put back as a dark lip along its bottom edge (`_PlateEdge`). In the stack each lamina drops
+  a shadow on the one under it, which is what makes four plates read as four rather than as one
+  blob. The four JAWS are four short parts (`JawLength` 0.55 of a side) with their own contact
+  shadows, never four edges meeting at the corners - a thin rectangle around the patch is a debug
+  bounding box, which is what the first pass drew. And the shell does not fade in: four slate
+  SHUTTERS travel in over the stack and the surface only completes behind them (`PaintShutters`),
+  because a grey cube appearing where the colours used to be is the sprite swap this replaces.
+  **An empty quadrant travels too**, as a dark NEGATIVE IMPRINT, because the rules store the hole
+  and the picture that comes back four turns later has to have it in it. The four laminae stack
+  with a readable offset for a breath, one heavy crush drives the spacing to nothing, and the
+  slate shell closes OVER them and locks with a pixel of inward punch. **THE CHAMBER CLOSES ONTO
+  THE ANCHOR**: Core puts the compressed cube on the patch's BOTTOM-LEFT cell, so jaws that
+  squeezed to the patch's middle had the mechanism saying one thing while the material slid off
+  to a corner — the four jaws now travel from the patch's centre onto that cell as the pressure
+  builds. The shut cube is a PRESENCE (`CompressedCubeView`, owned by `BoardView` like the rot and
+  the snake, drawn OVER the board's own slate cube so a missing shader costs detail and never the
+  block): contained pressure that tightens the central dimple and the quadrant seams every couple
+  of seconds and never once breathes or wobbles, and the turn it is on is said by PRESSURE AGEING rather than
+  by a counter: the central dimple bites deeper, the quadrant seams tighten and darken, the outer
+  bevel takes compression, the contact shadow draws in and gets heavier, and one more short
+  PRESSURE SCAR - a tapered crease running out of the cross into a quadrant - locks each turn.
+  Four orange dots is what that replaces, and it was a cooldown LED strip: it asked the player to
+  count lights instead of reading "this capsule is holding a lot now". Amber survives only as the
+  brief burnt strain that runs along a crease AS IT LOCKS, and as a trace of residue on the last
+  turn; the capsule never becomes an orange cube. A turn does not arrive in one frame either - a
+  ~180ms PRESSURE TICK loads the shell (its four edges press INWARD a pixel, never a scale),
+  tightens the dimple, contracts the seams, locks the new crease, tightens the shadow and settles,
+  and re-stating the same turn (which every repaint does) must not fire it. The number itself is
+  the POWER's `TurnsLeft`, never counted in the View: the power sets it mid-turn and decrements at
+  the end of that same turn, so the states the player sees are 4, 3, 2, 1 and the count is
+  `total - TurnsLeft + 1`, running 1..4. They lock in the quadrants' own patch order, and the idle cycle quickens
+  with the load (3.1s down to 1.8s) because the capsule is nearer its limit, not more alive. Opening runs backwards: the locks let go, the stored colours come up UNDER the seams for
+  a moment (mixed beneath the slate — a coloured sprite over it would be a sticker), the shell
+  retracts, and each lamina expands to the cell CORE restored it to, regaining its volume on the
+  way; a stored hole comes back as a hole and never as a cube the View invented. **NOTHING IN IT
+  IS DECIDED HERE.** `PressCompressionVisuals` / `PressReleaseVisuals` (written by
+  `GameBoard.Press`, reporting only, `[NotSaved]` on the power's copies — the snake's report
+  crashed saving once already) carry the four cells in patch order with a null per empty quadrant,
+  every side the press PRESSED including the ones that refused and the cube and KIND that refused
+  them, every cube it moved with its own step and a destination that is outside the board when it
+  went over the edge, the axis the corner finally opened on, and exactly the cells a failure
+  emptied. The reporting overloads are additive: the parameterless calls are the ones the rules
+  have always made and the baseline is byte-identical.
+  **THE REAL RULES ARE NOT SYMMETRICAL AND THE ANIMATION MUST NOT PRETTIFY THAT** — the anchor is
+  restored in place, the cell to its RIGHT is pushed +x, the one ABOVE it +y, and only the
+  DIAGONAL has a choice (horizontal, then vertical). So "a side is shut, so it opens the other
+  way" happens at the CORNER and nowhere else; a blocked straight side detonates at once. A
+  refusal is pressed and denied — a pixel of shell pressure, a compression mark on the face of the
+  cube that will not budge (deeper on obsidian than on gold), zero movement, a pixel of recoil —
+  and then a dull amber line carries the pressure through the shell to the axis that opened. No
+  shield, no spark, no glow. A push is a directional pressure front (a low-opacity slate band over
+  the floor, never a beam or a ring), the near cube answering first off the report's own `Order`,
+  hydraulic easing rather than a lerp, a percent or two of compression along the axis and a shadow
+  that lags; a cube shoved off the board keeps its velocity and goes, one movement, never a stop
+  at the rim followed by a removal. Destination cells AND the restored 2x2 are held blank
+  (`BoardView.HoldCells`) until the copies land, the same bargain `BossMoveView` makes.
+  **The failure is its own event** (`PressureVesselView`), because it is the one thing in the game
+  that removes gold and obsidian and it pays nothing: the seams darken, the dimple is driven in,
+  a burnt amber stress comes up, every edge strains a pixel or two out — and then the shell does
+  NOT burst outward, it collapses to the middle. That inversion is the identity; get it the TNT
+  way round and nothing else matters. A short pressure knot, then an overpressure FRONT (a
+  generated rounded-square ring with a cross influence — a filled plate grows into a pale wash,
+  which is a screen effect) reaching only as far as the cells Core actually emptied, and the stone
+  it reaches is CRUSHED FLAT rather than fractured: a thin lamina in its own material (gold an
+  amber-gold, obsidian a deep violet), carried a fifth of a cell, drained, gone. No coins, no
+  sparkle, no score pop, no white, no shake. Aiming has its own language too — the 2x2 is ONE
+  mechanical area under a single thin slate pressure frame with four inward brackets
+  (`BoardView.ShowPressPreview`), never four cells tinted the colour of an explosion, and the
+  activation plays the compression INSTEAD of the cluster burst a board-targeting power would get,
+  because the press destroys nothing. See `docs/hidrolik-pres-*.png` — and judge a face at the size a CELL is, never
+  blown up.
+- **"Parazit"'s HOST CUBE is a clasp, not a colour** (`ParasiteHostView`,
+  `Resources/Shaders/ParasiteHarness`). A host used to be its own colour lerped 55% toward magenta,
+  and that wash was the entire visual language of the mechanic: it said "this one is pink" and
+  nothing about a joker riding it, nothing about why a power bounced off it, and nothing about what
+  a line clear was going to cost. THE CUBE UNDERNEATH NOW KEEPS EVERYTHING — sprite, colour,
+  element, material, so a gold host still reads as gold — and the parasite is separate geometry
+  WRAPPING it. Two earlier passes are buried here and both were the same
+  mistake at different scales: a colour applied to the cube, then a set of parts bolted to it (four
+  rounded squares, four strips, a centre dot — a UI lock). The cube is not MARKED and it is not
+  CLAMPED. A thin TRANSLUCENT MEMBRANE lies over its face, its contour irregular (low-frequency
+  lobes, so it runs near the cube's edge in places and pulls back toward the middle in others,
+  never the square it is drawn on), thicker in some regions than others — and where it is THIN the
+  block's own colour comes through, which is what keeps the block legible.
+  **THE BLOCK UNDER IT IS DYING, AND THAT IS THE POINT** (`Resources/Shaders/ParasiteDrain`). A
+  film over a cube reads as a film over a cube — clean, weightless, rather like glass, which is
+  precisely what the pass before this looked like. What makes a parasite read as one is that the
+  thing under it is losing its colour. So the cube's OWN face is drawn a second time, desaturated
+  and dimmed and leaned toward a dead mauve, masked to the wrap's coverage and following its
+  THICKNESS: palest where the film lies heaviest, still itself where it is thin. Never a tint on
+  the cube (that is a global recolour and the whole point is that it is local), never greyscale and
+  never black — a blue host stays a blue host, just a poisoned one. It is TIERED by coverage
+  (`_Curve` above 1) so the thin edges stay honest while the heavy middle goes genuinely dead, and
+  it puts the block's own HIGHLIGHT out as well (`_Kill`): a cube's life is in the bright band its
+  bevel catches, and leaving that lit makes the whole thing a colour filter. Two to four NECROTIC
+  PATCHES, baked as dried bitten-out lobes and placed stably per host, are the dark matte
+  almost-unlit regions where the wrap has died onto the block; thin curved VEINS run out of the nest
+  as secondary detail only, because a network of lines reading first is what made the earlier pass
+  look like cracked glass. It spills a couple of
+  pixels over the bevel, so it wraps rather than sits — and UNEVENLY (`_Curl`): in places it has
+  curled right over the bevel in a thick dark lip with a lit top, in others it stops short on the
+  face, because a band of the same weight all the way round is a BORDER and a border is what a
+  decal has. Two or three THICK WRAP FOLDS — gathers of the film itself — cross the face, lit along
+  one flank, shadowed and creased along the other, more opaque through their middles, and flattened
+  by however hard the wrap is pulling. They live IN the membrane's shader (`_FoldA`/`B`/`C`) as
+  shading and thickness rather than as pieces over it, and that distinction is the whole layer: a
+  gather has no silhouette of its own, because it IS the sheet. Drawn as geometry they were a chain
+  of overlapping convex segments, which is a TUBE however wide it is made — and a tube crossing a
+  cube is a cable lying on it. The drain follows them, so the block is deadest under the heaviest
+  part of the wrap rather than in some unrelated pattern. Two to four curved BINDING STRANDS — which
+  really are cords, and really do break — cross the face on asymmetric paths (never corner-to-centre,
+  never a perfect X).
+  The film also has HOLES in it (`_WindowA` / `_WindowB`): two regions with no membrane and no
+  drain at all, where the block is simply itself, seen THROUGH the wrap rather than under it, with
+  the film gathered into a thicker lit lip around each — a sheet with no negative space in it reads
+  as a filter over the cell, and the holes are what make the cube and the thing on it two objects.
+  A hole is never round and the two are never the same size (a tear and a nick), and the block
+  inside one is still PARTLY drained — it has been under this thing the whole time. Taken all the
+  way back to its own colour it is a bright saturated disc on a dead face, which is a status light;
+  made round it is a button; given one strong three-lobe harmonic it is a clover, which is worse
+  than the circle it replaced.
+  One lobed NEST sits slightly off centre where the strands gather: a SHELL with two or three
+  growth ridges (`_Ridges`) and a contour light of its own, not a bead with a highlight, and the
+  passenger inside it is THREE shells — a dark husk, the joker's own colour, a pale centre, all
+  three derived from that one colour by scaling and lifting so the identity survives the layering.
+  **THE PALETTE IS A FUNCTION OF THE BLOCK** (`ParasiteContrast` / `ParasiteContrastProfile`). A
+  dark plum organism on an OBSIDIAN cube is dark-on-dark and the whole thing disappears — which is
+  one of the two cubes in the game that most needs to be read. So the darkness of the host's own
+  MATERIAL colour (never its renderer tint, which is white on a painted tile) opens the parasite's
+  edges up toward ash and lilac and lights its contours (`_Rim`, taken from the baked silhouette's
+  own alpha ramp so it follows the shape rather than a rectangle); on a bright block those close
+  back down, because there a rim would only read as an outline. Only the CONTRAST moves — the hue
+  family never does. The drain scales with it too: a near-black cube has almost no colour left to
+  take, and draining it hard says nothing and only muddies the cell.
+  **THE MEMBRANE IS A MESH** (`ParasiteMembraneMesh`, a 6x6 subdivided quad) for one reason: the
+  idle is THE CUBE TRYING TO GET OUT. Every few seconds the film BULGES in one of six preset
+  regions — the cube pushing from underneath — the film thins there so the block's colour shows
+  through, the cube loads half a pixel that way, the strands nearest it tension and straighten, the
+  core is pulled the OTHER way holding on, the passenger brightens, and then the wrap contracts and
+  presses the cube back into its cell — AND TAKES ITS PAYMENT: the whole face withers for a moment
+  as the cube goes back down (`WitherPulseStrength`), the region it fought in is left more drained
+  than it was (`AfterDrainStrength`), and a little of that stays for good (`StainDepth`,
+  accumulating to a cap and decaying very slowly), so a host that has struggled several times is
+  visibly further gone than one just seated. That is what makes the idle a losing fight rather than
+  a fidget. A quad has four corners and can only scale as a whole; a
+  local bulge needs vertices. The cube itself is still almost all of the time — what moves is the
+  thing on top of it. The other parts are baked silhouettes (`ParasiteShapes`: SDF blobs
+  smooth-unioned, so the core is lobed and asymmetric and the strand segments are capsules), never
+  a scaled rounded rectangle. That passenger colour comes from its DEF ID — never from the host cube's material,
+  which says nothing about who is riding, and never the parasite's own plum, which would read as an
+  empty socket. Roughly four fifths of the cell is still the block itself.
+  **THE VIEW DECIDES NONE OF IT.** `ParasiteVisuals` carries the refusals: `GameBoard.DestroyCube`
+  and `DestroyCubeForced` are the two central chokepoints the rules already funnel every external
+  destroy and every forced pickup through, so each writes down a `HostRefusal` — the cell, what
+  tried it, and the direction when there was one (`SetForcedStep`; a destroy has none and the report
+  never invents one). The joker reports its own `HostPosition` and `PassengerIdentity`. Reporting
+  only, cleared each turn, never saved, and the baseline is byte-identical.
+  Four events, and they are told apart on purpose. SEATING (HOST AWAKENING): a faint stain, the
+  heart GERMINATING out of the surface narrow and filling out, tendrils growing from it to the
+  corners on a stagger, the clusters blooming and gripping, the membrane settling, and the
+  passenger waking last. IDLE: a bond circulation every three to five seconds, node → tethers →
+  anchors, with the passenger briefly legible; no particles, no constant glow, and the cube never
+  breathes. CLAMP: a power or a moving board was refused, so the parasite GRIPS HARDER rather than
+  raising a shield — the clusters facing the force SPREAD further over the surface
+  (`Vector2.Dot` against the reported step) while the far ones pull back behind them, the tendrils
+  tension and straighten, the heart compresses, the occlusion deepens and the cube loads a pixel
+  into the force without leaving its cell. RUPTURE: the player's own line, the one thing it cannot hold — the wrap
+  grips once more, then the film TEARS along the line's own band (`_Tear`, ragged because its own
+  contour decides where it gives, and the orientation comes from `TurnReport.ExplodedRows`, never
+  from the View), the strands break one at a time IN THE MIDDLE with each half retracting to its own
+  end (the two segments at the break thinning to nothing first), the film peels back toward the
+  core, the core is exposed and the passenger is fully visible for a beat — and on the frames the
+  tear opens THE BLOCK'S COLOUR FLOODS BACK (`DeathColourReturn`, snapped rather than faded: a slow
+  return reads as the effect switching off, and this has to read as the cube getting free a moment
+  too late) — the cube then goes through the line's own destruction, and only then does the
+  passenger collapse inward on its own colour. The folds do not break with the strands: they
+  SLACKEN, heaping up as the tension goes out of them and peeling toward the core with the film. The player has to be able to read: I lost the cube
+  AND the joker on it. The lab has TWENTY-SIX host scenes of its own (`AnimHost`) — the four
+  materials, the passenger-identity cycle, seating, idle, both obsidian readability heroes, the two
+  refusals, the sweep pass, both line orientations, the passenger's own death, both whole
+  lifecycles, the withering at four strengths (off / thin / the tuned value / all the way), and each
+  layer standing ALONE (membrane, necrotic crust, wrap folds, nest) — plus ten switches that take
+  one layer away at a time. The "alone" scenes set their switches BEFORE the host is built, because
+  a layer that is off is a layer that is never rented; and a layer judged with every other layer
+  over it is being judged by the layers over it. See `docs/parazit-siluetler.png` for the baked
+  shapes, `docs/parazit-zar.png` for the film over four materials with each of its parts switched
+  off in turn, and `docs/parazit-kivrim.png` for the gathers drawn the WRONG way — as geometry —
+  which is what settled the argument.
 - `Assets/Scripts/View/Menus/` — the menu layer (title, pause, settings, how to play, run
   summary). Unlike the rest of View this is NOT disposable: it is the real UI shell, built
   on the HUD canvas. Every screen is `MenuScreenView` with different content — do not
@@ -409,7 +722,11 @@ Three rules the design turns on:
    them on load. Swapping in a state-readable PRNG would have changed every draw in the game
    and invalidated the baseline trace — never do that.
 2. **Content state is walked by reflection** (`ContentStateSerializer`), so a new joker saves
-   correctly the day it is written. Fields are name-sorted, base class first, for a stable
+   correctly the day it is written. The ONE way out is `[NotSaved]` on a field, for per-turn data
+   the VIEW reads back (`SnakeBoss.LastTurn`) - rebuilt by the next turn, meaningless across a load,
+   and not state. It has to be written deliberately, so nothing is dropped by accident; a boss that
+   kept such a field WITHOUT it could not be saved at all, and the round-trip tests are what said
+   so. Fields are name-sorted, base class first, for a stable
    order. Only primitives, enums, `Nullable<T>`, collections, structs, `BlockShape` and a
    nested `Power` are supported — anything else throws by design, and the per-content
    round-trip tests are what catch it.
@@ -453,7 +770,7 @@ animation without having to reach the game state that normally triggers it.
 The rule it follows: **it drives the real animation code, never a copy.** An entry calls the
 same method the game calls and only fabricates the ARGUMENTS, so a retimed animation shows its
 new timing there for free. That is why `CardLayerView.PlayDebugAnimation` and the small
-`FlashLine` / `FlashCells` / `PlayRemoval` / `PlayForcedExit` / `PlayBoardMoves` / `PlayGangreneScene` / `LiftCells` / `FlashDynamite` / `ShakeForBlast` / `Spawn*Popup` /
+`FlashLine` / `FlashCells` / `PlayRemoval` / `PlayForcedExit` / `PlayBoardMoves` / `PlayGangreneScene` / `PlaySnakeBody` / `PlaySnakeScene` / `FlashDynamite` / `ShakeForBlast` / `Spawn*Popup` /
 `EmitSweepConfetti` seams in `GameUiController.Feedback.cs` exist — the lab and the game both
 go through them. Add an animation: add one line to
 `BuildAnimCatalogue`. Nothing the lab does touches the round's Core state (`TurnReport` cannot
@@ -467,7 +784,28 @@ scenes of its own (`AnimRot`): one per thing the rot does, each running `GameBoa
 repeatable) and `GameBoard.InfectFullLines`, whose reporting overloads are public for exactly this
 — so the lab's dead lines are really dead and their bands and washes are the rules' own rather than
 a drawing of them. What the lab fabricates is only the ARGUMENTS: the shape of the board, and for
-the staged scenes which cell finishes the line. Then `AnimResync` puts the round's board back. The "boss hareketiyle atılma" entries do the same for one step at a time (eight
-directions, a holed arena, a staged blocked target). The two "İç Hareket" entries run a moving board's turn
+the staged scenes which cell finishes the line. "Yılan" has twenty-two scenes of its own
+(`AnimSnake`): the three spawn lengths, the idle, one/three/long slides, a slide that turns, boxed
+in, eating a plain block, obsidian and gold, eat-and-grow, one/two/three tail cuts, the last
+segment, a whole turn, a whole line clear, and three tests (the four directions, the five body
+shapes, the bite in four directions) - each one a snake laid out by the lab and a turn shaped the
+way Core shapes one, played through the game's own seams. A snake scene HOLDS what it ends on -
+a segment longer, the head in the cell it emptied - like every other entry, until RESET or closing
+the lab puts the round back; it used to resync itself a breath later, which read as the snake
+biting and then going straight back to how it was. "Hidrolik pres" has twenty-three scenes of its own (`AnimPress`) and RUNS THE REAL RULES on a
+board of the lab's own — `GameBoard.Compress` and `GameBoard.Expand` through their reporting
+overloads, exactly as the power calls them — so the laminae, the push chain, the side that refuses,
+the axis the corner opens on and the failure's footprint are the rules' answers rather than a
+drawing of them: the squeeze at four/three/two/one/zero occupied quadrants, mixed materials, gold
+and obsidian stored inside it, the four idle turns, a clean release, one pushed cube, a long chain,
+a cube shoved off the board, a straight side shut by gold and by obsidian, the corner's reroute,
+the failure, the failure shearing the stone around it, the press broken while shut, and the two
+whole lifecycles. Fifteen more entries switch each layer off on its own (jaws, laminae, null
+imprints, shell, pressure front, push response, seams, dimple, countdown marks, contact shadow,
+inward collapse, burst, shear, residue, and all back on). Each one HOLDS what it ends on, and the
+scene's label says what the report actually contained — how many quadrants were full, how many
+cubes were shoved, how many went over the edge, which axis the corner used. The "boss hareketiyle
+atılma" entries do the same for one step at a time (eight directions, a holed arena, a staged
+blocked target). The two "İç Hareket" entries run a moving board's turn
 end for its survivors (sparse to nearly full; the centrifuge on an odd board so its centre stays
 put), and their debug switches can draw each move's vector and destination cell.

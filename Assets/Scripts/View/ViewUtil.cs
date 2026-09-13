@@ -235,6 +235,37 @@ namespace ProjectBlock.View
             return tile;
         }
 
+        /// <summary>"Yılan"'s six drawn pieces.</summary>
+        public enum SnakePiece
+        {
+            HeadClosed,
+            HeadOpen,
+            Body,
+            Bend,
+            Tail,
+            Swollen
+        }
+
+        /// <summary>
+        /// One of the snake's pieces, by name. EXPLICIT FILES: the sheet they were drawn on was cut
+        /// into six tiles at import, each with its pivot on the cell centre its tube belongs to, so
+        /// nothing here slices anything at runtime and nothing depends on a sheet's layout.
+        ///
+        /// A missing file gives null, which shows up as a missing snake rather than as a wrong one.
+        /// </summary>
+        public static Sprite SnakeTile(SnakePiece piece)
+        {
+            switch (piece)
+            {
+                case SnakePiece.HeadClosed: return Tile("snake_head");
+                case SnakePiece.HeadOpen: return Tile("snake_head_open");
+                case SnakePiece.Bend: return Tile("snake_bend");
+                case SnakePiece.Tail: return Tile("snake_tail");
+                case SnakePiece.Swollen: return Tile("snake_body_swollen");
+                default: return Tile("snake_body");
+            }
+        }
+
         /// <summary>Whether a tile file loaded, by file name. For the diagnostics in the F4
         /// gallery: some tiles (the targeted block's BODY) belong to no cube kind and no
         /// element, so nothing else on that screen would reveal a failed import.</summary>
@@ -569,8 +600,10 @@ namespace ProjectBlock.View
             {
                 return CubeDisplayColor(cube);
             }
+            // A painted tile's TINT: a host is barely bruised, because the parasite is drawn
+            // over it rather than mixed into it.
             return cube.Protected
-                ? Color.Lerp(Color.white, new Color(0.85f, 0.2f, 0.85f), 0.4f)
+                ? Color.Lerp(Color.white, HostBruise, HostBruiseStrength)
                 : Color.white;
         }
 
@@ -646,14 +679,43 @@ namespace ProjectBlock.View
         /// <summary>Board color of a cube: element kinds get their signature color,
         /// plain cubes keep their card's color. A Parazit host cube is tinted toward magenta
         /// so the player can see which cube carries the passenger.</summary>
+        /// <summary>The cube's own MATERIAL colour, for anything that has to reason about what
+        /// a block is made of rather than how to tint its sprite - the snake's bite derives its
+        /// whole palette from this. Deliberately WITHOUT the protected cube's magenta wash, which
+        /// is a state readout painted over the block and not the block's own colour: eating a
+        /// protected gold block still has to look like eating gold.</summary>
+        public static Color CubeMaterialColor(Cube cube)
+        {
+            return CubeBaseColor(cube);
+        }
+
+        /// <summary>
+        /// What a cube looks like on the board.
+        ///
+        /// A "PARAZIT" HOST KEEPS ITS OWN COLOUR. It used to be lerped 55% toward magenta, and that
+        /// wash was the whole visual language of the mechanic: it said "this one is pink" and
+        /// nothing about a joker riding it, nothing about why a power bounced off it, and nothing
+        /// about what a line clear was going to cost. The parasite is drawn as its own thing
+        /// gripping the cube now (ParasiteHostView), so the block underneath stays exactly the
+        /// block it is - and a gold host still reads as gold. A very faint bruise is all that is
+        /// left here, for the frames before the harness has seated and for a board drawn with no
+        /// parasite layer at all.
+        /// </summary>
         public static Color CubeDisplayColor(Cube cube)
         {
             if (cube.Protected)
             {
-                return Color.Lerp(CubeBaseColor(cube), new Color(0.85f, 0.2f, 0.85f), 0.55f);
+                return Color.Lerp(CubeBaseColor(cube), HostBruise, HostBruiseStrength);
             }
             return CubeBaseColor(cube);
         }
+
+        /// <summary>The deep plum a host cube is very slightly bruised toward - the parasite's own
+        /// body colour, never a bright magenta.</summary>
+        public static readonly Color HostBruise = new Color(0.35f, 0.18f, 0.38f);
+
+        /// <summary>How far. Small on purpose: the harness carries the identity.</summary>
+        public const float HostBruiseStrength = 0.12f;
 
         private static Color CubeBaseColor(Cube cube)
         {

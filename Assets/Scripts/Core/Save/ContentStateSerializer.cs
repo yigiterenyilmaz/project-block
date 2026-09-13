@@ -17,6 +17,11 @@
 // object is supported only for Power, because exactly one exists ("Halüsinasyon" wearing the
 // face of another power). Anything else throws by design - a new field shape should stop the
 // build's tests, not quietly vanish from saves.
+//
+// WHAT IS LEFT OUT, deliberately: a field marked [NotSaved]. That is for per-turn data the VIEW
+// reads back (the snake's report of what it did this turn) - rebuilt by the next turn, meaningless
+// across a load, and not state. It is an opt-out that has to be WRITTEN, so nothing is dropped by
+// accident; forget it on a field that really is state and the round-trip tests say so.
 
 using System;
 using System.Collections;
@@ -25,6 +30,13 @@ using System.Reflection;
 
 namespace ProjectBlock.Core
 {
+    /// <summary>A field the save file must NOT carry: per-turn data the VIEW reads, rebuilt
+    /// by the next turn and meaningless across a load. It is reporting, not state.</summary>
+    [AttributeUsage(AttributeTargets.Field)]
+    public sealed class NotSavedAttribute : Attribute
+    {
+    }
+
     /// <summary>Reflection-driven save/load for jokers, powers and bosses.</summary>
     public static class ContentStateSerializer
     {
@@ -83,7 +95,13 @@ namespace ProjectBlock.Core
                     {
                         return string.CompareOrdinal(a.Name, b.Name);
                     });
-                fields.AddRange(declared);
+                for (int f = 0; f < declared.Length; f++)
+                {
+                    if (!declared[f].IsDefined(typeof(NotSavedAttribute), false))
+                    {
+                        fields.Add(declared[f]);
+                    }
+                }
             }
             return fields;
         }

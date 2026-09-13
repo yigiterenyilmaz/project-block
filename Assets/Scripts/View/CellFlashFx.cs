@@ -5,8 +5,9 @@
 // This was once how EVERY cube died. The loud ones have since got languages of their own - a
 // cleared line (LineSweepView + LineBurstView), a loose group exploding (ClusterBurstView), the
 // clean sweep (BoardCleanseView), TNT (DynamiteBlastView), an infection (InfectionBurstView).
-// What is left here is a boss LIFTING cubes away (GameUiController.LiftCells) - not an
-// explosion, and it must not look like one - and FlashBoard.
+// What is left here is FlashBoard - the whole arena striking at once. Every boss that takes
+// cubes off has a language of its own now (a removal variant, the momentum peel, the rot), and
+// the quiet COLD palette this used to lend them went with them.
 //
 // IT IS DRAWN IN CELLS, ON PURPOSE. This board has no gradients and no glows anywhere: a cube
 // is a flat hard-edged square that expresses itself by changing COLOUR (fire flickers, water
@@ -16,8 +17,7 @@
 // imported.
 //
 // Every destruction keeps its own colour and passes it as a Palette, so the language is
-// shared but a green infection still reads as the infection and a cold lift still reads as
-// cold. Where sparks go with it (GameUiController.BurstParticles) they are handed the SAME
+// shared but a green infection still reads as the infection and a sweep as the sweep. Where sparks go with it (GameUiController.BurstParticles) they are handed the SAME
 // schedule, so sparks and squares fire together - there is one clock, not two. A cleared LINE
 // is the exception that throws none: its sheet is drawn with its own debris already.
 
@@ -92,17 +92,6 @@ namespace ProjectBlock.View
                     Color.Lerp(tone, Color.white, 0.8f),
                     tone,
                     Color.Lerp(tone, Color.black, 0.45f));
-            }
-
-            /// <summary>Something was LIFTED AWAY - a boss forgetting a card, an escalator
-            /// carrying a row off. Nothing broke and nothing was earned, so it never flashes:
-            /// it only brightens a little and goes.</summary>
-            public static Palette Cold(Color tone)
-            {
-                return new Palette(
-                    Color.Lerp(tone, Color.white, 0.3f),
-                    tone,
-                    Color.Lerp(tone, Color.black, 0.35f));
             }
         }
 

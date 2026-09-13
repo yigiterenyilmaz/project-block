@@ -175,6 +175,9 @@ public static class JokerTests
         Snake_TheCutCheckSurvivesAnInflatedBoard();
         Snake_EatsWhatStopsItAndGrows();
         Snake_ShrinksOnAnExplosionAndDyingWinsTheRound();
+        Snake_EveryTurnIsReportedForTheView();
+        HidrolikPres_TheSqueezeAndTheReleaseAreReportedForTheView();
+        Parazit_EveryRefusalIsReportedForTheView();
         Istilaci_TakesTheMarkedColumnAndBills();
         Istilaci_EverySweptCubeIsReportedForTheView();
         Tamagotchi_FeedingClearsTheDemandAndTheCardLeavesTheRound();
@@ -5709,6 +5712,198 @@ public static class JokerTests
         }
     }
 
+    /// <summary>
+    /// THE SNAKE'S CONTRACT WITH THE VIEW. The animation is played from SnakeBoss.LastTurn, so that
+    /// report has to BE the turn that happened: the body it started from, one snapshot per cut with
+    /// the tail cell it took, one snapshot per CELL of the slide, the block it ate taken before the
+    /// rules removed it, and the last word matching the snake now standing on the board.
+    ///
+    /// Invisible to the compiler, like the column sweep above: a report that quietly stopped
+    /// matching would still build, and the snake would be animated making a move it never made.
+    /// </summary>
+    private static void Snake_EveryTurnIsReportedForTheView()
+    {
+        Section("snake / the turn the View plays is the turn that happened");
+        var session = NewBossSession(9723, 9, 1000000, "snake", 60, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (SnakeBoss)round.Boss;
+        ClearBoardExceptSnake(round, boss);
+
+        // ---- a plain slide ----
+        var before = new List<GridPos>(boss.Body);
+        boss.AfterTurnScored(FakeTurnFor(session, round));
+        SnakeTurnVisuals vis = boss.LastTurn;
+        Check(vis != null && vis.Turn == 1, "the turn was written down");
+        Check(SameCells(vis.BodyBeforeCuts, before), "with the body it started from");
+        Check(vis.CutCount == 0 && !vis.Defeated, "no line went off, so nothing was cut");
+        Check(!vis.WasStuck && vis.StepSnapshots.Count > 0,
+            "it moved, and every cell of that move is in the report",
+            "" + vis.StepSnapshots.Count);
+        Check(System.Math.Abs(vis.MoveStep.X) + System.Math.Abs(vis.MoveStep.Y) == 1,
+            "the step it slid along is one cell",
+            vis.MoveStep.X + "," + vis.MoveStep.Y);
+        bool connected = true;
+        bool cellByCell = true;
+        IReadOnlyList<GridPos> prev = vis.BodyBeforeCuts;
+        for (int i = 0; i < vis.StepSnapshots.Count; i++)
+        {
+            IReadOnlyList<GridPos> now = vis.StepSnapshots[i];
+            if (!IsOneSnake(now))
+            {
+                connected = false;
+            }
+            if (now[0].X - prev[0].X != vis.MoveStep.X || now[0].Y - prev[0].Y != vis.MoveStep.Y)
+            {
+                cellByCell = false;
+            }
+            prev = now;
+        }
+        Check(connected, "every snapshot is a snake: each segment touches the next");
+        Check(cellByCell, "and each one is exactly one more cell along the step");
+        Check(SameCells(vis.BodyAfter, boss.Body), "the last word is the snake standing there");
+        Check(SameCells(vis.StepSnapshots[vis.StepSnapshots.Count - 1], boss.Body),
+            "and so is the final snapshot");
+
+        // ---- a turn it feeds on: the block is reported with its own face, before it was taken ----
+        int fed = 0;
+        for (int turn = 0; turn < 30 && fed == 0; turn++)
+        {
+            FeedTheSnake(round, boss);
+            int lengthBefore = boss.Length;
+            boss.AfterTurnScored(FakeTurnFor(session, round));
+            SnakeTurnVisuals ate = boss.LastTurn;
+            if (!ate.EatenCell.HasValue)
+            {
+                continue;
+            }
+            fed++;
+            Check(ate.GrowthOccurred && boss.Length == lengthBefore + 1,
+                "eating is reported as growth", lengthBefore + " -> " + boss.Length);
+            Check(ate.EatenCube.HasValue && ate.EatenCube.Value.Kind == CubeKind.Normal,
+                "the block it ate is in the report, with its own kind");
+            Check(ate.EatenCell.Value.X == boss.Body[0].X && ate.EatenCell.Value.Y == boss.Body[0].Y,
+                "and the head is standing in the cell it ate");
+            Cube? left = round.Board.GetCube(ate.EatenCell.Value);
+            Check(left.HasValue && left.Value.Kind == CubeKind.Snake,
+                "nothing of that block is left: the snake is what stands there now");
+            // BodyAfter is the one field the View lands its animation on. A report that said the
+            // old body here would show a snake biting and going straight back where it was, with
+            // every other field still correct - so it is checked on its own.
+            Check(SameCells(ate.BodyAfter, boss.Body),
+                "the body the View lands on is the body standing there");
+            Check(ate.BodyAfter.Count == lengthBefore + 1,
+                "one segment longer in that same field",
+                lengthBefore + " -> " + ate.BodyAfter.Count);
+            Check(ate.BodyAfter[0].X == ate.EatenCell.Value.X
+                && ate.BodyAfter[0].Y == ate.EatenCell.Value.Y,
+                "and its head is in the cell it ate - not back where it started");
+        }
+        Check(fed > 0, "it fed at least once in thirty turns");
+
+        // ---- boxed in: the report says so, instead of the turn looking like a bug ----
+        var walls = new List<GridPos>();
+        GridPos head = boss.Body[0];
+        walls.Add(new GridPos(head.X + 1, head.Y));
+        walls.Add(new GridPos(head.X - 1, head.Y));
+        walls.Add(new GridPos(head.X, head.Y + 1));
+        walls.Add(new GridPos(head.X, head.Y - 1));
+        round.Board.MarkDead(walls);
+        boss.AfterTurnScored(FakeTurnFor(session, round));
+        Check(boss.LastTurn.WasStuck, "with every way out eaten away, the report says stuck");
+        Check(boss.LastTurn.StepSnapshots.Count == 0
+            && boss.LastTurn.MoveStep.X == 0 && boss.LastTurn.MoveStep.Y == 0,
+            "and it reports no movement at all");
+
+        // ---- the cuts: one per line that crossed it, each with the tail cell it took ----
+        var second = NewBossSession(9724, 5, 1000000, "snake", 60, 1);
+        RoundEngine other = second.CurrentRound;
+        var snake = (SnakeBoss)other.Boss;
+        ClearBoardExceptSnake(other, snake);
+        int length = snake.Length;
+        GridPos tail = snake.Body[snake.Length - 1];
+        int tailRow = tail.Y - other.Board.MinY;
+        snake.AfterTurnScored(FakeTurnCuttingRows(second, other, new[] { tailRow }));
+        SnakeTurnVisuals cut = snake.LastTurn;
+        Check(cut.CutCount == 1, "one line crossed it, so one segment went", "" + cut.CutCount);
+        Check(cut.CutRows.Count == 1 && cut.CutRows[0] == other.Board.MinY + tailRow,
+            "the report names the row that did it - in absolute cells");
+        Check(cut.RemovedTailCells.Count == 1 && cut.RemovedTailCells[0].X == tail.X
+            && cut.RemovedTailCells[0].Y == tail.Y, "and the tail cell it took");
+        Check(cut.BodyAfterEachCut.Count == 1 && cut.BodyAfterEachCut[0].Count == length - 1,
+            "with the snake as it stood after that cut", "" + cut.BodyAfterEachCut.Count);
+
+        // TWO lines in one turn: two cuts, in order, not one lump.
+        GridPos t0 = snake.Body[snake.Length - 1];
+        int rowA = t0.Y - other.Board.MinY;
+        int rowB = snake.Body[0].Y - other.Board.MinY;
+        if (rowA != rowB)
+        {
+            int was = snake.Length;
+            snake.AfterTurnScored(FakeTurnCuttingRows(second, other, new[] { rowA, rowB }));
+            Check(snake.LastTurn.CutCount == 2 && snake.LastTurn.RemovedTailCells.Count == 2,
+                "two lines, two cuts, two tail cells", "" + snake.LastTurn.CutCount);
+            Check(snake.LastTurn.BodyAfterEachCut.Count == 2
+                && snake.LastTurn.BodyAfterEachCut[0].Count == was - 1
+                && snake.LastTurn.BodyAfterEachCut[1].Count == was - 2,
+                "each with the snake as it stood after it");
+        }
+
+        // ---- cut all the way down: the report says the last segment went ----
+        for (int i = 0; i < 40 && snake.Length > 0; i++)
+        {
+            int row = snake.Body[snake.Length - 1].Y - other.Board.MinY;
+            snake.AfterTurnScored(FakeTurnCuttingRows(second, other, new[] { row }));
+        }
+        Check(snake.Length == 0, "cut down to nothing", "" + snake.Length);
+        Check(snake.LastTurn.Defeated && snake.LastTurn.BodyAfter.Count == 0,
+            "and the last report is the one that killed it");
+        Check(snake.LastTurn.StepSnapshots.Count == 0,
+            "a snake that died does not also slide");
+    }
+
+    /// <summary>A turn whose report says these ROWS (0-based, as the engine reports them) went
+    /// off, so a test can cut the snake without building a line by hand.</summary>
+    private static TurnContext FakeTurnCuttingRows(GameSession session, RoundEngine round, int[] rows)
+    {
+        var report = new TurnReport();
+        var score = new ScoreBreakdown();
+        report.Score = score;
+        report.ExplodedRows = rows;
+        return new TurnContext(session, new SeededRandom(7), round, report, score);
+    }
+
+    private static bool SameCells(IReadOnlyList<GridPos> a, IReadOnlyList<GridPos> b)
+    {
+        if (a == null || b == null || a.Count != b.Count)
+        {
+            return false;
+        }
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (a[i].X != b[i].X || a[i].Y != b[i].Y)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>True when every segment touches the next one - what makes a list of cells a snake
+    /// rather than a scatter.</summary>
+    private static bool IsOneSnake(IReadOnlyList<GridPos> body)
+    {
+        for (int i = 1; i < body.Count; i++)
+        {
+            int d = System.Math.Abs(body[i].X - body[i - 1].X)
+                + System.Math.Abs(body[i].Y - body[i - 1].Y);
+            if (d != 1)
+            {
+                return false;
+            }
+        }
+        return body.Count > 0;
+    }
+
     private static void Snake_ShrinksOnAnExplosionAndDyingWinsTheRound()
     {
         Section("snake / an explosion cuts it, and killing it takes the round");
@@ -10654,6 +10849,276 @@ public static class JokerTests
         plain.Place(new BlockCard(7, Bar(1)), new GridPos(0, 0));
         plain.Place(new BlockCard(8, Bar(1)), new GridPos(2, 0));
         Check(plain.ResolveFullLines().LineCount == 0, "and it still kills its row");
+    }
+
+    /// <summary>
+    /// THE PRESS'S CONTRACT WITH THE VIEW. The whole animation is played from
+    /// PressCompressionVisuals / PressReleaseVisuals, so those reports have to BE what the board
+    /// did: the four quadrants in patch order with a null where one was empty, every side it
+    /// pressed INCLUDING the ones that refused, every cube it actually moved with its own step,
+    /// the axis the corner finally opened on, and exactly the cells a failure emptied.
+    ///
+    /// Invisible to the compiler, like the snake's report above: a report that quietly stopped
+    /// matching would still build, and the press would be animated opening a way it never opened.
+    /// </summary>
+    private static void HidrolikPres_TheSqueezeAndTheReleaseAreReportedForTheView()
+    {
+        Section("hidrolik pres / the squeeze and the release the View plays are the ones that happened");
+
+        // ---- the squeeze: four quadrants in patch order, nulls and all ----
+        var board = new GameBoard(7, 7);
+        var anchor = new GridPos(2, 2);
+        PaintCells(board, CubeKind.Normal, anchor, new GridPos(3, 2), new GridPos(3, 3));
+        // (2,3) deliberately left EMPTY - the press stores holes too.
+        PressCompressionVisuals squeeze;
+        Cube?[] swallowed = board.Compress(anchor, out squeeze);
+        Check(swallowed != null && squeeze != null, "the squeeze was written down");
+        Check(squeeze.Cells.Count == 4 && squeeze.Swallowed.Count == 4,
+            "all four quadrants are in the report");
+        Check(squeeze.Cells[0].Equals(anchor) && squeeze.Cells[1].Equals(new GridPos(3, 2))
+                && squeeze.Cells[2].Equals(new GridPos(2, 3))
+                && squeeze.Cells[3].Equals(new GridPos(3, 3)),
+            "in patch order: anchor, right, up, up-right");
+        Check(squeeze.CompressedCell.Equals(anchor),
+            "the compressed cube stands on the ANCHOR, not a centre");
+        Check(squeeze.Swallowed[0].HasValue && squeeze.Swallowed[1].HasValue
+                && !squeeze.Swallowed[2].HasValue && squeeze.Swallowed[3].HasValue,
+            "the empty quadrant travels as a NULL");
+        Check(squeeze.OccupiedCount == 3, "three of the four held a cube", "" + squeeze.OccupiedCount);
+        Check(board.GetCube(anchor).HasValue
+                && board.GetCube(anchor).Value.Kind == CubeKind.Compressed,
+            "and the board now holds one pressed cube there");
+
+        // ---- a clean release: nothing in the way, so nothing is pressed ----
+        PressReleaseVisuals open;
+        PressExpansion done = board.Expand(anchor, swallowed, out open);
+        Check(done != null && open != null && !open.Detonated, "it opened");
+        Check(open.AlreadyFree.Count == 3 && open.Tests.Count == 0 && open.Pushes.Count == 0,
+            "all three cells were free, so no side was pressed at all",
+            open.AlreadyFree.Count + "/" + open.Tests.Count + "/" + open.Pushes.Count);
+        Check(!open.Stored[2].HasValue && !board.GetCube(new GridPos(2, 3)).HasValue,
+            "the stored hole came back as a hole - never a cube the press invented");
+        Check(open.DiagonalAxis == null, "and the corner needed no direction");
+
+        // ---- a release that pushes a chain, the far cube off the board ----
+        board = new GameBoard(7, 7);
+        anchor = new GridPos(2, 2);
+        PaintCells(board, CubeKind.Normal, anchor, new GridPos(3, 2), new GridPos(2, 3),
+            new GridPos(3, 3));
+        swallowed = board.Compress(anchor, out squeeze);
+        // Fill the whole row to the right of the press: four cubes, the last one on the rim.
+        PaintCells(board, CubeKind.Normal, new GridPos(3, 2), new GridPos(4, 2), new GridPos(5, 2),
+            new GridPos(6, 2));
+        done = board.Expand(anchor, swallowed, out open);
+        Check(done != null && open != null && !open.Detonated, "it opened, shoving the row");
+        var forRight = new List<PressPush>();
+        for (int i = 0; i < open.Pushes.Count; i++)
+        {
+            if (open.Pushes[i].ForWantedCell.Equals(new GridPos(3, 2)))
+            {
+                forRight.Add(open.Pushes[i]);
+            }
+        }
+        Check(forRight.Count == 4, "every cube in the line is reported, not just the first",
+            "" + forRight.Count);
+        bool ordered = true;
+        bool stepped = true;
+        for (int i = 0; i < forRight.Count; i++)
+        {
+            PressPush p = forRight[i];
+            if (p.Step.X != 1 || p.Step.Y != 0)
+            {
+                stepped = false;
+            }
+            if (p.To.X - p.From.X != 1 || p.To.Y != p.From.Y)
+            {
+                stepped = false;
+            }
+            // Order counts from the press outward, so the cube at x=3 is 0 and the rim cube is 3.
+            if (p.Order != p.From.X - 3)
+            {
+                ordered = false;
+            }
+        }
+        Check(stepped, "each one moved exactly one cell along the press's own axis");
+        Check(ordered, "and Order counts outward from the press, so the near cube is first");
+        int leftBoard = 0;
+        for (int i = 0; i < open.Pushes.Count; i++)
+        {
+            if (open.Pushes[i].LeftBoard)
+            {
+                leftBoard++;
+                Check(!board.IsInside(open.Pushes[i].To),
+                    "a cube that left the board has a destination OUTSIDE it");
+            }
+        }
+        Check(leftBoard == done.CubesPushedOff && leftBoard == 1,
+            "exactly the cubes the rules counted over the edge are flagged",
+            leftBoard + "/" + done.CubesPushedOff);
+        Check(open.CubesPushedOff == done.CubesPushedOff, "and the report carries that count");
+
+        // ---- gold shuts a STRAIGHT side: no reroute exists there, so it detonates ----
+        board = new GameBoard(7, 7);
+        anchor = new GridPos(2, 2);
+        PaintCells(board, CubeKind.Normal, anchor, new GridPos(3, 2), new GridPos(2, 3),
+            new GridPos(3, 3));
+        swallowed = board.Compress(anchor, out squeeze);
+        PaintCells(board, CubeKind.Normal, new GridPos(3, 2));
+        PaintCells(board, CubeKind.Gold, new GridPos(4, 2));
+        done = board.Expand(anchor, swallowed, out open);
+        Check(done != null && done.Detonated && open.Detonated,
+            "a blocked straight side detonates - it is not rerouted");
+        Check(open.Tests.Count == 1 && !open.Tests[0].Succeeded,
+            "one side was pressed, and it refused", "" + open.Tests.Count);
+        Check(open.Tests[0].BlockedAt.Equals(new GridPos(4, 2))
+                && open.Tests[0].BlockedKind == CubeKind.Gold,
+            "the report names the gold cube that would not budge");
+        Check(!open.Tests[0].IsReroute && !open.Rerouted,
+            "and nothing claims a reroute happened");
+        var kinds = new List<CubeKind>(open.DetonatedKinds);
+        Check(open.DetonatedCells.Count == done.DetonatedCells.Count
+                && open.DetonatedKinds.Count == open.DetonatedCells.Count,
+            "the failure's footprint is exactly the cells the rules emptied");
+        bool onlyStoneAndPress = true;
+        for (int i = 0; i < kinds.Count; i++)
+        {
+            if (kinds[i] != CubeKind.Gold && kinds[i] != CubeKind.Obsidian
+                && kinds[i] != CubeKind.Compressed)
+            {
+                onlyStoneAndPress = false;
+            }
+        }
+        Check(onlyStoneAndPress, "and it took only the press and the stone around it");
+        Check(board.GetCube(new GridPos(3, 2)).HasValue,
+            "the ordinary cube beside it is still standing - the blast is not for those");
+
+        // ---- gold shuts the CORNER's horizontal: the one reroute in the power ----
+        board = new GameBoard(7, 7);
+        anchor = new GridPos(2, 2);
+        PaintCells(board, CubeKind.Normal, anchor, new GridPos(3, 2), new GridPos(2, 3),
+            new GridPos(3, 3));
+        swallowed = board.Compress(anchor, out squeeze);
+        PaintCells(board, CubeKind.Normal, new GridPos(3, 3));
+        PaintCells(board, CubeKind.Gold, new GridPos(4, 3));
+        done = board.Expand(anchor, swallowed, out open);
+        Check(done != null && !done.Detonated, "the corner opened the other way instead");
+        Check(open.DiagonalAxis == PressAxis.Vertical,
+            "and the report says which axis it finally used");
+        Check(open.Tests.Count == 2 && !open.Tests[0].Succeeded && open.Tests[1].Succeeded,
+            "both attempts are in the report, the refusal first", "" + open.Tests.Count);
+        Check(open.Tests[0].Axis == PressAxis.Horizontal
+                && open.Tests[1].Axis == PressAxis.Vertical,
+            "horizontal first, vertical second - the rules' own preference");
+        Check(open.Tests[1].IsReroute && open.Rerouted,
+            "the second one is marked as the reroute it is");
+        Check(board.GetCube(new GridPos(3, 4)).HasValue,
+            "the cube in the corner really went up");
+
+        // ---- both of the corner's axes shut: two refusals, then the failure ----
+        board = new GameBoard(7, 7);
+        anchor = new GridPos(2, 2);
+        PaintCells(board, CubeKind.Normal, anchor, new GridPos(3, 2), new GridPos(2, 3),
+            new GridPos(3, 3));
+        swallowed = board.Compress(anchor, out squeeze);
+        PaintCells(board, CubeKind.Normal, new GridPos(3, 3));
+        PaintCells(board, CubeKind.Gold, new GridPos(4, 3));
+        PaintCells(board, CubeKind.Obsidian, new GridPos(3, 4));
+        done = board.Expand(anchor, swallowed, out open);
+        Check(done != null && done.Detonated, "nothing was open, so it blew");
+        Check(open.Tests.Count == 2 && !open.Tests[0].Succeeded && !open.Tests[1].Succeeded,
+            "both sides were pressed and both refused", "" + open.Tests.Count);
+        Check(open.Tests[1].IsReroute && !open.Rerouted,
+            "the second was still the reroute attempt, but it got nowhere");
+        Check(open.Tests[0].BlockedKind == CubeKind.Gold
+                && open.Tests[1].BlockedKind == CubeKind.Obsidian,
+            "gold and obsidian are told apart - they do not look alike");
+        bool tookBoth = false;
+        bool tookPress = false;
+        for (int i = 0; i < open.DetonatedCells.Count; i++)
+        {
+            if (open.DetonatedCells[i].Equals(new GridPos(4, 3))
+                || open.DetonatedCells[i].Equals(new GridPos(3, 4)))
+            {
+                tookBoth = true;
+            }
+            if (open.DetonatedKinds[i] == CubeKind.Compressed)
+            {
+                tookPress = true;
+            }
+        }
+        Check(tookBoth, "the failure removed the stone that shut it in");
+        Check(tookPress, "and the press itself went with it");
+    }
+
+    /// <summary>
+    /// THE PARASITE'S CONTRACT WITH THE VIEW. A host cube's whole identity is a NEGATIVE - it is
+    /// the one that does not break and does not move - so the View can see nothing at all unless
+    /// the rules write the refusals down. This proves they do, with the direction when there is
+    /// one, and that reporting them changed nothing about who lives and who dies.
+    /// </summary>
+    private static void Parazit_EveryRefusalIsReportedForTheView()
+    {
+        Section("parazit / the host cube's refusals are reported for the View");
+        var board = new GameBoard(5, 5);
+        var host = new GridPos(2, 2);
+        var plain = new GridPos(3, 2);
+        PaintCells(board, CubeKind.Normal, host, plain);
+        board.SetCubeProtected(host);
+
+        // ---- a power tries to destroy it ----
+        board.HostRefusals.Clear();
+        Check(!board.DestroyCube(host), "a power cannot destroy a host cube");
+        Check(board.GetCube(host).HasValue, "and it is still standing");
+        Check(board.HostRefusals.Count == 1, "the refusal was written down",
+            "" + board.HostRefusals.Count);
+        Check(board.HostRefusals.Refusals[0].Kind == HostRefusalKind.Destroy
+                && board.HostRefusals.Refusals[0].Cell.Equals(host),
+            "with what tried it and which cell held");
+        Check(!board.HostRefusals.Refusals[0].HasDirection,
+            "a destroy has no direction, and the report does not invent one");
+
+        // ---- an ORDINARY cube in the same call reports nothing ----
+        board.HostRefusals.Clear();
+        Check(board.DestroyCube(plain), "an ordinary cube still breaks");
+        Check(board.HostRefusals.Count == 0, "and nothing is reported for it");
+
+        // ---- a moving board tries to carry it, and the direction comes through ----
+        board.HostRefusals.Clear();
+        board.SetForcedStep(new GridPos(1, 0));
+        Check(!board.DestroyCubeForced(host), "a moving board cannot pick a host up");
+        Check(board.HostRefusals.Count == 1
+                && board.HostRefusals.Refusals[0].Kind == HostRefusalKind.ForcedMove,
+            "the forced pickup's refusal is reported as its own kind");
+        Check(board.HostRefusals.Refusals[0].HasDirection
+                && board.HostRefusals.Refusals[0].Step.X == 1
+                && board.HostRefusals.Refusals[0].Step.Y == 0,
+            "with the direction the force came from - the clamp needs a side");
+
+        // ---- and the one thing that DOES take it, which reports no refusal ----
+        board.HostRefusals.Clear();
+        var line = new GameBoard(3, 1);
+        var lineHost = new GridPos(1, 0);
+        PaintCells(line, CubeKind.Normal, new GridPos(0, 0), lineHost, new GridPos(2, 0));
+        line.SetCubeProtected(lineHost);
+        LineExplosionResult cleared = line.ResolveFullLines();
+        // A 3x1 board's single row is full and so is every one of its columns, so the count is
+        // not 1 - what matters is that a line went off at all and took the host with it.
+        Check(cleared.LineCount >= 1, "a completed line goes off over a host",
+            "" + cleared.LineCount);
+        Check(!line.GetCube(lineHost).HasValue,
+            "and the host DIES to it - the parasite's one real weakness");
+        Check(line.HostRefusals.Count == 0,
+            "nothing was refused, so nothing was reported");
+
+        // ---- the cell that is filtered by cell, for a View driving one host ----
+        var log = new List<HostRefusal>();
+        board.HostRefusals.Clear();
+        board.DestroyCube(host);
+        board.HostRefusals.CollectAt(host, log);
+        Check(log.Count == 1, "a View can ask for just its own cell's refusals");
+        log.Clear();
+        board.HostRefusals.CollectAt(plain, log);
+        Check(log.Count == 0, "and gets nothing for a cell that never held");
     }
 
     /// <summary>PaintBoard without a session, for the bare-GameBoard tests above.</summary>

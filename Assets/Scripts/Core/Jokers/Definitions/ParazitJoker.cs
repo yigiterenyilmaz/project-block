@@ -55,6 +55,36 @@ namespace ProjectBlock.Core
             get { return BoundJokerInstanceId.HasValue; }
         }
 
+        /// <summary>Where the host cube is standing, once its block has been played - or null
+        /// while the binding is still in the deck. Presentation only: the View needs a cell to
+        /// hang the parasite's harness on, and it must never work one out for itself.</summary>
+        public GridPos? HostPosition
+        {
+            get { return hostPos; }
+        }
+
+        /// <summary>
+        /// WHO IS RIDING, for the View to show inside the parasite's node. Losing the host cube
+        /// means losing this joker, so a player who cannot see which one has not been told what a
+        /// line clear is about to cost. Presentation only, and never saved - the binding itself is
+        /// the state, and this is read off it.
+        /// </summary>
+        public BoundJokerIdentity PassengerIdentity(GameSession session)
+        {
+            Joker bound = FindBound(session);
+            if (bound == null)
+            {
+                return new BoundJokerIdentity();
+            }
+            return new BoundJokerIdentity
+            {
+                DefId = bound.DefId,
+                DisplayName = bound.DisplayName,
+                InstanceId = bound.InstanceId,
+                Bound = true
+            };
+        }
+
         public override string StatusText
         {
             get

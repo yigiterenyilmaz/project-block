@@ -75,9 +75,9 @@ for fn, kind in tags.items():
     body = body[:body.index('\n        }\n')]
     check('%s -> LiftKind.%s' % (fn, kind), 'LiftKind.%s' % kind in body, '%s yanlis etiketli' % fn)
 emit = method(fb, 'private void EmitBlastParticles(')
-check('yalnizca YOK OLANLAR kuyuya (PlayRemoval), gerisi eski ize (LiftCells)',
-      'LiftKindAt(i) == LiftKind.Removed' in emit and 'PlayRemoval(removed)' in emit and 'LiftCells(marked' in emit,
-      'ayrim yok')
+check('yalnizca YOK OLANLAR kuyuya (PlayRemoval); tasinan sokulmede, donusen kangrende',
+      'LiftKindAt(i) == LiftKind.Removed' in emit and 'PlayRemoval(removed)' in emit
+      and 'LiftCells' not in emit, 'ayrim yok')
 removal = method(fb, 'private bool PlayRemoval(')
 check('varyant her kaldirmada rastgele (tekrar serbest)', 'Random.Range(0, RemovalVariants.Length)' in removal,
       'rastgele secim yok')
