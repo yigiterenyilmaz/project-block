@@ -1034,6 +1034,49 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
+        /// "TILSIM"'s ground, asked every repaint, and its harvest the moment the power runs.
+        ///
+        /// Both come from the power's own reports. The harvest is keyed on a SERIAL rather than on
+        /// the list's contents, so a repaint during the animation does not restart it; the ground
+        /// is keyed the same way, and an empty report where there was a full one is the gift being
+        /// recalled at the end of its round. The View works out none of it - not which ghosts could
+        /// be reclaimed from, not which cells the next board got, not when the gift expires.
+        /// </summary>
+        private void SyncTalisman(RoundEngine round)
+        {
+            TilsimPower power = FindTalisman();
+            if (power == null)
+            {
+                boardView.StopTalisman();
+                return;
+            }
+            if (power.LastActivation != null)
+            {
+                boardView.Talisman.PlayHarvest(boardView, power.LastActivation);
+            }
+            boardView.Talisman.Sync(boardView, power.LastGround);
+        }
+
+        /// <summary>The talisman in the player's power inventory, or null.</summary>
+        private TilsimPower FindTalisman()
+        {
+            if (session == null || session.Powers == null)
+            {
+                return null;
+            }
+            IReadOnlyList<Power> owned = session.Powers.Powers;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                var found = owned[i] as TilsimPower;
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
         /// WHERE "MAPUS" HAS ITS SEAL, asked every repaint - and everything about it comes from the
         /// boss's own report (MapusSealVisuals): which cell, how many turns it has held it, how
         /// close the row and the column through it are to completion, and whether the cap has just
@@ -1917,6 +1960,7 @@ namespace ProjectBlock.View
             SyncPress(round);
             SyncParasite(round);
             SyncMapus(round);
+            SyncTalisman(round);
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

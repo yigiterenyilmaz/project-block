@@ -384,6 +384,182 @@ dropped that way once each.
   activation plays the compression INSTEAD of the cluster burst a board-targeting power would get,
   because the press destroys nothing. See `docs/hidrolik-pres-*.png` — and judge a face at the size a CELL is, never
   blown up.
+- **"Tılsım" is paid for in one round and delivered in the next** (`TalismanView`,
+  `TalismanShapes`, `Resources/Shaders/TalismanSpirit`). Ghost blocks may be played hanging off the
+  board's edge, and the cubes that land outside persist as dead traces that no line, sweep or
+  explosion ever touches. Tılsım harvests them — 15 points each — and reclaims the ground they
+  occupied as BONUS GROUND. Nothing about that is one animation: the payoff lands on the NEXT
+  round's board, with a market screen in between, so the power is five beats with a round boundary
+  between the second and the third. **HARVEST**: not the cluster burst, which is a material break —
+  each ghost lights from within in its OWN colour (from a snapshot Core takes before removing it;
+  an animation cannot start from the colour of a block that has already been deleted), its shell
+  comes apart into soft spectral flakes that keep that colour for a moment before turning ghost,
+  and a soul kernel is left. Every ghost scores; only the ones the rules can reclaim from leave a
+  seed, and "which of those is reclaimable" (the board never grows left or down) is written in
+  exactly one place and carried out in the report. **CLAIM**: ONE OVERGROWTH PER CONNECTED
+  COMPONENT, not one wreath per cell. **THE VINE IS A SPRITE SHEET, NOT CODE** — nine frames of one
+  plant growing, at `Resources/Art/Fx/talisman_vine_sheet.png`, 5x2 in reading order. It replaced a
+  drawn root system (a four-level hierarchy of tapered tube segments with forks, tips, crowns and
+  contact shadows) that was rebuilt three times and never stopped reading as a wire diagram; the
+  art settled it in one pass. What survives from that work is the CHOREOGRAPHY, which is the part
+  that was doing the work: the cells are ordered by distance from the board and staggered, so the
+  cover visibly crawls OUT from the board's own edge (there is still a rune where it leaves).
+  The source art was nine drawings scattered on one canvas, and repacking it is where the
+  animation is won or lost: **every frame is planted on the same FOOT** — the cut end of the stem,
+  which becomes the sprite pivot — so the base stays nailed down while everything above it reaches
+  out. Centre the frames instead and the plant slides across the board while it grows, which reads
+  as nine different vines being swapped rather than one growing.
+  **AND IT IS PLACED BY ITS MASS, NOT BY ITS FOOT**: the drawing's bulk sits 0.53 frame-heights
+  from the stem's cut end, 24° above its own base line, so anchoring on the foot lands the mass a
+  cell and a half from the cell it is meant to bury; the foot is solved BACKWARDS from where the
+  mass has to land. A mirrored copy carries its mass on the other side of its own axis, so the
+  lean flips with it. That also buys the growth for free — the early frames are small and still at
+  the foot, so the vine reaches IN over the cell instead of swelling on top of it. **THEY STAND IN RANKS, SIDE BY SIDE** —
+  one rank per layer of depth, spaced across it, every other rank offset half a space, all facing
+  the same way, and the direction SNAPPED to an axis so the cover comes straight in off the board
+  edge rather than spilling in at 37°. Mirroring alternates rather than being random, which reads
+  as a weave; the random turn on top is small (±14°), because the whole point of a rank is that it
+  has a direction. A 2x2 claim gets six vines and a single cell two.
+  **THE PASS BEFORE THIS ONE OPTIMISED THE MEASURABLE THING AND LOST THE READABLE ONE.** It put
+  five vines on every cell spread evenly round the circle, and it measured beautifully — 97% of
+  every cell buried, against 72% for three in one direction. On the board it was a ball of snakes:
+  a fan that covers every direction equally has no direction in it, and twenty of them at 0.42s
+  each is not a plant growing over something. Coverage is a CONSTRAINT, not the objective.
+  What hides the ground is not the vines at all, and the layer that does it has now failed three
+  times the same way. It was a per-cell blob (a row of pale circles with plants on them), then a
+  near-black one, then **ONE soft field over the claim's bounding box** — and that last one is the
+  instructive failure, because on paper it is the right idea: a single mask, an irregular rim, no
+  grid anywhere. On the board it was **a big transparent rounded rectangle with a bouquet on it**.
+  Two things did it. A wobble on a rim is a decoration ON a rectangle, so the rectangle survives
+  it; and a field that covers a bounding box says nothing about WHICH cells were taken, which is
+  the one thing this layer exists to say.
+  So nobody tries to draw an organic shape any more. **THE CURSE STAIN** (`TalismanStain`) is
+  ASSEMBLED from four dull pieces that know only the gameplay set: a PATCH per reclaimed cell (a
+  rounded irregular square just under a cell across — no bevel, no border, no highlight, because
+  it is a stain and not a tile), a BRIDGE per 4-adjacent PAIR (wide, 0.82 of a cell: at 0.72 two
+  patches read as two blobs kissing and the cell boundary is visible in the SILHOUETTE even when
+  it is invisible in the tone), a MERGE per 2x2 in the shared corner, and BLEED tongues over every
+  edge with no reclaimed neighbour — rooted INSIDE the body so they swell out of the mass rather
+  than sitting on its rim like beads, and deliberately uneven (one wide, one a sliver, one barely
+  there), which is what actually kills the rectangle. **So an L comes out L-shaped, a sparse claim
+  comes out as islands, and a 3x3 with a hole comes out as a ring — none of the three is coded for
+  anywhere.** They are what the field does when it is built from what the rules handed over.
+  Three rules hold it together. **The parts combine with MAX into one baked field, never by being
+  drawn over each other**: twenty semi-transparent quads double-blend wherever they overlap and
+  the banding lands exactly on the cell boundaries, which is the seam the whole system exists to
+  remove. **Depth comes from a BLUR of the finished union**, never from the part that drew the
+  texel — per-part depth reads as lumps, with the bridge ovals and the cell circles visible
+  straight through the tone. And **the animation is a CHANNEL rather than a timeline**: every
+  texel carries WHEN it belongs to the claim (hung off `MeasureArrival`, which asks the vine
+  network itself when it reached each cell), so one float plays the growth — patches opening from
+  their middles, bridges closing from both ends at once and merging in the middle, tongues last —
+  and the same float **run backwards is the unseal**, with the tongues retracting first and the
+  bridges opening from their middles. The retraction is not written down anywhere.
+  **AND THE DARKNESS IS TWO PASSES, BECAUSE THE BOARD RENDERS IN LINEAR COLOUR.** This is the
+  arithmetic that defeated every earlier version: a near-black quad at the 0.28-0.38 alpha that
+  reads as "quite dark" on paper lands at **0.87 of the background's sRGB luminance** — a drop you
+  have to be told about. The design's own tone hierarchy asks for 0.65-0.72 through the mass,
+  which needs the LINEAR value at about 0.43, and no alpha anybody would write by hand gets there.
+  So the field is drawn twice off one shader: a **DRAIN** (`Blend DstColor OneMinusSrcAlpha`,
+  premultiplied — a genuine masked multiply of what is already in the frame, which is the half an
+  alpha overlay cannot do at any opacity) and then the **STAIN** over it, which is what pulls the
+  hue and the saturation so the area comes out colder and dirtier rather than merely dimmer. The
+  colour goes a breath BEFORE the darkness lands, which is the difference between the vine putting
+  the light out and a decal arriving. Measured against the real backdrop: 0.67 of the background
+  through the mass, 0.75 at the rim. **Two linear-colour traps are load-bearing and both are
+  invisible until something looks subtly wrong**: the baked texture is created `linear: true`
+  because three of its four channels are DATA (alpha is exempt from the sRGB decode, which is
+  exactly why the old Alpha8 membrane never hit this), and the two tone colours are set with
+  `SetVector` rather than `SetColor` because they are linear COEFFICIENTS, not swatches — a
+  conversion would put the drain at roughly twice the darkening that was calibrated.
+  **WHAT COVERS THE CLAIM WHERE THE ART DID NOT IS THE PLANT'S SHADOW, NOT MORE PLANT**
+  (`TalismanTendril`). The honest way to cover more ground with a nine-frame drawing is to grow
+  more of it, and that is exactly the pass that ended as a ball of snakes. So: SHADOW TENDRILS —
+  simple dark curved ribbons that leave the branch nearest the barest place left in the claim
+  (the same coverage field the vines grew against) and crawl into it, forking once at most,
+  because two children is a root and three is a fern. They must never try to look like the art:
+  no green, no highlight, no leaves, no tip detail — a tendril that gets pretty stops being
+  support and starts competing with what it is holding up. Then VEIL POCKETS over the biggest
+  holes those still leave, hung on three points of the network and sagging CONCAVE between them
+  (a convex blob is a bubble sitting in the gap rather than the gap being covered), with their
+  size clamped at both ends so one can never become a sheet. And during the unseal, DARK STREAMS:
+  two to four per cell running from the patch into the vine that is pulling it back, which is what
+  makes the ending a suction rather than a dissolve — darkness that only fades where it stands was
+  never really there. All of it is soft-edged **in the VERTICES** (a ribbon is three rows, rim /
+  spine / rim, with the rims at zero alpha; a pocket is two rings round a centre), so the entire
+  system costs one white texture and no blur.
+  **EACH VINE ALSO CARRIES ITS OWN DARKNESS, and it is not the contact shadow.** The shadow is
+  tight and offset and says the vine is LYING on something; the curse depth is centred, a tenth
+  wider, and says the ground under it is darker for the vine being there. Both, or the plant
+  either floats or drags a smear. It is scaled about the plant's own MASS rather than its foot, or
+  the swell slides off the drawing. **THE SEAL IS A CONTRACTION, NEVER A FLASH**: the gold runs
+  the network once, the ground it has just passed over goes a few per cent darker behind it — the
+  same growth channel, read as a travelling band, so what the gold passes is what the plant passed
+  without a second timeline existing — and then the whole mass tightens two or three per cent from
+  its rim and settles. The idle is that band again at a twentieth of the strength, every several
+  seconds; there is no whole-area pulse, because a region that breathes as one is a UI element.
+  **The claim is no longer stencilled to the darkness.** The branches used to be clipped to the
+  membrane, which had a bounding box's worth of room to spare; the stain stops a sixth of a cell
+  past the cells, so the same stencil would cut the hero art off mid-stem.
+    **SIZE WENT 1.7 → 1.4 → 0.95 → 0.75 AND LANDED ON 1.2, AND THE WAY IT LANDED IS THE POINT.**
+  Four passes were spent shrinking it against screenshots and memory, which is not comparing it
+  against anything; the lab was then given a live cycle (0.60 / 0.75 / 0.95 / 1.20 / 1.40, spacing
+  moving with it) and the answer arrived in one minute. When a number is being argued more than
+  twice, stop tuning it and build the way to see it. What that cycle also separated is SIZE from
+  DENSITY, which had been moving together the whole time and hiding which of the two was actually
+  wrong: 1.2 was right and there were simply twice too many of them. A plant whose curl is wider than the blocks beside it is not undergrowth on the board,
+  it is a creature on top of it, and every extra tenth of overhang buries more of the playable
+  board next door. Smaller pieces and more of them keeps the coverage, tightens the claim's
+  outline and leaves the individual plant legible instead of being one arm of something huge.
+  What must hold while that number moves is the RATIO: the spacing stays around two thirds of the
+  reach, so every vine still spills past its neighbours — pieces sized to their own station are a
+  grid of badges however good the art — while the gaps between them stay wide enough that the
+  stain shows through, which is what undergrowth actually looks like. The checker tests that
+  ratio rather than the absolute size, because both of the rules written as absolutes fired the
+  moment the vines were resized, which is the wrong reason for a rule to fire. Each is turned,
+  mirrored, resized and started separately, because nine frames repeated at one size is a tiled
+  texture. One vine takes 1.15s to run its nine frames — 128ms a frame — and a claim 1.6-2.9s. The first pass drew an
+  independent ring round every cell with a pale rounded SQUARE under it, and that reads as four
+  collectible badges on four tiles — which is wrong twice over, because there is no floor there yet
+  and the cells are not four things. A CONTACT SHADOW goes under all of it, dropped in WORLD terms
+  because a shadow does not turn with the thing casting it. **REVEAL**: next round the same builder puts the cover back
+  up already grown and then runs THE SAME ANIMATION BACKWARDS, in the reverse ORDER too — the last
+  vine to grow is the first to let go, so the cover peels off the way it crawled on and the ground
+  is uncovered from the far side inwards. Fading it out instead is a dissolve, and a dissolve says
+  the vines were never really there. The seed sits UNDER the cover in the sorting order, because a
+  cover something shows through is not a cover. **AND THE FLOOR IS HELD BACK WHILE THE COVER IS
+  STILL ON IT** (`BoardView.HoldCells`, the same bargain the press and `BossMoveView` make): the
+  next round's board is BUILT with the bonus ground in it, so without this the gift is simply
+  there from the first frame with some darkness fading off the top of it. Each cell's floor comes
+  back, and its corner rune lights on it, at the moment the stain's OWN front has passed that
+  cell — one number, read off the growth channel the shader is drawing with, rather than a
+  per-cell delay running beside it. Two timelines drift, and when they do a rune arrives from
+  under a patch that is still standing. **PRESENCE**: then it simply sits for a round, and this is the
+  part the player actually looks at — four OPEN corner runes and no closed frame. That gap is the
+  mechanic: an ordinary cell has a structural border a line runs through, and bonus ground is play
+  area no line ever waits for, so its frame does not close. The rule is legible without a word of
+  UI. **RECALL**: at the round's end the gift stops being matter and is drawn home along the vines.
+  The small pieces around the vine — the edge rune, the seed, the harvest kernel and flakes, the
+  corner runes — are still baked SDFs from FUSED CIRCLES, the opposite pole from Mapus's polygons,
+  because this is a growing spiritual thing with no flat on it anywhere; using the wrong primitive
+  is what made the parasite a flower and Mapus a rotor, and both were the same mistake.
+  Two glyph traps are recorded in the shapes: an open ring with a tie across it is the letter e,
+  and a stem built from big circles is a bottle. `TalismanActivationVisuals` and
+  `TalismanGroundVisuals` are reporting only and `[NotSaved]`; the ground report is written when
+  the next board's config is built and deliberately survives `OnRoundStarted`, which clears the
+  power's working list while the View still has an unwrapping to play. **A ghost trace is drawn
+  with the ghost block's own tile and its own billowing warp material** — both already existed and
+  simply were not asked for, so the one cube in the game whose whole identity is "not quite solid"
+  was for a long time the one drawn as a flat pale rectangle. Bonus ground is also real ground for
+  the DEAD END: a line never waits for it, but a block still fits there, and losing with a legal
+  move in hand would be the worst class of bug (`Tilsim_BonusGroundIsStillSomewhereToPlay`).
+  **RECLAIMED GROUND IS A SET, NEVER A BOX ROUND IT.** The board's backing store is a rectangle, so
+  a cell reclaimed past the right edge has to grow it — and the cells that rectangle grows over
+  must NOT become playable as a side effect. Reclaiming (7,3) hands the player one cell, not a
+  column of seven. `GameBoard`'s constructor already does this correctly and
+  `Tilsim_ReclaimedGroundIsSparseNotRectangular` pins it shape by shape (a lone cell, gaps down a
+  column, two columns, an L, four corners with holes between them, and a far cell that grows the
+  bounds and nothing else), asserting the mask cell by cell rather than counting.
 - **"Mapus" does not mark a cell, it TURNS IT INTO A PRISON** (`MapusSealView`, `MapusShapes`,
   `Resources/Shaders/MapusPit` + `MapusIron`). A sealed cell used to be the empty cell in a
   different colour, which said "somebody painted this square" — worse here than almost anywhere,
@@ -862,7 +1038,17 @@ whole lifecycles. Fifteen more entries switch each layer off on its own (jaws, l
 imprints, shell, pressure front, push response, seams, dimple, countdown marks, contact shadow,
 inward collapse, burst, shear, residue, and all back on). Each one HOLDS what it ends on, and the
 scene's label says what the report actually contained — how many quadrants were full, how many
-cubes were shoved, how many went over the edge, which axis the corner used. The "boss hareketiyle
+cubes were shoved, how many went over the edge, which axis the corner used. "Tılsım" has a set of its own built round ONE question — is the darkness following the CELLS or
+the box? Six geometry scenes are the acceptance set (a single cell, two side by side, a 2x2, an L,
+a 3x3 with a hole, sparse islands) and three more play the same shapes coming apart next round;
+seven isolate one layer of the curse at a time, and those go through the layer flags INTO THE BAKE
+rather than hiding a renderer afterwards, because the patches, bridges, corner merges and tongues
+are one baked field and there is no renderer to hide. Two more are the real test: the same claim
+with the vines OFF (is the footprint still a cursed region on its own?) and back ON (do they read
+as its skeleton?). Two debug overlays settle the argument rather than continuing it — one outlines
+the cells the rules actually reclaimed together with their bounding rectangle, the other paints the
+stain by the part that drew each texel (patch red, bridge blue, merge yellow, tongue green). The
+"boss hareketiyle
 atılma" entries do the same for one step at a time (eight directions, a holed arena, a staged
 blocked target). The two "İç Hareket" entries run a moving board's turn
 end for its survivors (sparse to nearly full; the centrifuge on an odd board so its centre stays

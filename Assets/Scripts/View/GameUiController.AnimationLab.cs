@@ -164,6 +164,7 @@ namespace ProjectBlock.View
             StopAnimPress();
             StopAnimHost();
             StopAnimMapus();
+            StopAnimTalisman();
             boardView.ClearPreview();
             RefreshAll(null);
             SyncRetroPresentation();
@@ -1503,16 +1504,315 @@ namespace ProjectBlock.View
                         RedrawAnimationLab();
                     }
                 });
+            AddAnimHeader("tılsım / hayalet alanı", "tılsım / hayalet alanı");
+            // "TILSIM" - the ghost harvest, the claim it leaves in the outside space, and the
+            // bonus ground it hands the next round. What the lab fabricates here is the REPORT,
+            // which is the argument: the power's real Run would score and mutate the round's own
+            // board, and nothing the lab does may touch Core state.
+            AddAnim("Tılsım: the ghosts standing there (the bait)",
+                "tılsım: hayaletler duruyor (yem)",
+                delegate { AnimTalisman(AnimTalismanScene.Ghosts); });
+            AddAnim("Tılsım: HARVEST - a few ghosts", "tılsım: HASAT - birkaç hayalet",
+                delegate { AnimTalisman(AnimTalismanScene.HarvestFew); });
+            AddAnim("Tılsım: HARVEST - many ghosts (the wave)",
+                "tılsım: HASAT - çok hayalet (dalga)",
+                delegate { AnimTalisman(AnimTalismanScene.HarvestMany); });
+            AddAnim("Tılsım: harvest where NOTHING can be reclaimed",
+                "tılsım: hiçbir yeri geri kazanılamayan hasat",
+                delegate { AnimTalisman(AnimTalismanScene.HarvestNoClaim); });
+            AddAnim("Tılsım: the CLAIM - vines wrap the future ground",
+                "tılsım: TALEP - sarmaşıklar gelecek zemini sarıyor",
+                delegate { AnimTalisman(AnimTalismanScene.Claim); });
+            AddAnim("Tılsım HERO: next round REVEAL - the ground under the vines",
+                "tılsım HERO: sonraki raunt AÇILIŞ - sarmaşığın altındaki zemin",
+                delegate { AnimTalisman(AnimTalismanScene.Reveal); });
+            AddAnim("Tılsım HERO: bonus ground standing (the OPEN frame)",
+                "tılsım HERO: bonus zemin duruyor (AÇIK çerçeve)",
+                delegate { AnimTalisman(AnimTalismanScene.Ground); });
+            AddAnim("Tılsım: bonus ground on a BUSY board (readability)",
+                "tılsım: DOLU tahtada bonus zemin (okunurluk)",
+                delegate { AnimTalisman(AnimTalismanScene.GroundBusy); });
+            AddAnim("Tılsım: an L-shaped claim (never assume a rectangle)",
+                "tılsım: L biçimli talep (dikdörtgen varsayma)",
+                delegate { AnimTalisman(AnimTalismanScene.GroundShape); });
+            AddAnim("Tılsım: RECALL - the round ends and the gift goes home",
+                "tılsım: GERİ ÇAĞIRMA - raunt bitiyor, hediye geri alınıyor",
+                delegate { AnimTalisman(AnimTalismanScene.Recall); });
+            AddAnim("Tılsım: the WHOLE story - harvest, claim, reveal, recall",
+                "tılsım: TÜM hikâye - hasat, talep, açılış, geri çağırma",
+                delegate { AnimTalisman(AnimTalismanScene.Lifecycle); });
+            // ---- THE CURSE STAIN, and the six shapes it has to survive ----
+            // The darkness under a claim is ASSEMBLED from the exact reclaimed cells - a patch
+            // each, a bridge per neighbouring pair, a merge per 2x2, tongues over every outer
+            // edge - so the shapes below are the whole acceptance set. An L has to come out
+            // L-shaped, two cells with a gap have to come out as two islands, and a ring has to
+            // keep its hole. None of the three is written down anywhere: they are what the field
+            // does when it is built from the gameplay set and nothing else, which is exactly why
+            // they are worth pressing.
+            AddAnim("Tılsım STAIN: a single cell",
+                "tılsım LEKE: tek hücre",
+                delegate { AnimTalisman(AnimTalismanScene.StainSingle); });
+            AddAnim("Tılsım STAIN: two cells side by side - is there a seam?",
+                "tılsım LEKE: yan yana iki hücre - dikiş görünüyor mu?",
+                delegate { AnimTalisman(AnimTalismanScene.StainTwo); });
+            AddAnim("Tılsım STAIN: a 2x2 - four patches, four bridges, one corner merge",
+                "tılsım LEKE: 2x2 - dört yama, dört köprü, bir köşe kaynağı",
+                delegate { AnimTalisman(AnimTalismanScene.StainSquare); });
+            AddAnim("Tılsım STAIN: an L - it must NOT come out a rectangle",
+                "tılsım LEKE: L - dikdörtgen çıkmamalı",
+                delegate { AnimTalisman(AnimTalismanScene.StainL); });
+            AddAnim("Tılsım STAIN: a 3x3 with a HOLE - the middle must stay open",
+                "tılsım LEKE: ortası DELİK 3x3 - orta açık kalmalı",
+                delegate { AnimTalisman(AnimTalismanScene.StainHole); });
+            AddAnim("Tılsım STAIN: sparse islands - the gap must stay background",
+                "tılsım LEKE: ayrık adalar - aradaki boşluk arka plan kalmalı",
+                delegate { AnimTalisman(AnimTalismanScene.StainSparse); });
+
+            // ---- ONE PART AT A TIME ----
+            AddAnim("Tılsım alone: the CELL PATCHES", "tılsım tek başına: HÜCRE YAMALARI",
+                delegate { AnimTalismanOnly(AnimTalismanScene.StainSquare, "cell patches",
+                    "hücre yamaları", delegate
+                    {
+                        TalismanView.Layers.ShowStainBody = true;
+                        TalismanView.Layers.ShowCellPatches = true;
+                    }); });
+            AddAnim("Tılsım alone: the NEIGHBOUR BRIDGES", "tılsım tek başına: KOMŞU KÖPRÜLERİ",
+                delegate { AnimTalismanOnly(AnimTalismanScene.StainSquare, "bridges",
+                    "köprüler", delegate
+                    {
+                        TalismanView.Layers.ShowStainBody = true;
+                        TalismanView.Layers.ShowNeighborBridges = true;
+                    }); });
+            AddAnim("Tılsım alone: the CORNER MERGES", "tılsım tek başına: KÖŞE KAYNAKLARI",
+                delegate { AnimTalismanOnly(AnimTalismanScene.StainSquare, "corner merges",
+                    "köşe kaynakları", delegate
+                    {
+                        TalismanView.Layers.ShowStainBody = true;
+                        TalismanView.Layers.ShowCornerMerges = true;
+                    }); });
+            AddAnim("Tılsım alone: the EDGE BLEED (the tongues over the rim)",
+                "tılsım tek başına: KENAR TAŞMASI (kenardan taşan diller)",
+                delegate { AnimTalismanOnly(AnimTalismanScene.StainSquare, "edge bleed",
+                    "kenar taşması", delegate
+                    {
+                        TalismanView.Layers.ShowStainBody = true;
+                        TalismanView.Layers.ShowEdgeBleed = true;
+                    }); });
+            AddAnim("Tılsım alone: the LOCAL COLOUR DRAIN (the multiply, no stain over it)",
+                "tılsım tek başına: YEREL RENK ÇEKİLMESİ (çarpma katmanı, üstünde leke yok)",
+                delegate { AnimTalismanOnly(AnimTalismanScene.StainSquare, "colour drain",
+                    "renk çekilmesi", delegate
+                    {
+                        TalismanView.Layers.ShowCellPatches = true;
+                        TalismanView.Layers.ShowNeighborBridges = true;
+                        TalismanView.Layers.ShowCornerMerges = true;
+                        TalismanView.Layers.ShowEdgeBleed = true;
+                        TalismanView.Layers.ShowLocalColorDrain = true;
+                    }); });
+            AddAnim("Tılsım alone: the SHADOW TENDRILS", "tılsım tek başına: GÖLGE KÖKLERİ",
+                delegate { AnimTalismanOnly(AnimTalismanScene.StainSquare, "shadow tendrils",
+                    "gölge kökleri", delegate
+                    {
+                        TalismanView.Layers.ShowShadowTendrils = true;
+                    }); });
+            AddAnim("Tılsım alone: the VEIL POCKETS", "tılsım tek başına: ZAR CEPLERİ",
+                delegate { AnimTalismanOnly(AnimTalismanScene.StainSquare, "veil pockets",
+                    "zar cepleri", delegate
+                    {
+                        TalismanView.Layers.ShowShadowTendrils = true;
+                        TalismanView.Layers.ShowVeilPockets = true;
+                    }); });
+
+            // ---- THE TEST THE WHOLE THING IS JUDGED ON ----
+            // With no plant on it at all, is the claimed footprint a dark, organic, sealed region
+            // - or is it the background with a bit of shadow on it? Everything else in this
+            // system is in service of that one screenshot.
+            AddAnim("Tılsım: VINES OFF - is the claim STILL a cursed region?",
+                "tılsım: SARMAŞIKLAR KAPALI - talep hâlâ lanetli bir bölge mi?",
+                delegate { AnimTalismanCurse(AnimTalismanScene.StainSquare, false); });
+            AddAnim("Tılsım: VINES ON - do they read as the SKELETON of that region?",
+                "tılsım: SARMAŞIKLAR AÇIK - bu bölgenin İSKELETİ gibi mi okunuyorlar?",
+                delegate { AnimTalismanCurse(AnimTalismanScene.StainSquare, true); });
+            AddAnim("Tılsım: VINES OFF on a 3x3 with a hole",
+                "tılsım: ortası delik 3x3'te SARMAŞIKLAR KAPALI",
+                delegate { AnimTalismanCurse(AnimTalismanScene.StainHole, false); });
+
+            // ---- THE GROWTH, AND THE LOCK ----
+            AddAnim("Tılsım: the claim arriving, full speed",
+                "tılsım: talebin gelişi, tam hız",
+                delegate { AnimTalismanCurse(AnimTalismanScene.StainSquare, true); });
+            AddAnim("Tılsım: the claim arriving, QUARTER speed (RESET puts it back)",
+                "tılsım: talebin gelişi, ÇEYREK hız (RESET geri alır)",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    animSpeedIndex = 1;
+                    AnimTalismanCurse(AnimTalismanScene.StainSquare, true);
+                });
+            AddAnim("Tılsım: the SEAL PULSE - watch the END (it tightens, it does not flash)",
+                "tılsım: MÜHÜR DARBESİ - SONA bak (sıkışır, parlamaz)",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    animSpeedIndex = 1;
+                    TalismanView.Layers.AllOn();
+                    AnimTalisman(AnimTalismanScene.StainSquare);
+                    animLastLabel = Loc.Pick(
+                        "the gold runs the network, the mass tightens, it settles darker",
+                        "altın ağı dolaşır, kütle sıkışır, daha koyu oturur");
+                });
+
+            // ---- AND THE UNSEAL, WHICH IS THE SAME MAP RUN BACKWARDS ----
+            AddAnim("Tılsım UNSEAL: the PATCHES retracting to their middles",
+                "tılsım AÇILIŞ: YAMALAR merkezlerine çekiliyor",
+                delegate { AnimTalismanOnly(AnimTalismanScene.UnsealSquare, "patch retraction",
+                    "yama geri çekilmesi", delegate
+                    {
+                        TalismanView.Layers.ShowStainBody = true;
+                        TalismanView.Layers.ShowCellPatches = true;
+                    }); });
+            AddAnim("Tılsım UNSEAL: the BRIDGES opening from the middle",
+                "tılsım AÇILIŞ: KÖPRÜLER ortadan açılıyor",
+                delegate { AnimTalismanOnly(AnimTalismanScene.UnsealSquare, "bridge opening",
+                    "köprü açılması", delegate
+                    {
+                        TalismanView.Layers.ShowStainBody = true;
+                        TalismanView.Layers.ShowCellPatches = true;
+                        TalismanView.Layers.ShowNeighborBridges = true;
+                    }); });
+            AddAnim("Tılsım UNSEAL: the SHADOW TENDRILS pulling back, tip first",
+                "tılsım AÇILIŞ: GÖLGE KÖKLERİ uçtan geri çekiliyor",
+                delegate { AnimTalismanOnly(AnimTalismanScene.UnsealSquare, "tendril retraction",
+                    "kök geri çekilmesi", delegate
+                    {
+                        TalismanView.Layers.ShowShadowTendrils = true;
+                    }); });
+            AddAnim("Tılsım UNSEAL: the VEIL POCKETS collapsing into the roots",
+                "tılsım AÇILIŞ: ZAR CEPLERİ köklere toplanıyor",
+                delegate { AnimTalismanOnly(AnimTalismanScene.UnsealSquare, "veil collapse",
+                    "zar toplanması", delegate
+                    {
+                        TalismanView.Layers.ShowShadowTendrils = true;
+                        TalismanView.Layers.ShowVeilPockets = true;
+                    }); });
+            AddAnim("Tılsım UNSEAL: the DARK STREAMS going home into the vine",
+                "tılsım AÇILIŞ: KARA AKINTILAR sarmaşığa dönüyor",
+                delegate
+                {
+                    TalismanView.Layers.AllOn();
+                    TalismanView.Layers.CurseOff();
+                    AnimTalisman(AnimTalismanScene.UnsealSquare);
+                    animLastLabel = Loc.Pick(
+                        "the darkness LEAVES along the vines - it does not fade where it stood",
+                        "karanlık sarmaşıklar boyunca GİDİYOR - durduğu yerde solmuyor");
+                });
+            AddAnim("Tılsım UNSEAL: the COLOUR coming back (drain only)",
+                "tılsım AÇILIŞ: RENGİN geri gelişi (yalnız çekilme katmanı)",
+                delegate { AnimTalismanOnly(AnimTalismanScene.UnsealSquare, "colour restore",
+                    "renk geri gelişi", delegate
+                    {
+                        TalismanView.Layers.ShowCellPatches = true;
+                        TalismanView.Layers.ShowNeighborBridges = true;
+                        TalismanView.Layers.ShowCornerMerges = true;
+                        TalismanView.Layers.ShowEdgeBleed = true;
+                        TalismanView.Layers.ShowLocalColorDrain = true;
+                    }); });
+            AddAnim("Tılsım UNSEAL: the BONUS GROUND underneath, with nothing over it",
+                "tılsım AÇILIŞ: altındaki BONUS ZEMİN, üstünde hiçbir şey yokken",
+                delegate { AnimTalismanOnly(AnimTalismanScene.UnsealSquare, "bonus ground",
+                    "bonus zemin", null); });
+            AddAnim("Tılsım UNSEAL: a whole 2x2", "tılsım AÇILIŞ: bütün bir 2x2",
+                delegate { AnimTalismanCurse(AnimTalismanScene.UnsealSquare, true); });
+            AddAnim("Tılsım UNSEAL: a whole 3x3 with a hole",
+                "tılsım AÇILIŞ: ortası delik bütün bir 3x3",
+                delegate { AnimTalismanCurse(AnimTalismanScene.UnsealHole, true); });
+            AddAnim("Tılsım UNSEAL: sparse islands", "tılsım AÇILIŞ: ayrık adalar",
+                delegate { AnimTalismanCurse(AnimTalismanScene.UnsealSparse, true); });
+
+            // ---- THE SWITCHES ----
+            AddAnim("Tılsım switch: the vine cover", "tılsım anahtarı: sarmaşık örtüsü",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowVines,
+                    "vines", "sarmaşıklar"); });
+            AddAnim("Tılsım switch: the rune knots", "tılsım anahtarı: rün düğümleri",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowKnots,
+                    "rune knots", "rün düğümleri"); });
+            AddAnim("Tılsım switch: the CONTACT shadows", "tılsım anahtarı: TEMAS gölgeleri",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowContactShadows,
+                    "contact shadows", "temas gölgeleri"); });
+            AddAnim("Tılsım switch: the CURSE DEPTH round each vine",
+                "tılsım anahtarı: her sarmaşığın çevresindeki LANET DERİNLİĞİ",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowCurseDepth,
+                    "curse depth", "lanet derinliği"); });
+            AddAnim("Tılsım: CYCLE the vine size (0.60 / 0.75 / 0.95 / 1.20 / 1.40 of a cell)",
+                "tılsım: sarmaşık BOYUNU değiştir (hücrenin 0.60 / 0.75 / 0.95 / 1.20 / 1.40 katı)",
+                delegate { AnimTalismanCycleSize(); });
+            AddAnim("Tılsım switch: the CELL PATCHES", "tılsım anahtarı: HÜCRE YAMALARI",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowCellPatches,
+                    "cell patches", "hücre yamaları"); });
+            AddAnim("Tılsım switch: the NEIGHBOUR BRIDGES", "tılsım anahtarı: KOMŞU KÖPRÜLERİ",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowNeighborBridges,
+                    "bridges", "köprüler"); });
+            AddAnim("Tılsım switch: the CORNER MERGES", "tılsım anahtarı: KÖŞE KAYNAKLARI",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowCornerMerges,
+                    "corner merges", "köşe kaynakları"); });
+            AddAnim("Tılsım switch: the EDGE BLEED", "tılsım anahtarı: KENAR TAŞMASI",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowEdgeBleed,
+                    "edge bleed", "kenar taşması"); });
+            AddAnim("Tılsım switch: the LOCAL COLOUR DRAIN",
+                "tılsım anahtarı: YEREL RENK ÇEKİLMESİ",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowLocalColorDrain,
+                    "colour drain", "renk çekilmesi"); });
+            AddAnim("Tılsım switch: the SHADOW TENDRILS", "tılsım anahtarı: GÖLGE KÖKLERİ",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowShadowTendrils,
+                    "shadow tendrils", "gölge kökleri"); });
+            AddAnim("Tılsım switch: the VEIL POCKETS", "tılsım anahtarı: ZAR CEPLERİ",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowVeilPockets,
+                    "veil pockets", "zar cepleri"); });
+            AddAnim("Tılsım switch: the GOLD SEAL pulse",
+                "tılsım anahtarı: ALTIN MÜHÜR darbesi",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowSeal,
+                    "seal pulse", "mühür darbesi"); });
+            AddAnim("Tılsım switch: the OPEN corner runes",
+                "tılsım anahtarı: AÇIK köşe rünleri",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowCorners,
+                    "corner runes", "köşe rünleri"); });
+            AddAnim("Tılsım switch: the talisman seeds", "tılsım anahtarı: tılsım tohumları",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowSeeds,
+                    "seeds", "tohumlar"); });
+            // THE RECTANGLE TEST, and it is a switch rather than a scene because the question it
+            // answers is asked OF another scene: outline what the rules actually reclaimed, and
+            // the box those cells sit in, then replay any claim and look at which of the two the
+            // darkness is following.
+            AddAnim("Tılsım debug: outline the RECLAIMED CELLS and their bounding box",
+                "tılsım hata ayıklama: GERİ KAZANILAN HÜCRELERİ ve kutularını çiz",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.ShowActualReclaimCells,
+                    "reclaimed cells + box", "geri kazanılan hücreler + kutu"); });
+            AddAnim("Tılsım debug: colour the stain BY PART (patch red, bridge blue, merge "
+                    + "yellow, tongue green)",
+                "tılsım hata ayıklama: lekeyi PARÇAYA GÖRE boya (yama kırmızı, köprü mavi, "
+                    + "kaynak sarı, dil yeşil)",
+                delegate { AnimTalismanToggle(ref TalismanView.Layers.DebugParts,
+                    "part colours", "parça renkleri"); });
+            AddAnim("Tılsım switch: ALL layers back on",
+                "tılsım anahtarı: TÜM katmanlar geri açık",
+                delegate
+                {
+                    TalismanView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("every talisman layer on",
+                        "tüm tılsım katmanları açık");
+                    if (AnimLabOpen)
+                    {
+                        RedrawAnimationLab();
+                    }
+                });
             AddAnimHeader("raw - not reworked yet", "ham - henüz elden geçirilmedi");
             // Everything under this heading is the CURRENT state of something nobody has designed
             // yet: a mechanic with no visual language of its own, or a look that exists in the game
             // but had no way of being reached from here. They are deliberately plain - the point is
             // to have a BEFORE to hold the next pass against.
-            // Mapus has a section of its own now; what is left raw here is "Tılsım"'s bonus
-            // ground, which is still nothing but a colour.
-            AddAnim("RAW - Tılsım bonus ground (a tint, nothing else)",
-                "ham - Tılsım bonus zemini (yalnız renk)",
-                delegate { AnimRawBoard(AnimRawScene.CellStates); });
+            // The cell-states entry that used to live here is gone: BOTH of the states it was
+            // showing as a flat tint - Mapus's sealed cell and Tılsım's bonus ground - have
+            // sections of their own now. It is the first raw entry to graduate off this list.
             AddAnim("RAW - overtime: the board's pressure squeeze (overtime knob)",
                 "ham - uzatma: alanın basınç sıkışması (uzatma ayarı)", AnimRawPressure);
             AddAnim("RAW - overtime: the screen vignette (overtime knob)",
@@ -4870,6 +5170,439 @@ namespace ProjectBlock.View
             }
         }
 
+        // ------------------------------------------------------------------ tılsım
+
+        private enum AnimTalismanScene
+        {
+            Ghosts,
+            HarvestFew,
+            HarvestMany,
+            HarvestNoClaim,
+            Claim,
+            Reveal,
+            Ground,
+            GroundBusy,
+            GroundShape,
+            Recall,
+            Lifecycle,
+
+            // THE CURSE STAIN'S OWN GEOMETRY. These six are the acceptance set: the darkness has
+            // to follow the cells the rules reclaimed and nothing else, so an L must come out
+            // L-shaped, a sparse pair must come out as two islands, and a ring must keep its
+            // hole. None of the three is coded for anywhere - they are what the field does when
+            // it is built from the gameplay set - which is exactly why they are worth a scene.
+            StainSingle,
+            StainTwo,
+            StainSquare,
+            StainL,
+            StainHole,
+            StainSparse,
+
+            // And the same geometry coming APART next round.
+            UnsealSquare,
+            UnsealHole,
+            UnsealSparse
+        }
+
+        /// <summary>How far left a Tılsım scene slides the board, in world units. Enough that the
+        /// three columns of outside space clear the lab panel's left edge (3.84) - the board is
+        /// 6.5 wide and centred on 0, so its own right edge starts at 3.25 and the outside cells
+        /// go straight under the panel without this.</summary>
+        private const float AnimTalismanShift = 2.4f;
+
+        private Coroutine animTalisman;
+
+        private void AnimTalisman(AnimTalismanScene scene)
+        {
+            StopAnimTalisman();
+            StopAnimMapus();
+            StopAnimHost();
+            StopAnimPress();
+            StopAnimSnake();
+            StopAnimBossLift();
+            StopAnimRot();
+            StopAnimRaw();
+            animTalisman = StartCoroutine(TalismanRoutine(scene));
+        }
+
+        private void StopAnimTalisman()
+        {
+            if (animTalisman != null)
+            {
+                StopCoroutine(animTalisman);
+                animTalisman = null;
+            }
+            if (boardView != null)
+            {
+                boardView.StopTalisman();
+            }
+        }
+
+        /// <summary>The cells one scene works with - always OUTSIDE the board's right edge, which
+        /// is where ghost cubes actually end up.</summary>
+        private static List<GridPos> AnimTalismanCells(AnimTalismanScene scene, int w, int h)
+        {
+            var cells = new List<GridPos>();
+            int x = w;
+            int y = h / 2;
+            switch (scene)
+            {
+                case AnimTalismanScene.HarvestMany:
+                    for (int i = 0; i < 9; i++)
+                    {
+                        cells.Add(new GridPos(x + i % 3, y - 3 + i / 3));
+                    }
+                    break;
+                case AnimTalismanScene.GroundShape:
+                    // AN L. The claim is never guaranteed to be a rectangle and the drawing must
+                    // not assume one.
+                    cells.Add(new GridPos(x, y));
+                    cells.Add(new GridPos(x, y - 1));
+                    cells.Add(new GridPos(x, y - 2));
+                    cells.Add(new GridPos(x + 1, y - 2));
+                    cells.Add(new GridPos(x + 2, y - 2));
+                    break;
+                case AnimTalismanScene.StainSingle:
+                    cells.Add(new GridPos(x, y));
+                    break;
+                case AnimTalismanScene.StainTwo:
+                    cells.Add(new GridPos(x, y));
+                    cells.Add(new GridPos(x + 1, y));
+                    break;
+                case AnimTalismanScene.StainL:
+                    cells.Add(new GridPos(x, y));
+                    cells.Add(new GridPos(x, y - 1));
+                    cells.Add(new GridPos(x + 1, y - 1));
+                    break;
+                case AnimTalismanScene.StainHole:
+                case AnimTalismanScene.UnsealHole:
+                    // A RING. The middle was never reclaimed, so the darkness must not fill it -
+                    // a claim whose hole closes is a claim following its bounding box.
+                    for (int gx = 0; gx < 3; gx++)
+                    {
+                        for (int gy = 0; gy < 3; gy++)
+                        {
+                            if (gx != 1 || gy != 1)
+                            {
+                                cells.Add(new GridPos(x + gx, y - 1 + gy));
+                            }
+                        }
+                    }
+                    break;
+                case AnimTalismanScene.StainSparse:
+                case AnimTalismanScene.UnsealSparse:
+                    // TWO ISLANDS with a whole cell between them, which the vines may cross and
+                    // the darkness may not.
+                    cells.Add(new GridPos(x, y));
+                    cells.Add(new GridPos(x + 2, y));
+                    break;
+                case AnimTalismanScene.HarvestNoClaim:
+                    // Off the LEFT edge: harvested and paid for, but the board never grows that
+                    // way, so nothing is reclaimed. The rules say so; the lab only says where.
+                    for (int i = 0; i < 4; i++)
+                    {
+                        cells.Add(new GridPos(-1 - i % 2, y - i / 2));
+                    }
+                    break;
+                default:
+                    for (int i = 0; i < 4; i++)
+                    {
+                        cells.Add(new GridPos(x + i % 2, y - i / 2));
+                    }
+                    break;
+            }
+            return cells;
+        }
+
+        /// <summary>
+        /// The REPORT a scene plays - which is the argument, not the animation. The power's own Run
+        /// would score and empty the round's board, and nothing in the lab may touch Core state.
+        /// </summary>
+        private TalismanActivationVisuals AnimTalismanReport(List<GridPos> cells,
+            List<int> cards, int serial)
+        {
+            var report = new TalismanActivationVisuals { Serial = serial, ScorePerGhost = 15 };
+            for (int i = 0; i < cells.Count; i++)
+            {
+                // THE RULE'S OWN ANSWER. The lab used to repeat the coordinate test here,
+                // which is the one thing a lab must never do with a rule.
+                bool reclaimable = TilsimPower.CanReclaim(cells[i]);
+                report.Ghosts.Add(new HarvestedGhost
+                {
+                    Cell = cells[i],
+                    Cube = AnimCardCube(cells[i].X, cells[i].Y, cards),
+                    Reclaimable = reclaimable
+                });
+                if (reclaimable)
+                {
+                    report.Reclaimed.Add(cells[i]);
+                }
+            }
+            report.TotalScore = report.Ghosts.Count * report.ScorePerGhost;
+            return report;
+        }
+
+        private IEnumerator TalismanRoutine(AnimTalismanScene scene)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                animTalisman = null;
+                yield break;
+            }
+            int w = Mathf.Max(7, round.Board.Width);
+            int h = Mathf.Max(7, round.Board.Height);
+            List<int> cards = AnimBossCards();
+            List<GridPos> cells = AnimTalismanCells(scene, w, h);
+
+            bool busy = scene == AnimTalismanScene.GroundBusy;
+            // THE GROUND SCENES BUILD A BOARD THAT ACTUALLY HAS THE BONUS CELLS IN IT, through the
+            // same constructor the round uses - so the plate under the runes is the board's own
+            // bonus ground and not something drawn to look like it.
+            bool wantsGround = scene == AnimTalismanScene.Reveal
+                || scene == AnimTalismanScene.Ground || busy
+                || scene == AnimTalismanScene.GroundShape
+                || scene == AnimTalismanScene.Recall
+                || scene == AnimTalismanScene.Lifecycle
+                || scene == AnimTalismanScene.UnsealSquare
+                || scene == AnimTalismanScene.UnsealHole
+                || scene == AnimTalismanScene.UnsealSparse;
+            var board = wantsGround
+                ? new GameBoard(w, h, cells, cells)
+                : new GameBoard(w, h);
+            AnimRotFill(board, cards, busy ? 52u : 24u, null);
+            if (!wantsGround)
+            {
+                // THE BAIT, PUT THERE THE WAY THE GAME PUTS IT THERE. SetCubeAt cannot do this:
+                // it drops anything outside the board on the floor (SetCellRaw returns early), so
+                // the first pass of this scene placed nothing at all and the cells the label was
+                // talking about were simply empty. Outside cubes only exist because a GHOST block
+                // was placed straddling the edge with allowOutside - so that is what the scene
+                // does, through the board's own Place.
+                AnimTalismanBait(board, cells);
+            }
+            // THE WHOLE POINT OF THIS POWER HAPPENS OFF THE BOARD'S RIGHT EDGE, and that is where
+            // the lab's own panel sits - so a Tılsım scene drawn at the usual place puts its
+            // subject underneath the panel you are reading. The cells cannot move to the other
+            // side: the board never grows left or down, so ground is only ever reclaimed to the
+            // right. The BOARD moves instead. It is put back by AnimResync like everything else,
+            // because the refresh rebuilds whenever the board it is showing is not the round's.
+            boardView.Rebuild(board, MainBoardWorldSize,
+                MainBoardCenter + new Vector2(-AnimTalismanShift, 0f));
+
+            var ground = new TalismanGroundVisuals { Serial = Time.frameCount };
+            switch (scene)
+            {
+                case AnimTalismanScene.Ghosts:
+                    animLastLabel = Loc.Pick(cells.Count + " ghosts waiting to be harvested",
+                        cells.Count + " hayalet hasat bekliyor");
+                    break;
+                case AnimTalismanScene.HarvestFew:
+                case AnimTalismanScene.HarvestMany:
+                case AnimTalismanScene.HarvestNoClaim:
+                case AnimTalismanScene.Claim:
+                case AnimTalismanScene.StainSingle:
+                case AnimTalismanScene.StainTwo:
+                case AnimTalismanScene.StainSquare:
+                case AnimTalismanScene.StainL:
+                case AnimTalismanScene.StainHole:
+                case AnimTalismanScene.StainSparse:
+                    AnimTalismanHarvest(board, cells, cards);
+                    break;
+                case AnimTalismanScene.Reveal:
+                case AnimTalismanScene.Ground:
+                case AnimTalismanScene.GroundBusy:
+                case AnimTalismanScene.GroundShape:
+                case AnimTalismanScene.UnsealSquare:
+                case AnimTalismanScene.UnsealHole:
+                case AnimTalismanScene.UnsealSparse:
+                    ground.Cells.AddRange(cells);
+                    boardView.Talisman.Sync(boardView, ground);
+                    animLastLabel = Loc.Pick(cells.Count + " cells of bonus ground",
+                        cells.Count + " hücre bonus zemin");
+                    break;
+                case AnimTalismanScene.Recall:
+                    ground.Cells.AddRange(cells);
+                    boardView.Talisman.Sync(boardView, ground);
+                    yield return new WaitForSeconds(1.4f);
+                    boardView.Talisman.Sync(boardView, new TalismanGroundVisuals());
+                    animLastLabel = Loc.Pick("the round ended - the gift goes home",
+                        "raunt bitti - hediye geri alınıyor");
+                    break;
+                case AnimTalismanScene.Lifecycle:
+                    AnimTalismanHarvest(board, cells, cards);
+                    yield return new WaitForSeconds(2.2f);
+                    ground.Cells.AddRange(cells);
+                    boardView.Talisman.Sync(boardView, ground);
+                    animLastLabel = Loc.Pick("next round: the ground is unwrapped",
+                        "sonraki raunt: zemin açılıyor");
+                    yield return new WaitForSeconds(2.6f);
+                    boardView.Talisman.Sync(boardView, new TalismanGroundVisuals());
+                    animLastLabel = Loc.Pick("and at the round's end it is taken back",
+                        "ve raunt sonunda geri alınıyor");
+                    break;
+            }
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+            animTalisman = null;
+        }
+
+        /// <summary>
+        /// Puts real ghost traces in the outside space by placing GHOST blocks over the board's
+        /// edge - the only way they are ever created. Each one is a two-cube bar with its left
+        /// cube on the board and its right cube outside, which is exactly the shape of the move a
+        /// player makes to leave a trace there.
+        /// </summary>
+        private void AnimTalismanBait(GameBoard board, List<GridPos> cells)
+        {
+            if (session == null)
+            {
+                return;
+            }
+            // ONE BLOCK PER ROW, reaching from the last cell INSIDE the board out past the
+            // furthest target on that row - a bar that stops at the first outside cell can only
+            // ever leave one trace, and a scene that wants three in a row needs a block that
+            // hangs three cells over the edge.
+            var rows = new Dictionary<int, int>();
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (board.IsInside(cells[i]))
+                {
+                    continue;
+                }
+                int far;
+                rows[cells[i].Y] = rows.TryGetValue(cells[i].Y, out far)
+                    ? Mathf.Max(far, cells[i].X) : cells[i].X;
+            }
+            foreach (KeyValuePair<int, int> row in rows)
+            {
+                var origin = new GridPos(board.MinX + board.Width - 1, row.Key);
+                if (!board.IsInside(origin))
+                {
+                    continue;
+                }
+                var run = new List<GridPos>();
+                for (int x = 0; x <= row.Value - origin.X; x++)
+                {
+                    run.Add(new GridPos(x, 0));
+                }
+                BlockShape shape = BlockShape.FromCells(run);
+                BlockCard card = session.CreateCard(shape, new[] { BlockElement.Ghost });
+                // The fill may have already taken the anchor cell; the ghost needs it free.
+                if (board.GetCube(origin).HasValue)
+                {
+                    board.DestroyCubeForced(origin);
+                }
+                if (board.CanPlace(shape, origin, true))
+                {
+                    board.Place(card, shape, origin, true);
+                }
+            }
+        }
+
+        private void AnimTalismanHarvest(GameBoard board, List<GridPos> cells, List<int> cards)
+        {
+            TalismanActivationVisuals report =
+                AnimTalismanReport(cells, cards, Time.frameCount);
+            boardView.Talisman.PlayHarvest(boardView, report);
+            // AND THE GHOSTS ARE ACTUALLY TAKEN, through the board's own method - the same one the
+            // power calls. Playing the harvest without this left the traces standing under the
+            // claim for the rest of the scene, which is where the "pale grey squares under the
+            // vines" came from: a claim is supposed to sit on empty outside space, and the lab was
+            // quietly showing a floor that the round it is depicting does not have.
+            board.TakeOutsideCellsForConversion();
+            boardView.Refresh();
+            animLastLabel = Loc.Pick(
+                report.Ghosts.Count + " ghosts harvested, " + report.Reclaimed.Count
+                    + " reclaimed, " + report.TotalScore + " points",
+                report.Ghosts.Count + " hayalet hasat edildi, " + report.Reclaimed.Count
+                    + " tanesi geri kazanıldı, " + report.TotalScore + " puan");
+        }
+
+        /// <summary>
+        /// The sizes the vine cover has been through, smallest first. This exists because "how big
+        /// is a vine" was argued three times in a row off screenshots and memory, and the only way
+        /// to settle it is to put the sizes next to each other on the real board within one press
+        /// of each other.
+        ///
+        /// The SPACING moves with the size. That ratio is the thing that must not drift: each vine
+        /// has to spill well past its neighbours or the claim reads as a grid of badges, and it
+        /// must not be packed so tight it becomes a nest. Change the size alone and you are
+        /// changing the density too, which is how the first pass ended up with twenty vines in a
+        /// ball.
+        /// </summary>
+        private static readonly float[] AnimTalismanSizes = { 0.6f, 0.75f, 0.95f, 1.2f, 1.4f };
+
+        /// <summary>Where the shipped default sits in that list, so the first press moves off it
+        /// rather than re-selecting it.</summary>
+        private int animTalismanSize = 3;
+
+        private void AnimTalismanCycleSize()
+        {
+            animTalismanSize = (animTalismanSize + 1) % AnimTalismanSizes.Length;
+            float reach = AnimTalismanSizes[animTalismanSize];
+            TalismanView.Style.VineReach = reach;
+            animLastLabel = Loc.Pick(
+                "vine size " + reach.ToString("0.00") + " of a cell - replay a claim to see it",
+                "sarmaşık boyu hücrenin " + reach.ToString("0.00") + " katı - talebi tekrar oynat");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>
+        /// ONE LAYER OF THE CURSE, ALONE.
+        ///
+        /// Everything off, then one thing back on, then the scene. It goes through the LAYER
+        /// FLAGS rather than through a renderer hidden afterwards, because most of these parts
+        /// are not renderers at all - the patches, the bridges, the corner merges and the edge
+        /// tongues are one baked field, and a claim with its bridges off has to be a claim BUILT
+        /// without bridges or the test is showing something nobody can ship.
+        /// </summary>
+        private void AnimTalismanOnly(AnimTalismanScene scene, string english, string turkish,
+            System.Action on)
+        {
+            TalismanView.Layers.AllOn();
+            TalismanView.Layers.CurseOff();
+            TalismanView.Layers.ShowVines = false;
+            if (on != null)
+            {
+                on();
+            }
+            AnimTalisman(scene);
+            animLastLabel = Loc.Pick(english + " - alone (RESET puts every layer back)",
+                turkish + " - tek başına (RESET tüm katmanları geri açar)");
+        }
+
+        /// <summary>The curse whole, with the vine art on or off. The OFF one is the acceptance
+        /// test: with no plant on it at all, is the claimed footprint still a dark, organic,
+        /// sealed region rather than the background with some shadow on it?</summary>
+        private void AnimTalismanCurse(AnimTalismanScene scene, bool vines)
+        {
+            TalismanView.Layers.AllOn();
+            TalismanView.Layers.ShowVines = vines;
+            AnimTalisman(scene);
+            animLastLabel = vines
+                ? Loc.Pick("the whole curse, vines and all",
+                    "tüm lanet, sarmaşıklarıyla birlikte")
+                : Loc.Pick("VINES OFF - the curse area on its own",
+                    "SARMAŞIKLAR KAPALI - lanet alanı tek başına");
+        }
+
+        private void AnimTalismanToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("talisman " + english + ": ", "tılsım " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
         // ------------------------------------------------------------------ mapus
 
         // "MAPUS" IN THE LAB. Every scene puts up a board of its own and runs the boss's REAL
@@ -5204,17 +5937,6 @@ namespace ProjectBlock.View
             }
             AnimRotFill(board, cards, 30u, reserved);
             boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
-            if (scene == AnimRawScene.CellStates)
-            {
-                for (int x = 1; x <= 4; x++)
-                {
-                    boardView.PaintCellState(new GridPos(x, h / 2), true);
-                    boardView.PaintCellState(new GridPos(x, h / 2 - 2), false);
-                }
-                animLastLabel = Loc.Pick(
-                    "bonus ground (Tılsım) - still just a tint; Mapus has its own section now",
-                    "bonus zemin (Tılsım) - hâlâ yalnız bir renk; Mapus'un artık kendi bölümü var");
-            }
             yield return new WaitForSeconds(AnimBossBeat);
             yield return new WaitForSeconds(AnimRawWatch);
             animRaw = null;

@@ -73,7 +73,12 @@ namespace ProjectBlock.View
         /// <summary>Empty BONUS ground ("Tılsım"): free to build on, and no line waits for it.
         /// Warm and faint - a gift, not a wound - so it cannot be mistaken for the eroded cell
         /// (DeadColor) or the barred one (SealedColor) it may sit beside.</summary>
-        private static readonly Color BonusGroundColor = new Color(0.20f, 0.19f, 0.13f);
+        /// <summary>BONUS GROUND ("Tılsım"): smoked jade-slate, a shade warmer and lighter than
+        /// the board rather than a different colour on it. What actually says "this is bonus
+        /// ground" is TalismanView's four OPEN corner runes - a cell whose structural frame is not
+        /// closed, because no line waits for it. This plate is only what they sit on, and it used
+        /// to be the entire language: one flat olive square.</summary>
+        private static readonly Color BonusGroundColor = new Color(0.135f, 0.165f, 0.163f);
         private static readonly Color ValidPreviewColor = new Color(0.35f, 1f, 0.45f, 0.6f);
         private static readonly Color InvalidPreviewColor = new Color(1f, 0.35f, 0.35f, 0.6f);
         private static readonly Color ExplosionPreviewColor = new Color(1f, 0.78f, 0.25f, 0.65f);
@@ -227,6 +232,8 @@ namespace ProjectBlock.View
         private ParasiteHostView parasite;
 
         private MapusSealView mapus;
+
+        private TalismanView talisman;
 
         private CircuitTraceView circuitTrace;
 
@@ -467,6 +474,34 @@ namespace ProjectBlock.View
                     mapus = go.AddComponent<MapusSealView>();
                 }
                 return mapus;
+            }
+        }
+
+        /// <summary>"Tılsım"'s own layer: the harvest of the ghosts, the vine claim it leaves in
+        /// the outside space, and the bonus ground it hands the next round. Made on first use and
+        /// kept through a rebuild - and keeping it through the rebuild is the whole point here,
+        /// because the one thing this power has to survive is a ROUND BOUNDARY.</summary>
+        public TalismanView Talisman
+        {
+            get
+            {
+                if (talisman == null)
+                {
+                    var go = new GameObject("Talisman");
+                    go.transform.SetParent(transform, false);
+                    talisman = go.AddComponent<TalismanView>();
+                }
+                return talisman;
+            }
+        }
+
+        /// <summary>Takes the vines and the bonus ground down, without making the view if there is
+        /// none.</summary>
+        public void StopTalisman()
+        {
+            if (talisman != null)
+            {
+                talisman.Stop();
             }
         }
 
@@ -1065,6 +1100,7 @@ namespace ProjectBlock.View
             Transform keepPress = press != null ? press.transform : null;
             Transform keepParasite = parasite != null ? parasite.transform : null;
             Transform keepMapus = mapus != null ? mapus.transform : null;
+            Transform keepTalisman = talisman != null ? talisman.transform : null;
             // The gravity field is a property of the ROUND, not of the board's contents, so it
             // survives the rebuild and is CLEARED below - a new arena starts under ordinary
             // gravity, which is the rules' own behaviour and not something this decides.
@@ -1081,7 +1117,8 @@ namespace ProjectBlock.View
                     || child == keepHeat || child == keepNest || child == keepLane
                     || child == keepGravity || child == keepDolls || child == keepRot
                     || child == keepSnake || child == keepPress
-                    || child == keepParasite || child == keepMapus)
+                    || child == keepParasite || child == keepMapus
+                    || child == keepTalisman)
                 {
                     continue;
                 }
@@ -1099,18 +1136,54 @@ namespace ProjectBlock.View
             infectionMarkers.Clear();
             deadZoneLine = null; // destroyed with the other children above; redrawn by SetDeadZone
             board = newBoard;
-            cellSize = Mathf.Min(maxWorldSize / board.Width, maxWorldSize / board.Height);
-            bottomLeft = center - new Vector2(board.Width, board.Height) * (cellSize * 0.5f);
+
+            // THE ARENA IS NOT THE BOARD'S BOUNDING BOX. The backing store is a rectangle, and
+            // "Tılsım" grows it rightward to hold ground it reclaimed OUTSIDE the arena - a 2x2
+            // claim past the right edge makes the store two columns wider. The cells it grows
+            // over are holes and the cell renderers already skip them, but the SURFACE was still
+            // being built from that rectangle, so the plate, its bevelled frame and its per-cell
+            // recesses all extended two full columns: the player was handed a whole new column of
+            // floor for four reclaimed cells. It also shrank the board, because the cell size is
+            // derived from the same numbers.
+            //
+            // So the arena is measured instead: every cell that is REQUIRED play area, plus the
+            // dead ones, which are eroded arena and still stand on the plate. Bonus ground is
+            // optional by definition, so it falls outside it - which is the point, because it is
+            // a gift lying beside the board rather than part of it.
+            int arenaWide = 1;
+            int arenaHigh = 1;
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    var gp = new GridPos(board.MinX + x, board.MinY + y);
+                    bool arena = board.IsDead(gp) || (board.IsInside(gp) && !board.IsOptional(gp));
+                    if (!arena)
+                    {
+                        continue;
+                    }
+                    if (x + 1 > arenaWide)
+                    {
+                        arenaWide = x + 1;
+                    }
+                    if (y + 1 > arenaHigh)
+                    {
+                        arenaHigh = y + 1;
+                    }
+                }
+            }
+            cellSize = Mathf.Min(maxWorldSize / arenaWide, maxWorldSize / arenaHigh);
+            bottomLeft = center - new Vector2(arenaWide, arenaHigh) * (cellSize * 0.5f);
 
             // The board's surface is GENERATED - a plate with a bevelled frame and a recess per
             // cell - rather than the flat rectangle this used to be. See BoardSurfaceView.
-            Surface.Build(center, board.Width, board.Height, cellSize, BorderOverhang);
+            Surface.Build(center, arenaWide, arenaHigh, cellSize, BorderOverhang);
             pressureCentre = center;
             glowCenter = center;
-            glowCellsWide = board.Width;
-            glowCellsHigh = board.Height;
+            glowCellsWide = arenaWide;
+            glowCellsHigh = arenaHigh;
             glowCellSize = cellSize;
-            LineGlow.Build(center, board.Width, board.Height, cellSize, BorderOverhang);
+            LineGlow.Build(center, arenaWide, arenaHigh, cellSize, BorderOverhang);
 
             cellRenderers = new SpriteRenderer[board.Width, board.Height];
             previewRenderers = new SpriteRenderer[board.Width, board.Height];
@@ -1161,6 +1234,15 @@ namespace ProjectBlock.View
         public int UnresolvedCubes { get; private set; }
 
         public int UnresolvedExampleId { get; private set; }
+
+        /// <summary>The face a cube wears, card and all. A ghost cube's art lives on its CARD's
+        /// element rather than on its kind, so a presence that draws one (TalismanView's harvest)
+        /// has to ask through here - CubeTile(kind, null) would hand it the default block.
+        /// </summary>
+        public Sprite FaceOf(Cube cube)
+        {
+            return ViewUtil.CubeTile(cube.Kind, CardOf(cube));
+        }
 
         private BlockCard CardOf(Cube cube)
         {
@@ -1375,9 +1457,20 @@ namespace ProjectBlock.View
             ghostSprites.Clear();
             foreach (KeyValuePair<GridPos, Cube> entry in board.OutsideCubes)
             {
-                ghostSprites.Add(ViewUtil.MakeCell(transform, "GhostCube",
-                    CellToWorld(entry.Key), cellSize * 0.86f,
-                    new Color(0.8f, 0.8f, 0.95f, 0.35f), 1));
+                // A GHOST TRACE IS A GHOST BLOCK, and it is drawn with the ghost block's own art
+                // and its own billowing material (ViewUtil.ApplyTile picks both up from the tile).
+                // It used to be a flat pale square instead - the painted tile and the warp were
+                // already there and simply were not asked for, so the one cube in the game whose
+                // whole identity is "not quite solid" was the one drawn as a rectangle.
+                SpriteRenderer trace = ViewUtil.MakeCell(transform, "GhostCube",
+                    CellToWorld(entry.Key), cellSize * CubeFill, Color.white, 1);
+                ViewUtil.ApplyTile(trace, ViewUtil.CubeTile(entry.Value.Kind, CardOf(entry.Value)),
+                    cellSize * CubeFill);
+                // Off the board and not real yet, so it is thinner than a cube that landed - the
+                // alpha pulse above is what carries that, and the tint stays neutral so the
+                // block's own material shows through it.
+                trace.color = new Color(1f, 1f, 1f, 0.35f);
+                ghostSprites.Add(trace);
             }
         }
 

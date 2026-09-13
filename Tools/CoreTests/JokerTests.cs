@@ -123,6 +123,10 @@ public static class JokerTests
         Boss_DrawnOncePerRunAndOnlyOnFlaggedRounds();
         Boss_UfukAndKulePayForOneAxisOnly();
         Boss_AlikoymaSeizesACardButNeverTheLast();
+        Tilsim_BonusGroundIsStillSomewhereToPlay();
+        Tilsim_ReclaimedGroundIsSparseNotRectangular();
+        Tilsim_TheRealPathGrantsExactlyTheReclaimedCells();
+        Tilsim_OnlyTheGhostsTheRulesCanReclaimFromCount();
         Boss_MapusSealsOneCellPerTurn();
         Boss_MapusSealsTheLineNearestCompletion();
         Boss_MapusPrefersTheCrossingOfTwoThreats();
@@ -3532,6 +3536,267 @@ public static class JokerTests
         soloBoss.OnRoundStarted(new RoundContext(solo, solo.Rng, solo.CurrentRound));
         Check(soloBoss.SeizedCardId == 0, "a single-card hand is never seized",
             "seized " + soloBoss.SeizedCardId);
+    }
+
+    /// <summary>
+    /// BONUS GROUND IS REAL GROUND FOR THE DEAD END. "Tılsım"'s reclaimed cells are excused from
+    /// the fullness check - a line never waits for one to be filled - and it would be very easy
+    /// for that exemption to leak into the loss condition as well, which would be exactly wrong:
+    /// a board whose required cells are all full but whose bonus ground still takes a block is a
+    /// board the player can still play on, and losing there would be losing with a legal move in
+    /// hand. The two questions are different and this test is what keeps them apart.
+    /// </summary>
+    private static void Tilsim_BonusGroundIsStillSomewhereToPlay()
+    {
+        Section("tılsım / bonus ground counts for the dead end");
+        // A 4x4 arena with two cells of reclaimed ground bolted to its right edge.
+        var bonus = new List<GridPos> { new GridPos(4, 1), new GridPos(4, 2) };
+        var board = new GameBoard(4, 4, bonus, bonus);
+        Check(board.IsInside(new GridPos(4, 1)), "the reclaimed cell is play area");
+        Check(board.IsOptional(new GridPos(4, 1)), "and it is BONUS ground, not ordinary board");
+
+        // Fill every REQUIRED cell. The bonus ground stays empty.
+        for (int x = 0; x < 4; x++)
+        {
+            for (int y = 0; y < 4; y++)
+            {
+                board.SetCubeAt(new GridPos(x, y), new Cube(CubeKind.Normal, 8000 + x * 4 + y));
+            }
+        }
+        BlockShape single = BlockShape.FromCells(new[] { new GridPos(0, 0) });
+        Check(board.AnyPlacementExists(single),
+            "a block still fits: the bonus ground is somewhere to play");
+        List<GridPos> origins = board.GetValidOrigins(single);
+        bool offered = false;
+        for (int i = 0; i < origins.Count; i++)
+        {
+            if (origins[i].X == 4 && (origins[i].Y == 1 || origins[i].Y == 2))
+            {
+                offered = true;
+            }
+        }
+        Check(offered, "and it is offered as a legal origin", "origins " + origins.Count);
+        Check(origins.Count == 2, "exactly the two reclaimed cells are left",
+            "origins " + origins.Count);
+
+        // Now fill the bonus ground too. NOW there is nowhere to go.
+        board.SetCubeAt(new GridPos(4, 1), new Cube(CubeKind.Normal, 8100));
+        board.SetCubeAt(new GridPos(4, 2), new Cube(CubeKind.Normal, 8101));
+        Check(!board.AnyPlacementExists(single),
+            "with the bonus ground full as well, the board really is out of room");
+
+        // And the OTHER half of the rule still holds: a row of nothing but bonus ground is not a
+        // row, however full it is - the exemption belongs to the line check and stays there.
+        Check(board.RowGapCount(1) == 0, "row 1's required cells are all full",
+            "gaps " + board.RowGapCount(1));
+        Check(board.ColumnGapCount(4) == -1,
+            "but the column made only of bonus ground is not a line at all",
+            "gaps " + board.ColumnGapCount(4));
+    }
+
+    /// <summary>
+    /// RECLAIMED GROUND IS A SET OF CELLS, NOT A BOX ROUND THEM.
+    ///
+    /// The board's backing store is a rectangle, so reclaiming a cell out past the right edge has
+    /// to GROW that rectangle - and it would be very easy, and completely wrong, for the cells the
+    /// rectangle grew over to become playable as a side effect. Reclaiming one cell at (7,3) must
+    /// hand the player exactly one cell, not a column of seven. This test walks every shape the
+    /// power can produce - a lone cell, gaps down a column, two columns, an L, a ring with a hole
+    /// in it - and asserts the mask cell by cell.
+    /// </summary>
+    private static void Tilsim_ReclaimedGroundIsSparseNotRectangular()
+    {
+        Section("tılsım / reclaimed ground is sparse, never a rectangle");
+        CheckSparseClaim("A: one cell out past the edge", new[] { new GridPos(7, 3) });
+        CheckSparseClaim("B: two cells, same column, a gap between",
+            new[] { new GridPos(7, 1), new GridPos(7, 5) });
+        CheckSparseClaim("C: two columns, nothing shared",
+            new[] { new GridPos(7, 1), new GridPos(8, 4) });
+        CheckSparseClaim("D: an L",
+            new[] { new GridPos(7, 3), new GridPos(7, 4), new GridPos(8, 4) });
+        CheckSparseClaim("E: four corners with holes between them",
+            new[] { new GridPos(7, 2), new GridPos(7, 4), new GridPos(8, 2), new GridPos(8, 4) });
+        // G: the backing rectangle has to reach x=9, and x=7 and x=8 must stay shut.
+        CheckSparseClaim("G: a far cell grows the bounds and nothing else",
+            new[] { new GridPos(9, 4) });
+        // H: THE BOARD ONLY EVER GROWS RIGHT AND UP. A negative coordinate is not a cell the
+        // rules can hand back, and it must not drag the origin with it either.
+        CheckSparseClaim("H: negatives are dropped, the rest still lands",
+            new[] { new GridPos(-1, 3), new GridPos(7, -1), new GridPos(7, 3) },
+            new[] { new GridPos(7, 3) });
+    }
+
+    /// <summary>
+    /// The same guarantee again, but down the path the GAME actually takes: the power's own
+    /// FilterRoundConfig builds the next round's config, and the engine builds the board out of
+    /// that. The direct-construction tests above were passing while the board on screen was wrong,
+    /// because they were checking the half of the road that had never been broken.
+    /// </summary>
+    private static void Tilsim_TheRealPathGrantsExactlyTheReclaimedCells()
+    {
+        Section("tılsım / the round's own path grants exactly the reclaimed set");
+        CheckRealPathClaim("real path: one cell", new[] { new GridPos(7, 3) });
+        CheckRealPathClaim("real path: a gap down one column",
+            new[] { new GridPos(7, 1), new GridPos(7, 5) });
+        CheckRealPathClaim("real path: two columns, nothing shared",
+            new[] { new GridPos(7, 1), new GridPos(8, 4) });
+        CheckRealPathClaim("real path: four corners with a hole in the middle",
+            new[] { new GridPos(7, 2), new GridPos(7, 4), new GridPos(8, 2), new GridPos(8, 4) });
+        CheckRealPathClaim("real path: a far cell, and the columns it skipped stay shut",
+            new[] { new GridPos(9, 4) });
+    }
+
+    private static void CheckRealPathClaim(string label, GridPos[] claimed)
+    {
+        const int Size = 7;
+        // A round config the way the progression makes one, then the shape the power gives it.
+        var config = new RoundConfig(1, Size, Size, 100, null, ShuffleErosion.None, false, null);
+        var extra = new List<GridPos>(claimed);
+        var bonus = new List<GridPos>(claimed);
+        RoundConfig next = config.WithBoard(config.BoardWidth, config.BoardHeight, extra, bonus);
+        // And the board the way RoundEngine makes one.
+        var board = new GameBoard(next.BoardWidth, next.BoardHeight, next.ExtraPlayableCells,
+            next.OptionalPlayableCells);
+
+        var wanted = new HashSet<GridPos>(claimed);
+        int extraCells = 0, missing = 0, notBonus = 0;
+        for (int x = 0; x < board.Width; x++)
+        {
+            for (int y = 0; y < board.Height; y++)
+            {
+                var at = new GridPos(x, y);
+                bool baseCell = x < Size && y < Size;
+                bool inside = board.IsInside(at);
+                if (wanted.Contains(at))
+                {
+                    if (!inside)
+                    {
+                        missing++;
+                    }
+                    else if (!baseCell && !board.IsOptional(at))
+                    {
+                        notBonus++;
+                    }
+                }
+                else if (!baseCell && inside)
+                {
+                    extraCells++;
+                }
+            }
+        }
+        Check(missing == 0, label + " - every reclaimed cell arrived", "missing " + missing);
+        Check(extraCells == 0, label + " - and no column came with it",
+            "wrongly playable " + extraCells);
+        Check(notBonus == 0, label + " - each is bonus ground", "not optional " + notBonus);
+        Check(next.BoardWidth == Size && next.BoardHeight == Size,
+            label + " - the ARENA itself did not grow",
+            "arena " + next.BoardWidth + "x" + next.BoardHeight);
+    }
+
+    /// <summary>Builds the board the way RoundEngine does and asserts that EXACTLY the given cells
+    /// were added - every other cell of the grown rectangle is closed.</summary>
+    private static void CheckSparseClaim(string label, GridPos[] claimed)
+    {
+        CheckSparseClaim(label, claimed, claimed);
+    }
+
+    /// <summary>As above, where what goes IN and what must come OUT differ - a claim carrying
+    /// coordinates the board cannot grow to.</summary>
+    private static void CheckSparseClaim(string label, GridPos[] claimed, GridPos[] expected)
+    {
+        const int Size = 7;
+        var board = new GameBoard(Size, Size, claimed, claimed);
+        var wanted = new HashSet<GridPos>(expected);
+        int extra = 0;
+        int wrong = 0;
+        int missing = 0;
+        for (int x = 0; x < board.Width; x++)
+        {
+            for (int y = 0; y < board.Height; y++)
+            {
+                var at = new GridPos(x, y);
+                bool baseCell = x < Size && y < Size;
+                bool inside = board.IsInside(at);
+                if (wanted.Contains(at))
+                {
+                    if (!inside)
+                    {
+                        missing++;
+                    }
+                    else if (!baseCell && !board.IsOptional(at))
+                    {
+                        wrong++; // reclaimed ground must be BONUS ground, not ordinary board
+                    }
+                }
+                else if (!baseCell && inside)
+                {
+                    extra++; // the rectangle grew over it and it became playable: the bug
+                }
+            }
+        }
+        Check(missing == 0, label + " - every reclaimed cell is play area",
+            "missing " + missing);
+        Check(extra == 0, label + " - and NOTHING the bounds grew over is",
+            "wrongly playable " + extra);
+        Check(wrong == 0, label + " - each one is bonus ground, not ordinary board",
+            "not optional " + wrong);
+        Check(board.PlayableCellCount == Size * Size + expected.Length,
+            label + " - the count matches the set exactly",
+            "playable " + board.PlayableCellCount);
+    }
+
+    /// <summary>
+    /// TEST F: the board never grows left or down, so a ghost trace at a negative coordinate is
+    /// harvested and PAID FOR and leaves no ground. The power's report has to say the same thing
+    /// the conversion does - the View draws its claim from that list, so a disagreement here shows
+    /// up as vines wrapping a cell that never becomes ground.
+    /// </summary>
+    private static void Tilsim_OnlyTheGhostsTheRulesCanReclaimFromCount()
+    {
+        Section("tılsım / only reclaimable ghosts leave ground");
+        Check(!TilsimPower.CanReclaim(new GridPos(-1, 3)), "a ghost off the LEFT edge reclaims nothing");
+        Check(!TilsimPower.CanReclaim(new GridPos(7, -1)), "nor one BELOW the board");
+        Check(TilsimPower.CanReclaim(new GridPos(7, 3)), "one off the right edge does");
+
+        var session = NewSession(5177, 7, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        // Three ghost traces: one off the right edge, one off the left, one below. Only the first
+        // can become ground.
+        var bar = BlockShape.FromCells(new[] { new GridPos(0, 0), new GridPos(1, 0) });
+        BlockCard ghost = session.CreateCard(bar, new[] { BlockElement.Ghost });
+        var anchor = new GridPos(round.Board.Width - 1, 3);
+        while (round.Board.GetCube(anchor).HasValue)
+        {
+            round.Board.DestroyCubeForced(anchor);
+        }
+        round.Board.Place(ghost, bar, anchor, true);
+        Check(round.Board.OutsideCubes.Count == 1, "one ghost trace is standing outside",
+            "traces " + round.Board.OutsideCubes.Count);
+
+        var power = new TilsimPower();
+        var ctx = new RoundContext(session, session.Rng, round);
+        Check(power.CanRun(ctx, ActivationTarget.None), "the power is live while a trace stands");
+        Check(power.Run(ctx, ActivationTarget.None), "and it runs");
+
+        TalismanActivationVisuals report = power.LastActivation;
+        Check(report != null && report.Ghosts.Count == 1, "the report carries the ghost",
+            "ghosts " + (report == null ? -1 : report.Ghosts.Count));
+        Check(report.Reclaimed.Count == 1 && report.Reclaimed[0].X == round.Board.Width,
+            "and exactly the one cell it can reclaim from",
+            "reclaimed " + report.Reclaimed.Count);
+        Check(report.TotalScore == report.Ghosts.Count * power.PointsPerGhostCube,
+            "every ghost is paid for, reclaimable or not", "score " + report.TotalScore);
+        Check(round.Board.OutsideCubes.Count == 0, "and the traces are gone");
+
+        // Now the config the next round is built from: exactly that one cell, twice over.
+        RoundConfig config = power.FilterRoundConfig(new SessionContext(session, session.Rng), round.Config);
+        Check(config.ExtraPlayableCells.Count == 1, "the next board gets one extra cell",
+            "extra " + config.ExtraPlayableCells.Count);
+        Check(config.OptionalPlayableCells.Count == 1, "and it is bonus ground",
+            "optional " + config.OptionalPlayableCells.Count);
+        Check(power.LastGround != null && power.LastGround.Cells.Count == 1,
+            "and the View is told the same one cell",
+            "reported " + (power.LastGround == null ? -1 : power.LastGround.Cells.Count));
     }
 
     private static void Boss_MapusSealsOneCellPerTurn()
