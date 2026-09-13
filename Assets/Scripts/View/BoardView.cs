@@ -64,7 +64,11 @@ namespace ProjectBlock.View
         /// Deliberately COLD, not another scar red: an eaten cell (DeadColor) is gone for good
         /// and kills its line, while a seal lifts again next turn. The two can sit on the same
         /// board, so they must not look alike.</summary>
-        private static readonly Color SealedColor = new Color(0.20f, 0.24f, 0.40f);
+        /// <summary>What a sealed cell's own plate is under everything MapusSealView draws on it.
+        /// It used to be the entire visual language of the boss - one blue-grey square - and it is
+        /// now only what shows through while the pit is still sinking, so it is a DARKENING rather
+        /// than a colour: a cell somebody painted blue is exactly what the seal replaced.</summary>
+        private static readonly Color SealedColor = new Color(0.075f, 0.078f, 0.105f);
 
         /// <summary>Empty BONUS ground ("Tılsım"): free to build on, and no line waits for it.
         /// Warm and faint - a gift, not a wound - so it cannot be mistaken for the eroded cell
@@ -221,6 +225,8 @@ namespace ProjectBlock.View
         private CompressedCubeView press;
 
         private ParasiteHostView parasite;
+
+        private MapusSealView mapus;
 
         private CircuitTraceView circuitTrace;
 
@@ -444,6 +450,32 @@ namespace ProjectBlock.View
                     parasite = go.AddComponent<ParasiteHostView>();
                 }
                 return parasite;
+            }
+        }
+
+        /// <summary>"Mapus"'s own layer: the prison it builds in one empty cell, and the pressure
+        /// that puts on the row and the column through it. Made on first use and kept through a
+        /// rebuild like the rest - a seal stands for turns at a time.</summary>
+        public MapusSealView Mapus
+        {
+            get
+            {
+                if (mapus == null)
+                {
+                    var go = new GameObject("Mapus");
+                    go.transform.SetParent(transform, false);
+                    mapus = go.AddComponent<MapusSealView>();
+                }
+                return mapus;
+            }
+        }
+
+        /// <summary>Takes the seal down, without making the view if there is none.</summary>
+        public void StopMapus()
+        {
+            if (mapus != null)
+            {
+                mapus.Stop();
             }
         }
 
@@ -1032,6 +1064,7 @@ namespace ProjectBlock.View
             // by the Refresh below, and a new arena has no press on it.
             Transform keepPress = press != null ? press.transform : null;
             Transform keepParasite = parasite != null ? parasite.transform : null;
+            Transform keepMapus = mapus != null ? mapus.transform : null;
             // The gravity field is a property of the ROUND, not of the board's contents, so it
             // survives the rebuild and is CLEARED below - a new arena starts under ordinary
             // gravity, which is the rules' own behaviour and not something this decides.
@@ -1048,7 +1081,7 @@ namespace ProjectBlock.View
                     || child == keepHeat || child == keepNest || child == keepLane
                     || child == keepGravity || child == keepDolls || child == keepRot
                     || child == keepSnake || child == keepPress
-                    || child == keepParasite)
+                    || child == keepParasite || child == keepMapus)
                 {
                     continue;
                 }
@@ -2140,7 +2173,17 @@ namespace ProjectBlock.View
             {
                 // Outside the grid this paints a temporary overhang sprite instead - a ghost
                 // block hanging off the edge breathes with the rest of its own preview.
-                PaintPreviewCell(origin + offset, color, true);
+                GridPos cell = origin + offset;
+                PaintPreviewCell(cell, color, true);
+                // DENIED ENTRY. If a sealed cell is under this preview it refuses it ITSELF - the
+                // nearest ribs clamp and the seal tightens. That is the whole message: no red
+                // cross, no shake, no text, because the thing stopping you is right there and can
+                // answer for itself. Asking the board whether the cell is sealed is reading a
+                // state, not deciding a rule.
+                if (mapus != null && board.IsSealed(cell))
+                {
+                    mapus.PlayDenied(cell);
+                }
             }
             // The explosion preview is the biggest tell of all: it would announce exactly which
             // lines are one cube from full. Blind means blind.

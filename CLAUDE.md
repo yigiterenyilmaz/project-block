@@ -384,6 +384,64 @@ dropped that way once each.
   activation plays the compression INSTEAD of the cluster burst a board-targeting power would get,
   because the press destroys nothing. See `docs/hidrolik-pres-*.png` — and judge a face at the size a CELL is, never
   blown up.
+- **"Mapus" does not mark a cell, it TURNS IT INTO A PRISON** (`MapusSealView`, `MapusShapes`,
+  `Resources/Shaders/MapusPit` + `MapusIron`). A sealed cell used to be the empty cell in a
+  different colour, which said "somebody painted this square" — worse here than almost anywhere,
+  because Mapus does not take a square: a sealed cell still reads as EMPTY, so the row AND the
+  column through it cannot be completed either, and a cube short of a line the player had no way
+  to see which cell was holding it. Five layers, and the design is not finished without all five.
+  **THE PIT**: the cell's floor drops a step into the board, and it is lit like a HOLE and not like
+  a bump — the upper-left light falls on the FAR inner wall and leaves the near one dark; one sign,
+  and it decides whether the cell reads as sunken or as something standing on it. The void keeps a
+  cold indigo of its own and never goes to black (a pure black disc in a cell is a hole punched in
+  the render). **THE SOCKETS**: four recessed brackets in the cell's edges — without them the ribs
+  are four shapes floating over a cell. **THE RIBS**: four warden ribs swing out of those sockets,
+  broad at the root, tapering, each ending in a HOOK that turns the same way round the middle, so
+  they read as an IRIS CLOSING rather than a compass rose; they never meet, and the gap they leave
+  is where **THE SEAL** sits — a struck lump of dull garnet wax with a die's guilloche pressed into
+  it, small, the only warm thing in the effect, and never a glow. **THE PRESSURE**: on the grid edge
+  of every cell of that row and column, a faint bracket of shadow, travelling out cell by cell as
+  the prison locks. Rows are bracketed top and bottom, columns left and right, so the two axes are
+  told apart without either being a coloured stripe; nothing tints anybody's block.
+  The silhouettes are baked SDFs like the parasite's, but from **convex polygons, not fused
+  circles** — the parasite is an organism and has no flat on it anywhere, Mapus is forged iron and
+  needs flat runs between crisp corners. **Three failures are buried in the shapes and all three
+  were about PROPORTION, not detail.** Fused circles gave four soft petals round a red middle - a
+  FLOWER. A broken ring with a bar across its gap in the seal is the letter G, exactly. And the
+  first version that shipped read as a PROPELLER: its hook was nearly as wide as the rib's root and
+  stuck out sideways, so the silhouette was narrow in the middle and wide at both ends, which is a
+  fan blade by definition - and four of them leaning the same way is a shuriken. The fix was not
+  more taper, a better hook, or (the answer after that) a chunkier piece: it was WHERE THE MASS
+  IS. Four pieces converging on a small middle read as spokes however they are shaped, because the
+  eye works out where a thing comes FROM by where its weight sits. So the weight moved to the
+  edge: the WALL HOUSING is now the heavy element (about a third of a cell), the bolt sliding out
+  of it is roughly half that and nearly parallel-sided, its latch head is narrower still rather
+  than flared, and the four of them stop well short of the middle - what is left there is the
+  prison gap, not a hub. They close in PAIRS, top and bottom then left and right, because four
+  pieces arriving evenly round a circle is a fan opening whatever they look like.
+  **Two switches exist so this is never argued about again**: the PROPELLER TEST draws the whole
+  mechanism flat grey with no brand and no shading, leaving only the silhouette - if that reads as
+  a fan, nothing painted on top of it will help, which is precisely how two passes were lost - and
+  the EDGE-MASS TEST colours the housing green, the shaft blue and the head red, so "the green must
+  be the heaviest region" is something you can see rather than discuss. The iron also has to be seen at all: it sits well above the board's own value,
+  its light has a FLOOR under it (purely directional shading leaves half of every piece at the body
+  colour, which on this board is near-black), it carries a groove down its middle, and each rib
+  drops a contact shadow into the pit - without that it is printed on the cell rather than closed
+  over it. The seal is a medallion, not a disc: a dried garnet rim, a burnt-wine body inside it and
+  the die's mark inside that, because one flat red circle in the middle of a dark cell is a status
+  LED. Every shape fills its own box, so a tuning number in the view
+  means what it says (the `_FaceHalf` trap, again). The iron is lit **in WORLD space**: four ribs
+  are one sprite at four rotations, and lit in their own local space each highlight points a
+  different way, which reads as four separate objects rather than one mechanism.
+  **THE VIEW DECIDES NONE OF IT.** `MapusSealVisuals` (Core, reporting only, `[NotSaved]`) carries
+  which cell, whether this turn MOVED the seal or HELD it, whether the CAP just released one, and
+  how many cubes the row and column still want (`GameBoard.RowGapCount` / `ColumnGapCount` — which
+  count exactly what `ResolveFullLines` waits for, so there is one definition of a nearly-full line
+  in the codebase and not two). Held is the small animation and moved is the big one; the cap's
+  release is its own beat, because that is the one turn the player can finish the line and it has
+  to look like a window rather than a wander. The boss's targeting lives in ONE method (`Choose`)
+  that both the round and the **animation lab** call — the lab seals its own board through
+  `MapusBoss.RetargetOn`, so the cell its sixteen scenes seal is the cell the rules would seal.
 - **"Parazit"'s HOST CUBE is a clasp, not a colour** (`ParasiteHostView`,
   `Resources/Shaders/ParasiteHarness`). A host used to be its own colour lerped 55% toward magenta,
   and that wash was the entire visual language of the mechanic: it said "this one is pink" and

@@ -1034,6 +1034,44 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
+        /// WHERE "MAPUS" HAS ITS SEAL, asked every repaint - and everything about it comes from the
+        /// boss's own report (MapusSealVisuals): which cell, how many turns it has held it, how
+        /// close the row and the column through it are to completion, and whether the cap has just
+        /// let a cell go. The View works out none of that; it plays it.
+        ///
+        /// Calling this on every repaint is safe by design: the same cell twice is the seal being
+        /// HELD, and the seal view answers that by doing nothing rather than by rebuilding a
+        /// prison the player is already looking at.
+        /// </summary>
+        private void SyncMapus(RoundEngine round)
+        {
+            var boss = round != null ? round.Boss as MapusBoss : null;
+            MapusSealVisuals seal = boss != null ? boss.LastSeal : null;
+            if (boss == null)
+            {
+                boardView.StopMapus();
+                return;
+            }
+            if (seal == null || !seal.HasSeal)
+            {
+                // No seal this turn: too few free cells, or the cap released the only cell worth
+                // taking. Either way the board breathes, and the release is a real beat.
+                boardView.Mapus.Sync(boardView, null, seal != null && seal.Released);
+                return;
+            }
+            boardView.Mapus.Sync(boardView, new MapusSealView.Seal
+            {
+                Cell = seal.Cell,
+                TurnsHeld = seal.TurnsHeld,
+                MaxTurns = seal.MaxTurns,
+                RowGaps = seal.RowGaps,
+                ColumnGaps = seal.ColumnGaps,
+                RowHeldAlone = seal.RowHeldByTheSealAlone,
+                ColumnHeldAlone = seal.ColumnHeldByTheSealAlone
+            }, seal.Released);
+        }
+
+        /// <summary>
         /// Where the host cube is and who is riding it, asked every repaint. Both come from the
         /// JOKER - the View never works out which cube is a host, and never guesses the passenger
         /// from the cube's own material, which says nothing about who is on it.
@@ -1878,6 +1916,7 @@ namespace ProjectBlock.View
             SyncSnake(round);
             SyncPress(round);
             SyncParasite(round);
+            SyncMapus(round);
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

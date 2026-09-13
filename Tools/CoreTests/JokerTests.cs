@@ -124,6 +124,8 @@ public static class JokerTests
         Boss_UfukAndKulePayForOneAxisOnly();
         Boss_AlikoymaSeizesACardButNeverTheLast();
         Boss_MapusSealsOneCellPerTurn();
+        Boss_MapusSealsTheLineNearestCompletion();
+        Boss_MapusPrefersTheCrossingOfTwoThreats();
         Boss_FedaMakesABonusCardCostTheHand();
         Boss_AnarsiSilencesEverythingRare();
         Boss_OburlukEatsOnlyWhenSlotsAreFull();
@@ -3574,6 +3576,114 @@ public static class JokerTests
             || (boss.HasSeal && boss.SealedCell.X == sealed1.X && boss.SealedCell.Y == sealed1.Y);
         Check(oldSealLifted, "the previous seal is gone unless it was re-picked",
             "old " + sealed1.X + "," + sealed1.Y + " new " + boss.SealedCell.X + "," + boss.SealedCell.Y);
+    }
+
+    /// <summary>
+    /// THE SEAL GOES WHERE IT HURTS. A row one cube from completion is the most dangerous line on
+    /// the board, so that row's last gap is where the seal belongs - and it belongs there NEXT
+    /// turn as well, because a seal that wanders off the moment it lands somewhere that matters
+    /// is a tax rather than an antagonist. The cap is what stops that from becoming a permanently
+    /// dead row: held MaxTurnsOnOneCell turns running, it has to let go.
+    /// </summary>
+    private static void Boss_MapusSealsTheLineNearestCompletion()
+    {
+        Section("boss / mapus seals the line nearest completion");
+        var session = NewSession(5162, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        GameBoard board = round.Board;
+
+        // Row 0 is one cube from full; its last gap is (3,0). Nothing else on the board is
+        // anywhere near, so there is exactly one right answer.
+        int w = board.Width;
+        for (int x = board.MinX; x < board.MinX + w; x++)
+        {
+            if (x == 3)
+            {
+                continue;
+            }
+            board.SetCubeAt(new GridPos(x, 0), new Cube(CubeKind.Normal, 9100 + x));
+        }
+        Check(board.RowGapCount(0) == 1, "the row really is one cube from full",
+            "gaps " + board.RowGapCount(0));
+
+        var boss = new MapusBoss();
+        round.SetBoss(boss);
+        boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+        Check(boss.HasSeal && boss.SealedCell.X == 3 && boss.SealedCell.Y == 0,
+            "the seal lands on the row's LAST GAP",
+            boss.SealedCell.X + "," + boss.SealedCell.Y);
+        Check(round.Board.RowGapCount(0) == 1,
+            "and the row still cannot be completed - a sealed cell is still an empty cell");
+
+        // IT STAYS. The board has not changed, so the same cell is still the worst place to lose.
+        boss.AfterTurnScored(FakeTurnFor(session, round));
+        Check(boss.HasSeal && boss.SealedCell.X == 3 && boss.SealedCell.Y == 0,
+            "it holds the cell while that is still the threat",
+            boss.SealedCell.X + "," + boss.SealedCell.Y);
+        Check(round.Board.SealedCells.Count == 1, "and never accumulates seals",
+            "count " + round.Board.SealedCells.Count);
+
+        // THE CAP. Three turns is all one cell gets, and the cell it releases sits out that
+        // retarget - which is the window the player gets to finish the row.
+        boss.AfterTurnScored(FakeTurnFor(session, round));
+        Check(boss.SealedCell.X == 3 && boss.SealedCell.Y == 0,
+            "still there on its third turn", boss.SealedCell.X + "," + boss.SealedCell.Y);
+        boss.AfterTurnScored(FakeTurnFor(session, round));
+        bool moved = !boss.HasSeal || boss.SealedCell.X != 3 || boss.SealedCell.Y != 0;
+        Check(moved, "past the cap it MUST let go - a row denied for ever has no answer in it",
+            boss.SealedCell.X + "," + boss.SealedCell.Y);
+        Check(!round.Board.IsSealed(new GridPos(3, 0)),
+            "the row's last gap is open again for exactly one turn");
+
+        // And it comes straight back, because that row is still the most dangerous thing here.
+        boss.AfterTurnScored(FakeTurnFor(session, round));
+        Check(boss.HasSeal && boss.SealedCell.X == 3 && boss.SealedCell.Y == 0,
+            "if the player did not take the window, it is taken back",
+            boss.SealedCell.X + "," + boss.SealedCell.Y);
+    }
+
+    /// <summary>A cell that is the last gap of a ROW and of a COLUMN at once outranks one that is
+    /// only the last gap of a row: the seal is worth two lines there, not one.</summary>
+    private static void Boss_MapusPrefersTheCrossingOfTwoThreats()
+    {
+        Section("boss / mapus prefers where two lines cross");
+        var session = NewSession(5164, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        GameBoard board = round.Board;
+        int w = board.Width;
+        int h = board.Height;
+
+        // Row 0 one from full, with its gap at (2,0) - and column 2 one from full as well, so
+        // (2,0) denies both. Row 4 is also one from full (gap at (5,4)) but denies only itself.
+        for (int x = board.MinX; x < board.MinX + w; x++)
+        {
+            if (x != 2)
+            {
+                board.SetCubeAt(new GridPos(x, 0), new Cube(CubeKind.Normal, 9200 + x));
+            }
+            if (x != 5)
+            {
+                board.SetCubeAt(new GridPos(x, 4), new Cube(CubeKind.Normal, 9300 + x));
+            }
+        }
+        for (int y = board.MinY; y < board.MinY + h; y++)
+        {
+            if (y != 0 && y != 4)
+            {
+                board.SetCubeAt(new GridPos(2, y), new Cube(CubeKind.Normal, 9400 + y));
+            }
+        }
+        Check(board.RowGapCount(0) == 1 && board.ColumnGapCount(2) == 1
+                && board.RowGapCount(4) == 1,
+            "two rows and a column are each one cube from full",
+            board.RowGapCount(0) + "/" + board.ColumnGapCount(2) + "/" + board.RowGapCount(4));
+
+        var boss = new MapusBoss();
+        round.SetBoss(boss);
+        boss.OnRoundStarted(new RoundContext(session, session.Rng, round));
+        Check(boss.HasSeal && boss.SealedCell.X == 2 && boss.SealedCell.Y == 0,
+            "it seals where the two threats CROSS, not the lone one",
+            boss.SealedCell.X + "," + boss.SealedCell.Y);
     }
 
     private static void Boss_FedaMakesABonusCardCostTheHand()
