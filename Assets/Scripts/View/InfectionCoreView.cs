@@ -394,6 +394,9 @@ namespace ProjectBlock.View
             public Vector2 SpreadFrom;
             public float ChargeTimer;
             public bool Charging;
+
+            /// <summary>Seconds this core is still held back from arriving - see HoldBirth.</summary>
+            public float BirthHold;
         }
 
         private readonly List<Core> cores = new List<Core>();
@@ -512,6 +515,46 @@ namespace ProjectBlock.View
             return length;
         }
 
+        /// <summary>
+        /// Holds back the arrival of cores that are about to play the plus spread.
+        ///
+        /// They are MADE by the refresh that follows the turn, and that refresh runs before the
+        /// detonation is even drawn - so left alone the new cores reached their cells while the
+        /// block that sent them was still standing through its charge, and the spread landed
+        /// before the thing that spread it had gone. A held core draws nothing and its spread
+        /// clock does not run until the hold is over; then it blooms where the carriers land.
+        ///
+        /// Only a core still waiting to arrive is held: one already standing on the board was
+        /// infected before this detonation, and hiding it would hide a real infection. And a
+        /// held core cannot be charging - the spread often lands on the detonated block's own
+        /// ground, and the charge is started on every one of those cells before this is called.
+        /// </summary>
+        public void HoldBirth(IReadOnlyList<GridPos> cells, float seconds)
+        {
+            if (cells == null || seconds <= 0f)
+            {
+                return;
+            }
+            for (int i = 0; i < cells.Count; i++)
+            {
+                Core c = Find(cells[i]);
+                if (c == null || c.SpreadTimer <= 0f)
+                {
+                    continue;
+                }
+                c.BirthHold = Mathf.Max(c.BirthHold, seconds);
+                // Arrives by BLOOM only. The detonation's spores do the travelling the tendril
+                // would, and a tendril on top of them draws the spread as four straight lines out
+                // of one cell - a plus sign where there should be contagion.
+                c.SpreadTimer = Style.SpreadBloomSeconds;
+                c.Charging = false;
+                c.ChargeTimer = 0f;
+                // Scale, not SetActive: an inactive core is a retired one to Find, and the next
+                // refresh would take it for a brand-new infection.
+                c.Root.transform.localScale = Vector3.zero;
+            }
+        }
+
         public void Clear()
         {
             for (int i = 0; i < cores.Count; i++)
@@ -621,6 +664,8 @@ namespace ProjectBlock.View
             c.SpreadTimer = 0f;
             c.ChargeTimer = 0f;
             c.Charging = false;
+            c.BirthHold = 0f;
+            c.Root.transform.localScale = Vector3.one;
         }
 
         private Core Create()
@@ -709,6 +754,17 @@ namespace ProjectBlock.View
 
         private void Tick(Core c, float dt)
         {
+            // Held back until the detonation that sends it has ruptured - see HoldBirth. Nothing
+            // of it ticks meanwhile, so its spread plays in full once it is let go.
+            if (c.BirthHold > 0f)
+            {
+                c.BirthHold -= dt;
+                if (c.BirthHold > 0f)
+                {
+                    return;
+                }
+                c.Root.transform.localScale = Vector3.one;
+            }
             int stage = Mathf.Clamp(c.Turns, 0, 3);
             bool dormant = !c.HasCube;
 

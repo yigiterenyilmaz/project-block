@@ -34,6 +34,8 @@ namespace ProjectBlock.Core
             breakdown.Reset();
             breakdown.ScoreScale = scorer.ScoreScale; // whole-economy x scale, applied to Total
             var report = new TurnReport();
+            // "Parazit": last turn's refusals are last turn's. Reporting only.
+            MainBoard.HostRefusals.Clear();
             report.TurnNumber = TurnNumber;
             report.Card = card;
             report.PlayedFromBonusHand = fromBonus;
@@ -381,7 +383,7 @@ namespace ProjectBlock.Core
             ClampTurnScoreFloor();
 
             // 9. threshold check (first pass only)
-            if (!ThresholdPassed && RoundScore >= ScaledThreshold)
+            if (!ThresholdPassed && !ThresholdWinBlocked && RoundScore >= ScaledThreshold)
             {
                 // "Çıkmaz": the bar is a trap, not a goal. Reaching it ends the round as a
                 // loss, so there is no overtime and no advance offer to make.

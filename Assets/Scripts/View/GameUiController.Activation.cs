@@ -537,7 +537,7 @@ namespace ProjectBlock.View
                     return true;
                 }
                 workshopPressAnchor = cell;
-                boardView.ShowPowerPreview(power.PreviewCells(ActivationTarget.Board(cell)));
+                boardView.ShowPressPreview(power.PreviewCells(ActivationTarget.Board(cell)), true);
                 UpdateHud();
                 return true;
             }
@@ -627,6 +627,14 @@ namespace ProjectBlock.View
                 waterAnimating = true;
                 boardView.PlayWaterAnimation(flow, delegate { waterAnimating = false; });
             }
+            // "HIDROLIK PRES" DESTROYS NOTHING. It takes four cubes into storage under pressure, so
+            // the cluster burst a board-targeting power would otherwise get here is the wrong
+            // sentence entirely - four cubes breaking where they stood. The compression plays
+            // instead, on THIS frame, the one the board was repainted in.
+            if (PlayPressCompression(round))
+            {
+                return;
+            }
             PlayPowerBlast(blastCells);
         }
 
@@ -656,9 +664,9 @@ namespace ProjectBlock.View
         {
             supurgeAnimating = true;
             yield return new WaitForSeconds(0.28f);
-            FlashCells(cells, new Color(0.7f, 0.85f, 1f), 6);
-            sfx.Explode();
-            ShakeCamera(0.14f, 0.22f);
+            // The bang waits for the first cell to burst, and the shake is the burst's own -
+            // sized by how many cells the sweeper took.
+            FlashCells(cells, new Color(0.7f, 0.85f, 1f), delegate { sfx.Explode(); });
             supurgeAnimating = false;
         }
 
@@ -672,64 +680,217 @@ namespace ProjectBlock.View
         /// Immediate rather than delayed (unlike the sweeper): the destruction already happened
         /// during the turn, so the particles have to land as the cubes disappear, not after.
         /// </summary>
-        private void TriggerInfectionBlast()
+        private void TriggerInfectionBlast(TurnReport report)
         {
-            infectionBlastBuffer.Clear();
             IReadOnlyList<Joker> jokers = session.Jokers.Jokers;
             for (int i = 0; i < jokers.Count; i++)
             {
                 var enf = jokers[i] as EnfeksiyonJoker;
-                if (enf != null)
+                if (enf != null && enf.LastDetonatedCells.Count > 0)
                 {
-                    infectionBlastBuffer.AddRange(enf.LastDetonatedCells);
+                    // Per JOKER, not merged: two infections are two organisms, each with its
+                    // own block and its own answer to whether it has already spread.
+                    PlayInfectionDetonation(report, enf);
                 }
             }
-            if (infectionBlastBuffer.Count == 0)
-            {
-                return;
-            }
+        }
+
+        /// <summary>
+        /// One infection going off.
+        ///
+        /// It is split BY BLOCK before anything is drawn, because a turn can ripen two of them
+        /// at once and a detonation is a block coming apart - eight cells from two different
+        /// blocks bursting as one shape would be a lie about what happened. The split is by
+        /// SourceCardId, which is what a block IS: the cells one card put down.
+        ///
+        /// The block's own tiles come from the turn's destruction log rather than from the
+        /// board, because RefreshAll has already run and painted those cells empty.
+        /// </summary>
+        private void PlayInfectionDetonation(TurnReport report, EnfeksiyonJoker enf)
+        {
+            IReadOnlyList<GridPos> cells = enf.LastDetonatedCells;
+
             // THE CORE CHARGES FIRST. The rules already destroyed the cubes, so this is the one
             // place the presentation runs LATE on purpose: the infection goes quiet, beats twice
             // and then lets go. Without it the block simply vanishes and the joker's whole three
             // turns of buildup pay off in nothing. If the gap ever reads as detached from the
             // cubes going, InfectionChargeDelay is the one number to take to zero.
             float charge = 0f;
-            for (int i = 0; i < infectionBlastBuffer.Count; i++)
+            for (int i = 0; i < cells.Count; i++)
             {
-                charge = Mathf.Max(charge, boardView.PlayInfectionCharge(infectionBlastBuffer[i]));
+                charge = Mathf.Max(charge, boardView.PlayInfectionCharge(cells[i]));
             }
-            StartCoroutine(InfectionBlastAfter(charge * InfectionChargeDelay,
-                new List<GridPos>(infectionBlastBuffer)));
+
+            infectionCubes.Clear();
+            IReadOnlyList<DestroyedCube> log = report != null
+                ? report.DestroyedCubes : null;
+            if (log != null)
+            {
+                for (int i = 0; i < log.Count; i++)
+                {
+                    infectionCubes[log[i].Pos] = log[i].Cube;
+                }
+            }
+
+            // Cells the arena no longer has (a turn that also eroded it) are dropped, exactly
+            // as FlashCells drops them.
+            GameBoard board = boardView != null ? boardView.Board : null;
+            var blocks = new List<List<DestroyedCube>>();
+            var blockIds = new List<int>();
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (board == null || !board.IsInside(cells[i]))
+                {
+                    continue;
+                }
+                Cube cube;
+                if (!infectionCubes.TryGetValue(cells[i], out cube))
+                {
+                    // Not in the log: draw it as a plain cube rather than skipping it. A cell
+                    // the player watched go has to be seen going.
+                    cube = new Cube(CubeKind.Normal, -1);
+                }
+                int at = blockIds.IndexOf(cube.SourceCardId);
+                if (at < 0)
+                {
+                    blockIds.Add(cube.SourceCardId);
+                    blocks.Add(new List<DestroyedCube>());
+                    at = blocks.Count - 1;
+                }
+                blocks[at].Add(new DestroyedCube(cells[i], cube));
+            }
+            if (blocks.Count == 0)
+            {
+                return;
+            }
+
+            // The spread belongs to ONE of those blocks - the one whose ripe cell set it off -
+            // and to no other. Both halves come from the rules: which cell, and which
+            // neighbours actually took the infection.
+            GridPos? spreadCentre = enf.LastSpreadCentre;
+            var spread = new List<GridPos>(enf.LastSpreadCells);
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                bool owns = spreadCentre.HasValue && Holds(blocks[i], spreadCentre.Value);
+                GridPos from = owns ? spreadCentre.Value : RipeCellOf(blocks[i], enf);
+                // One sound for the detonation, not one per block: two blocks going on the same
+                // beat are one event to the ear.
+                PlayInfectionBlock(blocks[i], from, owns ? spread : null,
+                    charge * InfectionChargeDelay, i == 0);
+            }
+        }
+
+        /// <summary>
+        /// ONE block's detonation - the call the turn and the animation lab share, so the lab
+        /// shows exactly what a turn does.
+        ///
+        /// It starts NOW, not after the charge, on purpose. The rules destroyed these cubes and
+        /// RefreshAll has already painted their cells empty, so anything that waited out the
+        /// charge before drawing the block showed it vanish and then come back to explode. The
+        /// ghost goes up on this same frame and simply stands there until the charge is done.
+        ///
+        /// No FlashCells and no ShakeCamera, and both on purpose. The flash was the SHARED
+        /// destruction language with a green tint on it - the same squares the dynamite and the
+        /// sweeper strike - so three turns of ripening paid off in an effect the player had
+        /// already seen a dozen times that round. And a shake says IMPACT, which is the one thing
+        /// this is not: nothing hits the board, something inside it gives way.
+        /// </summary>
+        private void PlayInfectionBlock(List<DestroyedCube> block, GridPos from,
+            List<GridPos> spreadTo, float hold, bool sound)
+        {
+            float rupture = boardView.PlayInfectionBurst(block, from, spreadTo, hold);
+            if (sound)
+            {
+                StartCoroutine(InfectionSoundAt(rupture));
+            }
+        }
+
+        /// <summary>The sound lands on the rupture, not on the first beat of the charge.</summary>
+        private IEnumerator InfectionSoundAt(float delay)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+            sfx.Explode();
+        }
+
+        /// <summary>Reused per detonation - the turn's destruction log by cell.</summary>
+        private readonly Dictionary<GridPos, Cube> infectionCubes =
+            new Dictionary<GridPos, Cube>();
+
+        private static bool Holds(List<DestroyedCube> block, GridPos cell)
+        {
+            for (int i = 0; i < block.Count; i++)
+            {
+                if (block[i].Pos.Equals(cell))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Where a block with no spread ruptures FROM: the infected cell inside it - the one
+        /// whose core just charged - so the sickness leaves from the cell the player watched
+        /// beat. The rules keep a detonated cell on their infected list, which is what makes
+        /// this answerable. The block's middle only if none of its cells is listed.
+        /// </summary>
+        private static GridPos RipeCellOf(List<DestroyedCube> block, EnfeksiyonJoker enf)
+        {
+            IReadOnlyList<InfectedCell> infected = enf.InfectedCells;
+            for (int i = 0; i < block.Count; i++)
+            {
+                for (int j = 0; j < infected.Count; j++)
+                {
+                    if (infected[j].Cell.Equals(block[i].Pos))
+                    {
+                        return block[i].Pos;
+                    }
+                }
+            }
+            return Middle(block);
+        }
+
+        /// <summary>The cell nearest a block's middle. Only a fallback for RipeCellOf.</summary>
+        private static GridPos Middle(List<DestroyedCube> block)
+        {
+            float cx = 0f;
+            float cy = 0f;
+            for (int i = 0; i < block.Count; i++)
+            {
+                cx += block[i].Pos.X;
+                cy += block[i].Pos.Y;
+            }
+            cx /= block.Count;
+            cy /= block.Count;
+            int best = 0;
+            float bestD = float.MaxValue;
+            for (int i = 0; i < block.Count; i++)
+            {
+                float dx = block[i].Pos.X - cx;
+                float dy = block[i].Pos.Y - cy;
+                float d = dx * dx + dy * dy;
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = i;
+                }
+            }
+            return block[best].Pos;
         }
 
         /// <summary>How much of the core's charge the blast waits out. One means the full
         /// silence-and-two-beats; zero fires it the instant the cubes go, as it used to.</summary>
         private const float InfectionChargeDelay = 1f;
 
-        private System.Collections.IEnumerator InfectionBlastAfter(float delay,
-            List<GridPos> cells)
-        {
-            if (delay > 0f)
-            {
-                yield return new WaitForSeconds(delay);
-            }
-            // Cells off the board by now (a turn that also eroded the arena) are dropped by
-            // FlashCells, which is also what "any" comes from.
-            if (FlashCells(cells, new Color(0.25f, 0.95f, 0.4f), 8))
-            {
-                sfx.Explode();
-                ShakeCamera(0.13f, 0.22f);
-            }
-        }
-
-        /// <summary>The struck cells + particles + shake + sound a board power just hit.</summary>
+        /// <summary>The group explosion + sound a board power just hit. The bang lands on the
+        /// first cell's burst, and the shake comes from the burst itself, sized by how many cells
+        /// went.</summary>
         private void PlayPowerBlast(IReadOnlyList<GridPos> cells)
         {
-            if (FlashCells(cells, BlastColor, 5))
-            {
-                sfx.Explode();
-                ShakeCamera(0.12f, 0.2f);
-            }
+            FlashCells(cells, BlastColor, delegate { sfx.Explode(); });
         }
 
         // ------------------------------------------------------- dead-end rescue flow

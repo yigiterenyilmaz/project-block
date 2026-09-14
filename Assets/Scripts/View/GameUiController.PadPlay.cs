@@ -436,7 +436,7 @@ namespace ProjectBlock.View
             Vector2Int step = PadStep(pad);
             if (step.x != 0)
             {
-                padBarIndex = (padBarIndex + step.x + count) % count;
+                padBarIndex = (padBarIndex + BarStepX(step.x, jokers) + count) % count;
                 return true;
             }
             if (!pad.buttonSouth.wasPressedThisFrame)
@@ -651,6 +651,14 @@ namespace ProjectBlock.View
 
         // ---- the joker and power strips ---------------------------------------------------
 
+        /// <summary>Which way through the inventory a stick push goes. The desktop joker grid
+        /// fills right to left from the screen edge (UiLayout.PlaceBarSlot), so there the next
+        /// joker is to the LEFT and a push right has to walk backwards.</summary>
+        private static int BarStepX(int stepX, bool jokers)
+        {
+            return jokers && !UiLayout.Active.BarsAsRow ? -stepX : stepX;
+        }
+
         /// <summary>A strip is open only while its shoulder is HELD, so it can never be left
         /// open over the board. The trigger under that shoulder uses what is highlighted.</summary>
         private bool HandlePadBar(Gamepad pad, bool jokers)
@@ -670,7 +678,7 @@ namespace ProjectBlock.View
             Vector2Int step = PadStep(pad);
             if (step.x != 0)
             {
-                padBarIndex = (padBarIndex + step.x + count) % count;
+                padBarIndex = (padBarIndex + BarStepX(step.x, jokers) + count) % count;
                 return true;
             }
             // A, and only A. Holding the shoulder is how you INSPECT the strip - the tooltip

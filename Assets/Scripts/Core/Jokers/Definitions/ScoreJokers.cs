@@ -273,13 +273,12 @@ namespace ProjectBlock.Core
             : base("genel_temizlik", "Genel Temizlik")
         {
             SetDescription(
-                "Clean sweeps triggered by jokers and powers count as real sweeps - they pay "
-                    + "the sweep bonus and recharge your powers, just like emptying the board on "
-                    + "a placement. Normally such a between-placements clear does not count.",
-                "Jokerler ve güçler tarafından tetiklenen temizlikler de gerçek temizlik sayılır "
-                    + "- tıpkı blok koyarak tahtayı boşaltmak gibi temizlik bonusunu verir ve "
-                    + "güçlerini şarj eder. Normalde blok koymalar arasındaki böyle bir temizlik "
-                    + "sayılmaz.");
+                "Explosions, line clears and clean sweeps caused by jokers and powers score "
+                    + "like your own - sweeps pay the sweep bonus and recharge your powers. "
+                    + "Normally they clear the board but pay nothing.",
+                "Jokerlerin ve güçlerin yaptığı patlamalar, satır temizlemeleri ve temizlikler "
+                    + "de senin yaptığın gibi puan verir - temizlik bonusunu verir ve güçlerini "
+                    + "şarj eder. Normalde alanı temizler ama puan vermez.");
         }
 
         public override void OnAcquired(SessionContext ctx)

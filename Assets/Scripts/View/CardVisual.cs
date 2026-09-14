@@ -151,27 +151,11 @@ namespace ProjectBlock.View
                 // "Hedefli" is a mark on ONE cube, not a colour for the whole block, so it is
                 // skipped when picking the block's body colour - otherwise a plain targeted card
                 // would be lime from edge to edge and the mark would be invisible.
-                Color miniColor = ViewUtil.ColorForCard(card.Id);
-                // The element also decides which painted TILE the mini cubes are drawn on, so
-                // it is remembered and not just turned into a colour. "Çark" and "Tilki" have
-                // no cube kind of their own and are only ever seen here, in the hand.
-                BlockElement? miniElement = null;
-                for (int i = 0; i < card.Elements.Count; i++)
-                {
-                    if (card.Elements[i] != BlockElement.Targeted)
-                    {
-                        miniColor = ViewUtil.ElementColor(card.Elements[i]);
-                        miniElement = card.Elements[i];
-                        break;
-                    }
-                }
-                // Which cube carries the target, in the shape actually being drawn - so a rotated
-                // or reshaped card shows the mark where the block will really land it.
-                int targetCell = card.Has(BlockElement.Targeted) ? card.TargetIndexIn(shape) : -1;
-                // A per-cube designed block colours each cube by ITS element. Its per-cube array
-                // is aligned to card.Shape.Cells, so only index into it when we draw that shape
-                // (not a fox/mechanical displayShape); a plain cube keeps the neutral card colour.
-                bool perCube = card.HasPerCubeElements && displayShape == null;
+                // A per-cube designed block's array is aligned to card.Shape.Cells, so it is only
+                // read when that is the shape being drawn - not a fox/mechanical displayShape. What
+                // each cube wears is ViewUtil.CardCubeTile's call: the same rule a defective block's
+                // cubes are drawn with as they fall, so the two can never disagree.
+                bool cellsAligned = displayShape == null;
                 float mini = Mathf.Min(1.0f / Mathf.Max(shape.Width, shape.Height), 0.28f);
                 Vector2 bottomLeft = new Vector2(-shape.Width * mini * 0.5f + mini * 0.5f,
                     -shape.Height * mini * 0.5f + mini * 0.5f);
@@ -179,29 +163,9 @@ namespace ProjectBlock.View
                 for (int i = 0; i < miniCells.Count; i++)
                 {
                     GridPos cell = miniCells[i];
-                    Color cubeColor = miniColor;
-                    BlockElement? cubeElement = miniElement;
-                    if (perCube)
-                    {
-                        BlockElement? e = card.CellElement(i);
-                        cubeColor = e.HasValue
-                            ? ViewUtil.ElementColor(e.Value)
-                            : ViewUtil.ColorForCard(card.Id);
-                        cubeElement = e;
-                    }
-                    if (i == targetCell)
-                    {
-                        cubeColor = ViewUtil.ElementColor(BlockElement.Targeted);
-                    }
-                    // The tile: the bullseye for the marked cube, this cube's own element if it
-                    // has one, otherwise whatever the CARD says - which is how a targeted
-                    // block's plain cubes get its body tile instead of a default one.
-                    Sprite miniTile = i == targetCell
-                        ? ViewUtil.CubeTile(CubeKind.Target)
-                        : cubeElement.HasValue && perCube
-                            ? ViewUtil.CubeTile(cubeElement.Value)
-                            : ViewUtil.CubeTile(CubeKind.Normal, card);
-                    Color miniTint = ViewUtil.CubeTileColor(miniTile, cubeColor);
+                    Color miniTint;
+                    Sprite miniTile = ViewUtil.CardCubeTile(card, shape, i, cellsAligned,
+                        out miniTint);
                     SpriteRenderer miniCube = ViewUtil.MakeCell(transform, "Mini",
                         bottomLeft + new Vector2(cell.X * mini, cell.Y * mini),
                         mini * MiniFlatFill, miniTint, order + 2);
@@ -448,7 +412,20 @@ namespace ProjectBlock.View
         /// it directly would be undone by the next slide.</summary>
         public void SetHovered(bool hovered)
         {
-            float scale = hovered ? HoverScale : 1f;
+            float scale = (hovered ? HoverScale : 1f) * BaseScale;
+            transform.localScale = new Vector3(scale, scale, 1f);
+        }
+
+        /// <summary>The card's RESTING size, which the hover multiplies rather than replaces.
+        /// It exists because a phone held upright draws the hand smaller: without it the first
+        /// hover would silently snap the card back to desktop size and leave it there.</summary>
+        public float BaseScale = 1f;
+
+        /// <summary>Sets the resting size and applies it now (the card is not hovered when this
+        /// is called - it is called as the card is dealt, or when the layout changes).</summary>
+        public void SetBaseScale(float scale)
+        {
+            BaseScale = scale;
             transform.localScale = new Vector3(scale, scale, 1f);
         }
 

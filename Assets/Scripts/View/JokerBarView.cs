@@ -1,10 +1,10 @@
-// PURPOSE: The joker strip along the top of the screen - one panel per owned joker with
-// its hotkey, name, live state, charges and sell value. Reads JokerInventory, never
-// changes it (GameUiController owns input).
-// NOTE FOR AGENTS: placeholder presentation like everything else under View/. The panel
-// stays generic on purpose - it renders Joker.StatusText/ChargesLeft/SellValue rather than
-// knowing any specific joker, so new jokers show up here for free. The only per-joker
-// styling is the rarity strip/name colour, and that comes from RarityPalette.
+// PURPOSE: The joker bar - one VERTICAL card per owned joker (HeldItemCard) with its hotkey,
+// name and one live status line; the full description and the sell value are in its tooltip.
+// Reads JokerInventory, never changes it (GameUiController owns input).
+// NOTE FOR AGENTS: placeholder presentation like everything else under View/. The card
+// stays generic on purpose - it renders Joker.StatusText/ChargesLeft rather than knowing any
+// specific joker, so new jokers show up here for free. The only per-joker styling is the
+// rarity frame/name colour, and that comes from RarityPalette.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -16,12 +16,29 @@ namespace ProjectBlock.View
     /// <summary>Canvas strip listing the player's jokers.</summary>
     public sealed class JokerBarView : MonoBehaviour
     {
-        private const float PanelWidth = 232f;
-        private const float PanelHeight = 92f;
-        private const float PanelGap = 8f;
+        // The strip's SHAPE belongs to the layout: a column of wide panels down the right edge
+        // on a desktop, a row of square slots under the score on a phone. See UiLayout.
+        private static float PanelWidth
+        {
+            get { return UiLayout.Active.JokerPanel.x; }
+        }
 
-        /// <summary>Inset from the top-right corner, shared by every anchored position here.</summary>
-        private const float CornerInset = 16f;
+        private static float PanelHeight
+        {
+            get { return UiLayout.Active.JokerPanel.y; }
+        }
+
+        private static float PanelGap
+        {
+            get { return UiLayout.Active.JokerGap; }
+        }
+
+        /// <summary>True while the strip is a row of squares, which is too small for a body line
+        /// and gets the name alone.</summary>
+        private static bool Compact
+        {
+            get { return UiLayout.Active.BarsAsRow; }
+        }
 
         private static readonly Color PanelColor = new Color(0.13f, 0.15f, 0.19f, 0.92f);
         private static readonly Color ReadyColor = new Color(0.20f, 0.34f, 0.24f, 0.95f);
@@ -37,18 +54,8 @@ namespace ProjectBlock.View
         private static readonly Color NameColor = new Color(1f, 0.93f, 0.72f);
         private static readonly Color BodyColor = new Color(0.80f, 0.84f, 0.90f);
 
-        private readonly List<Panel> panels = new List<Panel>();
+        private readonly List<HeldItemCard> panels = new List<HeldItemCard>();
         private RectTransform root;
-
-        private sealed class Panel
-        {
-            public GameObject Root;
-            public Image Background;
-            public Image RarityStrip;
-            public Text Title;
-            public Text Body;
-            public int InstanceId = -1;
-        }
 
         /// <summary>Creates the strip under the HUD canvas. Call once.</summary>
         public void Build(Transform canvas)
@@ -56,11 +63,8 @@ namespace ProjectBlock.View
             var go = new GameObject("JokerBar");
             go.transform.SetParent(canvas, false);
             root = go.AddComponent<RectTransform>();
-            root.anchorMin = new Vector2(1f, 1f);
-            root.anchorMax = new Vector2(1f, 1f);
-            root.pivot = new Vector2(1f, 1f);
-            root.anchoredPosition = new Vector2(-CornerInset, -CornerInset);
             root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+            UiLayout.PlaceBarRoot(root, true, topOffset);
         }
 
         /// <summary>How far the strip is pushed DOWN from its corner, in canvas pixels. The boss
@@ -68,9 +72,43 @@ namespace ProjectBlock.View
         /// it asks for its own height back rather than the bar guessing what is above it.</summary>
         public void SetTopOffset(float pixels)
         {
-            if (root != null)
+            topOffset = pixels;
+            UiLayout.PlaceBarRoot(root, true, topOffset);
+        }
+
+        private float topOffset;
+
+        /// <summary>Re-anchors the strip and every slot in it after the layout changed.</summary>
+        public void RelayoutForScreen()
+        {
+            if (root == null)
             {
-                root.anchoredPosition = new Vector2(-CornerInset, -CornerInset - pixels);
+                return;
+            }
+            root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+            UiLayout.PlaceBarRoot(root, true, UiLayout.Active.BarsAsRow
+                ? UiLayout.Active.BarRowTop : topOffset);
+            PlaceSlots();
+        }
+
+        /// <summary>Lays every visible slot out for the current profile. A row has to be told how
+        /// many there are so it can stay centred, which is why this runs after Refresh has
+        /// decided what is showing rather than when a panel is created.</summary>
+        private void PlaceSlots()
+        {
+            int showing = 0;
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i].Root.activeSelf)
+                {
+                    showing++;
+                }
+            }
+            for (int i = 0; i < panels.Count; i++)
+            {
+                UiLayout.PlaceBarSlot(panels[i].Root.GetComponent<RectTransform>(),
+                    i, showing, new Vector2(PanelWidth, PanelHeight), PanelGap, true);
+                panels[i].Layout(new Vector2(PanelWidth, PanelHeight), Compact);
             }
         }
 
@@ -107,6 +145,8 @@ namespace ProjectBlock.View
                     Fill(panels[i], jokers[i], i, session, targetingInstanceId);
                 }
             }
+            // A ROW has to be re-centred whenever the count changes; a column does not care.
+            PlaceSlots();
         }
 
         /// <summary>Index of the joker panel under a screen point, or -1. The index matches
@@ -195,7 +235,7 @@ namespace ProjectBlock.View
             Refresh(session, null);
         }
 
-        private void Fill(Panel panel, Joker joker, int index, GameSession session,
+        private void Fill(HeldItemCard panel, Joker joker, int index, GameSession session,
             int? targetingInstanceId)
         {
             panel.InstanceId = joker.InstanceId;
@@ -210,140 +250,75 @@ namespace ProjectBlock.View
             // two are never confused: a silenced joker does nothing, an inverted one hurts.
             bool inverted = !silenced && session.CurrentRound != null
                 && session.CurrentRound.InvertsJokerScore;
-            panel.Background.color = silenced
+            panel.Body.color = silenced
                 ? SilencedColor
                 : inverted
                     ? InvertedColor
                     : (targeting ? TargetingColor : (ready ? ReadyColor : PanelColor));
 
-            // The background still belongs to the activation state (ready/targeting), so rarity
-            // rides on the edge strip and the name colour instead of fighting it for the panel.
+            // The body still belongs to the activation state (ready/targeting), so rarity rides
+            // on the frame and the name colour instead of fighting it for the card.
             Rarity rarity = RarityPalette.Of(joker);
-            panel.RarityStrip.color = RarityPalette.Accent(rarity);
+            panel.Frame.color = RarityPalette.Accent(rarity);
             panel.Title.color = rarity == Rarity.Common ? NameColor : RarityPalette.Accent(rarity);
+            panel.Hotkey.color = panel.Title.color;
 
-            string hotkey = index < 9 ? "[" + (index + 1) + "] " : "    ";
-            panel.Title.text = hotkey + joker.DisplayName;
+            panel.Hotkey.text = index < 9 ? (index + 1).ToString() : string.Empty;
+            panel.Title.text = joker.DisplayName;
+            panel.SetIcon(ViewUtil.JokerIcon(joker.DefId), silenced);
+            panel.Status.text = StatusLine(joker, silenced, inverted);
+        }
 
-            var line = new System.Text.StringBuilder();
+        /// <summary>The ONE line a vertical card has room for, most important first: a boss
+        /// switching it off or turning it round outranks a defect, which outranks the joker's
+        /// own status and charges. The full picture (description, sell value, overtime) is the
+        /// held-joker tooltip.</summary>
+        private static string StatusLine(Joker joker, bool silenced, bool inverted)
+        {
+            if (silenced)
+            {
+                return Loc.Pick("BOSS: off", "PATRON: kapalı");
+            }
+            if (inverted)
+            {
+                return Loc.Pick("REVERSED", "TERS");
+            }
             // "Kaçakçı": the joker itself does not know it came off a lorry, so the bar has to
             // say so - a joker that silently does nothing reads as a bug.
             if (joker.Defect == SmuggledDefect.NeverWorks)
             {
-                line.Append(Loc.Pick("DEFECTIVE: dead", "DEFOLU: hiç çalışmaz"));
+                return Loc.Pick("DEFECTIVE", "DEFOLU");
             }
-            else if (joker.Defect == SmuggledDefect.DeadInBossRounds)
+            var line = new System.Text.StringBuilder();
+            if (joker.Defect == SmuggledDefect.DeadInBossRounds)
             {
-                line.Append(Loc.Pick("DEFECTIVE: off in boss rounds",
-                    "DEFOLU: patron rauntlarında kapalı"));
+                line.Append(Loc.Pick("DEFECTIVE ", "DEFOLU "));
             }
             string status = joker.StatusText;
             if (!string.IsNullOrEmpty(status))
             {
-                if (line.Length > 0)
-                {
-                    line.Append("   ");
-                }
                 line.Append(status);
             }
             if (joker.ChargesPerRound > 0)
             {
                 if (line.Length > 0)
                 {
-                    line.Append("   ");
+                    line.Append("  ");
                 }
                 line.Append(Loc.Pick("uses ", "hak "))
                     .Append(joker.ChargesLeft).Append('/').Append(joker.ChargesPerRound);
             }
-            if (line.Length > 0)
-            {
-                line.Append('\n');
-            }
-            line.Append(Loc.Pick("sell ", "satış "))
-                .Append(session.Jokers.SellValueOf(joker) * session.Config.Scoring.ScoreScale);
-            if (inverted)
-            {
-                line.Append(Loc.Pick("   (REVERSED)", "   (TERS)"));
-            }
-            if (joker.DisabledInOvertime)
-            {
-                line.Append(Loc.Pick("   (off in overtime)", "   (uzatmada kapalı)"));
-            }
-            if (silenced)
-            {
-                line.Append(Loc.Pick("   (BOSS: off)", "   (PATRON: kapalı)"));
-            }
-            panel.Body.text = line.ToString();
+            return line.ToString();
         }
 
-        private Panel CreatePanel(int index)
+        private HeldItemCard CreatePanel(int index)
         {
-            var go = new GameObject("Joker_" + index);
-            go.transform.SetParent(root, false);
-            RectTransform rect = go.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(1f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(1f, 1f);
-            rect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-            rect.anchoredPosition = new Vector2(0f, -index * (PanelHeight + PanelGap));
-
-            var background = go.AddComponent<Image>();
-            background.color = PanelColor;
-            background.raycastTarget = false;
-
-            Image strip = MakeRarityStrip(rect);
-            Text title = MakeLabel(rect, "Title", new Vector2(10f, -8f), 22, NameColor,
-                FontStyle.Bold, PanelWidth - 20f, 24f);
-            Text body = MakeLabel(rect, "Body", new Vector2(10f, -34f), 19, BodyColor,
-                FontStyle.Normal, PanelWidth - 20f, 52f);
-
-            return new Panel
-            {
-                Root = go,
-                Background = background,
-                RarityStrip = strip,
-                Title = title,
-                Body = body
-            };
-        }
-
-        /// <summary>Full-height colour bar on the panel's left edge, recoloured per rarity.</summary>
-        private static Image MakeRarityStrip(RectTransform parent)
-        {
-            var go = new GameObject("Rarity");
-            go.transform.SetParent(parent, false);
-            var image = go.AddComponent<Image>();
-            image.raycastTarget = false;
-            RectTransform rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 0.5f);
-            rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(5f, 0f);
-            return image;
-        }
-
-        private static Text MakeLabel(Transform parent, string name, Vector2 offset, int fontSize,
-            Color color, FontStyle style, float width, float height)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            Text text = go.AddComponent<Text>();
-            // The real bold cut, not fontStyle - see ViewUtil.UiFontFor.
-            text.font = ViewUtil.UiFontFor(style);
-            text.fontSize = fontSize;
-            text.color = color;
-            text.alignment = TextAnchor.UpperLeft;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-            text.raycastTarget = false;
-            RectTransform rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = offset;
-            rect.sizeDelta = new Vector2(width, height);
-            return text;
+            HeldItemCard card = HeldItemCard.Create(root, "Joker_" + index, NameColor, BodyColor);
+            card.Body.color = PanelColor;
+            UiLayout.PlaceBarSlot(card.Root.GetComponent<RectTransform>(), index, index + 1,
+                new Vector2(PanelWidth, PanelHeight), PanelGap, true);
+            card.Layout(new Vector2(PanelWidth, PanelHeight), Compact);
+            return card;
         }
     }
 }

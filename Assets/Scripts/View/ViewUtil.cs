@@ -138,6 +138,29 @@ namespace ProjectBlock.View
             return CachedSprite(DeckFolder + fileName);
         }
 
+        private const string CardFolder = "Art/Cards/";
+
+        /// <summary>The plain, tintable card art the joker and power cards are built from
+        /// (card_base, card_frame). White and 9-sliced, so the colour passed with it decides the
+        /// look and one sprite serves every size. Null when missing, like the rest.</summary>
+        public static Sprite CardSprite(string fileName)
+        {
+            return CachedSprite(CardFolder + fileName);
+        }
+
+        /// <summary>A joker's icon, Art/Jokers/&lt;DefId&gt;. Null when that joker has no art yet,
+        /// and the card then shows its empty well.</summary>
+        public static Sprite JokerIcon(string defId)
+        {
+            return string.IsNullOrEmpty(defId) ? null : CachedSprite("Art/Jokers/" + defId);
+        }
+
+        /// <summary>A power's icon, Art/Powers/&lt;DefId&gt;, on the same terms.</summary>
+        public static Sprite PowerIcon(string defId)
+        {
+            return string.IsNullOrEmpty(defId) ? null : CachedSprite("Art/Powers/" + defId);
+        }
+
         /// <summary>Keyed on the FULL path, so two folders can never collide on a file name.
         /// A miss is cached too - a missing asset must not be re-looked-up every frame.</summary>
         private static Sprite CachedSprite(string path)
@@ -233,6 +256,37 @@ namespace ProjectBlock.View
                 tileCache[fileName] = tile;
             }
             return tile;
+        }
+
+        /// <summary>"Yılan"'s six drawn pieces.</summary>
+        public enum SnakePiece
+        {
+            HeadClosed,
+            HeadOpen,
+            Body,
+            Bend,
+            Tail,
+            Swollen
+        }
+
+        /// <summary>
+        /// One of the snake's pieces, by name. EXPLICIT FILES: the sheet they were drawn on was cut
+        /// into six tiles at import, each with its pivot on the cell centre its tube belongs to, so
+        /// nothing here slices anything at runtime and nothing depends on a sheet's layout.
+        ///
+        /// A missing file gives null, which shows up as a missing snake rather than as a wrong one.
+        /// </summary>
+        public static Sprite SnakeTile(SnakePiece piece)
+        {
+            switch (piece)
+            {
+                case SnakePiece.HeadClosed: return Tile("snake_head");
+                case SnakePiece.HeadOpen: return Tile("snake_head_open");
+                case SnakePiece.Bend: return Tile("snake_bend");
+                case SnakePiece.Tail: return Tile("snake_tail");
+                case SnakePiece.Swollen: return Tile("snake_body_swollen");
+                default: return Tile("snake_body");
+            }
         }
 
         /// <summary>Whether a tile file loaded, by file name. For the diagnostics in the F4
@@ -333,6 +387,14 @@ namespace ProjectBlock.View
             if (own != null)
             {
                 return own;
+            }
+            // "Kangren": a converted cube KEEPS its card - the rules still count it for whatever
+            // minted it - but dead tissue must not go on wearing that card's face. A fox's muzzle
+            // or a gear on rot reads as the art having failed, and the rot's own look (GangreneView)
+            // is drawn on the plain tile.
+            if (kind == CubeKind.Gangrene)
+            {
+                return DefaultTile != null ? DefaultTile : WhiteSprite;
             }
             if (sourceCard != null)
             {
@@ -499,6 +561,58 @@ namespace ProjectBlock.View
             return DefaultTile != null ? DefaultTile : WhiteSprite;
         }
 
+        /// <summary>
+        /// How ONE cube of a card is drawn off the board - in the hand, or falling off the screen as
+        /// a defective block: its tile, and the tint to draw that tile in.
+        ///
+        /// The hand's own rule, lifted out of CardVisual so everything that draws a card's cubes asks
+        /// the same question. The falling cubes did not: they fell as flat squares in the block's
+        /// colour while the hand showed the block's art, so a fox, a gear and a glass block all
+        /// dropped as the same square in three colours.
+        ///
+        ///   the TARGET cube       the bullseye, counted in the shape being drawn
+        ///   a per-cube cube       its OWN element's face - only when <paramref name="cellsAligned"/>,
+        ///                         because that array lines up with card.Shape and nothing else
+        ///   anything else         whatever the card says: its element's face, a targeted block's
+        ///                         body, or the default tile of a plain block
+        /// </summary>
+        public static Sprite CardCubeTile(BlockCard card, BlockShape shape, int index,
+            bool cellsAligned, out Color tint)
+        {
+            // "Hedefli" is a mark on one cube, not the block's colour, so it is skipped here -
+            // otherwise a plain targeted card would be lime from edge to edge.
+            Color color = ColorForCard(card.Id);
+            BlockElement? element = null;
+            for (int i = 0; i < card.Elements.Count; i++)
+            {
+                if (card.Elements[i] != BlockElement.Targeted)
+                {
+                    color = ElementColor(card.Elements[i]);
+                    element = card.Elements[i];
+                    break;
+                }
+            }
+            int targetCell = card.Has(BlockElement.Targeted) ? card.TargetIndexIn(shape) : -1;
+            bool perCube = card.HasPerCubeElements && cellsAligned;
+            if (perCube)
+            {
+                BlockElement? own = card.CellElement(index);
+                color = own.HasValue ? ElementColor(own.Value) : ColorForCard(card.Id);
+                element = own;
+            }
+            if (index == targetCell)
+            {
+                color = ElementColor(BlockElement.Targeted);
+            }
+            Sprite tile = index == targetCell
+                ? CubeTile(CubeKind.Target)
+                : element.HasValue && perCube
+                    ? CubeTile(element.Value)
+                    : CubeTile(CubeKind.Normal, card);
+            tint = CubeTileColor(tile, color);
+            return tile;
+        }
+
         /// <summary>What COLOUR to draw a cube in, given the tile it ended up on: white when
         /// the tile carries its own paint (the art speaks for itself), its usual colour when
         /// the tile is there to be tinted. The Parazit host tint survives either way - which
@@ -509,8 +623,10 @@ namespace ProjectBlock.View
             {
                 return CubeDisplayColor(cube);
             }
+            // A painted tile's TINT: a host is barely bruised, because the parasite is drawn
+            // over it rather than mixed into it.
             return cube.Protected
-                ? Color.Lerp(Color.white, new Color(0.85f, 0.2f, 0.85f), 0.4f)
+                ? Color.Lerp(Color.white, HostBruise, HostBruiseStrength)
                 : Color.white;
         }
 
@@ -586,14 +702,43 @@ namespace ProjectBlock.View
         /// <summary>Board color of a cube: element kinds get their signature color,
         /// plain cubes keep their card's color. A Parazit host cube is tinted toward magenta
         /// so the player can see which cube carries the passenger.</summary>
+        /// <summary>The cube's own MATERIAL colour, for anything that has to reason about what
+        /// a block is made of rather than how to tint its sprite - the snake's bite derives its
+        /// whole palette from this. Deliberately WITHOUT the protected cube's magenta wash, which
+        /// is a state readout painted over the block and not the block's own colour: eating a
+        /// protected gold block still has to look like eating gold.</summary>
+        public static Color CubeMaterialColor(Cube cube)
+        {
+            return CubeBaseColor(cube);
+        }
+
+        /// <summary>
+        /// What a cube looks like on the board.
+        ///
+        /// A "PARAZIT" HOST KEEPS ITS OWN COLOUR. It used to be lerped 55% toward magenta, and that
+        /// wash was the whole visual language of the mechanic: it said "this one is pink" and
+        /// nothing about a joker riding it, nothing about why a power bounced off it, and nothing
+        /// about what a line clear was going to cost. The parasite is drawn as its own thing
+        /// gripping the cube now (ParasiteHostView), so the block underneath stays exactly the
+        /// block it is - and a gold host still reads as gold. A very faint bruise is all that is
+        /// left here, for the frames before the harness has seated and for a board drawn with no
+        /// parasite layer at all.
+        /// </summary>
         public static Color CubeDisplayColor(Cube cube)
         {
             if (cube.Protected)
             {
-                return Color.Lerp(CubeBaseColor(cube), new Color(0.85f, 0.2f, 0.85f), 0.55f);
+                return Color.Lerp(CubeBaseColor(cube), HostBruise, HostBruiseStrength);
             }
             return CubeBaseColor(cube);
         }
+
+        /// <summary>The deep plum a host cube is very slightly bruised toward - the parasite's own
+        /// body colour, never a bright magenta.</summary>
+        public static readonly Color HostBruise = new Color(0.35f, 0.18f, 0.38f);
+
+        /// <summary>How far. Small on purpose: the harness carries the identity.</summary>
+        public const float HostBruiseStrength = 0.12f;
 
         private static Color CubeBaseColor(Cube cube)
         {
@@ -608,9 +753,11 @@ namespace ProjectBlock.View
                 case CubeKind.Ice: return new Color(0.62f, 0.86f, 0.95f);
                 case CubeKind.Void: return new Color(0.10f, 0.07f, 0.16f);
                 case CubeKind.Mine: return new Color(0.42f, 0.12f, 0.12f);
-                // "Kangren" rot: a sickly grey-green, so a rotten cube is never mistaken for a
-                // healthy one however full the board is.
-                case CubeKind.Gangrene: return new Color(0.38f, 0.44f, 0.28f);
+                // "Kangren" rot: a muted DEAD olive - ashen, never a toxic or lime green, which
+                // would read as something to collect. Dead tissue, so a rotten cube can never be
+                // mistaken for a healthy one however full the board is. GangreneView draws its
+                // veins and cracks on top and must use this same colour underneath.
+                case CubeKind.Gangrene: return new Color(0.36f, 0.40f, 0.30f);
                 // "Hidrolik pres": a hard industrial slate, so four cubes squeezed into one never
                 // reads as an ordinary block.
                 case CubeKind.Compressed: return new Color(0.30f, 0.34f, 0.42f);
@@ -882,6 +1029,40 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Creates a rectangular sprite object (position and size in local space).</summary>
+        /// <summary>
+        /// Fits a WORLD-SPACE overlay screen into whatever the camera can actually see.
+        ///
+        /// Every one of these screens - the deck picker, the grant picker, the collection - was
+        /// laid out in world units against a wide window, so on a phone held upright they are
+        /// simply wider than the screen and run off both sides. Rather than giving each one a
+        /// second hand-authored layout, the whole thing is SCALED to fit and centred on the
+        /// camera: the design is preserved exactly, and it is guaranteed to be on screen.
+        ///
+        /// It never magnifies. A screen that already fits is left at 1, so nothing about the
+        /// desktop changes - which is what makes this safe to drop into every overlay at once.
+        /// </summary>
+        /// <param name="size">The design's full extent in world units.</param>
+        /// <param name="centre">The middle of that extent, in the overlay's own local space.</param>
+        /// <param name="margin">How much of the view to leave as air around it.</param>
+        public static void FitOverlay(Transform root, Vector2 size, Vector2 centre,
+            float margin = 0.94f)
+        {
+            Camera cam = Camera.main;
+            if (root == null || cam == null || !cam.orthographic)
+            {
+                return;
+            }
+            float halfH = cam.orthographicSize * margin;
+            float halfW = halfH * cam.aspect;
+            float scale = Mathf.Min(1f, Mathf.Min(
+                halfH / Mathf.Max(size.y * 0.5f, 0.0001f),
+                halfW / Mathf.Max(size.x * 0.5f, 0.0001f)));
+            root.localScale = new Vector3(scale, scale, 1f);
+            Vector3 camPos = cam.transform.position;
+            root.position = new Vector3(camPos.x - centre.x * scale,
+                camPos.y - centre.y * scale, 0f);
+        }
+
         public static SpriteRenderer MakeRect(Transform parent, string name, Vector2 position,
             Vector2 size, Color color, int sortingOrder)
         {

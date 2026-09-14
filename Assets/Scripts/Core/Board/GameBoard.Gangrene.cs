@@ -77,6 +77,19 @@ namespace ProjectBlock.Core
         /// </summary>
         internal GridPos? SpreadGangrene(IRandomSource rng)
         {
+            GangreneSpread ignored;
+            return SpreadGangrene(rng, out ignored);
+        }
+
+        /// <summary>As above, also telling the View what happened: the cell, the rotten neighbour it
+        /// crept in from (null for the seed), what stood there, and the cubes next to it the rot could
+        /// not take. Reporting only - the same single random draw, the same spread.
+        ///
+        /// Public for the ANIMATION LAB, which runs the rot on a board of its own so its scenes are
+        /// the real rules rather than a staging of them. The round goes through RoundEngine.</summary>
+        public GridPos? SpreadGangrene(IRandomSource rng, out GangreneSpread spread)
+        {
+            spread = null;
             if (rng == null)
             {
                 return null;
@@ -103,8 +116,62 @@ namespace ProjectBlock.Core
                 return null;
             }
             GridPos target = candidates[rng.NextInt(0, candidates.Count)];
+            int tx = target.X - MinX;
+            int ty = target.Y - MinY;
+            Cube? before = cells[tx, ty];
+            GridPos? source = anyGangrene ? RottenNeighbour(tx, ty) : (GridPos?)null;
             SetGangreneAt(target);
+            spread = new GangreneSpread(target, source, before, ImmuneAround(tx, ty));
             return target;
+        }
+
+        /// <summary>The first rotten neighbour of a cell, right, up, left, down - a fixed order and no
+        /// random draw, so reporting it changes nothing. Null when none touches it.</summary>
+        private GridPos? RottenNeighbour(int x, int y)
+        {
+            if (IsGangreneAt(x + 1, y))
+            {
+                return new GridPos(x + 1 + MinX, y + MinY);
+            }
+            if (IsGangreneAt(x, y + 1))
+            {
+                return new GridPos(x + MinX, y + 1 + MinY);
+            }
+            if (IsGangreneAt(x - 1, y))
+            {
+                return new GridPos(x - 1 + MinX, y + MinY);
+            }
+            if (IsGangreneAt(x, y - 1))
+            {
+                return new GridPos(x + MinX, y - 1 + MinY);
+            }
+            return null;
+        }
+
+        /// <summary>The cubes next to a cell that nothing can infect - what the rot presses against
+        /// there and cannot take.</summary>
+        private List<GridPos> ImmuneAround(int x, int y)
+        {
+            var immune = new List<GridPos>();
+            AddImmune(immune, x + 1, y);
+            AddImmune(immune, x, y + 1);
+            AddImmune(immune, x - 1, y);
+            AddImmune(immune, x, y - 1);
+            return immune;
+        }
+
+        private void AddImmune(List<GridPos> immune, int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= Width || y >= Height || !playable[x, y] || dead[x, y])
+            {
+                return;
+            }
+            Cube? occupant = cells[x, y];
+            if (occupant.HasValue && occupant.Value.Kind != CubeKind.Gangrene
+                && !CubeRules.IsExternallyDestructible(occupant.Value))
+            {
+                immune.Add(new GridPos(x + MinX, y + MinY));
+            }
         }
 
         /// <summary>Can the infection take this cell? Play area, not already gangrene, and not
@@ -168,6 +235,16 @@ namespace ProjectBlock.Core
         /// </summary>
         internal List<GridPos> InfectFullLines()
         {
+            return InfectFullLines(null);
+        }
+
+        /// <summary>As above, also writing into <paramref name="deaths"/> every line that died, in
+        /// order, with the edge line the rot jumped to and the cubes it turned there. Reporting only.
+        ///
+        /// Public for the ANIMATION LAB, for the same reason as the spread above: a lab board that
+        /// really dies marks its own dead lines, which no staging can do.</summary>
+        public List<GridPos> InfectFullLines(List<GangreneLineDeath> deaths)
+        {
             var converted = new List<GridPos>();
             // Bounded by the number of lines there are: every pass must kill at least one new line
             // to continue, and there are only Width + Height of them.
@@ -185,7 +262,14 @@ namespace ProjectBlock.Core
                     killedSomething = true;
                     // The infection jumps to whichever horizontal edge of the board is nearer.
                     int edgeY = y <= Height - 1 - y ? 0 : Height - 1;
-                    ConvertRow(edgeY, converted);
+                    int first = converted.Count;
+                    List<Cube> before = deaths != null ? new List<Cube>() : null;
+                    ConvertRow(edgeY, converted, before);
+                    if (deaths != null)
+                    {
+                        deaths.Add(new GangreneLineDeath(true, absoluteY, edgeY + MinY,
+                            converted.GetRange(first, converted.Count - first), before, pass));
+                    }
                 }
                 for (int x = 0; x < Width; x++)
                 {
@@ -197,7 +281,14 @@ namespace ProjectBlock.Core
                     infectionDeadColumns.Add(absoluteX);
                     killedSomething = true;
                     int edgeX = x <= Width - 1 - x ? 0 : Width - 1;
-                    ConvertColumn(edgeX, converted);
+                    int first = converted.Count;
+                    List<Cube> before = deaths != null ? new List<Cube>() : null;
+                    ConvertColumn(edgeX, converted, before);
+                    if (deaths != null)
+                    {
+                        deaths.Add(new GangreneLineDeath(false, absoluteX, edgeX + MinX,
+                            converted.GetRange(first, converted.Count - first), before, pass));
+                    }
                 }
                 if (!killedSomething)
                 {
@@ -248,26 +339,34 @@ namespace ProjectBlock.Core
 
         /// <summary>Turns every cube standing in a row to gangrene. Converts only - an empty cell
         /// stays empty, which is what keeps the cascade finite.</summary>
-        private void ConvertRow(int y, List<GridPos> converted)
+        private void ConvertRow(int y, List<GridPos> converted, List<Cube> before)
         {
             for (int x = 0; x < Width; x++)
             {
                 if (CanBeInfected(x, y) && cells[x, y].HasValue)
                 {
                     var cell = new GridPos(x + MinX, y + MinY);
+                    if (before != null)
+                    {
+                        before.Add(cells[x, y].Value);
+                    }
                     SetGangreneAt(cell);
                     converted.Add(cell);
                 }
             }
         }
 
-        private void ConvertColumn(int x, List<GridPos> converted)
+        private void ConvertColumn(int x, List<GridPos> converted, List<Cube> before)
         {
             for (int y = 0; y < Height; y++)
             {
                 if (CanBeInfected(x, y) && cells[x, y].HasValue)
                 {
                     var cell = new GridPos(x + MinX, y + MinY);
+                    if (before != null)
+                    {
+                        before.Add(cells[x, y].Value);
+                    }
                     SetGangreneAt(cell);
                     converted.Add(cell);
                 }

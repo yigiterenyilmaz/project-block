@@ -140,7 +140,8 @@ namespace ProjectBlock.Core
                 return;
             }
             IReadOnlyList<GridPos> burned = turn.Round.DestroyCubes(fire, true);
-            if (burned.Count > 0)
+            // The chain itself is the effect; it pays only under "Genel temizlik".
+            if (burned.Count > 0 && turn.Round.ExternalDestructionScores)
             {
                 turn.Score.AddFlat(burned.Count * PointsPerChainedCube, DefId);
             }

@@ -48,6 +48,13 @@ namespace ProjectBlock.View
         public const float BorderOverhang = 0.15f;
         private static readonly Color EmptyColor = new Color(0.112f, 0.121f, 0.147f);
 
+        /// <summary>What an empty cell looks like, for an effect that hands a cell back to the
+        /// board and must do it without a seam (ColdSinkView closing its pit).</summary>
+        public static Color EmptySlotColor
+        {
+            get { return EmptyColor; }
+        }
+
         /// <summary>A cell shuffle erosion ATE. Deliberately not hidden like an ordinary hole:
         /// the player has to see what the stalling cost them, and that its row/column is dead.</summary>
         private static readonly Color DeadColor = new Color(0.30f, 0.10f, 0.12f, 0.85f);
@@ -57,12 +64,21 @@ namespace ProjectBlock.View
         /// Deliberately COLD, not another scar red: an eaten cell (DeadColor) is gone for good
         /// and kills its line, while a seal lifts again next turn. The two can sit on the same
         /// board, so they must not look alike.</summary>
-        private static readonly Color SealedColor = new Color(0.20f, 0.24f, 0.40f);
+        /// <summary>What a sealed cell's own plate is under everything MapusSealView draws on it.
+        /// It used to be the entire visual language of the boss - one blue-grey square - and it is
+        /// now only what shows through while the pit is still sinking, so it is a DARKENING rather
+        /// than a colour: a cell somebody painted blue is exactly what the seal replaced.</summary>
+        private static readonly Color SealedColor = new Color(0.075f, 0.078f, 0.105f);
 
         /// <summary>Empty BONUS ground ("Tılsım"): free to build on, and no line waits for it.
         /// Warm and faint - a gift, not a wound - so it cannot be mistaken for the eroded cell
         /// (DeadColor) or the barred one (SealedColor) it may sit beside.</summary>
-        private static readonly Color BonusGroundColor = new Color(0.20f, 0.19f, 0.13f);
+        /// <summary>BONUS GROUND ("Tılsım"): smoked jade-slate, a shade warmer and lighter than
+        /// the board rather than a different colour on it. What actually says "this is bonus
+        /// ground" is TalismanView's four OPEN corner runes - a cell whose structural frame is not
+        /// closed, because no line waits for it. This plate is only what they sit on, and it used
+        /// to be the entire language: one flat olive square.</summary>
+        private static readonly Color BonusGroundColor = new Color(0.135f, 0.165f, 0.163f);
         private static readonly Color ValidPreviewColor = new Color(0.35f, 1f, 0.45f, 0.6f);
         private static readonly Color InvalidPreviewColor = new Color(1f, 0.35f, 0.35f, 0.6f);
         private static readonly Color ExplosionPreviewColor = new Color(1f, 0.78f, 0.25f, 0.65f);
@@ -103,16 +119,11 @@ namespace ProjectBlock.View
         /// cell and a full one, since the route crosses both.</summary>
         private static readonly Color CircuitColor = new Color(0.35f, 1f, 0.75f, 0.85f);
 
-        /// <summary>"Matruşka"'s dolls, drawn as a pip ON a cube rather than as a cube. A warm
-        /// lacquer red, because a doll is a thing sitting on the board and not a piece of it.</summary>
-        private static readonly Color DollColor = new Color(0.95f, 0.35f, 0.30f, 0.95f);
-
         /// <summary>"İstilacı"'s marked column: the demolition wash. Deliberately its own colour -
         /// a marked column is neither sealed (a seal lifts next turn) nor eaten (that is
         /// permanent); it is a place with a deadline on it.</summary>
         /// <summary>"Kütleçekim merkezi"'s pull markers, in water's own blue - what they are
         /// telling you about is where the WATER goes, and nothing else.</summary>
-        private static readonly Color GravityArrowColor = new Color(0.35f, 0.6f, 1f, 0.75f);
 
         /// <summary>"Karantina": how much colour is pulled out of a block standing in a sealed
         /// zone, and how far its value is taken down. This is done to the block's OWN colour
@@ -175,11 +186,27 @@ namespace ProjectBlock.View
         private bool[,] previewBreathes;
         private CubeKind?[,] kindCache;
         private Color[,] baseColorCache;
+
+        /// <summary>What a cube looked like on the repaint that emptied its cell, and when. An
+        /// explosion plays a moment AFTER that repaint, and this is what lets it break the cube
+        /// that was there instead of an empty slot. Keyed by absolute cell, so a rebuild of the
+        /// arrays cannot lose it; overwritten the moment a cube stands there again.</summary>
+        private readonly Dictionary<GridPos, VacatedCube> vacated =
+            new Dictionary<GridPos, VacatedCube>();
+
+        private struct VacatedCube
+        {
+            public Sprite Tile;
+            public Color Colour;
+            public float At;
+        }
         private readonly List<SpriteRenderer> ghostSprites = new List<SpriteRenderer>();
         private readonly List<SpriteRenderer> outsidePreviewSprites = new List<SpriteRenderer>();
         private readonly List<GameObject> infectionMarkers = new List<GameObject>();
 
         private InfectionCoreView infectionCores;
+
+        private InfectionBurstView infectionBurst;
 
         private QuarantineFieldView quarantineField;
 
@@ -189,6 +216,25 @@ namespace ProjectBlock.View
 
         private InvaderColumnView invaderColumn;
 
+        /// <summary>"Kangren"'s dead tissue, its dead-line bands and its turn animations. Like the
+        /// nest, it is a layer over the board rather than part of its contents - a dead line has to
+        /// outlive every repaint and every rebuild.</summary>
+        private GangreneView gangrene;
+
+        /// <summary>"Yılan": the snake DRAWS ITSELF from the six pieces painted for it, so the
+        /// board leaves its cells blank (see Refresh) and this layer puts the snake in them. Like
+        /// the rot, it outlives a repaint and a rebuild - the snake is not board contents, it is a
+        /// thing standing on the board.</summary>
+        private SnakeView snake;
+
+        private CompressedCubeView press;
+
+        private ParasiteHostView parasite;
+
+        private MapusSealView mapus;
+
+        private TalismanView talisman;
+
         private CircuitTraceView circuitTrace;
 
         private CircuitOverloadView circuitOverload;
@@ -196,12 +242,13 @@ namespace ProjectBlock.View
         /// <summary>Nodes of "Devre"'s traced circuit, redrawn whenever the route changes.</summary>
         private readonly List<GameObject> circuitMarkers = new List<GameObject>();
 
-        /// <summary>"Matruşka"'s dolls, redrawn whenever one splits or moves.</summary>
-        private readonly List<GameObject> dollMarkers = new List<GameObject>();
+        /// <summary>"Matruşka"'s dolls - resting on their cubes and staged when they split. A layer over
+        /// the board rather than part of its contents, so it survives a rebuild.</summary>
+        private MatryoshkaView matryoshka;
 
-        /// <summary>"Kütleçekim merkezi"'s arrows, shown only while gravity is NOT pointing
-        /// down - normal gravity needs no explaining.</summary>
-        private readonly List<GameObject> gravityMarkers = new List<GameObject>();
+        /// <summary>"Kütleçekim merkezi"'s field, shown only while gravity is NOT pointing
+        /// down - normal gravity needs no explaining. See GravityFieldView.</summary>
+        private GravityFieldView gravityField;
 
         /// <summary>"Karantina"'s sealed rows and columns, in absolute board coordinates.</summary>
         private readonly List<GridPos> quarantinedCells = new List<GridPos>();
@@ -254,7 +301,332 @@ namespace ProjectBlock.View
         /// ANIMATION LAB nothing was destroyed, so without this the lab draws a copy on top of the
         /// player's actual block, breaks the copy, and leaves the original sitting there - which
         /// looks exactly like the effect skipping their block.</summary>
-        private readonly List<GridPos> circuitHiddenCells = new List<GridPos>();
+        /// <summary>
+        /// Cells whose cube the BOARD has stopped drawing because an effect is drawing its own
+        /// copy instead. Shared by every effect that borrows a cube rather than owned by one:
+        /// the circuit cooks blocks, the invader's column pulls them out, and both need the
+        /// board to stand back for exactly as long as they are holding them.
+        ///
+        /// In a real round the cube is already destroyed and this changes nothing. It is the
+        /// ANIMATION LAB it exists for - there nothing has been destroyed, so without it the
+        /// effect's copy is drawn on top of a cube that never leaves.
+        /// </summary>
+        private readonly List<GridPos> borrowedCells = new List<GridPos>();
+
+        /// <summary>Cells a moving-cube effect (BossMoveView) is drawing its travelling copies into.
+        /// Blanked while it holds them - and again after every repaint in the meantime, as the
+        /// water's are - so the cube already standing at its new cell never shows under the copy
+        /// still on its way there.</summary>
+        private readonly HashSet<GridPos> heldCells = new HashSet<GridPos>();
+
+        /// <summary>Blanks these cells until ReleaseCells gives them back.</summary>
+        public void HoldCells(IEnumerable<GridPos> cells)
+        {
+            if (board == null || cells == null)
+            {
+                return;
+            }
+            foreach (GridPos cell in cells)
+            {
+                if (board.IsInside(cell) && heldCells.Add(cell))
+                {
+                    BlankHeld(cell);
+                }
+            }
+        }
+
+        /// <summary>Gives held cells back, repainted as they really are.</summary>
+        public void ReleaseCells(IEnumerable<GridPos> cells)
+        {
+            if (cells == null)
+            {
+                return;
+            }
+            bool any = false;
+            foreach (GridPos cell in cells)
+            {
+                any |= heldCells.Remove(cell);
+            }
+            if (any)
+            {
+                Refresh();
+            }
+        }
+
+        private void BlankHeld(GridPos cell)
+        {
+            BlankCell(cell);
+            // Nor may the element pulse paint a cube back in (AnimateElementCubes reads this).
+            kindCache[cell.X - board.MinX, cell.Y - board.MinY] = null;
+        }
+
+        // ---- "Kangren" ---------------------------------------------------------------------
+
+        /// <summary>
+        /// The rot's own layer: dead tissue on every rotten cube, a band under every line it took
+        /// whole, and a turn's spread, deaths and jumps. Made on first use and kept through a
+        /// rebuild (see Rebuild), because a dead line lasts the round.
+        /// </summary>
+        public GangreneView Gangrene
+        {
+            get
+            {
+                if (gangrene == null)
+                {
+                    var go = new GameObject("Gangrene");
+                    go.transform.SetParent(transform, false);
+                    gangrene = go.AddComponent<GangreneView>();
+                }
+                return gangrene;
+            }
+        }
+
+        /// <summary>Ends anything the rot is playing, without making the view if there is none.</summary>
+        public void StopGangrene()
+        {
+            if (gangrene != null)
+            {
+                gangrene.Stop();
+            }
+        }
+
+        /// <summary>"Yılan"'s own layer: the six pieces, its slides, its bites and its cuts. Made on
+        /// first use and kept through a rebuild, like the rot.</summary>
+        public SnakeView Snake
+        {
+            get
+            {
+                if (snake == null)
+                {
+                    var go = new GameObject("Snake");
+                    go.transform.SetParent(transform, false);
+                    snake = go.AddComponent<SnakeView>();
+                }
+                return snake;
+            }
+        }
+
+        /// <summary>Ends anything the snake is playing, without making the view if there is none.</summary>
+        public void StopSnake()
+        {
+            if (snake != null)
+            {
+                snake.Stop();
+            }
+        }
+
+        /// <summary>"Hidrolik pres"'s own layer: the compressed cube's shell, its contained-pressure
+        /// idle and its turn countdown. Made on first use and kept through a rebuild, like the rot
+        /// and the snake - a press stands for four turns and the board is repainted many times in
+        /// them. It draws OVER the board's own slate cube rather than replacing it, so without its
+        /// shader the press is still a readable block.</summary>
+        public CompressedCubeView Press
+        {
+            get
+            {
+                if (press == null)
+                {
+                    var go = new GameObject("Press");
+                    go.transform.SetParent(transform, false);
+                    press = go.AddComponent<CompressedCubeView>();
+                }
+                return press;
+            }
+        }
+
+        /// <summary>Takes every press plate down, without making the view if there is none.</summary>
+        public void StopPress()
+        {
+            if (press != null)
+            {
+                press.Stop();
+            }
+        }
+
+        /// <summary>"Parazit"'s own layer: the clasp on every host cube, its bonds and the joker
+        /// riding in its middle. Made on first use and kept through a rebuild, like the rest - a
+        /// host stands for as long as its block does.</summary>
+        public ParasiteHostView Parasite
+        {
+            get
+            {
+                if (parasite == null)
+                {
+                    var go = new GameObject("Parasite");
+                    go.transform.SetParent(transform, false);
+                    parasite = go.AddComponent<ParasiteHostView>();
+                }
+                return parasite;
+            }
+        }
+
+        /// <summary>"Mapus"'s own layer: the prison it builds in one empty cell, and the pressure
+        /// that puts on the row and the column through it. Made on first use and kept through a
+        /// rebuild like the rest - a seal stands for turns at a time.</summary>
+        public MapusSealView Mapus
+        {
+            get
+            {
+                if (mapus == null)
+                {
+                    var go = new GameObject("Mapus");
+                    go.transform.SetParent(transform, false);
+                    mapus = go.AddComponent<MapusSealView>();
+                }
+                return mapus;
+            }
+        }
+
+        /// <summary>"Tılsım"'s own layer: the harvest of the ghosts, the vine claim it leaves in
+        /// the outside space, and the bonus ground it hands the next round. Made on first use and
+        /// kept through a rebuild - and keeping it through the rebuild is the whole point here,
+        /// because the one thing this power has to survive is a ROUND BOUNDARY.</summary>
+        public TalismanView Talisman
+        {
+            get
+            {
+                if (talisman == null)
+                {
+                    var go = new GameObject("Talisman");
+                    go.transform.SetParent(transform, false);
+                    talisman = go.AddComponent<TalismanView>();
+                }
+                return talisman;
+            }
+        }
+
+        /// <summary>Takes the vines and the bonus ground down, without making the view if there is
+        /// none.</summary>
+        public void StopTalisman()
+        {
+            if (talisman != null)
+            {
+                talisman.Stop();
+            }
+        }
+
+        /// <summary>Takes the seal down, without making the view if there is none.</summary>
+        public void StopMapus()
+        {
+            if (mapus != null)
+            {
+                mapus.Stop();
+            }
+        }
+
+        /// <summary>Takes every harness down, without making the view if there is none.</summary>
+        public void StopParasite()
+        {
+            if (parasite != null)
+            {
+                parasite.Stop();
+            }
+        }
+
+        /// <summary>True on the last repaint that drew at least one compressed cube - what decides
+        /// whether the press's layer is worth asking for at all.</summary>
+        private bool sawPress;
+
+        /// <summary>True on the last repaint that left a cell blank for the snake.</summary>
+        private bool sawSnake;
+
+        /// <summary>True on the last repaint that drew at least one rotten cube - what decides
+        /// whether the rot's layer is worth asking for at all.</summary>
+        private bool sawRot;
+
+        /// <summary>Each cell's colour as it was BEFORE the dead-line wash, so one cell can be
+        /// repainted at a new wash without repainting the board.</summary>
+        private Color[,] preWashCache;
+
+        /// <summary>Cells whose dead-line wash is being walked in by the rot's sweep, 0..1. A cell
+        /// that is not in here is washed fully, exactly as it always was.</summary>
+        private readonly Dictionary<GridPos, float> rotWash = new Dictionary<GridPos, float>();
+
+        /// <summary>
+        /// How much of the dead-line wash a cell shows. The rules kill a line in one go; the sweep
+        /// that puts its life out brings the wash in behind its own front, so it winds it back to
+        /// nothing first and then walks it up. Cheap enough to call every frame on a whole line.
+        /// </summary>
+        public void SetRotWash(GridPos cell, float amount)
+        {
+            if (board == null || !board.IsInside(cell))
+            {
+                return;
+            }
+            amount = Mathf.Clamp01(amount);
+            float now;
+            if (rotWash.TryGetValue(cell, out now) && Mathf.Abs(now - amount) < 0.002f)
+            {
+                return;
+            }
+            rotWash[cell] = amount;
+            RepaintWash(cell);
+        }
+
+        /// <summary>Every cell goes back to the full wash: the sweep is done, or the round is.</summary>
+        public void ClearRotWash()
+        {
+            if (rotWash.Count == 0)
+            {
+                return;
+            }
+            rotWash.Clear();
+            Refresh();
+        }
+
+        private float RotWashAt(GridPos cell)
+        {
+            float amount;
+            return rotWash.TryGetValue(cell, out amount) ? amount : 1f;
+        }
+
+        /// <summary>One cell repainted at its current wash. Cells something else is drawing (a held
+        /// cell, a water cube in flight) are left alone - they are not the board's to paint.</summary>
+        private void RepaintWash(GridPos cell)
+        {
+            int x = cell.X - board.MinX;
+            int y = cell.Y - board.MinY;
+            if (cellRenderers == null || preWashCache == null || cellRenderers[x, y] == null
+                || heldCells.Contains(cell) || waterHiddenCells.Contains(cell))
+            {
+                return;
+            }
+            float light = LightAt(x, y);
+            if (light <= 0f)
+            {
+                return;
+            }
+            Color color = preWashCache[x, y];
+            if (board.RowIsInfectionDead(cell.Y) || board.ColumnIsInfectionDead(cell.X))
+            {
+                color = Color.Lerp(color, RotDeadLineColor,
+                    RotWashAt(cell) * (kindCache[x, y].HasValue ? 0.4f : 0.66f));
+            }
+            if (dark)
+            {
+                color = Color.Lerp(DarkCellColor, color, light);
+            }
+            cellRenderers[x, y].color = color;
+            baseColorCache[x, y] = color;
+        }
+
+        /// <summary>How brightly a ROTTEN cube is being drawn at this cell: 0 where there is none,
+        /// where an animation is holding the cell, or where the dark has it. The rot's tissue hangs
+        /// on exactly this, so the overlay and the cube under it can never disagree.</summary>
+        public float RotLight(GridPos cell)
+        {
+            if (board == null || kindCache == null || !board.IsInside(cell))
+            {
+                return 0f;
+            }
+            int x = cell.X - board.MinX;
+            int y = cell.Y - board.MinY;
+            if (!kindCache[x, y].HasValue || kindCache[x, y].Value != CubeKind.Gangrene)
+            {
+                return 0f;
+            }
+            return LightAt(x, y);
+        }
 
         private void Awake()
         {
@@ -378,9 +750,11 @@ namespace ProjectBlock.View
             // The circuit effect draws its own copies of the cubes it owns; the moment it lets go,
             // the board takes its own back. Polled rather than pushed because the effect ends on
             // its own clock, not on anything the board is told about.
-            if (circuitHiddenCells.Count > 0 && (circuitHeat == null || !circuitHeat.Active))
+            if (borrowedCells.Count > 0
+                && (circuitHeat == null || !circuitHeat.Active)
+                && (invaderColumn == null || !invaderColumn.Extracting))
             {
-                RestoreCircuitCells();
+                RestoreBorrowedCells();
             }
             PulseOvertimeLines();
             if (board == null || kindCache == null)
@@ -620,6 +994,48 @@ namespace ProjectBlock.View
             get { return cellSize; }
         }
 
+        /// <summary>Edge length a CUBE is drawn at - a cell less its gap - so cubes drawn away from
+        /// the board (a defective block falling off the screen) are the size the board draws them.</summary>
+        public float CubeWorldSize
+        {
+            get { return cellSize * CubeFill; }
+        }
+
+        /// <summary>The size an empty cell's slot is drawn at - the mouth a pit opens in.</summary>
+        public float EmptySlotSize
+        {
+            get { return cellSize * EmptyFill; }
+        }
+
+        /// <summary>The face the cube at <paramref name="pos"/> wears - still standing there, or
+        /// taken by a repaint in the last <paramref name="maxAge"/> seconds (unscaled). False
+        /// for a cell that has held no cube lately, or one lost to the dark.</summary>
+        public bool TryCubeLook(GridPos pos, float maxAge, out Sprite tile, out Color colour)
+        {
+            tile = null;
+            colour = Color.white;
+            if (board != null && kindCache != null && cellRenderers != null)
+            {
+                int x = pos.X - board.MinX;
+                int y = pos.Y - board.MinY;
+                if (x >= 0 && y >= 0 && x < kindCache.GetLength(0) && y < kindCache.GetLength(1)
+                    && kindCache[x, y].HasValue && cellRenderers[x, y] != null)
+                {
+                    tile = cellRenderers[x, y].sprite;
+                    colour = baseColorCache[x, y];
+                    return tile != null;
+                }
+            }
+            VacatedCube gone;
+            if (vacated.TryGetValue(pos, out gone) && Time.unscaledTime - gone.At <= maxAge)
+            {
+                tile = gone.Tile;
+                colour = gone.Colour;
+                return tile != null;
+            }
+            return false;
+        }
+
         private Vector2 bottomLeft;
         private SpriteRenderer deadZoneLine; // red separator for the retro dead zone, or null
 
@@ -649,7 +1065,8 @@ namespace ProjectBlock.View
             StopAllCoroutines();
             animatingWater = false;
             waterHiddenCells.Clear(); // the drop sprites go with the children below
-            circuitHiddenCells.Clear(); // the renderers below are rebuilt enabled anyway
+            borrowedCells.Clear(); // the renderers below are rebuilt enabled anyway
+            heldCells.Clear(); // a new board: nothing is on its way to any of its cells
             // EXCEPT the overtime glow, which outlives a rebuild. It is not part of the board's
             // contents: it is a light over them, its texture costs real time to generate, and
             // sweeping it up with everything else meant the overtime effect was torn down and
@@ -658,6 +1075,10 @@ namespace ProjectBlock.View
             Transform keepSurface = surface != null ? surface.transform : null;
             Transform keepInfection = infectionCores != null
                 ? infectionCores.transform : null;
+            // The burst outlives a rebuild for the same reason the cores do - and for one more:
+            // the turn that detonates an infection can also erode the arena, and a rebuild
+            // halfway through the animation would otherwise delete it mid-frame.
+            Transform keepBurst = infectionBurst != null ? infectionBurst.transform : null;
             Transform keepCircuit = circuitTrace != null ? circuitTrace.transform : null;
             Transform keepOverload = circuitOverload != null
                 ? circuitOverload.transform : null;
@@ -670,37 +1091,99 @@ namespace ProjectBlock.View
             // distance field on every placement would be pure waste.
             Transform keepNest = creatureNest != null ? creatureNest.transform : null;
             Transform keepLane = invaderColumn != null ? invaderColumn.transform : null;
+            // The rot is a property of the ROUND: its bands and tissue are put back in step with
+            // Core by the Refresh below, and a new arena clears them (GangreneView.Sync).
+            Transform keepRot = gangrene != null ? gangrene.transform : null;
+            Transform keepSnake = snake != null ? snake.transform : null;
+            // The press is a property of the ROUND too: its plates are put back in step with Core
+            // by the Refresh below, and a new arena has no press on it.
+            Transform keepPress = press != null ? press.transform : null;
+            Transform keepParasite = parasite != null ? parasite.transform : null;
+            Transform keepMapus = mapus != null ? mapus.transform : null;
+            Transform keepTalisman = talisman != null ? talisman.transform : null;
+            // The gravity field is a property of the ROUND, not of the board's contents, so it
+            // survives the rebuild and is CLEARED below - a new arena starts under ordinary
+            // gravity, which is the rules' own behaviour and not something this decides.
+            Transform keepGravity = gravityField != null ? gravityField.transform : null;
+            // The dolls are staged across several frames; a rebuild mid-split must not delete the
+            // dolls in the air.
+            Transform keepDolls = matryoshka != null ? matryoshka.transform : null;
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Transform child = transform.GetChild(i);
                 if (child == keepGlow || child == keepSurface
-                    || child == keepInfection || child == keepCircuit
+                    || child == keepInfection || child == keepBurst || child == keepCircuit
                     || child == keepOverload || child == keepQuarantine
-                    || child == keepHeat || child == keepNest || child == keepLane)
+                    || child == keepHeat || child == keepNest || child == keepLane
+                    || child == keepGravity || child == keepDolls || child == keepRot
+                    || child == keepSnake || child == keepPress
+                    || child == keepParasite || child == keepMapus
+                    || child == keepTalisman)
                 {
                     continue;
                 }
                 Destroy(child.gameObject);
             }
+            if (gravityField != null)
+            {
+                gravityField.Clear();
+            }
             ghostSprites.Clear();
+            pressPreview.Clear();
             outsidePreviewSprites.Clear();
             outsidePreviewBaseColors.Clear();
             outsidePreviewBreathes.Clear();
             infectionMarkers.Clear();
             deadZoneLine = null; // destroyed with the other children above; redrawn by SetDeadZone
             board = newBoard;
-            cellSize = Mathf.Min(maxWorldSize / board.Width, maxWorldSize / board.Height);
-            bottomLeft = center - new Vector2(board.Width, board.Height) * (cellSize * 0.5f);
+
+            // THE ARENA IS NOT THE BOARD'S BOUNDING BOX. The backing store is a rectangle, and
+            // "Tılsım" grows it rightward to hold ground it reclaimed OUTSIDE the arena - a 2x2
+            // claim past the right edge makes the store two columns wider. The cells it grows
+            // over are holes and the cell renderers already skip them, but the SURFACE was still
+            // being built from that rectangle, so the plate, its bevelled frame and its per-cell
+            // recesses all extended two full columns: the player was handed a whole new column of
+            // floor for four reclaimed cells. It also shrank the board, because the cell size is
+            // derived from the same numbers.
+            //
+            // So the arena is measured instead: every cell that is REQUIRED play area, plus the
+            // dead ones, which are eroded arena and still stand on the plate. Bonus ground is
+            // optional by definition, so it falls outside it - which is the point, because it is
+            // a gift lying beside the board rather than part of it.
+            int arenaWide = 1;
+            int arenaHigh = 1;
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    var gp = new GridPos(board.MinX + x, board.MinY + y);
+                    bool arena = board.IsDead(gp) || (board.IsInside(gp) && !board.IsOptional(gp));
+                    if (!arena)
+                    {
+                        continue;
+                    }
+                    if (x + 1 > arenaWide)
+                    {
+                        arenaWide = x + 1;
+                    }
+                    if (y + 1 > arenaHigh)
+                    {
+                        arenaHigh = y + 1;
+                    }
+                }
+            }
+            cellSize = Mathf.Min(maxWorldSize / arenaWide, maxWorldSize / arenaHigh);
+            bottomLeft = center - new Vector2(arenaWide, arenaHigh) * (cellSize * 0.5f);
 
             // The board's surface is GENERATED - a plate with a bevelled frame and a recess per
             // cell - rather than the flat rectangle this used to be. See BoardSurfaceView.
-            Surface.Build(center, board.Width, board.Height, cellSize, BorderOverhang);
+            Surface.Build(center, arenaWide, arenaHigh, cellSize, BorderOverhang);
             pressureCentre = center;
             glowCenter = center;
-            glowCellsWide = board.Width;
-            glowCellsHigh = board.Height;
+            glowCellsWide = arenaWide;
+            glowCellsHigh = arenaHigh;
             glowCellSize = cellSize;
-            LineGlow.Build(center, board.Width, board.Height, cellSize, BorderOverhang);
+            LineGlow.Build(center, arenaWide, arenaHigh, cellSize, BorderOverhang);
 
             cellRenderers = new SpriteRenderer[board.Width, board.Height];
             previewRenderers = new SpriteRenderer[board.Width, board.Height];
@@ -709,6 +1192,8 @@ namespace ProjectBlock.View
             kindCache = new CubeKind?[board.Width, board.Height];
             litFor = new float[board.Width, board.Height];
             baseColorCache = new Color[board.Width, board.Height];
+            preWashCache = new Color[board.Width, board.Height];
+            rotWash.Clear();
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -750,6 +1235,15 @@ namespace ProjectBlock.View
 
         public int UnresolvedExampleId { get; private set; }
 
+        /// <summary>The face a cube wears, card and all. A ghost cube's art lives on its CARD's
+        /// element rather than on its kind, so a presence that draws one (TalismanView's harvest)
+        /// has to ask through here - CubeTile(kind, null) would hand it the default block.
+        /// </summary>
+        public Sprite FaceOf(Cube cube)
+        {
+            return ViewUtil.CubeTile(cube.Kind, CardOf(cube));
+        }
+
         private BlockCard CardOf(Cube cube)
         {
             BlockCard card = CardLookup != null ? CardLookup(cube.SourceCardId) : null;
@@ -774,6 +1268,9 @@ namespace ProjectBlock.View
             Shader.SetGlobalVector("_BlockFlowDir",
                 new Vector4(board.WaterFlow.X, board.WaterFlow.Y, 0f, 0f));
             UnresolvedCubes = 0;
+            sawRot = false;
+            sawSnake = false;
+            sawPress = false;
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -818,12 +1315,26 @@ namespace ProjectBlock.View
                         baseColorCache[x, y] = DarkCellColor;
                         continue;
                     }
+                    // "YILAN" DRAWS ITSELF. Its segments are the six pieces painted for it and
+                    // they are placed on these cells by SnakeView, so the board must not put a cube
+                    // here: a green square under the snake is exactly what that art replaces.
+                    if (cube.HasValue && cube.Value.Kind == CubeKind.Snake)
+                    {
+                        ViewUtil.ApplyTile(cellRenderers[x, y], null, cellSize * EmptyFill);
+                        cellRenderers[x, y].color = EmptyColor;
+                        kindCache[x, y] = null;
+                        baseColorCache[x, y] = EmptyColor;
+                        preWashCache[x, y] = EmptyColor;
+                        sawSnake = true;
+                        continue;
+                    }
                     // A CUBE is a painted tile and fills its cell; an EMPTY cell stays the flat
                     // inset square it always was, so the grid still reads as holes waiting to be
                     // filled rather than as pale blocks.
                     Sprite tile = null;
                     if (cube.HasValue)
                     {
+                        vacated.Remove(gp);
                         tile = ViewUtil.CubeTile(cube.Value.Kind, CardOf(cube.Value));
                         // Blind: the cube GROWS into its cell as the light reaches it and
                         // shrinks back to an anonymous square as it fades, so a revealed block
@@ -833,6 +1344,17 @@ namespace ProjectBlock.View
                     }
                     else
                     {
+                        // A cube stood here on the last repaint and is gone on this one: keep
+                        // its face for the explosion that is about to play over the cell.
+                        if (kindCache[x, y].HasValue && cellRenderers[x, y].sprite != null)
+                        {
+                            vacated[gp] = new VacatedCube
+                            {
+                                Tile = cellRenderers[x, y].sprite,
+                                Colour = baseColorCache[x, y],
+                                At = Time.unscaledTime
+                            };
+                        }
                         ViewUtil.ApplyTile(cellRenderers[x, y], null, cellSize * EmptyFill);
                     }
                     Color color = cube.HasValue
@@ -852,10 +1374,14 @@ namespace ProjectBlock.View
                     }
                     // "Kangren": a line the rot took WHOLE can never explode again, which the
                     // player has to be able to see - an unexplodable full line otherwise reads as
-                    // a bug. Washed like the erosion scar it behaves like.
+                    // a bug. Washed like the erosion scar it behaves like. The colour BEFORE the
+                    // wash is kept so the sweep that kills a line can walk the wash in a cell at a
+                    // time (SetRotWash) without a full repaint per frame.
+                    preWashCache[x, y] = color;
                     if (board.RowIsInfectionDead(gp.Y) || board.ColumnIsInfectionDead(gp.X))
                     {
-                        color = Color.Lerp(color, RotDeadLineColor, cube.HasValue ? 0.4f : 0.66f);
+                        color = Color.Lerp(color, RotDeadLineColor,
+                            RotWashAt(gp) * (cube.HasValue ? 0.4f : 0.66f));
                     }
                     // NOT painted here, on purpose: "Besleme"'s creature patch and "İstilacı"'s
                     // doomed column both draw themselves in their own views (CreatureNestView,
@@ -871,12 +1397,37 @@ namespace ProjectBlock.View
                     cellRenderers[x, y].color = color;
                     kindCache[x, y] = cube.HasValue ? cube.Value.Kind : (CubeKind?)null;
                     baseColorCache[x, y] = color;
+                    sawRot |= cube.HasValue && cube.Value.Kind == CubeKind.Gangrene;
+                    sawPress |= cube.HasValue && cube.Value.Kind == CubeKind.Compressed;
                 }
             }
             RefreshGhostTraces();
             if (animatingWater)
             {
                 HideWaterCells();
+            }
+            foreach (GridPos cell in heldCells)
+            {
+                BlankHeld(cell);
+            }
+            // "Kangren": the standing tissue and the dead lines' bands follow every repaint, so
+            // what they draw is what the rules say rather than a memory of it. Asked for only once
+            // there is rot to draw - or once there is a view holding some.
+            if (sawRot || gangrene != null || board.InfectionDeadRows.Count > 0
+                || board.InfectionDeadColumns.Count > 0)
+            {
+                Gangrene.Sync(this);
+            }
+            // And the snake, for the same reason: the cells above were left blank for it.
+            if (sawSnake || snake != null)
+            {
+                Snake.Sync(this);
+            }
+            // And the press, for the same reason: its shell, its idle and its countdown have to
+            // follow the rules' own board rather than a memory of it.
+            if (sawPress || press != null)
+            {
+                Press.Sync(this);
             }
         }
 
@@ -906,9 +1457,20 @@ namespace ProjectBlock.View
             ghostSprites.Clear();
             foreach (KeyValuePair<GridPos, Cube> entry in board.OutsideCubes)
             {
-                ghostSprites.Add(ViewUtil.MakeCell(transform, "GhostCube",
-                    CellToWorld(entry.Key), cellSize * 0.86f,
-                    new Color(0.8f, 0.8f, 0.95f, 0.35f), 1));
+                // A GHOST TRACE IS A GHOST BLOCK, and it is drawn with the ghost block's own art
+                // and its own billowing material (ViewUtil.ApplyTile picks both up from the tile).
+                // It used to be a flat pale square instead - the painted tile and the warp were
+                // already there and simply were not asked for, so the one cube in the game whose
+                // whole identity is "not quite solid" was the one drawn as a rectangle.
+                SpriteRenderer trace = ViewUtil.MakeCell(transform, "GhostCube",
+                    CellToWorld(entry.Key), cellSize * CubeFill, Color.white, 1);
+                ViewUtil.ApplyTile(trace, ViewUtil.CubeTile(entry.Value.Kind, CardOf(entry.Value)),
+                    cellSize * CubeFill);
+                // Off the board and not real yet, so it is thinner than a cube that landed - the
+                // alpha pulse above is what carries that, and the tint stays neutral so the
+                // block's own material shows through it.
+                trace.color = new Color(1f, 1f, 1f, 0.35f);
+                ghostSprites.Add(trace);
             }
         }
 
@@ -967,6 +1529,137 @@ namespace ProjectBlock.View
         public float PlayInfectionCharge(GridPos cell)
         {
             return infectionCores != null ? infectionCores.PlayCharge(cell) : 0f;
+        }
+
+        /// <summary>
+        /// The detonation itself: the infected block is eaten from inside and comes apart, and on
+        /// the FIRST one its spores carry the contagion to the cells the spread took.
+        ///
+        /// It takes the destroyed cubes rather than plain cells because the burst draws the
+        /// block wearing its own tiles right up to the moment it comes apart, and by the time
+        /// this runs the rules have destroyed them and Refresh has already painted them away -
+        /// so the art has to come from the turn's destruction log.
+        ///
+        /// <paramref name="hold"/> is how long the block stands intact first: the core's charge.
+        /// <paramref name="spreadTo"/> is the rules' own list of cells that were actually
+        /// infected, empty on every detonation after the first; the view never works the plus
+        /// out for itself. Those cells' cores already exist - the refresh made them - and would
+        /// arrive before the block had even gone, so their birth is held until the spores
+        /// carrying the spread have landed on them.
+        ///
+        /// Returns the seconds from now until the source cell ruptures.
+        /// </summary>
+        public float PlayInfectionBurst(IReadOnlyList<DestroyedCube> block, GridPos source,
+            IReadOnlyList<GridPos> spreadTo, float hold)
+        {
+            if (block == null || block.Count == 0)
+            {
+                return 0f;
+            }
+            EnsureInfectionBurst();
+            if (infectionBurst == null)
+            {
+                return 0f;
+            }
+            // How many steps THROUGH the block each cube is from the cell that ripened - through
+            // it, not across the gap inside an L or a U - because that is the path the sickness
+            // takes, and the rupture follows it.
+            var inBlock = new HashSet<GridPos>();
+            for (int i = 0; i < block.Count; i++)
+            {
+                inBlock.Add(block[i].Pos);
+            }
+            var steps = new Dictionary<GridPos, int>();
+            var frontier = new Queue<GridPos>();
+            steps[source] = 0;
+            frontier.Enqueue(source);
+            while (frontier.Count > 0)
+            {
+                GridPos at = frontier.Dequeue();
+                int next = steps[at] + 1;
+                GridPos[] around =
+                {
+                    new GridPos(at.X + 1, at.Y), new GridPos(at.X - 1, at.Y),
+                    new GridPos(at.X, at.Y + 1), new GridPos(at.X, at.Y - 1)
+                };
+                for (int i = 0; i < around.Length; i++)
+                {
+                    if (inBlock.Contains(around[i]) && !steps.ContainsKey(around[i]))
+                    {
+                        steps[around[i]] = next;
+                        frontier.Enqueue(around[i]);
+                    }
+                }
+            }
+
+            var ghosts = new List<InfectionBurstView.Ghost>();
+            for (int i = 0; i < block.Count; i++)
+            {
+                Cube cube = block[i].Cube;
+                // CardLookup rather than CardOf: this is not a repaint, and it must not be
+                // counted against the gallery's unresolved-cube diagnostic.
+                BlockCard card = CardLookup != null ? CardLookup(cube.SourceCardId) : null;
+                Sprite tile = ViewUtil.CubeTile(cube.Kind, card);
+                int step;
+                if (!steps.TryGetValue(block[i].Pos, out step))
+                {
+                    // Not joined to the source (a block always is) - plain distance, so it
+                    // still goes in a sensible order.
+                    step = Mathf.Abs(block[i].Pos.X - source.X)
+                        + Mathf.Abs(block[i].Pos.Y - source.Y);
+                }
+                ghosts.Add(new InfectionBurstView.Ghost
+                {
+                    Where = CellToWorld(block[i].Pos),
+                    Tile = tile,
+                    Colour = ViewUtil.CubeTileColor(cube, tile),
+                    // The size a cube is drawn at, so the ghost takes over without a jump.
+                    Size = cellSize * CubeFill,
+                    Steps = step
+                });
+            }
+            var carry = new List<Vector2>();
+            if (spreadTo != null)
+            {
+                for (int i = 0; i < spreadTo.Count; i++)
+                {
+                    carry.Add(CellToWorld(spreadTo[i]));
+                }
+            }
+            float rupture = infectionBurst.Play(ghosts, cellSize, hold, CellToWorld(source), carry);
+            if (infectionCores != null && spreadTo != null)
+            {
+                // Until the carriers LAND, not merely until the rupture: they do the travelling,
+                // and the core only has to bloom where they arrive.
+                infectionCores.HoldBirth(spreadTo, rupture + InfectionBurstView.Style.CarrierSeconds);
+            }
+            return rupture;
+        }
+
+        /// <summary>True while a detonation is still on screen.</summary>
+        public bool InfectionBursting
+        {
+            get { return infectionBurst != null && infectionBurst.Active; }
+        }
+
+        /// <summary>Clears a detonation mid-flight - the animation lab's RESET.</summary>
+        public void StopInfectionBurst()
+        {
+            if (infectionBurst != null)
+            {
+                infectionBurst.Stop();
+            }
+        }
+
+        private void EnsureInfectionBurst()
+        {
+            if (infectionBurst != null)
+            {
+                return;
+            }
+            var go = new GameObject("InfectionBurst");
+            go.transform.SetParent(transform, false);
+            infectionBurst = go.AddComponent<InfectionBurstView>();
         }
 
 
@@ -1176,7 +1869,7 @@ namespace ProjectBlock.View
                 return;
             }
             EnsureCircuitHeat();
-            HideForCircuit(cubes);
+            HideBorrowedCells(cubes);
             circuitHeat.Play(CircuitGhosts(cubes), cellSize, seconds);
         }
 
@@ -1189,7 +1882,7 @@ namespace ProjectBlock.View
                 return;
             }
             EnsureCircuitHeat();
-            HideForCircuit(cubes);
+            HideBorrowedCells(cubes);
             circuitHeat.Hold(CircuitGhosts(cubes), cellSize);
         }
 
@@ -1200,12 +1893,12 @@ namespace ProjectBlock.View
             {
                 circuitHeat.Stop();
             }
-            RestoreCircuitCells();
+            RestoreBorrowedCells();
         }
 
-        private void HideForCircuit(IReadOnlyList<DestroyedCube> cubes)
+        private void HideBorrowedCells(IReadOnlyList<DestroyedCube> cubes)
         {
-            RestoreCircuitCells();
+            RestoreBorrowedCells();
             for (int i = 0; i < cubes.Count; i++)
             {
                 GridPos p = cubes[i].Pos;
@@ -1220,16 +1913,16 @@ namespace ProjectBlock.View
                 if (r != null && r.enabled)
                 {
                     r.enabled = false;
-                    circuitHiddenCells.Add(p);
+                    borrowedCells.Add(p);
                 }
             }
         }
 
-        private void RestoreCircuitCells()
+        private void RestoreBorrowedCells()
         {
-            for (int i = 0; i < circuitHiddenCells.Count; i++)
+            for (int i = 0; i < borrowedCells.Count; i++)
             {
-                GridPos p = circuitHiddenCells[i];
+                GridPos p = borrowedCells[i];
                 int cx = p.X - board.MinX;
                 int cy = p.Y - board.MinY;
                 if (cx >= 0 && cy >= 0 && cx < cellRenderers.GetLength(0)
@@ -1238,7 +1931,7 @@ namespace ProjectBlock.View
                     cellRenderers[cx, cy].enabled = true;
                 }
             }
-            circuitHiddenCells.Clear();
+            borrowedCells.Clear();
         }
 
         private void EnsureCircuitHeat()
@@ -1313,41 +2006,34 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// "Kütleçekim merkezi": marks which way water is being pulled, with a row of pips just
-        /// outside the edge it falls towards. Nothing is drawn while gravity points DOWN, because
-        /// that is what every board does and a permanent marker for it would be noise.
+        /// "Kütleçekim merkezi": points the arena's gravity FIELD along the pull.
+        ///
+        /// <paramref name="flow"/> is GameBoard.WaterFlow, handed straight through from the rules
+        /// - this view keeps no direction of its own. (0,-1) is an ordinary board and turns the
+        /// whole thing off: every board falls downward, and a permanent marker for that is noise.
+        ///
+        /// It used to be a row of pips outside one edge. They read as a debug marker, which is
+        /// the wrong weight for a power that turns the physics of the arena for a whole round -
+        /// see GravityFieldView for what replaced them.
         /// </summary>
         public void ShowGravity(GridPos flow)
         {
-            for (int i = gravityMarkers.Count - 1; i >= 0; i--)
-            {
-                if (gravityMarkers[i] != null)
-                {
-                    Destroy(gravityMarkers[i]);
-                }
-            }
-            gravityMarkers.Clear();
-            if (board == null || (flow.X == 0 && flow.Y == -1))
+            bool down = flow.X == 0 && flow.Y == -1;
+            if (board == null || (down && gravityField == null))
             {
                 return;
             }
-            // One pip per lane, just beyond the edge the water is heading for.
-            bool horizontal = flow.X != 0;
-            int lanes = horizontal ? board.Height : board.Width;
-            for (int i = 0; i < lanes; i++)
+            EnsureGravityField();
+            gravityField.Show(flow, WorldRect, cellSize, board.Width, board.Height);
+        }
+
+        private void EnsureGravityField()
+        {
+            if (gravityField == null)
             {
-                GridPos edge = horizontal
-                    ? new GridPos(flow.X > 0 ? board.MinX + board.Width - 1 : board.MinX,
-                        board.MinY + i)
-                    : new GridPos(board.MinX + i,
-                        flow.Y > 0 ? board.MinY + board.Height - 1 : board.MinY);
-                Vector2 at = CellToWorld(edge)
-                    + new Vector2(flow.X, flow.Y) * (cellSize * 0.72f);
-                SpriteRenderer pip = ViewUtil.MakeRect(transform, "Gravity_" + i, at,
-                    new Vector2(cellSize * (horizontal ? 0.18f : 0.5f),
-                        cellSize * (horizontal ? 0.5f : 0.18f)),
-                    GravityArrowColor, 6);
-                gravityMarkers.Add(pip.gameObject);
+                var go = new GameObject("GravityField");
+                go.transform.SetParent(transform, false);
+                gravityField = go.AddComponent<GravityFieldView>();
             }
         }
 
@@ -1378,6 +2064,9 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // The column draws its OWN copies of what it takes, so the board stands back for
+            // as long as it is holding them - see borrowedCells.
+            HideBorrowedCells(taken);
             invaderColumn.PlayExtraction(taken, CellToWorld,
                 cube => ViewUtil.CubeTile(cube.Kind, CardOf(cube)),
                 (cube, tile) => ViewUtil.CubeTileColor(cube, tile));
@@ -1393,38 +2082,72 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>
-        /// Draws "Matruşka"'s dolls as pips sitting ON their host cubes. Sized by how many splits
-        /// each has left, so a nearly-spent doll is visibly a small one - which is the only way
-        /// the player can tell how much of the ladder is behind them.
-        /// </summary>
-        public void ShowDolls(IReadOnlyList<GridPos> cells, IReadOnlyList<int> sizes)
+        /// <summary>"Matruşka"'s dolls as they stand, drawn without ceremony. Null clears them. The
+        /// drawing - and everything that happens to them - is MatryoshkaView's.</summary>
+        public void ShowDolls(IReadOnlyList<GridPos> cells, IReadOnlyList<int> generations,
+            int lastGeneration)
         {
-            for (int i = dollMarkers.Count - 1; i >= 0; i--)
+            if (cells == null || board == null)
             {
-                if (dollMarkers[i] != null)
+                if (matryoshka != null)
                 {
-                    Destroy(dollMarkers[i]);
+                    matryoshka.Clear();
                 }
+                return;
             }
-            dollMarkers.Clear();
-            if (board == null || cells == null)
+            EnsureMatryoshka();
+            matryoshka.Show(DollMarks(cells, generations), lastGeneration, board, CellToWorld, cellSize);
+        }
+
+        /// <summary>
+        /// A turn that did something to the dolls: its events and where the dolls end up, held until
+        /// ReleaseDolls - the moment the cubes under them go - so a doll opens as its cube breaks.
+        /// </summary>
+        public void HoldDolls(IReadOnlyList<DollEvent> events, IReadOnlyList<GridPos> cells,
+            IReadOnlyList<int> generations, int lastGeneration)
+        {
+            if (board == null || events == null)
             {
                 return;
             }
-            for (int i = 0; i < cells.Count; i++)
+            EnsureMatryoshka();
+            matryoshka.Hold(events, DollMarks(cells, generations), lastGeneration, board, CellToWorld,
+                cellSize);
+        }
+
+        /// <summary>Plays the held doll events, if any are held.</summary>
+        public void ReleaseDolls()
+        {
+            if (matryoshka != null)
             {
-                if (!board.IsInside(cells[i]))
-                {
-                    continue;
-                }
-                int left = sizes != null && i < sizes.Count ? sizes[i] : 1;
-                if (left < 1) { left = 1; }
-                float scale = cellSize * (0.22f + 0.09f * Mathf.Min(left, 4));
-                SpriteRenderer pip = ViewUtil.MakeRect(transform, "Doll_" + i,
-                    CellToWorld(cells[i]), new Vector2(scale, scale), DollColor, 6);
-                dollMarkers.Add(pip.gameObject);
+                matryoshka.Release();
             }
+        }
+
+        private List<MatryoshkaView.Mark> DollMarks(IReadOnlyList<GridPos> cells,
+            IReadOnlyList<int> generations)
+        {
+            var marks = new List<MatryoshkaView.Mark>();
+            for (int i = 0; cells != null && i < cells.Count; i++)
+            {
+                if (board.IsInside(cells[i]))
+                {
+                    int generation = generations != null && i < generations.Count ? generations[i] : 1;
+                    marks.Add(new MatryoshkaView.Mark(cells[i], Mathf.Max(1, generation)));
+                }
+            }
+            return marks;
+        }
+
+        private void EnsureMatryoshka()
+        {
+            if (matryoshka != null)
+            {
+                return;
+            }
+            var go = new GameObject("Matryoshka");
+            go.transform.SetParent(transform, false);
+            matryoshka = go.AddComponent<MatryoshkaView>();
         }
 
         /// <summary>The circuit path, IN ORDER. The drawing is CircuitTraceView's business: one
@@ -1543,7 +2266,17 @@ namespace ProjectBlock.View
             {
                 // Outside the grid this paints a temporary overhang sprite instead - a ghost
                 // block hanging off the edge breathes with the rest of its own preview.
-                PaintPreviewCell(origin + offset, color, true);
+                GridPos cell = origin + offset;
+                PaintPreviewCell(cell, color, true);
+                // DENIED ENTRY. If a sealed cell is under this preview it refuses it ITSELF - the
+                // nearest ribs clamp and the seal tightens. That is the whole message: no red
+                // cross, no shake, no text, because the thing stopping you is right there and can
+                // answer for itself. Asking the board whether the cell is sealed is reading a
+                // state, not deciding a rule.
+                if (mapus != null && board.IsSealed(cell))
+                {
+                    mapus.PlayDenied(cell);
+                }
             }
             // The explosion preview is the biggest tell of all: it would announce exactly which
             // lines are one cube from full. Blind means blind.
@@ -1576,6 +2309,118 @@ namespace ProjectBlock.View
                 }
             }
         }
+
+        /// <summary>
+        /// "HIDROLIK PRES" AIMED. The four cells are ONE MECHANICAL AREA, so they are not tinted
+        /// one at a time and never with the explosion colour - nothing here explodes. What is drawn
+        /// is a single very thin slate pressure frame around the whole 2x2, four small INWARD-facing
+        /// corner brackets, and a faint inner shadow. No arrows: four big arrows over the board is
+        /// the thing this replaces, and brackets plus a shadow already say "this is about to be
+        /// squeezed".
+        ///
+        /// Invalid targets keep the game's existing language (the red preview tint), so a refusal
+        /// reads the way every other refusal in the game does.
+        ///
+        /// <paramref name="pressCell"/> is the press's SECOND aim: once the patch is committed the
+        /// player names which of its four cells keeps the cube, and that one cell is tinted inside
+        /// the frame - the frame stays, because the patch is still what gets squeezed.
+        /// </summary>
+        public void ShowPressPreview(IReadOnlyList<GridPos> cells, bool valid,
+            GridPos? pressCell = null)
+        {
+            ClearPreview();
+            if (board == null || cells == null || cells.Count == 0)
+            {
+                return;
+            }
+            if (!valid)
+            {
+                for (int i = 0; i < cells.Count; i++)
+                {
+                    if (board.IsInside(cells[i]))
+                    {
+                        PaintPreviewCell(cells[i], InvalidPreviewColor, true);
+                    }
+                }
+                return;
+            }
+            // The patch's own middle and extent, taken from the cells rather than assumed, so a
+            // differently shaped patch one day draws its own frame.
+            var min = new Vector2(float.MaxValue, float.MaxValue);
+            var max = new Vector2(float.MinValue, float.MinValue);
+            int inside = 0;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (!board.IsInside(cells[i]))
+                {
+                    continue;
+                }
+                Vector2 at = CellToWorld(cells[i]);
+                min = Vector2.Min(min, at);
+                max = Vector2.Max(max, at);
+                inside++;
+            }
+            if (inside == 0)
+            {
+                return;
+            }
+            Vector2 centre = (min + max) * 0.5f;
+            Vector2 span = (max - min) + new Vector2(cellSize, cellSize);
+            float line = Mathf.Max(cellSize * 0.035f, 0.01f);
+            float bracket = cellSize * 0.26f;
+            // ONE frame: four thin edges of a single rectangle, muted steel.
+            pressPreview.Add(ViewUtil.MakeRounded(transform, "PressFrame",
+                centre + new Vector2(0f, span.y * 0.5f - line * 0.5f),
+                new Vector2(span.x, line), PressFrameColor, PressPreviewOrder));
+            pressPreview.Add(ViewUtil.MakeRounded(transform, "PressFrame",
+                centre - new Vector2(0f, span.y * 0.5f - line * 0.5f),
+                new Vector2(span.x, line), PressFrameColor, PressPreviewOrder));
+            pressPreview.Add(ViewUtil.MakeRounded(transform, "PressFrame",
+                centre + new Vector2(span.x * 0.5f - line * 0.5f, 0f),
+                new Vector2(line, span.y), PressFrameColor, PressPreviewOrder));
+            pressPreview.Add(ViewUtil.MakeRounded(transform, "PressFrame",
+                centre - new Vector2(span.x * 0.5f - line * 0.5f, 0f),
+                new Vector2(line, span.y), PressFrameColor, PressPreviewOrder));
+            // Four corner brackets, each pointing IN - the game's own rounded language rather than
+            // hard typographic corners.
+            float bx = span.x * 0.5f - line * 1.6f;
+            float by = span.y * 0.5f - line * 1.6f;
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                for (int sy = -1; sy <= 1; sy += 2)
+                {
+                    Vector2 corner = centre + new Vector2(bx * sx, by * sy);
+                    pressPreview.Add(ViewUtil.MakeRounded(transform, "PressBracket",
+                        corner - new Vector2(bracket * 0.5f * sx, 0f),
+                        new Vector2(bracket, line * 1.6f), PressBracketColor,
+                        PressPreviewOrder));
+                    pressPreview.Add(ViewUtil.MakeRounded(transform, "PressBracket",
+                        corner - new Vector2(0f, bracket * 0.5f * sy),
+                        new Vector2(line * 1.6f, bracket), PressBracketColor,
+                        PressPreviewOrder));
+                }
+            }
+            // And the faintest inner shadow, so the area reads as recessed under the jaws.
+            pressPreview.Add(ViewUtil.MakeRounded(transform, "PressInner", centre,
+                span - new Vector2(line * 3f, line * 3f), PressInnerColor,
+                PressPreviewOrder - 1));
+            if (pressCell.HasValue && board.IsInside(pressCell.Value))
+            {
+                PaintPreviewCell(pressCell.Value, ValidPreviewColor, true);
+            }
+        }
+
+        /// <summary>The frame's muted steel, the brackets a shade brighter, and a very faint inner
+        /// shadow. Slate-grey throughout: the press is industrial, not an alert.</summary>
+        private static readonly Color PressFrameColor = new Color(0.56f, 0.60f, 0.67f, 0.55f);
+
+        private static readonly Color PressBracketColor = new Color(0.70f, 0.74f, 0.80f, 0.7f);
+
+        private static readonly Color PressInnerColor = new Color(0f, 0f, 0f, 0.1f);
+
+        private const int PressPreviewOrder = 4;
+
+        private readonly List<SpriteRenderer> pressPreview = new List<SpriteRenderer>();
 
         /// <summary>Draws (or hides) the red line separating the game area from the retro dead
         /// zone - the top <paramref name="deadZoneRows"/> rows. Recreated on demand; the controller
@@ -1732,6 +2577,14 @@ namespace ProjectBlock.View
             outsidePreviewSprites.Clear();
             outsidePreviewBaseColors.Clear();
             outsidePreviewBreathes.Clear();
+            for (int i = 0; i < pressPreview.Count; i++)
+            {
+                if (pressPreview[i] != null)
+                {
+                    Destroy(pressPreview[i].gameObject);
+                }
+            }
+            pressPreview.Clear();
         }
 
         /// <summary>Replays the water fall frames, then restores the true board state and
@@ -2002,6 +2855,15 @@ namespace ProjectBlock.View
             SpriteRenderer renderer = cellRenderers[pos.X - board.MinX, pos.Y - board.MinY];
             ViewUtil.ApplyTile(renderer, null, cellSize * EmptyFill);
             renderer.color = board.IsSealed(pos) ? SealedColor : EmptyColor;
+        }
+
+        /// <summary>THE ANIMATION LAB ONLY: paints one cell in a state colour the board itself
+        /// uses - "Mapus" sealed, or "Tılsım" bonus ground - so the lab can show what they look
+        /// like without the rules having to make one on a board of its own. Any repaint takes it
+        /// straight back; nothing here is state.</summary>
+        public void PaintCellState(GridPos cell, bool sealedCell)
+        {
+            PaintCell(cell, sealedCell ? SealedColor : BonusGroundColor);
         }
 
         private void PaintCell(GridPos pos, Color color)

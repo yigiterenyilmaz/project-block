@@ -299,7 +299,35 @@ namespace ProjectBlock.Core
         /// <summary>Points per ghost cube blown up.</summary>
         public int PointsPerGhostCube = 15;
 
+        /// <summary>
+        /// WHETHER GROUND CAN BE RECLAIMED FROM A GHOST AT THIS CELL. The board never grows left
+        /// or down, so a trace at a negative coordinate is harvested and paid for and leaves
+        /// nothing behind.
+        ///
+        /// This is the ONE place that is decided. It is public because the presentation needs the
+        /// answer too - the report carries it out to the View, and the animation lab asks it
+        /// directly rather than re-deriving it, which it was doing until this existed.
+        /// </summary>
+        public static bool CanReclaim(GridPos cell)
+        {
+            return cell.X >= 0 && cell.Y >= 0;
+        }
+
         private readonly List<GridPos> convertedCells = new List<GridPos>();
+
+        /// <summary>WHAT THE HARVEST TOOK, for the View: every ghost with its own face, which of
+        /// them the rules could reclaim ground from, and what it all paid. Written before the
+        /// ghosts are removed, because an animation that begins from a block's own colour cannot
+        /// begin from a block that has already been deleted. Reporting only, [NotSaved].</summary>
+        [field: NotSaved]
+        public TalismanActivationVisuals LastActivation { get; private set; }
+
+        /// <summary>THE GROUND AS THE NEXT BOARD ACTUALLY GOT IT. Written when that board's config
+        /// is built and deliberately NOT cleared by OnRoundStarted - the working list is reset
+        /// there, and the View still has an unwrapping to play on the round that just began.
+        /// </summary>
+        [field: NotSaved]
+        public TalismanGroundVisuals LastGround { get; private set; }
 
         public TilsimPower()
             : base("tilsim", "Tılsım")
@@ -332,6 +360,8 @@ namespace ProjectBlock.Core
         /// <summary>Confirmed: the conversion lasts for the round only.</summary>
         public override void OnRoundStarted(RoundContext ctx)
         {
+            // The gift lasts one round, so the source list goes. LastGround does NOT: the board
+            // this round was built with those cells and the View has an unwrapping to play on it.
             convertedCells.Clear();
         }
 
@@ -347,13 +377,35 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
+            if (LastActivation == null)
+            {
+                LastActivation = new TalismanActivationVisuals();
+            }
+            LastActivation.Clear();
+            LastActivation.Serial++;
+            LastActivation.ScorePerGhost = PointsPerGhostCube;
+            LastActivation.TotalScore = ghosts * PointsPerGhostCube;
+            // SNAPSHOT FIRST. The ghosts are about to stop existing, and the View's harvest starts
+            // from each one's own face - so it is taken here rather than reconstructed after.
+            foreach (KeyValuePair<GridPos, Cube> ghost in ctx.Round.Board.OutsideCubes)
+            {
+                LastActivation.Ghosts.Add(new HarvestedGhost
+                {
+                    Cell = ghost.Key,
+                    Cube = ghost.Value,
+                    Reclaimable = CanReclaim(ghost.Key)
+                });
+            }
             List<GridPos> converted = ctx.Round.Board.TakeOutsideCellsForConversion();
             foreach (GridPos cell in converted)
             {
-                // Only cells the board can actually grow into: it never grows left or down.
-                if (cell.X >= 0 && cell.Y >= 0 && !convertedCells.Contains(cell))
+                // Only cells the board can actually grow into: it never grows left or down. This
+                // is the ONE place that condition is written, and the report above carries its
+                // answer out so the View never re-derives it.
+                if (CanReclaim(cell) && !convertedCells.Contains(cell))
                 {
                     convertedCells.Add(cell);
+                    LastActivation.Reclaimed.Add(cell);
                 }
             }
             ctx.Round.AddScoreOutsideTurn(ghosts * PointsPerGhostCube);
@@ -373,6 +425,16 @@ namespace ProjectBlock.Core
             // line must never wait for it to be filled (see GameBoard's header).
             var bonus = new List<GridPos>(config.OptionalPlayableCells);
             bonus.AddRange(convertedCells);
+            // AND THE VIEW IS TOLD WHAT THIS BOARD ACTUALLY GOT - here, at the moment it is
+            // decided, rather than left to be inferred later from a board the power no longer has
+            // a list for.
+            if (LastGround == null)
+            {
+                LastGround = new TalismanGroundVisuals();
+            }
+            LastGround.Clear();
+            LastGround.Serial++;
+            LastGround.Cells.AddRange(convertedCells);
             // WithBoard, not a hand-written rebuild: the erosion style and the boss flag come
             // along by themselves (see RoundConfig's header - both have been dropped before).
             return config.WithBoard(config.BoardWidth, config.BoardHeight, cells, bonus);

@@ -97,23 +97,56 @@ namespace ProjectBlock.View
 
         // ------------------------------------------------------------------- metrics
 
-        public const float ButtonWidth = 460f;
-        public const float ButtonHeight = 76f;
-        public const float ButtonGap = 14f;
+        // THE SHAPE OF A MENU BELONGS TO THE LAYOUT, not to this file: a row sized for a
+        // mouse on a monitor is too small for a thumb on a phone. The desktop numbers below are
+        // the ones that used to be consts here, unchanged. See UiLayout.
+        public static float ButtonWidth
+        {
+            get { return UiLayout.Active.MenuButtonWidth; }
+        }
+        public static float ButtonHeight
+        {
+            get { return UiLayout.Active.MenuButtonHeight; }
+        }
+        public static float ButtonGap
+        {
+            get { return UiLayout.Active.MenuButtonGap; }
+        }
 
         /// <summary>Width of the highlight bar on the selected row.</summary>
-        public const float AccentWidth = 7f;
+        public static float AccentWidth
+        {
+            get { return UiLayout.Active.MenuAccentWidth; }
+        }
 
         /// <summary>Gap between the header block and the first button.</summary>
-        public const float HeaderGap = 70f;
+        public static float HeaderGap
+        {
+            get { return UiLayout.Active.MenuHeaderGap; }
+        }
 
-        public const int TitleFontSize = 68;
-        public const int SubtitleFontSize = 24;
-        public const int LabelFontSize = 30;
-        public const int NoteFontSize = 21;
+        public static int TitleFontSize
+        {
+            get { return UiLayout.Active.MenuTitleFont; }
+        }
+        public static int SubtitleFontSize
+        {
+            get { return UiLayout.Active.MenuSubtitleFont; }
+        }
+        public static int LabelFontSize
+        {
+            get { return UiLayout.Active.MenuLabelFont; }
+        }
+        public static int NoteFontSize
+        {
+            get { return UiLayout.Active.MenuNoteFont; }
+        }
 
         /// <summary>The reading screens (how to play, run summary). A page is capped at ~19
         /// lines, and the body box is 620 tall, so this has headroom to grow a little.</summary>
-        public const int BodyFontSize = 24;
+        public static int BodyFontSize
+        {
+            get { return UiLayout.Active.MenuBodyFont; }
+        }
     }
 }

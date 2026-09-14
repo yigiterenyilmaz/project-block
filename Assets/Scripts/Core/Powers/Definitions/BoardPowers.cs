@@ -290,7 +290,12 @@ namespace ProjectBlock.Core
             memory.Clear();
             if (echoed.Count > 0)
             {
-                ctx.Round.AddScoreOutsideTurn(echoed.Count * PointsPerEchoedCube);
+                // A replayed explosion is a power's destruction: it pays only under "Genel
+                // temizlik".
+                if (ctx.Round.ExternalDestructionScores)
+                {
+                    ctx.Round.AddScoreOutsideTurn(echoed.Count * PointsPerEchoedCube);
+                }
                 ctx.Round.TryResolveCleanSweep();
             }
             return true;

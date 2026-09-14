@@ -382,6 +382,22 @@ namespace ProjectBlock.View
             {
                 body += "\n\n" + joker.StatusText;
             }
+            // What the old horizontal panel printed and a vertical card has no room for.
+            if (joker.Defect == SmuggledDefect.NeverWorks)
+            {
+                body += "\n" + Loc.Pick("DEFECTIVE: dead", "DEFOLU: hiç çalışmaz");
+            }
+            else if (joker.Defect == SmuggledDefect.DeadInBossRounds)
+            {
+                body += "\n" + Loc.Pick("DEFECTIVE: off in boss rounds",
+                    "DEFOLU: patron rauntlarında kapalı");
+            }
+            if (joker.DisabledInOvertime)
+            {
+                body += "\n" + Loc.Pick("Off in overtime", "Uzatmada kapalı");
+            }
+            body += "\n" + Loc.Pick("Sell ", "Satış ")
+                + session.Jokers.SellValueOf(joker) * session.Config.Scoring.ScoreScale;
             // The key carries a text hash so a live-changing description/status (Halüsinasyon's
             // current form, a charge flipping) rebuilds the panel instead of showing stale text.
             RenderTooltip("heldjoker:" + joker.InstanceId + "#" + (title + body).GetHashCode(),
@@ -398,6 +414,9 @@ namespace ProjectBlock.View
             {
                 body += "\n\n" + power.StatusText;
             }
+            // The sell value the old horizontal panel printed.
+            body += "\n" + Loc.Pick("Sell ", "Satış ")
+                + session.Powers.SellValueOf(power) * session.Config.Scoring.ScoreScale;
             RenderTooltip("heldpower:" + power.InstanceId + "#" + (title + body).GetHashCode(),
                 title, body, nearWorld, rarity);
         }

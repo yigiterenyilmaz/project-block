@@ -36,6 +36,23 @@ namespace ProjectBlock.View
             // mine's reveal and it has to know to wait for the blast. Drawn further down.
             TriggerMineDetonation(round);
             RefreshAll(report);
+            // A moving board's turn end is drawn on THIS frame, the one the board was repainted in
+            // - never behind the water below, or its cubes would be seen at their new cells before
+            // they had set off.
+            PlayBoardMotion(report);
+            // "Kangren" for the same reason: the cells it takes are held back to what stood in them
+            // on this frame, before anything is drawn.
+            PlayGangrene(round, report);
+            // "Yılan" too: it slid, it may have eaten, and the player's lines may have cut it - all
+            // of it on the frame the board was repainted.
+            PlaySnake(round);
+            // "Hidrolik pres" letting go, on the same frame and for the same reason: the cubes it
+            // shoved are already at their new cells on the board, so the copies have to set off now.
+            PlayPressRelease(round);
+            // "Parazit": the host cube either held against something this turn, or the player's own
+            // line finally took it. Both on this frame, off the rules' own report.
+            PlayParasiteSeverance(round, report);
+            PlayParasiteRefusals(round);
             IReadOnlyList<IReadOnlyList<WaterMove>> frames = report.WaterFallFrames;
             if (frames.Count == 0)
             {
@@ -61,7 +78,7 @@ namespace ProjectBlock.View
                 });
             }
             TriggerSupurgeBlast();
-            TriggerInfectionBlast();
+            TriggerInfectionBlast(report);
             PlayMineDetonationFeedback(round);
             ShowShellGameReveal(round);
             // A resolved turn is the natural save point: the per-turn scratch state is at rest,
@@ -136,6 +153,9 @@ namespace ProjectBlock.View
         /// pre-explosion water falls when the flow is what completed the line.</summary>
         private void PlayExplosionFeedback(RoundEngine round, TurnReport report)
         {
+            // "Matruşka": the dolls held since the refresh open NOW - as the cubes under them go, not
+            // when the board was repainted before the water fell.
+            boardView.ReleaseDolls();
             if (report.CleanSweep)
             {
                 // the sweep bling rises in pitch with every sweep this round
@@ -231,7 +251,13 @@ namespace ProjectBlock.View
             }
             comboStreak++;
             EmitBlastParticles(round, report);
-            ShakeForBlast(report.DynamiteTriggered, report.CleanSweep, comboStreak);
+            // A turn whose only explosion was a loose group ("Hedefli" payout, a late reshape
+            // clear) does not shake: the group explosion keeps the screen still. A cleared line,
+            // TNT and a clean sweep keep theirs.
+            if (report.CubesExploded > 0 || report.DynamiteTriggered || report.CleanSweep)
+            {
+                ShakeForBlast(report.DynamiteTriggered, report.CleanSweep, comboStreak);
+            }
             if (report.DynamiteTriggered)
             {
                 FlashDynamite(DynamiteCenter(report));
@@ -420,16 +446,28 @@ namespace ProjectBlock.View
             // Late board-reshape clears (inflation deflate, board powers) blast their exact
             // absolute cells - ExplodedRows/Columns never covered them. The board has already
             // been rebuilt to its new size by RefreshAll, so CellToWorld maps these correctly.
-            FlashCells(report.ExtraExplodedCells, BlastColor, 4);
+            FlashCells(report.ExtraExplodedCells, BlastColor);
             // A "Hedefli" payout keeps its cells in a list of its own (so "Antimadde" cannot be
             // billed for them). It goes off in the lime that belongs to nothing else on the
             // board, so the cube the player was aiming at is what they see break.
             FlashCells(report.TargetedExplodedCells,
-                ViewUtil.ElementColor(BlockElement.Targeted), 4);
-            // Cells a BOSS lifted off rather than destroyed ("Alzheimer" forgetting a card,
-            // "Yürüyen merdiven" carrying a row away). Pale and COLD - it never strikes bright,
-            // because nothing blew up and nothing was earned.
-            FlashCells(report.LiftedCells, LiftedColor, 3, cold: true);
+                ViewUtil.ElementColor(BlockElement.Targeted));
+            // Cells a BOSS took off rather than destroyed - and here, only the ones that
+            // VANISHED where they stood ("Alzheimer", "Hidrolik pres"): those go through a removal
+            // variant. The other two kinds have ALREADY played, on the frame the board was
+            // repainted: one a MOVING board carried off ("Yürüyen merdiven", "Merkezkaç kuvveti")
+            // was torn away along its step (PlayBoardMotion), and one that CHANGED in place
+            // ("Kangren") was drawn turning by the rot's own system (PlayGangrene). This pass can
+            // run behind the water, which is exactly why they do not wait for it.
+            var removed = new List<GridPos>();
+            for (int i = 0; i < report.LiftedCells.Count; i++)
+            {
+                if (report.LiftKindAt(i) == LiftKind.Removed)
+                {
+                    removed.Add(report.LiftedCells[i]);
+                }
+            }
+            PlayRemoval(removed);
             // "Kaçakçı" defective goods: the cubes showed up and then let go. They fall through
             // the arena and off the bottom of the screen - nothing landed, so there is nothing to
             // blast, only something to drop.
@@ -486,10 +524,6 @@ namespace ProjectBlock.View
         /// counter has already moved on by then. The animation lab writes it directly.</summary>
         private int activeLineTier = 1;
 
-        /// <summary>Cells a boss carried away rather than broke: cold and pale, so a lift can
-        /// never be mistaken for something the player earned.</summary>
-        private static readonly Color LiftedColor = new Color(0.62f, 0.68f, 0.82f, 0.9f);
-
         /// <summary>
         /// ONE cleared line: the ray out of its middle. <paramref name="line"/> is an ABSOLUTE
         /// row or column coordinate, like a GridPos - the two callers that hold a 0-based report
@@ -525,53 +559,1076 @@ namespace ProjectBlock.View
             // two can never disagree about which streak the player is on.
             int tier = LineBurstView.EffectiveTier(activeLineTier);
             Color tone = LineBlastColors[tier];
-            // A cleared LINE does not go through CellFlashFx and throws no code particles,
-            // unlike every other destruction. Both were built for a loose handful of cells: a
-            // whole row of struck squares is a rectangle, and the sheet already flies its own
-            // debris out of the middle. What a line gets instead is LineSweepView - energy
-            // leaving the centre for both ends, with each slot answering as it passes - under
-            // the drawn burst. FlashCells keeps the squares and the sparks, because a loose
-            // group has neither a direction nor a drawing of its own.
+            // A cleared LINE shares nothing with FlashCells. A whole row of cells going off one
+            // by one is a rectangle, and the sheet already flies its own debris out of the
+            // middle. What a line gets instead is LineSweepView - energy leaving the centre for
+            // both ends, with each slot answering as it passes - under the drawn burst. A loose
+            // group goes through ClusterBurstView, which has neither a direction nor a combo
+            // tier, so the two can never be mistaken for each other.
             lineSweep.Play(cells, boardView.CellWorldSize, row, tone);
             lineBurst.Play(cells, boardView.CellWorldSize, row, activeLineTier);
         }
 
         /// <summary>
-        /// EVERY destruction that is not a line: a late board-reshape clear, a "Hedefli" payout,
-        /// a power blast, the sweeper, an infection going off, cubes a boss lifted away. They
-        /// strike in the same language a cleared line does - the squares themselves going off -
-        /// only rippling out from the middle of the group instead of along an axis, and in the
-        /// colour that destruction already owns.
+        /// EVERY explosion that is not a line: a late board-reshape clear, a "Hedefli" payout, a
+        /// power blast, the sweeper. The group goes off from its own centre through
+        /// ClusterBurstView - each cell charging, bursting and letting go - in the colour that
+        /// destruction already owns. It leaves the camera alone unless its impulse setting is
+        /// raised from zero.
+        ///
+        /// <paramref name="onFirstPeak"/> is for a caller that owns its SOUND: it fires on the
+        /// frame the first cell bursts, so the bang lands with the flash instead of ahead of it.
         ///
         /// Cells outside the board are dropped: a turn that also eroded the arena can name a
-        /// cell that is no longer there. Returns whether anything was drawn, which is what the
-        /// callers that also make a sound or shake the camera decide on.
+        /// cell that is no longer there. A cell named twice goes off once. Returns whether
+        /// anything was drawn.
         /// </summary>
-        private bool FlashCells(IReadOnlyList<GridPos> cells, Color tone, int particlesPerCell,
-            bool cold = false)
+        private bool FlashCells(IReadOnlyList<GridPos> cells, Color tone,
+            System.Action onFirstPeak = null, IReadOnlyList<ClusterBurstView.Look> faces = null)
         {
             if (cells == null || cells.Count == 0 || boardView == null || boardView.Board == null)
             {
                 return false;
             }
+            GameBoard board = boardView.Board;
+            var group = new HashSet<GridPos>();
             var world = new List<Vector2>(cells.Count);
+            var looks = new List<ClusterBurstView.Look>(cells.Count);
             for (int i = 0; i < cells.Count; i++)
             {
-                if (boardView.Board.IsInside(cells[i]))
+                if (board.IsInside(cells[i]) && group.Add(cells[i]))
                 {
                     world.Add(boardView.CellToWorld(cells[i]));
+                    Sprite tile;
+                    Color colour;
+                    if (faces != null && faces.Count > 0)
+                    {
+                        // The lab's blocks, handed in whole: the cells it blasts hold none.
+                        looks.Add(faces[i % faces.Count]);
+                    }
+                    else
+                    {
+                        // The board repainted this cell empty a moment ago; the burst breaks the
+                        // cube that WAS there, so it asks what that cube looked like.
+                        looks.Add(boardView.TryCubeLook(cells[i], CubeLookMaxAge, out tile, out colour)
+                            ? new ClusterBurstView.Look { Tile = tile, Colour = colour }
+                            : new ClusterBurstView.Look());
+                    }
                 }
             }
             if (world.Count == 0)
             {
                 return false;
             }
-            float[] times = CellFlashFx.BurstTimes(world);
-            CellFlashFx.Play(transform, world, times, boardView.CellWorldSize,
-                CellFlashFx.Pinch.Uniform,
-                cold ? CellFlashFx.Palette.Cold(tone) : CellFlashFx.Palette.Hot(tone));
-            StartCoroutine(BurstParticles(world, times, tone, particlesPerCell));
+            // The screen stays still unless ClusterBurstView.Style.ScreenImpulseStrength is raised
+            // from its default of zero (the designer's call).
+            float impulse = ClusterBurstView.ImpulseFor(world.Count);
+            System.Action onImpact = null;
+            if (impulse > 0f)
+            {
+                onImpact = delegate
+                {
+                    ShakeCamera(impulse, ClusterBurstView.Style.ScreenImpulseDuration, 3f);
+                };
+            }
+            clusterBurst.Play(world, looks, boardView.CellWorldSize, boardView.CubeWorldSize, tone,
+                onFirstPeak, onImpact);
             return true;
+        }
+
+        /// <summary>How long after a repaint emptied a cell FlashCells still breaks the cube that
+        /// stood there. Generous: the sweeper waits its own beat, and a turn's explosion can play
+        /// after the water has finished falling.</summary>
+        private const float CubeLookMaxAge = 2f;
+
+        /// <summary>The ways a cube a boss REMOVED can leave the board. Every removal draws one
+        /// at random - the same one twice is allowed - so the player keeps seeing it happen
+        /// differently. Add a variant here and in PlayRemoval; nothing else needs to know.</summary>
+        private enum RemovalVariant
+        {
+            ColdSink,
+            PhaseFold,
+            CryoSublimation
+        }
+
+        private static readonly RemovalVariant[] RemovalVariants =
+        {
+            RemovalVariant.ColdSink, RemovalVariant.PhaseFold, RemovalVariant.CryoSublimation
+        };
+
+        /// <summary>
+        /// Cubes a boss REMOVED - vanished where they stood, cells empty now. One variant, picked
+        /// at random, for the whole removal: half a group falling into pits and half doing
+        /// something else would read as two events. Visual only - the random pick never reaches
+        /// Core. <paramref name="variant"/> and <paramref name="faces"/> are the lab's: a variant
+        /// to force and the blocks to use on cells that hold none.
+        /// </summary>
+        private bool PlayRemoval(IReadOnlyList<GridPos> cells, RemovalVariant? variant = null,
+            IReadOnlyList<ClusterBurstView.Look> faces = null)
+        {
+            if (cells == null || cells.Count == 0 || boardView == null || boardView.Board == null)
+            {
+                return false;
+            }
+            GameBoard board = boardView.Board;
+            var seen = new HashSet<GridPos>();
+            var world = new List<Vector2>(cells.Count);
+            var looks = new List<ClusterBurstView.Look>(cells.Count);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (!board.IsInside(cells[i]) || !seen.Add(cells[i]))
+                {
+                    continue;
+                }
+                world.Add(boardView.CellToWorld(cells[i]));
+                Sprite tile;
+                Color colour;
+                if (faces != null && faces.Count > 0)
+                {
+                    looks.Add(faces[i % faces.Count]);
+                }
+                else
+                {
+                    looks.Add(boardView.TryCubeLook(cells[i], CubeLookMaxAge, out tile, out colour)
+                        ? new ClusterBurstView.Look { Tile = tile, Colour = colour }
+                        : new ClusterBurstView.Look());
+                }
+            }
+            if (world.Count == 0)
+            {
+                return false;
+            }
+            RemovalVariant chosen = variant.HasValue ? variant.Value
+                : RemovalVariants[Random.Range(0, RemovalVariants.Length)];
+            switch (chosen)
+            {
+                case RemovalVariant.PhaseFold:
+                    phaseFold.Play(world, looks, boardView.CellWorldSize, boardView.CubeWorldSize,
+                        boardView.EmptySlotSize);
+                    break;
+                case RemovalVariant.CryoSublimation:
+                    cryoSublimation.Play(world, looks, boardView.CellWorldSize, boardView.CubeWorldSize,
+                        boardView.EmptySlotSize);
+                    break;
+                default:
+                    coldSink.Play(world, looks, boardView.CellWorldSize, boardView.CubeWorldSize,
+                        boardView.EmptySlotSize);
+                    break;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// A moving board's turn end ("Yürüyen merdiven", "Merkezkaç kuvveti"), drawn on the frame
+        /// the board was repainted in its new state: every cube that stays rides to its new cell
+        /// (PlayBoardMoves), every one that does not is torn off (PlayForcedExit) - both on the same
+        /// board's launch, so a row's survivors and casualties set off together.
+        /// </summary>
+        private void PlayBoardMotion(TurnReport report)
+        {
+            if (report == null)
+            {
+                return;
+            }
+            PlayBoardMoves(report.BoardMoves);
+            var carried = new List<GridPos>();
+            var motions = new List<LiftMotion>();
+            for (int i = 0; i < report.LiftedCells.Count; i++)
+            {
+                LiftMotion motion = report.LiftMotionAt(i);
+                if (report.LiftKindAt(i) == LiftKind.Relocated && motion.Reason != LiftReason.None)
+                {
+                    carried.Add(report.LiftedCells[i]);
+                    motions.Add(motion);
+                }
+            }
+            PlayForcedExit(carried, motions);
+        }
+
+        /// <summary>
+        /// Cubes a moving board carried to another cell and that SURVIVED: each rides from the cell
+        /// Core says it left to the cell Core says it reached - never a destination worked out here -
+        /// through BossMoveView, on the profile of the board that moved it. The board view keeps the
+        /// destinations blank until they land. A mirror-world move plays over the mirror board.
+        /// </summary>
+        private bool PlayBoardMoves(IReadOnlyList<CellMove> moves)
+        {
+            if (moves == null || moves.Count == 0 || bossMove == null)
+            {
+                return false;
+            }
+            bool any = false;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                bool mirror = pass == 1;
+                BoardView view = mirror ? mirrorBoardView : boardView;
+                if (view == null || view.Board == null)
+                {
+                    continue;
+                }
+                var from = new List<Vector2>();
+                var to = new List<Vector2>();
+                var targets = new List<GridPos>();
+                var sources = new List<BoardMotionSource>();
+                var looks = new List<ClusterBurstView.Look>();
+                for (int i = 0; i < moves.Count; i++)
+                {
+                    CellMove m = moves[i];
+                    if (m.Mirror != mirror || !view.Board.IsInside(m.To))
+                    {
+                        continue;
+                    }
+                    from.Add(view.CellToWorld(m.From));
+                    to.Add(view.CellToWorld(m.To));
+                    targets.Add(m.To);
+                    sources.Add(m.Source);
+                    Sprite tile = ViewUtil.CubeTile(m.Cube.Kind, FindOwnedCard(m.Cube.SourceCardId));
+                    looks.Add(new ClusterBurstView.Look { Tile = tile, Colour = ViewUtil.CubeTileColor(m.Cube, tile) });
+                }
+                if (from.Count == 0)
+                {
+                    continue;
+                }
+                bossMove.Play(view, from, to, targets, sources, looks, view.CellWorldSize, view.CubeWorldSize,
+                    view.WorldRect);
+                any = true;
+            }
+            return any;
+        }
+
+        /// <summary>
+        /// Cubes a MOVING board carried off ("Yürüyen merdiven", "Merkezkaç kuvveti"): each is torn
+        /// off along the step Core reported it taking (LiftMotion) - never a direction worked out
+        /// here - through MomentumPeelView ("Soğuk sökülme"). Drawn from the cube Core says WENT,
+        /// since its cell may already hold the cube that slid in behind it, and from the cell it
+        /// stood in when the step began. A mirror-world cube plays over the mirror board. The
+        /// board's rect goes along, so a cube going over the edge is clipped by it.
+        /// </summary>
+        private bool PlayForcedExit(IReadOnlyList<GridPos> cells, IReadOnlyList<LiftMotion> motions)
+        {
+            if (cells == null || motions == null || cells.Count == 0 || momentumPeel == null)
+            {
+                return false;
+            }
+            bool any = false;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                bool mirror = pass == 1;
+                BoardView view = mirror ? mirrorBoardView : boardView;
+                if (view == null || view.Board == null)
+                {
+                    continue;
+                }
+                var from = new List<Vector2>();
+                var steps = new List<Vector2>();
+                var reasons = new List<LiftReason>();
+                var sources = new List<BoardMotionSource>();
+                var looks = new List<ClusterBurstView.Look>();
+                for (int i = 0; i < cells.Count && i < motions.Count; i++)
+                {
+                    LiftMotion m = motions[i];
+                    if (m.Mirror != mirror || m.Reason == LiftReason.None)
+                    {
+                        continue;
+                    }
+                    from.Add(view.CellToWorld(m.From));
+                    steps.Add(new Vector2(m.Step.X, m.Step.Y));
+                    reasons.Add(m.Reason);
+                    sources.Add(m.Source);
+                    Sprite tile = ViewUtil.CubeTile(m.Cube.Kind, FindOwnedCard(m.Cube.SourceCardId));
+                    looks.Add(new ClusterBurstView.Look { Tile = tile, Colour = ViewUtil.CubeTileColor(m.Cube, tile) });
+                }
+                if (from.Count == 0)
+                {
+                    continue;
+                }
+                momentumPeel.Play(from, steps, reasons, sources, looks, view.CellWorldSize, view.CubeWorldSize,
+                    view.WorldRect);
+                any = true;
+            }
+            return any;
+        }
+
+        /// <summary>
+        /// "Kangren" - the rot's whole turn, exactly as Core reported it: the cell it took and the
+        /// side it crept in from, the cubes beside it it could not take, every line it took whole in
+        /// the order they died, and the cubes each jump turned on the nearer edge. Nothing here is
+        /// worked out from the board; the View is told all of it (TurnReport.GangreneSpread /
+        /// GangreneLineDeaths) and only decides how it LOOKS.
+        /// </summary>
+        private bool PlayGangrene(RoundEngine round, TurnReport report)
+        {
+            if (report == null || (report.GangreneSpread == null && report.GangreneLineDeaths.Count == 0))
+            {
+                return false;
+            }
+            var scene = new GangreneView.TurnScene();
+            GangreneSpread spread = report.GangreneSpread;
+            if (spread != null)
+            {
+                scene.Cell = spread.Cell;
+                scene.Source = spread.Source;
+                scene.HadCube = spread.Before.HasValue;
+                if (spread.Before.HasValue)
+                {
+                    scene.Before = LookOf(spread.Before.Value);
+                }
+                for (int i = 0; i < spread.Immune.Count; i++)
+                {
+                    scene.Immune.Add(spread.Immune[i]);
+                }
+            }
+            for (int d = 0; d < report.GangreneLineDeaths.Count; d++)
+            {
+                GangreneLineDeath death = report.GangreneLineDeaths[d];
+                var line = new GangreneView.LineDeath
+                {
+                    IsRow = death.IsRow,
+                    Line = death.Line,
+                    EdgeLine = death.EdgeLine
+                };
+                for (int i = 0; i < death.Converted.Count; i++)
+                {
+                    line.Converted.Add(new GangreneView.Converted
+                    {
+                        Cell = death.Converted[i],
+                        Before = i < death.Before.Count
+                            ? LookOf(death.Before[i])
+                            : default(ClusterBurstView.Look)
+                    });
+                }
+                scene.Deaths.Add(line);
+            }
+            // The turn's bill, felt once through every rotten cube - taken from the breakdown the
+            // boss actually wrote, never assumed from the board.
+            var boss = round != null ? round.Boss as KangrenBoss : null;
+            if (boss != null)
+            {
+                foreach (ScoreContribution c in report.Score.Contributions)
+                {
+                    if (c.Source == boss.DefId && c.Flat < 0)
+                    {
+                        scene.Billed = true;
+                        break;
+                    }
+                }
+            }
+            // A turn that cleared something gets its own blast read first; a quiet one does not.
+            bool cleared = report.ExplodedRows.Count > 0 || report.ExplodedColumns.Count > 0
+                || report.ExtraExplodedCells.Count > 0;
+            scene.Delay = cleared ? GangreneView.Style.TurnStartDelay
+                : GangreneView.Style.TurnStartDelayQuiet;
+            return PlayGangreneScene(scene);
+        }
+
+        /// <summary>The snake's turn this View has already played, so a report is played once.</summary>
+        private int snakeTurnPlayed;
+
+        /// <summary>Whether the snake in this arena has had its wake-up. It comes AWAKE the first
+        /// time the round is drawn; after that it is simply there.</summary>
+        private bool snakeSpawned;
+
+        /// <summary>
+        /// "Yılan": where the snake is, straight from the rules. The board leaves its cells blank
+        /// (see BoardView.Refresh) and SnakeView stands the six drawn pieces in them - so this is
+        /// the only thing that tells the View a snake exists at all.
+        /// </summary>
+        private void SyncSnake(RoundEngine round)
+        {
+            var boss = round != null ? round.Boss as SnakeBoss : null;
+            if (boss == null)
+            {
+                boardView.StopSnake();
+                return;
+            }
+            boardView.Snake.Sync(boardView);
+            if (!snakeSpawned)
+            {
+                // A NEW SNAKE HAS EATEN NOTHING. Its defeat is about the colours IT took, so the
+                // last one's history cannot be allowed to leak into it.
+                SnakeDefeatView.ForgetHistory();
+            }
+            boardView.Snake.SetBody(boss.Body, !snakeSpawned);
+            snakeSpawned = true;
+        }
+
+        /// <summary>
+        /// "Yılan"'s whole turn, exactly as Core reported it (SnakeBoss.LastTurn): the segments the
+        /// player's lines cut, in order, with the tail cell each one took; then either the death or
+        /// the slide - and the slide comes with THE BODY AFTER EVERY CELL of it, so the View follows
+        /// the movement the rules made instead of interpolating between two states. What it ate
+        /// comes with the block's own face, taken before the rules removed it.
+        /// </summary>
+        private bool PlaySnake(RoundEngine round)
+        {
+            var boss = round != null ? round.Boss as SnakeBoss : null;
+            SnakeTurnVisuals turn = boss != null ? boss.LastTurn : null;
+            if (turn == null || turn.Turn == snakeTurnPlayed)
+            {
+                return false;
+            }
+            snakeTurnPlayed = turn.Turn;
+            var scene = new SnakeView.TurnScene
+            {
+                Defeated = turn.Defeated,
+                Stuck = turn.WasStuck,
+                Grew = turn.GrowthOccurred,
+                EatenCell = turn.EatenCell
+            };
+            CopyCells(turn.BodyBeforeCuts, scene.BodyBefore);
+            var standing = new List<GridPos>(turn.BodyBeforeCuts);
+            for (int i = 0; i < turn.RemovedTailCells.Count; i++)
+            {
+                var after = new List<GridPos>();
+                if (i < turn.BodyAfterEachCut.Count)
+                {
+                    CopyCells(turn.BodyAfterEachCut[i], after);
+                }
+                scene.Cuts.Add(new SnakeView.CutStep
+                {
+                    Trigger = SnakeCutTrigger(turn, i, standing),
+                    RemovedTail = turn.RemovedTailCells[i],
+                    BodyAfter = after
+                });
+                standing = after;
+            }
+            for (int i = 0; i < turn.StepSnapshots.Count; i++)
+            {
+                var step = new List<GridPos>();
+                CopyCells(turn.StepSnapshots[i], step);
+                scene.Steps.Add(step);
+            }
+            if (turn.EatenCube.HasValue)
+            {
+                scene.EatenLook = LookOf(turn.EatenCube.Value);
+            }
+            CopyCells(turn.BodyAfter, scene.BodyAfter);
+            return PlaySnakeScene(scene);
+        }
+
+        // ---- "Parazit" -------------------------------------------------------------------
+        //
+        // The host cube's harness, and the three things that can happen to it. Everything below
+        // takes what the RULES wrote (ParasiteVisuals: GameBoard.HostRefusals, the joker's own host
+        // cell and passenger) and turns it into world geometry. Nothing here decides whether an
+        // attempt was refused, which way it came from, or whether the bond is about to break.
+
+        private readonly List<ParasiteHostView.Host> parasiteHosts =
+            new List<ParasiteHostView.Host>();
+
+        private readonly List<GridPos> parasiteSevered = new List<GridPos>();
+
+        /// <summary>The parasite in play, or null. One per run by the rules.</summary>
+        private ParazitJoker FindParasite()
+        {
+            if (session == null || session.Jokers == null)
+            {
+                return null;
+            }
+            IReadOnlyList<Joker> owned = session.Jokers.Jokers;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                var parasite = owned[i] as ParazitJoker;
+                if (parasite != null)
+                {
+                    return parasite;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// "TILSIM"'s ground, asked every repaint, and its harvest the moment the power runs.
+        ///
+        /// Both come from the power's own reports. The harvest is keyed on a SERIAL rather than on
+        /// the list's contents, so a repaint during the animation does not restart it; the ground
+        /// is keyed the same way, and an empty report where there was a full one is the gift being
+        /// recalled at the end of its round. The View works out none of it - not which ghosts could
+        /// be reclaimed from, not which cells the next board got, not when the gift expires.
+        /// </summary>
+        private void SyncTalisman(RoundEngine round)
+        {
+            TilsimPower power = FindTalisman();
+            if (power == null)
+            {
+                boardView.StopTalisman();
+                return;
+            }
+            if (power.LastActivation != null)
+            {
+                boardView.Talisman.PlayHarvest(boardView, power.LastActivation);
+            }
+            boardView.Talisman.Sync(boardView, power.LastGround);
+        }
+
+        /// <summary>The talisman in the player's power inventory, or null.</summary>
+        private TilsimPower FindTalisman()
+        {
+            if (session == null || session.Powers == null)
+            {
+                return null;
+            }
+            IReadOnlyList<Power> owned = session.Powers.Powers;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                var found = owned[i] as TilsimPower;
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// WHERE "MAPUS" HAS ITS SEAL, asked every repaint - and everything about it comes from the
+        /// boss's own report (MapusSealVisuals): which cell, how many turns it has held it, how
+        /// close the row and the column through it are to completion, and whether the cap has just
+        /// let a cell go. The View works out none of that; it plays it.
+        ///
+        /// Calling this on every repaint is safe by design: the same cell twice is the seal being
+        /// HELD, and the seal view answers that by doing nothing rather than by rebuilding a
+        /// prison the player is already looking at.
+        /// </summary>
+        private void SyncMapus(RoundEngine round)
+        {
+            var boss = round != null ? round.Boss as MapusBoss : null;
+            MapusSealVisuals seal = boss != null ? boss.LastSeal : null;
+            if (boss == null)
+            {
+                boardView.StopMapus();
+                return;
+            }
+            if (seal == null || !seal.HasSeal)
+            {
+                // No seal this turn: too few free cells, or the cap released the only cell worth
+                // taking. Either way the board breathes, and the release is a real beat.
+                boardView.Mapus.Sync(boardView, null, seal != null && seal.Released);
+                return;
+            }
+            boardView.Mapus.Sync(boardView, new MapusSealView.Seal
+            {
+                Cell = seal.Cell,
+                TurnsHeld = seal.TurnsHeld,
+                MaxTurns = seal.MaxTurns,
+                RowGaps = seal.RowGaps,
+                ColumnGaps = seal.ColumnGaps,
+                RowHeldAlone = seal.RowHeldByTheSealAlone,
+                ColumnHeldAlone = seal.ColumnHeldByTheSealAlone
+            }, seal.Released);
+        }
+
+        /// <summary>
+        /// Where the host cube is and who is riding it, asked every repaint. Both come from the
+        /// JOKER - the View never works out which cube is a host, and never guesses the passenger
+        /// from the cube's own material, which says nothing about who is on it.
+        /// </summary>
+        private void SyncParasite(RoundEngine round)
+        {
+            parasiteHosts.Clear();
+            ParazitJoker parasite = FindParasite();
+            if (parasite != null && parasite.HasBinding && parasite.HostPosition.HasValue
+                && round != null && round.Board != null
+                && round.Board.IsInside(parasite.HostPosition.Value))
+            {
+                Cube? cube = round.Board.GetCube(parasite.HostPosition.Value);
+                if (cube.HasValue && cube.Value.Protected)
+                {
+                    parasiteHosts.Add(new ParasiteHostView.Host
+                    {
+                        Cell = parasite.HostPosition.Value,
+                        Passenger = parasite.PassengerIdentity(session),
+                        // The cube's OWN face, so the wrap can redraw it drained. LookOf takes it
+                        // from the cube itself, magenta wash and all removed.
+                        Look = LookOf(cube.Value)
+                    });
+                }
+            }
+            if (parasiteHosts.Count == 0 && !boardView.Parasite.Busy)
+            {
+                boardView.Parasite.Sync(boardView, parasiteHosts);
+                return;
+            }
+            boardView.Parasite.Sync(boardView, parasiteHosts);
+        }
+
+        /// <summary>
+        /// Every attempt the rules REFUSED on a host this turn, played in their order: the parasite
+        /// grips harder, on the side Core says the force came from. A refusal with no direction
+        /// gets an undirected clamp rather than a side this invented.
+        /// </summary>
+        private bool PlayParasiteRefusals(RoundEngine round)
+        {
+            if (round == null || round.MainBoard == null || boardView == null)
+            {
+                return false;
+            }
+            IReadOnlyList<HostRefusal> refusals = round.MainBoard.HostRefusals.Refusals;
+            bool any = false;
+            for (int i = 0; i < refusals.Count; i++)
+            {
+                HostRefusal r = refusals[i];
+                boardView.Parasite.PlayRefusal(new ParasiteHostView.Refusal
+                {
+                    Cell = r.Cell,
+                    Kind = r.Kind,
+                    Step = new Vector2(r.Step.X, r.Step.Y),
+                    HasDirection = r.HasDirection
+                });
+                any = true;
+            }
+            return any;
+        }
+
+        /// <summary>
+        /// THE ONE THING THE PARASITE CANNOT HOLD: the player's own line took the host cube. The
+        /// bonds break one at a time, the passenger is shown, and both go. Driven off the turn's
+        /// destroyed cubes - a host that is in that list is a host the rules just killed.
+        /// </summary>
+        private bool PlayParasiteSeverance(RoundEngine round, TurnReport report)
+        {
+            if (report == null || boardView == null || parasiteHosts.Count == 0)
+            {
+                return false;
+            }
+            parasiteSevered.Clear();
+            IReadOnlyList<DestroyedCube> destroyed = report.DestroyedCubes;
+            for (int i = 0; i < destroyed.Count; i++)
+            {
+                for (int h = 0; h < parasiteHosts.Count; h++)
+                {
+                    if (destroyed[i].Pos.Equals(parasiteHosts[h].Cell))
+                    {
+                        parasiteSevered.Add(parasiteHosts[h].Cell);
+                    }
+                }
+            }
+            for (int i = 0; i < parasiteSevered.Count; i++)
+            {
+                // WHICH LINE TOOK IT, from the report: a row shears the wrap one way and a column
+                // the other. A host on both is torn along the row, which is the one the eye follows.
+                bool horizontal = true;
+                for (int r = 0; r < report.ExplodedRows.Count; r++)
+                {
+                    if (report.ExplodedRows[r] == parasiteSevered[i].Y)
+                    {
+                        horizontal = true;
+                        break;
+                    }
+                    horizontal = false;
+                }
+                boardView.Parasite.PlaySeverance(parasiteSevered[i], horizontal);
+            }
+            return parasiteSevered.Count > 0;
+        }
+
+        /// <summary>The lab's seam for a severance, and the game's: both go through here.</summary>
+        private bool PlayParasiteSeveranceScene(GridPos cell, bool horizontal)
+        {
+            if (boardView == null)
+            {
+                return false;
+            }
+            boardView.Parasite.PlaySeverance(cell, horizontal);
+            return true;
+        }
+
+        // ---- "Hidrolik pres" -------------------------------------------------------------
+        //
+        // THE SEAMS THE LAB AND THE GAME SHARE. Everything below takes a report the RULES wrote
+        // (PressCompressionVisuals / PressReleaseVisuals) and turns it into world geometry -
+        // nothing here decides which way the press opens, which cube moves, how far, or which
+        // quadrant was empty. Where a cell is on the screen and what a cube's face looks like is
+        // all this adds.
+
+        /// <summary>The last reports played, by reference: the rules make a new one per event, so
+        /// this is all it takes to know an event is new without Core carrying a counter for us.
+        /// </summary>
+        private PressCompressionVisuals pressSqueezePlayed;
+
+        private PressReleaseVisuals pressReleasePlayed;
+
+        /// <summary>The press in play, or null. One at a time by the rules (CanRun refuses while
+        /// IsPressing), so the first one found is the one.</summary>
+        private HidrolikPresPower FindPress()
+        {
+            if (session == null || session.Powers == null)
+            {
+                return null;
+            }
+            IReadOnlyList<Power> owned = session.Powers.Powers;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                var press = owned[i] as HidrolikPresPower;
+                if (press != null)
+                {
+                    return press;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// What a shut press is told every repaint: how many turns it has left (the POWER's number,
+        /// never one counted here) and the colours of the four quadrants inside it, so the release
+        /// can bring them up under the seams. The plates themselves follow the board
+        /// (BoardView.Refresh -> CompressedCubeView.Sync).
+        /// </summary>
+        private void SyncPress(RoundEngine round)
+        {
+            HidrolikPresPower press = FindPress();
+            if (press == null || !press.IsPressing)
+            {
+                boardView.Press.SetCountdown(0, 4);
+                return;
+            }
+            boardView.Press.SetCountdown(press.TurnsLeft, press.TurnsCompressed);
+            PressCompressionVisuals squeeze = press.LastCompression;
+            if (squeeze != null && squeeze.Swallowed.Count == 4)
+            {
+                boardView.Press.SetMemory(QuadMemory(squeeze.Swallowed[0]),
+                    QuadMemory(squeeze.Swallowed[1]), QuadMemory(squeeze.Swallowed[2]),
+                    QuadMemory(squeeze.Swallowed[3]));
+            }
+        }
+
+        /// <summary>A stored quadrant's colour for the shell's memory - what the block is MADE OF,
+        /// never its tint (a painted tile's tint is white). A transparent colour means the quadrant
+        /// was EMPTY, and the shell shows nothing for it.</summary>
+        private static Color QuadMemory(Cube? cube)
+        {
+            if (!cube.HasValue)
+            {
+                return new Color(0f, 0f, 0f, 0f);
+            }
+            Color paint = ViewUtil.CubeMaterialColor(cube.Value);
+            return new Color(paint.r, paint.g, paint.b, 1f);
+        }
+
+        /// <summary>The slate a compressed cube is made of - the designer's hard industrial grey,
+        /// taken from the one place that decides it.</summary>
+        private static Color PressSlate()
+        {
+            return ViewUtil.CubeMaterialColor(
+                new Cube(CubeKind.Compressed, GameBoard.PressCardId));
+        }
+
+        /// <summary>
+        /// THE SQUEEZE, on the frame the board was repainted after the power ran. The four faces
+        /// come from the report - taken before the rules emptied the cells, which is the only way
+        /// the laminae can wear the cubes' own materials - and a quadrant the report stored as NULL
+        /// is played as a hole, never as a cube this invented.
+        /// </summary>
+        private bool PlayPressCompression(RoundEngine round)
+        {
+            HidrolikPresPower press = FindPress();
+            PressCompressionVisuals report = press != null ? press.LastCompression : null;
+            if (report == null || ReferenceEquals(report, pressSqueezePlayed)
+                || report.Cells.Count != 4 || boardView == null || boardView.Board == null)
+            {
+                return false;
+            }
+            pressSqueezePlayed = report;
+            return PlayPressScene(PressSqueezeSceneOf(report));
+        }
+
+        /// <summary>
+        /// A squeeze report turned into world geometry. The LAB goes through here too: it runs the
+        /// real GameBoard.Compress on a board of its own and hands the report it gets back, so a
+        /// retimed or reshaped compression shows up there for free.
+        /// </summary>
+        private HydraulicPressView.CompressionScene PressSqueezeSceneOf(
+            PressCompressionVisuals report)
+        {
+            var scene = new HydraulicPressView.CompressionScene
+            {
+                CompressedCentre = boardView.CellToWorld(report.CompressedCell),
+                CompressedCell = report.CompressedCell,
+                Slate = PressSlate(),
+                CellSize = boardView.CellWorldSize,
+                CubeSize = boardView.CubeWorldSize
+            };
+            for (int i = 0; i < 4; i++)
+            {
+                Cube? cube = report.Swallowed[i];
+                scene.Quads[i] = new HydraulicPressView.Quad
+                {
+                    Cell = report.Cells[i],
+                    Centre = boardView.CellToWorld(report.Cells[i]),
+                    Occupied = cube.HasValue,
+                    Look = cube.HasValue ? LookOf(cube.Value) : new ClusterBurstView.Look()
+                };
+            }
+            return scene;
+        }
+
+        /// <summary>
+        /// THE RELEASE, on the frame the board was repainted after it opened. Every side the rules
+        /// pressed is played in their order - the refusals included, with the cube that refused and
+        /// what KIND it was - then every cube they moved, along its own reported step, with a
+        /// destination that is outside the board when the cube went over the edge. When the rules
+        /// detonated instead, the prelude plays and PressureVesselView takes the event over.
+        /// </summary>
+        private bool PlayPressRelease(RoundEngine round)
+        {
+            HidrolikPresPower press = FindPress();
+            PressReleaseVisuals report = press != null ? press.LastRelease : null;
+            if (report == null || ReferenceEquals(report, pressReleasePlayed)
+                || report.Cells.Count != 4 || boardView == null || boardView.Board == null)
+            {
+                return false;
+            }
+            pressReleasePlayed = report;
+            return PlayPressReleaseReport(report);
+        }
+
+        /// <summary>
+        /// A release report turned into world geometry and played - the prelude's denials, the
+        /// laminae, the push chain, and the failure when the rules detonated instead. The LAB goes
+        /// through here too, off a real GameBoard.Expand on a board of its own.
+        /// </summary>
+        private bool PlayPressReleaseReport(PressReleaseVisuals report)
+        {
+            GameBoard board = boardView.Board;
+            var scene = new HydraulicPressView.ReleaseScene
+            {
+                AnchorCentre = boardView.CellToWorld(report.PressCell),
+                Slate = PressSlate(),
+                CellSize = boardView.CellWorldSize,
+                CubeSize = boardView.CubeWorldSize,
+                DiagonalAxis = report.DiagonalAxis,
+                Detonated = report.Detonated,
+                BoardRect = boardView.WorldRect
+            };
+            for (int i = 0; i < 4; i++)
+            {
+                Cube? cube = report.Stored[i];
+                scene.Quads[i] = new HydraulicPressView.Quad
+                {
+                    Cell = report.Cells[i],
+                    Centre = boardView.CellToWorld(report.Cells[i]),
+                    Occupied = cube.HasValue,
+                    Look = cube.HasValue ? LookOf(cube.Value) : new ClusterBurstView.Look()
+                };
+            }
+            for (int i = 0; i < report.Tests.Count; i++)
+            {
+                PressureTest test = report.Tests[i];
+                scene.Denials.Add(new HydraulicPressView.Denial
+                {
+                    Step = new Vector2(test.Step.X, test.Step.Y),
+                    Succeeded = test.Succeeded,
+                    IsReroute = test.IsReroute,
+                    BlockedAt = boardView.CellToWorld(test.BlockedAt),
+                    BlockedKind = test.BlockedKind
+                });
+            }
+            for (int i = 0; i < report.Pushes.Count; i++)
+            {
+                PressPush push = report.Pushes[i];
+                // A cube that left the board has no cell to ask for a centre, so its destination is
+                // stepped out from the one it came from - it really is outside the arena.
+                Vector2 from = boardView.CellToWorld(push.From);
+                Vector2 to = board.IsInside(push.To)
+                    ? boardView.CellToWorld(push.To)
+                    : from + new Vector2(push.Step.X, push.Step.Y) * boardView.CellWorldSize;
+                scene.Shoves.Add(new HydraulicPressView.Shove
+                {
+                    From = from,
+                    To = to,
+                    Step = new Vector2(push.Step.X, push.Step.Y),
+                    LeftBoard = push.LeftBoard,
+                    Order = push.Order,
+                    Target = push.To,
+                    Look = LookOf(push.Cube)
+                });
+            }
+            bool played = PlayPressReleaseScene(scene);
+            if (report.Detonated)
+            {
+                var failure = new PressureVesselView.Scene
+                {
+                    // The shell collapses where it stood; the footprint is DetonatedCells.
+                    Centre = boardView.CellToWorld(report.PressCell),
+                    Slate = PressSlate(),
+                    CellSize = boardView.CellWorldSize,
+                    CubeSize = boardView.CubeWorldSize
+                };
+                for (int i = 0; i < 4; i++)
+                {
+                    failure.Memory[i] = QuadMemory(report.Stored[i]);
+                }
+                for (int i = 0; i < report.DetonatedCells.Count; i++)
+                {
+                    CubeKind kind = i < report.DetonatedKinds.Count
+                        ? report.DetonatedKinds[i]
+                        : CubeKind.Normal;
+                    // The cube's own face, kept from the repaint that emptied the cell - the same
+                    // bargain every blast in the game makes (BoardView.TryCubeLook).
+                    Sprite tile;
+                    Color colour;
+                    ClusterBurstView.Look look = boardView.TryCubeLook(report.DetonatedCells[i],
+                        CubeLookMaxAge, out tile, out colour)
+                        ? new ClusterBurstView.Look { Tile = tile, Colour = colour }
+                        : new ClusterBurstView.Look();
+                    if (look.Paint.a <= 0f)
+                    {
+                        Color paint = ViewUtil.CubeMaterialColor(new Cube(kind, 0));
+                        look.Paint = new Color(paint.r, paint.g, paint.b, 1f);
+                    }
+                    failure.Casualties.Add(new PressureVesselView.Casualty
+                    {
+                        Centre = boardView.CellToWorld(report.DetonatedCells[i]),
+                        Kind = kind,
+                        Look = look
+                    });
+                }
+                played |= PlayPressFailureScene(failure);
+            }
+            return played;
+        }
+
+        /// <summary>The squeeze's seam. The lab and the game both go through here, so a retimed
+        /// compression shows its new timing in both for free.</summary>
+        private bool PlayPressScene(HydraulicPressView.CompressionScene scene)
+        {
+            if (hydraulicPress == null || scene == null || boardView == null)
+            {
+                return false;
+            }
+            // The shell the compression closes is ITS plate while it plays; the standing press's
+            // own layer stands off that cell so two things never draw one shell.
+            boardView.Press.Suppress(scene.Quads[0].Cell, true);
+            hydraulicPress.PlayCompression(boardView, scene);
+            StartCoroutine(ReleasePressSuppression(scene.Quads[0].Cell));
+            return true;
+        }
+
+        /// <summary>The release's seam.</summary>
+        private bool PlayPressReleaseScene(HydraulicPressView.ReleaseScene scene)
+        {
+            if (hydraulicPress == null || scene == null || boardView == null)
+            {
+                return false;
+            }
+            hydraulicPress.PlayRelease(boardView, scene);
+            return true;
+        }
+
+        /// <summary>The failure's seam - its own event, never a removal variant and never the
+        /// cluster burst.</summary>
+        private bool PlayPressFailureScene(PressureVesselView.Scene scene)
+        {
+            if (pressureVessel == null || scene == null)
+            {
+                return false;
+            }
+            pressureVessel.Play(scene);
+            return true;
+        }
+
+        /// <summary>Hands a cell back to the standing press's own layer once the compression has
+        /// finished closing its shell on it.</summary>
+        private IEnumerator ReleasePressSuppression(GridPos cell)
+        {
+            float guard = 0f;
+            while (hydraulicPress != null && hydraulicPress.Busy && guard < 4f)
+            {
+                guard += Time.deltaTime;
+                yield return null;
+            }
+            if (boardView != null)
+            {
+                boardView.Press.Suppress(cell, false);
+            }
+        }
+
+        /// <summary>
+        /// Which segment a cut's constriction starts from: a cell of the snake that is ON the line
+        /// Core says exploded, the one nearest the head, so the signal is seen running the whole way
+        /// down to the tail. The LINE is Core's - only which of its cells to start at is ours.
+        /// </summary>
+        private GridPos SnakeCutTrigger(SnakeTurnVisuals turn, int index, List<GridPos> standing)
+        {
+            if (index >= turn.CutRows.Count + turn.CutColumns.Count)
+            {
+                // A cut from a non-line explosion: no line to start from, so start at the head.
+                return standing.Count > 0 ? standing[0] : new GridPos(0, 0);
+            }
+            bool isRow = index < turn.CutRows.Count;
+            int line = isRow ? turn.CutRows[index] : turn.CutColumns[index - turn.CutRows.Count];
+            for (int i = 0; i < standing.Count; i++)
+            {
+                if (isRow ? standing[i].Y == line : standing[i].X == line)
+                {
+                    return standing[i];
+                }
+            }
+            return standing.Count > 0 ? standing[standing.Count - 1] : new GridPos(0, 0);
+        }
+
+        /// <summary>Puts a snake on the board - the same two calls SyncSnake makes, for the lab's
+        /// own board.</summary>
+        private void PlaySnakeBody(IReadOnlyList<GridPos> body, bool spawn)
+        {
+            if (boardView == null || boardView.Board == null)
+            {
+                return;
+            }
+            boardView.Snake.Sync(boardView);
+            boardView.Snake.SetBody(body, spawn);
+        }
+
+        /// <summary>The seam the snake is played through - the game from its report above, the
+        /// animation lab from a snake of its own.</summary>
+        private bool PlaySnakeScene(SnakeView.TurnScene scene)
+        {
+            if (scene == null || boardView == null || boardView.Board == null)
+            {
+                return false;
+            }
+            boardView.Snake.Sync(boardView);
+            boardView.Snake.PlayTurn(scene);
+            return true;
+        }
+
+        private static void CopyCells(IReadOnlyList<GridPos> from, List<GridPos> into)
+        {
+            into.Clear();
+            if (from == null)
+            {
+                return;
+            }
+            for (int i = 0; i < from.Count; i++)
+            {
+                into.Add(from[i]);
+            }
+        }
+
+        /// <summary>The seam the rot is played through - the game from its report above, the
+        /// animation lab from what the same board code wrote on a board of its own.</summary>
+        private bool PlayGangreneScene(GangreneView.TurnScene scene)
+        {
+            if (scene == null || boardView == null || boardView.Board == null)
+            {
+                return false;
+            }
+            boardView.Gangrene.Sync(boardView);
+            boardView.Gangrene.PlayTurn(scene);
+            return true;
+        }
+
+        /// <summary>The face and colour a cube is drawn with - the board's own rule, so a cube that
+        /// is about to die on screen looks exactly like the one that was standing there.</summary>
+        private ClusterBurstView.Look LookOf(Cube cube)
+        {
+            Sprite tile = ViewUtil.CubeTile(cube.Kind, FindOwnedCard(cube.SourceCardId));
+            return new ClusterBurstView.Look
+            {
+                Tile = tile,
+                Colour = ViewUtil.CubeTileColor(cube, tile),
+                Paint = ViewUtil.CubeMaterialColor(cube)
+            };
         }
 
         /// <summary>
@@ -683,20 +1740,89 @@ namespace ProjectBlock.View
             SpawnFallingCubes(mirrorBoardView, report.MirrorFellThroughCells, report.MirrorCard);
         }
 
+        /// <summary>
+        /// Drops a defective block's cubes off the screen, each wearing the face it had in the hand.
+        ///
+        /// They used to be flat squares in the block's element colour, which threw away the one
+        /// thing that tells block types apart - their art. Every cube now asks ViewUtil.CardCubeTile,
+        /// the question the hand asks, so a fox falls as a fox, a gear as a gear, and a targeted
+        /// block with its bullseye on the cube that carried it.
+        ///
+        /// The shape is the one the card was PLACED with (RoundEngine.EffectiveShape - rotated,
+        /// reshaped), and the reported cells leave out any that were outside the arena, so a cube's
+        /// place in the list is not its place in the shape: each is matched back through the shape.
+        /// </summary>
         private void SpawnFallingCubes(BoardView view, IReadOnlyList<GridPos> cells, BlockCard card)
         {
             if (view == null || cells == null || cells.Count == 0)
             {
                 return;
             }
-            Color color = card != null && card.Elements.Count > 0
-                ? ViewUtil.ElementColor(card.Elements[0])
-                : ViewUtil.ColorForCard(card != null ? card.Id : 0);
+            BlockShape shape = null;
+            if (card != null)
+            {
+                RoundEngine round = session != null ? session.CurrentRound : null;
+                shape = round != null ? round.EffectiveShape(card) : card.Shape;
+            }
+            GridPos origin = shape != null ? FallOrigin(cells, shape) : new GridPos(0, 0);
             for (int i = 0; i < cells.Count; i++)
             {
-                FallingCubeFx.Spawn(transform, view.CellToWorld(cells[i]),
-                    view.CellWorldSize * 0.86f, color, i * 0.045f);
+                Sprite tile = null;
+                Color tint = ViewUtil.ColorForCard(card != null ? card.Id : 0);
+                if (shape != null)
+                {
+                    int index = ShapeIndexOf(shape,
+                        new GridPos(cells[i].X - origin.X, cells[i].Y - origin.Y));
+                    if (index >= 0)
+                    {
+                        tile = ViewUtil.CardCubeTile(card, shape, index,
+                            ReferenceEquals(shape, card.Shape), out tint);
+                    }
+                    else
+                    {
+                        // Not a cube of the shape (it always should be) - still the card's own face.
+                        tile = ViewUtil.CubeTile(CubeKind.Normal, card);
+                        tint = ViewUtil.CubeTileColor(tile, tint);
+                    }
+                }
+                FallingCubeFx.Spawn(transform, view.CellToWorld(cells[i]), view.CubeWorldSize,
+                    tile, tint, i * 0.045f);
             }
+        }
+
+        /// <summary>Where the card was placed, recovered from the cells it covered: the offset at
+        /// which every reported cell is a cube of the shape. The first cell is tried against each
+        /// cube in turn, so cells missing past the edge of the arena cannot throw it off.</summary>
+        private static GridPos FallOrigin(IReadOnlyList<GridPos> cells, BlockShape shape)
+        {
+            GridPos first = cells[0];
+            for (int k = 0; k < shape.Cells.Count; k++)
+            {
+                var origin = new GridPos(first.X - shape.Cells[k].X, first.Y - shape.Cells[k].Y);
+                bool fits = true;
+                for (int i = 1; i < cells.Count && fits; i++)
+                {
+                    fits = ShapeIndexOf(shape,
+                        new GridPos(cells[i].X - origin.X, cells[i].Y - origin.Y)) >= 0;
+                }
+                if (fits)
+                {
+                    return origin;
+                }
+            }
+            return new GridPos(first.X - shape.Cells[0].X, first.Y - shape.Cells[0].Y);
+        }
+
+        private static int ShapeIndexOf(BlockShape shape, GridPos offset)
+        {
+            for (int i = 0; i < shape.Cells.Count; i++)
+            {
+                if (shape.Cells[i].Equals(offset))
+                {
+                    return i;
+                }
+            }
+            return -1;
         }
 
         /// <summary>
@@ -716,10 +1842,13 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // Everything after the first is a RE-reveal: the same language, held a little
+            // shorter, because by then the player knows the ritual and only needs the look.
+            bool again = mine.ShuffleCount > 1;
             lastMineShuffle = mine.ShuffleCount;
             // A detonation arms a fresh mine on the spot, so the blast and this reveal are the
             // same frame unless the dance waits for it. See TriggerMineDetonation.
-            mineShuffle.Play(boardView, round.MainBoard, mine.ShufflePath,
+            mineShuffle.Play(boardView, round.MainBoard, mine.ShufflePath, again,
                 mineDetonationPending ? MineBlastSeconds : 0f);
         }
 
@@ -767,8 +1896,7 @@ namespace ProjectBlock.View
                 return;
             }
             mineDetonationPending = false;
-            FlashCells(new List<GridPos> { mine.LastDetonationCell },
-                MineShuffleView.MineColor, 14);
+            FlashCells(new List<GridPos> { mine.LastDetonationCell }, MineShuffleView.MineColor);
             ShakeCamera(0.34f, 0.16f, 2.4f);
             sfx.Explode();
             FloatingTextFx.Spawn(transform, new Vector2(0f, 3.0f),
@@ -886,14 +2014,29 @@ namespace ProjectBlock.View
             // below. With one world these are the values the board always had.
             float mainSize = MainBoardWorldSize;
             Vector2 mainCenter = MainBoardCenter;
-            if (boardView.Board != round.Board || !Mathf.Approximately(lastMainBoardSize, mainSize))
+            // The CENTRE is part of this test, not just the size: the two layouts fit the
+            // board into the same 6.5-unit box but put it in different places, so a profile flip
+            // changes where the board goes without changing how big it is.
+            if (boardView.Board != round.Board
+                || !Mathf.Approximately(lastMainBoardSize, mainSize)
+                || (lastMainBoardCenter - mainCenter).sqrMagnitude > 0.000001f)
             {
                 boardView.Rebuild(round.Board, mainSize, mainCenter);
                 lastMainBoardSize = mainSize;
+                lastMainBoardCenter = mainCenter;
+                // A new arena: the snake in it has not woken up yet, and no turn of its own has
+                // been played.
+                snakeSpawned = false;
+                snakeTurnPlayed = 0;
             }
             // "Alacakaranlık" - set BEFORE the refresh, so the very first paint is already dark.
             boardView.SetDarkness(round.BoardIsDark);
             boardView.Refresh();
+            SyncSnake(round);
+            SyncPress(round);
+            SyncParasite(round);
+            SyncMapus(round);
+            SyncTalisman(round);
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();
@@ -956,7 +2099,7 @@ namespace ProjectBlock.View
                 boardView.ShowCircuit(null);
                 boardView.ShowQuarantine(null);
                 boardView.ShowCreature(null);
-                boardView.ShowDolls(null, null);
+                boardView.ShowDolls(null, null, 0);
                 boardView.ShowDoomedColumn(null, 0);
                 // The pull markers sit OUTSIDE the arena and say nothing about what is on it, so
                 // they are the one marker the dark does not have to swallow.
@@ -967,7 +2110,7 @@ namespace ProjectBlock.View
             RefreshCircuit(report);
             RefreshQuarantine();
             RefreshCreature();
-            RefreshBossBoardMarks();
+            RefreshBossBoardMarks(report);
             // "Kütleçekim merkezi": which way the arena is pulling water. A no-op on every board
             // that pulls it downward, which is nearly all of them.
             boardView.ShowGravity(session.CurrentRound.Board.WaterFlow);
@@ -976,7 +2119,7 @@ namespace ProjectBlock.View
         /// <summary>Hands the board view what the new bosses have put ON it: "Matruşka"'s dolls
         /// and "İstilacı"'s marked column. Both are marks on the arena rather than cubes in it,
         /// so neither belongs in the cube pass.</summary>
-        private void RefreshBossBoardMarks()
+        private void RefreshBossBoardMarks(TurnReport report)
         {
             RoundEngine round = session.CurrentRound;
             BossRound boss = round != null ? round.Boss : null;
@@ -985,16 +2128,26 @@ namespace ProjectBlock.View
             if (dolls != null)
             {
                 IReadOnlyList<GridPos> cells = dolls.DollCells;
-                var sizes = new List<int>(cells.Count);
+                var generations = new List<int>(cells.Count);
                 for (int i = 0; i < cells.Count; i++)
                 {
-                    sizes.Add(dolls.GenerationsLeftAt(cells[i]));
+                    generations.Add(dolls.GenerationAt(cells[i]));
                 }
-                boardView.ShowDolls(cells, sizes);
+                // A turn that DID something to the dolls is staged, not repainted: the board is told
+                // where they end up and what happened on the way, and keeps its picture until the
+                // cubes actually go (PlayExplosionFeedback releases it).
+                if (report != null && report.DollEvents.Count > 0)
+                {
+                    boardView.HoldDolls(report.DollEvents, cells, generations, dolls.Generations);
+                }
+                else
+                {
+                    boardView.ShowDolls(cells, generations, dolls.Generations);
+                }
             }
             else
             {
-                boardView.ShowDolls(null, null);
+                boardView.ShowDolls(null, null, 0);
             }
 
             var invader = boss as IstilaciBoss;

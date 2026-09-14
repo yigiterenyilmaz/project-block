@@ -311,6 +311,24 @@ namespace ProjectBlock.Core
             get { return false; }
         }
 
+        /// <summary>
+        /// The score bar does NOT win this round: points still bank, but crossing the threshold
+        /// opens neither the advance offer nor overtime. The boss has to be beaten on its own
+        /// terms (DeclareRoundWon) - "Snake".
+        /// </summary>
+        public virtual bool ThresholdDoesNotWin
+        {
+            get { return false; }
+        }
+
+        /// <summary>Shuffle erosion is suspended this round: the arena never shrinks. A round
+        /// that cannot be won at the bar is not stalling, so the anti-stalling clock must not
+        /// eat the board under it.</summary>
+        public virtual bool SuspendsBoardErosion
+        {
+            get { return false; }
+        }
+
         // ---------------------------------------------------------------------- events
 
         /// <summary>End of a resolved turn - after the hand refill, BEFORE the threshold and

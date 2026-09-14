@@ -131,7 +131,7 @@ namespace ProjectBlock.Core
         /// </summary>
         internal bool ThresholdReached
         {
-            get { return ThresholdPassed || RoundScore >= ScaledThreshold; }
+            get { return ThresholdPassed || (!ThresholdWinBlocked && RoundScore >= ScaledThreshold); }
         }
 
         /// <summary>Clean sweeps ("temizlik") triggered this round. Drives the escalating
@@ -325,6 +325,12 @@ namespace ProjectBlock.Core
         public bool RoundOutcomeInverted
         {
             get { return Boss != null && Boss.InvertsRoundOutcome; }
+        }
+
+        /// <summary>True while the score bar cannot win the round (see BossRound.ThresholdDoesNotWin).</summary>
+        public bool ThresholdWinBlocked
+        {
+            get { return Boss != null && Boss.ThresholdDoesNotWin; }
         }
 
         /// <summary>True while every joker pays the player BACKWARDS ("Terslik"): the points and
@@ -648,6 +654,9 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
+                // Which way this pickup is going, so a "Parazit" host refusing it can be seen
+                // clamping on the side the force came from. Reporting only.
+                Board.SetForcedStep(new GridPos(step, 0));
                 // A protected (Parazit) cube refuses the forced pickup, so relocating it
                 // would duplicate it - leave it in place instead.
                 if (!Board.DestroyCubeForced(from))
@@ -680,6 +689,7 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
+                Board.SetForcedStep(new GridPos(0, step));
                 // A protected (Parazit) cube refuses the forced pickup, so relocating it
                 // would duplicate it - leave it in place instead.
                 if (!Board.DestroyCubeForced(from))
@@ -752,7 +762,7 @@ namespace ProjectBlock.Core
         private void ApplyPendingBoardErosion()
         {
             ShuffleErosion mode = Config.Erosion;
-            if (mode == ShuffleErosion.None)
+            if (mode == ShuffleErosion.None || (Boss != null && Boss.SuspendsBoardErosion))
             {
                 return;
             }
@@ -882,6 +892,26 @@ namespace ProjectBlock.Core
         /// <summary>"Kayıt defteri": while true, emptying the board is no longer a sweep.
         /// Only ForceCleanSweep can raise the event.</summary>
         internal bool SuppressNaturalSweep { get; set; }
+
+        /// <summary>
+        /// THE ONE GATE on scoring a JOKER's or POWER's own destruction. Blowing cubes up or
+        /// clearing lines is not, by itself, worth points - only the player's placement is. A
+        /// joker or power whose destruction pays asks this first, and it is true only while
+        /// "Genel temizlik" is held, the same switch its sweeps and between-turn line clears
+        /// already obey (ResolveFullLinesOutsideTurn).
+        ///
+        /// Nor an explosion the PLAYER completed by placing blocks ("Devre"'s circuit, filled cell
+        /// by cell) - that is the player's clear, like a line.
+        ///
+        /// What it does NOT cover is a bonus the content names outright ("Devre"'s break bonus,
+        /// "Elmas kazma"'s obsidian, "Tılsım"'s ghosts, the press's push-off): a promised reward
+        /// is the effect itself, not a side effect of the explosion. Never test the switch
+        /// directly inside content - ask this.
+        /// </summary>
+        internal bool ExternalDestructionScores
+        {
+            get { return Rules.CountExternalSweeps; }
+        }
 
         /// <summary>Powers used since the last placement. The confirmed rule is at most ONE
         /// power per turn; using one never costs a turn, so this is the only thing limiting

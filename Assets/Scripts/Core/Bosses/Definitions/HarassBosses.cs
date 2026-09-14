@@ -73,28 +73,86 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Mapus" - every turn one random empty cell is sealed off: nothing may be
-    /// placed on it while the seal lasts. A sealed cell still reads as an empty cell of its
-    /// row and column, so the line through it cannot be completed that turn either.</summary>
+    /// <summary>
+    /// "Mapus" - IT SEALS WHERE IT HURTS. Every turn it reads the board and puts its one seal on
+    /// the empty cell whose row and column are CLOSEST TO COMPLETION: nothing may be placed
+    /// there, and because a sealed cell still reads as an empty cell of its row and column, the
+    /// line through it cannot be completed either. Sealing the last gap of a row does not just
+    /// cost a square - it takes the row away.
+    ///
+    /// IT DOES NOT WANDER. A random cell per turn was a tax, not an antagonist: it almost never
+    /// landed anywhere the player cared about, and when it did, it left again immediately. The
+    /// seal now STAYS while it is still the most dangerous cell on the board, so denying a row
+    /// is something the player has to play around rather than wait out.
+    ///
+    /// TWO GUARDS, and both are load-bearing:
+    ///   - it may not hold ONE cell for more than MaxTurnsOnOneCell turns running, and the cell
+    ///     it releases sits out that one retarget. Without this the seal parks on a row's last
+    ///     gap for ever - the player fills the row's other cells, the row can never explode, the
+    ///     cubes stand there for the rest of the round, and the round is lost to something with
+    ///     no counterplay in it. A boss may be brutal; it may not be unanswerable.
+    ///   - it is only STICKY while it is actually denying something. With nothing near completion
+    ///     every cell is worth the same, and there it goes back to wandering - a seal that sat
+    ///     still on an empty board would just be a dead square.
+    /// </summary>
     public sealed class MapusBoss : BossRound
     {
         /// <summary>Empty cells the board must still have for a seal to be laid, so the very
         /// last hole is never the one taken away.</summary>
         public int MinFreeCells = 2;
 
+        /// <summary>How many turns running the seal may hold one cell. Past this it MUST move,
+        /// and the cell it leaves sits out that retarget - which is the window the player gets to
+        /// finish the line it was denying. Zero switches the cap off entirely, and with it the
+        /// only thing stopping a permanently dead row.</summary>
+        public int MaxTurnsOnOneCell = 3;
+
+        /// <summary>How near a line has to be to completion before it counts as a threat at all.
+        /// Beyond this the seal must not be dragged around by a row nobody is close to
+        /// finishing.</summary>
+        public int ThreatWindow = 3;
+
+        /// <summary>What a line one cube from completion is worth. Halved for two away, thirded
+        /// for three - so the LAST gap of a row outweighs anything further off, and a cell that
+        /// is the last gap of a row AND of a column outweighs everything.</summary>
+        public int DangerBase = 60;
+
         private GridPos sealedCell;
         private bool hasSeal;
 
+        /// <summary>How many retargets running the seal has held its current cell.</summary>
+        private int turnsOnCell;
+
         private readonly List<GridPos> freeCells = new List<GridPos>();
+
+        /// <summary>The empty REQUIRED cells, and what each one is worth to deny. Rebuilt from
+        /// scratch every retarget: the board changes under it every turn.</summary>
+        private readonly List<GridPos> candidates = new List<GridPos>();
+
+        private readonly List<int> scores = new List<int>();
+
+        private readonly List<GridPos> best = new List<GridPos>();
+
+        /// <summary>WHAT THE SEAL DID THIS TURN, for the View - moved or held, released by the cap
+        /// or not, and how close the lines it is sitting on are to completion. Reporting only, and
+        /// [NotSaved] because it is rebuilt by the next retarget and means nothing across a load.
+        /// </summary>
+        [field: NotSaved]
+        public MapusSealVisuals LastSeal { get; private set; }
 
         public MapusBoss()
             : base("mapus", "Mapus")
         {
             SetDescription(
-                "Every turn it seals off one random empty cell - nothing can be placed there, "
-                    + "and the row and column through it cannot be completed either.",
-                "Her tur rastgele bir boş hücreyi kapatır - oraya hiçbir şey koyulamaz, o "
-                    + "hücreden geçen satır ve sütun da tamamlanamaz.");
+                "Every turn it seals the empty cell whose row and column are closest to "
+                    + "completion - nothing can be placed there, and the row and column through "
+                    + "it cannot be completed either. The seal stays put while that is still the "
+                    + "most dangerous cell on the board, but never for more than three turns "
+                    + "running.",
+                "Her tur, satırı ve sütunu tamamlanmaya EN YAKIN olan boş hücreyi kapatır - "
+                    + "oraya hiçbir şey koyulamaz, o hücreden geçen satır ve sütun da "
+                    + "tamamlanamaz. Tahtanın en tehlikeli yeri orası olduğu sürece mühür yerinde "
+                    + "kalır, ama üst üste üç turdan fazla değil.");
         }
 
         /// <summary>The sealed cell, for the UI to mark. Meaningless when HasSeal is false.</summary>
@@ -112,52 +170,231 @@ namespace ProjectBlock.Core
         {
             get
             {
-                return hasSeal
-                    ? Loc.Pick("sealed ", "kapalı ") + sealedCell.X + "," + sealedCell.Y
-                    : null;
+                if (!hasSeal)
+                {
+                    return null;
+                }
+                string where = sealedCell.X + "," + sealedCell.Y;
+                // How long it can still hold this cell, because "it will move next turn" is
+                // something the player has to be able to plan around.
+                return MaxTurnsOnOneCell > 0
+                    ? Loc.Pick("sealed ", "kapalı ") + where
+                        + " (" + turnsOnCell + "/" + MaxTurnsOnOneCell + ")"
+                    : Loc.Pick("sealed ", "kapalı ") + where;
             }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
         {
-            Reseal(ctx.Round, ctx.Rng);
+            turnsOnCell = 0;
+            hasSeal = false;
+            Retarget(ctx.Round, ctx.Rng);
         }
 
         public override void AfterTurnScored(TurnContext turn)
         {
-            Reseal(turn.Round, turn.Rng);
+            Retarget(turn.Round, turn.Rng);
         }
 
-        /// <summary>Moves the seal to a fresh random empty cell. The old seal is always lifted
-        /// first, so exactly one cell is ever sealed by this boss.</summary>
-        private void Reseal(RoundEngine round, IRandomSource rng)
+        /// <summary>
+        /// Reads the board and puts the seal where it denies the most. The old seal is always
+        /// lifted first, so exactly one cell is ever sealed by this boss - even when the answer
+        /// is the same cell as last turn.
+        /// </summary>
+        private void Retarget(RoundEngine round, IRandomSource rng)
         {
             if (round == null)
             {
                 return;
             }
+            // Board mutations go through the engine, so the seal and the no-playable-move check
+            // can never disagree.
             round.ClearBoardSeals();
+            GridPos? chosen = Choose(round.Board, rng);
+            if (chosen.HasValue)
+            {
+                round.SealBoardCell(chosen.Value);
+            }
+        }
+
+        /// <summary>
+        /// THE SAME TARGETING, against a board of the caller's own and with no engine to route the
+        /// seal through - what the ANIMATION LAB drives. It matters that this is not a second
+        /// implementation: a lab that picked its own cell would be a drawing of the boss rather
+        /// than the boss, and the whole point of the Mapus scenes is that the cell they seal is the
+        /// cell the rules would seal. Returns the report the View plays.
+        /// </summary>
+        public MapusSealVisuals RetargetOn(GameBoard board, IRandomSource rng)
+        {
+            if (board == null)
+            {
+                return LastSeal;
+            }
+            board.ClearSeals();
+            GridPos? chosen = Choose(board, rng);
+            if (chosen.HasValue)
+            {
+                board.SealCell(chosen.Value);
+            }
+            return LastSeal;
+        }
+
+        /// <summary>
+        /// Picks the cell that denies the most, and writes the report. The caller applies the seal
+        /// - through the engine in a round, straight to the board in the lab.
+        /// </summary>
+        private GridPos? Choose(GameBoard board, IRandomSource rng)
+        {
+            if (LastSeal == null)
+            {
+                LastSeal = new MapusSealVisuals();
+            }
+
+            GridPos previous = sealedCell;
+            bool hadSeal = hasSeal;
             hasSeal = false;
-            GameBoard board = round.Board;
+            // THE CAP. Held long enough, the seal has to let go - and the cell it releases is
+            // barred from this one retarget, so the line it was denying really does open up.
+            bool mustMove = hadSeal && MaxTurnsOnOneCell > 0 && turnsOnCell >= MaxTurnsOnOneCell;
+
+            bool released = mustMove;
+
+            Collect(board);
+            if (freeCells.Count < MinFreeCells)
+            {
+                turnsOnCell = 0;
+                Report(board, previous, hadSeal, released);
+                return null; // never take the last hole away
+            }
+
+            int bestScore = int.MinValue;
+            best.Clear();
+            int previousScore = int.MinValue;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                GridPos cell = candidates[i];
+                if (hadSeal && cell.X == previous.X && cell.Y == previous.Y)
+                {
+                    previousScore = scores[i];
+                    if (mustMove)
+                    {
+                        continue; // barred for this retarget
+                    }
+                }
+                if (scores[i] > bestScore)
+                {
+                    bestScore = scores[i];
+                    best.Clear();
+                }
+                if (scores[i] == bestScore)
+                {
+                    best.Add(cell);
+                }
+            }
+            if (best.Count == 0)
+            {
+                turnsOnCell = 0;
+                Report(board, previous, hadSeal, released);
+                return null; // the barred cell was the only one left; the board breathes this turn
+            }
+
+            // STICKY ONLY WHILE IT IS DENYING SOMETHING. A seal sitting still on a board with
+            // nothing near completion is just a dead square, so with no threat anywhere it goes
+            // back to wandering.
+            if (!mustMove && previousScore > 0 && previousScore >= bestScore)
+            {
+                sealedCell = previous;
+                turnsOnCell++;
+            }
+            else
+            {
+                sealedCell = best[rng.NextInt(0, best.Count)];
+                turnsOnCell = 1;
+            }
+            hasSeal = true;
+            Report(board, previous, hadSeal, released);
+            return sealedCell;
+        }
+
+        /// <summary>
+        /// Writes down what just happened, for the View. Everything in it the rules already knew;
+        /// the point is that the View never has to work any of it out - least of all "is this line
+        /// being held by exactly this cell", which is the explosion rule's own question and must
+        /// have exactly one answer in the codebase.
+        /// </summary>
+        private void Report(GameBoard board, GridPos previous, bool hadSeal, bool released)
+        {
+            if (LastSeal == null)
+            {
+                LastSeal = new MapusSealVisuals();
+            }
+            LastSeal.Clear();
+            LastSeal.PreviousCell = previous;
+            LastSeal.HadPrevious = hadSeal;
+            LastSeal.Cell = sealedCell;
+            LastSeal.HasSeal = hasSeal;
+            LastSeal.MaxTurns = MaxTurnsOnOneCell;
+            LastSeal.TurnsHeld = turnsOnCell;
+            LastSeal.Released = released;
+            LastSeal.Moved = hasSeal
+                && (!hadSeal || previous.X != sealedCell.X || previous.Y != sealedCell.Y);
+            if (!hasSeal)
+            {
+                return;
+            }
+            LastSeal.RowGaps = board.RowGapCount(sealedCell.Y);
+            LastSeal.ColumnGaps = board.ColumnGapCount(sealedCell.X);
+            // ONE gap left and the seal is standing in it: nothing else is holding that line up.
+            LastSeal.RowHeldByTheSealAlone = LastSeal.RowGaps == 1;
+            LastSeal.ColumnHeldByTheSealAlone = LastSeal.ColumnGaps == 1;
+        }
+
+        /// <summary>
+        /// The empty cells, and what each one is worth to deny. A candidate is a REQUIRED empty
+        /// cell: sealing bonus ground ("Tılsım") denies no line at all, because a line never
+        /// waits for it. With no required cell free the boss falls back to any empty one, so it
+        /// is never simply idle.
+        /// </summary>
+        private void Collect(GameBoard board)
+        {
             freeCells.Clear();
+            candidates.Clear();
+            scores.Clear();
             for (int x = board.MinX; x < board.MinX + board.Width; x++)
             {
                 for (int y = board.MinY; y < board.MinY + board.Height; y++)
                 {
                     var pos = new GridPos(x, y);
-                    if (board.IsInside(pos) && !board.GetCube(pos).HasValue)
+                    if (!board.IsInside(pos) || board.GetCube(pos).HasValue)
                     {
-                        freeCells.Add(pos);
+                        continue;
                     }
+                    freeCells.Add(pos);
+                    if (board.IsOptional(pos))
+                    {
+                        continue;
+                    }
+                    candidates.Add(pos);
+                    scores.Add(Danger(board.RowGapCount(y)) + Danger(board.ColumnGapCount(x)));
                 }
             }
-            if (freeCells.Count < MinFreeCells)
+            if (candidates.Count == 0)
             {
-                return;
+                for (int i = 0; i < freeCells.Count; i++)
+                {
+                    candidates.Add(freeCells[i]);
+                    scores.Add(0);
+                }
             }
-            sealedCell = freeCells[rng.NextInt(0, freeCells.Count)];
-            round.SealBoardCell(sealedCell);
-            hasSeal = true;
+        }
+
+        /// <summary>What a line still needing <paramref name="gaps"/> cubes is worth to deny.
+        /// One away dominates two, which dominates three; past ThreatWindow it is not a threat
+        /// and must not drag the seal around. A dead line comes in as -1 and is worth nothing.
+        /// </summary>
+        private int Danger(int gaps)
+        {
+            return gaps <= 0 || gaps > ThreatWindow ? 0 : DangerBase / gaps;
         }
     }
 

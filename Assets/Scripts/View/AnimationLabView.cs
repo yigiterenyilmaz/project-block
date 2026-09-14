@@ -7,6 +7,10 @@
 // plays on the arena, the hand row or the two piles, so covering them would defeat the point.
 // It occupies the empty right-hand column and leaves the whole board visible.
 //
+// AND IT STAYS ONE COLUMN. A scene whose subject lands under this panel is the SCENE's problem -
+// it should be laid out somewhere visible - not a reason to spread the catalogue across the
+// board it exists to let you watch.
+//
 // Rebuilt from scratch on every change (cheap at this scale), like MarketView.
 
 using System.Collections.Generic;

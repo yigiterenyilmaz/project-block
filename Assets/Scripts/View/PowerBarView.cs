@@ -1,10 +1,11 @@
-// PURPOSE: The power strip on the left side of the screen - below the info text, above
-// the discard pile. One clickable panel per owned power with its name, charge state and
-// live status. Reads PowerInventory, never changes it (GameUiController owns input).
-// NOTE FOR AGENTS: placeholder presentation like everything else under View/. The panel
-// stays generic on purpose - it renders Power.StatusText/Charged/BaseSellValue rather
-// than knowing any specific power, so new powers show up here for free. The only per-power
-// styling is the rarity strip/name colour, and that comes from RarityPalette.
+// PURPOSE: The power bar on the left side of the screen - below the info text, above the
+// discard pile. One clickable VERTICAL card per owned power (HeldItemCard) with its name and
+// charge state; the description and sell value are in its tooltip. Reads PowerInventory,
+// never changes it (GameUiController owns input).
+// NOTE FOR AGENTS: placeholder presentation like everything else under View/. The card
+// stays generic on purpose - it renders Power.StatusText/Charged rather than knowing any
+// specific power, so new powers show up here for free. The only per-power styling is the
+// rarity frame/name colour, and that comes from RarityPalette.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -16,9 +17,42 @@ namespace ProjectBlock.View
     /// <summary>Canvas strip listing the player's powers.</summary>
     public sealed class PowerBarView : MonoBehaviour
     {
-        private const float PanelWidth = 232f;
-        private const float PanelHeight = 84f;
-        private const float PanelGap = 8f;
+        // Shape belongs to the layout - a column down the left edge on a desktop, a row of
+        // squares under the joker row on a phone. See UiLayout.
+        private static float PanelWidth
+        {
+            get { return UiLayout.Active.PowerPanel.x; }
+        }
+
+        private static float PanelHeight
+        {
+            get { return UiLayout.Active.PowerPanel.y; }
+        }
+
+        private static float PanelGap
+        {
+            get { return UiLayout.Active.PowerGap; }
+        }
+
+        private static bool Compact
+        {
+            get { return UiLayout.Active.BarsAsRow; }
+        }
+
+        /// <summary>Where the strip hangs from the top of the canvas. On the desktop this is the
+        /// old hand-placed 256; in a row it sits under the joker row.</summary>
+        private static float TopOffset
+        {
+            get
+            {
+                UiLayout layout = UiLayout.Active;
+                // Desktop: the very top of the left edge. The info/debug column that used to sit
+                // above it moved to its right (UiLayout.InfoLeft).
+                return layout.BarsAsRow
+                    ? layout.BarRowTop + layout.JokerPanel.y + 12f
+                    : 0f;
+            }
+        }
 
         private static readonly Color PanelColor = new Color(0.13f, 0.15f, 0.19f, 0.92f);
         private static readonly Color ReadyColor = new Color(0.12f, 0.30f, 0.34f, 0.95f);
@@ -32,18 +66,8 @@ namespace ProjectBlock.View
         /// cannot be used this round.</summary>
         private static readonly Color SilencedColor = new Color(0.26f, 0.10f, 0.12f, 0.95f);
 
-        private readonly List<Panel> panels = new List<Panel>();
+        private readonly List<HeldItemCard> panels = new List<HeldItemCard>();
         private RectTransform root;
-
-        private sealed class Panel
-        {
-            public GameObject Root;
-            public Image Background;
-            public Image RarityStrip;
-            public Text Title;
-            public Text Body;
-            public int InstanceId = -1;
-        }
 
         /// <summary>Creates the strip under the HUD canvas. Call once.</summary>
         public void Build(Transform canvas)
@@ -51,11 +75,40 @@ namespace ProjectBlock.View
             var go = new GameObject("PowerBar");
             go.transform.SetParent(canvas, false);
             root = go.AddComponent<RectTransform>();
-            root.anchorMin = new Vector2(0f, 1f);
-            root.anchorMax = new Vector2(0f, 1f);
-            root.pivot = new Vector2(0f, 1f);
-            root.anchoredPosition = new Vector2(16f, -256f);
             root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+            UiLayout.PlaceBarRoot(root, false, TopOffset);
+        }
+
+        /// <summary>Re-anchors the strip and every slot in it after the layout changed.</summary>
+        public void RelayoutForScreen()
+        {
+            if (root == null)
+            {
+                return;
+            }
+            root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+            UiLayout.PlaceBarRoot(root, false, TopOffset);
+            PlaceSlots();
+        }
+
+        /// <summary>Lays every visible slot out for the current profile. A row needs the count so
+        /// it can stay centred, which is why this runs after Refresh rather than at creation.</summary>
+        private void PlaceSlots()
+        {
+            int showing = 0;
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i].Root.activeSelf)
+                {
+                    showing++;
+                }
+            }
+            for (int i = 0; i < panels.Count; i++)
+            {
+                UiLayout.PlaceBarSlot(panels[i].Root.GetComponent<RectTransform>(),
+                    i, showing, new Vector2(PanelWidth, PanelHeight), PanelGap, false);
+                panels[i].Layout(new Vector2(PanelWidth, PanelHeight), Compact);
+            }
         }
 
         /// <summary>Shows or hides the whole strip. The menu layer hides it while no run is
@@ -91,6 +144,7 @@ namespace ProjectBlock.View
                     Fill(panels[i], powers[i], session, targetingInstanceId);
                 }
             }
+            PlaceSlots();
         }
 
         /// <summary>Index of the power panel under a screen point, or -1. The index matches
@@ -179,7 +233,8 @@ namespace ProjectBlock.View
             Refresh(session, null);
         }
 
-        private void Fill(Panel panel, Power power, GameSession session, int? targetingInstanceId)
+        private void Fill(HeldItemCard panel, Power power, GameSession session,
+            int? targetingInstanceId)
         {
             panel.InstanceId = power.InstanceId;
             bool ready = session.Powers.CanBeginUse(power.InstanceId);
@@ -189,26 +244,44 @@ namespace ProjectBlock.View
             // must not look ready.
             bool silenced = session.CurrentRound != null
                 && session.CurrentRound.IsSilencedByBoss(power);
-            panel.Background.color = silenced ? SilencedColor
+            panel.Body.color = silenced ? SilencedColor
                 : targeting ? TargetingColor
                 : !power.Charged ? SpentColor
                 : ready ? ReadyColor : PanelColor;
-            // Spent still greys the whole panel out; rarity only tints the charged state and
-            // the edge strip, which stays lit so the tier is readable on a spent power too.
+            // Spent still greys the whole card out; rarity only tints the charged state and the
+            // frame, which stays lit so the tier is readable on a spent power too.
             Rarity rarity = RarityPalette.Of(power);
             Color accent = RarityPalette.Accent(rarity);
-            panel.RarityStrip.color = accent;
+            panel.Frame.color = accent;
             panel.Title.color = !power.Charged ? SpentTextColor
                 : rarity == Rarity.Common ? NameColor : accent;
-            panel.Body.color = power.Charged ? BodyColor : SpentTextColor;
+            panel.Status.color = power.Charged ? BodyColor : SpentTextColor;
 
+            panel.Hotkey.text = string.Empty;
             panel.Title.text = power.DisplayName;
+            panel.SetIcon(ViewUtil.PowerIcon(power.DefId), silenced || !power.Charged);
+            panel.Status.text = StatusLine(power, session, silenced);
+        }
 
+        /// <summary>The one line a vertical card has room for: a boss outranks the charge state,
+        /// and the power's own status comes first when it has one. Sell value and the full
+        /// description are the held-power tooltip.</summary>
+        private static string StatusLine(Power power, GameSession session, bool silenced)
+        {
+            if (silenced)
+            {
+                return Loc.Pick("BOSS: off", "PATRON: kapalı");
+            }
+            if (!power.Charged && session.CurrentRound != null
+                && session.CurrentRound.PowerRechargeBlocked)
+            {
+                return Loc.Pick("BOSS: no refill", "PATRON: dolmaz");
+            }
             var line = new System.Text.StringBuilder();
             string status = power.StatusText;
             if (!string.IsNullOrEmpty(status))
             {
-                line.Append(status).Append("   ");
+                line.Append(status).Append("  ");
             }
             if (power.Charged)
             {
@@ -218,95 +291,24 @@ namespace ProjectBlock.View
             {
                 // "Kaçakçı" defective goods: say how far off a charge it is, or the meter looks
                 // stuck for four sweeps running.
-                line.Append(Loc.Pick("DEFECTIVE: ", "DEFOLU: "))
+                line.Append(Loc.Pick("DEFECTIVE ", "DEFOLU "))
                     .Append(power.RechargeProgress).Append('/').Append(power.RechargeCost);
             }
             else
             {
-                line.Append(Loc.Pick("empty (sweep refills)", "boş (temizlik doldurur)"));
+                line.Append(Loc.Pick("empty", "boş"));
             }
-            line.Append('\n').Append(Loc.Pick("sell ", "satış "))
-                .Append(session.Powers.SellValueOf(power) * session.Config.Scoring.ScoreScale);
-            if (silenced)
-            {
-                line.Append(Loc.Pick("   (BOSS: off)", "   (PATRON: kapalı)"));
-            }
-            else if (session.CurrentRound != null && session.CurrentRound.PowerRechargeBlocked
-                && !power.Charged)
-            {
-                line.Append(Loc.Pick("   (BOSS: no refill)", "   (PATRON: dolmaz)"));
-            }
-            panel.Body.text = line.ToString();
+            return line.ToString();
         }
 
-        private Panel CreatePanel(int index)
+        private HeldItemCard CreatePanel(int index)
         {
-            var go = new GameObject("Power_" + index);
-            go.transform.SetParent(root, false);
-            RectTransform rect = go.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-            rect.anchoredPosition = new Vector2(0f, -index * (PanelHeight + PanelGap));
-
-            var background = go.AddComponent<Image>();
-            background.color = PanelColor;
-            background.raycastTarget = false;
-
-            Image strip = MakeRarityStrip(rect);
-            Text title = MakeLabel(rect, "Title", new Vector2(10f, -8f), 22, NameColor,
-                FontStyle.Bold, PanelWidth - 20f, 24f);
-            Text body = MakeLabel(rect, "Body", new Vector2(10f, -34f), 19, BodyColor,
-                FontStyle.Normal, PanelWidth - 20f, 44f);
-
-            return new Panel
-            {
-                Root = go,
-                Background = background,
-                RarityStrip = strip,
-                Title = title,
-                Body = body
-            };
-        }
-
-        /// <summary>Full-height colour bar on the panel's left edge, recoloured per rarity.</summary>
-        private static Image MakeRarityStrip(RectTransform parent)
-        {
-            var go = new GameObject("Rarity");
-            go.transform.SetParent(parent, false);
-            var image = go.AddComponent<Image>();
-            image.raycastTarget = false;
-            RectTransform rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 0.5f);
-            rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(5f, 0f);
-            return image;
-        }
-
-        private static Text MakeLabel(Transform parent, string name, Vector2 offset, int fontSize,
-            Color color, FontStyle style, float width, float height)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            Text text = go.AddComponent<Text>();
-            // The real bold cut, not fontStyle - see ViewUtil.UiFontFor.
-            text.font = ViewUtil.UiFontFor(style);
-            text.fontSize = fontSize;
-            text.color = color;
-            text.alignment = TextAnchor.UpperLeft;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-            text.raycastTarget = false;
-            RectTransform rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = offset;
-            rect.sizeDelta = new Vector2(width, height);
-            return text;
+            HeldItemCard card = HeldItemCard.Create(root, "Power_" + index, NameColor, BodyColor);
+            card.Body.color = PanelColor;
+            UiLayout.PlaceBarSlot(card.Root.GetComponent<RectTransform>(), index, index + 1,
+                new Vector2(PanelWidth, PanelHeight), PanelGap, false);
+            card.Layout(new Vector2(PanelWidth, PanelHeight), Compact);
+            return card;
         }
     }
 }

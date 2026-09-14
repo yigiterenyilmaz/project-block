@@ -88,18 +88,20 @@ namespace ProjectBlock.Core
 
         /// <summary>"Hidrolik pres" letting go. Reports the cells it changed as LIFTED - nothing
         /// was destroyed in the scoring sense - and re-checks the lines, because an expansion can
-        /// complete one exactly as a board-reshaping power can.</summary>
-        internal PressExpansion ReleasePress(GridPos anchor, Cube?[] swallowed)
+        /// complete one exactly as a board-reshaping power can. <paramref name="visuals"/> is what
+        /// the board wrote down for the View (see HydraulicPressVisuals); the overload without it
+        /// is the one the rules have always called, and the two do the same thing.
+        ///
+        /// THE REAL BODY COMES FIRST on purpose: Tools/UiLayoutCheck/cold_sink.py proves every
+        /// board-change here is tagged with the right LiftKind by reading the FIRST method of this
+        /// name, and putting the delegating stub above it hid the tag from that check.
+        ///
+        /// <paramref name="pressCell"/> is where inside the patch the player put the cube (the
+        /// anchor unless they chose another corner).</summary>
+        internal PressExpansion ReleasePress(GridPos anchor, GridPos pressCell, Cube?[] swallowed,
+            out PressReleaseVisuals visuals)
         {
-            return ReleasePress(anchor, anchor, swallowed);
-        }
-
-        /// <summary>The same release, for a press whose cube the player placed somewhere other
-        /// than the patch's bottom-left cell.</summary>
-        internal PressExpansion ReleasePress(GridPos anchor, GridPos pressCell,
-            Cube?[] swallowed)
-        {
-            PressExpansion result = MainBoard.Expand(anchor, pressCell, swallowed);
+            PressExpansion result = MainBoard.Expand(anchor, pressCell, swallowed, out visuals);
             if (result == null)
             {
                 return null;
@@ -107,7 +109,7 @@ namespace ProjectBlock.Core
             ResyncSnapshot();
             if (currentReport != null && result.DetonatedCells.Count > 0)
             {
-                currentReport.AddLiftedCells(result.DetonatedCells);
+                currentReport.AddLiftedCells(result.DetonatedCells, LiftKind.Removed);
             }
             // An expansion can fill a line. Same path a deflating inflation power uses.
             LineExplosionResult lines = LineExplosionsSuppressed
@@ -115,8 +117,13 @@ namespace ProjectBlock.Core
                 : MainBoard.ResolveFullLines(Rules.RetroMode);
             if (lines.LineCount > 0)
             {
-                AddScoreOutsideTurn(PriceLines(BuildLineScore(lines, lines.ExplodedCells.Count,
-                    false)));
+                // A power's clear: scored only under "Genel temizlik", like every other line a
+                // power completes (ResolveFullLinesOutsideTurn).
+                if (ExternalDestructionScores)
+                {
+                    AddScoreOutsideTurn(PriceLines(BuildLineScore(lines,
+                        lines.ExplodedCells.Count, false)));
+                }
                 if (currentReport != null)
                 {
                     currentReport.AddExtraExplodedCells(lines.ExplodedCells);
@@ -125,6 +132,30 @@ namespace ProjectBlock.Core
                 TryResolveCleanSweep();
             }
             return result;
+        }
+
+        /// <summary>ReleasePress without the View's report - the call the rules have always made.
+        /// </summary>
+        internal PressExpansion ReleasePress(GridPos anchor, Cube?[] swallowed)
+        {
+            PressReleaseVisuals ignored;
+            return ReleasePress(anchor, anchor, swallowed, out ignored);
+        }
+
+        /// <summary>The same release, for a press whose cube the player placed somewhere other
+        /// than the patch's bottom-left cell, without the View's report.</summary>
+        internal PressExpansion ReleasePress(GridPos anchor, GridPos pressCell,
+            Cube?[] swallowed)
+        {
+            PressReleaseVisuals ignored;
+            return ReleasePress(anchor, pressCell, swallowed, out ignored);
+        }
+
+        /// <summary>ReleasePress at the anchor, with the View's report.</summary>
+        internal PressExpansion ReleasePress(GridPos anchor, Cube?[] swallowed,
+            out PressReleaseVisuals visuals)
+        {
+            return ReleasePress(anchor, anchor, swallowed, out visuals);
         }
 
         /// <summary>True while that card id is sitting in the bonus hand ("Antimadde" checking
@@ -269,7 +300,7 @@ namespace ProjectBlock.Core
             {
                 session.AddCurrency(scaled);
             }
-            if (!ThresholdPassed && RoundScore >= ScaledThreshold)
+            if (!ThresholdPassed && !ThresholdWinBlocked && RoundScore >= ScaledThreshold)
             {
                 if (RoundOutcomeInverted)
                 {
@@ -638,7 +669,7 @@ namespace ProjectBlock.Core
                 ResyncSnapshot();
                 if (currentReport != null)
                 {
-                    currentReport.AddLiftedCells(cleared);
+                    currentReport.AddLiftedCells(cleared, LiftKind.Removed);
                 }
             }
             return cleared;
@@ -651,19 +682,49 @@ namespace ProjectBlock.Core
         /// </summary>
         internal IReadOnlyList<GridPos> EscalateBoards()
         {
-            var lost = new List<GridPos>(MainBoard.ShiftRowsUp());
+            // The motions are reporting only: which way each cube was going and why it could not
+            // land, for the View to draw it leaving along the step it really took.
+            var motions = new List<LiftMotion>();
+            var moves = new List<CellMove>();
+            var lost = new List<GridPos>(MainBoard.ShiftRowsUp(motions, moves));
             if (MirrorBoard != null)
             {
-                lost.AddRange(MirrorBoard.ShiftRowsUp());
+                var mirrorMotions = new List<LiftMotion>();
+                var mirrorMoves = new List<CellMove>();
+                lost.AddRange(MirrorBoard.ShiftRowsUp(mirrorMotions, mirrorMoves));
+                AddMirrorMotions(motions, mirrorMotions);
+                AddMirrorMoves(moves, mirrorMoves);
             }
             // ALWAYS re-baseline: the escalator moves cubes even when it carries none off, and a
             // moved cube would otherwise read as a destroyed one.
             ResyncSnapshot();
             if (lost.Count > 0 && currentReport != null)
             {
-                currentReport.AddLiftedCells(lost);
+                currentReport.AddLiftedCells(lost, LiftKind.Relocated, motions);
+            }
+            if (moves.Count > 0 && currentReport != null)
+            {
+                currentReport.AddBoardMoves(moves);
             }
             return lost;
+        }
+
+        /// <summary>Appends the mirror world's motions, marked as the mirror's.</summary>
+        private static void AddMirrorMotions(List<LiftMotion> into, List<LiftMotion> mirror)
+        {
+            for (int i = 0; i < mirror.Count; i++)
+            {
+                into.Add(mirror[i].OnMirror());
+            }
+        }
+
+        /// <summary>Appends the mirror world's surviving moves, marked as the mirror's.</summary>
+        private static void AddMirrorMoves(List<CellMove> into, List<CellMove> mirror)
+        {
+            for (int i = 0; i < mirror.Count; i++)
+            {
+                into.Add(mirror[i].OnMirror());
+            }
         }
 
         /// <summary>
@@ -674,15 +735,25 @@ namespace ProjectBlock.Core
         /// </summary>
         internal IReadOnlyList<GridPos> FlingBoardsOutward()
         {
-            var lost = new List<GridPos>(MainBoard.FlingCubesOutward());
+            var motions = new List<LiftMotion>();
+            var moves = new List<CellMove>();
+            var lost = new List<GridPos>(MainBoard.FlingCubesOutward(motions, moves));
             if (MirrorBoard != null)
             {
-                lost.AddRange(MirrorBoard.FlingCubesOutward());
+                var mirrorMotions = new List<LiftMotion>();
+                var mirrorMoves = new List<CellMove>();
+                lost.AddRange(MirrorBoard.FlingCubesOutward(mirrorMotions, mirrorMoves));
+                AddMirrorMotions(motions, mirrorMotions);
+                AddMirrorMoves(moves, mirrorMoves);
             }
             ResyncSnapshot();
             if (lost.Count > 0 && currentReport != null)
             {
-                currentReport.AddLiftedCells(lost);
+                currentReport.AddLiftedCells(lost, LiftKind.Relocated, motions);
+            }
+            if (moves.Count > 0 && currentReport != null)
+            {
+                currentReport.AddBoardMoves(moves);
             }
             return lost;
         }
@@ -701,14 +772,29 @@ namespace ProjectBlock.Core
         /// </summary>
         internal GridPos? SpreadGangrene()
         {
-            GridPos? spread = MainBoard.SpreadGangrene(rng);
-            List<GridPos> converted = MainBoard.InfectFullLines();
+            // The events are reporting only: which cell, from where, what stood there, which lines
+            // died and where the rot jumped - for the View to stage exactly that.
+            GangreneSpread spreadEvent;
+            GridPos? spread = MainBoard.SpreadGangrene(rng, out spreadEvent);
+            var deaths = new List<GangreneLineDeath>();
+            List<GridPos> converted = MainBoard.InfectFullLines(deaths);
             // The infection changes cubes in place; a converted cube is not a destroyed one, so the
             // destruction diff has to be re-baselined or it would read as a killing.
             ResyncSnapshot();
             if (converted.Count > 0 && currentReport != null)
             {
-                currentReport.AddLiftedCells(converted);
+                currentReport.AddLiftedCells(converted, LiftKind.Transformed);
+            }
+            if (currentReport != null)
+            {
+                if (spreadEvent != null)
+                {
+                    currentReport.GangreneSpread = spreadEvent;
+                }
+                if (deaths.Count > 0)
+                {
+                    currentReport.AddGangreneLineDeaths(deaths);
+                }
             }
             return spread;
         }

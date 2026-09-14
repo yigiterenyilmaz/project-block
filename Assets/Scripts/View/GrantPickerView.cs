@@ -95,6 +95,14 @@ namespace ProjectBlock.View
                     "  -  kurallar için üstüne gel, vermek için tıkla, Esc kapatır"),
                 48, 0.06f, Color.white, 41, TextAnchor.MiddleCenter);
 
+            // A grid this wide never fitted a narrow screen, and it is a long list - so it is
+            // scaled to whatever is visible. Never magnified, so the desktop is unchanged.
+            float top = startY + 1.0f + 0.4f;
+            float bottom = startY - (rows - 1) * TileSpacingY - TileHeight * 0.5f;
+            ViewUtil.FitOverlay(transform,
+                new Vector2(Columns * TileSpacingX + 0.6f, top - bottom),
+                new Vector2(0f, (top + bottom) * 0.5f));
+
             for (int i = 0; i < entries.Count; i++)
             {
                 var center = new Vector2(startX + (i % Columns) * TileSpacingX,
@@ -130,10 +138,12 @@ namespace ProjectBlock.View
         /// order of whichever registry is on display (see Mode).</summary>
         public int EntryAt(Vector2 world)
         {
+            // Local, not world: the grid is scaled and moved to fit the screen.
+            Vector2 local = transform.InverseTransformPoint(world);
             for (int i = 0; i < tileCenters.Count; i++)
             {
-                if (Mathf.Abs(world.x - tileCenters[i].x) <= TileWidth * 0.5f
-                    && Mathf.Abs(world.y - tileCenters[i].y) <= TileHeight * 0.5f)
+                if (Mathf.Abs(local.x - tileCenters[i].x) <= TileWidth * 0.5f
+                    && Mathf.Abs(local.y - tileCenters[i].y) <= TileHeight * 0.5f)
                 {
                     return i;
                 }

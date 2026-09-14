@@ -3,6 +3,7 @@
 
 using System;
 using System.Globalization;
+using System.Reflection;
 using System.Threading;
 using ProjectBlock.Core;
 
@@ -37,6 +38,7 @@ public static class SaveTests
         EveryJokerRoundTrips();
         EveryPowerRoundTrips();
         EveryBossRoundTrips();
+        ReportingFieldsAreNotSaved();
         ContentStateCarriesRealValues();
         RunSaveLoadIsIdentical();
         RestoredRunPlaysOnIdentically();
@@ -546,6 +548,21 @@ public static class SaveTests
             checkedCount++;
         }
         Check(checkedCount > 8, "all bosses were round-tripped (" + checkedCount + ")");
+    }
+
+    /// <summary>A boss carrying a per-turn REPORT for the view must still save: the report is
+    /// left out on purpose, and leaving it out may not cost the boss its real state.</summary>
+    private static void ReportingFieldsAreNotSaved()
+    {
+        var boss = new SnakeBoss();
+        FieldInfo report = typeof(SnakeBoss).GetField("<LastTurn>k__BackingField",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Check(report != null, "the snake still keeps a per-turn report for the view");
+        Check(report.IsDefined(typeof(NotSavedAttribute), false),
+            "and that report is marked as not saved");
+        string state = StateOf(boss);
+        Check(!state.Contains("LastTurn"), "so no save file carries it");
+        RoundTripContent(new SnakeBoss(), new SnakeBoss(), "boss with a view report");
     }
 
     /// <summary>The round-trip above would still pass if every field were skipped, since two

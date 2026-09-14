@@ -64,7 +64,20 @@ namespace ProjectBlock.View
                     GridPos hoverCell;
                     if (boardView.TryWorldToCell(world, out hoverCell))
                     {
-                        boardView.ShowPowerPreview(aiming.PreviewCells(ActivationTarget.Board(hoverCell)));
+                        ActivationTarget at = ActivationTarget.Board(hoverCell);
+                        // "Hidrolik pres" has its own aiming language: the 2x2 is ONE mechanical
+                        // area under a thin pressure frame, not four cells tinted the colour of an
+                        // explosion - it destroys nothing.
+                        if (aiming is HidrolikPresPower)
+                        {
+                            boardView.ShowPressPreview(aiming.PreviewCells(at),
+                                aiming.CanRun(new RoundContext(session, session.Rng,
+                                    session.CurrentRound), at));
+                        }
+                        else
+                        {
+                            boardView.ShowPowerPreview(aiming.PreviewCells(at));
+                        }
                     }
                     else
                     {
@@ -557,20 +570,26 @@ namespace ProjectBlock.View
                 }
                 return;
             }
+            // The press's own aiming language (BoardView.ShowPressPreview): one pressure frame
+            // round the patch, never four cells in the explosion colour - it destroys nothing.
             if (!workshopPressAnchor.HasValue)
             {
-                boardView.ShowPowerPreview(aiming.PreviewCells(ActivationTarget.Board(hoverCell)));
+                ActivationTarget at = ActivationTarget.Board(hoverCell);
+                boardView.ShowPressPreview(aiming.PreviewCells(at),
+                    session.CurrentRound != null
+                        && session.CurrentRound.MainBoard.CanCompressAt(hoverCell));
                 return;
             }
             GridPos anchor = workshopPressAnchor.Value;
+            IReadOnlyList<GridPos> patch = aiming.PreviewCells(ActivationTarget.Board(anchor));
             int dx = hoverCell.X - anchor.X;
             int dy = hoverCell.Y - anchor.Y;
             if (dx < 0 || dx > 1 || dy < 0 || dy > 1)
             {
-                boardView.ShowPowerPreview(aiming.PreviewCells(ActivationTarget.Board(anchor)));
+                boardView.ShowPressPreview(patch, true);
                 return;
             }
-            boardView.ShowPowerPreview(new List<GridPos> { hoverCell });
+            boardView.ShowPressPreview(patch, true, hoverCell);
         }
 
     }

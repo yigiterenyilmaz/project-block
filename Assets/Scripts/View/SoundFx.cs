@@ -68,6 +68,11 @@ namespace ProjectBlock.View
             buyClip = BuildBuy();
             flameClip = BuildFlame();
             humClip = BuildHum();
+            stingClips = new[]
+            {
+                BuildStingSiren(), BuildStingBoom(), BuildStingGong(), BuildStingClank(),
+                BuildStingDrone()
+            };
             humSource.clip = humClip;
             ApplyHumVolume();
         }
@@ -135,6 +140,85 @@ namespace ProjectBlock.View
         public void Flame()
         {
             PlayWithPitch(flameClip, 0.9f, 1.1f, 1.1f);
+        }
+
+        // ---- boss identity stings (BossIdentityView prototypes) ----
+
+        private AudioClip[] stingClips;
+
+        /// <summary>One of the boss-intro stings. Played at a fixed pitch: the sequences are timed
+        /// against them, and a random pitch would stretch the hit away from its frame.</summary>
+        public void PlayBossSting(BossSting kind)
+        {
+            int i = (int)kind;
+            if (stingClips != null && i >= 0 && i < stingClips.Length)
+            {
+                PlayWithPitch(stingClips[i], 1f, 1f);
+            }
+        }
+
+        /// <summary>Two alternating tones, a little square-edged (a third harmonic).</summary>
+        private static AudioClip BuildStingSiren()
+        {
+            float[] buffer = Buffer(1.0f);
+            for (int k = 0; k < 4; k++)
+            {
+                float f = k % 2 == 0 ? 740f : 520f;
+                int start = (int)(SampleRate * 0.22f * k);
+                AddTone(buffer, start, 0.24f, f, f * 0.97f, 0.20f, 0.6f);
+                AddTone(buffer, start, 0.24f, f * 3f, f * 2.9f, 0.05f, 0.8f);
+            }
+            return Finish("stingSiren", buffer);
+        }
+
+        private static AudioClip BuildStingBoom()
+        {
+            float[] buffer = Buffer(1.2f);
+            AddTone(buffer, 0, 1.1f, 90f, 32f, 0.75f, 1.6f);
+            AddNoise(buffer, 0, 0.4f, 0.35f, 3f, new System.Random(11));
+            return Finish("stingBoom", buffer);
+        }
+
+        /// <summary>Inharmonic partials with a long decay - struck metal, not a musical note.</summary>
+        private static AudioClip BuildStingGong()
+        {
+            float[] buffer = Buffer(2.2f);
+            float[] partials = { 110f, 173f, 262f, 331f, 447f };
+            float[] amps = { 0.26f, 0.18f, 0.14f, 0.10f, 0.07f };
+            for (int i = 0; i < partials.Length; i++)
+            {
+                AddTone(buffer, 0, 2.2f, partials[i], partials[i] * 0.995f, amps[i], 1.2f + i * 0.3f);
+            }
+            AddTone(buffer, 0, 0.3f, 70f, 45f, 0.4f, 2f);
+            AddNoise(buffer, 0, 0.05f, 0.25f, 3f, new System.Random(12));
+            return Finish("stingGong", buffer);
+        }
+
+        private static AudioClip BuildStingClank()
+        {
+            float[] buffer = Buffer(0.35f);
+            AddNoise(buffer, 0, 0.08f, 0.5f, 4f, new System.Random(13));
+            AddTone(buffer, 0, 0.3f, 820f, 800f, 0.15f, 5f);
+            AddTone(buffer, 0, 0.3f, 1330f, 1300f, 0.12f, 5f);
+            AddTone(buffer, 0, 0.3f, 2150f, 2100f, 0.08f, 6f);
+            AddTone(buffer, 0, 0.12f, 140f, 90f, 0.4f, 2f);
+            return Finish("stingClank", buffer);
+        }
+
+        /// <summary>A low beating drone that SWELLS rather than decays.</summary>
+        private static AudioClip BuildStingDrone()
+        {
+            float[] buffer = Buffer(2.6f);
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                float t = i / (float)buffer.Length;
+                float env = Mathf.Pow(Mathf.Sin(Mathf.PI * t), 0.7f);
+                float s = i / (float)SampleRate;
+                buffer[i] = env * (0.22f * Mathf.Sin(2f * Mathf.PI * 55f * s)
+                    + 0.18f * Mathf.Sin(2f * Mathf.PI * 58.3f * s)
+                    + 0.07f * Mathf.Sin(2f * Mathf.PI * 110.5f * s));
+            }
+            return Finish("stingDrone", buffer);
         }
 
         private void PlayWithPitch(AudioClip clip, float minPitch, float maxPitch)

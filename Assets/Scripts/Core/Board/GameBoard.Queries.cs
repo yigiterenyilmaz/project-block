@@ -539,6 +539,70 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
+        /// HOW CLOSE A ROW IS TO EXPLODING: how many REQUIRED cells of row
+        /// <paramref name="absoluteY"/> are still empty, or -1 when the row can never explode
+        /// again at all - erosion killed it, "Kangren" took it whole, or it has no required cell
+        /// in it to begin with.
+        ///
+        /// It counts exactly what ResolveFullLines waits for and NOTHING else: a hole in the
+        /// bounding box was never part of the line, and bonus ground ("Tılsım") never holds one
+        /// up (nor, by the same token, conjures one). So anything reasoning about "the player is
+        /// one cube away from this row" - a boss picking where to hurt, a hint, a heuristic - is
+        /// reasoning about the same line the explosion rule does, rather than about a second
+        /// definition of "full" that can drift away from it.
+        ///
+        /// A pure query: nothing here touches the board.
+        /// </summary>
+        public int RowGapCount(int absoluteY)
+        {
+            int iy = absoluteY - MinY;
+            if (iy < 0 || iy >= Height || RowIsKilled(iy) || RowIsInfectionDead(absoluteY))
+            {
+                return -1;
+            }
+            int gaps = 0;
+            bool anyRequired = false;
+            for (int x = 0; x < Width; x++)
+            {
+                if (!playable[x, iy] || optional[x, iy])
+                {
+                    continue;
+                }
+                anyRequired = true;
+                if (!cells[x, iy].HasValue)
+                {
+                    gaps++;
+                }
+            }
+            return anyRequired ? gaps : -1;
+        }
+
+        /// <summary>Column counterpart of RowGapCount.</summary>
+        public int ColumnGapCount(int absoluteX)
+        {
+            int ix = absoluteX - MinX;
+            if (ix < 0 || ix >= Width || ColumnIsKilled(ix) || ColumnIsInfectionDead(absoluteX))
+            {
+                return -1;
+            }
+            int gaps = 0;
+            bool anyRequired = false;
+            for (int y = 0; y < Height; y++)
+            {
+                if (!playable[ix, y] || optional[ix, y])
+                {
+                    continue;
+                }
+                anyRequired = true;
+                if (!cells[ix, y].HasValue)
+                {
+                    gaps++;
+                }
+            }
+            return anyRequired ? gaps : -1;
+        }
+
+        /// <summary>
         /// Exchanges the contents of two whole rows, or two whole columns ("Kentsel Dönüşüm").
         /// Coordinates are board coordinates, so they respect MinX/MinY.
         ///

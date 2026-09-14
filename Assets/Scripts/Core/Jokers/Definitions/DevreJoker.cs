@@ -229,8 +229,10 @@ namespace ProjectBlock.Core
             {
                 turn.Round.TryResolveCleanSweep();
             }
-            // The cubes that had already gone this turn were part of the circuit too, so the
-            // whole circuit is paid for either way.
+            // NOT gated by "Genel temizlik" (RoundEngine.ExternalDestructionScores): the circuit
+            // only breaks when the PLAYER has filled every cell of it by placing blocks, so this
+            // explosion is the player's own, like a completed line. The cubes that had already
+            // gone this turn were part of the circuit too, so the whole circuit is paid for.
             turn.AddFlatScore(cells * turn.Scoring.PointsPerCubeExploded, DefId);
             turn.AddFlatScore(BreakBonus + cells * BonusPerCell, DefId);
             path.Clear();

@@ -16,6 +16,11 @@
 // The two failures pull against each other on purpose: you must keep clearing (to split the
 // dolls) and you must keep building (to house them).
 //
+// WHAT IT DID IS REPORTED, as it decides it (TurnReport.DollEvents): the first doll arriving, every
+// split with the cells its children went to, every last-generation doll emptied, every doll water
+// moved, and the boss beaten. The View stages exactly that. Reporting touches no rule, no random draw
+// and no field, so the round plays - and saves - exactly as it did.
+//
 // A doll RIDES a cube rather than being one. It fills no cell, blocks nothing, and takes no part
 // in a line - it is a mark on somebody else's cube, which is why an ordinary line clear is what
 // cracks it. Round-scoped like every boss: the dolls die with the engine.
@@ -94,6 +99,20 @@ namespace ProjectBlock.Core
             return 0;
         }
 
+        /// <summary>The generation of the doll on this cell - 1 is the largest, Generations the
+        /// smallest - or 0 when there is none. What the View picks each doll's art by.</summary>
+        public int GenerationAt(GridPos cell)
+        {
+            for (int i = 0; i < dolls.Count; i++)
+            {
+                if (dolls[i].Cell.X == cell.X && dolls[i].Cell.Y == cell.Y)
+                {
+                    return dolls[i].Generation;
+                }
+            }
+            return 0;
+        }
+
         public int DollCount
         {
             get { return dolls.Count; }
@@ -127,7 +146,7 @@ namespace ProjectBlock.Core
             started = false;
             // The arena is empty at round start, so there is nothing to set a doll on yet: the
             // first one arrives at the end of the first turn that leaves a cube standing.
-            SeedFirstDoll(ctx.Round, ctx.Rng);
+            SeedFirstDoll(ctx.Round, ctx.Rng, null);
         }
 
         public override void AfterTurnScored(TurnContext turn)
@@ -139,7 +158,7 @@ namespace ProjectBlock.Core
             }
             if (!started)
             {
-                SeedFirstDoll(round, turn.Rng);
+                SeedFirstDoll(round, turn.Rng, turn.Report);
                 return; // the first doll is not cracked by the turn that placed it
             }
             // 1. Was every line that went off aimed at a doll? Judged against the dolls as they
@@ -156,19 +175,20 @@ namespace ProjectBlock.Core
             }
             // 3. A doll whose cube MOVED rather than broke (settling water) is re-homed instead
             //    of being cracked - nothing exploded under it.
-            if (!ReHomeOrphans(round, turn.Rng))
+            if (!ReHomeOrphans(round, turn.Rng, turn.Report))
             {
                 return;
             }
             // 4. Nothing left to break: the round is over and it is won.
             if (dolls.Count == 0)
             {
+                turn.Report.AddDollEvent(DollEvent.AllCracked());
                 round.DeclareRoundWon();
             }
         }
 
         /// <summary>Sets the very first doll down, as soon as there is a cube to set it on.</summary>
-        private void SeedFirstDoll(RoundEngine round, IRandomSource rng)
+        private void SeedFirstDoll(RoundEngine round, IRandomSource rng, TurnReport report)
         {
             GameBoard board = round != null ? round.Board : null;
             if (board == null)
@@ -182,6 +202,11 @@ namespace ProjectBlock.Core
             }
             dolls.Add(new Doll(host.Value, 1));
             started = true;
+            // No report at round start: nothing is staged for a doll that was there before play began.
+            if (report != null)
+            {
+                report.AddDollEvent(DollEvent.Arrived(host.Value, 1, Generations <= 1));
+            }
         }
 
         /// <summary>
@@ -256,25 +281,32 @@ namespace ProjectBlock.Core
                 dollsCracked++;
                 if (broken[i].Generation >= Generations)
                 {
+                    turn.Report.AddDollEvent(DollEvent.Emptied(broken[i].Cell, broken[i].Generation));
                     continue; // the smallest doll of all: it holds nothing, so nothing comes out
                 }
+                var children = new List<GridPos>(SplitInto);
                 for (int half = 0; half < SplitInto; half++)
                 {
                     GridPos? host = FreeHost(round.Board, turn.Rng);
                     if (!host.HasValue)
                     {
+                        // What did land is still reported: those dolls exist, and the board shows them.
+                        turn.Report.AddDollEvent(DollEvent.Split(broken[i].Cell, broken[i].Generation,
+                            children));
                         round.DeclareLoss(LossReason.NoRoomForDoll);
                         return false;
                     }
                     dolls.Add(new Doll(host.Value, broken[i].Generation + 1));
+                    children.Add(host.Value);
                 }
+                turn.Report.AddDollEvent(DollEvent.Split(broken[i].Cell, broken[i].Generation, children));
             }
             return true;
         }
 
         /// <summary>Moves any doll left sitting on an empty cell back onto a real cube. Its cube
         /// was not destroyed (that was handled above) - it slid out from under it.</summary>
-        private bool ReHomeOrphans(RoundEngine round, IRandomSource rng)
+        private bool ReHomeOrphans(RoundEngine round, IRandomSource rng, TurnReport report)
         {
             for (int i = 0; i < dolls.Count; i++)
             {
@@ -288,6 +320,8 @@ namespace ProjectBlock.Core
                     round.DeclareLoss(LossReason.NoRoomForDoll);
                     return false;
                 }
+                report.AddDollEvent(DollEvent.Moved(dolls[i].Cell, host.Value, dolls[i].Generation,
+                    dolls[i].Generation >= Generations));
                 dolls[i] = new Doll(host.Value, dolls[i].Generation);
             }
             return true;
