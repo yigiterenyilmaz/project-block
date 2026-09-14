@@ -1,4 +1,4 @@
-// PURPOSE: What a player-activated joker/power was pointed at - an optional hand
+﻿// PURPOSE: What a player-activated joker/power was pointed at - an optional hand
 // index, board cell, or a pair of rows/columns to swap. Built via the factories.
 
 using System.Collections.Generic;
@@ -65,6 +65,16 @@ namespace ProjectBlock.Core
         public static ActivationTarget TwoCards(int first, int second, GridPos offset)
         {
             return new ActivationTarget(first, null, null, null, null, false, second, offset,
+                null);
+        }
+
+        /// <summary>"Hidrolik pres": the 2x2 patch, named by its bottom-left cell, and WHICH of
+        /// its four cells keeps the pressed cube. The second pick rides in Offset as a 0/1 step
+        /// from the anchor - the patch is only two cells wide, so a step is all it takes, and it
+        /// is the same shape of value Lehimleme's offset already is.</summary>
+        public static ActivationTarget BoardArea(GridPos anchor, GridPos offset)
+        {
+            return new ActivationTarget(null, anchor, null, null, null, false, null, offset,
                 null);
         }
 

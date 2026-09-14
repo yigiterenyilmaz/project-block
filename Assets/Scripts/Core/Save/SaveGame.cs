@@ -51,7 +51,7 @@ namespace ProjectBlock.Core
         // rebuilt from sealed lines into a moving patch of cells, and "Tutumluluk" remembers the
         // deck it started with - each changed which fields the reflection walk writes, so a 15's
         // content block no longer lines up.
-        public const int FormatVersion = 16;
+        public const int FormatVersion = 17;
 
         private const string VersionKey = "version";
 

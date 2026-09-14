@@ -79,6 +79,24 @@ everything here is unreleased and balance numbers are still placeholders.
   languages. The bindings are a first cut and are meant to be re-cut.
 
 ### Fixed
+- **"Mayın eşeği": setting the mine off did nothing you could see, and almost nothing you could
+  feel.** Two separate faults that added up to one non-event. The View drew NO detonation at all
+  — no blast, no popup, no message — so the only evidence was a score number quietly changing.
+  And the penalty could not land: it went through `ChargeScore`, which routes into the turn score
+  and is floored by `ClampTurnScoreFloor` at what that turn earned, so a mine tripped by an
+  ordinary line clear only ever cancelled that line. The flat 400 was, in practice, "lose the line
+  you just cleared". The cell now goes off in the mine's own red, the camera takes it, and the
+  number it cost is said out loud over the board; the replacement mine's reveal waits for the
+  blast to finish rather than landing on the same frame (setting a mine off arms a fresh one at
+  once). The cell that blew is remembered separately from `MineCell`, because by the time anything
+  can react `MineCell` is already the NEW mine's.
+- **"Şaşırtmaca": turning a card over and dragging it are now ONE gesture.** Pressing a face-down
+  card committed to it and stopped there, so the player had to let go and press again to actually
+  pick the card up — two gestures for what reads as one, on the boss whose whole point is that you
+  only get one pick. The commitment still happens on that first press; the press now carries on
+  into the pick-up. The flip rebuilds the card's visual (it is the wrong side up), so the drag
+  re-fetches the card by its SLOT rather than holding on to the object it pressed, which is the
+  part that made this look like it could not work.
 - **The arena was drawn too narrow in retro mode.** A retro round grows four dead rows on top of
   the board, and that made it the first NON-SQUARE arena in the game — at which point the generated
   surface plate came out squashed horizontally by exactly width/height, leaving the outer column of
@@ -125,6 +143,81 @@ everything here is unreleased and balance numbers are still placeholders.
   else changes. (The running catalogue total is on the Şifacı entry above.)
 
 ### Changed
+- **The hand fan now CLIMBS: every card draws over the one to its left, whole.** The overlap
+  alternated (0, 9, 0, 9…), so card 1 drew over both 0 *and* 2 and a left-hand card's cubes and
+  outline sat on top of its right-hand neighbour's face. It was a weave, not a stack, and once the
+  fan stopped widening and the cards genuinely lay over one another it read as nonsense.
+  The reason it alternated was budget: a card spans NINE sorting orders of its own, and one band
+  per card walks the hand up through the deck overlay within four of them. The fix was fewer
+  orders, not more — a hand card is now FLATTENED into a single order and layered by DEPTH
+  instead (`CardVisual.SetFlattenedOrder`), which works because the camera is orthographic and the
+  project's transparency sort mode is Default, so equal orders resolve by distance along the view
+  axis and z costs nothing on screen. A card therefore costs one order, the whole fan fits in the
+  gap that was always there, and the overlap runs one way only. Past 20 cards the climb saturates
+  and the last cards share the top order — reachable only through a hand-size joker.
+  Everything that hands a card its order followed: the drag pick-up, the release, the cards flying
+  to the discard and the hover all take an absolute place (`HandFrontOrder`, `ReturnToFan`) rather
+  than a relative boost, which no longer composes on a flattened card. `FxOrder` moved from 25 to
+  49, because the fan now climbs straight through where it used to sit.
+- **A crowded hand now STACKS instead of spreading.** The fan had a third width rule: once cards
+  would show less than about 60% of themselves it stopped tightening and started *widening*
+  instead, out to a ceiling measured to stop just short of the piles. So a big hand answered
+  crowding by creeping outward across the screen. It no longer grows at all past `HandFanSpan` —
+  the cards simply lie further and further over one another, and covering a card costs nothing,
+  because the one under the cursor lifts out of the row and rises clear of the whole fan. Two
+  constants (`HandFanSpanMax`, `HandMinSpacing`) are gone with the rule.
+- **Hit-testing the hand now agrees with what is drawn on top.** `CardAt` picked the highest SLOT
+  among the cards under the pointer, which was right while a card only overlapped its immediate
+  neighbours — but the resting fan alternates its sorting boost, so slot 1 draws over both 0 and
+  2, and a hand lying several deep would hand back a card visibly *behind* the one being pointed
+  at. It now compares the fan boost first and the slot only as the tie-break, which is exactly the
+  order the cards are painted in.
+- **"Mayın eşeği": the red goes out when the covers land.** The mine's marker used to ride on top
+  of the covers for the whole dance, which made the shell game a formality — you cannot lose a red
+  square. The mine is still named in red during the reveal, while the board is readable; the
+  moment the covers come down that red is gone and its cover is one of many identical covers. What
+  you follow is the MOTION, the way you would follow a cup on a table — the hop already arcs the
+  two covers past each other precisely so there is something to follow without a badge.
+- **"Mayın eşeği" now takes HALF the round instead of a flat 400.** A fraction rather than a
+  number, deliberately: a fixed penalty is barely felt on a late round and ruinous on an early
+  one, while half of what you have is the same size of disaster whenever it happens — and it grows
+  exactly as fast as your reason to go on playing carefully does. It goes through a new
+  `RoundEngine.HalveRoundScore` rather than `ChargeScore`, and the difference is the whole point:
+  a turn penalty is floored at what the turn earned, which is right for "Terslik" and "Besleme"
+  and wrong for a mine. **The floor's promise is kept, not broken** — the turn's own baseline moves
+  down with the score, so THIS TURN still cannot be worth less than nothing; what changes is that
+  the halving is a round-level charge and is no longer handed back. It rounds down, so half is a
+  ceiling on what it can take.
+- **"Mayın eşeği": the mine's cube turns black before the shuffle.** The reveal used to drop a red
+  marker on top of a cell and wait. Now it plays in two beats — first the mine's own cube goes
+  black while the rest of the board is still plainly itself, so what you are shown is a cube of
+  yours TURNING on a board you can still read; then the red marker settles onto it and names the
+  thing you will have to follow. The covers come down in that same black afterwards, so the board
+  closes around the mine's cell rather than over it.
+- **The market reroll price now steepens instead of climbing forever by the same step.** It ran
+  50, 100, 150, 200, 250, 300 … — a flat +50 a time, which meant a deep reroll spree kept costing
+  about what the first one did. Past 200 each further reroll now costs 100 more than the last:
+  50, 100, 150, 200, 300, 400, 500. The early rerolls are still cheap enough to shop with and the
+  fourth one starts to hurt. The two numbers are `MarketConfig.RerollStepUpAt` /
+  `RerollLateCostStep`, and setting the step-up at or below the base price gives back the old
+  single straight line. The whole-shelf surcharge rides the same counter as before, so it
+  steepens with it.
+- **"Hidrolik pres": the pressed cube pays properly, and you say WHERE it goes.** The power's own
+  text promised that breaking the cube while the press was shut paid for the four cubes it
+  swallowed; nothing anywhere actually paid it, so the clean line of play — squeeze, use the room,
+  clear the press before it opens — was worth a single ordinary cube. It now pays
+  `BonusWhenCrushed`, priced at four cubes at the same rate the power already pays for one shoved
+  off the edge. The payout is asked of the BOARD rather than of the turn's destruction log,
+  because the log is cleared at the top of every turn: keyed to the log, a power that blew the
+  press between turns would have paid nothing while a line that took it mid-turn paid in full.
+  Aiming is now two picks instead of one: the first names the 2x2 patch, the second names which of
+  its four cells keeps the cube — and since a press opens outward from where it SITS, putting it
+  in the far corner is a genuinely different piece of board from putting it in the near one. The
+  patch is still named by its bottom-left cell; the second pick only says where inside it the cube
+  lives. The preview follows both steps (the patch under the cursor, then the single cell), the
+  gamepad's direct scheme confirms twice through the same handler the mouse click goes through,
+  and a second click outside the patch is a miss rather than a cancel — having committed to a
+  patch, you should not lose it to a slipped cursor. Save format bumped to 17 for the new field.
 - **"Alacakaranlık" reworked: a real blackout, a lower bar, and a price for groping about.**
   The blackout was not one. Cells were tinted dark, but a cube brought its own painted tile and
   stood nearly edge to edge while an empty cell was a smaller flat square — so the board still

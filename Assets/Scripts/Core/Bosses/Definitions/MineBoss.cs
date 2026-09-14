@@ -1,4 +1,4 @@
-// PURPOSE: "Mayın eşeği" - the shell game. A mine is put on one cell and SHOWN to you, the board is
+﻿// PURPOSE: "Mayın eşeği" - the shell game. A mine is put on one cell and SHOWN to you, the board is
 // covered over, the covers dance, and the mine travels with its own cover. Follow it with your eyes
 // and you know where it ended up; lose it and you are guessing for ten turns.
 //
@@ -7,6 +7,11 @@
 //   - the MINE travels with the cover hiding it, so where its cover lands is where the mine is.
 // So the shuffle is not misdirection about a fixed answer - it genuinely relocates the mine, and
 // watching it is the only honest way to know. A player who blinks has to play blind.
+//
+// SETTING IT OFF HALVES the round's banked score (RoundEngine.HalveRoundScore). Deliberately a
+// fraction rather than a flat number: a fixed penalty is barely felt on a late round and ruinous
+// on an early one, while half of what you have is the same size of disaster whenever it happens -
+// and it grows exactly as fast as your reason to go on playing carefully does.
 //
 // CORE DECIDES, THE VIEW ANIMATES. The path the mine's cover takes is computed here, off the round's
 // own rng, so a headless run and a played one agree about where the mine is. The View replays that
@@ -22,9 +27,6 @@ namespace ProjectBlock.Core
         /// <summary>Turns between one reveal-and-shuffle and the next.</summary>
         public int TurnsPerShuffle = 10;
 
-        /// <summary>Score lost for setting it off. Heavy - this is the whole threat.</summary>
-        public int PenaltyOnDetonation = 400;
-
         /// <summary>How many covers the mine swaps with while the board is dark. Enough to be
         /// genuinely hard to follow, few enough to be followable at all.</summary>
         public int ShuffleSteps = 12;
@@ -34,6 +36,8 @@ namespace ProjectBlock.Core
         private int turnsLeft;
         private int detonations;
         private int shuffles;
+        private int lastLoss;
+        private GridPos lastLossCell;
         private readonly List<GridPos> path = new List<GridPos>();
 
         public MayinEsegiBoss()
@@ -41,14 +45,15 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "A mine is put on one cell and shown to you, then the board is covered and the "
-                    + "covers are shuffled - and the mine travels with its own cover. Do not "
-                    + "explode the cell it landed on. Every ten turns it is revealed and shuffled "
-                    + "again. The cubes never move; only your certainty does.",
+                    + "covers are shuffled - and the mine travels with its own cover. Explode the "
+                    + "cell it landed on and you lose HALF of everything the round has banked. "
+                    + "Every ten turns it is revealed and shuffled again. The cubes never move; "
+                    + "only your certainty does.",
                 "Bir kareye mayın konur ve sana gösterilir, sonra harita kapatılıp kapaklar "
                     + "karıştırılır - ve mayın kendi kapağıyla birlikte gider. Kapağın indiği "
-                    + "kareyi patlatma. Her 10 turda bir yeri tekrar gösterilip yeniden "
-                    + "karıştırılır. Küpler hiç kıpırdamaz; kıpırdayan tek şey senin emin "
-                    + "olduğun yer.");
+                    + "kareyi patlatırsan rauntta topladığın puanın YARISINI kaybedersin. Her 10 "
+                    + "turda bir yeri tekrar gösterilip yeniden karıştırılır. Küpler hiç "
+                    + "kıpırdamaz; kıpırdayan tek şey senin emin olduğun yer.");
         }
 
         /// <summary>Where the mine is RIGHT NOW - after the last shuffle. The View shows this only
@@ -73,6 +78,23 @@ namespace ProjectBlock.Core
         public int Detonations
         {
             get { return detonations; }
+        }
+
+        /// <summary>The cell the LAST detonation went off on. Kept separately from MineCell
+        /// because setting a mine off arms a fresh one immediately, so by the time anything can
+        /// react MineCell is already the NEW mine's - and the blast belongs over the old one.
+        /// </summary>
+        public GridPos LastDetonationCell
+        {
+            get { return lastLossCell; }
+        }
+
+        /// <summary>Points the LAST detonation took, in the scaled economy the player is shown.
+        /// The View says this number out loud over the cell that blew - a halving the player
+        /// cannot see the size of is indistinguishable from nothing happening.</summary>
+        public int LastDetonationLoss
+        {
+            get { return lastLoss; }
         }
 
         /// <summary>Bumped on every reveal-and-shuffle. The View watches it to know when to run
@@ -109,6 +131,7 @@ namespace ProjectBlock.Core
         {
             detonations = 0;
             shuffles = 0;
+            lastLoss = 0;
             armed = false;
             Arm(ctx.Round, ctx.Rng);
         }
@@ -128,7 +151,11 @@ namespace ProjectBlock.Core
             if (BlewUpThisTurn(turn))
             {
                 detonations++;
-                turn.Round.ChargeScore(PenaltyOnDetonation, DefId);
+                lastLossCell = mineCell;
+                // NOT ChargeScore: that is a turn penalty, floored at what the turn earned, so a
+                // mine set off by an ordinary line clear would only ever cancel that line. See
+                // RoundEngine.HalveRoundScore for why this one is allowed to stand.
+                lastLoss = turn.Round.HalveRoundScore(DefId);
                 // A fresh mine, shown and shuffled again - the player gets a clean look at it,
                 // which is the only mercy in this.
                 Arm(turn.Round, turn.Rng);

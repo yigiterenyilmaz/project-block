@@ -759,6 +759,19 @@ namespace ProjectBlock.View
                 {
                     return false; // let the drag path draw the aiming preview from our pointer
                 }
+                // "Hidrolik pres" aims TWICE - the patch, then which of its four cells keeps the
+                // cube - so A goes through the very handler the mouse click goes through rather
+                // than firing the power off the first pick. Everything else fires on one press.
+                if (workshopPowerId.HasValue && targeting == ActivationTargeting.BoardArea
+                    && power != null)
+                {
+                    if (HandlePressClick(power, round, boardView.CellToWorld(padCell))
+                        && !workshopPowerId.HasValue)
+                    {
+                        padFocus = PadFocus.Hand;
+                    }
+                    return true;
+                }
                 ActivationTarget cellTarget;
                 if (!TryBoardTargetAt(boardView.CellToWorld(padCell), out cellTarget))
                 {

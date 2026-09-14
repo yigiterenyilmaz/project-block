@@ -1,4 +1,4 @@
-// PURPOSE: RoundEngine scoring & round-flow helpers - card disposal, between-turn and
+﻿// PURPOSE: RoundEngine scoring & round-flow helpers - card disposal, between-turn and
 // overtime score, dead-zone-aware line scoring, retro/Tetris collapse, top-out, and
 // the loss/force-advance/force-sweep entry points.
 
@@ -91,7 +91,15 @@ namespace ProjectBlock.Core
         /// complete one exactly as a board-reshaping power can.</summary>
         internal PressExpansion ReleasePress(GridPos anchor, Cube?[] swallowed)
         {
-            PressExpansion result = MainBoard.Expand(anchor, swallowed);
+            return ReleasePress(anchor, anchor, swallowed);
+        }
+
+        /// <summary>The same release, for a press whose cube the player placed somewhere other
+        /// than the patch's bottom-left cell.</summary>
+        internal PressExpansion ReleasePress(GridPos anchor, GridPos pressCell,
+            Cube?[] swallowed)
+        {
+            PressExpansion result = MainBoard.Expand(anchor, pressCell, swallowed);
             if (result == null)
             {
                 return null;
@@ -197,6 +205,46 @@ namespace ProjectBlock.Core
             {
                 session.AddCurrency(-scaled);
             }
+        }
+
+        /// <summary>
+        /// Takes HALF of everything the round has banked so far ("Mayın eşeği" going off).
+        /// Returns what it took, in scaled points, so the View can say the number out loud.
+        ///
+        /// This is a ROUND-level charge, not a turn penalty, and the difference is the whole
+        /// reason it is its own method. A turn penalty goes through ChargeScore and is floored by
+        /// ClampTurnScoreFloor at what the turn earned - which is exactly right for "Terslik" or
+        /// "Besleme", and exactly wrong here: a mine that only ever cancelled the line that set it
+        /// off would be no threat at all. So the turn's own baseline moves down with the score,
+        /// which keeps the floor's promise intact - THIS TURN still cannot be worth less than
+        /// nothing - while letting the halving stand instead of being handed straight back.
+        ///
+        /// Rounds DOWN, so half is a ceiling on what it can take and a round score of 1 survives.
+        /// </summary>
+        internal int HalveRoundScore(string source)
+        {
+            int taken = RoundScore / 2;
+            if (taken <= 0)
+            {
+                return 0;
+            }
+            RoundScore -= taken;
+            if (session != null)
+            {
+                session.AddCurrency(-taken);
+            }
+            if (currentReport != null)
+            {
+                // The floor may never push the round back UP to a baseline the halving has
+                // already dropped below.
+                if (turnStartRoundScore > RoundScore)
+                {
+                    turnStartRoundScore = RoundScore;
+                }
+                currentReport.ScoreGained = RoundScore - turnStartRoundScore;
+                currentReport.RoundScoreAfter = RoundScore;
+            }
+            return taken;
         }
 
         /// <summary>Banks score from something that happened BETWEEN turns - a power, which

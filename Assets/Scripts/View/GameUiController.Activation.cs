@@ -1,4 +1,4 @@
-// PURPOSE: GameUiController activation - arming and running player-activated jokers and
+﻿// PURPOSE: GameUiController activation - arming and running player-activated jokers and
 // powers, the choice/batak/powerbank/block-designer pickers, targeting, and the
 // power-blast FX.
 
@@ -259,6 +259,7 @@ namespace ProjectBlock.View
             workshopFirstCard = -1;
             SecondWorkshopCard = -1;
             workshopDonorCell = null;
+            workshopPressAnchor = null;
             cubePicker.Hide();
             weldPicker.Hide();
             boardView.ClearPreview();
@@ -360,7 +361,8 @@ namespace ProjectBlock.View
             // state machine rather than the single pending click.
             if (power.Targeting == ActivationTargeting.CardCubes
                 || power.Targeting == ActivationTargeting.TwoHandCards
-                || power.Targeting == ActivationTargeting.CellAndHandCard)
+                || power.Targeting == ActivationTargeting.CellAndHandCard
+                || power.Targeting == ActivationTargeting.BoardArea)
             {
                 BeginWorkshopTargeting(power);
                 return;
@@ -389,6 +391,7 @@ namespace ProjectBlock.View
             workshopPowerId = power.InstanceId;
             workshopFirstCard = -1;
             workshopDonorCell = null;
+            workshopPressAnchor = null;
             pendingTargetPowerId = power.InstanceId; // so the bar and the hint light up
             UpdateHud();
             powerBar.Refresh(session, pendingTargetPowerId);
@@ -413,6 +416,13 @@ namespace ProjectBlock.View
             {
                 CancelTargeting();
                 return true;
+            }
+
+            // "Hidrolik pres" is two clicks on the BOARD - the patch, then which of its four
+            // cells keeps the cube - so it never reaches the hand-card tail below.
+            if (power.Targeting == ActivationTargeting.BoardArea)
+            {
+                return HandlePressClick(power, round, world);
             }
 
             // A picker is open: the click belongs to it.
@@ -501,6 +511,47 @@ namespace ProjectBlock.View
                 round.EffectiveShape(round.Hand[hit.SlotIndex]),
                 Loc.Pick("Lehimleme: pick where the second block goes   [Esc] cancel",
                     "Lehimleme: ikinci bloğun nereye geleceğini seç   [Esc] iptal"));
+            return true;
+        }
+
+        /// <summary>
+        /// One click of "Hidrolik pres". The first names the 2x2 PATCH, the second names which of
+        /// its four cells the pressed cube ends up in - a press in the far corner is a different
+        /// piece of board from one in the near corner, and it opens outward from where it sits.
+        /// A second click outside the patch is a miss, not a cancel: having already committed to
+        /// a patch, the player should not lose it to a slipped cursor.
+        /// </summary>
+        private bool HandlePressClick(Power power, RoundEngine round, Vector2 world)
+        {
+            GridPos cell;
+            if (!boardView.TryWorldToCell(world, out cell))
+            {
+                CancelTargeting();
+                return true;
+            }
+            if (!workshopPressAnchor.HasValue)
+            {
+                if (!round.MainBoard.CanCompressAt(cell))
+                {
+                    CancelTargeting();
+                    return true;
+                }
+                workshopPressAnchor = cell;
+                boardView.ShowPowerPreview(power.PreviewCells(ActivationTarget.Board(cell)));
+                UpdateHud();
+                return true;
+            }
+            GridPos anchor = workshopPressAnchor.Value;
+            int dx = cell.X - anchor.X;
+            int dy = cell.Y - anchor.Y;
+            if (dx < 0 || dx > 1 || dy < 0 || dy > 1)
+            {
+                return true; // outside the patch: a miss inside a committed pick
+            }
+            workshopPowerId = null;
+            workshopPressAnchor = null;
+            boardView.ClearPreview();
+            RunPowerActivation(power, ActivationTarget.BoardArea(anchor, new GridPos(dx, dy)));
             return true;
         }
 

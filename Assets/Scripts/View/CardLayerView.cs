@@ -1,4 +1,4 @@
-// PURPOSE: Everything card-shaped on screen: the hand row (draggable cards), the
+﻿// PURPOSE: Everything card-shaped on screen: the hand row (draggable cards), the
 // face-down draw pile (right), the discard pile with its top card face-up (left),
 // and the basic animations between them (deal, discard, burn, shuffle).
 // Sync() reconciles visuals against the engine state after every action; when a
@@ -31,14 +31,26 @@ namespace ProjectBlock.View
         // THE HAND'S BUDGET, since it is no longer one order per card: a card spans 9
         // (HandFanOrderStep) and the fan alternates, so a resting card tops out at 12+9+8 = 29
         // - under the MARKET panel's backdrop at 31, which matters because the hand is still
-        // drawn while the market is up. A hovered or dragged card adds HandFrontBoost for a top
+        // drawn while the market is up. A hovered or dragged card takes HandFrontOrder for a top
         // of 38, under the deck overlay's dim at 39; neither gesture can happen while that
         // overlay is open, and this is why the base is 12 rather than the 20 it was.
         private const int StackBaseOrder = 3;
         private const int StackOrderStep = 3;
         private const int DiscardTopOrder = 36;
         private const int HeldCardOrder = 12;
-        private const int FxOrder = 25;
+        /// <summary>
+        /// Loose card visuals that are not part of the hand - the "Şaşırtmaca" reveal beat, the
+        /// shuffle and burn flourishes, the lab's samples. Every one of them is something being
+        /// SHOWN over the hand, so it has to clear the fan; it used to sit at 25, which the fan
+        /// now climbs straight through.
+        ///
+        /// 49 and not 34, because these are the one kind of card left that is NOT flattened -
+        /// they are built and thrown away by the plain nine-order path - so the band has to be
+        /// nine wide plus the three a shuffle deals: 49..59, which stops exactly short of the
+        /// block gallery at 60. It therefore sits above the deck overlay, in company with the
+        /// draw-pile peek that already did (DiscardTopOrder + up to 4, i.e. 36..48).
+        /// </summary>
+        private const int FxOrder = 49;
 
         private static readonly Color PileSlotColor = new Color(0.10f, 0.11f, 0.13f);
 
@@ -114,7 +126,7 @@ namespace ProjectBlock.View
                 if (visual != null)
                 {
                     visual.SlotIndex = -1;
-                    visual.SetSortingBoost(8);
+                    visual.SetFlattenedOrder(HandFrontOrder);
                     visual.FlyToAndDestroy(DiscardPilePos, DiscardDuration);
                 }
             }
@@ -132,7 +144,7 @@ namespace ProjectBlock.View
             {
                 heldVisuals.Remove(replacedCardId);
                 old.SlotIndex = -1;
-                old.SetSortingBoost(8);
+                old.SetFlattenedOrder(HandFrontOrder);
                 old.FlyToAndDestroy(DiscardPilePos, DiscardDuration);
             }
             SyncInternal(round, null, true); // deals the replacement from the draw pile
@@ -318,7 +330,7 @@ namespace ProjectBlock.View
                 if (report != null && report.Card != null && report.Card.Id == id)
                 {
                     visual.SlotIndex = -1;
-                    visual.SetSortingBoost(8);
+                    visual.SetFlattenedOrder(HandFrontOrder);
                     if (report.PlayedCardExpired)
                     {
                         // An expiring bonus card joins no pile - it vanishes on the spot.
@@ -387,7 +399,7 @@ namespace ProjectBlock.View
                 // hand, which own a boost of their own until they are let go.
                 if (id != hoveredCardId)
                 {
-                    visual.SetSortingBoost(HandFanBoost(slot));
+                    visual.SetFlattenedOrder(HandFanOrder(slot));
                 }
                 // Asked of the ROUND, not the card: a freeze is round state with a countdown on
                 // it ("Alıkoyma" holds a card for one turn, "Hazine" longer), and it is the same
@@ -510,7 +522,7 @@ namespace ProjectBlock.View
             {
                 previous.SetHovered(false);
                 // Back into the fan, at the order its slot says.
-                previous.SetSortingBoost(HandFanBoost(previous.SlotIndex));
+                previous.SetFlattenedOrder(HandFanOrder(previous.SlotIndex));
                 previous.MoveTo(previous.HomePosition, HandHoverSeconds, null);
             }
             hoveredCardId = cardId;
@@ -521,10 +533,24 @@ namespace ProjectBlock.View
                 // OUT of the fan and in front of all of it: in a tight hand the card being
                 // pointed at is mostly buried, and growing it in place would only make a bigger
                 // buried card.
-                current.SetSortingBoost(HandFrontBoost);
+                current.SetFlattenedOrder(HandFrontOrder);
                 current.MoveTo(current.HomePosition + new Vector2(0f, HandHoverLift),
                     HandHoverSeconds, null);
             }
+        }
+
+        /// <summary>Puts a card back at the order its slot says. The drag path owns a card while
+        /// it is being carried and has to hand it back when it lets go - and "back" is a place in
+        /// the fan, which only this class knows how to work out.</summary>
+        public void ReturnToFan(CardVisual visual)
+        {
+            if (visual == null)
+            {
+                return;
+            }
+            visual.SetFlattenedOrder(visual.SlotIndex >= 0
+                ? HandFanOrder(visual.SlotIndex)
+                : HandFrontOrder);
         }
 
         /// <summary>Where a held card actually sits: its slot, plus the hover lift when it is
@@ -577,12 +603,15 @@ namespace ProjectBlock.View
         /// <summary>The held card under a world point (for drag pickup), or null.</summary>
         public CardVisual CardAt(Vector2 world)
         {
-            // THE TOP CARD WINS. The fan overlaps left to right, so the card the player is
-            // pointing at is the one with the HIGHEST slot among those under the pointer. The
-            // old version returned the first hit while walking a Dictionary, whose order is not
-            // defined - so an overlapping hand could hand back a card buried behind the one
-            // being pointed at.
+            // THE CARD ON TOP WINS, and "on top" has to mean what the player can SEE on top.
+            // The fan climbs left to right, so that is the HIGHEST fan order among the cards
+            // under the pointer - which past MaxFannedSlots saturates, and the slot settles the
+            // ones that then share it.
+            //
+            // (The older version returned the first hit while walking a Dictionary, whose order
+            // is not defined at all.)
             CardVisual best = null;
+            int bestBoost = 0;
             foreach (CardVisual visual in heldVisuals.Values)
             {
                 if (visual == null)
@@ -593,11 +622,17 @@ namespace ProjectBlock.View
                 // testing against the lifted box makes it hold on to its own hover - the pointer
                 // leaves the card, the card follows, and nothing else can take the hover.
                 Vector2 pos = visual.HomePosition;
-                if (Mathf.Abs(world.x - pos.x) <= CardVisual.BodyWidth * 0.5f
-                    && Mathf.Abs(world.y - pos.y) <= CardVisual.BodyHeight * 0.5f
-                    && (best == null || visual.SlotIndex > best.SlotIndex))
+                if (Mathf.Abs(world.x - pos.x) > CardVisual.BodyWidth * 0.5f
+                    || Mathf.Abs(world.y - pos.y) > CardVisual.BodyHeight * 0.5f)
+                {
+                    continue;
+                }
+                int boost = HandFanOrder(visual.SlotIndex);
+                if (best == null || boost > bestBoost
+                    || (boost == bestBoost && visual.SlotIndex > best.SlotIndex))
                 {
                     best = visual;
+                    bestBoost = boost;
                 }
             }
             return best;
@@ -608,27 +643,26 @@ namespace ProjectBlock.View
         // hand used to break into rows of 8 that stacked upward over the board - and a full row
         // of 8 was already 13.6 wide, straight through both piles at x +-6.4.
         //
-        // Three widths decide the shape, in order:
+        // TWO widths decide the shape, and the second one is the whole treatment:
         //   1. up to HandFanSpan the cards sit at their natural HandSpacing and nothing overlaps
         //      (a 7-card hand still has a gap between every card);
-        //   2. past that they tighten to fit the span, until a card would show less than
-        //      HandMinSpacing of itself;
-        //   3. past THAT the fan widens instead of tightening further - but never past
-        //      HandFanSpanMax, which is measured to stop short of the piles, because the draw
-        //      pile is the deck/sell screen and a hand lying over it takes that away.
-        // Only in the last case does the fan tighten past the floor, and by then the hand is a
-        // wall of slivers that is read by HOVERING, which is the whole point of the treatment.
+        //   2. past that the fan STOPS GROWING and the cards simply lie further and further over
+        //      one another. It never widens to make room, and it never wraps.
+        //
+        // A crowded hand is therefore a deliberate stack of half-hidden cards rather than a
+        // strip that creeps out towards the piles. That is fine, and it is the point: a card is
+        // read by HOVERING - the one under the cursor lifts out of the row and rises clear of
+        // everything (HandHoverLift, HandFrontBoost) - so covering a card costs nothing, while a
+        // hand that keeps widening eventually reaches the draw pile and takes the deck/sell
+        // screen away with it.
+        //
+        // The overlap runs one way and one way only: every card draws over the one to its left,
+        // whole - outline, cubes and element band together - so the row reads as cards laid down
+        // in order. See HandFanOrder for how that is paid for.
 
-        /// <summary>Width the fan is happy at, between the outermost card CENTRES.</summary>
+        /// <summary>Width the fan is happy at, between the outermost card CENTRES. Also its
+        /// hard ceiling - past this it overlaps instead of growing.</summary>
         private const float HandFanSpan = 9f;
-
-        /// <summary>Hard ceiling on that width. The piles' inner edge is at 5.725 and a card is
-        /// 1.35 wide, so an outermost centre at 5.05 is the furthest that still clears them.</summary>
-        private const float HandFanSpanMax = 10.1f;
-
-        /// <summary>How little of a card the fan is willing to leave showing before it widens
-        /// instead: 0.8 of a 1.35-wide card, so about 60% of each one.</summary>
-        private const float HandMinSpacing = 0.8f;
 
         /// <summary>Distance between two neighbouring cards for a hand of this size.</summary>
         private static float HandSpacingFor(int totalCount)
@@ -642,8 +676,7 @@ namespace ProjectBlock.View
             {
                 return HandSpacing;                       // roomy: nothing overlaps
             }
-            float span = Mathf.Clamp(gaps * HandMinSpacing, HandFanSpan, HandFanSpanMax);
-            return span / gaps;
+            return HandFanSpan / gaps;                    // crowded: they lie over one another
         }
 
         private static Vector2 SlotPosition(int slot, int totalCount)
@@ -654,30 +687,37 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// Resting sorting boost for a card in the fan, so the overlap runs consistently left to
-        /// right instead of being decided by nothing. It alternates rather than climbing: a card
-        /// spans EIGHT sorting orders of its own (body, cubes, element band and label, then the
-        /// HELD mark's pane, frame and band), and a boost per card would walk the hand up through
-        /// the deck overlay at 39 within a few cards.
+        /// THE FAN CLIMBS. Every card draws over the one to its left - all of it, outline and
+        /// cubes and element band together - so a crowded hand reads as a stack of cards laid
+        /// down left to right, which is the only overlap that means anything.
         ///
-        /// Alternating is enough while a card only ever overlaps its immediate neighbours, which
-        /// holds to about 15 cards. Past that, cards two apart share an order and may draw in
-        /// either sequence where they meet - cosmetic, in a hand that is already read by hover.
+        /// It used to ALTERNATE (0, 9, 0, 9...) because a card spans nine sorting orders of its
+        /// own and one band per card would have walked the hand up through the deck overlay
+        /// within four of them. What that bought was a weave: card 1 drew over both 0 AND 2, and
+        /// a left-hand card's cubes sat on top of its right-hand neighbour's face. The fix was
+        /// not more orders but fewer - a hand card is FLATTENED into a single order and layered
+        /// by depth instead (CardVisual.SetFlattenedOrder), so the whole fan costs one order per
+        /// card and fits in the gap that was always there.
+        ///
+        /// Past MaxFannedSlots the climb saturates and the last cards share the top order. That
+        /// is a hand of twenty-odd cards - only reachable through a joker that rewrites the hand
+        /// size - and it degrades into the old ambiguity rather than into the piles.
         /// </summary>
-        private static int HandFanBoost(int slot)
+        private static int HandFanOrder(int slot)
         {
-            return (slot % 2) * HandFanOrderStep;
+            return HeldCardOrder + Mathf.Clamp(slot, 0, MaxFannedSlots);
         }
 
-        /// <summary>Sorting orders one card occupies - see HandFanBoost. NINE: the outline, the
-        /// face, the cubes, the element band and its label, then the four pieces of the HELD
-        /// mark. Two cards sharing any one of them is how a card comes out looking wrong, so
-        /// this has to be the real span and not an estimate of it.</summary>
-        private const int HandFanOrderStep = 9;
+        /// <summary>How many cards get an order of their own before the climb saturates. The fan
+        /// therefore occupies HeldCardOrder..HeldCardOrder+MaxFannedSlots, and HandFrontOrder
+        /// sits directly above it - all of it below DiscardTopOrder, so the piles still draw over
+        /// the hand and the deck overlay still covers everything.</summary>
+        private const int MaxFannedSlots = 20;
 
-        /// <summary>Boost that lifts a hovered or dragged card clear of the whole fan (which
-        /// tops out at HeldCardOrder + HandFanOrderStep + 8 = 37).</summary>
-        private const int HandFrontBoost = 18;
+        /// <summary>Order a hovered or dragged card takes: clear of the whole fan, whatever slot
+        /// it came from. Absolute rather than a boost, because "in front of the fan" is a place,
+        /// not an amount.</summary>
+        public const int HandFrontOrder = HeldCardOrder + MaxFannedSlots + 1;
 
         /// <summary>How far a hovered card rises out of the fan - the Balatro read: the card you
         /// are pointing at leaves the row so it can be seen whole.</summary>

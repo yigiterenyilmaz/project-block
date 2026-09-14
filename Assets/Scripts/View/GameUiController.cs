@@ -152,6 +152,12 @@ namespace ProjectBlock.View
         /// shuffle - never twice, never missed.</summary>
         private int lastMineShuffle;
 
+        /// <summary>The detonation count the View has already drawn, and whether one is waiting
+        /// to be drawn this turn. A detonation appears in no TurnReport - it is the boss's own
+        /// bookkeeping - so it is watched exactly the way the shuffle above is.</summary>
+        private int lastMineDetonations;
+        private bool mineDetonationPending;
+
         // ---- the workshop powers' multi-step targeting ("Neşter", "Lehimleme", "Gen nakli") ----
 
         /// <summary>Which power is mid-way through picking, and what it has collected so far.
@@ -163,6 +169,10 @@ namespace ProjectBlock.View
 
         /// <summary>"Gen nakli": the board cube whose element is being moved.</summary>
         private GridPos? workshopDonorCell;
+
+        /// <summary>"Hidrolik pres": the 2x2 patch picked by the first click. While it is set the
+        /// power is waiting for the SECOND click - which of the four cells keeps the cube.</summary>
+        private GridPos? workshopPressAnchor;
         private bool sellCardsMode;
 
         /// <summary>True while the deck overlay's scrollbar is being dragged. Held across frames

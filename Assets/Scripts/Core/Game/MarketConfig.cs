@@ -119,6 +119,39 @@ namespace ProjectBlock.Core
         public int RerollBaseCost = 5;
         public int RerollCostStep = 5;
 
+        /// <summary>Past RerollStepUpAt the escalation STEEPENS: the cost keeps climbing, but by
+        /// RerollLateCostStep instead of RerollCostStep. With the defaults and the global
+        /// ScoreScale of 10 that reads on screen as 50, 100, 150, 200, then 300, 400, 500 - the
+        /// early rerolls stay cheap enough to shop with and a fourth one starts to hurt.
+        /// Set RerollStepUpAt to 0 (or below the base) to keep a single, linear step.</summary>
+        public int RerollStepUpAt = 20;
+        public int RerollLateCostStep = 10;
+
+        /// <summary>Cost of the reroll after <paramref name="rerollsDone"/> of them this visit,
+        /// before the global ScoreScale. Linear at RerollCostStep up to RerollStepUpAt, then
+        /// linear again at the steeper RerollLateCostStep.</summary>
+        public int RerollCost(int rerollsDone)
+        {
+            if (rerollsDone < 0)
+            {
+                rerollsDone = 0;
+            }
+            if (RerollStepUpAt <= RerollBaseCost || RerollCostStep <= 0)
+            {
+                return RerollBaseCost + RerollCostStep * rerollsDone;
+            }
+            // The first reroll whose price has reached the step-up point. Everything from there
+            // on climbs by the late step instead.
+            int stepsToThreshold =
+                (RerollStepUpAt - RerollBaseCost + RerollCostStep - 1) / RerollCostStep;
+            if (rerollsDone <= stepsToThreshold)
+            {
+                return RerollBaseCost + RerollCostStep * rerollsDone;
+            }
+            int atThreshold = RerollBaseCost + RerollCostStep * stepsToThreshold;
+            return atThreshold + RerollLateCostStep * (rerollsDone - stepsToThreshold);
+        }
+
         /// <summary>The market price of a block card: base + per-cube + per-element.</summary>
         public int BuyPrice(BlockCard card)
         {

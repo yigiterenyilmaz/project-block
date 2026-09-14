@@ -32,6 +32,9 @@ namespace ProjectBlock.View
             {
                 sfx.Shuffle();
             }
+            // Noticed BEFORE the refresh, because the refresh is what starts the replacement
+            // mine's reveal and it has to know to wait for the blast. Drawn further down.
+            TriggerMineDetonation(round);
             RefreshAll(report);
             IReadOnlyList<IReadOnlyList<WaterMove>> frames = report.WaterFallFrames;
             if (frames.Count == 0)
@@ -59,6 +62,7 @@ namespace ProjectBlock.View
             }
             TriggerSupurgeBlast();
             TriggerInfectionBlast();
+            PlayMineDetonationFeedback(round);
             ShowShellGameReveal(round);
             // A resolved turn is the natural save point: the per-turn scratch state is at rest,
             // which is exactly what the save format assumes (see RoundEngine.Save).
@@ -713,7 +717,73 @@ namespace ProjectBlock.View
                 return;
             }
             lastMineShuffle = mine.ShuffleCount;
-            mineShuffle.Play(boardView, round.MainBoard, mine.ShufflePath);
+            // A detonation arms a fresh mine on the spot, so the blast and this reveal are the
+            // same frame unless the dance waits for it. See TriggerMineDetonation.
+            mineShuffle.Play(boardView, round.MainBoard, mine.ShufflePath,
+                mineDetonationPending ? MineBlastSeconds : 0f);
+        }
+
+        /// <summary>How long the detonation gets the screen to itself before the replacement
+        /// mine's reveal begins.</summary>
+        private const float MineBlastSeconds = 1.15f;
+
+        /// <summary>
+        /// "Mayın eşeği" going off. Nothing drew this at all before: the mine took half the round
+        /// and said so nowhere, which is indistinguishable from the mine doing nothing.
+        ///
+        /// It is watched by COUNT rather than by a flag on the report, the same way the shuffle
+        /// is, because a detonation is the boss's own bookkeeping and never appears in a
+        /// TurnReport. The cell comes from LastDetonationCell, not MineCell - a fresh mine is
+        /// already armed somewhere else by the time this runs, and the blast belongs over the old
+        /// one.
+        /// </summary>
+        private void TriggerMineDetonation(RoundEngine round)
+        {
+            var mine = round != null ? round.Boss as MayinEsegiBoss : null;
+            if (mine == null)
+            {
+                lastMineDetonations = 0;
+                mineDetonationPending = false;
+                return;
+            }
+            if (mine.Detonations == lastMineDetonations)
+            {
+                return;
+            }
+            lastMineDetonations = mine.Detonations;
+            mineDetonationPending = true;
+        }
+
+        /// <summary>Draws the detonation the check above noticed: the cell goes off in the mine's
+        /// own red, the camera takes it, and the number it cost is said out loud over the board.
+        /// Split from the check because the CHECK has to run before the refresh (so the shuffle
+        /// knows to wait) while the DRAWING belongs after the line explosion that caused it.
+        /// </summary>
+        private void PlayMineDetonationFeedback(RoundEngine round)
+        {
+            var mine = round != null ? round.Boss as MayinEsegiBoss : null;
+            if (mine == null || !mineDetonationPending)
+            {
+                return;
+            }
+            mineDetonationPending = false;
+            FlashCells(new List<GridPos> { mine.LastDetonationCell },
+                MineShuffleView.MineColor, 14);
+            ShakeCamera(0.34f, 0.16f, 2.4f);
+            sfx.Explode();
+            FloatingTextFx.Spawn(transform, new Vector2(0f, 3.0f),
+                Loc.Pick("MINE!", "MAYIN!"), MineShuffleView.MineColor, 76, 0.09f);
+            if (mine.LastDetonationLoss > 0)
+            {
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.1f),
+                    Loc.Pick("HALF THE ROUND GONE  -", "RAUNDUN YARISI GİTTİ  -")
+                        + mine.LastDetonationLoss,
+                    new Color(1f, 0.35f, 0.35f), 58, 0.08f);
+            }
+            messageText.text = Loc.Pick(
+                "The mine went off - half of everything this round was banked is gone.",
+                "Mayın patladı - bu raunt topladığın puanın yarısı gitti.");
+            UpdateHud();
         }
 
         /// <summary>Very small camera shake for explosions (slightly bigger on clean sweeps).
@@ -1259,6 +1329,14 @@ namespace ProjectBlock.View
                             "şimdi elementi alacak kartı seç")
                         : Loc.Pick("pick the cube whose element you want",
                             "elementini alacağın küpü seç");
+                }
+                else if (shop != null && shop.Targeting == ActivationTargeting.BoardArea)
+                {
+                    step = workshopPressAnchor.HasValue
+                        ? Loc.Pick("now pick WHICH of the four cells keeps the pressed cube",
+                            "şimdi preslenen küpün dört kareden HANGİSİNDE kalacağını seç")
+                        : Loc.Pick("pick the 2x2 patch to squeeze",
+                            "sıkıştırılacak 2x2'lik alanı seç");
                 }
                 else if (shop != null && shop.Targeting == ActivationTargeting.TwoHandCards)
                 {

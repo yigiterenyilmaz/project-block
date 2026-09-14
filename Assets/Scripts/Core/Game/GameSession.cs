@@ -551,8 +551,7 @@ namespace ProjectBlock.Core
             get
             {
                 MarketConfig market = Config.Market;
-                return (long)(market.RerollBaseCost + market.RerollCostStep * rerollCount)
-                    * Config.Scoring.ScoreScale;
+                return (long)market.RerollCost(rerollCount) * Config.Scoring.ScoreScale;
             }
         }
 

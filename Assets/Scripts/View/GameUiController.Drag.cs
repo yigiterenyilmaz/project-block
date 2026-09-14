@@ -23,7 +23,7 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            draggedCard.SetSortingBoost(0);
+            cardLayer.ReturnToFan(draggedCard);
             draggedCard.SetAlpha(1f);
             draggedCard = null;
             boardView.ClearPreview();
@@ -46,6 +46,7 @@ namespace ProjectBlock.View
             // slots too (Hologram), so the full slot range is passed through.
             if (workshopPowerId.HasValue)
             {
+                ShowPressPreview(world);
                 if (mouse.leftButton.wasPressedThisFrame && HandleWorkshopClick(world))
                 {
                     return;
@@ -218,25 +219,33 @@ namespace ProjectBlock.View
                         {
                             return;
                         }
-                        // "Şaşırtmaca": while the hand is face down a click is not a pick-up, it
-                        // is the COMMITMENT - the card turns over and the rest of the hand locks
-                        // behind it. Dragging only begins once a card is showing its face.
+                        // "Şaşırtmaca": while the hand is face down, pressing a card is the
+                        // COMMITMENT - it turns over and the rest of the hand locks behind it.
+                        // The same press then carries on into the pick-up, so committing and
+                        // dragging are ONE gesture: the flip rebuilds the visual (it is the
+                        // wrong side up), so the card being dragged is re-fetched by slot.
                         if (picked != null && round.HandIsFaceDown
                             && round.RevealedHandCardId != picked.Id)
                         {
-                            if (round.RevealedHandCardId == 0
-                                && hit.SlotIndex >= 0 && hit.SlotIndex < round.Hand.Count
-                                && round.RevealHandCard(hit.SlotIndex))
+                            int revealSlot = hit.SlotIndex;
+                            if (round.RevealedHandCardId != 0
+                                || revealSlot < 0 || revealSlot >= round.Hand.Count
+                                || !round.RevealHandCard(revealSlot))
                             {
-                                sfx.Place();
-                                RefreshAll(null);
+                                return; // a locked card is never picked up
                             }
-                            return; // a locked card is never picked up
+                            sfx.Place();
+                            RefreshAll(null);
+                            hit = cardLayer.VisualOfSlot(revealSlot);
+                            if (hit == null)
+                            {
+                                return;
+                            }
                         }
                         draggedCard = hit;
-                        // 18, not 10: the hand is a fan now and a resting card can already be
-                        // nine orders above the base, so 10 no longer clears the row.
-                        draggedCard.SetSortingBoost(18);
+                        // An ABSOLUTE order, not a boost: the fan climbs a whole order per card
+                        // now, so "clear of the row" is a place rather than an amount.
+                        draggedCard.SetFlattenedOrder(CardLayerView.HandFrontOrder);
                         // Faint on purpose: what matters while placing is the BOARD and the
                         // preview under the cursor, not the card being carried over them - the
                         // card has already been read by the time it is picked up.
@@ -280,7 +289,7 @@ namespace ProjectBlock.View
             {
                 CardVisual released = draggedCard;
                 draggedCard = null;
-                released.SetSortingBoost(0);
+                cardLayer.ReturnToFan(released);
                 released.SetAlpha(1f);
                 // "Öteki dünya": a turn is a card in EACH world, so the main world cannot resolve
                 // one until the mirror has booked its half (the engine throws otherwise). Say so
@@ -520,5 +529,49 @@ namespace ProjectBlock.View
             TurnReport report = round.PlayFromHand(handIndex, origin);
             FinalizePlacement(round, report);
         }
+
+        /// <summary>
+        /// "Hidrolik pres" aims twice, so it previews twice: the 2x2 patch follows the cursor
+        /// while the patch is being chosen, and once it is committed the preview narrows to the
+        /// one cell under the cursor - the cell the cube would end up in. Every other workshop
+        /// power picks off the hand and has nothing to draw on the board.
+        /// </summary>
+        private void ShowPressPreview(Vector2 world)
+        {
+            if (!workshopPowerId.HasValue)
+            {
+                return;
+            }
+            Power aiming = session.Powers.Find(workshopPowerId.Value);
+            if (aiming == null || aiming.Targeting != ActivationTargeting.BoardArea)
+            {
+                return;
+            }
+            GridPos hoverCell;
+            if (!boardView.TryWorldToCell(world, out hoverCell))
+            {
+                // The patch already picked stays on screen - it is a commitment, not a hover.
+                if (!workshopPressAnchor.HasValue)
+                {
+                    boardView.ClearPreview();
+                }
+                return;
+            }
+            if (!workshopPressAnchor.HasValue)
+            {
+                boardView.ShowPowerPreview(aiming.PreviewCells(ActivationTarget.Board(hoverCell)));
+                return;
+            }
+            GridPos anchor = workshopPressAnchor.Value;
+            int dx = hoverCell.X - anchor.X;
+            int dy = hoverCell.Y - anchor.Y;
+            if (dx < 0 || dx > 1 || dy < 0 || dy > 1)
+            {
+                boardView.ShowPowerPreview(aiming.PreviewCells(ActivationTarget.Board(anchor)));
+                return;
+            }
+            boardView.ShowPowerPreview(new List<GridPos> { hoverCell });
+        }
+
     }
 }

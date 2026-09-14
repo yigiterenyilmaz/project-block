@@ -1,4 +1,4 @@
-// PURPOSE: the strip along the bottom of the screen that says what the pad can do RIGHT NOW.
+﻿// PURPOSE: the strip along the bottom of the screen that says what the pad can do RIGHT NOW.
 //
 // It exists because a control scheme nobody can see is a control scheme nobody uses: the
 // HOW TO PLAY pages are the reference, this is the reminder. It appears ONLY while a gamepad
@@ -347,7 +347,12 @@ namespace ProjectBlock.View
         {
             if (pendingTargetJokerId.HasValue || pendingTargetPowerId.HasValue)
             {
-                return PadJoin(PadTok("A", PadColorA, Loc.Pick("confirm", "onayla")),
+                // "Hidrolik pres" confirms twice, and A means a different thing each time - see
+                // HandlePressClick, which is the branch answering this button.
+                string confirm = workshopPressAnchor.HasValue
+                    ? Loc.Pick("where the cube goes", "küp nereye gitsin")
+                    : Loc.Pick("confirm", "onayla");
+                return PadJoin(PadTok("A", PadColorA, confirm),
                     PadTok("B", PadColorB, Loc.Pick("cancel", "iptal")));
             }
             switch (padFocus)

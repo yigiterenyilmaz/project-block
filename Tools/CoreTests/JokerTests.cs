@@ -166,6 +166,9 @@ public static class JokerTests
         Pres_ShovesCubesOffTheEdgeWhenItOpens();
         Pres_WillNotBudgeObsidianAndDetonatesWhenStuck();
         Pres_OpensByItselfAfterFourTurns();
+        Pres_PutsTheCubeWhereThePlayerAsked();
+        Pres_PaysWhenTheCubeIsBrokenWhileShut();
+        Market_RerollCostSteepensPastTheStepUp();
         MayinEsegi_ArmsAMineAndShufflesItAway();
         Sasirtmaca_OneCommitmentPerTurnAndTheLockLifts();
         Matruska_SplitsOnTheLadderAndWinsOnTheLastDoll();
@@ -5249,6 +5252,84 @@ public static class JokerTests
             "no compressed cube is left on the board");
     }
 
+    private static void Pres_PutsTheCubeWhereThePlayerAsked()
+    {
+        Section("hidrolik pres / the player names WHICH cell keeps the cube");
+        var session = NewSession(9520, 7, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (HidrolikPresPower)session.Powers.Add(new HidrolikPresPower());
+        session.Powers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+
+        // The patch is (1,1)-(2,2); the cube is asked for in its FAR corner.
+        var anchor = new GridPos(1, 1);
+        Check(session.Powers.TryUse(power.InstanceId,
+                ActivationTarget.BoardArea(anchor, new GridPos(1, 1))),
+            "the press came down on the patch");
+        Check(!round.Board.GetCube(anchor).HasValue,
+            "and the anchor is NOT where the cube ended up");
+        Cube? far = round.Board.GetCube(new GridPos(2, 2));
+        Check(far.HasValue && far.Value.Kind == CubeKind.Compressed,
+            "the cube sits in the corner the player picked");
+        Check(power.PressCell.X == 2 && power.PressCell.Y == 2,
+            "and the power remembers where it put it",
+            power.PressCell.X + "," + power.PressCell.Y);
+
+        // It still opens from where it actually sits, and gives all four cells back.
+        PlayTurns(session, power.TurnsCompressed);
+        Check(!power.IsPressing, "it let go on its own");
+        Check(round.Board.CellsOfKind(CubeKind.Compressed).Count == 0,
+            "with no compressed cube left behind");
+    }
+
+    private static void Pres_PaysWhenTheCubeIsBrokenWhileShut()
+    {
+        Section("hidrolik pres / breaking it while shut is the line of play that pays");
+        var session = NewSession(9521, 7, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (HidrolikPresPower)session.Powers.Add(new HidrolikPresPower());
+        session.Powers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+
+        var anchor = new GridPos(1, 1);
+        Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.Board(anchor)),
+            "the press came down");
+        long before = round.RoundScore;
+        round.DestroyCubes(new List<GridPos> { anchor }, true);
+        Check(!round.Board.GetCube(anchor).HasValue, "the pressed cube was broken");
+
+        PlayTurns(session, 1);
+        Check(!power.IsPressing, "the press is over");
+        Check(round.RoundScore - before
+                >= power.BonusWhenCrushed * session.Config.Scoring.ScoreScale,
+            "and it paid the crush bonus",
+            "gained " + (round.RoundScore - before));
+    }
+
+    private static void Market_RerollCostSteepensPastTheStepUp()
+    {
+        Section("market / the reroll price climbs faster once it passes the step-up");
+        var market = new MarketConfig();
+        Check(market.RerollCost(0) == market.RerollBaseCost, "the first reroll is the base price",
+            "" + market.RerollCost(0));
+        // Up to the step-up it climbs by the ordinary step...
+        Check(market.RerollCost(1) - market.RerollCost(0) == market.RerollCostStep,
+            "one ordinary step to begin with",
+            "" + (market.RerollCost(1) - market.RerollCost(0)));
+        Check(market.RerollCost(3) == market.RerollStepUpAt,
+            "and it lands exactly on the step-up",
+            "" + market.RerollCost(3));
+        // ...and by the steeper one after it.
+        Check(market.RerollCost(4) - market.RerollCost(3) == market.RerollLateCostStep,
+            "then every reroll costs the late step more",
+            "" + (market.RerollCost(4) - market.RerollCost(3)));
+        Check(market.RerollCost(6) - market.RerollCost(5) == market.RerollLateCostStep,
+            "and it keeps climbing at that rate",
+            "" + (market.RerollCost(6) - market.RerollCost(5)));
+        Check(market.RerollCost(-3) == market.RerollCost(0),
+            "a nonsense count is the base price, not a negative one");
+    }
+
     private static void MayinEsegi_ArmsAMineAndShufflesItAway()
     {
         Section("mayın eşeği / the mine travels with its cover, and the cubes never move");
@@ -5333,6 +5414,7 @@ public static class JokerTests
                 round.Board.SetCubeAt(cell, new Cube(CubeKind.Normal, 9605));
             }
         }
+        int scoreBeforeBlast = round.RoundScore;
         TurnReport report = PlayAt(round, new GridPos(round.Board.MinX, mine.Y));
         Check(report != null && report.ExplodedRows.Count > 0,
             "the mine's row was blown up");
@@ -5345,6 +5427,25 @@ public static class JokerTests
             "" + boss.TurnsLeft);
         Check(round.RoundScore >= 0, "the penalty never takes the round below zero",
             "" + round.RoundScore);
+
+        // THE HALVING REALLY LANDS. This is the thing the old flat penalty could not do: routed
+        // through ChargeScore it was floored at what the turn earned, so a mine set off by an
+        // ordinary line clear only ever cancelled that line and looked like nothing happened.
+        Check(boss.LastDetonationLoss > 0, "it took something",
+            "" + boss.LastDetonationLoss);
+        // Exactly half of what stood when it went off: the boss moves at step 8, so nothing is
+        // banked after it, and what is left has to be what was taken (give or take the odd point
+        // the halving rounds down). This is the assertion the flat penalty could never pass -
+        // floored at the turn's own earnings, it took whatever that turn happened to be worth.
+        Check(round.RoundScore >= boss.LastDetonationLoss
+                && round.RoundScore - boss.LastDetonationLoss <= 1,
+            "and what is left is exactly what was taken - half the round, no more, no less",
+            round.RoundScore + " left vs " + boss.LastDetonationLoss + " taken");
+        Check(scoreBeforeBlast > 0, "the round had something banked before the blast",
+            "" + scoreBeforeBlast);
+        Check(boss.LastDetonationCell.X == mine.X && boss.LastDetonationCell.Y == mine.Y,
+            "the cell it went off on is remembered, not overwritten by the fresh mine",
+            boss.LastDetonationCell.X + "," + boss.LastDetonationCell.Y);
     }
 
     private static void MayinEsegi_AQuietTurnJustRunsTheClockDown()

@@ -1,4 +1,4 @@
-// PURPOSE: The four workshop powers - the ones that take a block apart, weld two together, move an
+﻿// PURPOSE: The four workshop powers - the ones that take a block apart, weld two together, move an
 // element from the board into your hand, and squeeze a patch of arena flat.
 //
 // They share one idea: every one of them is ROUND-SCOPED. The cards they make live in the bonus
@@ -378,9 +378,16 @@ namespace ProjectBlock.Core
     /// "Hidrolik pres" - squeeze a 2x2 patch of arena into one cell. Three cells of room, right
     /// now, for four turns; on the fifth it lets go and wants them back.
     ///
-    /// While it is shut the pressed cube is an ordinary cube that happens to be worth FOUR when it
-    /// breaks - so the clean way to use the power is to squeeze, use the room, and clear the press
-    /// itself before it opens.
+    /// The player names the patch AND which of its four cells keeps the cube - the press opens
+    /// outward from wherever it sits, so putting it in the far corner is a different piece of
+    /// board from putting it in the near one.
+    ///
+    /// While it is shut the pressed cube is an ordinary cube that happens to pay HANDSOMELY when
+    /// it breaks - four cubes at the same rate the power pays for a cube shoved off the edge - so
+    /// the clean way to use the power is to squeeze, use the room, and clear the press itself
+    /// before it opens. The payout is settled here rather than in the score pipeline because it
+    /// is the POWER's, not the cube's: an identical-looking cube left behind by anything else
+    /// would pay nothing.
     ///
     /// Letting go is where the danger is, and the rules are the designer's (see GameBoard.Press):
     /// it pushes what is in the way outward and scores for whatever goes over the edge; obsidian
@@ -396,7 +403,17 @@ namespace ProjectBlock.Core
         /// <summary>Score per cube shoved off the board when it opens.</summary>
         public int BonusPerCubePushedOff = 30;
 
+        /// <summary>Score for breaking the pressed cube while it is still shut - the four cubes
+        /// it swallowed, at the same rate the power pays for one shoved off the edge. This is the
+        /// clean line of play, so it is the one that pays. BALANCE PLACEHOLDER.</summary>
+        public int BonusWhenCrushed = 120;
+
         private GridPos anchor;
+
+        /// <summary>Which cell of the patch holds the cube. The patch is still named by its
+        /// bottom-left cell; this is where inside it the press actually sits.</summary>
+        private GridPos pressCell;
+
         private Cube?[] swallowed;
         private int turnsLeft;
 
@@ -404,15 +421,16 @@ namespace ProjectBlock.Core
             : base("hidrolik_pres", "Hidrolik Pres")
         {
             SetDescription(
-                "Squeezes a 2x2 patch of the arena into ONE cell for four turns - three cells of "
-                    + "room, right now. Break the pressed cube while it is shut and it pays for "
-                    + "four. On the fifth turn it opens: what is in the way is shoved outward and "
+                "Squeezes a 2x2 patch of the arena into ONE cell of your choosing for four "
+                    + "turns - three cells of room, right now. Break the pressed cube while it is "
+                    + "shut and it pays richly. On the fifth turn it opens: what is in the way "
+                    + "is shoved outward and "
                     + "whatever goes over the edge scores. Obsidian and gold will not budge, so it "
                     + "opens the other way - and if it cannot open at all, it detonates and takes "
                     + "them with it for nothing.",
-                "Oyun alanından 2x2'lik bir parçayı 4 tur boyunca TEK kareye sıkıştırır - anında "
-                    + "üç kare yer. Sıkışıkken o küpü patlatırsan dört küp değerinde puan verir. "
-                    + "5. turda açılır: önündekileri dışarı ittirir ve kenardan taşan küpler puan "
+                "Oyun alanından 2x2'lik bir parçayı 4 tur boyunca senin seçtiğin TEK kareye "
+                    + "sıkıştırır - anında üç kare yer. Sıkışıkken o küpü patlatırsan bol puan "
+                    + "verir. 5. turda açılır: önündekileri dışarı ittirir ve kenardan taşan küpler puan "
                     + "getirir. Obsidyen ve altın itilemez, o yüzden diğer yöne açılır - hiç "
                     + "açılamazsa patlar ve onları da götürür, ama puan vermez.");
         }
@@ -423,10 +441,16 @@ namespace ProjectBlock.Core
             get { return swallowed != null; }
         }
 
-        /// <summary>Where the press is, for the UI.</summary>
+        /// <summary>The patch's bottom-left cell, for the UI.</summary>
         public GridPos Anchor
         {
             get { return anchor; }
+        }
+
+        /// <summary>Where inside the patch the pressed cube sits, for the UI.</summary>
+        public GridPos PressCell
+        {
+            get { return pressCell; }
         }
 
         public int TurnsLeft
@@ -472,6 +496,23 @@ namespace ProjectBlock.Core
             turnsLeft = 0;
         }
 
+        /// <summary>Where inside the patch the player asked for the cube. It rides in Offset as
+        /// a 0/1 step from the anchor - the same shape of value Lehimleme's offset is - and
+        /// defaults to the anchor itself, so a target that names only the patch still works.
+        /// Anything outside the 2x2 is clamped rather than refused: a press is never worth
+        /// losing to an off-by-one.</summary>
+        private static GridPos PressCellOf(ActivationTarget target, GridPos at)
+        {
+            if (!target.Offset.HasValue)
+            {
+                return at;
+            }
+            GridPos offset = target.Offset.Value;
+            int dx = offset.X > 0 ? 1 : 0;
+            int dy = offset.Y > 0 ? 1 : 0;
+            return new GridPos(at.X + dx, at.Y + dy);
+        }
+
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
         {
             return !IsPressing && ctx != null && ctx.Round != null && target.Cell.HasValue
@@ -485,7 +526,8 @@ namespace ProjectBlock.Core
                 return false;
             }
             anchor = target.Cell.Value;
-            swallowed = ctx.Round.MainBoard.Compress(anchor);
+            pressCell = PressCellOf(target, anchor);
+            swallowed = ctx.Round.MainBoard.Compress(anchor, pressCell);
             if (swallowed == null)
             {
                 return false;
@@ -503,11 +545,23 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            Cube? here = turn.Round.MainBoard.GetCube(anchor);
+            Cube? here = turn.Round.MainBoard.GetCube(pressCell);
             if (!here.HasValue || here.Value.Kind != CubeKind.Compressed)
             {
-                swallowed = null; // broken while shut: the player took the four-cube payout
+                // Broken while shut - the clean line of play, and the one that pays.
+                //
+                // The BOARD is what is asked, not the turn's destruction log: the log is cleared
+                // at the top of every turn, so a power that blew the press between turns would
+                // have vanished from it by the time this hook runs, and the payout would depend
+                // on WHICH source broke the cube. The cell still being real is the whole guard
+                // that is needed - a compressed cube survives a resize, so gone off a live cell
+                // means destroyed.
+                swallowed = null;
                 turnsLeft = 0;
+                if (turn.Round.MainBoard.IsInside(pressCell))
+                {
+                    turn.AddFlatScore(BonusWhenCrushed, DefId);
+                }
                 return;
             }
             turnsLeft--;
@@ -515,7 +569,7 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            PressExpansion result = turn.Round.ReleasePress(anchor, swallowed);
+            PressExpansion result = turn.Round.ReleasePress(anchor, pressCell, swallowed);
             swallowed = null;
             if (result != null && !result.Detonated && result.CubesPushedOff > 0)
             {

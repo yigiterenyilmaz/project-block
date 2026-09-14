@@ -1,10 +1,15 @@
-// PURPOSE: The board side of "Hidrolik pres" - squeezing a 2x2 patch into one cell, and letting it
+﻿// PURPOSE: The board side of "Hidrolik pres" - squeezing a 2x2 patch into one cell, and letting it
 // back out again four turns later.
 //
 // THE COMPRESSED CUBE is an ordinary destructible cube of its own kind (CubeKind.Compressed). It
 // fills one cell, blocks a clean sweep and breaks with a completed line like anything else; what is
-// special is only that the power pays four cubes' worth when it goes, and that it wants its three
-// cells back.
+// special is only that the power pays handsomely when it goes (HidrolikPresPower.BonusWhenCrushed),
+// and that it wants its three cells back.
+//
+// WHICH of the four cells keeps the cube is the PLAYER'S, named alongside the patch - a press in
+// the far corner of the patch is a different piece of board from one in the near corner, and it
+// opens outward from wherever it sits. The patch is still named by its bottom-left cell (the
+// anchor); the press cell only says where inside it the cube lives.
 //
 // EXPANDING is where the rules live, and they are the designer's, in this order:
 //   1. It expands into whatever is EMPTY. Nothing to push, nothing to decide.
@@ -49,8 +54,19 @@ namespace ProjectBlock.Core
         /// </summary>
         internal Cube?[] Compress(GridPos anchor)
         {
+            return Compress(anchor, anchor);
+        }
+
+        /// <summary>
+        /// The same squeeze, with the player naming WHICH of the four cells keeps the pressed
+        /// cube (see the file header). <paramref name="pressCell"/> must be one of the patch's
+        /// own cells; anything else is refused, so a bad pick can never strand a press outside
+        /// the patch it swallowed.
+        /// </summary>
+        internal Cube?[] Compress(GridPos anchor, GridPos pressCell)
+        {
             List<GridPos> patch = PatchAt(anchor);
-            if (patch == null)
+            if (patch == null || !patch.Contains(pressCell))
             {
                 return null;
             }
@@ -65,7 +81,8 @@ namespace ProjectBlock.Core
                     OccupiedCount--;
                 }
             }
-            cells[anchor.X - MinX, anchor.Y - MinY] = new Cube(CubeKind.Compressed, PressCardId);
+            cells[pressCell.X - MinX, pressCell.Y - MinY] =
+                new Cube(CubeKind.Compressed, PressCardId);
             OccupiedCount++;
             return swallowed;
         }
@@ -81,12 +98,24 @@ namespace ProjectBlock.Core
         /// </summary>
         internal PressExpansion Expand(GridPos anchor, Cube?[] swallowed)
         {
+            return Expand(anchor, anchor, swallowed);
+        }
+
+        /// <summary>
+        /// The same release, for a press whose cube the player put somewhere other than the
+        /// patch's bottom-left corner. It shoves outward from where the CUBE is, not from the
+        /// anchor - the anchor is only the name of the patch - so the three cells it wants back
+        /// are pushed away from the press itself whichever corner it sits in.
+        /// </summary>
+        internal PressExpansion Expand(GridPos anchor, GridPos pressCell, Cube?[] swallowed)
+        {
             List<GridPos> patch = PatchAt(anchor);
-            if (patch == null || swallowed == null || swallowed.Length != 4)
+            if (patch == null || !patch.Contains(pressCell)
+                || swallowed == null || swallowed.Length != 4)
             {
                 return null;
             }
-            Cube? here = cells[anchor.X - MinX, anchor.Y - MinY];
+            Cube? here = cells[pressCell.X - MinX, pressCell.Y - MinY];
             if (!here.HasValue || here.Value.Kind != CubeKind.Compressed)
             {
                 return null;
@@ -95,18 +124,24 @@ namespace ProjectBlock.Core
 
             // The three cells it wants back, and what is in the way.
             var wanted = new List<GridPos>();
-            for (int i = 1; i < 4; i++)
+            for (int i = 0; i < 4; i++)
             {
-                wanted.Add(patch[i]);
+                if (!patch[i].Equals(pressCell))
+                {
+                    wanted.Add(patch[i]);
+                }
             }
-            if (!ClearTheWay(anchor, wanted, result))
+            if (!ClearTheWay(pressCell, wanted, result))
             {
+                // The blast is centred on the PATCH, not on the cube: what it is for is the ring
+                // of gold and obsidian that shut the press in, and that ring is around the four
+                // cells it wants back wherever inside them the cube happens to sit.
                 Detonate(anchor, result);
                 return result;
             }
 
             // Put the picture back exactly as it was swallowed.
-            cells[anchor.X - MinX, anchor.Y - MinY] = null;
+            cells[pressCell.X - MinX, pressCell.Y - MinY] = null;
             OccupiedCount--;
             for (int i = 0; i < 4; i++)
             {

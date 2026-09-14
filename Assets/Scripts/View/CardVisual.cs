@@ -1,4 +1,4 @@
-// PURPOSE: One card object on screen - a card-shaped body showing its block shape
+﻿// PURPOSE: One card object on screen - a card-shaped body showing its block shape
 // (face-up) or a card back (face-down), with a tiny built-in move animation.
 // Used for hand/bonus cards, the discard pile's top card, and fly-by effects
 // (deals, discards, burns, shuffles). Pure presentation.
@@ -401,6 +401,13 @@ namespace ProjectBlock.View
             if (frozenMark == null)
             {
                 BuildFrozenMark();
+                if (flattened)
+                {
+                    // The mark is built LATE - a boss seizes the card long after it was dealt -
+                    // so it misses the flattening the rest of the card already had. Re-applying
+                    // is what folds its four new layers into the card's one order.
+                    SetFlattenedOrder(flattenedOrder);
+                }
             }
             frozenMark.SetActive(true);
         }
@@ -453,6 +460,13 @@ namespace ProjectBlock.View
         /// so dragged/flying cards render above resting ones.</summary>
         public void SetSortingBoost(int boost)
         {
+            if (flattened)
+            {
+                // A flattened card has ONE order, so a boost moves that one order (see
+                // SetFlattenedOrder). Its internal layering is depth and is already correct.
+                SetFlattenedOrder(flattenedOrder + boost);
+                return;
+            }
             for (int i = 0; i < renderers.Count; i++)
             {
                 renderers[i].sortingOrder = baseOrders[i] + boost;
@@ -462,6 +476,57 @@ namespace ProjectBlock.View
                 textRenderers[i].sortingOrder = textBaseOrders[i] + boost;
             }
         }
+
+        /// <summary>
+        /// Collapses the card's NINE internal sorting orders into ONE, and separates them by
+        /// DEPTH instead - each layer sits a hair nearer the camera than the one below it.
+        ///
+        /// This is what lets the hand be a real stack. A fan where every card genuinely covers
+        /// the one to its left needs each card's whole band of orders above its neighbour's, and
+        /// at nine orders a card that is 200-odd orders for a full hand - far more than the space
+        /// between the board and the deck overlay. Flattened, a card costs exactly one, so the
+        /// whole fan fits in the gap that was already there.
+        ///
+        /// It works because the camera is ORTHOGRAPHIC and the project's transparency sort mode
+        /// is Default, which sorts equal orders by distance along the view axis. Depth costs
+        /// nothing visually under an orthographic camera - z does not move a sprite on screen -
+        /// so the only thing these offsets do is decide who draws over whom.
+        ///
+        /// Only the HAND uses this. The deck overlay, the market and the pickers lay their cards
+        /// out with room to spare and keep the plain nine-order build.
+        /// </summary>
+        public void SetFlattenedOrder(int order)
+        {
+            flattened = true;
+            flattenedOrder = order;
+            for (int i = 0; i < renderers.Count; i++)
+            {
+                renderers[i].sortingOrder = order;
+                FlattenDepth(renderers[i].transform, baseOrders[i]);
+            }
+            for (int i = 0; i < textRenderers.Count; i++)
+            {
+                textRenderers[i].sortingOrder = order;
+                FlattenDepth(textMeshes[i].transform, textBaseOrders[i]);
+            }
+        }
+
+        /// <summary>Puts one layer of a flattened card at its own depth. Nearer the camera is
+        /// MORE NEGATIVE z - the 2D camera looks along +z - so a higher internal layer gets a
+        /// larger negative offset and draws on top, exactly as its sorting order used to.</summary>
+        private void FlattenDepth(Transform layer, int layerOrder)
+        {
+            Vector3 local = layer.localPosition;
+            local.z = -(layerOrder - baseOrder) * FlattenDepthStep;
+            layer.localPosition = local;
+        }
+
+        /// <summary>Depth between one internal layer and the next. Small enough to be nothing to
+        /// the camera, large enough to be an unambiguous ordering.</summary>
+        private const float FlattenDepthStep = 0.002f;
+
+        private bool flattened;
+        private int flattenedOrder;
 
         /// <summary>Eased slide to a local position; optional callback on arrival.</summary>
         public void MoveTo(Vector2 target, float duration, Action onArriveCallback)
