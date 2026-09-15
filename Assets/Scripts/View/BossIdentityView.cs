@@ -69,7 +69,8 @@ namespace ProjectBlock.View
         Boom,
         Gong,
         Clank,
-        Drone
+        Drone,
+        Magma
     }
 
     /// <summary>Boss stage intro + ambience prototypes. Build once; drive from the controller.</summary>
@@ -216,9 +217,12 @@ namespace ProjectBlock.View
                 return;
             }
             float dt = Time.deltaTime * Mathf.Max(0.01f, Speed);
+            orbitClock += dt;
+            TickReactions(dt);
             TickIntro(dt);
             TickAmbience(dt);
             TickAtmosphere(dt);
+            PoseReactions();
         }
 
         // =================================================================== the intro runner

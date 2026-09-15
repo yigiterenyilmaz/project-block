@@ -104,40 +104,61 @@ namespace ProjectBlock.View
         private void PoseAmbience(float w)
         {
             float t = ambienceTime;
+            // Every look answers the board (BossIdentityView.Reactions): `e` is how hard the stage
+            // was just hit, `drive` that energy run over time.
+            float e = reactEnergy;
+            float drive = reactDrive;
             switch (builtAmbience)
             {
                 case BossAmbience.HazardTape:
-                    PoseTape(tapeRig, rect, t, w, 0.5f + 0.5f * Mathf.Sin(t * 2.2f));
+                    // The tape races for a moment, each run is shoved outward as the front reaches
+                    // it, and the glow under it flares.
+                    PoseTape(tapeRig, rect, t + drive * 2.5f, w, 0.5f + 0.5f * Mathf.Sin(t * 2.2f), e);
                     break;
                 case BossAmbience.BloodEclipse:
-                    PoseEclipse(eclipseRig, t, Style.EclipseTint * w, 0f, Vector2.zero,
-                        (0.62f + 0.18f * Mathf.Sin(t * 1.3f)) * w, 1f + 0.025f * Mathf.Sin(t * 0.9f), w);
+                    // The corona swells and flares; the embers are blown outward by the front.
+                    PoseEclipse(eclipseRig, t + drive * 3f, Style.EclipseTint * w, 0f, Vector2.zero,
+                        (0.62f + 0.18f * Mathf.Sin(t * 1.3f) + 0.45f * e) * w,
+                        1f + 0.025f * Mathf.Sin(t * 0.9f) + 0.07f * e, w);
                     break;
                 case BossAmbience.RuneCircle:
+                {
+                    // A rune flares and swells as the front passes it; the seal spins up.
+                    float spinOuter = t * 2.0f + drive * 40f;
+                    float spinInner = -t * 3.5f - drive * 60f;
+                    float rMid = (sealRig.ROut + sealRig.RIn) * 0.5f;
                     for (int k = 0; k < sealRig.RuneAlpha.Length; k++)
                     {
                         float wave = Mathf.Cos(2f * Mathf.PI * (t * 0.22f - k / (float)sealRig.RuneAlpha.Length));
-                        sealRig.RuneAlpha[k] = 0.45f + 0.55f * Mathf.Pow(Mathf.Max(0f, wave), 8f);
-                        sealRig.RuneScale[k] = 1f;
+                        float a = 90f - 360f * (k + 0.5f) / sealRig.RuneAlpha.Length - spinOuter;
+                        float hit = Wave(rect.center + Polar(rMid, a));
+                        sealRig.RuneAlpha[k] = 0.45f + 0.55f * Mathf.Pow(Mathf.Max(0f, wave), 8f) + 1.2f * hit;
+                        sealRig.RuneScale[k] = 1f + 0.35f * Mathf.Min(1f, hit);
                     }
-                    PoseSeal(sealRig, rect.center, 1f, 0.8f * w, 1f, 1f, 1f,
-                        0.30f + 0.08f * Mathf.Sin(t * 1.1f), t * 2.0f, -t * 3.5f);
+                    PoseSeal(sealRig, rect.center, 1f + 0.02f * e, Mathf.Clamp01((0.8f + 0.3f * e) * w), 1f, 1f, 1f,
+                        0.30f + 0.08f * Mathf.Sin(t * 1.1f) + 0.6f * e, spinOuter, spinInner);
                     break;
+                }
                 case BossAmbience.IronCage:
-                    PoseCage(cageRig, rect, w, null, 0f, 1f, 0f, 0f,
-                        0.55f + 0.45f * Mathf.Sin(t * 3.9f), t);
+                    // The cage takes the blow: brackets rattle and pop, the lock jolts, lights flare.
+                    PoseCage(cageRig, rect, w, null, 0.05f * Mathf.Min(1.5f, e), 1f, 0f, 0.14f * Mathf.Min(1.5f, e),
+                        0.55f + 0.45f * Mathf.Sin(t * 3.9f) + e, t, e);
                     break;
                 case BossAmbience.Letterbox:
-                    PoseLetterbox(letterboxRig, halfH * 0.075f, w, 0.55f + 0.25f * Mathf.Sin(t * 1.6f));
+                    // The bars are thrown back toward the screen's edges and the hairline burns;
+                    // they settle back in as the energy falls away.
+                    PoseLetterbox(letterboxRig, halfH * 0.075f * (1f - 0.6f * Mathf.Min(1f, e)), w,
+                        0.55f + 0.25f * Mathf.Sin(t * 1.6f) + 0.9f * e);
                     break;
                 case BossAmbience.Aura:
-                    PoseAura(auraRig, rect, t, w);
+                    PoseAura(auraRig, rect, t + drive * 1.5f, w, e);
                     break;
                 case BossAmbience.Orbital:
-                    PoseOrbit(orbitRig, t, w, w, null, null, 0f);
+                    // The shared clock, so the intro's planets hand over in place (see Worlds.cs).
+                    PoseOrbit(orbitRig, orbitClock, w, w, null, null, 0f);
                     break;
                 case BossAmbience.LavaLake:
-                    PoseLava(lavaRig, t, w, 1f);
+                    PoseLava(lavaRig, orbitClock, w, 1f);
                     break;
             }
         }
@@ -189,7 +210,7 @@ namespace ProjectBlock.View
             return rig;
         }
 
-        private static void PoseTape(TapeRig rig, Rect r, float t, float alpha, float pulse)
+        private void PoseTape(TapeRig rig, Rect r, float t, float alpha, float pulse, float energy = 0f)
         {
             float g = TapeGap;
             float th = TapeThickness;
@@ -212,8 +233,9 @@ namespace ProjectBlock.View
             for (int i = 0; i < 4; i++)
             {
                 bool horizontal = i % 2 == 0;
-                Vector2 c = centres[i];
                 float len = lengths[i];
+                // Shoved outward as a front reaches this run of tape.
+                Vector2 c = centres[i] + outward[i] * Mathf.Min(0.18f, 0.12f * Wave(centres[i]));
                 Vector2 along = horizontal ? new Vector2(len, th) : new Vector2(th, len);
                 Put(rig.Shadows[i], c + drop, along, 0f, Color.black, 0.38f * alpha);
                 rig.Strips[i].sprite = frame;
@@ -240,6 +262,7 @@ namespace ProjectBlock.View
             for (int k = 0; k < 4; k++)
             {
                 Vector2 p = corners[k];
+                p += (p - r.center).normalized * Mathf.Min(0.15f, 0.1f * Wave(p));
                 PlaceSliced(rig.PostShadows[k], p + drop * 1.3f, Vector2.one * post, Color.black, 0.45f * alpha);
                 PlaceSliced(rig.Posts[k], p, Vector2.one * post, PostBody, alpha);
                 Put(rig.PostBevels[k], p + new Vector2(0f, post * 0.5f - 0.025f), new Vector2(post * 0.8f, 0.02f), 0f,
@@ -248,7 +271,8 @@ namespace ProjectBlock.View
             }
 
             Vector2 glowSize = (r.size + Vector2.one * 2f * (g + th)) / GlowBoxFill;
-            Put(rig.Glow, r.center, glowSize, 0f, Style.Threat, 0.14f * alpha);
+            Put(rig.Glow, r.center, glowSize * (1f + 0.04f * energy), 0f, Style.Threat,
+                (0.14f + 0.4f * energy) * alpha);
         }
 
         // =================================================================== RUNE SEAL
@@ -540,7 +564,7 @@ namespace ProjectBlock.View
         /// impact; <paramref name="rails"/> how far the bars have closed; <paramref name="lockDrop"/>
         /// 0 = seated, 1 = well above.</summary>
         private static void PoseCage(CageRig c, Rect r, float alpha, float[] fly, float bounce,
-            float rails, float lockDrop, float lockSquash, float key, float t)
+            float rails, float lockDrop, float lockSquash, float key, float t, float rattle = 0f)
         {
             float L = c.L;
             float T = c.T;
@@ -553,9 +577,12 @@ namespace ProjectBlock.View
                 float f = fly != null ? fly[k] : 0f;
                 Vector2 corner = r.center + new Vector2(sx * ox, sy * oy);
                 Vector2 at = corner + new Vector2(sx, sy) * 5f * f;
+                // A hit on the board rattles each bracket on its own beat.
+                float shake = Mathf.Min(1.5f, rattle);
+                at += new Vector2(Mathf.Sin(t * 57f + k * 2.1f), Mathf.Sin(t * 63f + k * 1.3f)) * 0.035f * shake;
                 Transform b = c.Brackets[k];
                 b.localPosition = new Vector3(at.x, at.y, 0f);
-                b.localRotation = Quaternion.Euler(0f, 0f, sx * sy * 30f * f);
+                b.localRotation = Quaternion.Euler(0f, 0f, sx * sy * 30f * f + Mathf.Sin(t * 49f + k) * 3f * shake);
                 float sc = 1f + bounce;
                 b.localScale = new Vector3(sc, sc, 1f);
                 SpriteRenderer[] parts = c.BracketParts[k];
@@ -565,7 +592,7 @@ namespace ProjectBlock.View
                     col.a = alpha;
                     parts[i].color = col;
                 }
-                float led = 0.35f + 0.65f * Mathf.Max(0f, Mathf.Sin(t * 2.4f - k * 1.2f));
+                float led = Mathf.Clamp01(0.35f + 0.65f * Mathf.Max(0f, Mathf.Sin(t * 2.4f - k * 1.2f)) + rattle);
                 c.Leds[k].color = new Color(Style.Threat.r, Style.Threat.g, Style.Threat.b,
                     alpha * led * (1f - f));
             }
@@ -597,7 +624,8 @@ namespace ProjectBlock.View
                 }
             }
             Vector2 lockAt = new Vector2(r.center.x, r.center.y + oy - T * 0.5f)
-                + Vector2.up * 3f * lockDrop;
+                + Vector2.up * 3f * lockDrop
+                + new Vector2(Mathf.Sin(t * 71f) * 0.03f, Mathf.Abs(Mathf.Sin(t * 23f)) * 0.06f) * Mathf.Min(1.5f, rattle);
             c.Lock.localPosition = new Vector3(lockAt.x, lockAt.y, 0f);
             c.Lock.localScale = new Vector3(1f + lockSquash, 1f - lockSquash * 0.6f, 1f);
             for (int i = 0; i < c.LockParts.Length; i++)
@@ -706,9 +734,14 @@ namespace ProjectBlock.View
                 float y = c.y + Mathf.Lerp(-halfH * 1.15f, halfH * 1.15f, phase);
                 float size = 0.07f + 0.12f * Hash(i, 4);
                 float flick = 0.75f + 0.25f * Mathf.Sin(t * (5f + 4f * Hash(i, 5)) + i);
-                float ea = Mathf.Sin(phase * Mathf.PI) * embers * flick;
-                Put(e.Embers[i], new Vector2(x, y), Vector2.one * size * 2.2f, 0f, new Color(1f, 0.30f, 0.12f), 0.45f * ea);
-                Put(e.EmberCores[i], new Vector2(x, y), Vector2.one * size * 0.7f, 0f, new Color(1f, 0.78f, 0.52f), ea);
+                // A passing front blows the embers outward and fans them brighter.
+                var ember = new Vector2(x, y);
+                float gust = Wave(ember);
+                ember += WavePush(ember) * 0.6f;
+                float ea = Mathf.Clamp01(Mathf.Sin(phase * Mathf.PI) * embers * flick * (1f + 0.8f * gust));
+                Put(e.Embers[i], ember, Vector2.one * size * 2.2f * (1f + 0.4f * Mathf.Min(1f, gust)), 0f,
+                    new Color(1f, 0.30f, 0.12f), 0.45f * ea);
+                Put(e.EmberCores[i], ember, Vector2.one * size * 0.7f, 0f, new Color(1f, 0.78f, 0.52f), ea);
             }
         }
 
@@ -821,10 +854,13 @@ namespace ProjectBlock.View
 
         /// <summary>Dark red flame-smoke licking off the arena's edges, behind the board, so the
         /// board itself reads as the thing giving off the menace.</summary>
-        private static void PoseAura(AuraRig a, Rect r, float t, float w)
+        /// <param name="surge">Reaction energy: the flames leap further, bigger and hotter.</param>
+        private static void PoseAura(AuraRig a, Rect r, float t, float w, float surge = 0f)
         {
             float breathe = 0.5f + 0.5f * Mathf.Sin(t * 1.4f);
-            Put(a.Base, r.center, r.size / GlowBoxFill, 0f, Style.Maroon, (0.75f + 0.2f * breathe) * w);
+            surge = Mathf.Min(1.5f, surge);
+            Put(a.Base, r.center, r.size / GlowBoxFill * (1f + 0.05f * surge), 0f,
+                Color.Lerp(Style.Maroon, Style.Threat, 0.4f * surge), Mathf.Clamp01((0.75f + 0.2f * breathe + 0.3f * surge) * w));
             float perimeter = 2f * (r.width + r.height);
             for (int i = 0; i < AuraBlobs; i++)
             {
@@ -850,10 +886,10 @@ namespace ProjectBlock.View
                 }
                 float period = 1.8f + 1.4f * Hash(i, 7);
                 float phase = Mathf.Repeat(t / period + Hash(i, 6), 1f);
-                Vector2 at = p + n * (0.05f + phase * 0.85f)
+                Vector2 at = p + n * (0.05f + phase * 0.85f * (1f + 0.7f * surge))
                     + tangent * Mathf.Sin(t * 0.9f + i * 1.7f) * 0.14f;
-                float size = (0.5f + 0.85f * phase) * (0.8f + 0.5f * Hash(i, 8));
-                float alpha = Mathf.Pow(Mathf.Sin(phase * Mathf.PI), 1.5f) * 0.5f * w;
+                float size = (0.5f + 0.85f * phase) * (0.8f + 0.5f * Hash(i, 8)) * (1f + 0.35f * surge);
+                float alpha = Mathf.Pow(Mathf.Sin(phase * Mathf.PI), 1.5f) * 0.5f * (1f + 0.6f * surge) * w;
                 Color c = Color.Lerp(new Color(Style.Threat.r * 0.8f, Style.Threat.g * 0.6f,
                     Style.Threat.b * 0.6f), Style.Maroon, phase);
                 Put(a.Blobs[i], at, Vector2.one * size, 0f, c, alpha);

@@ -57,6 +57,7 @@ namespace ProjectBlock.View
             // screen in the market - so it lights up whenever the pointer is on it and nothing
             // is covering it.
             cardLayer.SetDrawPileHovered(!deckOverlay.IsOpen && !grantPicker.IsOpen
+                && !(session.Phase == GamePhase.Market && UiLayout.Active.MarketStacked)
                 && cardLayer.IsDrawPileAt(world));
 
             // The market's hover outline is decided ONCE, here, before any of the modal

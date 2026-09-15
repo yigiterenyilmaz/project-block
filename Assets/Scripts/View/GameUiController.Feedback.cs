@@ -324,6 +324,10 @@ namespace ProjectBlock.View
                         DynamiteBlastView.Style.CameraShakeDuration,
                         DynamiteBlastView.Style.CameraShakeDamping);
                 });
+            if (bossIdentity != null)
+            {
+                bossIdentity.ReactDynamite(at);
+            }
         }
 
         /// <summary>Where the bomb was. The rule is that the block which detonates is the one
@@ -567,6 +571,10 @@ namespace ProjectBlock.View
             // tier, so the two can never be mistaken for each other.
             lineSweep.Play(cells, boardView.CellWorldSize, row, tone);
             lineBurst.Play(cells, boardView.CellWorldSize, row, activeLineTier);
+            if (bossIdentity != null)
+            {
+                bossIdentity.ReactLine(cells[0], cells[cells.Count - 1], tier);
+            }
         }
 
         /// <summary>
@@ -633,6 +641,15 @@ namespace ProjectBlock.View
             }
             clusterBurst.Play(world, looks, boardView.CellWorldSize, boardView.CubeWorldSize, tone,
                 onFirstPeak, onImpact);
+            if (bossIdentity != null)
+            {
+                var centre = Vector2.zero;
+                for (int i = 0; i < world.Count; i++)
+                {
+                    centre += world[i];
+                }
+                bossIdentity.ReactBurst(centre / world.Count, world.Count);
+            }
             return true;
         }
 
@@ -1700,6 +1717,10 @@ namespace ProjectBlock.View
                         BoardCleanseView.Style.ScreenShakeDuration,
                         BoardCleanseView.Style.ScreenShakeFrequency);
                 });
+            if (bossIdentity != null)
+            {
+                bossIdentity.ReactSweep();
+            }
         }
 
         /// <summary>
@@ -2341,9 +2362,10 @@ namespace ProjectBlock.View
         {
             UpdateScoreHud();
             RefreshBossBadge();
-            // The draw pile doubles as the SELL screen while shopping, which nothing on screen
-            // said. Set from the phase on every refresh, so it can never be left on in a round.
-            cardLayer.SetSellHint(session.Phase == GamePhase.Market);
+            // The "SELL CARDS" plate over the draw pile is retired: the pile says it is clickable
+            // with its hover outline, and the market's own DECK button names the action. Kept
+            // explicitly off so a plate built by an older path never lingers.
+            cardLayer.SetSellHint(false);
             if (session.Phase == GamePhase.Market)
             {
                 BuildMarketHud();

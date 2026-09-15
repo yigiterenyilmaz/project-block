@@ -318,9 +318,13 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            // The stacked shelf's own DECK button. It stands in for the deck PILE, which that
-            // layout covers - so it does exactly what clicking the pile does.
-            if (marketView.TryDeckAt(world))
+            // The shelf's own DECK button, and the draw pile itself where it is on screen (the
+            // desktop panel stops short of it; the stacked one hides it). Both open the owned
+            // cards as a SELL screen. The pile only answers while it is visible - a hidden pile
+            // that opened the sell screen would be an invisible button.
+            if (marketView.TryDeckAt(world)
+                || (!UiLayout.Active.MarketStacked && marketView.OfferAt(world) < 0
+                    && cardLayer.IsDrawPileAt(world)))
             {
                 sellCardsMode = true;
                 deckOverlay.ResetScroll();
@@ -330,13 +334,6 @@ namespace ProjectBlock.View
             int offerIndex = marketView.OfferAt(world);
             if (offerIndex < 0)
             {
-                // clicking the deck opens the owned cards as a SELL screen
-                if (cardLayer.IsDrawPileAt(world))
-                {
-                    sellCardsMode = true;
-                    deckOverlay.ResetScroll(); // a fresh visit starts at the top of the deck
-                    deckOverlay.Show(session.OwnedCards, true);
-                }
                 return;
             }
             // "Kaçakçı": hold SHIFT to take the offer for free instead of paying for it. One per

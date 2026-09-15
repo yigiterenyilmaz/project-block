@@ -309,13 +309,16 @@ namespace ProjectBlock.View
 
             // MarketView.cs
             MarketStacked = false;
-            // Trimmed so the joker/power cards can be taller: the top still clears the score and
-            // the message line (~100 canvas px), the bottom still stops above the draw pile's
-            // click box (-3.06) at -2.95.
-            MarketTopReserve = 1.15f;
-            MarketBottomReserve = 2.05f;
+            // The top still clears the score and the message line (~100 canvas px). The bottom
+            // runs down OVER the piles: they are hidden while the market is up and the footer
+            // carries a DECK button instead (the same bargain the portrait shelf makes), which is
+            // what gives the shelf room to breathe.
+            // EQUAL top and bottom, so the panel sits in the middle of the screen. The top still
+            // clears the score and the message line (~0.93 world units).
+            MarketTopReserve = 0.85f;
+            MarketBottomReserve = 0.85f;
             MarketSideReserve = 0.35f;
-            MarketFooterHeight = 0.85f;
+            MarketFooterHeight = 1.2f;
             MarketBlockSection = 0f;              // unused: the desktop splits the height
             MarketNamedSection = 0f;
         }

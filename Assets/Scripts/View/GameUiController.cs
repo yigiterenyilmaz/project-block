@@ -277,7 +277,8 @@ namespace ProjectBlock.View
         /// <summary>
         /// Hides the two piles while a STACKED market is open. That layout covers the whole
         /// screen and the piles' labels sort above its panel, so left alone they print straight
-        /// through it; the market's own DECK button is the way in while it is up.
+        /// through it; the market's own DECK button is the way in while it is up. The desktop
+        /// panel stops short of them, so there the draw pile stays up and clickable.
         /// </summary>
         private void SyncPilesForMarket()
         {

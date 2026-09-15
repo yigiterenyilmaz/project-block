@@ -71,7 +71,7 @@ namespace ProjectBlock.View
             stingClips = new[]
             {
                 BuildStingSiren(), BuildStingBoom(), BuildStingGong(), BuildStingClank(),
-                BuildStingDrone()
+                BuildStingDrone(), BuildStingMagma()
             };
             humSource.clip = humClip;
             ApplyHumVolume();
@@ -203,6 +203,50 @@ namespace ProjectBlock.View
             AddTone(buffer, 0, 0.3f, 2150f, 2100f, 0.08f, 6f);
             AddTone(buffer, 0, 0.12f, 140f, 90f, 0.4f, 2f);
             return Finish("stingClank", buffer);
+        }
+
+        /// <summary>Magma welling up: a deep, dark ROAR (noise filtered twice down to the low end,
+        /// so there is no hiss in it anywhere) that swells as the lake spreads, a sub tone that
+        /// wanders under it, and thick lava bubbles gulping through - each a soft sine whose pitch
+        /// rises as it bursts, never a click.</summary>
+        private static AudioClip BuildStingMagma()
+        {
+            const float seconds = 2.4f;
+            float[] buffer = Buffer(seconds);
+            var rng = new System.Random(15);
+            float lp1 = 0f;
+            float lp2 = 0f;
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                float t = i / (float)buffer.Length;
+                float s = i / (float)SampleRate;
+                // Swells to its peak just before the eruption, then lets go.
+                float env = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.8f)) * Mathf.Pow(1f - Mathf.Clamp01((t - 0.8f) / 0.2f), 1.5f);
+                float n = (float)(rng.NextDouble() * 2.0 - 1.0);
+                lp1 += (n - lp1) * 0.025f;
+                lp2 += (lp1 - lp2) * 0.04f;
+                float churn = 0.8f + 0.2f * Mathf.Sin(2f * Mathf.PI * 1.3f * s) * Mathf.Sin(2f * Mathf.PI * 0.7f * s + 1f);
+                float sub = Mathf.Sin(2f * Mathf.PI * (41f + 4f * Mathf.Sin(s * 2.2f)) * s);
+                buffer[i] = env * (lp2 * 4f * churn + 0.16f * sub);
+            }
+            for (int b = 0; b < 16; b++)
+            {
+                float at = (float)(0.15 + rng.NextDouble() * (seconds * 0.78 - 0.15));
+                float length = 0.07f + 0.09f * (float)rng.NextDouble();
+                float f0 = 70f + 50f * (float)rng.NextDouble();
+                float amp = 0.10f + 0.12f * (float)rng.NextDouble() * Mathf.Clamp01(at / 1.2f);
+                int start = (int)(at * SampleRate);
+                int count = Mathf.Min((int)(length * SampleRate), buffer.Length - start);
+                double phase = 0.0;
+                for (int i = 0; i < count; i++)
+                {
+                    float k = i / (float)count;
+                    float freq = f0 * (1f + 1.4f * k * k);
+                    phase += 2.0 * Mathf.PI * freq / SampleRate;
+                    buffer[start + i] += Mathf.Sin((float)phase) * amp * Mathf.Sin(Mathf.PI * k) * (1f - 0.5f * k);
+                }
+            }
+            return Finish("stingMagma", buffer);
         }
 
         /// <summary>A low beating drone that SWELLS rather than decays.</summary>

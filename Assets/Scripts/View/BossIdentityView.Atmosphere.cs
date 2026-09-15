@@ -87,6 +87,7 @@ namespace ProjectBlock.View
             {
                 sparks[i] = Part(atmoWorld, "Spark" + i, SoftDot, SparkOrder);
             }
+            BuildReactions();
         }
 
         private void TickAtmosphere(float dt)
@@ -107,7 +108,7 @@ namespace ProjectBlock.View
                 Smooth(backdropWeight));
             float pool = Mathf.Max(rect.width, rect.height) * 2.4f;
             Put(atmoPool, rect.center, new Vector2(pool, pool * 0.85f), 0f, AtmosphereStyle.Pool,
-                AtmosphereStyle.PoolStrength * Smooth(backdropWeight));
+                (AtmosphereStyle.PoolStrength + ReactStyle.PoolFlare * reactEnergy) * Smooth(backdropWeight));
 
             float hw = rect.width * 0.5f;
             float hh = rect.height * 0.5f;
@@ -134,6 +135,8 @@ namespace ProjectBlock.View
                 float travel = OutCubic(phase);
                 Vector2 at = rect.center + dir * (toEdge + 0.05f + travel * reach)
                     + tangent * curl * travel * travel;
+                // A passing front shoves the sparks outward.
+                at += WavePush(at) * 0.35f;
                 float alpha = Seg(phase, 0f, 0.10f) * (1f - Smooth(Seg(phase, 0.45f, 1f)));
                 float size = Mathf.Lerp(0.16f, 0.06f, phase) * (0.7f + 0.6f * Hash(i, 46));
                 Color c = Color.Lerp(AtmosphereStyle.SparkHot, AtmosphereStyle.SparkCool, phase);

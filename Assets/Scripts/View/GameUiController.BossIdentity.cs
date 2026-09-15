@@ -85,6 +85,9 @@ namespace ProjectBlock.View
             Boss,
             Speed,
             Kick,
+            ProcLineClear,
+            ProcExplosion,
+            ProcSweep,
             ByTheme,
             PlayIntro,
             PlayBoth,
@@ -97,7 +100,7 @@ namespace ProjectBlock.View
             Stop
         }
 
-        private const int BossLookRowCount = 15;
+        private const int BossLookRowCount = 18;
 
         private bool BossLookOpen
         {
@@ -338,6 +341,61 @@ namespace ProjectBlock.View
             }
         }
 
+        // ---- the lab's proc rows ----
+        //
+        // Each plays the REAL game effect through the same seam the game uses (FlashLine /
+        // FlashCells / EmitSweepConfetti), so the board animation and the background's reaction
+        // are both seen exactly as in a round. Visual only: no cube is touched, and the round's
+        // Core state is never changed. With no board up (a market) only the background reacts.
+
+        private int bossLookProcLine;
+
+        /// <summary>Alternates a row and a column through the middle of the arena.</summary>
+        private void ProcBossLookLineClear()
+        {
+            GameBoard board = boardView != null ? boardView.Board : null;
+            bool row = bossLookProcLine++ % 2 == 0;
+            if (board != null)
+            {
+                FlashLine(board, row ? board.MinY + board.Height / 2 : board.MinX + board.Width / 2, row);
+                return;
+            }
+            Rect r = BossLookBoardRect();
+            bossIdentity.ReactLine(row ? new Vector2(r.xMin, r.center.y) : new Vector2(r.center.x, r.yMin),
+                row ? new Vector2(r.xMax, r.center.y) : new Vector2(r.center.x, r.yMax), 1);
+        }
+
+        /// <summary>A 2x2 group going off near one corner of the arena.</summary>
+        private void ProcBossLookExplosion()
+        {
+            GameBoard board = boardView != null ? boardView.Board : null;
+            if (board != null)
+            {
+                int x = board.MinX + board.Width - 3;
+                int y = board.MinY + 1;
+                var cells = new List<GridPos>
+                {
+                    new GridPos(x, y), new GridPos(x + 1, y), new GridPos(x, y + 1), new GridPos(x + 1, y + 1)
+                };
+                if (FlashCells(cells, new Color(1f, 0.55f, 0.25f)))
+                {
+                    return;
+                }
+            }
+            Rect r = BossLookBoardRect();
+            bossIdentity.ReactBurst(new Vector2(r.xMax - r.width * 0.2f, r.yMin + r.height * 0.2f), 4);
+        }
+
+        private void ProcBossLookSweep()
+        {
+            if (boardView != null && boardView.Board != null)
+            {
+                EmitSweepConfetti();
+                return;
+            }
+            bossIdentity.ReactSweep();
+        }
+
         private static bool DigitPressed(Keyboard kb, int digit)
         {
             switch (digit)
@@ -397,6 +455,15 @@ namespace ProjectBlock.View
                     break;
                 case BossLookRow.Pin:
                     bossLookPinned = !bossLookPinned;
+                    break;
+                case BossLookRow.ProcLineClear:
+                    ProcBossLookLineClear();
+                    break;
+                case BossLookRow.ProcExplosion:
+                    ProcBossLookExplosion();
+                    break;
+                case BossLookRow.ProcSweep:
+                    ProcBossLookSweep();
                     break;
                 case BossLookRow.ByTheme:
                     bossLookByTheme = !bossLookByTheme;
@@ -517,6 +584,9 @@ namespace ProjectBlock.View
                     + (live ? Loc.Pick("  (live)", "  (canlı)") : string.Empty) + " >",
                 Loc.Pick("Speed:  < ", "Hız:  < ") + BossLookSpeeds[bossLookSpeed] + "x >",
                 Loc.Pick("Camera kick:  ", "Kamera sarsıntısı:  ") + BossLookOnOff(bossIdentity.CameraKick),
+                Loc.Pick("> Proc line clear", "> Satır temizlemeyi tetikle"),
+                Loc.Pick("> Proc explosion", "> Patlamayı tetikle"),
+                Loc.Pick("> Proc clean sweep", "> Temizliği tetikle"),
                 Loc.Pick("Pick by boss theme:  ", "Patron temasına göre seç:  ")
                     + BossLookOnOff(bossLookByTheme) + "   ["
                     + BossThemes.Name(BossThemes.For(PreviewBossId())) + "]",
@@ -613,8 +683,8 @@ namespace ProjectBlock.View
                         "Yıldızlar tahtaya doğru çizgiler halinde akar, üç yörünge devasa ve dönerek düşer, bir vuruşla yerine oturur ve başlık kartı gelir. Kozmik - tahta bir yıldıza dönüşür, patronun dünyaları çevresinde döner.");
                 case BossIntroStyle.Eruption:
                     return Loc.Pick(
-                        "The screen rumbles, lava rises from the bottom of the screen until the board is floating on it, then erupts - molten droplets thrown off the arena's edges - and the title card comes up.",
-                        "Ekran gürler, lav ekranın altından yükselir, tahta üstünde yüzene kadar; sonra patlar - arena kenarlarından erimiş damlalar fırlar - ve başlık kartı gelir.");
+                        "The screen rumbles, lava seeps out from under the arena and spreads across the screen along a ragged, sizzling front - steam and crackles where it meets the ground - until the board is floating on it, then erupts and the title card comes up.",
+                        "Ekran gürler, lav arenanın altından sızar ve tıslayan, düzensiz bir cepheyle ekrana yayılır - değdiği yerde buhar ve çıtırtılar - tahta üstünde yüzene kadar; sonra patlar ve başlık kartı gelir.");
             }
             return Loc.Pick("No intro.", "Giriş yok.");
         }

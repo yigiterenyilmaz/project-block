@@ -18,9 +18,9 @@ namespace ProjectBlock.View
         private const int CanvasOrder = 90;
         private const float PanelWidth = 580f;
         private const float PanelHeight = 960f;
-        private const float RowHeight = 38f;
+        private const float RowHeight = 34f;
         private const float RowsTop = 70f;
-        private const int MaxRows = 16;
+        private const int MaxRows = 18;
 
         private static readonly Color PanelColor = new Color(0.05f, 0.06f, 0.09f, 0.95f);
         private static readonly Color EdgeColor = new Color(0.40f, 0.14f, 0.18f, 1f);

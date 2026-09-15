@@ -146,6 +146,10 @@ namespace ProjectBlock.View
         /// <summary>Thickness of the hover outline and how far it stands off the tile.</summary>
         private const float HoverEdge = 0.075f;
         private const float HoverInset = 0.13f;
+        private const float FramelessHoverInset = 0.05f;
+
+        /// <summary>Character size of every price on the desktop shelf.</summary>
+        private const float DesktopPriceSize = 0.052f;
 
         /// <summary>(Re)builds the market display as stacked section ROWS - BLOCKS, JOKERS,
         /// POWERS - each row horizontally centered with its header above it and the prices
@@ -327,7 +331,7 @@ namespace ProjectBlock.View
 
             // A joker/power card draws its own rounded body and rarity rim (BuildNamedTile); a
             // square frame behind it would show at the corners. Blocks and sold slots keep it.
-            if (offer.Kind == MarketOfferKind.Block || offer.Sold)
+            if ((offer.Kind == MarketOfferKind.Block && !frameless) || offer.Sold)
             {
                 Masked(ViewUtil.MakeRect(transform, "Frame_" + i, slotCenter, tileSize,
                     RarityPalette.Frame(FrameColor, rarity), 34));
@@ -372,7 +376,7 @@ namespace ProjectBlock.View
                 CardVisual visual = CardVisual.Create(transform, "Offer_" + i, offer.Card,
                     true, false, slotCenter, 36);
                 float fit = Mathf.Min(tileSize.x / CardVisual.BodyWidth,
-                    tileSize.y / CardVisual.BodyHeight) * 0.78f;
+                    tileSize.y / CardVisual.BodyHeight) * (frameless ? 1f : BlockCardInFrame);
                 visual.transform.localScale = new Vector3(fit, fit, 1f);
                 // A card is a SUBTREE of renderers, not one - body, every cube, the tint. Each
                 // of them has to clip or a scrolled block card sails out over the frame, which
@@ -395,9 +399,13 @@ namespace ProjectBlock.View
                 bool card = offer.Kind != MarketOfferKind.Block;
                 ViewUtil.MakeText3D(transform, "Price_" + i,
                     slotCenter + new Vector2(0f, -tileSize.y * 0.5f
-                        + (card ? 0.12f * tileSize.x : 0.16f)),
-                    offer.Price.ToString(), 60, card ? 0.042f * tileSize.x : 0.060f,
-                    affordable ? AffordablePriceColor : TooExpensiveColor, 38,
+                        + (card ? (frameless ? 0.2f : 0.12f) * tileSize.x : frameless ? -0.24f : 0.16f)),
+                    // On the desktop shelf every price is one size, block or card alike.
+                    offer.Price.ToString(), 60,
+                    frameless ? DesktopPriceSize : card ? 0.042f * tileSize.x : 0.060f,
+                    // Over the hover outline (39) on the desktop shelf, whose block price hangs
+                    // across the card's bottom edge - right where the outline runs.
+                    affordable ? AffordablePriceColor : TooExpensiveColor, frameless ? 40 : 38,
                     TextAnchor.MiddleCenter);
                 if (blockedByLimit)
                 {
@@ -907,7 +915,8 @@ namespace ProjectBlock.View
                 bodyColor, 34, ViewUtil.CardSprite("card_base")));
             float pad = size.x * 0.07f;
             float wellWidth = size.x - pad * 2f;
-            float wellHeight = Mathf.Min(wellWidth * 0.86f, size.y * 0.46f);
+            // A touch shorter on the desktop shelf, which gives the raised price the room.
+            float wellHeight = Mathf.Min(wellWidth * 0.86f, size.y * (frameless ? 0.41f : 0.46f));
             float wellTop = size.y * 0.5f - pad;
             Vector2 wellCenter = center + new Vector2(0f, wellTop - wellHeight * 0.5f);
             Masked(ViewUtil.MakePlate(transform, key + "Well_" + index, wellCenter,
@@ -937,11 +946,17 @@ namespace ProjectBlock.View
                 90, 0.013f * s, tagColor, 38, TextAnchor.MiddleCenter);
             // A DEMO TILE CARRIES NO DESCRIPTION - see the note at the call site - so the name
             // sits between the tag under the well and the price at the bottom.
-            float priceTop = -size.y * 0.5f + 0.24f * s;
+            // The desktop shelf lifts the price off the card's bottom edge, so the name above
+            // it moves up with it.
+            float priceTop = -size.y * 0.5f + (frameless ? 0.31f : 0.24f) * s;
+            string wrappedName = ViewUtil.WrapText(displayName, DemoLayout ? DemoNameWrap : 14);
+            // A name that wraps to two lines is set smaller and nudged up, or its second line
+            // lands on the price under it.
+            bool twoLines = wrappedName.IndexOf('\n') >= 0;
+            float nameY = (wellBottom - 0.17f * s + priceTop) * 0.5f;
             ViewUtil.MakeText3D(transform, key + "Name_" + index,
-                center + new Vector2(0f, (wellBottom - 0.17f * s + priceTop) * 0.5f),
-                ViewUtil.WrapText(displayName, DemoLayout ? DemoNameWrap : 14),
-                90, 0.018f * s, JokerNameColor, 38, TextAnchor.MiddleCenter);
+                center + new Vector2(0f, nameY), wrappedName,
+                90, (twoLines ? 0.014f : 0.018f) * s, JokerNameColor, 38, TextAnchor.MiddleCenter);
             if (!string.IsNullOrEmpty(description))
             {
                 ViewUtil.MakeText3D(transform, key + "Desc_" + index,
@@ -985,10 +1000,10 @@ namespace ProjectBlock.View
         private const float DemoSideReserve = 0.35f;
 
         /// <summary>Air between the panel edge and anything in it.</summary>
-        private const float DemoPad = 0.3f;
+        private const float DemoPad = 0.4f;
 
         /// <summary>The strip across the top: MARKET on the left, the balance on the right.</summary>
-        private const float DemoTitleHeight = 0.72f;
+        private const float DemoTitleHeight = 0.9f;
 
         /// <summary>The strip across the bottom: the hints, and PROCEED on the right.</summary>
         private static float DemoFooterHeight
@@ -1020,7 +1035,7 @@ namespace ProjectBlock.View
         private const float DemoMinSectionWidth = 4.2f;
 
         /// <summary>The bar along the top of a section box: its name, and its reroll button.</summary>
-        private const float DemoHeaderHeight = 0.50f;          // just clears the 0.46 reroll button
+        private const float DemoHeaderHeight = 0.62f;          // the 0.46 reroll button with air round it
 
         /// <summary>How much of a section header answers to its NAME. Kept clear of the reroll
         /// button, which starts 2.33 in from the right of even the narrowest section.</summary>
@@ -1030,13 +1045,16 @@ namespace ProjectBlock.View
 
         private static readonly Vector2 DemoProceedSize = new Vector2(3.2f, 0.78f);
 
-        private const float DemoTilePadX = 0.14f;
+        private const float DemoTilePadX = 0.2f;
 
-        private const float DemoTilePadY = 0.12f;
+        private const float DemoTilePadY = 0.18f;
 
-        private const float DemoColumnGap = 0.34f;
+        private const float DemoColumnGap = 0.4f;
 
-        private const float DemoRowGap = 0.16f;
+        private const float DemoRowGap = 0.3f;
+
+        /// <summary>Width each joker/power offer asks for in the side-by-side shelf.</summary>
+        private const float DemoNamedSlotWidth = 2.4f;
 
         /// <summary>Tallest a tile gets, as a multiple of its own width. Card-shaped, so the
         /// block column keeps card-shaped frames however tall its box is.</summary>
@@ -1102,13 +1120,21 @@ namespace ProjectBlock.View
             {
                 buckets[SectionIndex(offers[i].Kind)].Add(i);
             }
+            frameless = false;
+            if (!UiLayout.Active.MarketStacked)
+            {
+                BuildDemoRows(session, offers, count, buckets);
+                return;
+            }
             int blockCount = buckets[SectionIndex(MarketOfferKind.Block)].Count;
             int namedCount = Mathf.Max(buckets[SectionIndex(MarketOfferKind.Joker)].Count,
                 buckets[SectionIndex(MarketOfferKind.Power)].Count);
             float leftWanted = Mathf.Max(DemoMinSectionWidth,
                 blockCount * (DemoBlockTileWidth + DemoTilePadX * 2f));
+            // A joker/power slot asks for more than its card: the card's width is capped by the
+            // shelf's height, and the extra is the air between cards that keeps them readable.
             float rightWanted = Mathf.Max(DemoMinSectionWidth,
-                namedCount * (DemoNamedTileWidth + DemoTilePadX * 2f));
+                namedCount * DemoNamedSlotWidth);
 
             Rect panel = DemoPanelRect(
                 DemoPad * 2f + leftWanted + DemoColumnGap + rightWanted);
@@ -1225,6 +1251,251 @@ namespace ProjectBlock.View
             BuildHoverOutline();
         }
 
+        // ---- THE DESKTOP SHELF ----
+        //
+        //   +----------------------------------------+-----------+
+        //   | BLOCKS   |  card  |  card  |  card     | MARKET    |
+        //   | [reroll] |        |        |           | balance   |
+        //   +--------------------+-------------------+ limit     |
+        //   | JOKERS    [reroll] | POWERS   [reroll] | hint      |
+        //   |  card      card    |  card      card   | [DECK]    |
+        //   +--------------------+-------------------+ [PROCEED] |
+        //
+        // BLOCKS take a full row across the top with their name and reroll in a column at the
+        // row's left; JOKERS and POWERS share the row under it, side by side, each with its name
+        // and reroll in a bar along its top. Everything that is not an offer is a column down the
+        // panel's RIGHT side, so the offers get the panel's whole height. (Picked from seven
+        // prototype layouts; the others were deleted.)
+
+        // Where a section puts its name and reroll button.
+        private const int HeaderLeft = 0;     // stacked in a column at the section's left
+        private const int HeaderTop = 1;      // side by side in a bar along its top
+
+        private const float RowSideWidth = 2.9f;
+        private const float RowHeaderWidth = 2.3f;
+        private const float RowSlotWidth = 1.8f;
+        private const float RowGap = 0.25f;
+
+        /// <summary>How much of its tile a block card fills when the tile draws a frame round it.
+        /// The desktop shelf draws none, so its tiles are shrunk by this and the card fills them.</summary>
+        private const float BlockCardInFrame = 0.78f;
+
+        /// <summary>How much bigger than that the desktop shelf draws a block card.</summary>
+        private const float BlockCardGrow = 1.2f;
+
+        /// <summary>True while the desktop shelf (BuildDemoRows) is being built.</summary>
+        private bool frameless;
+
+        /// <summary>Width of one offer in a section whose header sits on TOP (the header's width
+        /// does not have to be paid for in the row).</summary>
+        private const float TopSlotWidth = 2.2f;
+
+        private void BuildDemoRows(GameSession session, IReadOnlyList<MarketOffer> offers,
+            int count, List<int>[] buckets)
+        {
+            frameless = true;
+            int blocks = Mathf.Max(1, buckets[SectionIndex(MarketOfferKind.Block)].Count);
+            int jokers = Mathf.Max(1, buckets[SectionIndex(MarketOfferKind.Joker)].Count);
+            int powers = Mathf.Max(1, buckets[SectionIndex(MarketOfferKind.Power)].Count);
+            float offersWanted = Mathf.Max(0.25f + DemoRerollSize.x + 0.25f + blocks * RowSlotWidth,
+                Mathf.Max(DemoMinSectionWidth, jokers * TopSlotWidth)
+                + Mathf.Max(DemoMinSectionWidth, powers * TopSlotWidth) + RowGap);
+            float wanted = DemoPad * 2f + RowSideWidth + DemoColumnGap + offersWanted;
+            Rect panel = DemoPanelRect(wanted);
+            transform.localScale = Vector3.one;
+            Camera mainCam = Camera.main;
+            transform.position = mainCam != null
+                ? new Vector3(mainCam.transform.position.x, mainCam.transform.position.y, 0f)
+                : Vector3.zero;
+
+            ViewUtil.MakeRect(transform, "DemoFrame", panel.center,
+                new Vector2(panel.width + PanelBorder * 2f, panel.height + PanelBorder * 2f),
+                PanelFrameColor, 30);
+            ViewUtil.MakeRect(transform, "DemoBackdrop", panel.center,
+                new Vector2(panel.width, panel.height), BackdropColor, 31);
+
+            var side = Rect.MinMaxRect(panel.xMax - DemoPad - RowSideWidth, panel.yMin + DemoPad,
+                panel.xMax - DemoPad, panel.yMax - DemoPad);
+            BuildRowsSide(session, side);
+
+            var area = Rect.MinMaxRect(panel.xMin + DemoPad, panel.yMin + DemoPad,
+                side.xMin - DemoColumnGap, panel.yMax - DemoPad);
+            int bi = SectionIndex(MarketOfferKind.Block);
+            int ji = SectionIndex(MarketOfferKind.Joker);
+            int pi = SectionIndex(MarketOfferKind.Power);
+
+            float topHeight = (area.height - RowGap) * 0.5f;
+            BuildSection(bi, new Rect(area.xMin, area.yMax - topHeight, area.width, topHeight),
+                buckets[bi], blocks, 1, HeaderLeft);
+            float lowHeight = area.height - topHeight - RowGap;
+            float half = (area.width - RowGap) * 0.5f;
+            BuildSection(ji, new Rect(area.xMin, area.yMin, half, lowHeight), buckets[ji], jokers, 1, HeaderTop);
+            BuildSection(pi, new Rect(area.xMin + half + RowGap, area.yMin, half, lowHeight), buckets[pi],
+                powers, 1, HeaderTop);
+
+            for (int i = 0; i < count; i++)
+            {
+                if (offerTileSizes[i] == Vector2.zero)
+                {
+                    offerVisuals.Add(null);
+                    offerRarities.Add(Rarity.Common);
+                    continue;
+                }
+                BuildOffer(session, offers, i);
+            }
+            BuildHoverOutline();
+        }
+
+        /// <summary>One category section: a plate, its name and reroll button, and its offers in
+        /// a grid of <paramref name="columns"/> x <paramref name="rows"/> equal slots filled left
+        /// to right, top to bottom. <paramref name="headerLeft"/> stacks the name over the reroll
+        /// button in a column at the left; otherwise they share a bar along the top.</summary>
+        /// <summary>The tile an offer gets in a slot of this size. A joker/power card keeps its
+        /// upright aspect; a block tile is trimmed to the block CARD's own shape (1.35 x 1.8),
+        /// which never changes the card's size - the card is fitted by whichever of width and
+        /// height runs out first - and only removes empty frame beside it.</summary>
+        private static Vector2 TileFor(bool named, float slotW, float slotH)
+        {
+            float roomHeight = slotH - DemoTilePadY * 2f;
+            float tileWidth = Mathf.Min(slotW - DemoTilePadX * 2f, named ? DemoNamedTileWidth : DemoBlockTileWidth);
+            if (named)
+            {
+                tileWidth = Mathf.Min(tileWidth, roomHeight * NamedCardAspect);
+            }
+            float tileHeight = Mathf.Min(roomHeight,
+                named ? tileWidth / NamedCardAspect : tileWidth * DemoTileAspect);
+            if (!named)
+            {
+                // Card-shaped in BOTH directions: trimming only the width left a tile taller than
+                // the card whenever the slot's width was the limit, and the hover outline (which
+                // follows the tile) stood off the card's top and bottom.
+                tileWidth = Mathf.Min(tileWidth, tileHeight * CardVisual.BodyWidth / CardVisual.BodyHeight);
+                tileHeight = Mathf.Min(tileHeight, tileWidth * CardVisual.BodyHeight / CardVisual.BodyWidth);
+                // No frame round a block here: the tile IS the card, at the size the framed
+                // version drew it inside its frame.
+                return new Vector2(tileWidth, tileHeight) * BlockCardInFrame * BlockCardGrow;
+            }
+            return new Vector2(tileWidth, tileHeight);
+        }
+
+        private void BuildSection(int section, Rect box, List<int> bucket, int columns, int rows,
+            int header)
+        {
+            ViewUtil.MakeRect(transform, "DemoSection_" + section, box.center,
+                new Vector2(box.width, box.height), DemoSectionColor, 33);
+
+            Vector2 nameAt;
+            Vector2 buttonCentre;
+            Rect slots;
+            if (header == HeaderLeft)
+            {
+                float x = box.xMin + 0.25f;
+                nameAt = new Vector2(x, box.center.y + 0.32f);
+                buttonCentre = new Vector2(x + DemoRerollSize.x * 0.5f, box.center.y - 0.3f);
+                // The offers start clear of the reroll button, with the same air on its right as
+                // on its left - it used to run right up against the first card.
+                slots = Rect.MinMaxRect(x + DemoRerollSize.x + 0.25f, box.yMin, box.xMax, box.yMax);
+            }
+            else
+            {
+                float y = box.yMax - DemoHeaderHeight * 0.5f;
+                nameAt = new Vector2(box.xMin + 0.25f, y);
+                buttonCentre = new Vector2(box.xMax - 0.18f - DemoRerollSize.x * 0.5f, y);
+                slots = Rect.MinMaxRect(box.xMin, box.yMin, box.xMax, box.yMax - DemoHeaderHeight);
+            }
+            ViewUtil.MakeText3D(transform, "DemoSectionTitle_" + section, nameAt,
+                SectionLabel(KindOf(section)), 60, 0.05f, SectionHeaderColor, 38, TextAnchor.MiddleLeft);
+            demoLabelRects[section] = new Rect(nameAt.x - 0.1f, nameAt.y - 0.28f, DemoLabelHitWidth - 0.3f, 0.56f);
+
+            demoRerollRects[section] = new Rect(buttonCentre.x - DemoRerollSize.x * 0.5f,
+                buttonCentre.y - DemoRerollSize.y * 0.5f, DemoRerollSize.x, DemoRerollSize.y);
+            ViewUtil.MakeRect(transform, "DemoReroll_" + section, buttonCentre, DemoRerollSize,
+                rerollAffordable ? DemoButtonColor : DemoButtonDeadColor, 35);
+            ViewUtil.MakeText3D(transform, "DemoRerollLabel_" + section, buttonCentre,
+                Loc.Pick("REROLL  ", "YENİLE  ") + rerollCostText, 90, 0.026f,
+                rerollAffordable ? PanelCreamColor : TooExpensiveColor, 38, TextAnchor.MiddleCenter);
+
+            if (bucket.Count == 0)
+            {
+                return;
+            }
+            columns = Mathf.Max(1, columns);
+            rows = Mathf.Max(1, rows);
+            // Slots are fixed by the count asked for (not this bucket's), and filled from the
+            // top-left, so rows with fewer offers line up with the fuller ones.
+            float slotW = slots.width / columns;
+            float slotH = slots.height / rows;
+            bool named = KindOf(section) != MarketOfferKind.Block;
+            Vector2 tile = TileFor(named, slotW, slotH);
+            float slotsLeft = slots.xMin;
+            for (int c = 0; c < bucket.Count; c++)
+            {
+                int i = bucket[c];
+                int col = c % columns;
+                int row = c / columns;
+                // A block's price hangs BELOW its card (clear of the hover outline), so the card
+                // sits a little high to keep card + price centred in the row together.
+                float lift = named ? 0f : 0.14f;
+                offerCenters[i] = new Vector2(slotsLeft + slotW * (col + 0.5f),
+                    slots.yMax - slotH * (row + 0.5f) + lift);
+                offerTileSizes[i] = tile;
+            }
+        }
+
+        /// <summary>The column down the right of the desktop shelf: the title, the money and the
+        /// block allowance at the top, the hints in the middle, DECK and PROCEED at the bottom.</summary>
+        private void BuildRowsSide(GameSession session, Rect side)
+        {
+            ViewUtil.MakeRect(transform, "DemoSide", side.center, new Vector2(side.width, side.height),
+                DemoSectionColor, 33);
+            float x = side.xMin + 0.25f;
+            float y = side.yMax - 0.45f;
+            ViewUtil.MakeText3D(transform, "DemoTitle", new Vector2(x, y), Loc.Pick("MARKET", "MARKET"),
+                60, 0.085f, PanelCreamColor, 38, TextAnchor.MiddleLeft);
+            y -= 0.75f;
+            ViewUtil.MakeText3D(transform, "DemoBalance", new Vector2(x, y),
+                Loc.Pick("You have ", "Paran: ") + session.TotalScore,
+                90, 0.034f, AffordablePriceColor, 38, TextAnchor.MiddleLeft);
+            y -= 0.38f;
+            ViewUtil.MakeText3D(transform, "DemoCardLimit", new Vector2(x, y),
+                Loc.Pick("Blocks bought ", "Alınan blok ")
+                    + session.PurchasedCardCount + "/" + session.CardPurchaseLimit,
+                90, 0.024f, session.CanBuyMoreCards ? SectionHeaderColor : TooExpensiveColor, 38,
+                TextAnchor.MiddleLeft);
+            y -= 0.6f;
+            ViewUtil.MakeText3D(transform, "DemoHint1", new Vector2(x, y),
+                ViewUtil.WrapText(Loc.Pick("Sell a joker or power by clicking it on its bar.",
+                    "Joker ya da güç satmak için bardaki kartına tıkla."), 26),
+                90, 0.019f, SectionHeaderColor, 38, TextAnchor.UpperLeft);
+
+            float buttonWidth = side.width - 0.4f;
+            var proceedSize = new Vector2(buttonWidth, 0.95f);
+            var proceedCentre = new Vector2(side.center.x, side.yMin + 0.2f + proceedSize.y * 0.5f);
+            demoProceedRect = new Rect(proceedCentre.x - proceedSize.x * 0.5f,
+                proceedCentre.y - proceedSize.y * 0.5f, proceedSize.x, proceedSize.y);
+            ViewUtil.MakeRect(transform, "DemoProceed", proceedCentre, proceedSize, DemoProceedColor, 35);
+            ViewUtil.MakeText3D(transform, "DemoProceedLabel", proceedCentre + new Vector2(0f, 0.13f),
+                Loc.Pick("PROCEED", "DEVAM"), 60, 0.044f, PanelCreamColor, 38, TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "DemoProceedSub", proceedCentre - new Vector2(0f, 0.2f),
+                session.BossStageFollowsThisRound && !session.InBossStage
+                    ? Loc.Pick("BOSS of round " + session.RoundNumber + "   " + ProceedControl,
+                        session.RoundNumber + ". rauntun PATRONU   " + ProceedControl)
+                    : Loc.Pick("round " + (session.RoundNumber + 1) + "   " + ProceedControl,
+                        "raunt " + (session.RoundNumber + 1) + "   " + ProceedControl),
+                90, 0.021f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
+
+            var deckSize = new Vector2(buttonWidth, 0.8f);
+            var deckCentre = new Vector2(side.center.x, proceedCentre.y + proceedSize.y * 0.5f + 0.18f + deckSize.y * 0.5f);
+            demoDeckRect = new Rect(deckCentre.x - deckSize.x * 0.5f, deckCentre.y - deckSize.y * 0.5f,
+                deckSize.x, deckSize.y);
+            ViewUtil.MakeRect(transform, "DemoDeck", deckCentre, deckSize, DemoDeckColor, 35);
+            ViewUtil.MakeText3D(transform, "DemoDeckLabel", deckCentre + new Vector2(0f, 0.11f),
+                Loc.Pick("DECK", "DESTE"), 60, 0.040f, PanelCreamColor, 38, TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "DemoDeckSub", deckCentre - new Vector2(0f, 0.17f),
+                Loc.Pick("inspect & sell cards", "kartlara bak ve sat"), 90, 0.021f, SectionHeaderColor, 38,
+                TextAnchor.MiddleCenter);
+        }
+
         /// <summary>The panel, in world units. HEIGHT comes from the camera minus the reserved
         /// strips; WIDTH is whatever the content asked for, centred, and only cut back when the
         /// screen cannot hold it. Falls back to ortho 5 / 16:9 when there is no camera to ask.</summary>
@@ -1254,11 +1525,11 @@ namespace ProjectBlock.View
             float y = panel.yMax - DemoTitleHeight * 0.5f;
             ViewUtil.MakeText3D(transform, "DemoTitle",
                 new Vector2(panel.xMin + DemoPad, y), Loc.Pick("MARKET", "MARKET"),
-                60, 0.075f, PanelCreamColor, 38, TextAnchor.MiddleLeft);
+                60, 0.085f, PanelCreamColor, 38, TextAnchor.MiddleLeft);
             ViewUtil.MakeText3D(transform, "DemoBalance",
-                new Vector2(panel.xMax - DemoPad, y),
+                new Vector2(panel.xMax - DemoPad, y + 0.08f),
                 Loc.Pick("You have ", "Paran: ") + session.TotalScore,
-                90, 0.036f, AffordablePriceColor, 38, TextAnchor.MiddleRight);
+                90, 0.038f, AffordablePriceColor, 38, TextAnchor.MiddleRight);
             // How much of the run's BLOCK allowance is left, under the balance and in the same
             // corner: it is the other number that decides whether a block on the shelf can be
             // taken, and it belongs where the player already looks to find that out. It goes
@@ -1318,13 +1589,18 @@ namespace ProjectBlock.View
                 return;
             }
             var content = new Rect(box.xMin, box.yMin, box.width, box.height - DemoHeaderHeight);
-            float slot = content.width / bucket.Count;
+            bool named = KindOf(section) != MarketOfferKind.Block;
+            // One row per section. The row/column maths below stays general so a section can
+            // wrap if it is ever given a column count.
+            int columns = bucket.Count;
+            int rows = (bucket.Count + columns - 1) / columns;
+            float slot = content.width / columns;
+            float rowHeight = content.height / rows;
             // The slot was sized FOR this width (see the panel), so the cap normally lands
             // exactly on it - it only bites when a narrow screen made the columns give ground.
-            bool named = KindOf(section) != MarketOfferKind.Block;
             float tileWidth = Mathf.Min(slot - DemoTilePadX * 2f,
                 named ? DemoNamedTileWidth : DemoBlockTileWidth);
-            float roomHeight = content.height - DemoTilePadY * 2f;
+            float roomHeight = rowHeight - DemoTilePadY * 2f;
             if (named)
             {
                 // A joker/power card keeps its upright shape: the shelf's height decides it, and
@@ -1340,7 +1616,13 @@ namespace ProjectBlock.View
             for (int c = 0; c < bucket.Count; c++)
             {
                 int i = bucket[c];
-                offerCenters[i] = new Vector2(content.xMin + slot * (c + 0.5f), content.center.y);
+                int row = c / columns;
+                // A short last row is centred rather than left-aligned under the full ones.
+                int inRow = Mathf.Min(columns, bucket.Count - row * columns);
+                float rowLeft = content.xMin + (columns - inRow) * slot * 0.5f;
+                float x = rowLeft + slot * (c - row * columns + 0.5f);
+                float y = content.yMax - rowHeight * (row + 0.5f);
+                offerCenters[i] = new Vector2(x, y);
                 offerTileSizes[i] = tile;
             }
         }
@@ -1356,21 +1638,35 @@ namespace ProjectBlock.View
                 return;
             }
             float left = panel.xMin + DemoPad;
+            float footerMid = panel.yMin + DemoFooterHeight * 0.5f;
             ViewUtil.MakeText3D(transform, "DemoHint1",
-                new Vector2(left, panel.yMin + 0.56f),
-                Loc.Pick("Click a joker or power on the bars to sell it",
-                    "Satmak için barlardaki jokere veya güce tıkla"),
-                90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleLeft);
+                new Vector2(left, footerMid + 0.15f),
+                Loc.Pick("Sell a joker or power: click it on its bar",
+                    "Joker/güç satmak için bardaki kartına tıkla"),
+                90, 0.019f, SectionHeaderColor, 38, TextAnchor.MiddleLeft);
             ViewUtil.MakeText3D(transform, "DemoHint2",
-                new Vector2(left, panel.yMin + 0.28f),
-                Loc.Pick("Click the DECK, bottom right, to inspect it and sell cards",
-                    "Kartlara bakmak ve satmak için sağ alttaki DESTEYE tıkla"),
-                90, 0.022f, SectionHeaderColor, 38, TextAnchor.MiddleLeft);
+                new Vector2(left, footerMid - 0.15f),
+                Loc.Pick("Sell cards: open the DECK",
+                    "Kart satmak için DESTE'yi aç"),
+                90, 0.019f, SectionHeaderColor, 38, TextAnchor.MiddleLeft);
 
             // Centred in the FOOTER STRIP, not measured up from the panel edge: at 0.78 tall
             // and 0.3 of padding the button reached 0.08 into the POWERS box above it.
-            var centre = new Vector2(panel.xMax - DemoPad - DemoProceedSize.x * 0.5f,
-                panel.yMin + DemoFooterHeight * 0.5f);
+            var centre = new Vector2(panel.xMax - DemoPad - DemoProceedSize.x * 0.5f, footerMid);
+
+            // The DECK button, left of PROCEED. The panel covers the piles now (and they are
+            // hidden while the market is up), so this is the way in to the sell screen.
+            var deckSize = new Vector2(1.7f, DemoProceedSize.y);
+            var deckCentre = new Vector2(centre.x - DemoProceedSize.x * 0.5f - 0.2f - deckSize.x * 0.5f,
+                footerMid);
+            demoDeckRect = new Rect(deckCentre.x - deckSize.x * 0.5f, deckCentre.y - deckSize.y * 0.5f,
+                deckSize.x, deckSize.y);
+            ViewUtil.MakeRect(transform, "DemoDeck", deckCentre, deckSize, DemoDeckColor, 35);
+            ViewUtil.MakeText3D(transform, "DemoDeckLabel", deckCentre + new Vector2(0f, 0.11f),
+                Loc.Pick("DECK", "DESTE"), 60, 0.040f, PanelCreamColor, 38, TextAnchor.MiddleCenter);
+            ViewUtil.MakeText3D(transform, "DemoDeckSub", deckCentre - new Vector2(0f, 0.16f),
+                Loc.Pick("sell cards", "kart sat"), 90, 0.021f, SectionHeaderColor, 38,
+                TextAnchor.MiddleCenter);
             demoProceedRect = new Rect(centre.x - DemoProceedSize.x * 0.5f,
                 centre.y - DemoProceedSize.y * 0.5f, DemoProceedSize.x, DemoProceedSize.y);
             ViewUtil.MakeRect(transform, "DemoProceed", centre, DemoProceedSize,
@@ -1467,6 +1763,13 @@ namespace ProjectBlock.View
             {
                 ShowHoverOutline(demoProceedRect.center,
                     new Vector2(demoProceedRect.width, demoProceedRect.height) * 0.5f,
+                    HoverColor);
+                return true;
+            }
+            if (demoDeckRect.width > 0f && demoDeckRect.Contains(local))
+            {
+                ShowHoverOutline(demoDeckRect.center,
+                    new Vector2(demoDeckRect.width, demoDeckRect.height) * 0.5f,
                     HoverColor);
                 return true;
             }
@@ -1590,7 +1893,10 @@ namespace ProjectBlock.View
             {
                 return; // the shelf is not built (or was just hidden)
             }
-            Vector2 outer = half + new Vector2(HoverInset, HoverInset);
+            // The desktop shelf's tiles ARE the cards (no frame round them), so the outline hugs
+            // them instead of standing off a frame that is not there.
+            float inset = frameless ? FramelessHoverInset : HoverInset;
+            Vector2 outer = half + new Vector2(inset, inset);
             float spanX = outer.x * 2f + HoverEdge;
             float spanY = outer.y * 2f + HoverEdge;
             Place(hoverEdges[0], center + new Vector2(0f, outer.y), new Vector2(spanX, HoverEdge));
