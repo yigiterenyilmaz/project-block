@@ -167,6 +167,10 @@ namespace ProjectBlock.View
             StopAnimMidas();
             StopAnimFire();
             StopAnimIce();
+            StopRebate();
+            // The lab can show the pile spent without a payout, so RESET has to be able to give
+            // it back even when no animation is running.
+            if (cardLayer != null) { cardLayer.SetDrawPileShownEmpty(false); }
             boardView.ClearPreview();
             RefreshAll(null);
             SyncRetroPresentation();
@@ -1579,6 +1583,199 @@ namespace ProjectBlock.View
             AddAnim("Yangın switch: the settle", "yangın anahtarı: oturma",
                 delegate { AnimFireToggle(ref FireSpreadView.Layers.ShowSettle,
                     "settle", "oturma"); });
+            AddAnim("harcama bonusu: the whole payout",
+                "harcama bonusu: bütün ödeme",
+                delegate { AnimRebate(1, false, "empty pile pays back", "boş deste geri ödedi"); });
+            AddAnim("harcama bonusu: the EMPTY PILE on its own (no payout)",
+                "harcama bonusu: yalnızca BOŞ DESTE (ödeme yok)",
+                delegate
+                {
+                    // The CAUSE, with nothing on top of it. If the slot does not read as spent
+                    // here, no payout drawn over it will ever state a cause.
+                    StopRebate();
+                    cardLayer.SetDrawPileShownEmpty(true);
+                    cardLayer.PlayDrawPileEmptyBeat();
+                    animLastLabel = Loc.Pick(
+                        "the slot, spent - stack, top card and COUNT all away (RESET restores)",
+                        "harcanmış yuva - deste, üst kart ve SAYI yok (RESET geri verir)");
+                    if (AnimLabOpen) { RedrawAnimationLab(); }
+                });
+            AddAnim("harcama bonusu: RESHUFFLE behind the cashback",
+                "harcama bonusu: ödemenin ARKASINDA yeniden karma",
+                delegate
+                {
+                    // The real collision: the rules recycle the discard straight back into the
+                    // pile while the receipt is still out. The spent state has to survive that
+                    // repaint - it is re-applied at the bottom of UpdatePiles for exactly this.
+                    AnimRebate(1, false, "receipt out while the deck refills behind it",
+                        "fiş dışarıdayken deste arkasında doluyor");
+                    // A full repaint, which is what a recycle actually causes - the spent slot
+                    // has to come through it intact.
+                    RefreshAll(null);
+                });
+            AddAnim("harcama bonusu: the pile's empty beat, alone",
+                "harcama bonusu: destenin boşalma vuruşu, tek başına",
+                delegate { AnimRebateOnly("empty beat", "boşalma vuruşu",
+                    delegate { RebateView.Layers.ShowEmptyBeat = true; }); });
+            AddAnim("harcama bonusu: the gold line waking, alone",
+                "harcama bonusu: altın çizginin uyanması, tek başına",
+                delegate { AnimRebateOnly("gold line", "altın çizgi",
+                    delegate { RebateView.Layers.ShowGoldLine = true; }); });
+            AddAnim("harcama bonusu: the receipt unfurling, alone",
+                "harcama bonusu: fişin açılması, tek başına",
+                delegate { AnimRebateOnly("receipt strip", "fiş şeridi",
+                    delegate
+                    {
+                        RebateView.Layers.ShowGoldLine = true;
+                        RebateView.Layers.ShowReceiptStrip = true;
+                    }); });
+            AddAnim("harcama bonusu: the value stamp, alone",
+                "harcama bonusu: değerin basılması, tek başına",
+                delegate { AnimRebateOnly("value stamp", "değer damgası",
+                    delegate
+                    {
+                        RebateView.Layers.ShowReceiptStrip = true;
+                        RebateView.Layers.ShowStamp = true;
+                    }); });
+            AddAnim("harcama bonusu: the flecks, alone",
+                "harcama bonusu: altın kırıntılar, tek başına",
+                delegate { AnimRebateOnly("flecks", "kırıntılar",
+                    delegate
+                    {
+                        RebateView.Layers.ShowReceiptStrip = true;
+                        RebateView.Layers.ShowStamp = true;
+                        RebateView.Layers.ShowFlecks = true;
+                    }); });
+            AddAnim("harcama bonusu: the rebate core, alone",
+                "harcama bonusu: ödeme çekirdeği, tek başına",
+                delegate { AnimRebateOnly("rebate core", "ödeme çekirdeği",
+                    delegate { RebateView.Layers.ShowRebateCore = true; }); });
+            AddAnim("harcama bonusu: the flight to the score, alone",
+                "harcama bonusu: skora gidiş, tek başına",
+                delegate { AnimRebateOnly("collection", "toplama",
+                    delegate
+                    {
+                        RebateView.Layers.ShowRebateCore = true;
+                        RebateView.Layers.ShowCollectionPath = true;
+                        RebateView.Layers.ShowScoreResponse = true;
+                    }); });
+            AddAnim("harcama bonusu: RULE TEST - pile dried TWICE, ONE payout",
+                "harcama bonusu: KURAL TESTİ - deste İKİ kez kurudu, TEK ödeme",
+                delegate
+                {
+                    // The rules pay on a BOOL, not on a count. Firing the seam twice with ONE
+                    // report is exactly what a turn like that hands the View, and the serial is
+                    // what makes the second call do nothing.
+                    StopRebate();
+                    int amount = AnimRebateAmount();
+                    var once = new RebateVisuals
+                    {
+                        Serial = ++animRebateSerial,
+                        Payout = amount,
+                        TimesThisRound = 1
+                    };
+                    PlayRebate(once);
+                    PlayRebate(once);
+                    animLastLabel = Loc.Pick(
+                        "two dry piles, one report, one receipt (+" + amount + ")",
+                        "iki kez kuruyan deste, tek rapor, tek fiş (+" + amount + ")");
+                    if (AnimLabOpen) { RedrawAnimationLab(); }
+                });
+            AddAnim("harcama bonusu: TONE TEST - the same payout in OVERTIME",
+                "harcama bonusu: TON TESTİ - UZATMADA aynı ödeme",
+                delegate
+                {
+                    // Past the threshold this same event is the LOSS. The payout still plays -
+                    // the joker is not gated - and it must not celebrate. A consolation, not a
+                    // rescue.
+                    AnimRebate(3, true, "paid on the turn the deck killed you",
+                        "destenin seni öldürdüğü turda ödendi");
+                });
+            AddAnim("harcama bonusu: the fourth payout this round",
+                "harcama bonusu: bu rauntta dördüncü ödeme",
+                delegate { AnimRebate(4, false, "the fourth dry pile", "dördüncü kuruyan deste"); });
+            AddAnim("harcama bonusu: the whole payout at 0.5x",
+                "harcama bonusu: bütün ödeme 0.5x",
+                delegate
+                {
+                    Time.timeScale = 0.5f;
+                    AnimRebate(1, false, "cashback, half speed", "geri ödeme, yarım hız");
+                });
+            AddAnim("harcama bonusu: the whole payout at 0.25x (the six beats apart)",
+                "harcama bonusu: bütün ödeme 0.25x (altı vuruş ayrı ayrı)",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    AnimRebate(1, false, "cashback, quarter speed", "geri ödeme, çeyrek hız");
+                });
+            AddAnim("harcama bonusu debug: ring the SOURCE and the TARGET",
+                "harcama bonusu hata ayıklama: KAYNAK ve HEDEFİ işaretle",
+                delegate
+                {
+                    RebateView.Layers.ShowAnchors = !RebateView.Layers.ShowAnchors;
+                    AnimRebate(1, false, "anchors " + OnOff(RebateView.Layers.ShowAnchors),
+                        "işaretler " + OnOff(RebateView.Layers.ShowAnchors));
+                });
+            AddAnim("harcama bonusu debug: DOT THE WHOLE FLIGHT PATH",
+                "harcama bonusu hata ayıklama: BÜTÜN UÇUŞ YOLUNU NOKTALA",
+                delegate
+                {
+                    // Settles the board question by looking: the path is drawn from the two real
+                    // anchors and has no board term in it at all.
+                    RebateView.Layers.ShowBezier = !RebateView.Layers.ShowBezier;
+                    RebateView.Layers.ShowAnchors = RebateView.Layers.ShowBezier;
+                    AnimRebate(1, false, "flight path " + OnOff(RebateView.Layers.ShowBezier),
+                        "uçuş yolu " + OnOff(RebateView.Layers.ShowBezier));
+                });
+            AddAnim("harcama bonusu debug: print what the RULES said",
+                "harcama bonusu hata ayıklama: KURALIN söylediğini yaz",
+                delegate
+                {
+                    RebateView.Layers.ShowReport = !RebateView.Layers.ShowReport;
+                    AnimRebate(2, false, "report " + OnOff(RebateView.Layers.ShowReport),
+                        "rapor " + OnOff(RebateView.Layers.ShowReport));
+                });
+            AddAnim("harcama switch: the empty beat on/off",
+                "harcama anahtarı: boşalma vuruşu aç/kapa",
+                delegate { AnimRebateToggle(ref RebateView.Layers.ShowEmptyBeat,
+                    "empty beat", "boşalma vuruşu"); });
+            AddAnim("harcama switch: the gold line on/off",
+                "harcama anahtarı: altın çizgi aç/kapa",
+                delegate { AnimRebateToggle(ref RebateView.Layers.ShowGoldLine,
+                    "gold line", "altın çizgi"); });
+            AddAnim("harcama switch: the receipt strip on/off",
+                "harcama anahtarı: fiş şeridi aç/kapa",
+                delegate { AnimRebateToggle(ref RebateView.Layers.ShowReceiptStrip,
+                    "receipt strip", "fiş şeridi"); });
+            AddAnim("harcama switch: the value stamp on/off",
+                "harcama anahtarı: değer damgası aç/kapa",
+                delegate { AnimRebateToggle(ref RebateView.Layers.ShowStamp,
+                    "stamp", "damga"); });
+            AddAnim("harcama switch: the flecks on/off",
+                "harcama anahtarı: kırıntılar aç/kapa",
+                delegate { AnimRebateToggle(ref RebateView.Layers.ShowFlecks,
+                    "flecks", "kırıntılar"); });
+            AddAnim("harcama switch: the rebate core on/off",
+                "harcama anahtarı: ödeme çekirdeği aç/kapa",
+                delegate { AnimRebateToggle(ref RebateView.Layers.ShowRebateCore,
+                    "rebate core", "ödeme çekirdeği"); });
+            AddAnim("harcama switch: the collection path on/off",
+                "harcama anahtarı: toplama yolu aç/kapa",
+                delegate { AnimRebateToggle(ref RebateView.Layers.ShowCollectionPath,
+                    "collection path", "toplama yolu"); });
+            AddAnim("harcama switch: the score response on/off",
+                "harcama anahtarı: skor tepkisi aç/kapa",
+                delegate { AnimRebateToggle(ref RebateView.Layers.ShowScoreResponse,
+                    "score response", "skor tepkisi"); });
+            AddAnim("harcama switch: ALL layers back on",
+                "harcama anahtarı: TÜM katmanlar geri açık",
+                delegate
+                {
+                    RebateView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("harcama bonusu: every layer back on",
+                        "harcama bonusu: tüm katmanlar geri açık");
+                    if (AnimLabOpen) { RedrawAnimationLab(); }
+                });
             AddAnim("buzluk: water freezes at the BOTTOM wall",
                 "buzluk: su ALT duvarda donuyor",
                 delegate { AnimIce(AnimIceScene.Bottom); });
@@ -5753,6 +5950,89 @@ namespace ProjectBlock.View
             AnimFire(scene);
             animLastLabel = Loc.Pick(english + " - alone (RESET puts every layer back)",
                 turkish + " - tek başına (RESET tüm katmanları geri açar)");
+        }
+
+        // ------------------------------------------------------------------ harcama bonusu
+
+        // "HARCAMA BONUSU" IN THE LAB. The subject is a PAYMENT, so what the lab fabricates is the
+        // joker's own report - never the animation's arguments. The amount comes off the joker
+        // (the owned one if there is one, a fresh instance if not), because it is a balance
+        // placeholder and a lab that prints its own number is a lab that will disagree with the
+        // score the moment somebody tunes it.
+        //
+        // The two scenes that matter are the ones about GRANULARITY and about TONE: a turn where
+        // the pile dried twice must still pay once, and a payout in overtime - where the same
+        // event is the loss - must play without congratulating anybody.
+
+        private int animRebateSerial;
+
+        /// <summary>What the joker would actually pay. Read, never written here.</summary>
+        private int AnimRebateAmount()
+        {
+            if (session != null && session.Jokers != null)
+            {
+                IReadOnlyList<Joker> owned = session.Jokers.Jokers;
+                for (int i = 0; i < owned.Count; i++)
+                {
+                    var bonus = owned[i] as HarcamaBonusuJoker;
+                    if (bonus != null)
+                    {
+                        return bonus.PointsPerEmptyDrawPile;
+                    }
+                }
+            }
+            return new HarcamaBonusuJoker().PointsPerEmptyDrawPile;
+        }
+
+        private void AnimRebate(int times, bool overtime, string english, string turkish)
+        {
+            StopRebate();
+            int amount = AnimRebateAmount();
+            PlayRebate(new RebateVisuals
+            {
+                Serial = ++animRebateSerial,
+                Payout = amount,
+                TimesThisRound = Mathf.Max(1, times),
+                ThresholdPassed = overtime
+            });
+            animLastLabel = Loc.Pick(english + " (+" + amount + ")",
+                turkish + " (+" + amount + ")");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>One beat on its own. The switches go in BEFORE the payout is played, because
+        /// a beat judged with every other beat over it is being judged by those.</summary>
+        private void AnimRebateOnly(string english, string turkish, System.Action on)
+        {
+            RebateView.Layers.AllOn();
+            RebateView.Layers.ShowEmptyBeat = false;
+            RebateView.Layers.ShowGoldLine = false;
+            RebateView.Layers.ShowReceiptStrip = false;
+            RebateView.Layers.ShowStamp = false;
+            RebateView.Layers.ShowFlecks = false;
+            RebateView.Layers.ShowRebateCore = false;
+            RebateView.Layers.ShowCollectionPath = false;
+            RebateView.Layers.ShowScoreResponse = false;
+            if (on != null)
+            {
+                on();
+            }
+            AnimRebate(1, false, english + " - alone (RESET puts every layer back)",
+                turkish + " - tek başına (RESET tüm katmanları geri açar)");
+        }
+
+        private void AnimRebateToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("harcama " + english + ": ", "harcama " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
         }
 
         // ------------------------------------------------------------------ buzluk

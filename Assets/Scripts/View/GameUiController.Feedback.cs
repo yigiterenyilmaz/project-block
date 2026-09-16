@@ -2111,6 +2111,7 @@ namespace ProjectBlock.View
             SyncTalisman(round);
             SyncFireSpread(round);
             SyncBuzluk(round);
+            SyncRebate(round);
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

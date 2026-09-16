@@ -89,6 +89,14 @@ namespace ProjectBlock.View
         /// both stay centred on the pile's visible top card however tall the pile is.</summary>
         private Transform drawLabelRoot;
 
+        /// <summary>The inset shown in the slot while the pile is being drawn as empty.</summary>
+        private SpriteRenderer drawEmptyInset;
+
+        /// <summary>True while an effect is showing the pile as spent. Re-applied at the end of
+        /// UpdatePiles, so a repaint or a reshuffle in the middle of that effect cannot put the
+        /// stack back underneath it.</summary>
+        private bool drawPileShownEmpty;
+
         /// <summary>The "SELL CARDS" plate over the draw pile, shown in the market only.</summary>
         private Transform sellHintRoot;
         private TextMesh sellHintLabel;
@@ -227,6 +235,100 @@ namespace ProjectBlock.View
             }
             yield return new WaitForSeconds(0.2f);
             yield return PilePulse(drawPileRoot);
+        }
+
+        /// <summary>
+        /// SHOWS THE DRAW PILE AS SPENT - the stack, its top card and its COUNT all away, and a
+        /// darker inset in the slot where they were.
+        ///
+        /// Presentation only: the rules' pile is untouched and the reshuffle that usually follows
+        /// runs on its own schedule. It exists because "the deck ran out" is the CAUSE the
+        /// cashback is the effect of, and a payout that appears over a full-looking stack of
+        /// twenty-one cards states no cause at all - it is just a number on a pile. Worse, the
+        /// count and the payout land in the same place and collide.
+        ///
+        /// Re-applied at the bottom of UpdatePiles, so the recycle refilling the pile behind this
+        /// cannot undo it halfway through.
+        /// </summary>
+        public void SetDrawPileShownEmpty(bool empty)
+        {
+            BuildPilesIfNeeded();
+            drawPileShownEmpty = empty;
+            ApplyDrawPileShownEmpty();
+        }
+
+        private void ApplyDrawPileShownEmpty()
+        {
+            if (drawStackRoot == null)
+            {
+                return;
+            }
+            bool empty = drawPileShownEmpty;
+            drawStackRoot.gameObject.SetActive(!empty);
+            if (drawLabelRoot != null)
+            {
+                drawLabelRoot.gameObject.SetActive(!empty);
+            }
+            if (drawTopVisual != null)
+            {
+                drawTopVisual.gameObject.SetActive(!empty);
+            }
+            if (drawEmptyInset == null)
+            {
+                // A recess, not a hole: the slot keeps its frame and only its middle goes dark
+                // and cool. A black rectangle in the tray reads as something broken.
+                var size = new Vector2(CardVisual.BodyWidth - 0.10f, CardVisual.BodyHeight - 0.10f);
+                drawEmptyInset = ViewUtil.MakeRect(drawPileRoot, "EmptyInset", Vector2.zero,
+                    size, new Color(0.07f, 0.08f, 0.11f, 0.92f), 3);
+            }
+            drawEmptyInset.gameObject.SetActive(empty);
+        }
+
+        /// <summary>
+        /// THE DRAW PILE GOING EMPTY, as a beat rather than as a state change.
+        ///
+        /// It belongs here rather than in the effect that follows it, because this class owns the
+        /// pile's transform: an effect reaching in to squash it would be overwritten by the next
+        /// UpdatePiles, and the two would fight for the rest of the round. "Harcama bonusu" asks
+        /// for it and then draws its own layer OVER this, which is also what lets the discard
+        /// being reshuffled straight back in not collide with the payout.
+        ///
+        /// It is not a punishment: a pixel or two of settle and a breath of cooling. The arena
+        /// erosion that the same event triggers has a language of its own.
+        /// </summary>
+        public void PlayDrawPileEmptyBeat()
+        {
+            BuildPilesIfNeeded();
+            if (drawPileRoot != null && isActiveAndEnabled)
+            {
+                StartCoroutine(PileSettle(drawPileRoot));
+            }
+        }
+
+        /// <summary>How wide the draw pile stands in world units, so an effect anchored on it can
+        /// size itself off the real thing instead of a constant. It follows the layout profile,
+        /// which is the whole reason to ask.</summary>
+        public static float PileWorldWidth
+        {
+            get { return (CardVisual.BodyWidth + 0.18f) * UiLayout.Active.PileScale; }
+        }
+
+        /// <summary>The opposite of PilePulse: a short compression that comes back, for the
+        /// moment the pile has nothing left in it.</summary>
+        private static IEnumerator PileSettle(Transform root)
+        {
+            const float duration = 0.22f;
+            float time = 0f;
+            float rest = UiLayout.Active.PileScale;
+            while (time < duration)
+            {
+                time += Time.deltaTime;
+                float k = Mathf.Sin(Mathf.Clamp01(time / duration) * Mathf.PI);
+                // Only the HEIGHT gives: a slot losing its stack settles, it does not shrink.
+                root.localScale = new Vector3(rest, rest * (1f - 0.028f * k), 1f);
+                yield return null;
+            }
+            root.localScale = new Vector3(rest, rest, 1f);
         }
 
         private static IEnumerator PilePulse(Transform root)
@@ -1054,6 +1156,10 @@ namespace ProjectBlock.View
             UpdateDiscardTop(round);
             UpdateDrawTop(round);
             UpdateRevealFans(round);
+            // LAST, and it has to be last: everything above rebuilds the pile from the rules, and
+            // the whole point of the spent state is that it survives the reshuffle happening
+            // behind it.
+            ApplyDrawPileShownEmpty();
         }
 
         // ---- reveal peeks: the top few cards of a pile shown face-up (rule-driven info) ----

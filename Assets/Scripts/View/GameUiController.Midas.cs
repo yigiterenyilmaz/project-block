@@ -236,27 +236,9 @@ namespace ProjectBlock.View
         /// The VIEW does not reach in here - it reports how warm it is and this applies it, so
         /// one transform has one owner. Ticked from Update.
         /// </summary>
-        private void TickMidasScoreResponse()
-        {
-            if (midasPayout == null || totalText == null)
-            {
-                return;
-            }
-            float warm = midasPayout.ScoreWarm;
-            if (!midasScoreRead)
-            {
-                midasScoreInk = totalText.color;
-                midasScoreRead = true;
-            }
-            if (warm <= 0.001f)
-            {
-                totalText.rectTransform.localScale = Vector3.one;
-                totalText.color = midasScoreInk;
-                return;
-            }
-            float punch = 1f + MidasPayoutView.Style.Punch * warm;
-            totalText.rectTransform.localScale = new Vector3(punch, punch, 1f);
-            totalText.color = Color.Lerp(midasScoreInk, MidasPayoutView.Style.Gold, warm * 0.8f);
-        }
+        // THE SCORE LINE'S ANSWER MOVED to GameUiController.Rebate.TickScoreResponse, because
+        // two effects can warm the same label and each one writing it directly meant whichever
+        // ticked second won - and the one that had finished would reset the label to normal
+        // while the other was still mid-punch. MidasPayoutView.ScoreWarm is what it reads.
     }
 }

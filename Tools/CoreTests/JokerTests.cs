@@ -1199,6 +1199,35 @@ public static class JokerTests
         int expectedBonus = joker.TriggeredThisRound * 60 * session.Config.Scoring.ScoreScale;
         Check(session.CurrentRound.RoundScore >= scoreBefore + expectedBonus,
             "round score contains the bonus", "round score " + session.CurrentRound.RoundScore);
+
+        // AND IT SAID SO. The receipt the View draws is written beside the payment, so what it
+        // carries is part of the payment being right - above all the AMOUNT, which is a balance
+        // placeholder that will move. A View drawing "+60" would one day lie about the score.
+        RebateVisuals report = joker.LastRebate;
+        Check(report != null, "the payout reported itself");
+        Check(report.Payout == joker.PointsPerEmptyDrawPile,
+            "the receipt carries the joker's OWN amount, never a constant",
+            report == null ? "no report" : "payout " + report.Payout);
+        Check(report.TimesThisRound == joker.TriggeredThisRound,
+            "and how many times it has paid this round",
+            report == null ? "no report" : report.TimesThisRound + " vs "
+                + joker.TriggeredThisRound);
+        Check(report.Serial > 0, "with a serial, so a repaint cannot replay it");
+
+        // ONE TURN, ONE PAYMENT - AND ONE SERIAL. This is the granularity the whole animation
+        // hangs off: the joker reads a BOOL ("did the pile empty at all this turn"), not a count,
+        // so a turn in which the pile dried twice pays ONCE and must be drawn ONCE. Firing the
+        // hook again for the same turn must move neither the score nor the serial.
+        int serialBefore = report.Serial;
+        int timesBefore = joker.TriggeredThisRound;
+        var quiet = new ScoreBreakdown();
+        joker.AfterTurnScored(FakeTurnWithRound(session, quiet));
+        Check(joker.TriggeredThisRound == timesBefore,
+            "a turn that did not empty the pile pays nothing",
+            joker.TriggeredThisRound + " vs " + timesBefore);
+        Check(joker.LastRebate.Serial == serialBefore,
+            "and writes no new receipt - one turn, one serial",
+            joker.LastRebate.Serial + " vs " + serialBefore);
     }
 
     private static void CleanSweep_FiresOnceAndOnlyOnRealSweep()

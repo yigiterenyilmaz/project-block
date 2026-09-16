@@ -61,6 +61,17 @@ namespace ProjectBlock.Core
         /// <summary>Times it paid out this round, for the UI.</summary>
         public int TriggeredThisRound { get; private set; }
 
+        /// <summary>
+        /// What it paid THIS TURN, for the animation. Written where the payment is made and
+        /// nowhere else, so the picture cannot pay a different number - or pay twice for a turn
+        /// the rules only paid once for (see RebateVisuals).
+        /// </summary>
+        [field: NotSaved]
+        public RebateVisuals LastRebate { get; private set; }
+
+        [NotSaved]
+        private int rebateSerial;
+
         public HarcamaBonusuJoker()
             : base("harcama_bonusu", "Harcama Bonusu")
         {
@@ -89,6 +100,15 @@ namespace ProjectBlock.Core
             // Granted at end of turn but BEFORE the threshold check, so it can push the
             // round over the line on the very turn the deck ran out.
             turn.AddFlatScore(PointsPerEmptyDrawPile, DefId);
+            // The receipt is written HERE, beside the payment, which is what keeps the two the
+            // same number and the same count. One turn, one payment, one serial.
+            LastRebate = new RebateVisuals
+            {
+                Serial = ++rebateSerial,
+                Payout = PointsPerEmptyDrawPile,
+                TimesThisRound = TriggeredThisRound,
+                ThresholdPassed = turn.Round.ThresholdPassed
+            };
         }
     }
 

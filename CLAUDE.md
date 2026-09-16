@@ -560,6 +560,81 @@ dropped that way once each.
   `Tilsim_ReclaimedGroundIsSparseNotRectangular` pins it shape by shape (a lone cell, gaps down a
   column, two columns, an L, four corners with holes between them, and a far cell that grows the
   bounds and nothing else), asserting the mask cell by cell rather than counting.
+- **"Harcama bonusu" is the empty pile PAYING YOU BACK** (`RebateView`, `RebateShapes`,
+  `GameUiController.Rebate.cs`). The mechanic is not "you scored some points" — it is "you spent
+  the resource and the spending refunded you" — so the payout may not simply appear beside the
+  score. It is one causal chain from the source to the target, six beats on one clock in about a
+  second: the slot **settles and cools** (`CardLayerView.PlayDrawPileEmptyBeat`, which lives there
+  because that class owns the pile's transform and an effect reaching in would fight the next
+  repaint), a short muted-gold **line wakes** in the empty middle, a **voucher strip unfurls** out
+  of it — height first, then width, because scaling as a block is a panel appearing rather than a
+  receipt opening — the **real value is stamped** on with a pixel of compression and four to six
+  gold chips, it is simply **legible for 0.18s** (the reward beat; without it the player sees a
+  shape move rather than a number arrive), the strip **folds to its middle** into one small rebate
+  core, and that core **arcs to the score** and is absorbed.
+  **TWO FACTS ARE CORE’S AND NEITHER MAY BE DERIVED HERE.** The AMOUNT is
+  `RebateVisuals.Payout`: `PointsPerEmptyDrawPile` is a balance placeholder and a hard-coded
+  "+60" is a picture that will one day lie about the score. And the COUNT — the joker pays on a
+  **BOOL** (`TurnReport.DrawPileEmptiedThisTurn`), not on a tally, so a turn in which the pile
+  dried twice pays ONCE. A View hung off "the draw pile just emptied" would be watching the right
+  fact and still be wrong, because it could not know the payment had already been made; it watches
+  the PAYMENT, keyed on a SERIAL. Both are pinned in `HarcamaBonusu_PaysWhenDrawPileEmpties` and
+  by a lab scene that fires the seam twice with one report.
+  **BOTH ANCHORS ARE ASKED FOR**: the source is the real draw pile’s position and its real
+  width (`CardLayerView.PileWorldWidth`), the target the real score label through
+  `ScoreWorldAnchor()` — the same anchor Midas uses, and for the same reason: a written-down
+  corner is a payout that flies off the edge of a phone. The flight bows **perpendicular to its
+  own travel**, so the arc stays in the plane of the journey instead of detouring over the board.
+  **THE SILHOUETTES ARE DEFINED BY WHAT THEY MUST NOT BE.** The strip is a voucher ribbon 3:1 with
+  concave ticket ends and three shallow notches — never a CARD (this draws on top of the card
+  layer beside a real pile, where a portrait rounded rectangle reads as another card) and never a
+  literal receipt (no paper, no tear teeth, no barcode, no fake text). The core is a notched
+  lozenge — the strip folded, still the same object — never a COIN and never a soft round dot,
+  which is the unexplained yellow blur Midas drew once. The first bake got both wrong and both
+  were visible immediately: the strip grew EARS (the end profile was written in `v`, which spans
+  only a sixth of the texture, so the cosine covered half a period and pushed the half-width out
+  of the box) and the core came out an OVAL. Every texture is square with the shape’s own
+  proportion baked in, so one sprite is one world unit in both axes and a `localScale` written as
+  (width, height) cannot silently come out at the wrong aspect.
+  **FOUR THINGS SHIPPED BROKEN AND ALL FOUR WERE MEASURABLE**, which is the lesson: every one of
+  them was found by computing the number against the real anchors, not by looking harder at a
+  screenshot. The STRIP was drawn `Color.white` — `Style.Cream` was never applied — so on the warm
+  pile art no voucher appeared at all. The VALUE was sized as a share of the pile's WIDTH and came
+  out at **180% of the strip it was meant to be printed on**, overflowing the tray and colliding
+  with the pile's own count; it is now solved backwards from the strip's own height (62%). The
+  FLIGHT bowed *perpendicular* to its travel, which against the real anchors put its control point
+  at **(1.8, 0.0) — the middle of the board**; it is now a cubic bezier lifted straight up, built
+  only from the two anchors, with no third reference anywhere. And the TRAIL was drawn on a shape
+  that tapers to a point, **longer and wider than the token it followed**, rotated along the
+  flight: an arrowhead, which is precisely what "a gold triangle flying across the board" was. A
+  trail is now clamped below the token's own size. The board may be *crossed* incidentally; it may
+  never be *aimed at*, and `ShowBezier` dots the whole path so that stops being a claim.
+  **AND THE VALUE IS STAMP RED.** It shipped ivory, which measures **1.11** against the cream
+  strip it is printed on — not a soft look, a number you cannot read — and it survived the strip
+  being given its proper colour because ivory is invisible on white too. Red is also the right
+  answer rather than merely a readable one: the beat IS a stamp, and stamped ink on a voucher is
+  red. 5.07 against the strip, over the 4.5 the card plates are held to, with a bronze shadow a
+  hair down and right; a brighter red reads better as a colour and worse as text (3.56). The
+  checker computes that contrast rather than naming a swatch.
+  **AND THE PILE HAS TO LOOK SPENT.** `CardLayerView.SetDrawPileShownEmpty` takes the stack, the
+  top card and the COUNT away and drops a recess into the slot — presentation only, the rules'
+  pile untouched. Without it the payout appears over a full-looking stack of twenty-odd cards and
+  states no cause at all. It is re-applied at the **bottom** of `UpdatePiles`, because the recycle
+  that usually follows refills the pile *while the receipt is still out*, and it is given back the
+  moment the receipt folds (`ReceiptGone`) rather than when the token lands — holding the slot
+  empty through the flight would be showing the player a lie about their deck.
+  **THE TONE IS PART OF THE MECHANIC.** It is a COMMON joker, and the event it pays for is the one
+  that eats the arena and, past the threshold, is the loss condition — so it plays in overtime
+  too, without celebrating. No flash, no coin rain, no jackpot, no shake, no camera move: 12
+  particles at the very most, and the score’s own answer is deliberately smaller than Midas’s
+  because the receipt already showed the number and a second celebration of the same points is a
+  duplicate reward. **The score line is now written in ONE place** (`TickScoreResponse`): two
+  effects can warm it, each used to write the scale and colour itself, and whichever ticked second
+  won — the one that had finished would reset the label to normal while the other was still
+  mid-punch. Each view publishes a `ScoreWarm` and the strongest claim wins. The lab has the whole
+  payout, seven beat-isolation entries, 0.5x/0.25x, ten switches, two debug overlays (ring the
+  source and target; print what the rules said beside what is drawn) and the two scenes that
+  matter: the GRANULARITY test and the TONE test.
 - **"Buzluk" grows an ICE CRUST over water at the wall** (`IceFreezeView`, `IceGrowth`,
   `Resources/Shaders/CryoFreeze`). Two passes are buried here and the first one is the instructive
   failure, because on paper it was right: one progress value, a ragged front crossing the cube,

@@ -653,7 +653,7 @@ namespace ProjectBlock.View
             WatchScreenShape();
             // "Midas" warms the score line while its gold is landing on it (see .Midas): one
             // owner for that transform, and it is this one.
-            TickMidasScoreResponse();
+            TickScoreResponse();
             // A finger, if there is one, writes itself into a virtual mouse BEFORE any handler
             // reads Mouse.current - the same contract the pad has (see TouchBridge).
             if (touch != null)
