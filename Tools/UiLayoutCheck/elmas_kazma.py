@@ -221,6 +221,13 @@ check('havuzdan gelen parca yerel konumu SIFIRLANIR (vekil pivottan kaymaz)',
 check('lab obsidyeni ZORLA kirar (DestroyCube obsidyeni reddeder, tas tahtada kalir)',
       'board.DestroyCubeForced(p);' in method(lab, 'private void AnimQuarry('),
       'labda obsidyen tahtada kaliyor - kirilmamis gibi gorunur')
+sc = method(lab, 'private IEnumerator AnimQuarryScenarioRoutine(')
+order = [sc.find('board.SetCubeAt(gap'), sc.find('quarry.Prepare(report);'), sc.find('FlashLine(board'),
+         sc.find('EmitSweepConfetti();'), sc.find('quarry.Begin(report, QuarryAfterSweep());')]
+check('lab TAM SENARYO: blok iner -> satir + temizlik -> obsidyen kalir -> kazma (oyunun sirasiyla)',
+      min(order) >= 0 and order == sorted(order),
+      'tam senaryo yok ya da sirasi oyundan farkli')
+check('senaryo RESET ile durur', 'StopAnimQuarryScenario();' in ctrl, 'senaryo arka planda devam eder')
 check('lab oyunun yolundan (Prepare / Begin)', 'quarry.Prepare(report);' in lab and 'quarry.Begin(report' in lab,
       'lab kopya oynatiyor')
 check('RESET durdurur ve katmanlari acar', 'StopQuarry();' in method(lab, 'private void AnimResync()')

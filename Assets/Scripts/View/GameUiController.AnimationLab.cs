@@ -2090,6 +2090,13 @@ namespace ProjectBlock.View
                     QuarryBreakView.Layers.ShowShards = true;
                     AnimQuarry(1, false, "single obsidian - score reward", "tek obsidyen - puan ödülü");
                 });
+            AddAnim("elmas kazma: WHOLE SCENARIO - a block lands, the line clears, the sweep, 1 obsidian stays, the pickaxe",
+                "elmas kazma: TAM SENARYO - blok iner, satır patlar, temizlik, 1 obsidyen kalır, kazma kırar",
+                delegate { QuarryBreakView.Layers.AllOn(); AnimQuarryScenario(1); });
+            AddAnim("elmas kazma: WHOLE SCENARIO with 4 obsidian", "elmas kazma: TAM SENARYO - 4 obsidyen",
+                delegate { QuarryBreakView.Layers.AllOn(); AnimQuarryScenario(4); });
+            AddAnim("elmas kazma: WHOLE SCENARIO at 0.5x", "elmas kazma: TAM SENARYO 0.5x",
+                delegate { QuarryBreakView.Layers.AllOn(); Time.timeScale = 0.5f; AnimQuarryScenario(2); });
             AddAnim("elmas kazma: full single sequence", "elmas kazma: tam tek dizi",
                 delegate
                 {
@@ -7424,6 +7431,121 @@ namespace ProjectBlock.View
             }
             animLastLabel = Loc.Pick("elmas kazma: " + english + " (" + report.Count + " stones, +" + report.Points + ")",
                 "elmas kazma: " + turkish + " (" + report.Count + " taş, +" + report.Points + ")");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        // THE WHOLE SCENARIO, in the order the game plays it - and through the game's own seams:
+        //   1. a board with one row a cube short and obsidian elsewhere; a block lands in the gap;
+        //   2. the turn resolves: the row AND the obsidian leave the rules in the same turn, the
+        //      board is repainted, and the stones are raised as proxies on that repaint (Prepare -
+        //      exactly where RefreshAll calls SyncQuarry);
+        //   3. the explosion feedback: the line's own flash, the sweep popup and shake, the sweep's
+        //      wave, and the pickaxe told to wait for that wave (Begin - where PlayExplosionFeedback
+        //      calls PlayQuarry);
+        //   4. the wave passes over the stones, which stay; then the pickaxe breaks them.
+        private Coroutine animQuarryScenario;
+
+        private static readonly GridPos[] AnimScenarioStones =
+        {
+            new GridPos(2, 5), new GridPos(5, 1), new GridPos(1, 1), new GridPos(5, 5)
+        };
+
+        private void AnimQuarryScenario(int stones)
+        {
+            StopAnimQuarryScenario();
+            animQuarryScenario = StartCoroutine(AnimQuarryScenarioRoutine(Mathf.Clamp(stones, 1, 4)));
+        }
+
+        private void StopAnimQuarryScenario()
+        {
+            if (animQuarryScenario != null)
+            {
+                StopCoroutine(animQuarryScenario);
+                animQuarryScenario = null;
+            }
+        }
+
+        private IEnumerator AnimQuarryScenarioRoutine(int stoneCount)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || boardView == null)
+            {
+                yield break;
+            }
+            EnsureQuarry();
+            quarry.Stop();
+            quarry.Forget();
+            ElmasKazmaJoker joker = FindPickaxe() ?? new ElmasKazmaJoker();
+            List<int> cards = AnimBossCards();
+            const int row = 3;
+            var gap = new GridPos(6, row);
+            var board = new GameBoard(7, 7);
+            for (int x = 0; x < 6; x++)
+            {
+                board.SetCubeAt(new GridPos(x, row), new Cube(CubeKind.Normal, cards[x % cards.Count]));
+            }
+            var stones = new List<GridPos>();
+            for (int i = 0; i < stoneCount; i++)
+            {
+                stones.Add(AnimScenarioStones[i]);
+                board.SetCubeAt(AnimScenarioStones[i], new Cube(CubeKind.Obsidian, cards[0]));
+            }
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            boardView.Refresh();
+            AnimScenarioLabel("1/4 the row is one cube short; the obsidian waits",
+                "1/4 satırda bir küp eksik; obsidyen bekliyor");
+            yield return new WaitForSeconds(0.8f);
+
+            // 1. the block lands.
+            board.SetCubeAt(gap, new Cube(CubeKind.Normal, cards[cards.Count - 1]));
+            boardView.Refresh();
+            sfx.Place();
+            AnimScenarioLabel("2/4 a block lands: the row is full", "2/4 blok iner: satır doldu");
+            yield return new WaitForSeconds(0.25f);
+
+            // 2. the turn resolves: the row and the stones leave the rules together.
+            var report = new QuarryVisuals();
+            foreach (GridPos p in stones)
+            {
+                report.Cells.Add(p);
+                report.Cubes.Add(board.GetCube(p).Value);
+            }
+            report.Points = stones.Count * joker.PointsPerObsidian * session.Config.Scoring.ScoreScale;
+            report.Seed = animQuarrySeed++ * 2654435761u;
+            for (int x = 0; x < 7; x++)
+            {
+                board.DestroyCube(new GridPos(x, row));
+            }
+            foreach (GridPos p in stones)
+            {
+                board.DestroyCubeForced(p);
+            }
+            boardView.Refresh();
+            quarry.Prepare(report);
+
+            // 3. the explosion feedback, as the game draws it for a sweeping line.
+            FlashLine(board, board.MinY + row, true);
+            sfx.CleanSweep(1f);
+            SpawnSweepPopup();
+            ShakeForBlast(false, true, 1);
+            EmitSweepConfetti();
+            quarry.Begin(report, QuarryAfterSweep());
+            AnimScenarioLabel("3/4 CLEAN SWEEP - the line and the wave take everything but the obsidian",
+                "3/4 TEMİZLİK - satır ve dalga her şeyi götürür, obsidyen kalır");
+            yield return new WaitForSeconds(QuarryAfterSweep());
+
+            // 4. the pickaxe.
+            AnimScenarioLabel("4/4 ELMAS KAZMA breaks the obsidian (+" + report.Points + ")",
+                "4/4 ELMAS KAZMA obsidyeni kırar (+" + report.Points + ")");
+            animQuarryScenario = null;
+        }
+
+        private void AnimScenarioLabel(string english, string turkish)
+        {
+            animLastLabel = Loc.Pick("elmas kazma: " + english, "elmas kazma: " + turkish);
             if (AnimLabOpen)
             {
                 RedrawAnimationLab();

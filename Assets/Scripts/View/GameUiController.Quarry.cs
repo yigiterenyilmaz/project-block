@@ -1,4 +1,4 @@
-// PURPOSE: "Elmas Kazma"'s break, wired up - the one place QuarryBreakView is reached from, by the
+﻿// PURPOSE: "Elmas Kazma"'s break, wired up - the one place QuarryBreakView is reached from, by the
 // game and by the animation lab alike.
 //
 // TWO HALVES, ON TWO MOMENTS. The repaint that follows the turn has already emptied the obsidian
@@ -124,6 +124,7 @@ namespace ProjectBlock.View
 
         private void StopQuarry()
         {
+            StopAnimQuarryScenario();
             if (quarry != null)
             {
                 quarry.Stop();
