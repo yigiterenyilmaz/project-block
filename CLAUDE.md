@@ -603,6 +603,50 @@ dropped that way once each.
   colours, near, far, edge, corner, and a full board with stone in it that stays), eight beats on
   their own, a proxy test, 0.5x/0.25x, and three debug overlays (targets red / could fall yellow /
   stone grey, the wave each cube falls in, crack bounds).
+- **"Hazine" is two DRAWN bursts with code around them, and the code is what makes them true**
+  (`HazineRevealView`, `FrameSequenceFx`, `HazineShapes`, `GameUiController.Hazine.cs`). The art is
+  two eight-frame sheets at `Resources/Art/Fx/hazine_treasure_sheet` / `hazine_dynamite_sheet`,
+  repacked by `Tools/ArtPrep/pack_hazine_sheets.py` from scattered generated drawings: every frame
+  on one 4x2 grid, ONE scale for the whole sheet so the growth survives, each centred on its own
+  bright core, the generator's red/yellow fringe (saturated colour under alpha 32) and loose specks
+  removed, and on the treasure every faint texel taken to the frame's own gold - pale ivory at
+  alpha 0.1 reads as a cold grey smear on a dark board. `FrameSequenceFx` plays a sheet with a
+  duration PER FRAME (the animator's table: the peak holds longest), pooled, on the OWNER's clock so
+  the lab's time scale slows the drawing and the code together, and a negative clock is a delay.
+  **A sheet on its own is a sticker**, so everything else is laid on particular DRAWN frames: a beat
+  of anticipation (the dynamite's is tension, a swell and a pinch) in the 50ms between the cube
+  breaking and the reveal; a local light whose curve follows the drawing's own brightness and dies
+  at its own edge (peak 0.18 / 0.24); motes and one or two glints, or charred chips, smoke and a
+  soot mark that stays inside the cell and outlives the burst; the verdict at the peak; and the
+  value carried as one small essence to where it actually went. **The dynamite knocks the ARENA,
+  never the camera** - a third term on `BoardView` (`SetImpulse`), because a quake can bring down the
+  cube a stick was buried under and two writers of that transform would fight.
+  **MOST OF WHAT HAZINE DOES IS NOT SCORE, AND THE REPORT SAYS SO.** The treasure draws one of four
+  rewards and only one is score (an extra half of the explosion's base line value, and only when a
+  line went off - a clean sweep REPLACES the line score, so a sweep that finds the treasure has no
+  line to multiply); the dynamite's three penalties are a drained power, a frozen card and a
+  discarded hand, and none is score. `HazineVisuals` (`[NotSaved]`, a new object per find, written
+  beside the code that applied each effect) names the effect and its real number, and the score
+  is MEASURED around the payment (`RoundScore` before and after), so a "Terslik" round reports - and
+  draws - a treasure that cost points. The verdict is therefore a word as often as a number ("%20
+  İNDİRİM", "GÜÇ -1", "3 TUR DONDU", "ETKİSİZ"), and the essence flies only to a thing really on
+  screen: the score label (through `TickScoreResponse`, which now takes a dip as well as a punch),
+  the power panel the rules named (a refill's power is found by diffing charged flags around
+  `RechargeOne`, no draw), the card frozen or minted, the discard pile, or the joker's own panel for
+  a discount that waits for the market. **IT NEVER POINTS AT THE OTHER MARK**: finding one removes
+  the other and where it lay was never earned, so the report does not carry it and the view draws
+  at the found cells only - "the other one is gone too" is a single ember that appears INSIDE the
+  found burst's light and is eaten there. **Both at once cancel**: both drawings are cut at their
+  third frame, a core leaves each cell for the point between them, and they meet in the treasure
+  drawing's own tail taken down to ivory, with a quiet "İPTAL" and nothing paid. The reveal is
+  asked from `PlayExplosionFeedback`, not the repaint, and each cell's delay is when ITS cube
+  breaks - a line's sweep front (`PropagationSeconds` times the distance from the middle), anything
+  else the cluster burst - so a treasure is never revealed before the line that found it has
+  broken. The lab has nineteen scenes (every effect, an inverted round, line end / loose / edge /
+  corner, the dynamite under a quake, three cancels, and the HIDDEN-INFO test that prints how many
+  cells the report names beside how many the view draws at), each drawing alone and everything but
+  the drawing, 0.25x runs with a frame-index + ms readout, a cell outline of what the report names,
+  and eleven switches; `Tools/UiLayoutCheck/hazine.py` holds the lot.
 - **"Harcama bonusu" is the empty pile PAYING YOU BACK** (`RebateView`, `RebateShapes`,
   `GameUiController.Rebate.cs`). The mechanic is not "you scored some points" — it is "you spent
   the resource and the spending refunded you" — so the payout may not simply appear beside the
@@ -1254,7 +1298,7 @@ particular: a panel that can be dropped where it cannot be grabbed is a panel th
 
 **A PER-TURN REPORT IS MATCHED BY IDENTITY, NEVER BY ITS SERIAL.** Every joker that hands the
 View a `[NotSaved]` report (`SpreadVisuals`, `FreezeVisuals`, `RebateVisuals`,
-`MidasPayoutVisuals`) writes a NEW object per use, and the view remembers the object it last
+`MidasPayoutVisuals`, `QuakeVisuals`, `HazineVisuals`) writes a NEW object per use, and the view remembers the object it last
 played (`ReferenceEquals`). They used to compare `report.Serial` against the last serial played,
 and that was wrong in a way no single run shows: a serial restarts at 1 with every new joker,
 while the views outlive a run (they are kept through `BoardView.Rebuild`, or live on the

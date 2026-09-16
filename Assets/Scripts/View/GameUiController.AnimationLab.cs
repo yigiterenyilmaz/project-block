@@ -1,4 +1,4 @@
-// PURPOSE: The ANIMATION LAB (F3) - a catalogue of every animation in the game, each
+﻿// PURPOSE: The ANIMATION LAB (F3) - a catalogue of every animation in the game, each
 // playable on demand, with knobs for the conditions that modulate them (combo streak, sweep
 // count, overtime level, board darkness...). Built for retiming and reworking animations
 // without having to reach the game state that normally triggers them.
@@ -176,7 +176,11 @@ namespace ProjectBlock.View
             StopAnimFire();
             StopAnimIce();
             StopAnimQuake();
+            StopHazine();
             StopRebate();
+            // The beat-isolation entries promise that RESET puts every layer back.
+            QuakeCollapseView.Layers.AllOn();
+            HazineRevealView.Layers.AllOn();
             // The lab can show the pile spent without a payout, so RESET has to be able to give
             // it back even when no animation is running.
             if (cardLayer != null) { cardLayer.SetDrawPileShownEmpty(false); }
@@ -1805,6 +1809,129 @@ namespace ProjectBlock.View
                     QuakeCollapseView.Layers.AllOn();
                     animLastLabel = Loc.Pick("deprem: every layer back on",
                         "deprem: tüm katmanlar geri açık");
+                    if (AnimLabOpen) { RedrawAnimationLab(); }
+                });
+            AddAnim("hazine: TREASURE - explosion bonus (+score)",
+                "hazine: HAZİNE - patlama bonusu (+skor)",
+                delegate { AnimHazine(AnimHazineScene.TreasureScore); });
+            AddAnim("hazine: TREASURE - market discount",
+                "hazine: HAZİNE - market indirimi",
+                delegate { AnimHazine(AnimHazineScene.TreasureDiscount); });
+            AddAnim("hazine: TREASURE - a power refilled",
+                "hazine: HAZİNE - bir güç doldu",
+                delegate { AnimHazine(AnimHazineScene.TreasurePower); });
+            AddAnim("hazine: TREASURE - a bonus card",
+                "hazine: HAZİNE - bonus kart",
+                delegate { AnimHazine(AnimHazineScene.TreasureCard); });
+            AddAnim("hazine: TREASURE in an inverted round (score runs backwards)",
+                "hazine: HAZİNE ters raundda (skor geri gider)",
+                delegate { AnimHazine(AnimHazineScene.TreasureInverted); });
+            AddAnim("hazine: treasure found by a LINE at its far end (late break)",
+                "hazine: hazine bir SATIRIN ucunda bulundu (geç kırılma)",
+                delegate { AnimHazine(AnimHazineScene.TreasureLineEnd); });
+            AddAnim("hazine: treasure found by a loose blast",
+                "hazine: hazine dağınık patlamayla bulundu",
+                delegate { AnimHazine(AnimHazineScene.TreasureLoose); });
+            AddAnim("hazine: treasure on the top edge (verdict stays on screen)",
+                "hazine: hazine üst kenarda (hüküm ekranda kalır)",
+                delegate { AnimHazine(AnimHazineScene.TreasureEdge); });
+            AddAnim("hazine: treasure in a corner",
+                "hazine: hazine köşede",
+                delegate { AnimHazine(AnimHazineScene.TreasureCorner); });
+            AddAnim("hazine: DYNAMITE - a power drained",
+                "hazine: DİNAMİT - bir güç tükendi",
+                delegate { AnimHazine(AnimHazineScene.DynamitePower); });
+            AddAnim("hazine: DYNAMITE - a card frozen",
+                "hazine: DİNAMİT - bir kart dondu",
+                delegate { AnimHazine(AnimHazineScene.DynamiteFrozen); });
+            AddAnim("hazine: DYNAMITE - the hand discarded",
+                "hazine: DİNAMİT - el ıskartaya",
+                delegate { AnimHazine(AnimHazineScene.DynamiteHand); });
+            AddAnim("hazine: DYNAMITE - nothing to take (fizzle)",
+                "hazine: DİNAMİT - alacak bir şey yok (etkisiz)",
+                delegate { AnimHazine(AnimHazineScene.DynamiteFizzle); });
+            AddAnim("hazine: dynamite on the edge (knock toward the middle)",
+                "hazine: dinamit kenarda (itiş merkeze doğru)",
+                delegate { AnimHazine(AnimHazineScene.DynamiteEdge); });
+            AddAnim("hazine: dynamite under a QUAKE (knock + tremor compose)",
+                "hazine: DEPREM altında dinamit (itiş + sarsıntı birlikte)",
+                delegate { AnimHazine(AnimHazineScene.DynamiteQuake); });
+            AddAnim("hazine: BOTH at once, side by side - they cancel",
+                "hazine: İKİSİ birden, yan yana - birbirini götürür",
+                delegate { AnimHazine(AnimHazineScene.CancelNear); });
+            AddAnim("hazine: BOTH at once, far apart",
+                "hazine: İKİSİ birden, uzak",
+                delegate { AnimHazine(AnimHazineScene.CancelFar); });
+            AddAnim("hazine: BOTH on one cleared line",
+                "hazine: İKİSİ aynı temizlenen satırda",
+                delegate { AnimHazine(AnimHazineScene.CancelSameLine); });
+            AddAnim("hazine TEST: hidden information (what the report names vs what is drawn)",
+                "hazine TEST: gizli bilgi (raporun söylediği ve çizilen)",
+                delegate { AnimHazine(AnimHazineScene.HiddenInfo); });
+            AddAnim("hazine: the TREASURE drawing alone",
+                "hazine: yalnızca HAZİNE çizimi",
+                delegate { AnimHazineOnly(true, true); });
+            AddAnim("hazine: the DYNAMITE drawing alone",
+                "hazine: yalnızca DİNAMİT çizimi",
+                delegate { AnimHazineOnly(false, true); });
+            AddAnim("hazine: treasure WITHOUT its drawing (is the code support enough?)",
+                "hazine: çizimi OLMADAN hazine (kod desteği yetiyor mu?)",
+                delegate { AnimHazineOnly(true, false); });
+            AddAnim("hazine: dynamite WITHOUT its drawing",
+                "hazine: çizimi OLMADAN dinamit",
+                delegate { AnimHazineOnly(false, false); });
+            AddAnim("hazine: treasure at 0.25x (frame by frame)",
+                "hazine: hazine 0.25x (kare kare)",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    HazineRevealView.Layers.ShowFrameDebug = true;
+                    AnimHazine(AnimHazineScene.TreasureScore);
+                });
+            AddAnim("hazine: dynamite at 0.25x (frame by frame)",
+                "hazine: dinamit 0.25x (kare kare)",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    HazineRevealView.Layers.ShowFrameDebug = true;
+                    AnimHazine(AnimHazineScene.DynamiteFrozen);
+                });
+            AddAnim("hazine debug: frame index + ms",
+                "hazine hata ayıklama: kare no + ms",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowFrameDebug, "frame debug", "kare"); });
+            AddAnim("hazine debug: the cells the report names",
+                "hazine hata ayıklama: raporun andığı kareler",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowCellDebug, "cell debug", "kare çerçevesi"); });
+            AddAnim("hazine switch: drawings", "hazine anahtarı: çizimler",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowSheet, "drawings", "çizimler"); });
+            AddAnim("hazine switch: local light", "hazine anahtarı: yerel ışık",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowLight, "light", "ışık"); });
+            AddAnim("hazine switch: anticipation / tension", "hazine anahtarı: beklenti / gerilim",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowAnticipation, "anticipation", "beklenti"); });
+            AddAnim("hazine switch: motes + glints", "hazine anahtarı: zerreler + parıltılar",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowSparkle, "sparkle", "parıltı"); });
+            AddAnim("hazine switch: charred chips", "hazine anahtarı: kömürleşmiş parçalar",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowDebris, "chips", "parçalar"); });
+            AddAnim("hazine switch: smoke", "hazine anahtarı: duman",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowSmoke, "smoke", "duman"); });
+            AddAnim("hazine switch: scorch", "hazine anahtarı: is izi",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowScorch, "scorch", "is izi"); });
+            AddAnim("hazine switch: verdict", "hazine anahtarı: hüküm",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowVerdict, "verdict", "hüküm"); });
+            AddAnim("hazine switch: essence flight", "hazine anahtarı: öz uçuşu",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowEssence, "essence", "öz"); });
+            AddAnim("hazine switch: board knock", "hazine anahtarı: alan itişi",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowImpulse, "knock", "itiş"); });
+            AddAnim("hazine switch: target response", "hazine anahtarı: hedef tepkisi",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowTargetResponse, "target", "hedef"); });
+            AddAnim("hazine switch: the other mark's ember", "hazine anahtarı: diğer işaretin közü",
+                delegate { AnimHazineToggle(ref HazineRevealView.Layers.ShowCounterpart, "counterpart", "karşı işaret"); });
+            AddAnim("hazine switch: ALL layers back on",
+                "hazine anahtarı: TÜM katmanlar geri açık",
+                delegate
+                {
+                    HazineRevealView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("hazine: every layer back on", "hazine: tüm katmanlar geri açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
             AddAnim("harcama bonusu: the whole payout",
@@ -6357,6 +6484,340 @@ namespace ProjectBlock.View
         {
             flag = !flag;
             animLastLabel = Loc.Pick("deprem " + english + ": ", "deprem " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        // ------------------------------------------------------------------ hazine
+
+        // "HAZİNE" IN THE LAB. What it fabricates is the joker's REPORT - which mark was found,
+        // what it did and by how much - with every amount read off the joker's own fields, the
+        // round's own scoring and the real hand and powers, so a retuned joker shows its new
+        // numbers here. The board and the destruction are the lab's: a board of its own is laid
+        // out, the found cube is taken away the way the game takes it (a line sweep or a loose
+        // burst), and the reveal is played through PlayHazine, the seam the game uses.
+
+        private enum AnimHazineScene
+        {
+            TreasureScore,
+            TreasureDiscount,
+            TreasurePower,
+            TreasureCard,
+            TreasureInverted,
+            TreasureLineEnd,
+            TreasureLoose,
+            TreasureEdge,
+            TreasureCorner,
+            DynamitePower,
+            DynamiteFrozen,
+            DynamiteHand,
+            DynamiteFizzle,
+            DynamiteEdge,
+            DynamiteQuake,
+            CancelNear,
+            CancelFar,
+            CancelSameLine,
+            HiddenInfo
+        }
+
+        private HazineJoker AnimHazineJoker(out int instanceId)
+        {
+            instanceId = -1;
+            if (session != null && session.Jokers != null)
+            {
+                IReadOnlyList<Joker> owned = session.Jokers.Jokers;
+                for (int i = 0; i < owned.Count; i++)
+                {
+                    var found = owned[i] as HazineJoker;
+                    if (found != null)
+                    {
+                        instanceId = found.InstanceId;
+                        return found;
+                    }
+                }
+            }
+            return new HazineJoker();
+        }
+
+        private void AnimHazine(AnimHazineScene scene)
+        {
+            StopHazine();
+            StopAnimQuake();
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || boardView == null)
+            {
+                return;
+            }
+            int jokerId;
+            HazineJoker joker = AnimHazineJoker(out jokerId);
+            var board = new GameBoard(7, 7);
+            List<int> cards = AnimBossCards();
+            // About half full, so the burst is seen among blocks rather than on an empty floor.
+            for (int y = 0; y < 7; y++)
+            {
+                for (int x = 0; x < 7; x++)
+                {
+                    if ((x * 7 + y * 3 + x * y) % 5 < 3)
+                    {
+                        board.SetCubeAt(new GridPos(x, y), new Cube(CubeKind.Normal, cards[(x + y) % cards.Count]));
+                    }
+                }
+            }
+
+            var report = new HazineVisuals();
+            var found = new List<GridPos>();
+            bool line = false;
+            bool treasure = true;
+            switch (scene)
+            {
+                case AnimHazineScene.TreasureLineEnd:
+                    found.Add(new GridPos(6, 3));
+                    line = true;
+                    break;
+                case AnimHazineScene.TreasureEdge:
+                    found.Add(new GridPos(3, 6));
+                    break;
+                case AnimHazineScene.TreasureCorner:
+                    found.Add(new GridPos(0, 0));
+                    break;
+                case AnimHazineScene.DynamiteEdge:
+                    found.Add(new GridPos(0, 3));
+                    treasure = false;
+                    break;
+                case AnimHazineScene.DynamitePower:
+                case AnimHazineScene.DynamiteFrozen:
+                case AnimHazineScene.DynamiteHand:
+                case AnimHazineScene.DynamiteFizzle:
+                case AnimHazineScene.DynamiteQuake:
+                    found.Add(new GridPos(4, 2));
+                    treasure = false;
+                    break;
+                case AnimHazineScene.CancelNear:
+                    found.Add(new GridPos(2, 3));
+                    found.Add(new GridPos(3, 3));
+                    break;
+                case AnimHazineScene.CancelFar:
+                    found.Add(new GridPos(1, 5));
+                    found.Add(new GridPos(5, 1));
+                    break;
+                case AnimHazineScene.CancelSameLine:
+                    found.Add(new GridPos(1, 2));
+                    found.Add(new GridPos(5, 2));
+                    line = true;
+                    break;
+                case AnimHazineScene.TreasureLoose:
+                    found.Add(new GridPos(2, 4));
+                    break;
+                case AnimHazineScene.HiddenInfo:
+                    found.Add(new GridPos(3, 3));
+                    break;
+                default:
+                    found.Add(new GridPos(3, 3));
+                    line = scene == AnimHazineScene.TreasureScore
+                        || scene == AnimHazineScene.TreasureInverted;
+                    break;
+            }
+            if (found.Count == 2)
+            {
+                report.Result = HazineResult.BothCancelled;
+                report.Effect = HazineEffect.None;
+                report.Discoveries.Add(new HazineDiscovery { Cell = found[0], IsTreasure = true });
+                report.Discoveries.Add(new HazineDiscovery { Cell = found[1], IsTreasure = false });
+            }
+            else
+            {
+                report.Result = treasure ? HazineResult.TreasureOnly : HazineResult.DynamiteOnly;
+                report.Discoveries.Add(new HazineDiscovery { Cell = found[0], IsTreasure = treasure });
+                AnimHazineEffect(scene, joker, round, report);
+            }
+            foreach (GridPos cell in found)
+            {
+                board.SetCubeAt(cell, new Cube(CubeKind.Normal, cards[0]));
+            }
+            var rows = new List<int>();
+            if (line)
+            {
+                int y = found[0].Y;
+                for (int x = 0; x < 7; x++)
+                {
+                    board.SetCubeAt(new GridPos(x, y), new Cube(CubeKind.Normal, cards[x % cards.Count]));
+                }
+                rows.Add(y);
+            }
+            for (int i = 0; i < report.Discoveries.Count; i++)
+            {
+                Cube? cube = board.GetCube(report.Discoveries[i].Cell);
+                report.Discoveries[i].Cube = cube.HasValue ? cube.Value : new Cube(CubeKind.Normal, cards[0]);
+            }
+            report.Seed = (uint)(animHazineSeed++ * 2654435761u);
+
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            boardView.Refresh();
+            // The cubes come off the way the game takes them, then the repaint keeps their faces
+            // for the breaks.
+            if (line)
+            {
+                for (int x = 0; x < 7; x++)
+                {
+                    board.DestroyCube(new GridPos(x, rows[0]));
+                }
+            }
+            else
+            {
+                foreach (GridPos cell in found)
+                {
+                    board.DestroyCube(cell);
+                }
+            }
+            boardView.Refresh();
+            if (line)
+            {
+                FlashLine(board, rows[0], true);
+            }
+            else
+            {
+                FlashCells(found, BlastColor);
+            }
+            if (scene == AnimHazineScene.DynamiteQuake)
+            {
+                // A quake of the lab's own under the same knock: the two terms must compose.
+                var quake = new QuakeVisuals();
+                foreach (GridPos p in new[] { new GridPos(1, 1), new GridPos(5, 5), new GridPos(1, 4) })
+                {
+                    Cube? cube = board.GetCube(p);
+                    if (cube.HasValue && board.DestroyCube(p))
+                    {
+                        quake.Cells.Add(p);
+                        quake.Cubes.Add(cube.Value);
+                    }
+                }
+                quake.Seed = 7u;
+                boardView.Refresh();
+                boardView.Quake.Play(boardView, quake);
+            }
+            if (hazine != null)
+            {
+                hazine.Forget();
+            }
+            PlayHazine(report, board, null, jokerId, rows, null);
+
+            string what = report.Result == HazineResult.BothCancelled
+                ? Loc.Pick("cancelled", "iptal")
+                : report.Effect + (report.ScoreDelta != 0 ? " " + report.ScoreDelta : "")
+                    + (report.Amount != 0 ? " (" + report.Amount + ")" : "");
+            animLastLabel = Loc.Pick("hazine: " + what, "hazine: " + what);
+            if (scene == AnimHazineScene.HiddenInfo)
+            {
+                // The one number that matters: the report names ONE cell, so exactly one cell may
+                // ever be drawn at - the other mark's location is not in anything the view holds.
+                HazineRevealView.Layers.ShowCellDebug = true;
+                animLastLabel = Loc.Pick(
+                    "hidden info: report names " + report.Discoveries.Count + " cell, view draws at "
+                        + (hazine != null ? hazine.DrawnCellCount : 0) + " - the other mark is nowhere",
+                    "gizli bilgi: rapor " + report.Discoveries.Count + " kare anıyor, görünüm "
+                        + (hazine != null ? hazine.DrawnCellCount : 0) + " karede çiziyor - diğer işaret hiçbir yerde");
+            }
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        private int animHazineSeed = 1;
+
+        /// <summary>The effect as the joker would apply it, with its own numbers.</summary>
+        private void AnimHazineEffect(AnimHazineScene scene, HazineJoker joker, RoundEngine round,
+            HazineVisuals report)
+        {
+            IReadOnlyList<Power> powers = session.Powers.Powers;
+            int powerId = powers.Count > 0 ? powers[0].InstanceId : -1;
+            string powerName = powers.Count > 0 ? powers[0].DisplayName : null;
+            int cardId = round.Hand.Count > 0 ? round.Hand[0].Id : -1;
+            int line = (int)(session.Config.Scoring.PointsPerLine * joker.TreasureScoreBonus)
+                * session.Config.Scoring.ScoreScale;
+            switch (scene)
+            {
+                case AnimHazineScene.TreasureDiscount:
+                    report.Effect = HazineEffect.MarketDiscount;
+                    report.Amount = (int)((joker.MinDiscount + joker.MaxDiscount) * 50.0);
+                    break;
+                case AnimHazineScene.TreasurePower:
+                    report.Effect = HazineEffect.PowerRefilled;
+                    report.PowerId = powerId;
+                    report.PowerName = powerName;
+                    break;
+                case AnimHazineScene.TreasureCard:
+                    report.Effect = HazineEffect.BonusCard;
+                    report.CardId = cardId;
+                    break;
+                case AnimHazineScene.TreasureInverted:
+                    report.Effect = HazineEffect.ExplosionBonus;
+                    report.ScoreDelta = -line;
+                    break;
+                case AnimHazineScene.DynamitePower:
+                    report.Effect = HazineEffect.PowerDrained;
+                    report.PowerId = powerId;
+                    report.PowerName = powerName;
+                    break;
+                case AnimHazineScene.DynamiteFrozen:
+                case AnimHazineScene.DynamiteEdge:
+                case AnimHazineScene.DynamiteQuake:
+                    report.Effect = HazineEffect.CardFrozen;
+                    report.CardId = cardId;
+                    report.Amount = joker.FreezeTurns;
+                    break;
+                case AnimHazineScene.DynamiteHand:
+                    report.Effect = HazineEffect.HandDiscarded;
+                    report.Amount = round.Hand.Count;
+                    break;
+                case AnimHazineScene.DynamiteFizzle:
+                    report.Effect = HazineEffect.Fizzled;
+                    break;
+                default:
+                    report.Effect = HazineEffect.ExplosionBonus;
+                    report.ScoreDelta = line;
+                    break;
+            }
+        }
+
+        /// <summary>A drawing on its own, or everything BUT the drawing. Switches go in first.
+        /// </summary>
+        private void AnimHazineOnly(bool treasure, bool sheetOnly)
+        {
+            HazineRevealView.Layers.AllOn();
+            if (sheetOnly)
+            {
+                HazineRevealView.Layers.ShowAnticipation = false;
+                HazineRevealView.Layers.ShowLight = false;
+                HazineRevealView.Layers.ShowSparkle = false;
+                HazineRevealView.Layers.ShowDebris = false;
+                HazineRevealView.Layers.ShowSmoke = false;
+                HazineRevealView.Layers.ShowScorch = false;
+                HazineRevealView.Layers.ShowVerdict = false;
+                HazineRevealView.Layers.ShowEssence = false;
+                HazineRevealView.Layers.ShowImpulse = false;
+                HazineRevealView.Layers.ShowTargetResponse = false;
+                HazineRevealView.Layers.ShowCounterpart = false;
+            }
+            else
+            {
+                HazineRevealView.Layers.ShowSheet = false;
+            }
+            AnimHazine(treasure ? AnimHazineScene.TreasureLoose : AnimHazineScene.DynamiteFizzle);
+            animLastLabel = Loc.Pick(
+                (sheetOnly ? "the drawing alone" : "everything but the drawing")
+                    + " (RESET puts every layer back)",
+                (sheetOnly ? "yalnızca çizim" : "çizim dışındaki her şey")
+                    + " (RESET tüm katmanları geri açar)");
+        }
+
+        private void AnimHazineToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("hazine " + english + ": ", "hazine " + turkish + ": ")
                 + OnOff(flag);
             if (AnimLabOpen)
             {

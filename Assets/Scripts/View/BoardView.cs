@@ -847,12 +847,24 @@ namespace ProjectBlock.View
             ApplyArenaTransform();
         }
 
+        /// <summary>
+        /// "Hazine"'s dynamite: one knock of the ARENA at the blast's peak frame. A third term for
+        /// the same reason the tremor is one - a quake can bring down the cube a stick of dynamite
+        /// was buried under, and two writers of this transform on the same frame would fight.
+        /// </summary>
+        public void SetImpulse(Vector2 offset)
+        {
+            impulseOffset = offset;
+            ApplyArenaTransform();
+        }
+
         private float pressureScale = 1f;
         private Vector2 pressureKnock;
         private Vector2 tremorOffset;
         private float tremorDegrees;
+        private Vector2 impulseOffset;
 
-        /// <summary>Scale AND turn about the board's own centre, then knock and tremor on top.
+        /// <summary>Scale AND turn about the board's own centre, then knock, tremor and impulse on top.
         /// With no turn this is exactly the squeeze SetPressure always wrote.</summary>
         private void ApplyArenaTransform()
         {
@@ -863,8 +875,8 @@ namespace ProjectBlock.View
             transform.localScale = new Vector3(s, s, 1f);
             transform.localRotation = turn;
             transform.localPosition = centre - turnedCentre
-                + new Vector3(pressureKnock.x + tremorOffset.x,
-                    pressureKnock.y + tremorOffset.y, 0f);
+                + new Vector3(pressureKnock.x + tremorOffset.x + impulseOffset.x,
+                    pressureKnock.y + tremorOffset.y + impulseOffset.y, 0f);
         }
 
         /// <summary>Where the arena stands, kept for SetPressure to squeeze about.</summary>

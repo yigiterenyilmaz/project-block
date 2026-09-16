@@ -1,4 +1,4 @@
-// PURPOSE: "Harcama bonusu"'s cashback, wired up - the one place the payout animation is reached
+﻿// PURPOSE: "Harcama bonusu"'s cashback, wired up - the one place the payout animation is reached
 // from, by the game and by the animation lab alike.
 //
 // THREE THINGS LIVE HERE AND NOTHING ELSE. WHERE the money comes FROM (the real draw pile's own
@@ -152,6 +152,16 @@ namespace ProjectBlock.View
                 midasScoreRead = true;
             }
             float warm = Mathf.Max(midasWarm, rebateWarm);
+            // "Hazine" writes its own shape (a gain punches, an inverted loss dips and goes red),
+            // and takes the label only while its claim is the strongest.
+            float hazineClaim = hazine != null ? hazine.ScoreClaim : 0f;
+            if (hazineClaim > warm && hazineClaim > 0.001f)
+            {
+                float hs = hazine.ScoreScale;
+                totalText.rectTransform.localScale = new Vector3(hs, hs, 1f);
+                totalText.color = Color.Lerp(midasScoreInk, hazine.ScoreInk, hazineClaim * 0.8f);
+                return;
+            }
             if (warm <= 0.001f)
             {
                 totalText.rectTransform.localScale = Vector3.one;

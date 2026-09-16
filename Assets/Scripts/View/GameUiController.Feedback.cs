@@ -156,6 +156,9 @@ namespace ProjectBlock.View
             // "Matruşka": the dolls held since the refresh open NOW - as the cubes under them go, not
             // when the board was repainted before the water fell.
             boardView.ReleaseDolls();
+            // "Hazine": a mark found by this turn's destruction is revealed as ITS cube breaks -
+            // which is now, not when the board was repainted before the water fell.
+            SyncHazine(round, report);
             if (report.CleanSweep)
             {
                 // the sweep bling rises in pitch with every sweep this round
