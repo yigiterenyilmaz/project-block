@@ -49,6 +49,7 @@ namespace ProjectBlock.View
         private AudioClip shuffleClip;
         private AudioClip buyClip;
         private AudioClip flameClip;
+        private AudioClip fuseClip;
         private AudioClip humClip;
 
         // ---- retro ("CRT") audio: a looping mains hum, toggled by SetRetro. The bit-crush that
@@ -67,6 +68,7 @@ namespace ProjectBlock.View
             shuffleClip = BuildShuffle();
             buyClip = BuildBuy();
             flameClip = BuildFlame();
+            fuseClip = BuildFuse();
             humClip = BuildHum();
             stingClips = new[]
             {
@@ -140,6 +142,18 @@ namespace ProjectBlock.View
         public void Flame()
         {
             PlayWithPitch(flameClip, 0.9f, 1.1f, 1.1f);
+        }
+
+        /// <summary>
+        /// "Barut tedarikçisi": a dynamite block took one more charge. Quiet, and PITCHED BY HOW
+        /// FULL THE BLOCK IS (0 to 1): a fuse burning down rises, so the fifth charge sounds
+        /// nearer to going off than the first. Several may land in one turn, so the volume is
+        /// low enough that four of them together are still a texture rather than an event.
+        /// </summary>
+        public void Fuse(float fullness)
+        {
+            float pitch = Mathf.Lerp(0.92f, 1.45f, Mathf.Clamp01(fullness));
+            PlayWithPitch(fuseClip, pitch, pitch + 0.04f, 0.42f);
         }
 
         // ---- boss identity stings (BossIdentityView prototypes) ----
@@ -358,6 +372,27 @@ namespace ProjectBlock.View
                 AddNoise(buffer, start, 0.035f, 0.35f, 1.5f, rng);
             }
             return Finish("shuffle", buffer);
+        }
+
+        /// <summary>
+        /// "Barut tedarikçisi": a fuse taking one more charge. SHORT AND QUIET ON PURPOSE - it
+        /// can fire several times in one turn (one per dynamite block standing) and every turn of
+        /// a long round, so anything with a body to it becomes a nuisance by round three.
+        ///
+        /// A fuse, not an explosion: a fifth of a second of thin high noise that decays hard, a
+        /// touch of sputter, and no tone underneath. The low rumble BuildFlame has is exactly
+        /// what would make this tiring.
+        /// </summary>
+        private static AudioClip BuildFuse()
+        {
+            float[] buffer = Buffer(0.20f);
+            var rng = new System.Random(77);
+            // Thin body: low amplitude, steep decay, so it is gone almost as soon as it lands.
+            AddNoise(buffer, 0, 0.18f, 0.16f, 3.2f, rng);
+            // Two small sputters, which is what makes it read as a fuse rather than a hiss.
+            AddNoise(buffer, (int)(SampleRate * 0.04f), 0.02f, 0.13f, 1.5f, rng);
+            AddNoise(buffer, (int)(SampleRate * 0.10f), 0.02f, 0.10f, 1.5f, rng);
+            return Finish("fuse", buffer);
         }
 
         private static AudioClip BuildFlame()

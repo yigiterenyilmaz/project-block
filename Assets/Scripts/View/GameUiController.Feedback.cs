@@ -2177,6 +2177,7 @@ namespace ProjectBlock.View
             SyncChallenge();
             SyncQuarry();
             SyncIgnition();
+            SyncPowder();
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

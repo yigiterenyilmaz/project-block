@@ -176,6 +176,13 @@ namespace ProjectBlock.Core
         private readonly Dictionary<int, int> chargesByCard = new Dictionary<int, int>();
         private int paidThisRound;
 
+        /// <summary>What the powder did this turn, for the View - which cells took a charge and
+        /// how full each is. A NEW object per turn, matched by identity; rebuilt every turn and
+        /// meaningless across a load, hence [NotSaved] (which only goes on FIELDS, so this is one
+        /// rather than an auto-property).</summary>
+        [NotSaved]
+        public PowderVisuals LastCharge;
+
         public BarutTedarikcisiJoker()
             : base("barut_tedarikcisi", "Barut Tedarikçisi")
         {
@@ -267,7 +274,9 @@ namespace ProjectBlock.Core
         /// one. Nothing to forget and nothing to leak.</summary>
         private void ChargeWhatSurvived(GameBoard board)
         {
-            var standing = new Dictionary<int, int>();
+            // The CELLS are collected as well as the card ids, because the View shows cubes: a
+            // block reports one entry per cube it still has standing, all at the same charge.
+            var standing = new Dictionary<int, List<GridPos>>();
             foreach (GridPos cell in board.CellsOfKind(CubeKind.Dynamite))
             {
                 Cube? cube = board.GetCube(cell);
@@ -275,20 +284,39 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
-                standing[cube.Value.SourceCardId] = 1;
+                List<GridPos> cells;
+                if (!standing.TryGetValue(cube.Value.SourceCardId, out cells))
+                {
+                    cells = new List<GridPos>();
+                    standing[cube.Value.SourceCardId] = cells;
+                }
+                cells.Add(cell);
             }
             var next = new Dictionary<int, int>();
-            foreach (KeyValuePair<int, int> entry in standing)
+            var report = new PowderVisuals();
+            foreach (KeyValuePair<int, List<GridPos>> entry in standing)
             {
                 int had;
                 chargesByCard.TryGetValue(entry.Key, out had);
-                next[entry.Key] = had < MaxCharges ? had + 1 : MaxCharges;
+                int now = had < MaxCharges ? had + 1 : MaxCharges;
+                next[entry.Key] = now;
+                // A block at the cap takes nothing, so it is not reported: the sizzle and the
+                // mark say "this gained something", and a full block gaining nothing must not
+                // sound every turn for the rest of the round.
+                if (now > had)
+                {
+                    for (int i = 0; i < entry.Value.Count; i++)
+                    {
+                        report.Add(entry.Value[i], now, MaxCharges);
+                    }
+                }
             }
             chargesByCard.Clear();
             foreach (KeyValuePair<int, int> entry in next)
             {
                 chargesByCard[entry.Key] = entry.Value;
             }
+            LastCharge = report.Count > 0 ? report : null;
         }
     }
 
