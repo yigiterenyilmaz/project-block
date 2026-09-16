@@ -45,7 +45,12 @@ namespace ProjectBlock.View
             /// header so a closed group still says how much is in it.</summary>
             public int Count;
 
-            public static Row Header(string en, string tr, bool expanded, int count)
+            /// <summary>How deep in the tree this row sits - 0 for a top-level category, 1 for a
+            /// sub-group or a top-level category's own entries, 2 for a sub-group's entries. It
+            /// is the INDENT, and the indent is the only thing saying what belongs to what.</summary>
+            public int Depth;
+
+            public static Row Header(string en, string tr, bool expanded, int count, int depth)
             {
                 var row = new Row();
                 row.IsHeader = true;
@@ -53,14 +58,21 @@ namespace ProjectBlock.View
                 row.Tr = tr;
                 row.Expanded = expanded;
                 row.Count = count;
+                row.Depth = depth;
                 return row;
             }
 
             public static Row Item(string en, string tr)
             {
+                return Item(en, tr, 0);
+            }
+
+            public static Row Item(string en, string tr, int depth)
+            {
                 var row = new Row();
                 row.En = en;
                 row.Tr = tr;
+                row.Depth = depth;
                 return row;
             }
 
@@ -134,6 +146,15 @@ namespace ProjectBlock.View
         private static readonly Color HeaderClosedColor = new Color(0.16f, 0.22f, 0.33f);
 
         private static readonly Color HeaderCountColor = new Color(0.42f, 0.54f, 0.72f);
+
+        /// <summary>A sub-group's name - paler and smaller than a category's, so the two levels
+        /// are told apart by WEIGHT as well as by indent.</summary>
+        private static readonly Color SubHeaderColor = new Color(0.74f, 0.82f, 0.92f);
+
+        private static readonly Color SearchColor = new Color(1f, 0.86f, 0.45f);
+
+        /// <summary>How far one level of the tree steps in, in world units.</summary>
+        private const float IndentStep = 0.17f;
         private static readonly Color ItemColor = new Color(0.86f, 0.89f, 0.94f);
         private static readonly Color SelectedRowColor = new Color(0.20f, 0.28f, 0.42f);
         private static readonly Color KnobRowColor = new Color(0.11f, 0.13f, 0.18f);
@@ -263,6 +284,14 @@ namespace ProjectBlock.View
         public void SetContent(IReadOnlyList<Row> rows, int selected, int scroll,
             IReadOnlyList<Knob> knobs, string status)
         {
+            SetContent(rows, selected, scroll, knobs, status, null);
+        }
+
+        /// <summary><paramref name="query"/> is the live search text, or null/empty when the
+        /// panel is showing the tree.</summary>
+        public void SetContent(IReadOnlyList<Row> rows, int selected, int scroll,
+            IReadOnlyList<Knob> knobs, string status, string query)
+        {
             Clear();
             IsOpen = true;
             // The root carries the drag, so a rebuild cannot lose it.
@@ -278,10 +307,23 @@ namespace ProjectBlock.View
             ViewUtil.MakeText3D(transform, "Title", new Vector2(PanelCenterX, TitleY),
                 Loc.Pick("ANIMATION LAB (F3)", "ANİMASYON LABI (F3)"),
                 90, 0.022f, TitleColor, TextOrder, TextAnchor.MiddleCenter);
-            ViewUtil.MakeText3D(transform, "Help", new Vector2(PanelCenterX, HelpY),
-                Loc.Pick("click a group to open it  -  click an entry to play  -  DRAG THIS BAR",
-                    "grubu açmak için tıkla  -  oynatmak için girdiye tıkla  -  ÇUBUĞU SÜRÜKLE"),
-                90, 0.013f, FaintColor, TextOrder, TextAnchor.MiddleCenter);
+            // THE SEARCH LINE TAKES THE HELP LINE'S PLACE while a query is live. It is the same
+            // row because they are the same job - saying what the panel is doing right now - and
+            // a search box that is always on screen is a box you have to be told to ignore.
+            if (!string.IsNullOrEmpty(query))
+            {
+                ViewUtil.MakeText3D(transform, "Search", new Vector2(PanelCenterX, HelpY),
+                    Loc.Pick("search: ", "ara: ") + query + "_"
+                        + Loc.Pick("   (esc clears)", "   (esc temizler)"),
+                    90, 0.014f, SearchColor, TextOrder, TextAnchor.MiddleCenter);
+            }
+            else
+            {
+                ViewUtil.MakeText3D(transform, "Help", new Vector2(PanelCenterX, HelpY),
+                    Loc.Pick("click to open  -  TYPE TO SEARCH  -  space replays  -  DRAG THIS BAR",
+                        "tıkla aç  -  ARAMAK İÇİN YAZ  -  boşluk tekrarlar  -  ÇUBUĞU SÜRÜKLE"),
+                    90, 0.0125f, FaintColor, TextOrder, TextAnchor.MiddleCenter);
+            }
 
             DrawRows(rows, selected, scroll);
             DrawScrollbar(rows.Count, scroll);
@@ -309,28 +351,32 @@ namespace ProjectBlock.View
                     continue;
                 }
                 Row row = rows[index];
+                float indent = row.Depth * IndentStep;
                 if (row.IsHeader)
                 {
-                    // A HEADER IS A BUTTON NOW: it opens and closes its group, so it gets a
-                    // plate of its own to look pressable and a caret saying which way it is.
-                    // The rule under it stays only while the group is OPEN - a rule under a
-                    // closed header is a divider between two things that are not there.
+                    // A HEADER IS A BUTTON: it opens and closes its group, so it gets a plate to
+                    // look pressable and a caret saying which way it is. A TOP-LEVEL category is
+                    // drawn heavier than a sub-group - with two levels on screen the indent alone
+                    // is not enough to say which is which at a glance.
+                    bool top = row.Depth == 0;
                     ViewUtil.MakeRect(transform, "HeaderPlate_" + index,
-                        new Vector2(PanelCenterX, y),
-                        new Vector2(PanelWidth - 0.16f, RowHeight),
+                        new Vector2(PanelCenterX + indent * 0.5f, y),
+                        new Vector2(PanelWidth - 0.16f - indent, RowHeight),
                         row.Expanded ? HeaderOpenColor : HeaderClosedColor, ContentOrder);
                     ViewUtil.MakeText3D(transform, "HeaderCaret_" + index,
-                        new Vector2(PanelLeft + 0.18f, y), row.Expanded ? "v" : ">",
+                        new Vector2(PanelLeft + 0.18f + indent, y), row.Expanded ? "v" : ">",
                         90, 0.0135f, HeaderColor, TextOrder, TextAnchor.MiddleLeft);
                     ViewUtil.MakeText3D(transform, "Header_" + index,
-                        new Vector2(PanelLeft + 0.38f, y), row.Label.ToUpperInvariant(),
-                        90, 0.0135f, HeaderColor, TextOrder, TextAnchor.MiddleLeft);
+                        new Vector2(PanelLeft + 0.38f + indent, y),
+                        top ? row.Label.ToUpperInvariant() : row.Label,
+                        90, top ? 0.0145f : 0.0128f,
+                        top ? HeaderColor : SubHeaderColor, TextOrder, TextAnchor.MiddleLeft);
                     // The COUNT, right-aligned: a closed group still has to say how much is in
                     // it, or collapsing the catalogue hides how big it is as well as what it is.
                     ViewUtil.MakeText3D(transform, "HeaderCount_" + index,
                         new Vector2(PanelRight - 0.22f, y), row.Count.ToString(),
                         90, 0.0125f, HeaderCountColor, TextOrder, TextAnchor.MiddleRight);
-                    if (row.Expanded)
+                    if (row.Expanded && top)
                     {
                         ViewUtil.MakeRect(transform, "HeaderRule_" + index,
                             new Vector2(PanelCenterX, y - 0.15f),
@@ -340,11 +386,13 @@ namespace ProjectBlock.View
                 }
                 if (index == selected)
                 {
-                    ViewUtil.MakeRect(transform, "Sel_" + index, new Vector2(PanelCenterX, y),
-                        new Vector2(PanelWidth - 0.16f, RowHeight), SelectedRowColor, ContentOrder);
+                    ViewUtil.MakeRect(transform, "Sel_" + index,
+                        new Vector2(PanelCenterX + indent * 0.5f, y),
+                        new Vector2(PanelWidth - 0.16f - indent, RowHeight),
+                        SelectedRowColor, ContentOrder);
                 }
                 ViewUtil.MakeText3D(transform, "Row_" + index,
-                    new Vector2(PanelLeft + 0.3f, y), row.Label,
+                    new Vector2(PanelLeft + 0.3f + indent, y), row.Label,
                     90, 0.0145f, ItemColor, TextOrder, TextAnchor.MiddleLeft);
             }
         }

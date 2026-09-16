@@ -58,76 +58,193 @@ namespace ProjectBlock.View
         // master index - so no index into the catalogue can ever go stale, and the selection and
         // the scroll work in view space where the player's eyes are.
 
-        /// <summary>For every master row, the master index of the header it belongs to; -1 for a
-        /// header itself. Written as the catalogue is built.</summary>
-        private readonly List<int> animGroupOf = new List<int>();
+        /// <summary>One node of the catalogue tree - a parent category or one of its
+        /// sub-groups. Items are MASTER indices, so the catalogue itself is never filtered.</summary>
+        private sealed class AnimGroup
+        {
+            public string Key;
+            public string En;
+            public string Tr;
+            public AnimGroup Parent;
+            public readonly List<AnimGroup> Subs = new List<AnimGroup>();
+            public readonly List<int> Items = new List<int>();
+            public bool Open;
 
-        /// <summary>Header master indices whose group is CLOSED. Everything starts in here.</summary>
-        private readonly HashSet<int> animCollapsed = new HashSet<int>();
+            public string Label
+            {
+                get { return Loc.Pick(En, Tr); }
+            }
 
-        /// <summary>Visible position -> master index. The list the panel actually shows.</summary>
+            /// <summary>Playable entries anywhere beneath this node.</summary>
+            public int TotalItems
+            {
+                get
+                {
+                    int total = Items.Count;
+                    for (int i = 0; i < Subs.Count; i++)
+                    {
+                        total += Subs[i].TotalItems;
+                    }
+                    return total;
+                }
+            }
+        }
+
+        private readonly List<AnimGroup> animParents = new List<AnimGroup>();
+        private readonly Dictionary<string, AnimGroup> animParentByKey =
+            new Dictionary<string, AnimGroup>();
+
+        /// <summary>The sub-group being filled while the catalogue is built.</summary>
+        private AnimGroup animBuildingSub;
+
+        /// <summary>Visible position -> master index, or -1 for a group header row. The list the
+        /// panel actually shows.</summary>
         private readonly List<int> animView = new List<int>();
+
+        /// <summary>The group each visible row IS, when it is a header row; null for an entry.
+        /// Parallel to animView.</summary>
+        private readonly List<AnimGroup> animViewGroup = new List<AnimGroup>();
 
         /// <summary>The rows handed to the panel, parallel to animView.</summary>
         private readonly List<AnimationLabView.Row> animViewRows =
             new List<AnimationLabView.Row>();
 
-        /// <summary>Playable entries under each header, by header master index - so a closed
-        /// group can still say how much is in it.</summary>
-        private readonly Dictionary<int, int> animGroupCount = new Dictionary<int, int>();
-
-        /// <summary>The header being filled while the catalogue is built.</summary>
-        private int animBuildingHeader = -1;
+        /// <summary>
+        /// THE SEARCH BOX. Typing anywhere in the lab filters, because the catalogue is far too
+        /// big to be found by opening groups one at a time when you already know the name of the
+        /// thing you want.
+        ///
+        /// A non-empty query REPLACES the tree with a flat list of matching entries, each
+        /// labelled with the group it came from - the structure is what you browse when you do
+        /// not know where a thing is, and it only gets in the way when you do.
+        /// </summary>
+        private string animQuery = string.Empty;
 
         /// <summary>Rebuilds the visible projection from the collapsed set. Cheap - the catalogue
         /// is a few hundred rows and this only runs when a group is opened or closed.</summary>
         private void RebuildAnimView()
         {
             animView.Clear();
+            animViewGroup.Clear();
             animViewRows.Clear();
-            for (int i = 0; i < animRows.Count; i++)
+            if (!string.IsNullOrEmpty(animQuery))
             {
-                AnimationLabView.Row row = animRows[i];
-                if (row.IsHeader)
-                {
-                    int count;
-                    animGroupCount.TryGetValue(i, out count);
-                    animView.Add(i);
-                    animViewRows.Add(AnimationLabView.Row.Header(row.En, row.Tr,
-                        !animCollapsed.Contains(i), count));
-                    continue;
-                }
-                int owner = animGroupOf[i];
-                if (owner >= 0 && animCollapsed.Contains(owner))
-                {
-                    continue;
-                }
-                animView.Add(i);
-                animViewRows.Add(row);
+                RebuildAnimSearchView();
+                return;
             }
+            for (int p = 0; p < animParents.Count; p++)
+            {
+                AnimGroup parent = animParents[p];
+                AddGroupRow(parent, 0);
+                if (!parent.Open)
+                {
+                    continue;
+                }
+                // A parent's own loose entries come before its sub-groups, so a category that is
+                // mostly one flat list does not hide them under a fold.
+                AddItemRows(parent, 1);
+                for (int c = 0; c < parent.Subs.Count; c++)
+                {
+                    AnimGroup subGroup = parent.Subs[c];
+                    AddGroupRow(subGroup, 1);
+                    if (subGroup.Open)
+                    {
+                        AddItemRows(subGroup, 2);
+                    }
+                }
+            }
+        }
+
+        private void AddGroupRow(AnimGroup group, int depth)
+        {
+            animView.Add(-1);
+            animViewGroup.Add(group);
+            animViewRows.Add(AnimationLabView.Row.Header(group.En, group.Tr, group.Open,
+                group.TotalItems, depth));
+        }
+
+        private void AddItemRows(AnimGroup group, int depth)
+        {
+            for (int i = 0; i < group.Items.Count; i++)
+            {
+                int master = group.Items[i];
+                animView.Add(master);
+                animViewGroup.Add(null);
+                animViewRows.Add(AnimationLabView.Row.Item(
+                    animRows[master].En, animRows[master].Tr, depth));
+            }
+        }
+
+        /// <summary>
+        /// The flat filtered list. Every entry in the game is matched against the query, in BOTH
+        /// languages and against the name of the group it sits in - so "barut" finds the group's
+        /// entries even where an entry's own label does not repeat the name.
+        /// </summary>
+        private void RebuildAnimSearchView()
+        {
+            string q = animQuery.ToLowerInvariant();
+            for (int p = 0; p < animParents.Count; p++)
+            {
+                MatchInto(animParents[p], q);
+                for (int c = 0; c < animParents[p].Subs.Count; c++)
+                {
+                    MatchInto(animParents[p].Subs[c], q);
+                }
+            }
+        }
+
+        private void MatchInto(AnimGroup group, string q)
+        {
+            bool groupMatches = Contains(group.En, q) || Contains(group.Tr, q)
+                || (group.Parent != null
+                    && (Contains(group.Parent.En, q) || Contains(group.Parent.Tr, q)));
+            for (int i = 0; i < group.Items.Count; i++)
+            {
+                int master = group.Items[i];
+                AnimationLabView.Row row = animRows[master];
+                if (!groupMatches && !Contains(row.En, q) && !Contains(row.Tr, q))
+                {
+                    continue;
+                }
+                animView.Add(master);
+                animViewGroup.Add(null);
+                // The group's name is prefixed, because a flat list of entry labels out of
+                // context is a list you cannot tell apart - half of them are called "switch".
+                animViewRows.Add(AnimationLabView.Row.Item(
+                    group.En + "  -  " + row.En, group.Tr + "  -  " + row.Tr, 0));
+            }
+        }
+
+        private static bool Contains(string haystack, string lowerNeedle)
+        {
+            return !string.IsNullOrEmpty(haystack)
+                && haystack.ToLowerInvariant().Contains(lowerNeedle);
         }
 
         /// <summary>Opens or closes the group a VISIBLE row belongs to, keeping the header the
         /// player clicked under the cursor rather than letting the list jump.</summary>
         private void ToggleAnimGroup(int viewIndex)
         {
-            if (viewIndex < 0 || viewIndex >= animView.Count)
+            AnimGroup group = AnimGroupAt(viewIndex);
+            if (group == null)
             {
                 return;
             }
-            int master = animView[viewIndex];
-            if (!animRows[master].IsHeader)
+            group.Open = !group.Open;
+            // CLOSING A PARENT CLOSES ITS CHILDREN, so reopening it shows the sub-groups rather
+            // than whatever was left open inside it three minutes ago. A fold should look the
+            // same every time it opens.
+            if (!group.Open)
             {
-                return;
-            }
-            if (!animCollapsed.Remove(master))
-            {
-                animCollapsed.Add(master);
+                for (int i = 0; i < group.Subs.Count; i++)
+                {
+                    group.Subs[i].Open = false;
+                }
             }
             RebuildAnimView();
             // The header keeps its place on screen: it is what the player is looking at, and a
             // list that scrolls out from under a click is a list that has to be found again.
-            int nowAt = animView.IndexOf(master);
+            int nowAt = animViewGroup.IndexOf(group);
             if (nowAt >= 0)
             {
                 animSelected = nowAt;
@@ -140,10 +257,17 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>The master index a visible position points at, or -1.</summary>
+        /// <summary>The master index a visible position points at, or -1 on a header row.</summary>
         private int AnimMasterAt(int viewIndex)
         {
             return viewIndex >= 0 && viewIndex < animView.Count ? animView[viewIndex] : -1;
+        }
+
+        /// <summary>The group a visible position IS, or null when it is an entry.</summary>
+        private AnimGroup AnimGroupAt(int viewIndex)
+        {
+            return viewIndex >= 0 && viewIndex < animViewGroup.Count
+                ? animViewGroup[viewIndex] : null;
         }
 
         private int animSelected;
@@ -211,17 +335,11 @@ namespace ProjectBlock.View
                 return;
             }
             BuildAnimCatalogue();
-            // EVERY GROUP CLOSED on open - see the block by animCollapsed. The catalogue is
-            // rebuilt each time the lab opens (so a language switch re-texts it), and this is
-            // what makes reopening it show the categories rather than wherever it was left.
-            animCollapsed.Clear();
-            for (int i = 0; i < animRows.Count; i++)
-            {
-                if (animRows[i].IsHeader)
-                {
-                    animCollapsed.Add(i);
-                }
-            }
+            // EVERY GROUP CLOSED on open. The catalogue is rebuilt each time the lab opens (so a
+            // language switch re-texts it), and a fresh tree is closed by construction - which is
+            // what makes reopening the lab show the six categories rather than wherever the
+            // scroll happened to be left.
+            animQuery = string.Empty;
             RebuildAnimView();
             animSelected = 0;
             animScroll = 0;
@@ -234,11 +352,14 @@ namespace ProjectBlock.View
             // away while the lab is open; the two entries that animate it bring it back (see
             // PlayAnimationRow). The power strip is on the left and needs no such care.
             jokerBar.SetVisible(false);
+            SubscribeAnimText(true);
             RedrawAnimationLab();
         }
 
         private void CloseAnimationLab()
         {
+            SubscribeAnimText(false);
+            animQuery = string.Empty;
             animLab.Hide();
             animDragging = false;
             // Every knob that reaches outside the panel is put back: a lab left at 0.25x or with
@@ -338,6 +459,10 @@ namespace ProjectBlock.View
             if (kb != null && (kb.escapeKey.wasPressedThisFrame || kb.f3Key.wasPressedThisFrame))
             {
                 CloseAnimationLab();
+                return;
+            }
+            if (HandleAnimSearchInput(kb))
+            {
                 return;
             }
             if (kb != null && kb.spaceKey.wasPressedThisFrame)
@@ -474,12 +599,7 @@ namespace ProjectBlock.View
         /// verb for the mouse and the keyboard both.</summary>
         private void ActivateAnimRow(int viewIndex)
         {
-            int master = AnimMasterAt(viewIndex);
-            if (master < 0)
-            {
-                return;
-            }
-            if (animRows[master].IsHeader)
+            if (AnimGroupAt(viewIndex) != null)
             {
                 ToggleAnimGroup(viewIndex);
                 RedrawAnimationLab();
@@ -492,17 +612,12 @@ namespace ProjectBlock.View
         /// lands on its header. Right and left, as a tree is expected to behave.</summary>
         private void CollapseNavigate(bool open)
         {
-            int master = AnimMasterAt(animSelected);
-            if (master < 0)
+            AnimGroup group = AnimGroupAt(animSelected);
+            if (group != null)
             {
-                return;
-            }
-            if (animRows[master].IsHeader)
-            {
-                // Already in the state that key asks for: nothing to do.
-                if (open != animCollapsed.Contains(master))
+                if (group.Open == open)
                 {
-                    return;
+                    return; // already in the state that key asks for
                 }
                 ToggleAnimGroup(animSelected);
                 RedrawAnimationLab();
@@ -512,12 +627,15 @@ namespace ProjectBlock.View
             {
                 return; // an entry has nothing to open
             }
-            int owner = animGroupOf[master];
-            int headerAt = owner >= 0 ? animView.IndexOf(owner) : -1;
-            if (headerAt >= 0)
+            // Inside a group: close the nearest header ABOVE the cursor and land on it.
+            for (int i = animSelected - 1; i >= 0; i--)
             {
-                ToggleAnimGroup(headerAt);
-                RedrawAnimationLab();
+                if (animViewGroup[i] != null)
+                {
+                    ToggleAnimGroup(i);
+                    RedrawAnimationLab();
+                    return;
+                }
             }
         }
 
@@ -574,6 +692,92 @@ namespace ProjectBlock.View
         // VISIBLE position (NextAnimRow), and a header is a row you stop on rather than step
         // over, because with the catalogue closed the headers are the only rows there are. A
         // master-indexed helper left lying next to a view-indexed selection is a trap.
+
+        /// <summary>
+        /// TYPING FILTERS. Letters and digits go into the query, backspace takes one back, and
+        /// Escape clears it before it closes the lab - so the key that means "get out of this"
+        /// gets out of the search first.
+        ///
+        /// It reads InputSystem's own text stream rather than testing forty key bindings, which
+        /// is also what makes it match the player's actual keyboard layout. SPACE is deliberately
+        /// NOT taken: it replays the last animation, which is the single most used key in the
+        /// lab, and a search box that eats it would cost more than it gives. Queries are single
+        /// words in practice.
+        /// </summary>
+        private bool HandleAnimSearchInput(Keyboard kb)
+        {
+            if (kb == null)
+            {
+                return false;
+            }
+            if (kb.backspaceKey.wasPressedThisFrame)
+            {
+                if (animQuery.Length > 0)
+                {
+                    animQuery = animQuery.Substring(0, animQuery.Length - 1);
+                    OnAnimQueryChanged();
+                }
+                return true;
+            }
+            if (kb.escapeKey.wasPressedThisFrame && animQuery.Length > 0)
+            {
+                animQuery = string.Empty;
+                OnAnimQueryChanged();
+                return true;
+            }
+            string typed = animTypedThisFrame;
+            animTypedThisFrame = string.Empty;
+            if (string.IsNullOrEmpty(typed))
+            {
+                return false;
+            }
+            animQuery += typed;
+            OnAnimQueryChanged();
+            return true;
+        }
+
+        private void OnAnimQueryChanged()
+        {
+            RebuildAnimView();
+            animSelected = 0;
+            animScroll = 0;
+            RedrawAnimationLab();
+        }
+
+        /// <summary>Characters typed since the last frame. Filled by the InputSystem callback the
+        /// lab subscribes to while it is open - polling keys cannot tell an A from a shifted one
+        /// and knows nothing about the player's layout.</summary>
+        private string animTypedThisFrame = string.Empty;
+
+        private bool animTextSubscribed;
+
+        private void SubscribeAnimText(bool on)
+        {
+            if (Keyboard.current == null || on == animTextSubscribed)
+            {
+                return;
+            }
+            if (on)
+            {
+                Keyboard.current.onTextInput += OnAnimTextInput;
+            }
+            else
+            {
+                Keyboard.current.onTextInput -= OnAnimTextInput;
+                animTypedThisFrame = string.Empty;
+            }
+            animTextSubscribed = on;
+        }
+
+        private void OnAnimTextInput(char c)
+        {
+            // Space replays; control characters are not a query.
+            if (c == ' ' || c < ' ')
+            {
+                return;
+            }
+            animTypedThisFrame += c;
+        }
 
         // ------------------------------------------------------------------ knobs
 
@@ -672,7 +876,7 @@ namespace ProjectBlock.View
             string status = animLastLabel.Length > 0
                 ? Loc.Pick("last: ", "son: ") + animLastLabel
                 : Loc.Pick("pick an animation", "bir animasyon seç");
-            animLab.SetContent(animViewRows, animSelected, animScroll, knobs, status);
+            animLab.SetContent(animViewRows, animSelected, animScroll, knobs, status, animQuery);
         }
 
         private static string OnOff(bool on)
@@ -682,25 +886,62 @@ namespace ProjectBlock.View
 
         // ------------------------------------------------------------------ the catalogue
 
-        private void AddAnimHeader(string en, string tr)
+        /// <summary>Declares a top-level category. Order here is the order on screen.</summary>
+        private void AddAnimParent(string key, string en, string tr)
         {
-            animBuildingHeader = animRows.Count;
-            animGroupCount[animBuildingHeader] = 0;
-            // Expanded/Count on the MASTER row are placeholders - RebuildAnimView writes the
-            // live ones, because both change without the catalogue being rebuilt.
-            animRows.Add(AnimationLabView.Row.Header(en, tr, false, 0));
-            animActions.Add(null);
-            animGroupOf.Add(-1);
+            var group = new AnimGroup();
+            group.Key = key;
+            group.En = en;
+            group.Tr = tr;
+            animParents.Add(group);
+            animParentByKey[key] = group;
+        }
+
+        /// <summary>
+        /// Opens a SUB-GROUP under a parent, and everything added after it belongs to that
+        /// sub-group until the next one.
+        ///
+        /// THE PARENT IS NAMED RATHER THAN INFERRED FROM POSITION, which is the whole reason the
+        /// tree could be built at all: the catalogue is three and a half thousand lines and its
+        /// groups are in the order they were written, not in the order they belong - the jokers
+        /// alone are scattered either side of the bosses and the powers. Naming the parent lets
+        /// the structure be right without moving a single entry.
+        ///
+        /// Declaring the same sub key twice REOPENS it rather than making a second one, so an
+        /// effect whose entries were written in two places comes out as one group.
+        /// </summary>
+        private void AddAnimSub(string parentKey, string key, string en, string tr)
+        {
+            AnimGroup parent;
+            if (!animParentByKey.TryGetValue(parentKey, out parent))
+            {
+                return;
+            }
+            for (int i = 0; i < parent.Subs.Count; i++)
+            {
+                if (parent.Subs[i].Key == key)
+                {
+                    animBuildingSub = parent.Subs[i];
+                    return;
+                }
+            }
+            var group = new AnimGroup();
+            group.Key = key;
+            group.En = en;
+            group.Tr = tr;
+            group.Parent = parent;
+            parent.Subs.Add(group);
+            animBuildingSub = group;
         }
 
         private void AddAnim(string en, string tr, System.Action play)
         {
+            int master = animRows.Count;
             animRows.Add(AnimationLabView.Row.Item(en, tr));
             animActions.Add(play);
-            animGroupOf.Add(animBuildingHeader);
-            if (animBuildingHeader >= 0)
+            if (animBuildingSub != null)
             {
-                animGroupCount[animBuildingHeader] = animGroupCount[animBuildingHeader] + 1;
+                animBuildingSub.Items.Add(master);
             }
         }
 
@@ -711,14 +952,24 @@ namespace ProjectBlock.View
         {
             animRows.Clear();
             animActions.Clear();
-            animGroupOf.Clear();
-            animGroupCount.Clear();
-            animBuildingHeader = -1;
+            animParents.Clear();
+            animParentByKey.Clear();
+            animBuildingSub = null;
 
-            AddAnimHeader("state", "durum");
+            // THE TOP LEVEL, in the order it is shown. Every sub-group names one of these, so the
+            // structure is decided here and nowhere else - and an entry can be written next to
+            // the code it exercises while still appearing under the category it belongs to.
+            AddAnimParent("general", "general", "genel");
+            AddAnimParent("jokers", "jokers", "jokerler");
+            AddAnimParent("bosses", "bosses", "patronlar");
+            AddAnimParent("powers", "powers", "güçler");
+            AddAnimParent("sequences", "full sequences", "tam diziler");
+            AddAnimParent("raw", "not reworked yet", "elden geçirilmedi");
+
+            AddAnimSub("general", "state", "state", "durum");
             AddAnim("RESET - resync to the real game", "SIFIRLA - oyuna geri dön", AnimResync);
 
-            AddAnimHeader("cards", "kartlar");
+            AddAnimSub("general", "cards", "cards", "kartlar");
             AddAnim("round start: shuffle + deal", "raunt başı: karma + dağıtma",
                 delegate { sfx.Shuffle(); cardLayer.AnimateRoundStart(session.CurrentRound); });
             AddAnim("redraw hand", "eli yenile",
@@ -746,7 +997,7 @@ namespace ProjectBlock.View
             AddAnim("pet demands out", "evcil istekleri kalksın",
                 delegate { cardLayer.ShowPetDemands(null); });
 
-            AddAnimHeader("board", "oyun alanı");
+            AddAnimSub("general", "board", "board", "oyun alanı");
             AddAnim("water fall", "su akışı", AnimWaterFall);
             AddAnim("placement preview: valid", "yerleşim önizleme: geçerli",
                 delegate { AnimPreview(true); });
@@ -838,7 +1089,7 @@ namespace ProjectBlock.View
             AddAnim("mine shell game (hold open / reveal / one hop / full / re-reveal)",
                 "mayın dansı (açık tut / gösterim / tek hamle / tam / yeniden)", AnimMineDance);
 
-            AddAnimHeader("blasts + shake", "patlama + sarsıntı");
+            AddAnimSub("general", "blasts", "blasts + shake", "patlama + sarsıntı");
             AddAnim("line clear ray: row (combo knob)", "satır ışını (kombo ayarı)",
                 delegate { FlashLineAtKnob(AnimBoard(), AnimMiddleRow(), true); });
             AddAnim("line clear ray: column (combo knob)", "sütun ışını (kombo ayarı)",
@@ -1078,7 +1329,7 @@ namespace ProjectBlock.View
             AddAnim("camera shake: dynamite", "kamera sarsıntısı: dinamit",
                 delegate { ShakeForBlast(true, false, animCombo); });
 
-            AddAnimHeader("popups", "yazılar");
+            AddAnimSub("general", "popups", "popups", "yazılar");
             AddAnim("COMBO xN (combo knob)", "KOMBO xN (kombo ayarı)",
                 delegate { SpawnComboPopup(Mathf.Max(2, animCombo)); });
             AddAnim("CLEAN SWEEP!", "TEMİZLİK!", delegate { SpawnSweepPopup(); });
@@ -1103,7 +1354,7 @@ namespace ProjectBlock.View
                         Loc.Pick("worthless", "değersiz"), new Color(0.6f, 0.6f, 0.6f), 50, 0.045f);
                 });
 
-            AddAnimHeader("bars + market", "barlar + market");
+            AddAnimSub("general", "bars", "bars + market", "barlar + market");
             AddAnim("joker panel pulse", "joker paneli nabzı",
                 delegate { AnimPulseJoker(); });
             AddAnim("joker sold shrink", "joker satıldı", AnimSellJoker);
@@ -1118,7 +1369,7 @@ namespace ProjectBlock.View
                 delegate { AnimMarketBuy(MarketOfferKind.Power); });
             AddAnim("deck overlay: sell flight", "deste ekranı: satış uçuşu", AnimDeckSell);
 
-            AddAnimHeader("ambience", "atmosfer");
+            AddAnimSub("general", "ambience", "ambience", "atmosfer");
             AddAnim("overtime flame (overtime knob)", "uzatma alevi (uzatma ayarı)",
                 delegate { flameStreak.SetState(animOvertime, boardView.WorldRect); });
             AddAnim("overtime flame off", "uzatma alevi kapalı",
@@ -1128,7 +1379,7 @@ namespace ProjectBlock.View
             AddAnim("explosion sound", "patlama sesi", delegate { sfx.Explode(); });
             AddAnim("flame sound", "alev sesi", delegate { sfx.Flame(); });
 
-            AddAnimHeader("yılan", "yılan");
+            AddAnimSub("bosses", "snakebody", "yılan: gövde", "yılan: gövde");
             // "YILAN" - every scenario on a board of the lab's own, played through the same seams
             // the game plays it through (PlaySnakeBody / PlaySnakeScene). The lab fabricates the
             // ARGUMENTS - the shape of the snake, what is standing in front of it, how many lines
@@ -1186,7 +1437,7 @@ namespace ProjectBlock.View
             AddAnim("Yılan test: the bite in all four directions",
                 "yılan testi: dört yönde ısırma",
                 delegate { AnimSnake(AnimSnakeScene.BiteDirections); });
-            AddAnimHeader("snake: beaten - the stolen colours let go",
+            AddAnimSub("bosses", "snakedefeat", "yılan: yenilgi",
                 "yılan: yenilgi - çalınan renklerin serbest kalması");
             // THE BOSS'S END, and the one animation whose subject is what it TOOK. Each entry
             // hands in a different round's worth of swallowed colour, because an animation that
@@ -1276,7 +1527,7 @@ namespace ProjectBlock.View
                 "yılan yenilgi hata ayıklama: son parıltı aç/kapa",
                 delegate { AnimSnakeToggle(ref SnakeDefeatView.Layers.ShowFinalGlint,
                     "final glint", "son parıltı"); });
-            AddAnimHeader("snake: the bite, one block at a time",
+            AddAnimSub("bosses", "snakebite", "yılan: ısırık",
                 "yılan: ısırma (hero) - blok blok");
             // THE BLOCK'S MATTER, not the block. Everything under this heading is one hero event
             // seen from a different side: a different block type, a different direction, or slowed
@@ -1421,7 +1672,7 @@ namespace ProjectBlock.View
             AddAnim("snake debug: proxy positions on/off",
                 "yılan hata ayıklama: vekil konumlar aç/kapa",
                 delegate { AnimSnakeToggle(ref SnakeView.Layers.ShowSnakeVisualProxyPositions, "proxy positions", "vekil konumlar"); });
-            AddAnimHeader("hidrolik pres", "hidrolik pres");
+            AddAnimSub("powers", "press", "hidrolik pres", "hidrolik pres");
             // "HIDROLIK PRES" - every scenario, on a board of the lab's own, with the REAL rules
             // run on it (GameBoard.Compress / GameBoard.Expand through their reporting overloads).
             // The lab fabricates the ARGUMENTS - what is in the four cells, what is standing in the
@@ -1560,7 +1811,7 @@ namespace ProjectBlock.View
                         RedrawAnimationLab();
                     }
                 });
-            AddAnimHeader("parazit / konak küp", "parazit / konak küp");
+            AddAnimSub("jokers", "parazit", "parazit", "parazit");
             // "PARAZIT" - the clasp on a host cube, on a board of the lab's own, with the REAL
             // rules run on it: the refusals come from GameBoard.DestroyCube / DestroyCubeForced
             // writing them down, exactly as they do in a turn.
@@ -1683,7 +1934,7 @@ namespace ProjectBlock.View
                         RedrawAnimationLab();
                     }
                 });
-            AddAnimHeader("mapus / mühürlü hücre", "mapus / mühürlü hücre");
+            AddAnimSub("bosses", "mapus", "mapus", "mapus");
             // "MAPUS" - the prison it builds in one empty cell, on a board of the lab's own with
             // the REAL rules run on it: the boss picks its own target through MapusBoss.Retarget,
             // and the scene plays whatever it reported. Which cell is sealed, whether the seal
@@ -1775,11 +2026,11 @@ namespace ProjectBlock.View
                         RedrawAnimationLab();
                     }
                 });
-            AddAnimHeader("yangın / ateş cephesi", "yangın / ateş cephesi");
             // "YANGIN" turns the neighbours of every fire cube to fire, ONE RING, once a round.
             // Every scene here runs the real rule (SpreadJoker.SpreadOn) on a board of the lab's
             // own, so the cubes that light are the cubes the game would light - which is the only
             // way the one-ring test below is worth anything.
+            AddAnimSub("jokers", "yangin", "yangın", "yangın");
             AddAnim("Yangın: one fire, one neighbour", "yangın: tek ateş, tek komşu",
                 delegate { AnimFire(AnimFireScene.One); });
             AddAnim("Yangın: one fire, all four neighbours",
@@ -1848,6 +2099,7 @@ namespace ProjectBlock.View
             AddAnim("Yangın switch: the settle", "yangın anahtarı: oturma",
                 delegate { AnimFireToggle(ref FireSpreadView.Layers.ShowSettle,
                     "settle", "oturma"); });
+            AddAnimSub("jokers", "deprem", "deprem", "deprem");
             AddAnim("deprem: one cube collapses",
                 "deprem: bir küp çöküyor",
                 delegate { AnimQuake(AnimQuakeScene.One); });
@@ -2004,6 +2256,7 @@ namespace ProjectBlock.View
                         "deprem: tüm katmanlar geri açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
+            AddAnimSub("jokers", "hazine", "hazine", "hazine");
             AddAnim("hazine: TREASURE - explosion bonus (+score)",
                 "hazine: HAZİNE - patlama bonusu (+skor)",
                 delegate { AnimHazine(AnimHazineScene.TreasureScore); });
@@ -2127,6 +2380,7 @@ namespace ProjectBlock.View
                     animLastLabel = Loc.Pick("hazine: every layer back on", "hazine: tüm katmanlar geri açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
+            AddAnimSub("jokers", "meydanokuma", "meydan okuma", "meydan okuma");
             AddAnim("meydan okuma: row challenge: contract laid", "meydan okuma: satır meydan okuması: kontrat kuruluyor",
                 delegate { AnimChallenge(AnimChallengeScene.SpawnRow); });
             AddAnim("meydan okuma: column challenge: contract laid", "meydan okuma: sütun meydan okuması: kontrat kuruluyor",
@@ -2226,6 +2480,7 @@ namespace ProjectBlock.View
                     animLastLabel = Loc.Pick("meydan okuma: every layer back on", "meydan okuma: tüm katmanlar açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
+            AddAnimSub("jokers", "elmaskazma", "elmas kazma", "elmas kazma");
             AddAnim("elmas kazma: single obsidian - attunement", "elmas kazma: tek obsidyen - rezonans",
                 delegate
                 {
@@ -2382,6 +2637,7 @@ namespace ProjectBlock.View
                     animLastLabel = Loc.Pick("elmas kazma: every layer back on", "elmas kazma: tüm katmanlar açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
+            AddAnimSub("jokers", "tutustur", "tutuştur", "tutuştur");
             AddAnim("tutuştur: single target burnout", "tutuştur: tek hedef yanması",
                 delegate { IgnitionBurnView.Layers.AllOn(); AnimIgnition(AnimIgnitionScene.Single); });
             AddAnim("tutuştur: heat surge only", "tutuştur: yalnızca ısınma",
@@ -2498,6 +2754,7 @@ namespace ProjectBlock.View
                     animLastLabel = Loc.Pick("tutuştur: every layer back on", "tutuştur: tüm katmanlar açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
+            AddAnimSub("jokers", "harcama", "harcama bonusu", "harcama bonusu");
             AddAnim("harcama bonusu: the whole payout",
                 "harcama bonusu: bütün ödeme",
                 delegate { AnimRebate(1, false, "empty pile pays back", "boş deste geri ödedi"); });
@@ -2691,6 +2948,7 @@ namespace ProjectBlock.View
                         "harcama bonusu: tüm katmanlar geri açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
+            AddAnimSub("jokers", "buzluk", "buzluk", "buzluk");
             AddAnim("buzluk: water freezes at the BOTTOM wall",
                 "buzluk: su ALT duvarda donuyor",
                 delegate { AnimIce(AnimIceScene.Bottom); });
@@ -2866,6 +3124,7 @@ namespace ProjectBlock.View
                         "buzluk: tüm katmanlar geri açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
+            AddAnimSub("jokers", "yangin", "yangın", "yangın");
             AddAnim("Yangın switch: ALL layers back on",
                 "yangın anahtarı: TÜM katmanlar geri açık",
                 delegate
@@ -2879,7 +3138,7 @@ namespace ProjectBlock.View
                     }
                 });
 
-            AddAnimHeader("midas / altın temettüsü", "midas / altın temettüsü");
+            AddAnimSub("jokers", "midas", "midas", "midas");
             // "MIDAS" pays EVERY TURN for the gold in your hand, so the whole design question is
             // whether it is still a pleasure on the fiftieth turn. These entries exist to be
             // pressed twice in a row: once to see it, once to find out whether you want to see it
@@ -3023,7 +3282,7 @@ namespace ProjectBlock.View
                     }
                 });
 
-            AddAnimHeader("tılsım / hayalet alanı", "tılsım / hayalet alanı");
+            AddAnimSub("powers", "talisman", "tılsım", "tılsım");
             // "TILSIM" - the ghost harvest, the claim it leaves in the outside space, and the
             // bonus ground it hands the next round. What the lab fabricates here is the REPORT,
             // which is the argument: the power's real Run would score and mutate the round's own
@@ -3324,7 +3583,7 @@ namespace ProjectBlock.View
                         RedrawAnimationLab();
                     }
                 });
-            AddAnimHeader("raw - not reworked yet", "ham - henüz elden geçirilmedi");
+            AddAnimSub("raw", "raw", "not reworked yet", "henüz elden geçirilmedi");
             // Everything under this heading is the CURRENT state of something nobody has designed
             // yet: a mechanic with no visual language of its own, or a look that exists in the game
             // but had no way of being reached from here. They are deliberately plain - the point is
@@ -3348,7 +3607,7 @@ namespace ProjectBlock.View
                 "ham - eldeki kart: kaldır, sürükle, yerine bırak", AnimRawCardFeel);
             AddAnim("RAW - Devre cooking, slowed right down (heat, cracks, ash)",
                 "ham - Devre pişmesi, iyice yavaşlatılmış (ısı, çatlak, kül)", AnimRawCircuitSlow);
-            AddAnimHeader("full sequences", "tam diziler");
+            AddAnimSub("sequences", "sequences", "full sequences", "tam diziler");
             AddAnim("TURN: line clear", "TUR: satır patlaması", AnimTurnLineClear);
             AddAnim("TURN: clean sweep", "TUR: temizlik", AnimTurnCleanSweep);
             AddAnim("TURN: dynamite board clear", "TUR: dinamit alan temizliği", AnimTurnDynamite);
