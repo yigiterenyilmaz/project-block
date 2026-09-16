@@ -2456,6 +2456,10 @@ namespace ProjectBlock.View
 
         private void BuildMarketHud()
         {
+            // "Eforsuz galibiyet" pays walking into the shop, which is not a turn and has no
+            // board - so it is celebrated here rather than through any of the turn seams. Keyed
+            // on the PAYOUT, so a rebuilt shop does not rain twice.
+            CheckEffortlessPayout();
             var sb = new StringBuilder();
             sb.Append("Seed ").Append(lastSeedUsed)
                 .Append(Loc.Pick("   Deck: ", "   Deste: ")).Append(currentDeck.Name).Append('\n');

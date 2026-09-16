@@ -177,6 +177,12 @@ namespace ProjectBlock.Core
                     + "hiç bozulmayan seri tam ödemeye devam eder.");
         }
 
+        /// <summary>It keeps proc statistics, so the tooltip prints its count even at zero.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         public override string StatusText
         {
             get

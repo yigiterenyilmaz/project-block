@@ -193,6 +193,24 @@ namespace ProjectBlock.Core
 
         private long procPoints;
 
+        /// <summary>
+        /// True for a joker that KEEPS proc statistics - i.e. one that calls NoteProc somewhere.
+        /// The tooltip prints its count even at ZERO, because "this has not fired yet" is real
+        /// information about a joker you are deciding whether to keep, while a silent card tells
+        /// you nothing about whether it is working.
+        ///
+        /// It has to be declared rather than inferred: a count that only appeared after the first
+        /// firing could never show the zero, and one shown for every joker would put "Fired 0
+        /// times" on the forty-odd that have no firing to count.
+        ///
+        /// EXTENSION POINT: override this to true in the same joker that calls NoteProc. The two
+        /// go together and neither is any use alone.
+        /// </summary>
+        public virtual bool TracksProcs
+        {
+            get { return false; }
+        }
+
         /// <summary>Times this joker has fired this run.</summary>
         public int ProcCount
         {

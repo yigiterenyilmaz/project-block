@@ -302,9 +302,26 @@ namespace ProjectBlock.View
             var his = Glow.GetComponent<RectTransform>();
             his.anchorMin = mine.anchorMin;
             his.anchorMax = mine.anchorMax;
-            his.pivot = mine.pivot;
+            // THE HALO IS PIVOTED ON ITS OWN MIDDLE, WHATEVER THE CARD IS PIVOTED ON.
+            //
+            // A bar card's pivot is a CORNER - UiLayout.PlaceBarSlot pivots the right-hand strip
+            // on (1, 1) and the left-hand one on (0, 1), so each column grows from its own screen
+            // edge. Copying that pivot and then growing sizeDelta to make the halo bigger than
+            // the card grows it AWAY FROM THAT CORNER ONLY: on the joker bar the light appeared
+            // down the left edge and under the bottom and nowhere else, which is precisely the
+            // "it only glows on two sides" this fixes.
+            //
+            // So the halo is centred instead, and the card's centre is worked out from its own
+            // pivot: with a pivot p and size s, the middle sits (0.5 - p) * s from the anchored
+            // position. Growth is then symmetric by construction and no caller has to know what
+            // any bar pivots on.
+            his.pivot = new Vector2(0.5f, 0.5f);
+            Vector2 size = mine.rect.size;
+            Vector2 centre = mine.anchoredPosition + new Vector2(
+                (0.5f - mine.pivot.x) * size.x,
+                (0.5f - mine.pivot.y) * size.y);
             Glow.gameObject.SetActive(Root.activeSelf);
-            Glow.Follow(mine.anchoredPosition, mine.sizeDelta);
+            Glow.Follow(centre, size);
         }
 
         /// <summary>Shows <paramref name="sprite"/> in the well, or nothing when it is null. The

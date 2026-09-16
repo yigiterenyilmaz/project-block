@@ -568,6 +568,7 @@ namespace ProjectBlock.View
             overtimeStartTurn = -1;
             overtimeTurns = 0;
             retroFallHand = -1; // no piece is mid-fall across a round boundary
+            ClearConfetti();    // the market's celebration does not follow you into the round
 
             // The whole screen, through the SAME method every other repaint goes through.
             //

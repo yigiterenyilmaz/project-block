@@ -195,6 +195,12 @@ namespace ProjectBlock.Core
                     + "patladığında biriken tüm barutun karşılığını öder. Cephane sabırdır.");
         }
 
+        /// <summary>It keeps proc statistics, so the tooltip prints its count even at zero.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         /// <summary>Charges banked across every dynamite block standing right now, for the UI.</summary>
         public int TotalCharges
         {
@@ -545,6 +551,18 @@ namespace ProjectBlock.Core
         private bool wentToOvertime;
         private int lastPaid;
 
+        /// <summary>True when the payout it last made was the OVERTIME one. Presentation only -
+        /// the celebration is bigger for the harder version of the feat - and read alongside
+        /// LastPaid, which is what says a payout happened at all.</summary>
+        private bool lastPaidWasOvertime;
+
+        /// <summary>Whether the last market entry paid the doubled bonus. The View asks so the
+        /// confetti can be heavier for a power-free overtime than a power-free round.</summary>
+        public bool LastPaidWasOvertime
+        {
+            get { return lastPaidWasOvertime; }
+        }
+
         public EforsuzGalibiyetJoker()
             : base("eforsuz_galibiyet", "Eforsuz Galibiyet")
         {
@@ -555,6 +573,12 @@ namespace ProjectBlock.Core
                 "Bir raundu tek bir güç kullanmadan bitir, markete girerken bonus alırsın. Aynısını "
                     + "UZATMAYA gidip sağ çıktığın bir raunttta yaparsan iki katını verir. Raundun "
                     + "herhangi bir yerinde bir güç kullanmak hakkını yakar.");
+        }
+
+        /// <summary>It keeps proc statistics, so the tooltip prints its count even at zero.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
         }
 
         /// <summary>True while the round is still clean of powers.</summary>
@@ -609,14 +633,19 @@ namespace ProjectBlock.Core
         public override void OnMarketEntered(SessionContext ctx)
         {
             lastPaid = 0;
+            lastPaidWasOvertime = false;
             if (usedAPowerThisRound)
             {
                 return;
             }
             lastPaid = wentToOvertime ? Bonus * OvertimeMultiplier : Bonus;
+            lastPaidWasOvertime = wentToOvertime;
             // GrantCurrency, not AddCurrency: this is money from nowhere, and the ledger has to
             // be able to tell it apart from a sale.
             ctx.Session.GrantCurrency((long)lastPaid * ctx.Session.Config.Scoring.ScoreScale);
+            // A proc with no turn to report it on - this lands walking into the shop, which is
+            // not a turn at all. The statistics line and the card's own flash still follow.
+            NoteProc(lastPaid);
         }
     }
 }

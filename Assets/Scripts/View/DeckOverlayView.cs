@@ -492,7 +492,7 @@ namespace ProjectBlock.View
                     BuildPickHighlight("PickHi_" + i, position);
                 }
                 CardVisual visual = CardVisual.Create(transform, "Overlay_" + sorted[i].Id,
-                    sorted[i], true, false, position, CardOrder);
+                    sorted[i], true, false, position, PickCardOrder);
                 visual.transform.localScale = new Vector3(CardScale, CardScale, 1f);
                 entryCenters.Add(position);
                 entryShapes.Add(sorted[i].Shape);
@@ -504,7 +504,7 @@ namespace ProjectBlock.View
             confirmButtonShown = true;
             SpriteRenderer confirm = ViewUtil.MakeRounded(transform, "PickConfirm",
                 confirmButtonCenter, confirmButtonHalf * 2f,
-                confirmEnabled ? ConfirmReadyColor : ConfirmIdleColor, ScrollTrackOrder);
+                confirmEnabled ? ConfirmReadyColor : ConfirmIdleColor, PickConfirmOrder);
             // The button breathes ONLY when pressing it would actually do something, so the one
             // moving thing on the screen is always the next thing to do.
             if (confirmEnabled)
@@ -537,12 +537,23 @@ namespace ProjectBlock.View
             var size = new Vector2(CardVisual.BodyWidth * CardScale + PickRingThickness * 2f,
                 CardVisual.BodyHeight * CardScale + PickRingThickness * 2f);
             SpriteRenderer ring = ViewUtil.MakeRounded(transform, name, position, size,
-                PickRingColor, CardOrder - 1);
+                PickRingColor, PickRingOrder);
             PulseSpriteFx.Attach(ring, 0.55f, 1f, 1.5f, 0.012f);
         }
 
         /// <summary>How far the selection ring stands out past the card, per side.</summary>
         private const float PickRingThickness = 0.09f;
+
+        // THE PICKER'S OWN LADDER, all distinct - the ring first went in at CardOrder - 1, which
+        // is PanelOrder, and an equal sorting order between two sprites is decided by nothing at
+        // all: the opaque panel won and the selection mark was simply never visible. This is the
+        // same trap the dim and the frame fell into at order 40 (see the constants above), so the
+        // picker gets tiers of its own rather than borrowing the list's.
+        private const int PickRingOrder = 42;
+
+        private const int PickCardOrder = 43;
+
+        private const int PickConfirmOrder = 44;
 
         private static readonly Color PickRingColor = new Color(1f, 0.84f, 0.42f);
 

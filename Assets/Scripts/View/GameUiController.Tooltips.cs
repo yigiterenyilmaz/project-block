@@ -411,16 +411,19 @@ namespace ProjectBlock.View
         /// paid. Generic, so every joker that calls NoteProc in Core gets these two numbers and
         /// nothing here has to know which jokers exist.
         ///
-        /// Nothing is printed for a joker that has never fired, and no points for one that has
-        /// never been credited with any: a run-long "0 times" on a joker bought this minute is
-        /// noise, and "0 points" on a rule-bender is a lie about what it is for.
+        /// A joker that KEEPS statistics (Joker.TracksProcs) prints its count even at ZERO -
+        /// "has not fired yet" is real information about a card you are deciding whether to keep,
+        /// and a silent card says nothing about whether it is working at all. One that keeps none
+        /// prints nothing, so the forty-odd jokers with no firing to count are unaffected.
         ///
-        /// The points are SCALED on the way out, like every other number the UI prints -
-        /// ProcPoints is kept in the logical economy the joker's own fields are written in.
+        /// The POINTS are still only printed once there are some: a rule-bender that pays nothing
+        /// directly would otherwise advertise "earned 0" forever, which is a lie about what it is
+        /// for. They are SCALED on the way out, like every other number the UI prints - ProcPoints
+        /// is kept in the logical economy the joker's own fields are written in.
         /// </summary>
         private string ProcStatsLine(Joker joker)
         {
-            if (joker.ProcCount <= 0)
+            if (!joker.TracksProcs && joker.ProcCount <= 0)
             {
                 return string.Empty;
             }
