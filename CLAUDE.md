@@ -1178,6 +1178,47 @@ on the three real decks, `max(3, gaps)` - a turn per missing cube - leaves 13% o
 honest dare at all and only 58% with a hard one, while `max(2, ceil(2*gaps/3))` gives every board a
 dare and fills all three rungs most evenly (53 / 41 hard / 44 middling / 44 reasonable).
 
+**The dare is drawn as a CONTRACT held on the board** (`ChallengeContractView`, `ChallengeShapes`,
+`GameUiController.Challenge.cs`). Nothing drew the marked line at all before this - only the joker's
+status text. Now two rails of PLATES run in the seams either side of the dared line, a seal CLAMP
+grips each end, two or three motes at a tenth of an opacity run through it, and the wager sits
+beside it as a token. **The first mock was a thin yellow rectangle** - two continuous rails and a
+thin bridge across each end are a bounding box whatever their colour - and three things undid it:
+the rail is one plate per cell with a bead and a hair of gap at every boundary; the plate throws a
+faint warm light to ONE side, into the line (baked on +v, the view turns the plate); and the ends
+are HEAVY - a ] bracket whose hooks reach back over the rail ends, with the seal on its spine and
+no bridge at all. A frame of one weight is an outline; heavy ends and fine sides are a mechanism.
+The blocks are never tinted and nothing fills the line. **The token is dark with a gold rim**:
+ivory on gold measures about 1.3:1 (the "Harcama bonusu" stamp failure), so the face is burnished
+cocoa and the ivory number reads at well over 10:1; it is baked as TWO HALVES cut along a slanted
+ragged seam, which is what lets the bonus physically halve. **The motion says the result before
+the number does**: a SUCCESS goes outward (the rails brighten as the line breaks, the clamps recoil
+3 px, the rails break into gold plates thrown off the line, the token punches 1.15, folds into a
+seed and the seed flies to the real TOPLAM, which punches 1.08); a MISS goes inward (the rails
+tense, the clamps let go, each clamp REELS IN its own rail - the top one grew from one end and the
+bottom from the other - a bronze cut runs down the token, the halves part 3 px, one goes out at
+0.65, the other slides back and the token reforms smaller and duller around the NEW value, then
+travels to the new line, lands, and the contract is laid there); running out is the miss with
+nowhere to go, and the last half collapses into bronze dust. A retarget is never an instant swap.
+Urgency is three looks (calm / tension / final: rails 0 / 1.5 / 3 px in, the current faster and
+warmer, a 1.025 heartbeat on the last turn) from ONE definition, `ChallengeVisuals.UrgencyOf`.
+**THE VIEW DECIDES NOTHING**: `MeydanOkumaJoker.LastEvent` (`ChallengeVisuals`, `[NotSaved]`, one
+new object per event) says Started / Ticked / Succeeded / Failed / Expired with the contract before
+and after - a miss and its new line are ONE event, the payment is MEASURED around `AddFlatScore`,
+and a miss with no honest line yet carries only `NextBonus`, so the token PARKS on it until a later
+Started moves it. There is no "/ 2" in the view. The deadline a dare started with is kept for the
+countdown's look only, `[NotSaved]`, so the save format did not change (a loaded run counts what is
+left as the whole deadline). **When matters**: the joker writes its event during the turn and the
+repaint runs before the turn's explosions are drawn, so `RefreshAll` only hands over the joker's
+LIVE state once its last event has been played, and the event itself plays from
+`PlayExplosionFeedback` - the moment the dared line actually breaks. The lab has nineteen scenes
+(spawn row / column, the three urgencies, token idle, success row / column / with the score path,
+first miss, the halving alone, three retargets, second miss, expiry, long / short / irregular
+boards) plus 0.5x / 0.25x success and miss, nine debug views and six layer switches; its numbers
+are the joker's own (`BaseBonus`, `DeadlineFor` on the lab board's real gaps) and a success clears
+the line through `FlashLine`. `Tools/UiLayoutCheck/meydan_okuma.py` holds the lot. See
+`challenge_mock*.png` in the session scratchpad.
+
 **Market credit ("Kredi kartı") is a SESSION rule, not joker state.** `GameSession` owns
 `Debt`, `Spend` (own points first, borrow the shortfall) and `RepayDebt` (manual, market-only);
 the joker is only the switch that turns `CreditAvailable` on and names the interest rate. The

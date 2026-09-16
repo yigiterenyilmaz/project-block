@@ -159,6 +159,8 @@ namespace ProjectBlock.View
             // "Hazine": a mark found by this turn's destruction is revealed as ITS cube breaks -
             // which is now, not when the board was repainted before the water fell.
             SyncHazine(round, report);
+            // "Meydan Okuma": the dare paid, missed or moved - as this turn's lines go.
+            PlayChallengeEvent();
             if (report.CleanSweep)
             {
                 // the sweep bling rises in pitch with every sweep this round
@@ -2116,6 +2118,7 @@ namespace ProjectBlock.View
             SyncBuzluk(round);
             SyncRebate(round);
             SyncQuake();
+            SyncChallenge();
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

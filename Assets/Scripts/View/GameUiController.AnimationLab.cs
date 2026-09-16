@@ -177,10 +177,12 @@ namespace ProjectBlock.View
             StopAnimIce();
             StopAnimQuake();
             StopHazine();
+            StopChallenge();
             StopRebate();
             // The beat-isolation entries promise that RESET puts every layer back.
             QuakeCollapseView.Layers.AllOn();
             HazineRevealView.Layers.AllOn();
+            ChallengeContractView.Layers.AllOn();
             // The lab can show the pile spent without a payout, so RESET has to be able to give
             // it back even when no animation is running.
             if (cardLayer != null) { cardLayer.SetDrawPileShownEmpty(false); }
@@ -1932,6 +1934,105 @@ namespace ProjectBlock.View
                 {
                     HazineRevealView.Layers.AllOn();
                     animLastLabel = Loc.Pick("hazine: every layer back on", "hazine: tüm katmanlar geri açık");
+                    if (AnimLabOpen) { RedrawAnimationLab(); }
+                });
+            AddAnim("meydan okuma: row challenge: contract laid", "meydan okuma: satır meydan okuması: kontrat kuruluyor",
+                delegate { AnimChallenge(AnimChallengeScene.SpawnRow); });
+            AddAnim("meydan okuma: column challenge: contract laid", "meydan okuma: sütun meydan okuması: kontrat kuruluyor",
+                delegate { AnimChallenge(AnimChallengeScene.SpawnColumn); });
+            AddAnim("meydan okuma: idle: CALM", "meydan okuma: bekleme: SAKİN",
+                delegate { AnimChallenge(AnimChallengeScene.IdleCalm); });
+            AddAnim("meydan okuma: idle: TENSION", "meydan okuma: bekleme: GERİLİM",
+                delegate { AnimChallenge(AnimChallengeScene.IdleTension); });
+            AddAnim("meydan okuma: idle: FINAL turn (heartbeat)", "meydan okuma: bekleme: SON tur (nabız)",
+                delegate { AnimChallenge(AnimChallengeScene.IdleFinal); });
+            AddAnim("meydan okuma: the wager token idling (glint)", "meydan okuma: ödül jetonu beklerken (parıltı)",
+                delegate { AnimChallenge(AnimChallengeScene.TokenIdle); });
+            AddAnim("meydan okuma: SUCCESS on a row", "meydan okuma: BAŞARI - satır",
+                delegate { AnimChallenge(AnimChallengeScene.SuccessRow); });
+            AddAnim("meydan okuma: SUCCESS on a column", "meydan okuma: BAŞARI - sütun",
+                delegate { AnimChallenge(AnimChallengeScene.SuccessColumn); });
+            AddAnim("meydan okuma: success: the reward flies to the score (path shown)", "meydan okuma: başarı: ödül skora uçar (yol görünür)",
+                delegate { AnimChallenge(AnimChallengeScene.SuccessReward); });
+            AddAnim("meydan okuma: FIRST MISS: cut, halve, move", "meydan okuma: İLK KAÇIŞ: kes, yarıla, taşı",
+                delegate { AnimChallenge(AnimChallengeScene.FailFirst); });
+            AddAnim("meydan okuma: the halving alone (no honest line yet)", "meydan okuma: yalnızca yarılanma (henüz dürüst hat yok)",
+                delegate { AnimChallenge(AnimChallengeScene.HalvingOnly); });
+            AddAnim("meydan okuma: retarget row -> row", "meydan okuma: yeniden hedef satır -> satır",
+                delegate { AnimChallenge(AnimChallengeScene.RetargetRowRow); });
+            AddAnim("meydan okuma: retarget row -> column", "meydan okuma: yeniden hedef satır -> sütun",
+                delegate { AnimChallenge(AnimChallengeScene.RetargetRowCol); });
+            AddAnim("meydan okuma: retarget column -> row", "meydan okuma: yeniden hedef sütun -> satır",
+                delegate { AnimChallenge(AnimChallengeScene.RetargetColRow); });
+            AddAnim("meydan okuma: SECOND MISS (worn token)", "meydan okuma: İKİNCİ KAÇIŞ (yıpranmış jeton)",
+                delegate { AnimChallenge(AnimChallengeScene.FailSecond); });
+            AddAnim("meydan okuma: LAST MISS: the contract expires", "meydan okuma: SON KAÇIŞ: kontrat sona erer",
+                delegate { AnimChallenge(AnimChallengeScene.Expire); });
+            AddAnim("meydan okuma: a long board's row (11)", "meydan okuma: uzun tahta satırı (11)",
+                delegate { AnimChallenge(AnimChallengeScene.LongRow); });
+            AddAnim("meydan okuma: a short board's row (5)", "meydan okuma: kısa tahta satırı (5)",
+                delegate { AnimChallenge(AnimChallengeScene.ShortRow); });
+            AddAnim("meydan okuma: an irregular board (the row runs past the rest)", "meydan okuma: düzensiz tahta (satır diğerlerinden uzun)",
+                delegate { AnimChallenge(AnimChallengeScene.Irregular); });
+            AddAnim("meydan okuma: success at 0.5x", "meydan okuma: başarı 0.5x",
+                delegate
+                {
+                    Time.timeScale = 0.5f;
+                    AnimChallenge(AnimChallengeScene.SuccessRow);
+                });
+            AddAnim("meydan okuma: miss at 0.5x", "meydan okuma: kaçış 0.5x",
+                delegate
+                {
+                    Time.timeScale = 0.5f;
+                    AnimChallenge(AnimChallengeScene.FailFirst);
+                });
+            AddAnim("meydan okuma: success at 0.25x", "meydan okuma: başarı 0.25x",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    AnimChallenge(AnimChallengeScene.SuccessRow);
+                });
+            AddAnim("meydan okuma: miss at 0.25x", "meydan okuma: kaçış 0.25x",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    AnimChallenge(AnimChallengeScene.FailFirst);
+                });
+            AddAnim("meydan okuma debug: target cells", "meydan okuma hata ayıklama: hedef kareler",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowChallengeTarget, "target cells", "hedef kareler"); });
+            AddAnim("meydan okuma debug: rail bounds", "meydan okuma hata ayıklama: ray sınırları",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowRailBounds, "rail bounds", "ray sınırları"); });
+            AddAnim("meydan okuma debug: clamp anchors", "meydan okuma hata ayıklama: kelepçe noktaları",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowClampAnchors, "clamp anchors", "kelepçe noktaları"); });
+            AddAnim("meydan okuma debug: token anchor", "meydan okuma hata ayıklama: jeton noktası",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowBonusTokenAnchor, "token anchor", "jeton noktası"); });
+            AddAnim("meydan okuma debug: remaining turns", "meydan okuma hata ayıklama: kalan tur",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowRemainingTurns, "remaining turns", "kalan tur"); });
+            AddAnim("meydan okuma debug: attempt index", "meydan okuma hata ayıklama: deneme no",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowAttemptIndex, "attempt index", "deneme no"); });
+            AddAnim("meydan okuma debug: energy current path", "meydan okuma hata ayıklama: enerji akış yolu",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowEnergyCurrent, "energy current path", "enerji akış yolu"); });
+            AddAnim("meydan okuma debug: success -> score link", "meydan okuma hata ayıklama: başarı -> skor bağı",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowSuccessLink, "success -> score link", "başarı -> skor bağı"); });
+            AddAnim("meydan okuma debug: retarget path", "meydan okuma hata ayıklama: yeniden hedef yolu",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowRetargetPath, "retarget path", "yeniden hedef yolu"); });
+            AddAnim("meydan okuma switch: rails", "meydan okuma anahtarı: raylar",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowRails, "rails", "raylar"); });
+            AddAnim("meydan okuma switch: clamps", "meydan okuma anahtarı: kelepçeler",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowClamps, "clamps", "kelepçeler"); });
+            AddAnim("meydan okuma switch: energy current", "meydan okuma anahtarı: enerji akışı",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowCurrent, "energy current", "enerji akışı"); });
+            AddAnim("meydan okuma switch: token", "meydan okuma anahtarı: jeton",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowToken, "token", "jeton"); });
+            AddAnim("meydan okuma switch: particles", "meydan okuma anahtarı: parçacıklar",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowParticles, "particles", "parçacıklar"); });
+            AddAnim("meydan okuma switch: essence + trails", "meydan okuma anahtarı: öz + iz",
+                delegate { AnimChallengeToggle(ref ChallengeContractView.Layers.ShowEssence, "essence + trails", "öz + iz"); });
+            AddAnim("meydan okuma switch: ALL back on", "meydan okuma anahtarı: TÜMÜ geri açık",
+                delegate
+                {
+                    ChallengeContractView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("meydan okuma: every layer back on", "meydan okuma: tüm katmanlar açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
             AddAnim("harcama bonusu: the whole payout",
@@ -6818,6 +6919,264 @@ namespace ProjectBlock.View
         {
             flag = !flag;
             animLastLabel = Loc.Pick("hazine " + english + ": ", "hazine " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        // ------------------------------------------------------------------ meydan okuma
+
+        // "MEYDAN OKUMA" IN THE LAB. The contract is the joker's, so what is fabricated is the
+        // REPORT - the event, the lines, the bonus and the turns - with every number read off the
+        // joker itself (its BaseBonus halved by the attempts laid, its DeadlineFor the line's real
+        // gaps on the lab's board) and played through ChallengeContractView.Play, the game's own
+        // call. A success also clears the line on the lab's board through FlashLine, because the
+        // point of that scene is the cause and the effect landing together.
+
+        private enum AnimChallengeScene
+        {
+            SpawnRow,
+            SpawnColumn,
+            IdleCalm,
+            IdleTension,
+            IdleFinal,
+            TokenIdle,
+            SuccessRow,
+            SuccessColumn,
+            SuccessReward,
+            FailFirst,
+            HalvingOnly,
+            RetargetRowRow,
+            RetargetRowCol,
+            RetargetColRow,
+            FailSecond,
+            Expire,
+            LongRow,
+            ShortRow,
+            Irregular
+        }
+
+        private MeydanOkumaJoker AnimMeydanJoker()
+        {
+            MeydanOkumaJoker owned = FindMeydan();
+            return owned ?? new MeydanOkumaJoker();
+        }
+
+        private void AnimChallenge(AnimChallengeScene scene)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || boardView == null)
+            {
+                return;
+            }
+            EnsureChallenge();
+            challenge.Stop();
+            MeydanOkumaJoker joker = AnimMeydanJoker();
+            int width = scene == AnimChallengeScene.LongRow ? 11 : scene == AnimChallengeScene.ShortRow ? 5 : 7;
+            GameBoard board = scene == AnimChallengeScene.Irregular
+                ? new GameBoard(7, 7, new[] { new GridPos(7, 3), new GridPos(8, 3) })
+                : new GameBoard(width, scene == AnimChallengeScene.ShortRow ? 5 : 7);
+            List<int> cards = AnimBossCards();
+            for (int y = 0; y < board.Height; y++)
+            {
+                for (int x = 0; x < board.Width; x++)
+                {
+                    var p = new GridPos(x, y);
+                    if (board.IsInside(p) && (x * 7 + y * 3 + x * y) % 5 < 3)
+                    {
+                        board.SetCubeAt(p, new Cube(CubeKind.Normal, cards[(x + y) % cards.Count]));
+                    }
+                }
+            }
+            bool success = scene == AnimChallengeScene.SuccessRow || scene == AnimChallengeScene.SuccessColumn
+                || scene == AnimChallengeScene.SuccessReward;
+            bool successRow = scene != AnimChallengeScene.SuccessColumn;
+            int successLine = successRow ? 3 : 4;
+            if (success)
+            {
+                // Full but for nothing: the line the player is about to clear.
+                int n = successRow ? board.Width : board.Height;
+                for (int i = 0; i < n; i++)
+                {
+                    var p = successRow ? new GridPos(i, successLine) : new GridPos(successLine, i);
+                    if (board.IsInside(p))
+                    {
+                        board.SetCubeAt(p, new Cube(CubeKind.Normal, cards[i % cards.Count]));
+                    }
+                }
+            }
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            boardView.Refresh();
+
+            ChallengeVisuals ev = null;
+            switch (scene)
+            {
+                case AnimChallengeScene.SpawnRow:
+                case AnimChallengeScene.LongRow:
+                case AnimChallengeScene.Irregular:
+                    ev = AnimStarted(joker, board, true, 3, 1);
+                    break;
+                case AnimChallengeScene.ShortRow:
+                    ev = AnimStarted(joker, board, true, 2, 1);
+                    break;
+                case AnimChallengeScene.SpawnColumn:
+                    ev = AnimStarted(joker, board, false, 2, 1);
+                    break;
+                case AnimChallengeScene.IdleCalm:
+                case AnimChallengeScene.IdleTension:
+                case AnimChallengeScene.IdleFinal:
+                case AnimChallengeScene.TokenIdle:
+                {
+                    ChallengeContractView.Contract c = AnimContract(joker, board, true, 3, 1);
+                    c.InitialTurns = Mathf.Max(3, c.InitialTurns);
+                    c.TurnsLeft = scene == AnimChallengeScene.IdleFinal ? 1
+                        : scene == AnimChallengeScene.IdleTension ? (c.InitialTurns + 1) / 2
+                        : c.InitialTurns;
+                    challenge.SetStanding(c);
+                    if (scene == AnimChallengeScene.TokenIdle)
+                    {
+                        challenge.GlintSoon();
+                    }
+                    animLastLabel = Loc.Pick("standing contract: ", "duran kontrat: ") + c.Urgency
+                        + " (" + c.TurnsLeft + "/" + c.InitialTurns + ")";
+                    break;
+                }
+                case AnimChallengeScene.SuccessRow:
+                case AnimChallengeScene.SuccessColumn:
+                case AnimChallengeScene.SuccessReward:
+                {
+                    ChallengeContractView.Contract c = AnimContract(joker, board, successRow, successLine, 1);
+                    c.TurnsLeft = 1;
+                    challenge.SetStanding(c);
+                    ChallengeContractView.Layers.ShowSuccessLink = scene == AnimChallengeScene.SuccessReward;
+                    ev = AnimOld(c, ChallengeEvent.Succeeded);
+                    ev.ScoreDelta = c.Bonus * session.Config.Scoring.ScoreScale;
+                    // The cause: the line goes, on the same frame the contract answers.
+                    int n = successRow ? board.Width : board.Height;
+                    for (int i = 0; i < n; i++)
+                    {
+                        board.DestroyCube(successRow ? new GridPos(i, successLine) : new GridPos(successLine, i));
+                    }
+                    boardView.Refresh();
+                    FlashLine(board, successRow ? board.MinY + successLine : board.MinX + successLine, successRow);
+                    break;
+                }
+                case AnimChallengeScene.FailFirst:
+                case AnimChallengeScene.RetargetRowCol:
+                    ev = AnimFail(joker, board, true, 3, 1, false, 5);
+                    break;
+                case AnimChallengeScene.RetargetRowRow:
+                    ev = AnimFail(joker, board, true, 3, 1, true, 1);
+                    break;
+                case AnimChallengeScene.RetargetColRow:
+                    ev = AnimFail(joker, board, false, 2, 1, true, 5);
+                    break;
+                case AnimChallengeScene.FailSecond:
+                    ev = AnimFail(joker, board, true, 1, 2, false, 4);
+                    break;
+                case AnimChallengeScene.HalvingOnly:
+                {
+                    ChallengeContractView.Contract c = AnimContract(joker, board, true, 3, 1);
+                    c.TurnsLeft = 1;
+                    challenge.SetStanding(c);
+                    ev = AnimOld(c, ChallengeEvent.Failed);
+                    ev.NextBonus = joker.BaseBonus >> 1;
+                    break;
+                }
+                case AnimChallengeScene.Expire:
+                {
+                    ChallengeContractView.Contract c = AnimContract(joker, board, false, 4, 3);
+                    c.TurnsLeft = 1;
+                    challenge.SetStanding(c);
+                    ev = AnimOld(c, ChallengeEvent.Expired);
+                    break;
+                }
+            }
+            if (ev != null)
+            {
+                challenge.Play(ev);
+                animLastLabel = Loc.Pick("meydan okuma: ", "meydan okuma: ") + ev.Event
+                    + (ev.Event == ChallengeEvent.Started || ev.HasTarget
+                        ? " -> " + (ev.IsRow ? "ROW " : "COL ") + ev.Line + " +" + ev.Bonus + " (" + ev.TurnsLeft + ")"
+                        : "")
+                    + (ev.Event != ChallengeEvent.Started ? "  was " + (ev.OldIsRow ? "ROW " : "COL ") + ev.OldLine
+                        + " +" + ev.OldBonus : "")
+                    + (ev.Event == ChallengeEvent.Failed && !ev.HasTarget ? "  next +" + ev.NextBonus : "");
+            }
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>A contract as the joker would lay it on this board: its bonus for this attempt,
+        /// its deadline for this line's real gaps.</summary>
+        private static ChallengeContractView.Contract AnimContract(MeydanOkumaJoker joker, GameBoard board,
+            bool isRow, int line, int attempt)
+        {
+            int gaps = 0;
+            int n = isRow ? board.Width : board.Height;
+            for (int i = 0; i < n; i++)
+            {
+                var p = isRow ? new GridPos(board.MinX + i, board.MinY + line) : new GridPos(board.MinX + line, board.MinY + i);
+                if (board.IsInside(p) && !board.GetCube(p).HasValue)
+                {
+                    gaps++;
+                }
+            }
+            int deadline = joker.DeadlineFor(gaps);
+            return new ChallengeContractView.Contract
+            {
+                Has = true, IsRow = isRow, Line = line, Attempt = attempt,
+                Bonus = joker.BaseBonus >> (attempt - 1), TurnsLeft = deadline, InitialTurns = deadline
+            };
+        }
+
+        private static ChallengeVisuals AnimStarted(MeydanOkumaJoker joker, GameBoard board, bool isRow, int line,
+            int attempt)
+        {
+            ChallengeContractView.Contract c = AnimContract(joker, board, isRow, line, attempt);
+            return new ChallengeVisuals
+            {
+                Event = ChallengeEvent.Started, HasTarget = true, IsRow = c.IsRow, Line = c.Line,
+                Bonus = c.Bonus, Attempt = c.Attempt, TurnsLeft = c.TurnsLeft, InitialTurns = c.InitialTurns
+            };
+        }
+
+        private static ChallengeVisuals AnimOld(ChallengeContractView.Contract c, ChallengeEvent kind)
+        {
+            return new ChallengeVisuals
+            {
+                Event = kind, OldIsRow = c.IsRow, OldLine = c.Line, OldBonus = c.Bonus, OldAttempt = c.Attempt
+            };
+        }
+
+        /// <summary>A miss on one line that moves the dare to another, one attempt on.</summary>
+        private ChallengeVisuals AnimFail(MeydanOkumaJoker joker, GameBoard board, bool fromRow, int fromLine,
+            int attempt, bool toRow, int toLine)
+        {
+            ChallengeContractView.Contract c = AnimContract(joker, board, fromRow, fromLine, attempt);
+            c.TurnsLeft = 1;
+            challenge.SetStanding(c);
+            ChallengeVisuals ev = AnimOld(c, ChallengeEvent.Failed);
+            ChallengeContractView.Contract next = AnimContract(joker, board, toRow, toLine, attempt + 1);
+            ev.NextBonus = next.Bonus;
+            ev.HasTarget = true;
+            ev.IsRow = next.IsRow;
+            ev.Line = next.Line;
+            ev.Bonus = next.Bonus;
+            ev.Attempt = next.Attempt;
+            ev.TurnsLeft = next.TurnsLeft;
+            ev.InitialTurns = next.InitialTurns;
+            return ev;
+        }
+
+        private void AnimChallengeToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("meydan okuma " + english + ": ", "meydan okuma " + turkish + ": ")
                 + OnOff(flag);
             if (AnimLabOpen)
             {
