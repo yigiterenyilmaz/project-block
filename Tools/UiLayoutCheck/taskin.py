@@ -85,10 +85,16 @@ check('puan / flas / sarsinti yok', 'ScoreScale' not in view and 'ShakeCamera' n
 print()
 print('=== 2. BOYAMA DEGIL, BOGMA ===')
 between('kaynak KABARIP YUKSELIR (sn)', num(view, 'Pressure'), 0.24, 0.40, 'kabarma gorunmuyor')
-between('kaynak buyumesi', num(view, 'RiseScale'), 1.08, 1.16, 'kabarma gorunmuyor')
 between('kaynak yukselmesi (hucre)', num(view, 'RiseLift'), 0.03, 0.10, 'yukselme gorunmuyor')
-check('kaynak kendi SU karosuyla yukselir + golge (tahtanin kupu scale 1`de birebir)',
-      'kv.Value.Raised.sprite = waterTile;' in view and 's.Shadow' in view, 'yukselme sahte')
+swell = read('Assets', 'Resources', 'Shaders', 'FloodSwell.shader')
+check('kaynak SIVI gibi kabarir: kubbe + hedefe lob + dalgali yuzey + kopuk + kabarcik (sprite olcegi DEGIL)',
+      all(k in swell for k in ['float dome', 'float lobe', 'd += a * 0.022', 'float foam', 'float bubble'])
+      and 'kv.Value.Raised.sharedMaterial = SwellMaterial;' in view
+      and 'cube * s.Scale, cube * s.Scale' not in view, 'blok sadece buyuyor')
+check('lob yalniz GERCEK hedef yonlerine (Facing)', 'foreach (Vector2 f in s.Facing)' in view, 'her yone lob')
+check('kabarma 0`da govde tam kup (tahtaya gorunmez devir)', "if (a > 0.0001)" in swell
+      and 'lerp(water.a, 1.0, outsideCube)' in swell and 'step(0.495, max(abs(p.x), abs(p.y))) * step(0.0001, a)' in swell, 'devirde sicrama')
+check('govde suyun KENDI karosundan (sahte su degil)', 'block.SetTexture(WaterTexId, tex);' in view, 'sahte su')
 check('HEDEF, kaynak yukseldikten ve dil DEGDIKTEN sonra baslar',
       num(view, 'Arrival') >= num(view, 'Pressure') + 0.15 and num(view, 'TongueFrom') >= num(view, 'Pressure'),
       'hedef dogrudan suya donuyor')
@@ -97,7 +103,7 @@ check('kenar vurgusu YALNIZ hedefe bakan kenarda', 'sp.Highlight.transform.posit
       'tum kenar parliyor')
 between('kenar tumsegi (hucre)', num(view, 'SwellCells'), 0.12, 0.30, 'tumsek gorunmuyor')
 between('kenar tumsegi (sn)', num(view, 'Swell'), 0.12, 0.26, 'tumsek')
-check('tumsek hedefe bakan kenarda, yukselen suyla birlikte', 'sp.Swell.transform.position = src + sp.Dir' in view
+check('tumsek sivinin kendi lobu (sprite yalniz shader yoksa)', 'SwellMaterial == null' in view
       and 'CellWorld(sp.From.Cell) + new Vector2(0f, sp.From.Lift)' in view, 'tumsek kupten kopuk')
 between('su dili genisligi (hucre)', num(view, 'TongueWidth'), 0.2, 0.34, 'dil')
 between('su dili (sn)', num(view, 'Tongue'), 0.15, 0.25, 'dil')

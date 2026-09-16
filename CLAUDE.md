@@ -608,12 +608,15 @@ dropped that way once each.
   what each target WAS and which sources reached it) and FireSpreadView plays only fire, so for a long
   time the water joker had no picture at all - Core had already written everything it needed. **The
   order is the read, and the first pass lost it**: it started the target 180 ms in with a few pixels of
-  swell, and a cube simply turned to water. Now each source that really spills FIRST swells and rises
-  (~0.3 s: its own water tile, on its own warp material, grows 12% and lifts off the cell over a
-  spreading contact shadow, a pale highlight and a mound of water piling past the edge FACING each real
-  target and no other), THEN spills a LIQUID TONGUE over the border - wide at its root, a drop at its
-  tip, never a beam - and the target does not begin to turn until that tongue lands (~0.52 s), after
-  which the source sinks back to scale 1, where the raised water is exactly the board's cube again. **One target is one
+  swell, and a cube simply turned to water; the second scaled the water cube up, and a block getting
+  bigger is not water either. Now each source that really spills FIRST heaves up AS A LIQUID (~0.3 s,
+  `Resources/Shaders/FloodSwell`: an SDF body of its own water on a quad 2.2 cells wide - the cube's
+  rounded box smooth-unioned with a dome rising out of its top and a lobe toward each REAL target, its
+  outline rippling, the water churning inside, froth at the surface and bubbles rising through it,
+  its hard frame melting into the body; at amount 0 it is exactly the cube, so it comes and goes over
+  the board's cube unseen), THEN spills a LIQUID TONGUE over the border - wide at its root, a drop at
+  its tip, never a beam - and the target does not begin to turn until that tongue lands (~0.52 s),
+  after which the source sinks back. **One target is one
   transformation**: the held cell (`BoardView.HoldCells`, as for Yangın) shows the OLD face on the
   FloodFilm shader, with a film per side it was reached from (L / R / B / T progress, one mask, max-
   combined so films from two sides meet in the middle), a wavy front with a pale line that dies where

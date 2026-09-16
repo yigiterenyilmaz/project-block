@@ -1,7 +1,8 @@
 // PURPOSE: "Taşkın" - the water on the board OVERFLOWS into the cubes beside it and drowns them into
 // water. Not a tint, and IN THIS ORDER, which is the whole read: first the source water itself SWELLS
-// AND RISES - the water cube grows a tenth, lifts off its cell over a darker contact shadow, and piles
-// into a mound on each edge facing a real target; only once it has risen does it spill over the border
+// AND RISES AS A LIQUID (FloodSwell: its surface wobbles, a dome heaves out of its top, a lobe bulges
+// toward each real target, it churns, froths and throws up bubbles - a scaled block was the pass
+// before, and a block getting bigger is not water); only once it has risen does it spill over the border
 // as a liquid tongue; only when the tongue LANDS does the target begin to turn - a film crossing it
 // from that side while the cube under it refracts, loses its colour and contrast and runs - and the
 // source sinks back as the water tile underneath takes the target and settles with a broken ripple.
@@ -42,8 +43,9 @@ namespace ProjectBlock.View
         {
             /// <summary>The source RISING: its own water grows and lifts off the cell.</summary>
             public static float Pressure = 0.30f;
-            public static float RiseScale = 1.12f;
-            public static float RiseLift = 0.06f;           // cells
+            /// <summary>The swell's quad, in cells: room for the dome and the lobes.</summary>
+            public static float SwellSpan = 2.2f;
+            public static float RiseLift = 0.05f;           // cells (the shader lifts the body by this)
             public static float RiseShadow = 0.35f;
             public static float PressureBright = 0.10f;
             public static float SwellFrom = 0.14f;
@@ -149,6 +151,14 @@ namespace ProjectBlock.View
 
         private static Material filmMaterial;
         private static bool filmShaderMissing;
+        private static Material swellMaterial;
+        private static bool swellShaderMissing;
+        private static readonly int WaterTexId = Shader.PropertyToID("_WaterTex");
+        private static readonly int WaterPivotId = Shader.PropertyToID("_WaterPivot");
+        private static readonly int WaterUnitId = Shader.PropertyToID("_WaterUnit");
+        private static readonly int SpanId = Shader.PropertyToID("_Span");
+        private static readonly int AmountId = Shader.PropertyToID("_Amount");
+        private static readonly int DirsId = Shader.PropertyToID("_Dirs");
         private static readonly int FilmId = Shader.PropertyToID("_Film");
         private static readonly int SubmergeId = Shader.PropertyToID("_Submerge");
         private static readonly int LiquefyId = Shader.PropertyToID("_Liquefy");
@@ -260,6 +270,31 @@ namespace ProjectBlock.View
                     }
                 }
                 return filmMaterial;
+            }
+        }
+
+        private static Material SwellMaterial
+        {
+            get
+            {
+                if (swellMaterial == null && !swellShaderMissing)
+                {
+                    Shader shader = Shader.Find("ProjectBlock/FloodSwell");
+                    if (shader == null)
+                    {
+                        shader = Resources.Load<Shader>("Shaders/FloodSwell");
+                    }
+                    if (shader == null)
+                    {
+                        swellShaderMissing = true;
+                        Debug.LogWarning("[block_bonk] FloodSwell shader missing - the source only brightens and spills");
+                    }
+                    else
+                    {
+                        swellMaterial = new Material(shader);
+                    }
+                }
+                return swellMaterial;
             }
         }
 
@@ -437,10 +472,10 @@ namespace ProjectBlock.View
                     // The source's OWN water, raised: the same tile on the same warp material as the
                     // board's, so when it sinks back to scale 1 and goes it is the board's cube again.
                     kv.Value.Raised = Rent(RaisedOrder);
-                    kv.Value.Raised.sprite = waterTile;
-                    if (waterMaterial != null)
+                    kv.Value.Raised.sprite = ViewUtil.WhiteSprite;
+                    if (SwellMaterial != null)
                     {
-                        kv.Value.Raised.sharedMaterial = waterMaterial;
+                        kv.Value.Raised.sharedMaterial = SwellMaterial;
                     }
                     kv.Value.Shadow = Rent(ShadowOrder);
                     kv.Value.Shadow.sprite = QuarryShapes.Plate;
@@ -509,22 +544,59 @@ namespace ProjectBlock.View
             float sink = sk * sk * (3f - 2f * sk);
             float amount = clock < s.Start ? 0f : rise * (1f - sink);
             float undershoot = sk > 0.6f && sk < 1f ? -0.02f * Mathf.Sin((sk - 0.6f) / 0.4f * Mathf.PI) : 0f;
-            s.Amount = Layers.ShowPressure ? amount : 0f;
-            s.Scale = 1f + (Style.RiseScale - 1f) * s.Amount + (Layers.ShowPressure ? undershoot : 0f);
+            s.Amount = Layers.ShowPressure ? Mathf.Max(0f, amount + undershoot * 0.5f) : 0f;
+            s.Scale = 1f + 0.12f * s.Amount; // where the spill leaves from, not a sprite scale
             s.Lift = Style.RiseLift * cube * s.Amount;
             Vector2 at = CellWorld(s.Cell);
-            bool on = Layers.ShowPressure && clock >= s.Start && sk < 1f;
+            bool on = Layers.ShowPressure && clock >= s.Start && sk < 1f && SwellMaterial != null;
             s.Raised.enabled = on;
             s.Shadow.enabled = on && s.Amount > 0.01f;
-            s.Plate.enabled = on && s.Amount > 0.01f;
+            s.Plate.enabled = false;
             if (!on)
             {
                 return;
             }
-            // The raised water covers the board's own cube exactly when it is back at scale 1.
-            s.Raised.transform.position = at + new Vector2(0f, s.Lift);
-            s.Raised.transform.localScale = new Vector3(cube * s.Scale, cube * s.Scale, 1f);
+            // THE LIQUID: a body of the source's own water on a quad a couple of cells wide. At
+            // amount 0 it is exactly the cube, so it comes and goes over the board's cube unseen.
+            s.Raised.transform.position = at;
+            float span = Style.SwellSpan * cube;
+            s.Raised.transform.localScale = new Vector3(span, span, 1f);
             s.Raised.color = Color.white;
+            Vector4 dirs = Vector4.zero;
+            foreach (Vector2 f in s.Facing)
+            {
+                if (f.x > 0f) { dirs.x = 1f; }
+                else if (f.x < 0f) { dirs.y = 1f; }
+                else if (f.y < 0f) { dirs.z = 1f; }
+                else { dirs.w = 1f; }
+            }
+            if (!Layers.ShowSwell) { dirs = Vector4.zero; }
+            Sprite waterTile = ViewUtil.CubeTile(CubeKind.Water);
+            block.Clear();
+            if (waterTile != null && waterTile.texture != null)
+            {
+                Texture2D tex = waterTile.texture;
+                Rect r = waterTile.textureRect;
+                block.SetTexture(WaterTexId, tex);
+                block.SetVector(WaterPivotId, new Vector4((r.x + waterTile.pivot.x) / tex.width, (r.y + waterTile.pivot.y) / tex.height, 0f, 0f));
+                block.SetVector(WaterUnitId, new Vector4(waterTile.pixelsPerUnit / tex.width, waterTile.pixelsPerUnit / tex.height, 0f, 0f));
+            }
+            block.SetFloat(SpanId, Style.SwellSpan);
+            block.SetFloat(AmountId, s.Amount);
+            block.SetVector(DirsId, dirs);
+            block.SetFloat(ClockId, clock);
+            block.SetFloat(SeedId, (Hash(s.Cell) % 628) / 100f);
+            s.Raised.SetPropertyBlock(block);
+            // Froth thrown off the top as it heaves.
+            if (s.Amount > 0.8f && Layers.ShowDropletsLayer && Say(null, "froth" + sources.IndexOf(s)))
+            {
+                Vector2 top = at + new Vector2(0f, cube * 0.75f);
+                for (int i = 0; i < 3; i++)
+                {
+                    var d = new Vector2(-0.6f + 0.6f * i, 1f).normalized;
+                    AddBit(top, top + d * cube * 0.18f, 0.20f, cube * 0.035f);
+                }
+            }
             // A contact shadow under it, spreading as it lifts: that is what reads as RISING.
             s.Shadow.transform.position = at + new Vector2(cube * 0.02f, -cube * 0.03f * s.Amount);
             s.Shadow.transform.localScale = new Vector3(cube * (1f + 0.06f * s.Amount), cube * (1f + 0.06f * s.Amount), 1f);
@@ -561,7 +633,9 @@ namespace ProjectBlock.View
             // ---- the swell: the water piling up against that edge
             float sk = Mathf.Clamp01((a - Style.SwellFrom) / Style.Swell);
             float swell = Mathf.Sin(Mathf.Min(sk, 1f) * Mathf.PI * 0.5f) * (1f - rebound);
-            bool sOn = Layers.ShowSwell && swell > 0f;
+            // The mound is the liquid's own LOBE now (FloodSwell); the sprite stays only as the
+            // fallback when that shader is missing.
+            bool sOn = Layers.ShowSwell && swell > 0f && SwellMaterial == null;
             sp.Swell.enabled = sOn;
             if (sOn)
             {
