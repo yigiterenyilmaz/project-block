@@ -1,4 +1,4 @@
-// PURPOSE: BOSS STAGE IDENTITY - what makes a boss stage look like a threat. Two halves, both
+﻿// PURPOSE: BOSS STAGE IDENTITY - what makes a boss stage look like a threat. Two halves, both
 // chosen per boss by its THEME (BossThemes) and previewable on their own in the F7 lab
 // (GameUiController.BossIdentity):
 //
@@ -659,7 +659,8 @@ namespace ProjectBlock.View
             tm.transform.localPosition = new Vector3(position.x, position.y, 0f);
             tm.transform.localScale = new Vector3(scale, scale, 1f);
             colour.a *= Mathf.Clamp01(alpha);
-            tm.color = colour;
+            // Through ViewUtil so the outline fades with the ink - see SetTextColor.
+            ViewUtil.SetTextColor(tm, colour);
         }
 
         /// <summary>A label and a soft dark copy under it - the veil is not always dark enough

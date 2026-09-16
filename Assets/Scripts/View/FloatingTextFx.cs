@@ -1,4 +1,4 @@
-// PURPOSE: A short-lived popup text ("COMBO x3!", "CLEAN SWEEP!"): scale-punches in,
+﻿// PURPOSE: A short-lived popup text ("COMBO x3!", "CLEAN SWEEP!"): scale-punches in,
 // floats upward, fades out, destroys itself. Spawn-and-forget.
 //
 // AND THEY QUEUE. Three popups about the same turn used to be spawned in the same frame at
@@ -177,7 +177,10 @@ namespace ProjectBlock.View
             transform.localScale = new Vector3(punch, punch, 1f);
             Color color = baseColor;
             color.a = 1f - t * t;
-            textMesh.color = color;
+            // Through ViewUtil, so the dark outline under the glyph fades WITH it. Writing
+            // textMesh.color directly leaves the outline at full strength and the popup ends as
+            // a black ghost of itself.
+            ViewUtil.SetTextColor(textMesh, color);
             if (t >= 1f)
             {
                 Live.Remove(this);

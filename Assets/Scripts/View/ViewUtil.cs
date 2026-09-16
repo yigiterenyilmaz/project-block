@@ -1174,7 +1174,102 @@ namespace ProjectBlock.View
             var meshRenderer = go.GetComponent<MeshRenderer>();
             meshRenderer.material = font.material;
             meshRenderer.sortingOrder = sortingOrder;
+            AddTextOutline(textMesh, sortingOrder);
             return textMesh;
+        }
+
+        /// <summary>
+        /// THE DARK OUTLINE EVERY WORLD-SPACE TEXT GETS.
+        ///
+        /// This text is drawn over the ARENA, which is a different colour under every glyph: pale
+        /// blocks, dark empty cells, a boss's red wash, a fire tile's orange. A single ink colour
+        /// cannot be readable on all of it, and the yellow the HUD favours is worst of all - it
+        /// vanishes on gold and on lava.
+        ///
+        /// FOUR COPIES, NOT EIGHT. Four axis-aligned offsets read as an outline at a fraction of
+        /// the cost, and the diagonals a full ring would add are the ones the glyph's own
+        /// antialiasing already softens.
+        ///
+        /// THEY ARE DRAWN UNDER THE GLYPH, at sortingOrder - 1. The note this file used to carry
+        /// said outline copies "ghost", and they do - at the SAME order, where the renderers fight
+        /// and the half-transparent glyph edges blend over each other in whatever order the batch
+        /// happened to take. One order down, the outline is simply behind, which is where an
+        /// outline goes.
+        ///
+        /// EXTENSION POINT: OutlineThickness is in the text's own character units, so it scales
+        /// with the type rather than being a pixel size that is right at exactly one font size.
+        /// </summary>
+        private static void AddTextOutline(TextMesh textMesh, int sortingOrder)
+        {
+            if (textMesh == null || string.IsNullOrEmpty(textMesh.text))
+            {
+                return;
+            }
+            float step = textMesh.characterSize * textMesh.fontSize * OutlineThickness;
+            var copies = new TextMesh[OutlineOffsets.Length];
+            for (int i = 0; i < OutlineOffsets.Length; i++)
+            {
+                var go = new GameObject("Outline");
+                go.transform.SetParent(textMesh.transform, false);
+                go.transform.localPosition =
+                    new Vector3(OutlineOffsets[i].x * step, OutlineOffsets[i].y * step, 0f);
+                var copy = go.AddComponent<TextMesh>();
+                copy.font = textMesh.font;
+                copy.fontSize = textMesh.fontSize;
+                copy.characterSize = textMesh.characterSize;
+                copy.anchor = textMesh.anchor;
+                copy.alignment = textMesh.alignment;
+                copy.text = textMesh.text;
+                // The outline follows the ink's ALPHA, so a text fading out fades its outline
+                // with it - a popup that faded to nothing over a black ghost of itself would be
+                // the worst of both.
+                copy.color = new Color(OutlineInk.r, OutlineInk.g, OutlineInk.b,
+                    OutlineInk.a * textMesh.color.a);
+                var renderer = go.GetComponent<MeshRenderer>();
+                renderer.material = textMesh.font.material;
+                renderer.sortingOrder = sortingOrder - 1;
+                copies[i] = copy;
+            }
+            // The copies FOLLOW the ink from here on. A TextMesh's content is a plain field that
+            // a dozen callers write straight to (the draw-pile count every turn, the boss lab's
+            // rows), and an outline built once would go stale the first time any of them did -
+            // leaving the old word on screen, in black, under the new one.
+            textMesh.gameObject.AddComponent<TextOutlineFx>().Bind(textMesh, copies, OutlineInk);
+        }
+
+        private static readonly Vector2[] OutlineOffsets =
+        {
+            new Vector2(1f, 0f), new Vector2(-1f, 0f),
+            new Vector2(0f, 1f), new Vector2(0f, -1f)
+        };
+
+        /// <summary>Not pure black: a hard black edge on this palette reads as a sticker cut out
+        /// and laid on the board. A very dark blue-grey sits in the same family as the arena.</summary>
+        private static readonly Color OutlineInk = new Color(0.04f, 0.05f, 0.08f, 0.95f);
+
+        private const float OutlineThickness = 0.055f;
+
+        /// <summary>
+        /// Re-colours a text AND the outline under it. Anything that animates a TextMesh's colour
+        /// has to go through here, or the ink fades and the outline stays - which is exactly the
+        /// ghost the old note warned about, arrived at from the other direction.
+        /// </summary>
+        public static void SetTextColor(TextMesh textMesh, Color color)
+        {
+            if (textMesh == null)
+            {
+                return;
+            }
+            textMesh.color = color;
+            for (int i = 0; i < textMesh.transform.childCount; i++)
+            {
+                var copy = textMesh.transform.GetChild(i).GetComponent<TextMesh>();
+                if (copy != null)
+                {
+                    copy.color = new Color(OutlineInk.r, OutlineInk.g, OutlineInk.b,
+                        OutlineInk.a * color.a);
+                }
+            }
         }
 
         /// <summary>

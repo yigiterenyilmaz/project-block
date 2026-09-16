@@ -357,7 +357,8 @@ namespace ProjectBlock.View
             {
                 Color color = textBaseColors[i];
                 color.a *= Mathf.Clamp01(alpha);
-                textMeshes[i].color = color;
+                // Through ViewUtil so the outline fades with the ink - see SetTextColor.
+                ViewUtil.SetTextColor(textMeshes[i], color);
             }
         }
 

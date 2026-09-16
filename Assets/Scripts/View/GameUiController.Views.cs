@@ -1,4 +1,4 @@
-// PURPOSE: GameUiController view construction - building the runtime view objects and
+﻿// PURPOSE: GameUiController view construction - building the runtime view objects and
 // the shared text-label helper.
 
 using System.Collections;
@@ -585,6 +585,15 @@ namespace ProjectBlock.View
 
         private const int InfoFontSize = 20;
 
+        /// <summary>Not pure black: a hard black edge reads as a sticker cut out and laid on the
+        /// screen. The same very dark blue-grey the world-space outline uses, so the HUD and the
+        /// board speak with one voice.</summary>
+        private static readonly Color HudOutlineInk = new Color(0.04f, 0.05f, 0.08f, 0.92f);
+
+        /// <summary>In canvas pixels. Two is an outline; more starts to eat the counters of the
+        /// letters at the small sizes the debug readout uses.</summary>
+        private const float HudOutlineWidth = 2f;
+
         private static Text MakeText(Transform parent, string name, Vector2 anchor,
             Vector2 offset, TextAnchor alignment, int fontSize, Color color)
         {
@@ -596,6 +605,15 @@ namespace ProjectBlock.View
             text.alignment = alignment;
             text.color = color;
             text.raycastTarget = false;
+            // A DARK OUTLINE, for the same reason the world-space text has one: the HUD is drawn
+            // over the arena and the backdrop, which are a different colour under every line -
+            // pale blocks, a boss's red wash, a lava lake. uGUI's own Outline effect is one
+            // component and the canvas batches it, so this costs a great deal less here than the
+            // four mesh copies a TextMesh needs.
+            var outline = go.AddComponent<Outline>();
+            outline.effectColor = HudOutlineInk;
+            outline.effectDistance = new Vector2(HudOutlineWidth, HudOutlineWidth);
+            outline.useGraphicAlpha = true;
             RectTransform rect = go.GetComponent<RectTransform>();
             rect.anchorMin = anchor;
             rect.anchorMax = anchor;
