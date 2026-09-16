@@ -1,4 +1,4 @@
-// PURPOSE: The four jokers that pay you for a SHAPE OF PLAY rather than a kind of block -
+﻿// PURPOSE: The four jokers that pay you for a SHAPE OF PLAY rather than a kind of block -
 // symmetry on the board, dynamite left to mature, antimatter annihilating a whole element, and a
 // round won without touching a power.
 //
@@ -130,14 +130,48 @@ namespace ProjectBlock.Core
     ///
     /// Charges are per CARD, not per cube: a block that loses half its cubes keeps what it earned,
     /// and pays it when the rest goes.
+    ///
+    /// And the powder ACCELERATES - the n-th turn of waiting is worth n, capped at five turns
+    /// (see PowderUnits / MaxCharges). Charges are per TURN and are wiped at every round start;
+    /// nothing here has ever survived a round boundary.
     /// </summary>
     public sealed class BarutTedarikcisiJoker : Joker
     {
-        /// <summary>Score per charge, per dynamite cube destroyed.</summary>
+        /// <summary>Score per POWDER UNIT, per dynamite cube destroyed. See PowderUnits for what
+        /// a unit is - it is not the same thing as a charge any more.</summary>
         public int BonusPerChargePerCube = 3;
 
-        /// <summary>Charges a block can bank. Without a cap a stalling round would print score.</summary>
-        public int MaxCharges = 20;
+        /// <summary>
+        /// Charges a block can bank, in TURNS - charges are per turn and are wiped at every round
+        /// start (OnRoundStarted), so this has never had anything to do with rounds.
+        ///
+        /// Five (2026-09-16, designer's call; it was twenty). Twenty turns of nursing one block is
+        /// not a decision a real round ever offers, so the ceiling was theoretical and the first
+        /// few turns - the ones actually played - were worth almost nothing.
+        /// </summary>
+        public int MaxCharges = 5;
+
+        /// <summary>
+        /// WHAT THE CHARGES ARE WORTH, and the reason the payout is not simply charges * bonus:
+        /// the n-th turn of waiting is worth n, so the powder ACCELERATES. Five turns is
+        /// 1+2+3+4+5 = 15 units rather than 5.
+        ///
+        /// Linear growth under a short cap makes every turn of patience interchangeable, which is
+        /// the opposite of what this joker is about - the risk of leaving a dynamite block
+        /// standing goes up as the board fills, so the reward has to go up faster than the wait.
+        /// Triangular rather than exponential because the cap is what bounds it and an exponent
+        /// would make the last turn the only one that mattered.
+        ///
+        /// BALANCE PLACEHOLDER, like every number here.
+        /// </summary>
+        public int PowderUnits(int charges)
+        {
+            if (charges > MaxCharges)
+            {
+                charges = MaxCharges;
+            }
+            return charges * (charges + 1) / 2;
+        }
 
         private readonly Dictionary<int, int> chargesByCard = new Dictionary<int, int>();
         private int paidThisRound;
@@ -147,9 +181,11 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Every turn a dynamite block sits on the board unexploded it gains a charge, and "
-                    + "pays for all of them when it finally goes up. Patience is the ammunition.",
-                "Tahtadaki bir dinamit bloğu patlamadan durduğu her tur güç kazanır ve sonunda "
-                    + "patladığında hepsinin karşılığını öder. Cephane sabırdır.");
+                    + "each turn of waiting is worth more than the last - up to 5. It pays for all "
+                    + "of that powder when it finally goes up. Patience is the ammunition.",
+                "Tahtadaki bir dinamit bloğu patlamadan durduğu her tur güç kazanır ve her "
+                    + "beklenen tur bir öncekinden daha değerlidir - en fazla 5 tur. Sonunda "
+                    + "patladığında biriken tüm barutun karşılığını öder. Cephane sabırdır.");
         }
 
         /// <summary>Charges banked across every dynamite block standing right now, for the UI.</summary>
@@ -212,7 +248,7 @@ namespace ProjectBlock.Core
                 int charges;
                 if (chargesByCard.TryGetValue(destroyed[i].Cube.SourceCardId, out charges))
                 {
-                    bonus += charges * BonusPerChargePerCube;
+                    bonus += PowderUnits(charges) * BonusPerChargePerCube;
                 }
             }
             if (bonus <= 0)

@@ -8220,7 +8220,10 @@ public static class JokerTests
         TurnReport report = PlayAt(round, new GridPos(4, 0));
         Check(report != null && report.ExplodedRows.Count > 0, "the row exploded");
         // A block pays what it had BANKED: the turn it goes up is a turn it did not survive.
-        int expected = 2 * charges * joker.BonusPerChargePerCube;
+        // And the powder ACCELERATES, so the charges are worth their triangular sum rather than
+        // their count - asked of the joker rather than restated here, so the test cannot drift
+        // from the rule it is pinning.
+        int expected = 2 * joker.PowderUnits(charges) * joker.BonusPerChargePerCube;
         Check(FlatFrom(report.Score, joker.DefId) == expected,
             "and both cubes paid every charge they had banked",
             FlatFrom(report.Score, joker.DefId) + " vs " + expected);
