@@ -107,38 +107,38 @@ Shader "ProjectBlock/BlackHole"
                 return output;
             }
 
-            float Hash(float2 i, float s)
+            float BhHash(float2 i, float s)
             {
                 return frac(sin(dot(i, float2(127.1, 311.7)) + s * 74.7) * 43758.5453);
             }
 
             // Value noise whose x wraps every `period` cells, so an angle can be fed in without a seam.
-            float WrapNoise(float2 x, float period, float s)
+            float BhWrapNoise(float2 x, float period, float s)
             {
                 float2 i = floor(x);
                 float2 f = frac(x);
                 f = f * f * (3.0 - 2.0 * f);
                 float i0 = i.x - period * floor(i.x / period);
                 float i1 = (i.x + 1.0) - period * floor((i.x + 1.0) / period);
-                float a = Hash(float2(i0, i.y), s);
-                float b = Hash(float2(i1, i.y), s);
-                float c = Hash(float2(i0, i.y + 1.0), s);
-                float d = Hash(float2(i1, i.y + 1.0), s);
+                float a = BhHash(float2(i0, i.y), s);
+                float b = BhHash(float2(i1, i.y), s);
+                float c = BhHash(float2(i0, i.y + 1.0), s);
+                float d = BhHash(float2(i1, i.y + 1.0), s);
                 return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
             }
 
-            float Sq(float x)
+            float BhSq(float x)
             {
                 return x * x;
             }
 
-            float WrapAngle(float a)
+            float BhWrapAngle(float a)
             {
                 return a - TAU * floor((a + 3.14159265) / TAU);
             }
 
             // One band of flowing matter: radial profile x streaks along the flow x uneven thickness.
-            float Band(float r, float u, float r0, float width, float streakFreq, float seed)
+            float BhBand(float r, float u, float r0, float width, float streakFreq, float seed)
             {
                 float thick = 1.0 + 0.38 * sin(u + seed) + 0.22 * sin(u * 2.0 + seed * 1.7);
                 float w = width * max(thick, 0.35);
@@ -148,8 +148,8 @@ Shader "ProjectBlock/BlackHole"
                 float ua = u / TAU * streakFreq;
                 // ...and drifting INWARD with time, so the matter flows rather than the disk simply
                 // turning as a rigid picture.
-                float n = WrapNoise(float2(ua, r * 34.0 + _Clock * 0.45), streakFreq, seed) * 0.6
-                        + WrapNoise(float2(ua * 2.0, r * 71.0 + _Clock * 0.8), streakFreq * 2.0, seed + 5.0) * 0.4;
+                float n = BhWrapNoise(float2(ua, r * 34.0 + _Clock * 0.45), streakFreq, seed) * 0.6
+                        + BhWrapNoise(float2(ua * 2.0, r * 71.0 + _Clock * 0.8), streakFreq * 2.0, seed + 5.0) * 0.4;
                 return profile * (0.12 + 0.88 * pow(n, 1.5));
             }
 
@@ -173,12 +173,12 @@ Shader "ProjectBlock/BlackHole"
                 float silence = 1.0 - _Silence;
                 float u1 = a - _Angle;
                 float u2 = a - _Angle2;
-                float inner = Band(r, u1, _CoreR * 1.12 * scale, _CoreR * 1.75 * scale, 7.0, _Seed);
-                float outer = Band(r, u2, _CoreR * 2.10 * scale, _CoreR * 2.10 * scale, 5.0, _Seed + 11.0)
+                float inner = BhBand(r, u1, _CoreR * 1.12 * scale, _CoreR * 1.75 * scale, 7.0, _Seed);
+                float outer = BhBand(r, u2, _CoreR * 2.10 * scale, _CoreR * 2.10 * scale, 5.0, _Seed + 11.0)
                     * (0.55 + 0.45 * saturate(_Progress * 1.6));
                 // Density patches carried round with the flow.
-                float p1 = exp(-Sq(WrapAngle(u1 - 0.7)) / 0.30);
-                float p2 = exp(-Sq(WrapAngle(u1 + 2.3)) / 0.16) * 0.6;
+                float p1 = exp(-BhSq(BhWrapAngle(u1 - 0.7)) / 0.30);
+                float p2 = exp(-BhSq(BhWrapAngle(u1 + 2.3)) / 0.16) * 0.6;
                 float patch = p1 + p2;
                 // Ignition: the disk arrives as a few broken arcs before it closes.
                 float arcs = frac(u1 / TAU * 3.0 + _Seed * 0.13);
@@ -207,7 +207,7 @@ Shader "ProjectBlock/BlackHole"
                 float massProfile = smoothstep(0.0, 0.35, massT) * (1.0 - smoothstep(0.55, 1.0, massT));
                 float along = frac((1.5707963 - a) / TAU);       // clockwise from the top
                 float fill = smoothstep(_Progress + 0.02, _Progress - 0.02, along);
-                float grain = pow(WrapNoise(float2((a - _Angle2) / TAU * 14.0, r * 26.0 + _Clock * 0.3), 14.0, _Seed + 23.0), 2.2);
+                float grain = pow(BhWrapNoise(float2((a - _Angle2) / TAU * 14.0, r * 26.0 + _Clock * 0.3), 14.0, _Seed + 23.0), 2.2);
                 float massA = massProfile * fill * grain
                     * (0.10 + 0.45 * _Progress + 0.60 * _Pulse) * (0.4 + 0.6 * silence);
                 float3 massCol = lerp(indigo, blueViolet, _Progress * 0.6);
@@ -224,7 +224,7 @@ Shader "ProjectBlock/BlackHole"
                 A = A + horizon * (1.0 - A);
 
                 // ---- the lensing rim: a hair of bent light on the horizon's edge
-                float rim = exp(-Sq((r - coreR * 1.03) / 0.010)) * _Open * _Rim;
+                float rim = exp(-BhSq((r - coreR * 1.03) / 0.010)) * _Open * _Rim;
                 float3 rimCol = float3(0.62, 0.62, 0.86);
                 rimCol = lerp(rimCol, warm, pow(saturate(cos(a - _Angle - 0.9)), 10.0) * 0.8 * _Warm);
                 // Bent light is brightest on the approaching side, never an even ring (an even ring is an icon).

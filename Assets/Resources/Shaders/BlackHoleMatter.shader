@@ -87,7 +87,6 @@ Shader "ProjectBlock/BlackHoleMatter"
             SAMPLER(sampler_MainTex);
 
             CBUFFER_START(UnityPerMaterial)
-                float4 _MainTex_ST;
                 float4 _Color;
                 float _WarpAmp;
                 float _WarpFreq;
@@ -131,7 +130,7 @@ Shader "ProjectBlock/BlackHoleMatter"
                 ws.xy = _Pivot.xy + deformed + _Offset.xy;
                 output.positionCS = TransformWorldToHClip(ws);
                 output.color = input.color;
-                output.uv = TRANSFORM_TEX(input.uv, _MainTex);
+                output.uv = input.uv; // no _ST: the 2D SRP Batcher refuses a material that has one
                 float3 originWS = mul(UNITY_MATRIX_M, float4(0, 0, 0, 1)).xyz;
                 output.phase = originWS.x * 2.17 + originWS.y * 3.41;
                 output.worldPos = ws.xy;
