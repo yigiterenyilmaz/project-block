@@ -244,18 +244,18 @@ namespace ProjectBlock.View
             // must not look ready.
             bool silenced = session.CurrentRound != null
                 && session.CurrentRound.IsSilencedByBoss(power);
-            panel.Body.color = silenced ? SilencedColor
+            panel.SetBody(silenced ? SilencedColor
                 : targeting ? TargetingColor
                 : !power.Charged ? SpentColor
-                : ready ? ReadyColor : PanelColor;
+                : ready ? ReadyColor : PanelColor);
             // Spent still greys the whole card out; rarity only tints the charged state and the
             // frame, which stays lit so the tier is readable on a spent power too.
             Rarity rarity = RarityPalette.Of(power);
             Color accent = RarityPalette.Accent(rarity);
             panel.Frame.color = accent;
-            panel.Title.color = !power.Charged ? SpentTextColor
-                : rarity == Rarity.Common ? NameColor : accent;
-            panel.Status.color = power.Charged ? BodyColor : SpentTextColor;
+            panel.Title.color = panel.Ink(!power.Charged ? SpentTextColor
+                : rarity == Rarity.Common ? NameColor : accent);
+            panel.Status.color = panel.Ink(power.Charged ? BodyColor : SpentTextColor);
 
             panel.Hotkey.text = string.Empty;
             panel.Title.text = power.DisplayName;
@@ -303,8 +303,11 @@ namespace ProjectBlock.View
 
         private HeldItemCard CreatePanel(int index)
         {
-            HeldItemCard card = HeldItemCard.Create(root, "Power_" + index, NameColor, BodyColor);
-            card.Body.color = PanelColor;
+            // Art/Cards/card_power if somebody paints one; until then the flat card, which
+            // is what this bar has always drawn.
+            HeldItemCard card = HeldItemCard.Create(root, "Power_" + index, NameColor, BodyColor,
+                "card_power");
+            card.SetResting(PanelColor);
             UiLayout.PlaceBarSlot(card.Root.GetComponent<RectTransform>(), index, index + 1,
                 new Vector2(PanelWidth, PanelHeight), PanelGap, false);
             card.Layout(new Vector2(PanelWidth, PanelHeight), Compact);

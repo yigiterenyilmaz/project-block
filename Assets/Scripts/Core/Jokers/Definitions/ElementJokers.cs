@@ -27,6 +27,19 @@ namespace ProjectBlock.Core
         /// <summary>Gold cubes counted in hand last turn, for the UI.</summary>
         public int GoldCubesHeld { get; private set; }
 
+        /// <summary>
+        /// WHAT IT PAID AND WHICH CUBES PAID IT - for the View, and reporting only.
+        ///
+        /// [NotSaved] like every other per-turn report: it is rebuilt by the next turn and means
+        /// nothing across a load. The payout animation's subject is the CUBE, so this carries the
+        /// sources rather than one number - see MidasVisuals.
+        /// </summary>
+        [field: NotSaved]
+        public MidasPayoutVisuals LastPayout { get; private set; }
+
+        [NotSaved]
+        private int payoutSerial;
+
         public MidasJoker()
             : base("midas", "Midas")
         {
@@ -45,25 +58,58 @@ namespace ProjectBlock.Core
         public override void OnRoundStarted(RoundContext ctx)
         {
             GoldCubesHeld = 0;
+            LastPayout = null;
         }
 
         public override void ModifyScore(TurnContext turn)
         {
+            // THE SCORE IS UNCHANGED: the same cubes counted the same way, and the same one
+            // AddFlat at the end. What is new is that the counting WRITES DOWN where each cube
+            // came from, because the payout animation is per cube and the View may not recount.
+            var report = new MidasPayoutVisuals
+            {
+                Serial = ++payoutSerial,
+                PointsPerGoldCube = PointsPerGoldCubeHeld
+            };
             int cubes = 0;
             RoundEngine round = turn.Round;
             for (int i = 0; i < round.Hand.Count; i++)
             {
-                cubes += GoldCubesOf(round, round.Hand[i]);
+                cubes += Count(round, round.Hand[i], false, i, report);
             }
-            foreach (BonusSlot slot in round.BonusHand)
+            for (int i = 0; i < round.BonusHand.Count; i++)
             {
-                cubes += GoldCubesOf(round, slot.Card);
+                cubes += Count(round, round.BonusHand[i].Card, true, i, report);
             }
             GoldCubesHeld = cubes;
+            report.TotalScore = cubes * PointsPerGoldCubeHeld;
+            LastPayout = report;
             if (cubes > 0)
             {
-                turn.Score.AddFlat(cubes * PointsPerGoldCubeHeld, DefId);
+                turn.Score.AddFlat(report.TotalScore, DefId);
             }
+        }
+
+        /// <summary>Counts one held card and, when it pays, records it as a source.</summary>
+        private int Count(RoundEngine round, BlockCard card, bool bonus, int slot,
+            MidasPayoutVisuals report)
+        {
+            int cubes = GoldCubesOf(round, card);
+            if (cubes <= 0)
+            {
+                return 0;
+            }
+            report.Sources.Add(new MidasGoldSource
+            {
+                CardId = card.Id,
+                BonusHand = bonus,
+                Slot = slot,
+                // THE EFFECTIVE SHAPE, the one the card is being drawn in - see GoldCubesOf.
+                Shape = round.EffectiveShape(card),
+                GoldCubes = cubes,
+                Subtotal = cubes * PointsPerGoldCubeHeld
+            });
+            return cubes;
         }
 
         /// <summary>How many gold cubes this held card is worth right now. Both questions go
@@ -175,6 +221,27 @@ namespace ProjectBlock.Core
         /// <summary>The kind that spreads.</summary>
         public CubeKind SpreadKind { get; }
 
+        /// <summary>
+        /// WHAT THE LAST USE DID - for the View, and reporting only. [NotSaved] like every other
+        /// per-turn report: rebuilt by the next use and meaningless across a load.
+        ///
+        /// It carries the SOURCES, the TARGETS, which SIDE each target caught from and what each
+        /// target used to be. All four are things the View would otherwise have to guess at, and
+        /// the guess it would make - "everything that is fire now was lit by something" - is the
+        /// one that draws a second ring of spreading that the rules do not have.
+        /// </summary>
+        [field: NotSaved]
+        public SpreadVisuals LastSpread { get; private set; }
+
+        [NotSaved]
+        private int spreadSerial;
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            base.OnRoundStarted(ctx);
+            LastSpread = null;
+        }
+
         public override bool CanActivate(RoundContext ctx)
         {
             return ChargesLeft > 0
@@ -188,8 +255,27 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            GameBoard board = ctx.Round.Board;
-            List<GridPos> sources = board.CellsOfKind(SpreadKind);
+            LastSpread = SpreadOn(ctx.Round.Board, SpreadKind, ++spreadSerial);
+            return true;
+        }
+
+        /// <summary>
+        /// THE SPREAD ITSELF, on any board - and the ONE place the rule lives.
+        ///
+        /// Public and static so the ANIMATION LAB can run it on a board of its own and get
+        /// exactly what a round would get, reported the same way: the same bargain
+        /// MapusBoss.RetargetOn makes with the boss's targeting. A lab that reimplements the
+        /// rule is a lab that agrees with itself and with nothing else.
+        /// </summary>
+        public static SpreadVisuals SpreadOn(GameBoard board, CubeKind kind, int serial)
+        {
+            var report = new SpreadVisuals { Serial = serial, Kind = kind };
+            if (board == null)
+            {
+                return report;
+            }
+            List<GridPos> sources = board.CellsOfKind(kind);
+            report.Sources.AddRange(sources);
 
             // Collect first, convert after: converting as we walk would let the new cubes
             // seed further conversions and turn the whole board in one use.
@@ -199,17 +285,31 @@ namespace ProjectBlock.Core
                 foreach (GridPos neighbour in board.Neighbours(source))
                 {
                     Cube? cube = board.GetCube(neighbour);
-                    if (cube.HasValue && cube.Value.Kind != SpreadKind && !targets.Contains(neighbour))
+                    if (!cube.HasValue || cube.Value.Kind == kind)
+                    {
+                        continue;
+                    }
+                    if (!targets.Contains(neighbour))
                     {
                         targets.Add(neighbour);
+                        // The cube as it stands NOW: once the loop below has run, what it used
+                        // to be is gone, and that is where the animation starts from.
+                        report.Targets.Add(new SpreadIgnition
+                        {
+                            Cell = neighbour,
+                            Was = cube.Value
+                        });
                     }
+                    // WHICH SIDE it caught from, including the second and third - two fires
+                    // meeting on one cube is a thing the picture should be able to say.
+                    report.Targets[targets.IndexOf(neighbour)].From.Add(source);
                 }
             }
             foreach (GridPos pos in targets)
             {
-                board.SetCubeKind(pos, SpreadKind);
+                board.SetCubeKind(pos, kind);
             }
-            return true;
+            return report;
         }
     }
 

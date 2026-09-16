@@ -235,6 +235,8 @@ namespace ProjectBlock.View
 
         private TalismanView talisman;
 
+        private FireSpreadView fireSpread;
+
         private CircuitTraceView circuitTrace;
 
         private CircuitOverloadView circuitOverload;
@@ -492,6 +494,35 @@ namespace ProjectBlock.View
                     talisman = go.AddComponent<TalismanView>();
                 }
                 return talisman;
+            }
+        }
+
+        /// <summary>
+        /// "Yangın"'s fire front. Owned here because it borrows CELLS: it holds the ones it is
+        /// lighting blank (the rules have already made them fire) and draws the transformation
+        /// itself, which nothing outside the board can do.
+        /// </summary>
+        public FireSpreadView FireSpread
+        {
+            get
+            {
+                if (fireSpread == null)
+                {
+                    var go = new GameObject("FireSpread");
+                    go.transform.SetParent(transform, false);
+                    fireSpread = go.AddComponent<FireSpreadView>();
+                }
+                return fireSpread;
+            }
+        }
+
+        /// <summary>Puts the fire out and gives any held cells back, without making the view if
+        /// there is none.</summary>
+        public void StopFireSpread()
+        {
+            if (fireSpread != null)
+            {
+                fireSpread.Stop();
             }
         }
 
@@ -1101,6 +1132,9 @@ namespace ProjectBlock.View
             Transform keepParasite = parasite != null ? parasite.transform : null;
             Transform keepMapus = mapus != null ? mapus.transform : null;
             Transform keepTalisman = talisman != null ? talisman.transform : null;
+            // The fire front holds cells blank while it burns across them; destroyed mid-burn it
+            // would leave the board with holes it never gives back.
+            Transform keepFire = fireSpread != null ? fireSpread.transform : null;
             // The gravity field is a property of the ROUND, not of the board's contents, so it
             // survives the rebuild and is CLEARED below - a new arena starts under ordinary
             // gravity, which is the rules' own behaviour and not something this decides.
@@ -1118,7 +1152,7 @@ namespace ProjectBlock.View
                     || child == keepGravity || child == keepDolls || child == keepRot
                     || child == keepSnake || child == keepPress
                     || child == keepParasite || child == keepMapus
-                    || child == keepTalisman)
+                    || child == keepTalisman || child == keepFire)
                 {
                     continue;
                 }

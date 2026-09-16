@@ -163,8 +163,9 @@ namespace ProjectBlock.View
             }
             StopAnimPress();
             StopAnimHost();
-            StopAnimMapus();
             StopAnimTalisman();
+            StopAnimMidas();
+            StopAnimFire();
             boardView.ClearPreview();
             RefreshAll(null);
             SyncRetroPresentation();
@@ -1504,6 +1505,236 @@ namespace ProjectBlock.View
                         RedrawAnimationLab();
                     }
                 });
+            AddAnimHeader("yangın / ateş cephesi", "yangın / ateş cephesi");
+            // "YANGIN" turns the neighbours of every fire cube to fire, ONE RING, once a round.
+            // Every scene here runs the real rule (SpreadJoker.SpreadOn) on a board of the lab's
+            // own, so the cubes that light are the cubes the game would light - which is the only
+            // way the one-ring test below is worth anything.
+            AddAnim("Yangın: one fire, one neighbour", "yangın: tek ateş, tek komşu",
+                delegate { AnimFire(AnimFireScene.One); });
+            AddAnim("Yangın: one fire, all four neighbours",
+                "yangın: tek ateş, dört komşusu birden",
+                delegate { AnimFire(AnimFireScene.Four); });
+            AddAnim("Yangın: three fires, scattered", "yangın: üç ateş, dağınık",
+                delegate { AnimFire(AnimFireScene.Scattered); });
+            AddAnim("Yangın: TWO fires into ONE cube (one transformation, two marks)",
+                "yangın: İKİ ateş TEK küpe (tek dönüşüm, iki iz)",
+                delegate { AnimFire(AnimFireScene.TwoIntoOne); });
+            AddAnim("Yangın: a crowded board", "yangın: dolu tahta",
+                delegate { AnimFire(AnimFireScene.Crowded); });
+            // THE RULE TEST. A row of cubes off one fire: only the nearest may light. If the
+            // second one catches, the animation is showing a chain the game does not have.
+            AddAnim("Yangın RULE: new fire must NOT spread on (one ring only)",
+                "yangın KURAL: yeni ateş yayılmamalı (yalnız tek halka)",
+                delegate { AnimFire(AnimFireScene.NoReSpread); });
+            AddAnim("Yangın alone: the SOURCES gathering",
+                "yangın tek başına: KAYNAKLARIN toplanması",
+                delegate { AnimFireOnly(AnimFireScene.Scattered, "source warm-up",
+                    "kaynak ısınması",
+                    delegate { FireSpreadView.Layers.ShowSourceWarmup = true; }); });
+            AddAnim("Yangın alone: the FLAME LICKS", "yangın tek başına: ALEV DİLLERİ",
+                delegate { AnimFireOnly(AnimFireScene.Four, "flame licks", "alev dilleri",
+                    delegate { FireSpreadView.Layers.ShowFlameLicks = true; }); });
+            AddAnim("Yangın alone: the BURN crossing the cube",
+                "yangın tek başına: küpü geçen YANMA",
+                delegate { AnimFireOnly(AnimFireScene.Four, "the burn", "yanma",
+                    delegate { FireSpreadView.Layers.ShowBurn = true; }); });
+            AddAnim("Yangın alone: the EMBERS", "yangın tek başına: KÖZLER",
+                delegate { AnimFireOnly(AnimFireScene.Four, "embers", "közler",
+                    delegate { FireSpreadView.Layers.ShowEmbers = true; }); });
+            AddAnim("Yangın: full spread, HALF speed (RESET puts it back)",
+                "yangın: tam yayılma, YARIM hız (RESET geri alır)",
+                delegate
+                {
+                    Time.timeScale = 0.5f;
+                    animSpeedIndex = 1;
+                    FireSpreadView.Layers.AllOn();
+                    AnimFire(AnimFireScene.Four);
+                });
+            AddAnim("Yangın: full spread, QUARTER speed", "yangın: tam yayılma, ÇEYREK hız",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    animSpeedIndex = 1;
+                    FireSpreadView.Layers.AllOn();
+                    AnimFire(AnimFireScene.Scattered);
+                });
+            AddAnim("Yangın debug: ring the SOURCES and the TARGETS",
+                "yangın hata ayıklama: KAYNAKLARI ve HEDEFLERİ çerçevele",
+                delegate { AnimFireToggle(ref FireSpreadView.Layers.ShowSourceTargetMarks,
+                    "source/target marks", "kaynak/hedef işaretleri"); });
+            AddAnim("Yangın switch: the source warm-up", "yangın anahtarı: kaynak ısınması",
+                delegate { AnimFireToggle(ref FireSpreadView.Layers.ShowSourceWarmup,
+                    "source warm-up", "kaynak ısınması"); });
+            AddAnim("Yangın switch: the flame licks", "yangın anahtarı: alev dilleri",
+                delegate { AnimFireToggle(ref FireSpreadView.Layers.ShowFlameLicks,
+                    "flame licks", "alev dilleri"); });
+            AddAnim("Yangın switch: the burn", "yangın anahtarı: yanma",
+                delegate { AnimFireToggle(ref FireSpreadView.Layers.ShowBurn,
+                    "the burn", "yanma"); });
+            AddAnim("Yangın switch: the embers", "yangın anahtarı: közler",
+                delegate { AnimFireToggle(ref FireSpreadView.Layers.ShowEmbers,
+                    "embers", "közler"); });
+            AddAnim("Yangın switch: the settle", "yangın anahtarı: oturma",
+                delegate { AnimFireToggle(ref FireSpreadView.Layers.ShowSettle,
+                    "settle", "oturma"); });
+            AddAnim("Yangın switch: ALL layers back on",
+                "yangın anahtarı: TÜM katmanlar geri açık",
+                delegate
+                {
+                    FireSpreadView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("every fire layer on",
+                        "tüm yangın katmanları açık");
+                    if (AnimLabOpen)
+                    {
+                        RedrawAnimationLab();
+                    }
+                });
+
+            AddAnimHeader("midas / altın temettüsü", "midas / altın temettüsü");
+            // "MIDAS" pays EVERY TURN for the gold in your hand, so the whole design question is
+            // whether it is still a pleasure on the fiftieth turn. These entries exist to be
+            // pressed twice in a row: once to see it, once to find out whether you want to see it
+            // again. The counts are the acceptance set - one cube has to be satisfying and forty
+            // must not be a wall of "+2".
+            AddAnim("Midas: 1 gold cube", "midas: 1 altın küp",
+                delegate { AnimMidas(1); });
+            AddAnim("Midas: 3 gold cubes", "midas: 3 altın küp",
+                delegate { AnimMidas(3); });
+            AddAnim("Midas: 5 gold cubes (the hero count)", "midas: 5 altın küp (asıl sayı)",
+                delegate { AnimMidas(5); });
+            AddAnim("Midas: 8 gold cubes", "midas: 8 altın küp",
+                delegate { AnimMidas(8); });
+            AddAnim("Midas: 12 gold cubes", "midas: 12 altın küp",
+                delegate { AnimMidas(12); });
+            AddAnim("Midas: 20 gold cubes - is it still readable?",
+                "midas: 20 altın küp - hâlâ okunuyor mu?",
+                delegate { AnimMidas(20); });
+            AddAnim("Midas: 40 gold cubes (stress)", "midas: 40 altın küp (stres)",
+                delegate { AnimMidas(40); });
+            AddAnim("Midas: one cube in each of three cards",
+                "midas: üç kartın her birinde bir küp",
+                delegate
+                {
+                    AnimMidas(0, BlockShape.FromCells(new List<GridPos> { new GridPos(0, 0) }),
+                        BlockShape.FromCells(new List<GridPos> { new GridPos(0, 0) }),
+                        BlockShape.FromCells(new List<GridPos> { new GridPos(0, 0) }));
+                });
+            AddAnim("Midas: an uneven hand (4 + 1 + 2)", "midas: dengesiz el (4 + 1 + 2)",
+                delegate
+                {
+                    AnimMidas(0,
+                        BlockShape.FromCells(new List<GridPos> { new GridPos(0, 0),
+                            new GridPos(1, 0), new GridPos(0, 1), new GridPos(1, 1) }),
+                        BlockShape.FromCells(new List<GridPos> { new GridPos(0, 0) }),
+                        BlockShape.FromCells(new List<GridPos> { new GridPos(0, 0),
+                            new GridPos(1, 0) }));
+                });
+            AddAnim("Midas: the CROWDED layout - one amount per card",
+                "midas: KALABALIK yerleşim - kart başına tek tutar",
+                delegate
+                {
+                    MidasPayoutView.Layers.AllOn();
+                    MidasPayoutView.Layers.ForceSubtotals = true;
+                    AnimMidas(12);
+                });
+            AddAnim("Midas: NOTHING held - no payout at all",
+                "midas: elde HİÇBİR ŞEY yok - ödeme de yok",
+                delegate
+                {
+                    StopAnimMidas();
+                    animLastLabel = Loc.Pick(
+                        "no gold in hand: the joker reports nothing and nothing is drawn",
+                        "elde altın yok: joker hiçbir şey bildirmiyor, hiçbir şey çizilmiyor");
+                    if (AnimLabOpen)
+                    {
+                        RedrawAnimationLab();
+                    }
+                });
+            AddAnim("Midas alone: the CUBE WAKE", "midas tek başına: KÜP UYANMASI",
+                delegate { AnimMidasOnly(5, "cube wake", "küp uyanması",
+                    delegate { MidasPayoutView.Layers.ShowCubeWake = true; }); });
+            AddAnim("Midas alone: the VALUE popups", "midas tek başına: TUTAR baloncukları",
+                delegate { AnimMidasOnly(5, "values", "tutarlar",
+                    delegate { MidasPayoutView.Layers.ShowValuePopups = true; }); });
+            AddAnim("Midas alone: the GOLD FLECKS", "midas tek başına: ALTIN KIRINTILARI",
+                delegate { AnimMidasOnly(5, "flecks", "kırıntılar",
+                    delegate { MidasPayoutView.Layers.ShowFlecks = true; }); });
+            AddAnim("Midas alone: the COLLECTION (value into the score)",
+                "midas tek başına: TOPLAMA (tutar skora gidiyor)",
+                delegate { AnimMidasOnly(5, "collection", "toplama",
+                    delegate
+                    {
+                        MidasPayoutView.Layers.ShowValuePopups = true;
+                        MidasPayoutView.Layers.ShowEssence = true;
+                    }); });
+            AddAnim("Midas alone: the TOTAL beside the score",
+                "midas tek başına: skorun yanındaki TOPLAM",
+                delegate { AnimMidasOnly(5, "total", "toplam",
+                    delegate { MidasPayoutView.Layers.ShowTotal = true; }); });
+            AddAnim("Midas: full payout, HALF speed (RESET puts it back)",
+                "midas: tam ödeme, YARIM hız (RESET geri alır)",
+                delegate
+                {
+                    Time.timeScale = 0.5f;
+                    animSpeedIndex = 1;
+                    MidasPayoutView.Layers.AllOn();
+                    AnimMidas(5);
+                });
+            AddAnim("Midas: full payout, QUARTER speed", "midas: tam ödeme, ÇEYREK hız",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    animSpeedIndex = 1;
+                    MidasPayoutView.Layers.AllOn();
+                    AnimMidas(5);
+                });
+            AddAnim("Midas debug: mark every SOURCE cube and the score target",
+                "midas hata ayıklama: her KAYNAK küpü ve skor hedefini işaretle",
+                delegate { AnimMidasToggle(ref MidasPayoutView.Layers.ShowSourceAnchors,
+                    "source anchors", "kaynak işaretleri"); });
+            AddAnim("Midas switch: the cube wake", "midas anahtarı: küp uyanması",
+                delegate { AnimMidasToggle(ref MidasPayoutView.Layers.ShowCubeWake,
+                    "cube wake", "küp uyanması"); });
+            AddAnim("Midas switch: the value popups", "midas anahtarı: tutar baloncukları",
+                delegate { AnimMidasToggle(ref MidasPayoutView.Layers.ShowValuePopups,
+                    "values", "tutarlar"); });
+            AddAnim("Midas switch: the gold flecks", "midas anahtarı: altın kırıntıları",
+                delegate { AnimMidasToggle(ref MidasPayoutView.Layers.ShowFlecks,
+                    "flecks", "kırıntılar"); });
+            AddAnim("Midas switch: the FOIL SWEEP across a cube",
+                "midas anahtarı: küpün üstünden geçen FOIL parıltısı",
+                delegate { AnimMidasToggle(ref MidasPayoutView.Layers.ShowFoilSweep,
+                    "foil sweep", "foil parıltısı"); });
+            AddAnim("Midas switch: the RIBBON behind the essence",
+                "midas anahtarı: özün arkasındaki ŞERİT",
+                delegate { AnimMidasToggle(ref MidasPayoutView.Layers.ShowRibbon,
+                    "ribbon", "şerit"); });
+            AddAnim("Midas switch: the collection", "midas anahtarı: toplama",
+                delegate { AnimMidasToggle(ref MidasPayoutView.Layers.ShowEssence,
+                    "collection", "toplama"); });
+            AddAnim("Midas switch: the total", "midas anahtarı: toplam",
+                delegate { AnimMidasToggle(ref MidasPayoutView.Layers.ShowTotal,
+                    "total", "toplam"); });
+            AddAnim("Midas switch: force the crowded layout",
+                "midas anahtarı: kalabalık yerleşimi zorla",
+                delegate { AnimMidasToggle(ref MidasPayoutView.Layers.ForceSubtotals,
+                    "crowded layout", "kalabalık yerleşim"); });
+            AddAnim("Midas: CYCLE the whole effect's SIZE (0.7 / 1.0 / 1.4 / 1.8 / 2.4x)",
+                "midas: TÜM efektin BOYUNU değiştir (0.7 / 1.0 / 1.4 / 1.8 / 2.4x)",
+                delegate { AnimMidasCycleSize(); });
+            AddAnim("Midas switch: ALL layers back on", "midas anahtarı: TÜM katmanlar geri açık",
+                delegate
+                {
+                    MidasPayoutView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("every midas layer on",
+                        "tüm midas katmanları açık");
+                    if (AnimLabOpen)
+                    {
+                        RedrawAnimationLab();
+                    }
+                });
+
             AddAnimHeader("tılsım / hayalet alanı", "tılsım / hayalet alanı");
             // "TILSIM" - the ghost harvest, the claim it leaves in the outside space, and the
             // bonus ground it hands the next round. What the lab fabricates here is the REPORT,
@@ -5168,6 +5399,334 @@ namespace ProjectBlock.View
             {
                 RedrawAnimationLab();
             }
+        }
+
+        // ------------------------------------------------------------------ yangın
+
+        // "YANGIN" IN THE LAB. Every scene puts up a board of the lab's OWN and runs the REAL
+        // rule on it (SpreadJoker.SpreadOn - the same method the joker calls), then hands what it
+        // reported to the same seam the game uses. What the lab fabricates is only the ARGUMENTS:
+        // where the fire already is and what is standing next to it.
+        //
+        // That matters more here than almost anywhere, because the thing being judged IS the
+        // rule: one ring, sources only. A lab that laid the targets out by hand could draw a
+        // second ring and never notice.
+
+        private enum AnimFireScene
+        {
+            One,
+            Four,
+            Scattered,
+            TwoIntoOne,
+            Crowded,
+            NoReSpread
+        }
+
+        /// <summary>The fire cells and the ordinary cubes one scene starts from. The TARGETS are
+        /// never listed: those are the rule's answer, not the lab's.</summary>
+        private static void AnimFireLayout(AnimFireScene scene, GameBoard board, List<int> cards,
+            List<GridPos> fire)
+        {
+            int cx = board.MinX + board.Width / 2;
+            int cy = board.MinY + board.Height / 2;
+            switch (scene)
+            {
+                case AnimFireScene.One:
+                    // One fire with a single neighbour to catch.
+                    fire.Add(new GridPos(cx, cy));
+                    AnimFireFill(board, cards, new[] { new GridPos(cx + 1, cy) });
+                    break;
+                case AnimFireScene.Four:
+                    fire.Add(new GridPos(cx, cy));
+                    AnimFireFill(board, cards, new[]
+                    {
+                        new GridPos(cx + 1, cy), new GridPos(cx - 1, cy),
+                        new GridPos(cx, cy + 1), new GridPos(cx, cy - 1)
+                    });
+                    break;
+                case AnimFireScene.Scattered:
+                    fire.Add(new GridPos(cx - 2, cy + 1));
+                    fire.Add(new GridPos(cx + 1, cy - 1));
+                    fire.Add(new GridPos(cx + 2, cy + 2));
+                    AnimFireFill(board, cards, new[]
+                    {
+                        new GridPos(cx - 2, cy), new GridPos(cx - 1, cy + 1),
+                        new GridPos(cx + 1, cy), new GridPos(cx + 2, cy - 1),
+                        new GridPos(cx + 2, cy + 1), new GridPos(cx + 1, cy + 2)
+                    });
+                    break;
+                case AnimFireScene.TwoIntoOne:
+                    // TWO fires either side of ONE cube: it catches from both, and the picture
+                    // has to say so without playing the transformation twice.
+                    fire.Add(new GridPos(cx - 1, cy));
+                    fire.Add(new GridPos(cx + 1, cy));
+                    AnimFireFill(board, cards, new[] { new GridPos(cx, cy) });
+                    break;
+                case AnimFireScene.NoReSpread:
+                    // A RUN of cubes off one fire. Only the FIRST catches - the rest are the
+                    // neighbours of a cube that is about to become fire, and a cube that becomes
+                    // fire does not spread. If the second one lights, the rule has been broken.
+                    fire.Add(new GridPos(cx - 2, cy));
+                    AnimFireFill(board, cards, new[]
+                    {
+                        new GridPos(cx - 1, cy), new GridPos(cx, cy),
+                        new GridPos(cx + 1, cy), new GridPos(cx + 2, cy)
+                    });
+                    break;
+                default:
+                    for (int x = -2; x <= 2; x++)
+                    {
+                        for (int y = -2; y <= 2; y++)
+                        {
+                            var at = new GridPos(cx + x, cy + y);
+                            if ((x + y) % 3 == 0)
+                            {
+                                fire.Add(at);
+                            }
+                            else
+                            {
+                                AnimFireFill(board, cards, new[] { at });
+                            }
+                        }
+                    }
+                    break;
+            }
+        }
+
+        private static void AnimFireFill(GameBoard board, List<int> cards, GridPos[] cells)
+        {
+            for (int i = 0; i < cells.Length; i++)
+            {
+                if (!board.IsInside(cells[i]))
+                {
+                    continue;
+                }
+                board.SetCubeAt(cells[i], new Cube(CubeKind.Normal,
+                    cards.Count > 0 ? cards[i % cards.Count] : 101));
+            }
+        }
+
+        private void AnimFire(AnimFireScene scene)
+        {
+            StopAnimFire();
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                return;
+            }
+            int w = Mathf.Max(7, round.Board.Width);
+            int h = Mathf.Max(7, round.Board.Height);
+            List<int> cards = AnimBossCards();
+            var board = new GameBoard(w, h);
+            var fire = new List<GridPos>();
+            AnimFireLayout(scene, board, cards, fire);
+            for (int i = 0; i < fire.Count; i++)
+            {
+                if (board.IsInside(fire[i]))
+                {
+                    board.SetCubeAt(fire[i], new Cube(CubeKind.Fire,
+                        cards.Count > 0 ? cards[0] : 101));
+                }
+            }
+            // THE REAL RULE, on the lab's own board - not a list of targets written out here.
+            SpreadVisuals report = SpreadJoker.SpreadOn(board, CubeKind.Fire, Time.frameCount);
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            boardView.FireSpread.Play(boardView, report);
+            animLastLabel = Loc.Pick(
+                report.Sources.Count + " fire cubes lit " + report.Targets.Count + " neighbours",
+                report.Sources.Count + " ateş küpü " + report.Targets.Count
+                    + " komşuyu tutuşturdu");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        private void StopAnimFire()
+        {
+            if (boardView != null)
+            {
+                boardView.StopFireSpread();
+            }
+        }
+
+        private void AnimFireToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("yangın " + english + ": ", "yangın " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        private void AnimFireOnly(AnimFireScene scene, string english, string turkish,
+            System.Action on)
+        {
+            FireSpreadView.Layers.AllOn();
+            FireSpreadView.Layers.ShowSourceWarmup = false;
+            FireSpreadView.Layers.ShowFlameLicks = false;
+            FireSpreadView.Layers.ShowBurn = false;
+            FireSpreadView.Layers.ShowEmbers = false;
+            FireSpreadView.Layers.ShowSettle = false;
+            if (on != null)
+            {
+                on();
+            }
+            AnimFire(scene);
+            animLastLabel = Loc.Pick(english + " - alone (RESET puts every layer back)",
+                turkish + " - tek başına (RESET tüm katmanları geri açar)");
+        }
+
+        // ------------------------------------------------------------------ midas
+
+        // "MIDAS" IN THE LAB. The payout's subject is the gold you are HOLDING, and the lab may
+        // not deal itself a hand - so it lays out cards of its OWN (CardLayerView.ShowLabHand)
+        // and drives the real animation against those visuals through the same seam the game
+        // uses. What is fabricated is only the ARGUMENTS: how many gold cubes, in how many cards.
+        //
+        // The amount per cube is NEVER written here. It is read off the joker - the owned one if
+        // there is one, a fresh instance if not - because it is a balance placeholder and a lab
+        // that prints its own number is a lab that lies the day it changes.
+
+        /// <summary>Gold cubes split into cards of at most four, which is the deck's own ceiling
+        /// for a starting block - a lab hand of six-cube blocks would be a hand the game cannot
+        /// deal.</summary>
+        private static List<BlockShape> AnimMidasShapes(int cubes)
+        {
+            var shapes = new List<BlockShape>();
+            int left = Mathf.Max(1, cubes);
+            while (left > 0)
+            {
+                int take = Mathf.Min(4, left);
+                left -= take;
+                var cells = new List<GridPos>();
+                for (int i = 0; i < take; i++)
+                {
+                    // A row of up to three, then a second row - so a four-cube card is a square
+                    // rather than a bar four cells wide, which is what the deck actually holds.
+                    cells.Add(new GridPos(i % 3, i / 3));
+                }
+                shapes.Add(BlockShape.FromCells(cells));
+            }
+            return shapes;
+        }
+
+        private int AnimMidasPerCube()
+        {
+            if (session != null && session.Jokers != null)
+            {
+                IReadOnlyList<Joker> owned = session.Jokers.Jokers;
+                for (int i = 0; i < owned.Count; i++)
+                {
+                    var midas = owned[i] as MidasJoker;
+                    if (midas != null)
+                    {
+                        return midas.PointsPerGoldCubeHeld;
+                    }
+                }
+            }
+            return new MidasJoker().PointsPerGoldCubeHeld;
+        }
+
+        /// <summary>Lays out a gold hand and pays it. HOLDS what it ends on, like every other
+        /// entry, until RESET or closing the lab.</summary>
+        private void AnimMidas(int cubes, params BlockShape[] exact)
+        {
+            StopAnimMidas();
+            if (session == null || cardLayer == null)
+            {
+                return;
+            }
+            List<BlockShape> shapes = exact != null && exact.Length > 0
+                ? new List<BlockShape>(exact)
+                : AnimMidasShapes(cubes);
+            var cards = new List<BlockCard>();
+            for (int i = 0; i < shapes.Count; i++)
+            {
+                cards.Add(session.CreateCard(shapes[i], new[] { BlockElement.Gold }));
+            }
+            IReadOnlyList<CardVisual> hand = cardLayer.ShowLabHand(cards);
+            int per = AnimMidasPerCube();
+            PlayMidasDebug(hand, shapes, per);
+            int total = 0;
+            for (int i = 0; i < shapes.Count; i++)
+            {
+                total += shapes[i].Size * per;
+            }
+            animLastLabel = Loc.Pick(
+                total / Mathf.Max(per, 1) + " gold cubes in " + shapes.Count + " cards, "
+                    + per + " each = +" + total,
+                shapes.Count + " kartta " + (total / Mathf.Max(per, 1)) + " altın küp, her biri "
+                    + per + " = +" + total);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        private void StopAnimMidas()
+        {
+            StopMidasDebug();
+        }
+
+        /// <summary>
+        /// The sizes the payout has been through, and the ONLY honest way to settle which is
+        /// right: put them next to each other on the real screen within one press of each other.
+        ///
+        /// This exists because the first pass was measured on paper - flecks of 0.05 world units
+        /// and seeds of 0.055, which is five and six PIXELS - and looked fine in every number I
+        /// could write down. The vine size cost four passes to the same mistake; that one was
+        /// settled in a minute once the lab could cycle it.
+        /// </summary>
+        private static readonly float[] AnimMidasSizes = { 0.7f, 1f, 1.4f, 1.8f, 2.4f };
+
+        private int animMidasSize = 1;
+
+        private void AnimMidasCycleSize()
+        {
+            animMidasSize = (animMidasSize + 1) % AnimMidasSizes.Length;
+            MidasPayoutView.Style.Scale = AnimMidasSizes[animMidasSize];
+            MidasPayoutView.Layers.AllOn();
+            AnimMidas(5);
+            animLastLabel = Loc.Pick(
+                "payout size " + MidasPayoutView.Style.Scale.ToString("0.0") + "x",
+                "ödeme boyu " + MidasPayoutView.Style.Scale.ToString("0.0") + "x");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        private void AnimMidasToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("midas " + english + ": ", "midas " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>One layer of the payout, alone. Everything off, then one thing back on.
+        /// </summary>
+        private void AnimMidasOnly(int cubes, string english, string turkish, System.Action on)
+        {
+            MidasPayoutView.Layers.AllOn();
+            MidasPayoutView.Layers.ShowCubeWake = false;
+            MidasPayoutView.Layers.ShowValuePopups = false;
+            MidasPayoutView.Layers.ShowFlecks = false;
+            MidasPayoutView.Layers.ShowEssence = false;
+            MidasPayoutView.Layers.ShowTotal = false;
+            if (on != null)
+            {
+                on();
+            }
+            AnimMidas(cubes);
+            animLastLabel = Loc.Pick(english + " - alone (RESET puts every layer back)",
+                turkish + " - tek başına (RESET tüm katmanları geri açar)");
         }
 
         // ------------------------------------------------------------------ tılsım

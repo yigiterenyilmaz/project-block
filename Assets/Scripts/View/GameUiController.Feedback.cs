@@ -1078,6 +1078,31 @@ namespace ProjectBlock.View
             boardView.Talisman.Sync(boardView, power.LastGround);
         }
 
+        /// <summary>
+        /// "Yangın"'s spread, asked every repaint and keyed on the joker's own SERIAL.
+        ///
+        /// The View works out none of it: which cubes were already fire, which neighbours were
+        /// lit, what each of those used to be and which side it caught from are all the report's
+        /// - and so, crucially, is the ONE-RING rule. A View that derived the targets from "what
+        /// is fire now" could not tell a source from something it had just lit.
+        /// </summary>
+        private void SyncFireSpread(RoundEngine round)
+        {
+            if (session == null || session.Jokers == null || boardView == null)
+            {
+                return;
+            }
+            IReadOnlyList<Joker> owned = session.Jokers.Jokers;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                var spread = owned[i] as SpreadJoker;
+                if (spread != null && spread.LastSpread != null)
+                {
+                    boardView.FireSpread.Play(boardView, spread.LastSpread);
+                }
+            }
+        }
+
         /// <summary>The talisman in the player's power inventory, or null.</summary>
         private TilsimPower FindTalisman()
         {
@@ -2058,11 +2083,15 @@ namespace ProjectBlock.View
             SyncParasite(round);
             SyncMapus(round);
             SyncTalisman(round);
+            SyncFireSpread(round);
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();
             RefreshInfections(report);
             cardLayer.Sync(round, report);
+            // AFTER the hand is laid out, never before: the payout is drawn on the held cards and
+            // they are not where the player will see them until this call has run.
+            SyncMidas(round);
             // "Tamagotchi" lays out what it is still owed, next to the hand it has to come from.
             var pet = round.Boss as TamagotchiBoss;
             cardLayer.ShowPetDemands(pet != null ? pet.Demands : null);

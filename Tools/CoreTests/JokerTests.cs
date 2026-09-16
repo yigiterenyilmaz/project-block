@@ -1497,7 +1497,33 @@ public static class JokerTests
             "the other neighbour caught fire");
         Check(round.Board.GetCube(new GridPos(3, 2)).Value.Kind == CubeKind.Normal,
             "two cells away stayed normal - one ring only");
+        // AN EMPTY NEIGHBOUR IS NOT LIT. The spread converts CUBES; it never creates one, so a
+        // fire with nothing beside it spends its charge and changes nothing. The animation is
+        // drawn from this report, and a lit empty cell there would be the View inventing a cube.
+        Check(!round.Board.GetCube(new GridPos(1, 3)).HasValue,
+            "the empty cell above the fire stayed empty");
+        Check(!round.Board.GetCube(new GridPos(1, 1)).HasValue,
+            "the empty cell below it stayed empty");
         Check(!joker.CanActivate(ctx), "the single charge is spent");
+
+        // AND IT SAID SO. The report is what the View draws, so what it carries is part of the
+        // rule being right: the sources, only the cubes that were lit, which side each caught
+        // from, and what it used to be.
+        SpreadVisuals report = joker.LastSpread;
+        Check(report != null && report.Any, "the spread reported itself");
+        Check(report.Sources.Count == 1 && report.Sources[0].Equals(new GridPos(1, 2)),
+            "one source: the cube that was already fire",
+            report == null ? "no report" : report.Sources.Count + " sources");
+        Check(report.Targets.Count == 2, "two cubes were lit, and no empty cell was",
+            report == null ? "no report" : report.Targets.Count + " targets");
+        for (int i = 0; report != null && i < report.Targets.Count; i++)
+        {
+            Check(report.Targets[i].Was.Kind == CubeKind.Normal,
+                "the report kept what it used to be");
+            Check(report.Targets[i].From.Count == 1
+                && report.Targets[i].From[0].Equals(new GridPos(1, 2)),
+                "and which side it caught from");
+        }
     }
 
     private static void Buzluk_FreezesAtWallsAndDoesNotBlockSweep()

@@ -286,7 +286,11 @@ namespace ProjectBlock.View
             // text, so they take one column.
             JokerPanel = new Vector2(160f, 224f);
             JokerGap = 10f;
-            PowerPanel = new Vector2(160f, 224f);
+            // THE POWER SLOT IS THE POWER CARD'S OWN SHAPE. Art/Cards/card_power is 946x1040 -
+            // 0.91, nearly square, because it has no name plate to be tall for. Left at the
+            // joker's 0.71 the painting is either squashed or sits in a band of empty slot, and
+            // an empty band in a bar reads as a layout bug rather than as a design.
+            PowerPanel = new Vector2(160f, 176f);
             PowerGap = 10f;
             JokerColumns = 2;
             PowerColumns = 1;
@@ -371,7 +375,7 @@ namespace ProjectBlock.View
             // PortraitHudBand - this is the largest they can be without moving the board.
             JokerPanel = new Vector2(108f, 150f);
             JokerGap = 10f;
-            PowerPanel = new Vector2(108f, 150f);
+            PowerPanel = new Vector2(108f, 119f);
             PowerGap = 10f;
             CornerInset = 16f;
             BadgeSize = 76f;

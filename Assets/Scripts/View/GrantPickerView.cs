@@ -1,8 +1,18 @@
 // PURPOSE: Debug screen (J / P keys) for granting ANY joker or power from its registry,
 // replacing the old "next joker in registry order" cycling. Clicking a tile grants it;
 // clicking elsewhere or Esc closes without changes. Hovering a tile shows its rules text
-// (the tooltip lives in GameUiController, fed through TryGetEntry). Tiles are tinted and
-// striped by rarity through RarityPalette, same as the market and the joker/power bars.
+// (the tooltip lives in GameUiController, fed through TryGetEntry).
+//
+// IT SHOWS THE CARDS THEMSELVES, not a list of names. Fifty-two jokers and thirty-five powers
+// are a wall of text to read and a wall of pictures to SCAN, and the pictures are the thing the
+// player will be looking at in the bar anyway - so this draws the real painted card with the
+// real icon in it (Art/Cards + ViewUtil.JokerIcon/PowerIcon), which is also the only honest way
+// to find out that an icon is unreadable at card size before shipping it.
+//
+// A CARD THAT HAS A NAME PLATE CARRIES ITS OWN NAME; a plate-less one (the power card is a frame
+// round an icon and nothing else) gets its name printed UNDER the card, on the dim, rather than
+// over the painting. Without art of its own it falls back to the tinted name rows this screen
+// used to be - the same bargain every other painted thing in the View makes.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -19,6 +29,20 @@ namespace ProjectBlock.View
             Powers = 1
         }
 
+        // ---- the card grid ----
+        /// <summary>Nine across puts 52 jokers in six rows, which is the most that still leaves
+        /// the cards big enough to tell apart once FitOverlay has scaled the lot to the screen.
+        /// </summary>
+        private const int CardColumns = 9;
+
+        private const float CardWidth = 1.16f;
+
+        private const float CardGapX = 0.14f;
+
+        /// <summary>Room under each card for the name a plate-less card cannot carry.</summary>
+        private const float CardGapY = 0.34f;
+
+        // ---- the fallback rows, for a registry whose card art is missing ----
         private const int Columns = 4;
         private const float TileWidth = 4.3f;
         private const float TileHeight = 0.62f;
@@ -40,7 +64,12 @@ namespace ProjectBlock.View
         private readonly List<Vector2> tileCenters = new List<Vector2>();
         private readonly List<Entry> entries = new List<Entry>();
 
+        /// <summary>The hit box of one tile - a card grid and the fallback rows are not the same
+        /// shape, so EntryAt cannot assume either.</summary>
+        private Vector2 tileSize = new Vector2(TileWidth, TileHeight);
+
         public bool IsOpen { get; private set; }
+
         public PickerMode Mode { get; private set; }
 
         public void ShowJokers()
@@ -83,20 +112,103 @@ namespace ProjectBlock.View
             IsOpen = true;
             Mode = mode;
             entries.AddRange(newEntries);
+            string art = mode == PickerMode.Powers ? "card_power" : "card_joker";
+            Sprite painted = ViewUtil.CardSprite(art);
+            if (painted != null)
+            {
+                ShowCards(title, painted, HeldItemCard.ArtFor(art));
+                return;
+            }
+            ShowRows(title, tileColor);
+        }
 
+        /// <summary>
+        /// THE REAL CARDS, in a grid.
+        ///
+        /// Everything about where the icon and the name sit comes from the card's own anatomy
+        /// (HeldItemCard.ArtFor), so this screen cannot disagree with the bar about what a card
+        /// looks like - and when the art is redrawn, this follows it without being touched.
+        /// </summary>
+        private void ShowCards(string title, Sprite painted, HeldItemCard.CardArt art)
+        {
+            Vector2 unit = painted.bounds.size;
+            float cardHeight = CardWidth * unit.y / Mathf.Max(unit.x, 0.0001f);
+            tileSize = new Vector2(CardWidth, cardHeight);
+            float stepX = CardWidth + CardGapX;
+            float stepY = cardHeight + CardGapY;
+            int rows = (entries.Count + CardColumns - 1) / CardColumns;
+            float startY = (rows - 1) * stepY * 0.5f;
+            float startX = -(CardColumns - 1) * stepX * 0.5f;
+            float top = startY + cardHeight * 0.5f;
+            float bottom = startY - (rows - 1) * stepY - cardHeight * 0.5f - CardGapY;
+
+            Backdrop(title, top + 0.55f);
+            // Scaled to whatever is visible, never magnified - so the desktop is unchanged and a
+            // narrow screen gets the whole grid rather than the top two rows of it.
+            ViewUtil.FitOverlay(transform,
+                new Vector2(CardColumns * stepX + 0.6f, top - bottom + 1.3f),
+                new Vector2(0f, (top + bottom) * 0.5f + 0.15f));
+
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var center = new Vector2(startX + (i % CardColumns) * stepX,
+                    startY - (i / CardColumns) * stepY);
+                tileCenters.Add(center);
+                Entry entry = entries[i];
+                ViewUtil.MakeIcon(transform, "Card_" + i, center,
+                    CardWidth / Mathf.Max(unit.x, 0.0001f), Color.white, 41, painted);
+
+                Sprite icon = Mode == PickerMode.Powers
+                    ? ViewUtil.PowerIcon(entry.DefId)
+                    : ViewUtil.JokerIcon(entry.DefId);
+                if (icon != null)
+                {
+                    float wellWidth = CardWidth * (art.IconRight - art.IconLeft);
+                    float wellHeight = cardHeight * (art.IconBottom - art.IconTop);
+                    var well = new Vector2(
+                        center.x - CardWidth * 0.5f
+                            + CardWidth * (art.IconLeft + art.IconRight) * 0.5f,
+                        center.y + cardHeight * 0.5f
+                            - cardHeight * (art.IconTop + art.IconBottom) * 0.5f);
+                    Vector2 size = icon.bounds.size;
+                    ViewUtil.MakeIcon(transform, "Icon_" + i, well,
+                        Mathf.Min(wellWidth / size.x, wellHeight / size.y), Color.white, 42, icon);
+                }
+
+                Color accent = entry.Rarity == Rarity.Common
+                    ? NameColor
+                    : RarityPalette.Accent(entry.Rarity);
+                if (art.HasPlate)
+                {
+                    // On the plate, in ink - the same colour rule the bar and the shelf use.
+                    float plateY = center.y + cardHeight * 0.5f
+                        - cardHeight * (art.PlateTop + art.PlateBottom) * 0.5f;
+                    float plateX = center.x - CardWidth * 0.5f
+                        + CardWidth * (art.PlateLeft + art.PlateRight) * 0.5f;
+                    ViewUtil.MakeText3D(transform, "Name_" + i, new Vector2(plateX, plateY),
+                        ViewUtil.WrapText(entry.Name, 12), 90, 0.0075f * CardWidth,
+                        HeldItemCard.InkOn(accent), 43, TextAnchor.MiddleCenter);
+                    continue;
+                }
+                // No plate: the name goes UNDER the card, on the dim, where it costs the painting
+                // nothing. Light rather than ink, because the ground behind it is dark.
+                ViewUtil.MakeText3D(transform, "Name_" + i,
+                    new Vector2(center.x, center.y - cardHeight * 0.5f - CardGapY * 0.45f),
+                    ViewUtil.WrapText(entry.Name, 14), 90, 0.0085f * CardWidth, accent, 43,
+                    TextAnchor.MiddleCenter);
+            }
+        }
+
+        /// <summary>The name rows this screen used to be - what a registry with no card art gets.
+        /// </summary>
+        private void ShowRows(string title, Color tileColor)
+        {
+            tileSize = new Vector2(TileWidth, TileHeight);
             int rows = (entries.Count + Columns - 1) / Columns;
             float startY = (rows - 1) * TileSpacingY * 0.5f + 0.2f;
             float startX = -(Columns - 1) * TileSpacingX * 0.5f;
 
-            ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(30f, 14f),
-                new Color(0f, 0f, 0f, 0.82f), 40);
-            ViewUtil.MakeText3D(transform, "Title", new Vector2(0f, startY + 1.0f),
-                title + Loc.Pick("  -  hover for rules, click to grant, Esc closes",
-                    "  -  kurallar için üstüne gel, vermek için tıkla, Esc kapatır"),
-                48, 0.06f, Color.white, 41, TextAnchor.MiddleCenter);
-
-            // A grid this wide never fitted a narrow screen, and it is a long list - so it is
-            // scaled to whatever is visible. Never magnified, so the desktop is unchanged.
+            Backdrop(title, startY + 1.0f);
             float top = startY + 1.0f + 0.4f;
             float bottom = startY - (rows - 1) * TileSpacingY - TileHeight * 0.5f;
             ViewUtil.FitOverlay(transform,
@@ -123,6 +235,16 @@ namespace ProjectBlock.View
             }
         }
 
+        private void Backdrop(string title, float titleY)
+        {
+            ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(30f, 14f),
+                new Color(0f, 0f, 0f, 0.82f), 40);
+            ViewUtil.MakeText3D(transform, "Title", new Vector2(0f, titleY),
+                title + Loc.Pick("  -  hover for rules, click to grant, Esc closes",
+                    "  -  kurallar için üstüne gel, vermek için tıkla, Esc kapatır"),
+                48, 0.06f, Color.white, 41, TextAnchor.MiddleCenter);
+        }
+
         public void Hide()
         {
             IsOpen = false;
@@ -142,8 +264,8 @@ namespace ProjectBlock.View
             Vector2 local = transform.InverseTransformPoint(world);
             for (int i = 0; i < tileCenters.Count; i++)
             {
-                if (Mathf.Abs(local.x - tileCenters[i].x) <= TileWidth * 0.5f
-                    && Mathf.Abs(local.y - tileCenters[i].y) <= TileHeight * 0.5f)
+                if (Mathf.Abs(local.x - tileCenters[i].x) <= tileSize.x * 0.5f
+                    && Mathf.Abs(local.y - tileCenters[i].y) <= tileSize.y * 0.5f)
                 {
                     return i;
                 }

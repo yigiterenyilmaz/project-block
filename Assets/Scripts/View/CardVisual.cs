@@ -156,9 +156,7 @@ namespace ProjectBlock.View
                 // each cube wears is ViewUtil.CardCubeTile's call: the same rule a defective block's
                 // cubes are drawn with as they fall, so the two can never disagree.
                 bool cellsAligned = displayShape == null;
-                float mini = Mathf.Min(1.0f / Mathf.Max(shape.Width, shape.Height), 0.28f);
-                Vector2 bottomLeft = new Vector2(-shape.Width * mini * 0.5f + mini * 0.5f,
-                    -shape.Height * mini * 0.5f + mini * 0.5f);
+                float mini = MiniCubeSize(shape);
                 IReadOnlyList<GridPos> miniCells = shape.Cells;
                 for (int i = 0; i < miniCells.Count; i++)
                 {
@@ -167,8 +165,7 @@ namespace ProjectBlock.View
                     Sprite miniTile = ViewUtil.CardCubeTile(card, shape, i, cellsAligned,
                         out miniTint);
                     SpriteRenderer miniCube = ViewUtil.MakeCell(transform, "Mini",
-                        bottomLeft + new Vector2(cell.X * mini, cell.Y * mini),
-                        mini * MiniFlatFill, miniTint, order + 2);
+                        MiniCubeLocal(shape, cell), mini * MiniFlatFill, miniTint, order + 2);
                     // A painted tile brings its own frame and fills more of its cell than the
                     // inset flat square ever did.
                     ViewUtil.ApplyTile(miniCube, miniTile,
@@ -230,6 +227,28 @@ namespace ProjectBlock.View
         }
 
         /// <summary>Frame color of a card's back; anonymous backs (id &lt; 0) are neutral.</summary>
+        /// <summary>
+        /// HOW BIG ONE MINI CUBE IS on a card of this shape, and WHERE it sits in the card's own
+        /// local space.
+        ///
+        /// Public and used by the card itself, so nothing can draw a mark on a cube that is not
+        /// where the cube is: "Midas" puts a payout on every gold cube of a held card, and the
+        /// first version of that worked the position out a second time from the same formula -
+        /// which is a copy, and a copy drifts the day the card layout changes.
+        /// </summary>
+        public static float MiniCubeSize(BlockShape shape)
+        {
+            return Mathf.Min(1.0f / Mathf.Max(shape.Width, shape.Height), 0.28f);
+        }
+
+        public static Vector2 MiniCubeLocal(BlockShape shape, GridPos cell)
+        {
+            float mini = MiniCubeSize(shape);
+            var bottomLeft = new Vector2(-shape.Width * mini * 0.5f + mini * 0.5f,
+                -shape.Height * mini * 0.5f + mini * 0.5f);
+            return bottomLeft + new Vector2(cell.X * mini, cell.Y * mini);
+        }
+
         public static Color FrameColorFor(int cardId)
         {
             if (cardId < 0)

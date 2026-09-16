@@ -651,6 +651,9 @@ namespace ProjectBlock.View
             // Before anything is drawn or read: the window may have been resized, the device may
             // have been turned. Two integer reads on a normal frame (see UiLayout.Refresh).
             WatchScreenShape();
+            // "Midas" warms the score line while its gold is landing on it (see .Midas): one
+            // owner for that transform, and it is this one.
+            TickMidasScoreResponse();
             // A finger, if there is one, writes itself into a virtual mouse BEFORE any handler
             // reads Mouse.current - the same contract the pad has (see TouchBridge).
             if (touch != null)

@@ -397,15 +397,24 @@ namespace ProjectBlock.View
                 // A joker/power card is narrower than a block tile and its name sits just above
                 // the price, so its price is set smaller and lower.
                 bool card = offer.Kind != MarketOfferKind.Block;
-                ViewUtil.MakeText3D(transform, "Price_" + i,
-                    slotCenter + new Vector2(0f, -tileSize.y * 0.5f
-                        + (card ? (frameless ? 0.2f : 0.12f) * tileSize.x : frameless ? -0.24f : 0.16f)),
+                // A PAINTED tile put its price on its own plate, under the name, and told us
+                // where - so the price goes there instead of under the tile's bottom edge, and
+                // it is INK rather than a light colour, because the plate is pale.
+                bool onPlate = paintedPriceAt.ContainsKey(i);
+                Vector2 priceAt = onPlate
+                    ? paintedPriceAt[i]
+                    : slotCenter + new Vector2(0f, -tileSize.y * 0.5f
+                        + (card ? (frameless ? 0.2f : 0.12f) * tileSize.x
+                            : frameless ? -0.24f : 0.16f));
+                Color priceColor = affordable ? AffordablePriceColor : TooExpensiveColor;
+                ViewUtil.MakeText3D(transform, "Price_" + i, priceAt,
                     // On the desktop shelf every price is one size, block or card alike.
                     offer.Price.ToString(), 60,
-                    frameless ? DesktopPriceSize : card ? 0.042f * tileSize.x : 0.060f,
+                    onPlate ? paintedPriceSize[i]
+                        : frameless ? DesktopPriceSize : card ? 0.042f * tileSize.x : 0.060f,
                     // Over the hover outline (39) on the desktop shelf, whose block price hangs
                     // across the card's bottom edge - right where the outline runs.
-                    affordable ? AffordablePriceColor : TooExpensiveColor, frameless ? 40 : 38,
+                    onPlate ? HeldItemCard.InkOn(priceColor) : priceColor, frameless ? 40 : 38,
                     TextAnchor.MiddleCenter);
                 if (blockedByLimit)
                 {
@@ -900,6 +909,37 @@ namespace ProjectBlock.View
         /// a tile that ignores it hangs over the frame. An empty <paramref name="description"/>
         /// draws nothing: the description belongs to the strip under the panel, because a
         /// compartment 1.29 units tall has no room for eight wrapped lines.</summary>
+        /// <summary>The painted card a KIND is drawn on, or null for the flat tinted tile.
+        /// The joker bar asks for the same file (HeldItemCard), so the shelf and the bar cannot
+        /// drift apart: paint one card and both use it.</summary>
+        private static Sprite PaintedCardFor(string key)
+        {
+            // ONLY A CARD WITH A PLATE. A shelf tile has to carry a name and a price, and the
+            // power card is a frame round an icon with nowhere to put either - a shop tile you
+            // cannot read the name or the price of is not a tile, it is a picture. So a
+            // plate-less card keeps the flat tile here and is used in the BAR, where the icon is
+            // the whole point. Paint a plate onto it and this starts using it with no other
+            // change.
+            string file = key == "Joker" ? "card_joker" : key == "Power" ? "card_power" : null;
+            return file != null && HeldItemCard.ArtFor(file).HasPlate
+                ? ViewUtil.CardSprite(file)
+                : null;
+        }
+
+        /// <summary>
+        /// The largest rect of the ART's own aspect that fits the compartment.
+        ///
+        /// The boxed shelf hands a tile whatever shape its compartment is, and a painted card
+        /// stretched to that is a different card - its gold divider moves and its corners go oval.
+        /// So the painting is letterboxed and everything on it is measured off THIS rect.
+        /// </summary>
+        private static Vector2 FitPainted(Vector2 room, Sprite art)
+        {
+            Vector2 unit = art.bounds.size;
+            float k = Mathf.Min(room.x / unit.x, room.y / unit.y);
+            return new Vector2(unit.x * k, unit.y * k);
+        }
+
         private void BuildNamedTile(Vector2 center, int index, string key, string label,
             string displayName, string description, Color bodyColor, Color tagColor,
             bool withText, Sprite icon)
@@ -907,6 +947,13 @@ namespace ProjectBlock.View
             Vector2 size = index >= 0 && index < offerTileSizes.Count
                 ? offerTileSizes[index]
                 : new Vector2(NamedTileWidth, TileHeight);
+            Sprite painted = PaintedCardFor(key);
+            if (painted != null)
+            {
+                BuildPaintedTile(center, index, key, displayName, tagColor, withText,
+                    icon, painted, size);
+                return;
+            }
             // THE SAME CARD THE BARS DRAW (HeldItemCard), in world units: a rounded body in the
             // kind's colour, an icon well across the top, a rim in the rarity colour. Sorting:
             // body 34 (named tiles draw no flat Frame_ there), well 35, icon 36, rim 37, text 38 -
@@ -965,6 +1012,87 @@ namespace ProjectBlock.View
                     90, 0.017f, JokerDescColor, 37, TextAnchor.UpperCenter);
             }
         }
+
+        /// <summary>
+        /// THE PAINTED JOKER CARD, in world units - the shelf's half of what HeldItemCard draws
+        /// in the bars, off the SAME measurements (HeldItemCard.Art*).
+        ///
+        /// The art is the card: its own border, its own recess, its own name plate. So there is
+        /// no body tint, no second well and no rarity rim here either - the tier rides on the
+        /// name's colour, as it does on the bar card. What the plate carries is what the flat
+        /// tile carried, in the same order: the TIER TAG, the NAME, and the PRICE under it (the
+        /// price is placed here rather than in BuildOffer, which only sets it for flat tiles).
+        ///
+        /// A description is NOT drawn on a painted tile. The plate has room for three short
+        /// lines and no more, and the shelf's own rule is that the tile is the label while the
+        /// strip beside it is the text.
+        /// </summary>
+        private void BuildPaintedTile(Vector2 center, int index, string key,
+            string displayName, Color tagColor, bool withText, Sprite icon, Sprite painted,
+            Vector2 room)
+        {
+            Vector2 card = FitPainted(room, painted);
+            var go = new GameObject(key + "Body_" + index);
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(center.x, center.y, 0f);
+            Vector2 unit = painted.bounds.size;
+            go.transform.localScale = new Vector3(card.x / unit.x, card.y / unit.y, 1f);
+            var body = go.AddComponent<SpriteRenderer>();
+            body.sprite = painted;
+            body.sortingOrder = 34;
+            Masked(body);
+
+            HeldItemCard.CardArt shape = HeldItemCard.ArtFor(key == "Power" ? "card_power"
+                : "card_joker");
+            float top = center.y + card.y * 0.5f;
+            float left = center.x - card.x * 0.5f;
+            if (icon != null)
+            {
+                float wellWidth = card.x * (shape.IconRight - shape.IconLeft);
+                float wellHeight = card.y * (shape.IconBottom - shape.IconTop);
+                var wellCenter = new Vector2(
+                    left + card.x * (shape.IconLeft + shape.IconRight) * 0.5f,
+                    top - card.y * (shape.IconTop + shape.IconBottom) * 0.5f);
+                // Fitted INSIDE the painted recess with its aspect kept, and not a hair past it:
+                // the flat tile could overrun its own well because the well was ours to overrun.
+                Vector2 art = icon.bounds.size;
+                float fit = Mathf.Min(wellWidth / art.x, wellHeight / art.y);
+                Masked(ViewUtil.MakeIcon(transform, key + "Icon_" + index, wellCenter, fit,
+                    Color.white, 36, icon));
+            }
+            if (!withText)
+            {
+                return;
+            }
+            float plateHeight = card.y * (shape.PlateBottom - shape.PlateTop);
+            float plateTop = top - card.y * shape.PlateTop;
+            // The plate is NOT centred on the card - it sits about 2% right - so it is placed
+            // from its own edges rather than from the card's middle.
+            float plateX = left + card.x * (shape.PlateLeft + shape.PlateRight) * 0.5f;
+            float s = card.x;
+            string wrappedName = ViewUtil.WrapText(displayName, DemoLayout ? DemoNameWrap : 14);
+            bool twoLines = wrappedName.IndexOf('\n') >= 0;
+            // THE PLATE TAKES TWO LINES, NOT THREE, and that is arithmetic rather than taste.
+            // A TextMesh line stands fontSize * characterSize / 10 world units tall, the plate is
+            // 0.206 of the card's height and the card is 1/0.712 of its own width - so the plate
+            // is 0.29 CARD-WIDTHS of room. A tier tag, a two-line name and a price want 0.30 of
+            // it and spill over the gold divider, which is precisely what the first pass did.
+            // So the tag goes and the TIER RIDES ON THE NAME'S COLOUR - the same trade the bar
+            // card makes, for the same reason.
+            ViewUtil.MakeText3D(transform, key + "Name_" + index,
+                new Vector2(plateX, plateTop - plateHeight * (twoLines ? 0.36f : 0.33f)),
+                wrappedName, 90, (twoLines ? 0.0091f : 0.0117f) * s,
+                HeldItemCard.InkOn(tagColor), 38, TextAnchor.MiddleCenter);
+            paintedPriceAt[index] = new Vector2(plateX, plateTop - plateHeight * 0.8f);
+            paintedPriceSize[index] = 0.0089f * s;
+        }
+
+        /// <summary>Where a painted tile wants its price, and how big - filled by
+        /// <see cref="BuildPaintedTile"/> and read by <see cref="BuildOffer"/>, which is the one
+        /// that knows whether it can be afforded.</summary>
+        private readonly Dictionary<int, Vector2> paintedPriceAt = new Dictionary<int, Vector2>();
+
+        private readonly Dictionary<int, float> paintedPriceSize = new Dictionary<int, float>();
 
         // ======================= THE DEMO SHELF (temporary) ==========================
         // Flat rects and text, no art, no scroll, everything on screen: BLOCKS take the left
@@ -1797,6 +1925,10 @@ namespace ProjectBlock.View
             offerRarities.Clear();
             offerSold.Clear();
             offerAffordable.Clear();
+            // Per BUILD, like every list above it: a price left in here from the last shelf
+            // would be placed on a plate that is no longer where it was.
+            paintedPriceAt.Clear();
+            paintedPriceSize.Clear();
             // The outline's objects go with every other child below, so drop the references
             // rather than leave four destroyed renderers behind.
             for (int i = 0; i < hoverEdges.Length; i++)

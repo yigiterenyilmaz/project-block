@@ -250,17 +250,18 @@ namespace ProjectBlock.View
             // two are never confused: a silenced joker does nothing, an inverted one hurts.
             bool inverted = !silenced && session.CurrentRound != null
                 && session.CurrentRound.InvertsJokerScore;
-            panel.Body.color = silenced
+            panel.SetBody(silenced
                 ? SilencedColor
                 : inverted
                     ? InvertedColor
-                    : (targeting ? TargetingColor : (ready ? ReadyColor : PanelColor));
+                    : (targeting ? TargetingColor : (ready ? ReadyColor : PanelColor)));
 
             // The body still belongs to the activation state (ready/targeting), so rarity rides
             // on the frame and the name colour instead of fighting it for the card.
             Rarity rarity = RarityPalette.Of(joker);
             panel.Frame.color = RarityPalette.Accent(rarity);
-            panel.Title.color = rarity == Rarity.Common ? NameColor : RarityPalette.Accent(rarity);
+            panel.Title.color = panel.Ink(
+                rarity == Rarity.Common ? NameColor : RarityPalette.Accent(rarity));
             panel.Hotkey.color = panel.Title.color;
 
             panel.Hotkey.text = index < 9 ? (index + 1).ToString() : string.Empty;
@@ -313,8 +314,12 @@ namespace ProjectBlock.View
 
         private HeldItemCard CreatePanel(int index)
         {
-            HeldItemCard card = HeldItemCard.Create(root, "Joker_" + index, NameColor, BodyColor);
-            card.Body.color = PanelColor;
+            // THE PAINTED JOKER CARD (Art/Cards/card_joker) when it is there, the flat
+            // rectangle when it is not - the card decides, and nothing in this file changes
+            // either way.
+            HeldItemCard card = HeldItemCard.Create(root, "Joker_" + index, NameColor, BodyColor,
+                "card_joker");
+            card.SetResting(PanelColor);
             UiLayout.PlaceBarSlot(card.Root.GetComponent<RectTransform>(), index, index + 1,
                 new Vector2(PanelWidth, PanelHeight), PanelGap, true);
             card.Layout(new Vector2(PanelWidth, PanelHeight), Compact);

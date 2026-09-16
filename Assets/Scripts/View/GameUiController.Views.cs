@@ -194,6 +194,12 @@ namespace ProjectBlock.View
             powerGo.transform.SetParent(transform, false);
             powerBar = powerGo.AddComponent<PowerBarView>();
 
+            // "Midas"'s payout draws on the held cards and flies to the score, so it is a
+            // layer of the controller's own rather than of the board's.
+            var midasGo = new GameObject("MidasPayout");
+            midasGo.transform.SetParent(transform, false);
+            midasPayout = midasGo.AddComponent<MidasPayoutView>();
+
             var pickerGo = new GameObject("GrantPicker");
             pickerGo.transform.SetParent(transform, false);
             grantPicker = pickerGo.AddComponent<GrantPickerView>();

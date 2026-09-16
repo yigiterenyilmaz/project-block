@@ -107,6 +107,20 @@ namespace ProjectBlock.View
         private Transform discardPileRoot;
 
         /// <summary>Removes every card visual (new game / new round).</summary>
+        /// <summary>
+        /// The visual drawing one HELD card, or null when nothing is.
+        ///
+        /// "Midas" pays per gold CUBE and has to put each payout on the cube that earned it, so
+        /// something outside this file needs to find a card's visual. Only held cards answer:
+        /// the piles and the effects keep their own copies and none of them is the card the
+        /// player is holding.
+        /// </summary>
+        public CardVisual Held(int cardId)
+        {
+            CardVisual visual;
+            return heldVisuals.TryGetValue(cardId, out visual) ? visual : null;
+        }
+
         public void Clear()
         {
             StopAllCoroutines(); // in-flight fx cards still self-destroy on arrival
@@ -249,6 +263,44 @@ namespace ProjectBlock.View
                 yield return null;
             }
             Destroy(visual.gameObject);
+        }
+
+        private readonly List<CardVisual> labHand = new List<CardVisual>();
+
+        /// <summary>
+        /// LAB ONLY: a hand of cards the lab made up, laid out in the real hand's own slots.
+        ///
+        /// The animation lab may not touch the round, so an effect whose subject is what you are
+        /// HOLDING cannot be shown with the real hand - there is no way to put gold in it without
+        /// dealing one. This puts the lab's own cards where the hand would be and hands the
+        /// visuals back, so the effect can be driven against them exactly as it is against the
+        /// real ones. It holds until <see cref="ClearLabHand"/>, like every other lab scene.
+        /// </summary>
+        public IReadOnlyList<CardVisual> ShowLabHand(IReadOnlyList<BlockCard> cards)
+        {
+            ClearLabHand();
+            if (cards == null)
+            {
+                return labHand;
+            }
+            for (int i = 0; i < cards.Count; i++)
+            {
+                labHand.Add(CardVisual.Create(transform, "LabHand_" + i, cards[i], true, false,
+                    SlotPosition(i, cards.Count), FxOrder));
+            }
+            return labHand;
+        }
+
+        public void ClearLabHand()
+        {
+            for (int i = 0; i < labHand.Count; i++)
+            {
+                if (labHand[i] != null)
+                {
+                    Destroy(labHand[i].gameObject);
+                }
+            }
+            labHand.Clear();
         }
 
         /// <summary>
