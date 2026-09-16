@@ -91,10 +91,22 @@ namespace ProjectBlock.View
 
         private float topOffset;
 
-        /// <summary>Set while a panel this bar's own click opened is on screen, so the card that
-        /// opened it stops asking to be clicked. The controller owns it, because only the
-        /// controller knows what is modal.</summary>
-        public bool AttentionSuppressed { get; set; }
+        /// <summary>
+        /// Asked every refresh: is a panel one of these cards opened on screen right now? A card
+        /// must stop inviting the click while the player is already doing the thing it invites.
+        ///
+        /// A PREDICATE rather than a flag, deliberately. As a latch it had to be cleared on every
+        /// way out of every picker - confirm, Escape, the pad's B, the pause menu, a full UI
+        /// reset - and the first one anybody forgot would leave a card that never breathed again
+        /// with no panel to explain why. Derived from live state, there is nothing to leak.
+        /// Null means never suppressed.
+        /// </summary>
+        public System.Func<bool> AttentionSuppressedWhen;
+
+        private bool AttentionSuppressed
+        {
+            get { return AttentionSuppressedWhen != null && AttentionSuppressedWhen(); }
+        }
 
         /// <summary>Re-anchors the strip and every slot in it after the layout changed.</summary>
         public void RelayoutForScreen()

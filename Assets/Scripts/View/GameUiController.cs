@@ -1196,6 +1196,15 @@ namespace ProjectBlock.View
                         marketView.Hide();
                         StartRoundPresentation();
                     }
+                    // PRESS AND HOLD on a bar card owns the press outright (tap = use, hold =
+                    // sell), so it runs BEFORE the click handler and the shelf only ever sees
+                    // presses that were not on a joker or a power. It is polled every frame
+                    // rather than only on the press, because the hold light and the drag-off
+                    // cancel both need the frames in between.
+                    else if (HandleBarHold(mouse))
+                    {
+                        // owned by the hold this frame
+                    }
                     else if (mouse != null && mouse.leftButton.wasPressedThisFrame)
                     {
                         marketDragFrom = mouse.position.ReadValue();

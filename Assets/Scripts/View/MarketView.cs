@@ -435,8 +435,8 @@ namespace ProjectBlock.View
                 Loc.Pick("You have ", "Paran: ") + session.TotalScore,
                 90, 0.032f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleRight);
             ViewUtil.MakeText3D(transform, "SellHint", new Vector2(sideX, FrameCenter.y + 1.4f),
-                Loc.Pick("Click a joker or a power to sell it",
-                    "Satmak için jokere veya güce tıkla"),
+                Loc.Pick("Hold a joker or a power to sell it",
+                    "Satmak için jokere veya güce basılı tut"),
                 90, 0.024f, SectionHeaderColor, 38, TextAnchor.MiddleRight);
             ViewUtil.MakeText3D(transform, "SellHint2", new Vector2(sideX, FrameCenter.y + 1.1f),
                 Loc.Pick("Click the deck pile to sell cards",
@@ -831,8 +831,8 @@ namespace ProjectBlock.View
         {
             ViewUtil.MakeText3D(transform, "DemoHint1",
                 new Vector2(panel.center.x, panel.yMin + DemoFooterHeight - 0.22f),
-                Loc.Pick("Tap a joker or power on the bars above to sell it",
-                    "Joker ya da güç satmak için üstteki barlara dokun"),
+                Loc.Pick("Hold a joker or power on the bars above to sell it",
+                    "Joker ya da güç satmak için üstteki barlara basılı tut"),
                 90, 0.021f, SectionHeaderColor, 38, TextAnchor.MiddleCenter);
 
             // TWO buttons, because the panel now covers the whole screen and the deck pile it

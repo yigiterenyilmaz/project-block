@@ -76,10 +76,10 @@ namespace ProjectBlock.View
             return true;
         }
 
-        /// <summary>In the market, clicking a joker panel sells it for its SellValue.</summary>
-        private bool TrySellJokerFromBar(Mouse mouse)
+        /// <summary>In the market, a HELD press on a joker panel sells it for its SellValue.
+        /// Reached only from HandleBarHold, which owns every press on a bar card.</summary>
+        private bool SellJokerAt(int index)
         {
-            int index = jokerBar.JokerIndexAt(mouse.position.ReadValue());
             if (index < 0 || index >= session.Jokers.Count)
             {
                 return false;
@@ -114,10 +114,10 @@ namespace ProjectBlock.View
             return true;
         }
 
-        /// <summary>In the market, clicking a power panel sells it for its sell value.</summary>
-        private bool TrySellPowerFromBar(Mouse mouse)
+        /// <summary>In the market, a HELD press on a power panel sells it for its sell value.
+        /// Reached only from HandleBarHold, which owns every press on a bar card.</summary>
+        private bool SellPowerAt(int index)
         {
-            int index = powerBar.PowerIndexAt(mouse.position.ReadValue());
             if (index < 0 || index >= session.Powers.Count)
             {
                 return false;
@@ -139,31 +139,38 @@ namespace ProjectBlock.View
             return true;
         }
 
-        /// <summary>In the market, clicking a "Hileli zar" joker that still has this market's
-        /// pick opens the opening-hand picker instead of selling it - the same interception
-        /// Parazit does, so once the pick is spent the click sells the joker as usual.
-        /// Returns true if it handled the click.</summary>
-        private bool TryHileliZarFromBar(Mouse mouse)
+        /// <summary>
+        /// Opens the "Hileli zar" opening-hand picker. A TAP on the card gets here (a hold sells
+        /// it instead - see HandleBarHold).
+        ///
+        /// THE TARGET IS THE LIVE HAND SIZE, and it has to be: RoundRules.HandSize is a shared
+        /// mutable field that jokers move permanently ("Cömertlik" +1, "Risk" +2) and that
+        /// "İmitasyon" drops to 1 at the END of every round, so the next round's opening hand is
+        /// only knowable by asking now. Reading a constant 3 here would deal the wrong number of
+        /// cards for any of them.
+        ///
+        /// It is also clamped to the DECK: a hand of five out of a four-card deck is a target the
+        /// player can never reach, and CONFIRM would never light.
+        /// </summary>
+        private void StartHileliPick(HileliZarJoker zar)
         {
-            int index = jokerBar.JokerIndexAt(mouse.position.ReadValue());
-            if (index < 0 || index >= session.Jokers.Count)
-            {
-                return false;
-            }
-            var zar = session.Jokers.Jokers[index] as HileliZarJoker;
-            if (zar == null || !zar.CanPickOpeningHand)
-            {
-                return false;
-            }
             hileliPickMode = true;
             hileliSelection.Clear();
-            hileliTarget = Mathf.Max(1, session.Config.Rules.HandSize);
+            hileliTarget = HileliTargetNow();
             hileliJokerId = zar.InstanceId;
+            jokerBar.Refresh(session, null);
             ShowHileliPicker();
             messageText.text = Loc.Pick(
                 "Hileli Zar: pick " + hileliTarget + " cards for next round's opening hand",
                 "Hileli Zar: sonraki elin için " + hileliTarget + " kart seç");
-            return true;
+        }
+
+        /// <summary>How many cards next round will actually open with, right now. One definition,
+        /// so the header, the counter and CONFIRM can never disagree.</summary>
+        private int HileliTargetNow()
+        {
+            int wanted = Mathf.Max(1, session.Config.Rules.HandSize);
+            return Mathf.Min(wanted, Mathf.Max(1, session.OwnedCards.Count));
         }
 
         /// <summary>(Re)draws the Hileli Zar picker overlay with the current selection so the
@@ -177,13 +184,49 @@ namespace ProjectBlock.View
 
         private void ConfirmHileliZar()
         {
-            session.TryPickOpeningHand(hileliJokerId, hileliSelection);
+            // The RESULT is checked: TryPickOpeningHand refuses a pick the session does not allow
+            // (the id is not a held Hileli zar, or this market's deal is already spent), and
+            // closing the picker as though it had worked is how a silently lost pick happens.
+            bool dealt = session.TryPickOpeningHand(hileliJokerId, hileliSelection);
+            hileliPickMode = false;
+            EndHileliPick();
+            if (dealt)
+            {
+                sfx.Buy();
+                Debug.Log("[block_bonk] Hileli Zar opening hand set: "
+                    + hileliSelection.Count + " cards");
+            }
+            else
+            {
+                Debug.LogWarning("[block_bonk] Hileli Zar pick refused by the session");
+            }
+            UpdateHud();
+        }
+
+        /// <summary>Closes the picker and gives the bar its breath back. Every way out of the
+        /// pick goes through here - confirming, cancelling, or the panel being torn down - so the
+        /// suppression can never be left on with no panel to justify it.</summary>
+        private void EndHileliPick()
+        {
             hileliPickMode = false;
             deckOverlay.Hide();
             jokerBar.Refresh(session, null);
-            sfx.Buy();
-            Debug.Log("[block_bonk] Hileli Zar opening hand set: " + hileliSelection.Count + " cards");
-            UpdateHud();
+        }
+
+        /// <summary>In the market, a TAP on an unbound Parazit starts the attach flow.</summary>
+        private void StartParazitAttachAt(int index)
+        {
+            var parazit = session.Jokers.Jokers[index] as ParazitJoker;
+            if (parazit == null || parazit.HasBinding)
+            {
+                return;
+            }
+            parazitStep = ParazitStep.PickJoker;
+            parazitInstanceId = parazit.InstanceId;
+            jokerBar.Refresh(session, null);
+            messageText.text = Loc.Pick(
+                "Parazit: click the joker to attach   [Esc] cancel",
+                "Parazit: takılacak jokere tıkla   [Esc] iptal");
         }
 
         /// <summary>In the market, clicking an unbound Parazit starts the attach flow instead
@@ -269,7 +312,7 @@ namespace ProjectBlock.View
                     }
                     cubePicker.Hide();
                     parazitStep = ParazitStep.None;
-                    marketView.Show(session);
+                            marketView.Show(session);
                     jokerBar.Refresh(session, null);
                     UpdateHud();
                     break;
@@ -292,24 +335,182 @@ namespace ProjectBlock.View
             UpdateHud();
         }
 
+        // ---------------------------------------------------------------- press and hold to sell
+        //
+        // SELLING IS THE DESTRUCTIVE VERB, SO IT IS THE ONE THAT COSTS EFFORT. A single click on a
+        // bar card used to sell it outright, which put an irreversible action on the twitchiest
+        // input in the game - and it meant a joker that had something to DO in the market
+        // ("Hileli zar", "Parazit") had to intercept the click before the sale, so which of the
+        // two happened depended on invisible state.
+        //
+        // Now the two verbs are told apart by TIME rather than by state: a TAP uses the card, a
+        // HOLD sells it. Both are always available, for every joker and every power, so a card
+        // whose pick is spent still cannot be sold by accident and one with a pick left can still
+        // be sold without spending it first.
+        //
+        // The hold is armed on press and settled on RELEASE, never mid-hold: a sale that fires
+        // while the button is still down gives the player nothing to abort into. Dragging off the
+        // card cancels it, which is the standard escape hatch for a press-and-hold.
+
+        /// <summary>How long a bar card must be held for the press to become a SALE. Long enough
+        /// that it cannot be hit by a click, short enough not to feel like a punishment.</summary>
+        private const float SellHoldSeconds = 0.55f;
+
+        /// <summary>Which bar the current press is on, or None. Index is into that bar.</summary>
+        private enum HeldBar
+        {
+            None,
+            Joker,
+            Power
+        }
+
+        private HeldBar heldBar = HeldBar.None;
+        private int heldIndex = -1;
+        private float heldSince;
+
+        /// <summary>True once the press has been held long enough to be a sale.</summary>
+        private bool HeldLongEnough
+        {
+            get { return heldBar != HeldBar.None && Time.unscaledTime - heldSince >= SellHoldSeconds; }
+        }
+
+        /// <summary>
+        /// Called every frame in the market. Arms a press on a bar card, keeps the hold light on
+        /// it, and settles the press when the button comes up: a tap USES, a completed hold SELLS.
+        ///
+        /// Returns true on the frames it owned the press, so the market's other click handlers
+        /// (the shelf, the deck button, the piles) only ever see presses that were not on a bar.
+        /// </summary>
+        private bool HandleBarHold(Mouse mouse)
+        {
+            if (mouse == null || session == null)
+            {
+                return false;
+            }
+            if (mouse.leftButton.wasPressedThisFrame && heldBar == HeldBar.None)
+            {
+                Vector2 at = mouse.position.ReadValue();
+                int ji = jokerBar.JokerIndexAt(at);
+                int pi = ji < 0 ? powerBar.PowerIndexAt(at) : -1;
+                if (ji >= 0 && ji < session.Jokers.Count)
+                {
+                    heldBar = HeldBar.Joker;
+                    heldIndex = ji;
+                }
+                else if (pi >= 0 && pi < session.Powers.Count)
+                {
+                    heldBar = HeldBar.Power;
+                    heldIndex = pi;
+                }
+                else
+                {
+                    return false;
+                }
+                heldSince = Time.unscaledTime;
+                return true;
+            }
+            if (heldBar == HeldBar.None)
+            {
+                return false;
+            }
+            // Dragging off the card abandons the press - nothing is used and nothing is sold.
+            Vector2 now = mouse.position.ReadValue();
+            bool stillOn = heldBar == HeldBar.Joker
+                ? jokerBar.JokerIndexAt(now) == heldIndex
+                : powerBar.PowerIndexAt(now) == heldIndex;
+            if (!stillOn)
+            {
+                ClearBarHold();
+                return true;
+            }
+            if (mouse.leftButton.isPressed)
+            {
+                float progress = Mathf.Clamp01((Time.unscaledTime - heldSince) / SellHoldSeconds);
+                ShowHoldProgress(progress);
+                return true;
+            }
+            // Released: the press is settled here and nowhere else.
+            bool sell = HeldLongEnough;
+            HeldBar bar = heldBar;
+            int index = heldIndex;
+            ClearBarHold();
+            if (bar == HeldBar.Joker)
+            {
+                if (sell)
+                {
+                    SellJokerAt(index);
+                }
+                else
+                {
+                    UseJokerInMarket(index);
+                }
+            }
+            else if (sell)
+            {
+                SellPowerAt(index);
+            }
+            else
+            {
+                // A power has nothing to do in the market, so a tap only says so - silently
+                // doing nothing reads as a dropped click.
+                HintHoldToSell(powerBar.PanelScreenCenter(index));
+            }
+            return true;
+        }
+
+        private void ClearBarHold()
+        {
+            heldBar = HeldBar.None;
+            heldIndex = -1;
+            ShowHoldProgress(0f);
+        }
+
+        private void ShowHoldProgress(float progress)
+        {
+            jokerBar.SetHoldProgress(heldBar == HeldBar.Joker ? heldIndex : -1, progress);
+            powerBar.SetHoldProgress(heldBar == HeldBar.Power ? heldIndex : -1, progress);
+        }
+
+        /// <summary>A tap on something with no market action: say what a hold would do. Without
+        /// it the player has no way to discover the gesture.</summary>
+        private void HintHoldToSell(Vector2? panelScreen)
+        {
+            if (!panelScreen.HasValue)
+            {
+                return;
+            }
+            Vector2 world = cam.ScreenToWorldPoint(panelScreen.Value);
+            FloatingTextFx.Spawn(transform, world,
+                Loc.Pick("HOLD TO SELL", "SATMAK İÇİN BASILI TUT"),
+                new Color(0.85f, 0.88f, 0.95f), 40, 0.06f);
+        }
+
+        /// <summary>A TAP on a joker in the market: whatever that joker's market verb is, or a
+        /// hint that it has none. The two market jokers keep their own flows.</summary>
+        private void UseJokerInMarket(int index)
+        {
+            if (index < 0 || index >= session.Jokers.Count)
+            {
+                return;
+            }
+            Joker joker = session.Jokers.Jokers[index];
+            var parazit = joker as ParazitJoker;
+            if (parazit != null && !parazit.HasBinding)
+            {
+                StartParazitAttachAt(index);
+                return;
+            }
+            var zar = joker as HileliZarJoker;
+            if (zar != null && zar.CanPickOpeningHand)
+            {
+                StartHileliPick(zar);
+                return;
+            }
+            HintHoldToSell(jokerBar.PanelScreenCenter(index));
+        }
+
         private void HandleMarketClick(Mouse mouse)
         {
-            if (TryStartParazitAttach(mouse))
-            {
-                return;
-            }
-            if (TryHileliZarFromBar(mouse))
-            {
-                return;
-            }
-            if (TrySellJokerFromBar(mouse))
-            {
-                return;
-            }
-            if (TrySellPowerFromBar(mouse))
-            {
-                return;
-            }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
             // DEMO shelf buttons come FIRST: they sit in a section header and on the footer,
             // where no offer is, but a click that fell through to the deck-pile branch below

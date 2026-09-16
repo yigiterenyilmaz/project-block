@@ -439,22 +439,35 @@ namespace ProjectBlock.View
                 padBarIndex = (padBarIndex + BarStepX(step.x, jokers) + count) % count;
                 return true;
             }
+            // TWO VERBS, TWO BUTTONS. The mouse tells a use from a sale by how long the press
+            // lasts; a pad has no reason to make the player hold a button when it has a spare
+            // one, so A uses and X sells - X being the pad's secondary verb everywhere else in
+            // the game (see GamepadBridge: X is right-click). Same two actions as the mouse,
+            // reached the way a pad reaches things.
+            if (pad.buttonWest.wasPressedThisFrame)
+            {
+                if (jokers)
+                {
+                    SellJokerAt(padBarIndex);
+                }
+                else
+                {
+                    SellPowerAt(padBarIndex);
+                }
+                padFocus = PadFocus.Market;
+                return true;
+            }
             if (!pad.buttonSouth.wasPressedThisFrame)
             {
                 return false;
             }
-            Mouse pointer = Mouse.current;
-            if (pointer == null)
-            {
-                return true;
-            }
             if (jokers)
             {
-                TrySellJokerFromBar(pointer);
+                UseJokerInMarket(padBarIndex);
             }
             else
             {
-                TrySellPowerFromBar(pointer);
+                HintHoldToSell(powerBar.PanelScreenCenter(padBarIndex));
             }
             padFocus = PadFocus.Market;
             return true;

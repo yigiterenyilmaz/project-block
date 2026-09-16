@@ -443,15 +443,43 @@ namespace ProjectBlock.View
             lastCards = null;
             totalRows = 0;
 
-            ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(30f, 14f),
-                new Color(0f, 0f, 0f, 0.78f), 40);
-            ViewUtil.MakeText3D(transform, "PickTitle", new Vector2(0f, 4.4f), header, 90, 0.026f,
-                new Color(0.55f, 0.92f, 0.95f), 42, TextAnchor.MiddleCenter);
-
             var sorted = new List<BlockCard>(cards);
             sorted.Sort(CompareCards);
             int rows = (sorted.Count + MaxColumns - 1) / MaxColumns;
+            int columns = Mathf.Min(MaxColumns, Mathf.Max(1, sorted.Count));
             float startY = (rows - 1) * SpacingY * 0.5f + 0.3f;
+            float bottomRowY = startY - (rows - 1) * SpacingY;
+            float cardHalfW = CardVisual.BodyWidth * CardScale * 0.5f;
+            float cardHalfH = CardVisual.BodyHeight * CardScale * 0.5f;
+
+            // THE PANEL IS MEASURED ROUND WHAT IT HOLDS, exactly as the deck list's is - the
+            // picker used to be a dim wash with cards floating on it and a title in open space,
+            // which is the one screen in the game asking the player to make a considered choice
+            // and the one with nothing to make it in.
+            confirmButtonHalf = new Vector2(1.7f, 0.42f);
+            confirmButtonCenter = new Vector2(0f, bottomRowY - cardHalfH - 0.30f
+                - confirmButtonHalf.y);
+            float titleY = startY + cardHalfH + 0.52f;
+            float panelTop = titleY + 0.42f;
+            float panelBottom = confirmButtonCenter.y - confirmButtonHalf.y - 0.40f;
+            float gridHalf = (columns - 1) * SpacingX * 0.5f + cardHalfW + SidePadding;
+            panelHalfWidth = Mathf.Max(gridHalf,
+                EstimateTextWidth(header, 0.026f) * 0.5f + 0.35f);
+
+            var panelCenter = new Vector2(0f, (panelTop + panelBottom) * 0.5f);
+            var panelSize = new Vector2(panelHalfWidth * 2f, panelTop - panelBottom);
+
+            ViewUtil.MakeRect(transform, "Dim", Vector2.zero, new Vector2(40f, 20f),
+                DimColor, DimOrder);
+            ViewUtil.MakeRect(transform, "PanelFrame", panelCenter,
+                panelSize + new Vector2(0.22f, 0.22f), PanelFrameColor, FrameOrder);
+            ViewUtil.MakeRect(transform, "Panel", panelCenter, panelSize, PanelColor, PanelOrder);
+            panelBoundsCenter = panelCenter;
+            panelBoundsHalf = panelSize * 0.5f + new Vector2(0.11f, 0.11f);
+
+            ViewUtil.MakeText3D(transform, "PickTitle", new Vector2(0f, titleY), header, 90, 0.026f,
+                TitleColor, ChromeOrder, TextAnchor.MiddleCenter);
+
             for (int i = 0; i < sorted.Count; i++)
             {
                 int row = i / MaxColumns;
@@ -461,15 +489,10 @@ namespace ProjectBlock.View
                 var position = new Vector2(startX + column * SpacingX, startY - row * SpacingY);
                 if (selectedIds.Contains(sorted[i].Id))
                 {
-                    // A bright box just larger than the card, drawn over the dim (40) and under
-                    // the card (41), so it reads as a glowing border around the selected card.
-                    ViewUtil.MakeRect(transform, "PickHi_" + i, position,
-                        new Vector2(CardVisual.BodyWidth * CardScale + 0.24f,
-                            CardVisual.BodyHeight * CardScale + 0.24f),
-                        new Color(0.30f, 0.85f, 0.98f), 40);
+                    BuildPickHighlight("PickHi_" + i, position);
                 }
                 CardVisual visual = CardVisual.Create(transform, "Overlay_" + sorted[i].Id,
-                    sorted[i], true, false, position, 41);
+                    sorted[i], true, false, position, CardOrder);
                 visual.transform.localScale = new Vector3(CardScale, CardScale, 1f);
                 entryCenters.Add(position);
                 entryShapes.Add(sorted[i].Shape);
@@ -478,17 +501,54 @@ namespace ProjectBlock.View
             }
 
             confirmEnabled = selectedIds.Count == target;
-            float bottomY = startY - (rows - 1) * SpacingY;
-            confirmButtonCenter = new Vector2(0f, bottomY - SpacingY * 0.65f - 0.5f);
-            confirmButtonHalf = new Vector2(1.7f, 0.42f);
             confirmButtonShown = true;
-            ViewUtil.MakeRect(transform, "PickConfirm", confirmButtonCenter, confirmButtonHalf * 2f,
-                confirmEnabled ? new Color(0.18f, 0.42f, 0.24f) : new Color(0.16f, 0.16f, 0.18f), 42);
+            SpriteRenderer confirm = ViewUtil.MakeRounded(transform, "PickConfirm",
+                confirmButtonCenter, confirmButtonHalf * 2f,
+                confirmEnabled ? ConfirmReadyColor : ConfirmIdleColor, ScrollTrackOrder);
+            // The button breathes ONLY when pressing it would actually do something, so the one
+            // moving thing on the screen is always the next thing to do.
+            if (confirmEnabled)
+            {
+                PulseSpriteFx.Attach(confirm, 0.80f, 1f, 1.5f, 0f);
+            }
             ViewUtil.MakeText3D(transform, "PickConfirmLabel", confirmButtonCenter,
                 Loc.Pick("CONFIRM  ", "ONAYLA  ") + selectedIds.Count + "/" + target,
-                90, 0.02f, confirmEnabled ? new Color(0.8f, 1f, 0.85f) : new Color(0.6f, 0.6f, 0.62f),
-                43, TextAnchor.MiddleCenter);
+                90, 0.02f, confirmEnabled ? new Color(0.86f, 1f, 0.90f) : new Color(0.55f, 0.56f, 0.60f),
+                ChromeOrder, TextAnchor.MiddleCenter);
+            FitToCamera(panelCenter, panelSize);
         }
+
+        /// <summary>
+        /// THE SELECTION MARK - a thin BREATHING ring just outside the card, not a slab behind it.
+        ///
+        /// It was a hard cyan rectangle a quarter of a unit bigger than the card on every side,
+        /// which is a wide flat border in a colour nothing else on the screen uses: it read as a
+        /// highlighter drawn over the card rather than as the card being chosen, and it shouted
+        /// loud enough that eight of them made the grid unreadable.
+        ///
+        /// Now: rounded like the card itself so the two silhouettes agree, THIN (0.09 rather than
+        /// 0.12 a side), in the overlay's own warm title gold rather than a fifth hue, and
+        /// breathing - which is what the bar card does to mean "live", so the picker and the bar
+        /// say the same thing the same way. A faint wash sits inside it so a selected card also
+        /// reads as chosen at a glance, without a border thick enough to crop the art.
+        /// </summary>
+        private void BuildPickHighlight(string name, Vector2 position)
+        {
+            var size = new Vector2(CardVisual.BodyWidth * CardScale + PickRingThickness * 2f,
+                CardVisual.BodyHeight * CardScale + PickRingThickness * 2f);
+            SpriteRenderer ring = ViewUtil.MakeRounded(transform, name, position, size,
+                PickRingColor, CardOrder - 1);
+            PulseSpriteFx.Attach(ring, 0.55f, 1f, 1.5f, 0.012f);
+        }
+
+        /// <summary>How far the selection ring stands out past the card, per side.</summary>
+        private const float PickRingThickness = 0.09f;
+
+        private static readonly Color PickRingColor = new Color(1f, 0.84f, 0.42f);
+
+        private static readonly Color ConfirmReadyColor = new Color(0.20f, 0.46f, 0.27f);
+
+        private static readonly Color ConfirmIdleColor = new Color(0.15f, 0.16f, 0.19f);
 
         /// <summary>True if the world point is on the picker's CONFIRM button AND it is enabled
         /// (exactly the target number of cards is selected).</summary>

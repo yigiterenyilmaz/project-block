@@ -318,15 +318,17 @@ namespace ProjectBlock.View
         {
             if (padFocus == PadFocus.Jokers || padFocus == PadFocus.Powers)
             {
-                return PadJoin(PadTok("A", PadColorA, Loc.Pick("sell it", "sat")));
+                return PadJoin(
+                    PadTok("A", PadColorA, Loc.Pick("use it", "kullan")),
+                    PadTok("X", PadColorX, Loc.Pick("sell it", "sat")));
             }
             var parts = new List<string>
             {
                 PadTok("A", PadColorA, Loc.Pick("buy", "al")),
                 PadTok("X", PadColorX, Loc.Pick("reroll", "yenile")),
                 PadTok("Y", PadColorY, Loc.Pick("next round", "sonraki raunt")),
-                PadHold("RB", Loc.Pick("sell a joker", "joker sat")),
-                PadHold("LB", Loc.Pick("sell a power", "güç sat")),
+                PadHold("RB", Loc.Pick("jokers", "jokerler")),
+                PadHold("LB", Loc.Pick("powers", "güçler")),
                 PadMenu(Loc.Pick("sell cards", "kart sat"))
             };
             if (session.CanSmuggle)

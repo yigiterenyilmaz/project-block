@@ -48,6 +48,7 @@ public static class JokerTests
         Market_BlockPurchasesAreCappedAtHalfTheStartingDeck();
         Market_SellingADeckCardFreesNoBuyingSlot();
         HileliZar_DealsTheOpeningHandOncePerMarket();
+        HileliZar_DealsAGrownHand();
         Overtime_GatedJokerIsSkipped();
         HarcamaBonusu_PaysWhenDrawPileEmpties();
         FullRun_WithEveryJoker_IsDeterministic();
@@ -11984,6 +11985,62 @@ public static class JokerTests
         {
             Check(zar.CanPickOpeningHand, "the next market arms it again");
         }
+    }
+
+    /// <summary>
+    /// THE OPENING HAND IS NOT THREE CARDS - it is whatever RoundRules.HandSize says when the
+    /// round is built, and jokers move that permanently ("Seri tetik" +2). A pick sized to a
+    /// constant would under-fill a grown hand and leave the rest to the shuffle, which is
+    /// exactly the promise this joker makes and fails to keep.
+    ///
+    /// So: grow the hand, pick that many, and check every one of them is dealt AND that the hand
+    /// really is the bigger size - the second half matters, because a pick of five that lands in
+    /// a hand of five would also pass if the joker had silently not grown it.
+    /// </summary>
+    private static void HileliZar_DealsAGrownHand()
+    {
+        Section("hileli zar / a hand grown by another joker");
+        var config = new GameConfig();
+        config.RngSeed = 4242;
+        var session = new GameSession(config);
+        var zar = (HileliZarJoker)session.Jokers.Add(new HileliZarJoker());
+        var seri = (SeriTetikJoker)session.Jokers.Add(new SeriTetikJoker());
+        session = DriveOwnedToMarket(session);
+        if (session.Phase != GamePhase.Market)
+        {
+            Check(false, "reached the market", "phase " + session.Phase);
+            return;
+        }
+        int handSize = session.Config.Rules.HandSize;
+        Check(handSize >= 3 + seri.ExtraHandSize,
+            "the hand really did grow before the pick", "handSize " + handSize);
+
+        var wanted = new List<int>();
+        for (int i = session.OwnedCards.Count - handSize; i < session.OwnedCards.Count; i++)
+        {
+            wanted.Add(session.OwnedCards[i].Id);
+        }
+        Check(session.TryPickOpeningHand(zar.InstanceId, wanted),
+            "a pick the size of the GROWN hand goes through");
+
+        session.LeaveMarket();
+        RoundEngine round = session.CurrentRound;
+        Check(round.Hand.Cards.Count == handSize, "the round opens with that many cards",
+            round.Hand.Cards.Count + " of " + handSize);
+        int dealt = 0;
+        for (int i = 0; i < wanted.Count; i++)
+        {
+            for (int j = 0; j < round.Hand.Cards.Count; j++)
+            {
+                if (round.Hand.Cards[j].Id == wanted[i])
+                {
+                    dealt++;
+                    break;
+                }
+            }
+        }
+        Check(dealt == wanted.Count, "and every chosen card is in it",
+            dealt + " of " + wanted.Count);
     }
 
     private static void Market_RefusesJokerWhenSlotsFull()

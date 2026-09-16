@@ -283,6 +283,12 @@ namespace ProjectBlock.View
                 new Vector2(0f, -66f), TextAnchor.UpperCenter, 28, new Color(1f, 0.92f, 0.45f));
 
             jokerBar.Build(hudShake);
+            // A market card stops asking to be clicked while the panel IT opens is up. Wired
+            // once, as a predicate read live, so no exit path has to remember to clear it.
+            jokerBar.AttentionSuppressedWhen = delegate
+            {
+                return hileliPickMode || parazitStep != ParazitStep.None || deckOverlay.IsOpen;
+            };
             // Before the bars are laid out: the badge owns the top of that same corner column.
             BuildBossBadge(hudShake);
             powerBar.Build(hudShake);
