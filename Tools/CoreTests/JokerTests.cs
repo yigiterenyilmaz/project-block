@@ -62,6 +62,7 @@ public static class JokerTests
         Tutustur_BurnsEveryFireCube();
         Spread_ConvertsOneRingOnly();
         Buzluk_FreezesAtWallsAndDoesNotBlockSweep();
+        Buzluk_AHoleIsAWallToo();
         Simya_GivesOfferedElementalBlocksASecondElement();
         KapaliEkonomi_PaysWhenNothingWasBought();
         Ihale_LocksUntilTheAuctionedJokerLeaves();
@@ -1546,6 +1547,89 @@ public static class JokerTests
         round.Board.DestroyCubeForced(new GridPos(2, 2));
         Check(round.Board.IsCleanForSweep(), "a board holding only ice counts as swept");
         Check(joker.FrozenThisRound == 1, "counted the freeze", "got " + joker.FrozenThisRound);
+
+        // AND IT SAID WHICH WALL. The report is what the animation draws, so what it carries is
+        // part of the rule being right: the freeze comes off the side that IS the wall, and a
+        // picture that grows it out of the middle of the cube teaches a rule the game has not got.
+        FreezeVisuals report = joker.LastFreeze;
+        Check(report != null && report.Cells.Count == 1, "one cube froze, and it reported itself",
+            report == null ? "no report" : report.Cells.Count + " cells");
+        Check(report.Cells[0].Cell.Equals(new GridPos(0, 3)), "the report named the right cell");
+        Check(report.Cells[0].Was.Kind == CubeKind.Water, "and what it used to be");
+        Check(report.Cells[0].Sides == BoardSides.Left,
+            "one wall, on the LEFT - not a direction the View had to guess",
+            report.Cells[0].Sides.ToString());
+    }
+
+    /// <summary>
+    /// A WALL IS NOT THE BOARD'S OUTER RIM.
+    ///
+    /// IsOnEdge asks IsInside, which reads the PLAYABLE mask - so a cell beside a hole, or beside
+    /// one the shuffle erosion has eaten, is against a wall as surely as one on the rim. Neither
+    /// rule was written for the other and this is what falls out of the two of them; it is also
+    /// what the animation draws, so it is worth pinning shape by shape rather than trusting that
+    /// it keeps falling out the same way.
+    /// </summary>
+    private static void Buzluk_AHoleIsAWallToo()
+    {
+        Section("buzluk / a hole is a wall, and a corner has two");
+        var session = NewSession(91, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        GameBoard board = round.Board;
+
+        Check(board.EdgeSidesOf(new GridPos(0, 0))
+                == (BoardSides.Left | BoardSides.Down),
+            "a bottom-left corner touches TWO walls",
+            board.EdgeSidesOf(new GridPos(0, 0)).ToString());
+        Check(board.EdgeSidesOf(new GridPos(board.Width - 1, board.Height - 1))
+                == (BoardSides.Right | BoardSides.Up),
+            "and so does the far corner");
+        Check(board.EdgeSidesOf(new GridPos(0, 2)) == BoardSides.Left,
+            "an edge cell touches exactly one");
+        Check(board.EdgeSidesOf(new GridPos(2, 2)) == BoardSides.None,
+            "and the middle of the board touches none");
+
+        // A HOLE in the middle: its four neighbours are now against a wall, each from its own
+        // side, and the cell diagonally past it is not.
+        // The constructor takes cells to ADD to the base rectangle, so a hole is made by leaving
+        // one out of what is bolted on - not by removing it from a full board. Base row 0, then
+        // every other cell except the middle.
+        var bolted = new List<GridPos>();
+        for (int x = 0; x < 5; x++)
+        {
+            for (int y = 1; y < 5; y++)
+            {
+                if (x != 2 || y != 2) { bolted.Add(new GridPos(x, y)); }
+            }
+        }
+        var pocked = new GameBoard(5, 1, bolted);
+        Check(!pocked.IsInside(new GridPos(2, 2)), "the middle really is a hole");
+        Check(pocked.Width == 5 && pocked.Height == 5, "and the board is still 5x5",
+            pocked.Width + "x" + pocked.Height);
+        Check(pocked.EdgeSidesOf(new GridPos(1, 2)) == BoardSides.Right,
+            "the cell LEFT of a hole has the hole on its right",
+            pocked.EdgeSidesOf(new GridPos(1, 2)).ToString());
+        Check(pocked.EdgeSidesOf(new GridPos(3, 2)) == BoardSides.Left,
+            "and the cell right of it has the hole on its left");
+        Check(pocked.EdgeSidesOf(new GridPos(2, 1)) == BoardSides.Up,
+            "below it, the hole is up");
+        Check(pocked.EdgeSidesOf(new GridPos(2, 3)) == BoardSides.Down,
+            "above it, the hole is down");
+        Check(pocked.EdgeSidesOf(new GridPos(1, 1)) == BoardSides.None,
+            "diagonally past a hole is not against it - the walls are FOUR-neighbour");
+        Check(pocked.IsOnEdge(new GridPos(1, 2)),
+            "IsOnEdge agrees with EdgeSidesOf, because it IS EdgeSidesOf");
+
+        // And the rule uses it: water beside the hole freezes, water two cells away does not.
+        pocked.SetCubeAt(new GridPos(1, 2), new Cube(CubeKind.Water, 1));
+        pocked.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Water, 1));
+        FreezeVisuals report = BuzlukJoker.FreezeOn(pocked, 7);
+        Check(pocked.GetCube(new GridPos(1, 2)).Value.Kind == CubeKind.Ice,
+            "water against the hole froze");
+        Check(pocked.GetCube(new GridPos(1, 1)).Value.Kind == CubeKind.Water,
+            "water that touches nothing stayed liquid");
+        Check(report.Cells.Count == 1 && report.Cells[0].Sides == BoardSides.Right,
+            "and the report says the wall it froze against was the hole on its right");
     }
 
     private static void Simya_GivesOfferedElementalBlocksASecondElement()

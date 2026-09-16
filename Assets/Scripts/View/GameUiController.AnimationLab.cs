@@ -166,6 +166,7 @@ namespace ProjectBlock.View
             StopAnimTalisman();
             StopAnimMidas();
             StopAnimFire();
+            StopAnimIce();
             boardView.ClearPreview();
             RefreshAll(null);
             SyncRetroPresentation();
@@ -1578,6 +1579,181 @@ namespace ProjectBlock.View
             AddAnim("Yangın switch: the settle", "yangın anahtarı: oturma",
                 delegate { AnimFireToggle(ref FireSpreadView.Layers.ShowSettle,
                     "settle", "oturma"); });
+            AddAnim("buzluk: water freezes at the BOTTOM wall",
+                "buzluk: su ALT duvarda donuyor",
+                delegate { AnimIce(AnimIceScene.Bottom); });
+            AddAnim("buzluk: water freezes at the TOP wall",
+                "buzluk: su ÜST duvarda donuyor",
+                delegate { AnimIce(AnimIceScene.Top); });
+            AddAnim("buzluk: water freezes at the LEFT wall",
+                "buzluk: su SOL duvarda donuyor",
+                delegate { AnimIce(AnimIceScene.Left); });
+            AddAnim("buzluk: water freezes at the RIGHT wall",
+                "buzluk: su SAĞ duvarda donuyor",
+                delegate { AnimIce(AnimIceScene.Right); });
+            AddAnim("buzluk: corner - two fronts meet in the middle",
+                "buzluk: köşe - iki cephe ortada buluşuyor",
+                delegate { AnimIce(AnimIceScene.CornerBottomLeft); });
+            AddAnim("buzluk: the other corner",
+                "buzluk: öteki köşe",
+                delegate { AnimIce(AnimIceScene.CornerTopRight); });
+            AddAnim("buzluk: 3 along one edge - a cold wave",
+                "buzluk: bir kenarda 3 su - soğuk dalga",
+                delegate { AnimIce(AnimIceScene.ThreeAlongEdge); });
+            AddAnim("buzluk: 5 along one edge",
+                "buzluk: bir kenarda 5 su",
+                delegate { AnimIce(AnimIceScene.FiveAlongEdge); });
+            AddAnim("buzluk: several edges at once",
+                "buzluk: aynı turda birden çok kenar",
+                delegate { AnimIce(AnimIceScene.ManyEdges); });
+            AddAnim("buzluk: STRESS - the whole rim (budget + total length)",
+                "buzluk: STRES - bütün kenar (bütçe + toplam süre)",
+                delegate { AnimIce(AnimIceScene.Stress); });
+            AddAnim("buzluk: RULE TEST - a HOLE is a wall too",
+                "buzluk: KURAL TESTİ - DELİK de bir duvardır",
+                delegate { AnimIce(AnimIceScene.HoleWall); });
+            AddAnim("buzluk: ACCEPTANCE - ice beside water it could not reach",
+                "buzluk: KABUL - donan küp ile donamayan suyun yan yana hali",
+                delegate { AnimIce(AnimIceScene.WaterBesideIce); });
+            AddAnim("buzluk: ice beside obsidian and gold (readability)",
+                "buzluk: obsidyen ve altının yanında buz (okunabilirlik)",
+                delegate { AnimIce(AnimIceScene.AgainstObsidian); });
+            AddAnim("buzluk stage: the water slowing, alone",
+                "buzluk aşama: suyun yavaşlaması, tek başına",
+                delegate { AnimIceOnly(AnimIceScene.Bottom, "water slowdown", "su yavaşlaması",
+                    delegate { IceFreezeView.Layers.ShowWaterMotion = true; }); });
+            AddAnim("buzluk stage: the frost seeds, alone",
+                "buzluk aşama: kırağı tohumları, tek başına",
+                delegate { AnimIceOnly(AnimIceScene.Bottom, "frost seeds", "kırağı tohumları",
+                    delegate { IceFreezeView.Layers.ShowFrostSeeds = true; }); });
+            AddAnim("buzluk stage: the crystal fingers, alone",
+                "buzluk aşama: kristal parmaklar, tek başına",
+                delegate { AnimIceOnly(AnimIceScene.Bottom, "crystal fingers", "kristal parmaklar",
+                    delegate
+                    {
+                        IceFreezeView.Layers.ShowFrostSeeds = true;
+                        IceFreezeView.Layers.ShowCrystalFingers = true;
+                    }); });
+            AddAnim("buzluk stage: the ice film closing, alone",
+                "buzluk aşama: buz filminin kapanması, tek başına",
+                delegate { AnimIceOnly(AnimIceScene.Bottom, "ice film", "buz filmi",
+                    delegate
+                    {
+                        IceFreezeView.Layers.ShowFrostSeeds = true;
+                        IceFreezeView.Layers.ShowCrystalFingers = true;
+                        IceFreezeView.Layers.ShowIceFilm = true;
+                    }); });
+            AddAnim("buzluk stage: THE LIQUID POCKET shrinking",
+                "buzluk aşama: SIVI CEBİN küçülmesi",
+                delegate
+                {
+                    // The pocket is not a layer - it is what the film has NOT reached - so it is
+                    // shown by painting the field rather than by switching something off.
+                    IceFreezeView.Layers.AllOn();
+                    IceFreezeView.Layers.ShowField = 4;
+                    AnimIce(AnimIceScene.Bottom);
+                    animLastLabel = Loc.Pick(
+                        "the liquid pocket, painted - RESET puts the field back",
+                        "sıvı cep, boyanmış halde - RESET alanı geri kapatır");
+                });
+            AddAnim("buzluk stage: the shell thickening, alone",
+                "buzluk aşama: kabuğun kalınlaşması, tek başına",
+                delegate { AnimIceOnly(AnimIceScene.Bottom, "shell thickening",
+                    "kabuk kalınlaşması",
+                    delegate
+                    {
+                        IceFreezeView.Layers.ShowIceFilm = true;
+                        IceFreezeView.Layers.ShowShellThickness = true;
+                        IceFreezeView.Layers.ShowClouding = true;
+                    }); });
+            AddAnim("buzluk stage: the crystal lock, alone",
+                "buzluk aşama: kristal kilidi, tek başına",
+                delegate { AnimIceOnly(AnimIceScene.Bottom, "crystal lock", "kristal kilidi",
+                    delegate
+                    {
+                        IceFreezeView.Layers.ShowIceFilm = true;
+                        IceFreezeView.Layers.ShowLockResponse = true;
+                        IceFreezeView.Layers.ShowLockGlints = true;
+                    }); });
+            AddAnim("buzluk: the whole freeze at 0.5x",
+                "buzluk: bütün donma 0.5x",
+                delegate
+                {
+                    Time.timeScale = 0.5f;
+                    AnimIce(AnimIceScene.CornerBottomLeft);
+                });
+            AddAnim("buzluk: the whole freeze at 0.25x (the stages apart)",
+                "buzluk: bütün donma 0.25x (aşamalar ayrı ayrı)",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    AnimIce(AnimIceScene.Bottom);
+                });
+            AddAnim("buzluk debug: paint the WALL SIDES the rule named",
+                "buzluk hata ayıklama: kuralın söylediği DUVAR YÖNLERİNİ boya",
+                delegate { AnimIceField(1, "wall sides", "duvar yönleri"); });
+            AddAnim("buzluk debug: paint the CRYSTAL FINGER field",
+                "buzluk hata ayıklama: KRİSTAL PARMAK alanını boya",
+                delegate { AnimIceField(2, "finger field", "parmak alanı"); });
+            AddAnim("buzluk debug: paint the ICE FILM field",
+                "buzluk hata ayıklama: BUZ FİLMİ alanını boya",
+                delegate { AnimIceField(3, "film field", "film alanı"); });
+            AddAnim("buzluk debug: paint the LIQUID POCKET",
+                "buzluk hata ayıklama: SIVI CEBİ boya",
+                delegate { AnimIceField(4, "liquid pocket", "sıvı cep"); });
+            AddAnim("buzluk switch: frost seeds on/off",
+                "buzluk anahtarı: kırağı tohumları aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowFrostSeeds,
+                    "frost seeds", "kırağı tohumları"); });
+            AddAnim("buzluk switch: crystal fingers on/off",
+                "buzluk anahtarı: kristal parmaklar aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowCrystalFingers,
+                    "crystal fingers", "kristal parmaklar"); });
+            AddAnim("buzluk switch: the ice film on/off",
+                "buzluk anahtarı: buz filmi aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowIceFilm,
+                    "ice film", "buz filmi"); });
+            AddAnim("buzluk switch: shell thickening on/off",
+                "buzluk anahtarı: kabuk kalınlaşması aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowShellThickness,
+                    "shell thickening", "kabuk kalınlaşması"); });
+            AddAnim("buzluk switch: the final frosted rim on/off",
+                "buzluk anahtarı: son kırağı kenarı aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowFinalRim,
+                    "final rim", "son kenar"); });
+            AddAnim("buzluk switch: clouding on/off",
+                "buzluk anahtarı: bulutlanma aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowClouding,
+                    "clouding", "bulutlanma"); });
+            AddAnim("buzluk switch: the TRAPPED WATER on/off",
+                "buzluk anahtarı: HAPSOLMUŞ SU aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowTrappedWater,
+                    "trapped water", "hapsolmuş su"); });
+            AddAnim("buzluk switch: water motion on/off",
+                "buzluk anahtarı: su hareketi aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowWaterMotion,
+                    "water motion", "su hareketi"); });
+            AddAnim("buzluk switch: lock glints on/off",
+                "buzluk anahtarı: kilit parıltıları aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowLockGlints,
+                    "lock glints", "kilit parıltıları"); });
+            AddAnim("buzluk switch: the lock response on/off",
+                "buzluk anahtarı: kilit tepkisi aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowLockResponse,
+                    "lock response", "kilit tepkisi"); });
+            AddAnim("buzluk switch: the frozen idle glint on/off",
+                "buzluk anahtarı: donmuş bekleme parıltısı aç/kapa",
+                delegate { AnimIceToggle(ref IceFreezeView.Layers.ShowIdleGlint,
+                    "idle glint", "bekleme parıltısı"); });
+            AddAnim("buzluk switch: ALL layers back on",
+                "buzluk anahtarı: TÜM katmanlar geri açık",
+                delegate
+                {
+                    IceFreezeView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("buzluk: every layer back on",
+                        "buzluk: tüm katmanlar geri açık");
+                    if (AnimLabOpen) { RedrawAnimationLab(); }
+                });
             AddAnim("Yangın switch: ALL layers back on",
                 "yangın anahtarı: TÜM katmanlar geri açık",
                 delegate
@@ -5577,6 +5753,287 @@ namespace ProjectBlock.View
             AnimFire(scene);
             animLastLabel = Loc.Pick(english + " - alone (RESET puts every layer back)",
                 turkish + " - tek başına (RESET tüm katmanları geri açar)");
+        }
+
+        // ------------------------------------------------------------------ buzluk
+
+        // "BUZLUK" IN THE LAB, and it exists to answer ONE question: is the freeze coming off the
+        // side the RULE says is a wall?
+        //
+        // So no scene writes down which cubes freeze. Each lays out water on a board of its own
+        // and calls BuzlukJoker.FreezeOn - the same static the turn calls - and hands what it
+        // reports to the same seam the game uses. A scene that listed its own frozen cells would
+        // agree with itself and with nothing else, and the one thing worth checking here is
+        // exactly the thing it would have stopped checking.
+        //
+        // The acceptance set is the wall geometry: each of the four edges on its own (does the
+        // front come off the RIGHT one?), two corners (do two fronts meet in the middle?), a wall
+        // made by a HOLE rather than by the board's rim (the rule says those count, so the
+        // picture has to), and runs of water along one edge (does it read as a cold wave rather
+        // than five cinematics?).
+
+        private enum AnimIceScene
+        {
+            Bottom,
+            Top,
+            Left,
+            Right,
+            CornerBottomLeft,
+            CornerTopRight,
+            ThreeAlongEdge,
+            FiveAlongEdge,
+            ManyEdges,
+            Stress,
+            HoleWall,
+            WaterBesideIce,
+            AgainstObsidian
+        }
+
+        /// <summary>Lays the scene out in WATER and says nothing about what will freeze - that is
+        /// the rule's business. Cells outside the board are skipped, so a scene is safe on any
+        /// arena the lab happens to be sitting on.</summary>
+        private static void AnimIceWater(GameBoard board, List<int> cards, GridPos[] cells)
+        {
+            for (int i = 0; i < cells.Length; i++)
+            {
+                if (board.IsInside(cells[i]))
+                {
+                    board.SetCubeAt(cells[i], new Cube(CubeKind.Water,
+                        cards.Count > 0 ? cards[i % cards.Count] : 101));
+                }
+            }
+        }
+
+        private static void AnimIceLayout(AnimIceScene scene, GameBoard board, List<int> cards)
+        {
+            int w = board.Width;
+            int h = board.Height;
+            int cx = board.MinX + w / 2;
+            int cy = board.MinY + h / 2;
+            int left = board.MinX;
+            int right = board.MinX + w - 1;
+            int down = board.MinY;
+            int up = board.MinY + h - 1;
+            switch (scene)
+            {
+                case AnimIceScene.Bottom:
+                    AnimIceWater(board, cards, new[] { new GridPos(cx, down) });
+                    break;
+                case AnimIceScene.Top:
+                    AnimIceWater(board, cards, new[] { new GridPos(cx, up) });
+                    break;
+                case AnimIceScene.Left:
+                    AnimIceWater(board, cards, new[] { new GridPos(left, cy) });
+                    break;
+                case AnimIceScene.Right:
+                    AnimIceWater(board, cards, new[] { new GridPos(right, cy) });
+                    break;
+                case AnimIceScene.CornerBottomLeft:
+                    AnimIceWater(board, cards, new[] { new GridPos(left, down) });
+                    break;
+                case AnimIceScene.CornerTopRight:
+                    AnimIceWater(board, cards, new[] { new GridPos(right, up) });
+                    break;
+                case AnimIceScene.ThreeAlongEdge:
+                    AnimIceWater(board, cards, new[]
+                    {
+                        new GridPos(cx - 1, down), new GridPos(cx, down), new GridPos(cx + 1, down)
+                    });
+                    break;
+                case AnimIceScene.FiveAlongEdge:
+                    AnimIceWater(board, cards, new[]
+                    {
+                        new GridPos(cx - 2, down), new GridPos(cx - 1, down),
+                        new GridPos(cx, down), new GridPos(cx + 1, down),
+                        new GridPos(cx + 2, down)
+                    });
+                    break;
+                case AnimIceScene.ManyEdges:
+                    AnimIceWater(board, cards, new[]
+                    {
+                        new GridPos(cx, down), new GridPos(cx, up),
+                        new GridPos(left, cy), new GridPos(right, cy),
+                        new GridPos(left, down), new GridPos(right, up)
+                    });
+                    break;
+                case AnimIceScene.Stress:
+                {
+                    // The whole rim in water. THE PARTICLE BUDGET AND THE TOTAL LENGTH ARE WHAT
+                    // THIS SCENE IS FOR - a board edge of ice must stay a wave and stay short.
+                    var rim = new List<GridPos>();
+                    for (int x = left; x <= right; x++)
+                    {
+                        rim.Add(new GridPos(x, down));
+                        rim.Add(new GridPos(x, up));
+                    }
+                    for (int y = down + 1; y < up; y++)
+                    {
+                        rim.Add(new GridPos(left, y));
+                        rim.Add(new GridPos(right, y));
+                    }
+                    AnimIceWater(board, cards, rim.ToArray());
+                    break;
+                }
+                case AnimIceScene.HoleWall:
+                    // A WALL IS NOT THE RIM. The rule asks IsInside, which reads the playable
+                    // mask - so a cell beside the hole this board was built with is against a
+                    // wall as surely as one on the board's outer edge, and the freeze has to come
+                    // off the hole's side. Nothing in the View knows that; it falls out of
+                    // EdgeSidesOf, and the far cube here is the control.
+                    AnimIceWater(board, cards, new[]
+                    {
+                        new GridPos(cx + 1, cy), new GridPos(cx, cy + 1),
+                        new GridPos(cx - 2, cy)
+                    });
+                    break;
+                case AnimIceScene.WaterBesideIce:
+                    // THE ACCEPTANCE SHOT. One of these will freeze and one cannot, side by side
+                    // at the size a cell really is: if the frozen one reads as "the water sprite
+                    // with a tint on it", the whole effect has failed (spec 115).
+                    AnimIceWater(board, cards, new[]
+                    {
+                        new GridPos(cx, down), new GridPos(cx + 2, cy)
+                    });
+                    break;
+                case AnimIceScene.AgainstObsidian:
+                    AnimIceWater(board, cards, new[]
+                    {
+                        new GridPos(cx - 1, down), new GridPos(cx + 1, down)
+                    });
+                    board.SetCubeAt(new GridPos(cx, down), new Cube(CubeKind.Obsidian,
+                        cards.Count > 0 ? cards[0] : 101));
+                    board.SetCubeAt(new GridPos(cx + 2, down), new Cube(CubeKind.Gold,
+                        cards.Count > 0 ? cards[0] : 101));
+                    break;
+            }
+        }
+
+        private void AnimIce(AnimIceScene scene)
+        {
+            StopAnimIce();
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || round.Board == null || boardView == null)
+            {
+                return;
+            }
+            int w = Mathf.Max(7, round.Board.Width);
+            int h = Mathf.Max(7, round.Board.Height);
+            List<int> cards = AnimBossCards();
+            // The hole scene needs it in the board's SHAPE, so it is built with one rather than
+            // punched in afterwards - a hole is play area the board never had, not a cell state.
+            GameBoard board = scene == AnimIceScene.HoleWall
+                ? new GameBoard(w, 1, AnimIceHoled(w, h))
+                : new GameBoard(w, h);
+            AnimIceLayout(scene, board, cards);
+            // THE REAL RULE, on the lab's own board. It converts the water to ice and reports
+            // which sides were wall - both of which the animation then draws.
+            FreezeVisuals report = BuzlukJoker.FreezeOn(board, Time.frameCount);
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            boardView.Ice.Play(boardView, report);
+            animLastLabel = Loc.Pick(
+                report.Cells.Count + " cubes froze, " + AnimIceCorners(report) + " at a corner",
+                report.Cells.Count + " küp dondu, " + AnimIceCorners(report) + " tanesi köşede");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>How many of them touched more than one wall - the label says what the report
+        /// actually contained rather than what the scene meant to arrange.</summary>
+        private static int AnimIceCorners(FreezeVisuals report)
+        {
+            int n = 0;
+            for (int i = 0; report != null && i < report.Cells.Count; i++)
+            {
+                BoardSides s = report.Cells[i].Sides;
+                int walls = 0;
+                if ((s & BoardSides.Left) != 0) { walls++; }
+                if ((s & BoardSides.Right) != 0) { walls++; }
+                if ((s & BoardSides.Down) != 0) { walls++; }
+                if ((s & BoardSides.Up) != 0) { walls++; }
+                if (walls > 1) { n++; }
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// The cells to bolt onto a ONE-ROW base board: everything above row 0 except the middle,
+        /// which is therefore a HOLE and whose four neighbours are against a wall.
+        ///
+        /// It has to be built this way round because GameBoard's constructor takes cells to ADD
+        /// to the base rectangle - there is no "remove this cell" - so a hole is a cell you never
+        /// bolt on. The bounding box grows to cover the rest, so the arena is still w x h.
+        /// </summary>
+        private static List<GridPos> AnimIceHoled(int w, int h)
+        {
+            var cells = new List<GridPos>();
+            for (int x = 0; x < w; x++)
+            {
+                for (int y = 1; y < h; y++)
+                {
+                    if (x != w / 2 || y != h / 2)
+                    {
+                        cells.Add(new GridPos(x, y));
+                    }
+                }
+            }
+            return cells;
+        }
+
+        private void StopAnimIce()
+        {
+            if (boardView != null)
+            {
+                boardView.StopIceFreeze();
+            }
+        }
+
+        private void AnimIceToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("buzluk " + english + ": ", "buzluk " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>One stage on its own. The switches go in BEFORE the scene is built, because a
+        /// stage judged with every other stage over it is being judged by the stages over it.
+        /// </summary>
+        private void AnimIceOnly(AnimIceScene scene, string english, string turkish,
+            System.Action on)
+        {
+            IceFreezeView.Layers.AllOn();
+            IceFreezeView.Layers.ShowWaterMotion = false;
+            IceFreezeView.Layers.ShowFrostSeeds = false;
+            IceFreezeView.Layers.ShowCrystalFingers = false;
+            IceFreezeView.Layers.ShowIceFilm = false;
+            IceFreezeView.Layers.ShowShellThickness = false;
+            IceFreezeView.Layers.ShowLockGlints = false;
+            IceFreezeView.Layers.ShowLockResponse = false;
+            if (on != null)
+            {
+                on();
+            }
+            AnimIce(scene);
+            animLastLabel = Loc.Pick(english + " - alone (RESET puts every layer back)",
+                turkish + " - tek başına (RESET tüm katmanları geri açar)");
+        }
+
+        /// <summary>Paints one of the shader's own fields over the cube instead of the ice, so
+        /// "is the freeze coming off the side Core named" and "is the pocket really the last
+        /// unsealed region" stop being arguments and become a glance.</summary>
+        private void AnimIceField(int field, string english, string turkish)
+        {
+            IceFreezeView.Layers.AllOn();
+            IceFreezeView.Layers.ShowField
+                = IceFreezeView.Layers.ShowField == field ? 0 : field;
+            AnimIce(AnimIceScene.CornerBottomLeft);
+            animLastLabel = Loc.Pick("field: " + english + " - ", "alan: " + turkish + " - ")
+                + OnOff(IceFreezeView.Layers.ShowField == field);
         }
 
         // ------------------------------------------------------------------ midas

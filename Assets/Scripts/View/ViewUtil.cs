@@ -325,6 +325,9 @@ namespace ProjectBlock.View
                 case CubeKind.Dynamite: return Tile("block_dynamite");
                 case CubeKind.Target: return Tile("block_target");
                 case CubeKind.Void: return Tile("block_void");
+                // "Buzluk": ICE IS FROZEN WATER AND IS DRAWN FROM THE WATER'S OWN PIXELS.
+                // See IceTile - this is not a stand-in for missing art.
+                case CubeKind.Ice: return IceTile;
                 default: return null;
             }
         }
@@ -471,6 +474,82 @@ namespace ProjectBlock.View
             return material;
         }
 
+        private static Sprite iceTile;
+        private static Material iceMaterial;
+        private static Shader cryoShader;
+        private static bool cryoShaderMissing;
+
+        /// <summary>
+        /// THE ICE TILE: a second Sprite cut from the WATER's own texture, pixel for pixel.
+        ///
+        /// There is no block_ice.png and there does not need to be one (see
+        /// Resources/Shaders/CryoFreeze) - an ice cube is the water face seen through the cryo
+        /// shader. But the material here is chosen BY THE TILE, deliberately, so that the board
+        /// and the hand agree without either knowing the rule; and water and ice sharing one
+        /// Sprite would mean sharing one material, which is exactly what must not happen.
+        ///
+        /// So ice gets its own Sprite over the same pixels. Everything downstream then works
+        /// untouched: TileMaterial hands it the cryo material, the cluster burst's shell keeps
+        /// looking like ice while it breaks, the invader column and the press laminae likewise -
+        /// none of which would have happened through a signature change made in one place.
+        /// </summary>
+        public static Sprite IceTile
+        {
+            get
+            {
+                Sprite water = Tile("block_water");
+                if (water == null)
+                {
+                    return null;
+                }
+                if (iceTile == null)
+                {
+                    // Every import setting copied off the water: the .meta carries the body's
+                    // pixel size and the pivot, and a tile that got either of those wrong would
+                    // sit a few pixels out of its cell.
+                    Rect rect = water.rect;
+                    var pivot = new Vector2(water.pivot.x / rect.width, water.pivot.y / rect.height);
+                    iceTile = Sprite.Create(water.texture, rect, pivot, water.pixelsPerUnit,
+                        0, SpriteMeshType.FullRect, water.border);
+                    iceTile.name = "block_ice(from water)";
+                }
+                return iceTile;
+            }
+        }
+
+        private static Shader CryoShader
+        {
+            get
+            {
+                if (cryoShader == null && !cryoShaderMissing)
+                {
+                    cryoShader = Shader.Find("ProjectBlock/CryoFreeze");
+                    if (cryoShader == null)
+                    {
+                        cryoShader = Resources.Load<Shader>("Shaders/CryoFreeze");
+                    }
+                    cryoShaderMissing = cryoShader == null;
+                }
+                return cryoShader;
+            }
+        }
+
+        /// <summary>The ONE shared cryo material. Per-cube state (which wall, how far the front
+        /// has got, how much motion is left) rides in a MaterialPropertyBlock - see the shader's
+        /// header for why that trade is taken here and refused in BlockWarp. Null when the
+        /// shader is missing, and then ice falls back to a tinted water tile.</summary>
+        public static Material IceMaterial
+        {
+            get
+            {
+                if (iceMaterial == null && CryoShader != null)
+                {
+                    iceMaterial = new Material(CryoShader);
+                }
+                return iceMaterial;
+            }
+        }
+
         /// <summary>The material a tile animates itself with, or null for the ordinary sprite
         /// material. Null is a complete answer - most tiles do not move.</summary>
         public static Material TileMaterial(Sprite tile)
@@ -478,6 +557,19 @@ namespace ProjectBlock.View
             if (tile == null)
             {
                 return null;
+            }
+            if (tile == iceTile)
+            {
+                // Standing ice. The animation drives the same material through a property block;
+                // what it settles on is this, which is why nothing has to hand over at the end.
+                Material ice = IceMaterial;
+                if (ice != null)
+                {
+                    return ice;
+                }
+                // No cryo shader: it is still water art, so at least let it keep moving rather
+                // than freezing into a still frame nothing explains.
+                tile = Tile("block_water");
             }
             if (tile == Tile("block_water"))
             {

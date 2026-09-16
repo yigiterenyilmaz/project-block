@@ -560,6 +560,80 @@ dropped that way once each.
   `Tilsim_ReclaimedGroundIsSparseNotRectangular` pins it shape by shape (a lone cell, gaps down a
   column, two columns, an L, four corners with holes between them, and a far cell that grows the
   bounds and nothing else), asserting the mask cell by cell rather than counting.
+- **"Buzluk" grows an ICE CRUST over water at the wall** (`IceFreezeView`, `IceGrowth`,
+  `Resources/Shaders/CryoFreeze`). Two passes are buried here and the first one is the instructive
+  failure, because on paper it was right: one progress value, a ragged front crossing the cube,
+  the face lerped toward an ice colour behind it. Every still looked reasonable. On the board it
+  read as the water being **RECOLOURED** — water and ice were two brightnesses of one sprite. A
+  freeze is not one event, so it cannot be one number.
+  **AN ICE CUBE IS STILL THE WATER TILE'S OWN PIXELS.** `ViewUtil.IceTile` is a second `Sprite`
+  cut from the water texture (same rect, pivot, PPU) and that indirection is the trick: the
+  material is chosen BY THE TILE, so giving ice a Sprite of its own hands it the cryo material
+  everywhere at once — board, cluster-burst shell, invader column, press laminae — with no
+  signature changed. There is no `block_ice.png` and there must not be one.
+  **THE SHAPE IS A BAKED FIELD, NOT A FORMULA** (`IceGrowth`, four variants in one linear RGBA
+  texture — all four channels are DATA, the trap `TalismanStain` already records). R is FINGER
+  ARRIVAL, G FILM ARRIVAL, B cloud, A rim. Crystal fingers are grown as curved forking walks from
+  3–5 seeds on the wall, one hero reaching most of the way and the rest stopping short; G is a
+  **GEODESIC out of that field**, so the film closes the gaps between fingers from their sides at
+  a steady rate rather than fading in everywhere. Baked for a wall on the LEFT: every other wall
+  is a uv swizzle and a CORNER samples two tiles and takes MIN, so two crystal fields grow and
+  meet in the middle with nothing coded for it.
+  **THE LIQUID POCKET IS NOT DRAWN.** It is whatever the film has not reached, which is why it
+  comes out irregular and off-centre instead of a shrinking disc — nobody chose its shape. The
+  water's warp is scaled by that same mask, so the last swirl in the cube is in the last liquid
+  in the cube, for free. The film must run PAST 1 (`FilmOver` 1.16) or the last texel to seal
+  never seals and the pocket stays a bright blue patch that reads as a hole in the ice.
+  **FIVE OVERLAPPING STAGES, ~0.8s**: `_Slow` (the flow dying, and only where it is still
+  liquid), `_Seeds` (buds on the wall), `_Fingers`, `_Film` (the longest — it is what the eye
+  follows), `_Thick` (the shell thickening after the surface closes, which is what stops the
+  finished material arriving in one frame), then a LOCK that swells 2.2% and settles — water
+  expands when it freezes and that is the only place the effect says so. They overlap heavily,
+  which is what lets 0.8s not feel like 0.8s; standing ice is those five at their ends, so there
+  is no separate static path and no hand-off.
+  **THE FINISHED CUBE IS THREE PHYSICAL LAYERS**: the water BURIED (0.30 visible, and less as the
+  shell thickens), the MILKY ICE BODY with its own thickness variation so it is never a flat
+  plate, and the FROSTED CRYSTAL RIM — irregular, and baked **thicker on the wall side**, so even
+  the still says which way the cold came from. The fingers stay in it as veins, core pale blue
+  and edge near white.
+  **WHICH WAY IS THE WALL IS CORE'S ANSWER.** `GameBoard.EdgeSidesOf` returns the sides as flags
+  and `IsOnEdge` defers to it — one definition, the one the rule already used. A wall is any
+  neighbour that is not PLAY AREA, so a cell beside a hole or an eroded cell is against one;
+  nobody coded that and `Buzluk_AHoleIsAWallToo` pins it cell by cell. `FreezeVisuals` is
+  reporting only, `[NotSaved]`, keyed on a SERIAL, and the baseline is byte-identical.
+  **FIVE THINGS WERE GOT WRONG ON PAPER AND FIXED BY RENDERING THEM** (the mock is in the
+  scratchpad; `ice_field` / `ice_growth` / `ice_final.png`). The ice must be built from the face's
+  own LUMINANCE, never lerped toward a blue — luminance is where the tile's frame, bevel and lit
+  top edge live, and a lerp to a flat colour leaves a frosted PLATE with no block in it. The
+  geodesic must not WRAP (`np.roll` let the film leave one edge and come back the other). A
+  finger's heading needs MEMORY or a long one spirals back on itself. Its soft edge must be
+  BOUNDED — written as a plain distance it conflates "soft edge" with "grows forever" and every
+  finger ends a quarter of the cell wide. And the rim's roughness needs THREE non-harmonic
+  frequencies; two at a simple ratio repeat, and a repeating edge along a straight run is a row
+  of SAW TEETH — grown twice, once in the shader and once in the bake.
+  **AND IT STAYS IN ITS CELL.** An ice cube may never read as a bigger block than the one beside
+  it, and that was broken two ways. The seating's scale was read back off the renderer and
+  multiplied by the curve AGAIN every frame: seven frames at 60fps left the cube 6.6% oversized
+  and the lab at 0.25x gave it twenty-eight frames and 29%, and it stayed there until something
+  repainted the board. A per-frame scale is now written from a stored base, never from itself -
+  the general rule, and the same class of bug as the fire's halo. The whole seating then came
+  down under 1.5% (`ScaleCeiling` 1.02 is the documented ceiling) because saying "water expands"
+  with SIZE is exactly the wrong way to say it; it is said with the shell instead - clouding,
+  rim, crystal density, highlight. The frost rim itself scaled nothing (it is drawn inside the
+  tile's own uv and cannot spill one pixel past the sprite) and still made the cube look bigger,
+  because a bright band all the way round a dark cube is read as bulk - so its thickness and its
+  strength are **silhouette numbers**, not decoration ones, and both came down by about 40%.
+  Glints are clamped inside the cube's own face for the same reason.
+  No snow, no burst, no shake, no flash, no fog: the loudest moment is the seating. A whole turn
+  is capped at 1.15s with the stagger SQUEEZED rather than the total lengthened, so five cubes
+  freezing is one cold wave along the wall. The lab has thirteen scenes (four walls alone, two
+  corners, runs of three and five, several edges at once, the whole rim as a stress test, the
+  HOLE-as-wall rule test, ice beside water it could not reach as the acceptance shot, ice beside
+  obsidian and gold), seven stage-isolation entries, four DEBUG FIELD VIEWS that paint the wall
+  sides / finger field / film field / liquid pocket instead of the ice — so "is it coming off the
+  side Core named" and "is the pocket really the last unsealed region" are a glance rather than
+  an argument — eleven switches and 0.5x/0.25x runs. Every scene runs `BuzlukJoker.FreezeOn` on a
+  board of its own.
 - **"Mapus" does not mark a cell, it TURNS IT INTO A PRISON** (`MapusSealView`, `MapusShapes`,
   `Resources/Shaders/MapusPit` + `MapusIron`). A sealed cell used to be the empty cell in a
   different colour, which said "somebody painted this square" — worse here than almost anywhere,

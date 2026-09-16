@@ -176,14 +176,33 @@ namespace ProjectBlock.Core
         /// bolted-on piece, which is what "Buzluk" and "Çerçeve" both want.</summary>
         public bool IsOnEdge(GridPos pos)
         {
+            return EdgeSidesOf(pos) != BoardSides.None;
+        }
+
+        /// <summary>
+        /// WHICH walls the cell touches, rather than merely whether it touches one.
+        ///
+        /// IsOnEdge is this question with the answer thrown away, so it defers to this rather
+        /// than repeating the four tests - a second copy of "what counts as a wall" is a second
+        /// copy that can disagree, and "Buzluk"'s whole animation is built on this answer being
+        /// the same one the rule used.
+        ///
+        /// A wall is any neighbour that is not play area: the board's outer rim, a hole in the
+        /// bounding box, or a cell the shuffle erosion has eaten. None of those is a special
+        /// case here - IsInside already knows the difference and this asks it.
+        /// </summary>
+        public BoardSides EdgeSidesOf(GridPos pos)
+        {
             if (!IsInside(pos))
             {
-                return false;
+                return BoardSides.None;
             }
-            return !IsInside(new GridPos(pos.X + 1, pos.Y))
-                || !IsInside(new GridPos(pos.X - 1, pos.Y))
-                || !IsInside(new GridPos(pos.X, pos.Y + 1))
-                || !IsInside(new GridPos(pos.X, pos.Y - 1));
+            BoardSides sides = BoardSides.None;
+            if (!IsInside(new GridPos(pos.X - 1, pos.Y))) { sides |= BoardSides.Left; }
+            if (!IsInside(new GridPos(pos.X + 1, pos.Y))) { sides |= BoardSides.Right; }
+            if (!IsInside(new GridPos(pos.X, pos.Y - 1))) { sides |= BoardSides.Down; }
+            if (!IsInside(new GridPos(pos.X, pos.Y + 1))) { sides |= BoardSides.Up; }
+            return sides;
         }
 
         /// <summary>Every occupied cell, in a fixed left-to-right, bottom-to-top order.

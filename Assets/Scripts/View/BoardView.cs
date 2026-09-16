@@ -229,6 +229,8 @@ namespace ProjectBlock.View
 
         private CompressedCubeView press;
 
+        private IceFreezeView ice;
+
         private ParasiteHostView parasite;
 
         private MapusSealView mapus;
@@ -526,6 +528,61 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>
+        /// "Buzluk"'s freeze, and the ice it leaves standing. Owned here for the same reason the
+        /// rot and the press are: half of it is PRESENCE. The animation plays once, but every ice
+        /// cube on the board has to go on being ice through every repaint and every rebuild, and
+        /// it is this view that writes that onto the board's own cell renderers.
+        /// </summary>
+        public IceFreezeView Ice
+        {
+            get
+            {
+                if (ice == null)
+                {
+                    var go = new GameObject("IceFreeze");
+                    go.transform.SetParent(transform, false);
+                    ice = go.AddComponent<IceFreezeView>();
+                }
+                return ice;
+            }
+        }
+
+        /// <summary>Puts every ice cube back to a plain renderer, without making the view if
+        /// there is none.</summary>
+        public void StopIceFreeze()
+        {
+            if (ice != null)
+            {
+                ice.Stop();
+            }
+        }
+
+        /// <summary>
+        /// The board's own renderer for a cell, for the ONE effect that paints THROUGH it rather
+        /// than over it.
+        ///
+        /// "Buzluk" is that effect: an ice cube is the board's cube wearing the cryo material, not
+        /// a second sprite laid on top - which is what lets a missing shader cost detail and never
+        /// the block, and what stops the ice and the board disagreeing during a repaint. Null for
+        /// a cell outside the board.
+        /// </summary>
+        public SpriteRenderer CellRendererAt(GridPos pos)
+        {
+            if (board == null || cellRenderers == null)
+            {
+                return null;
+            }
+            int x = pos.X - board.MinX;
+            int y = pos.Y - board.MinY;
+            if (x < 0 || y < 0 || x >= cellRenderers.GetLength(0)
+                || y >= cellRenderers.GetLength(1))
+            {
+                return null;
+            }
+            return cellRenderers[x, y];
+        }
+
         /// <summary>Takes the vines and the bonus ground down, without making the view if there is
         /// none.</summary>
         public void StopTalisman()
@@ -553,6 +610,9 @@ namespace ProjectBlock.View
                 parasite.Stop();
             }
         }
+
+        /// <summary>True on the last repaint that drew at least one ice cube.</summary>
+        private bool sawIce;
 
         /// <summary>True on the last repaint that drew at least one compressed cube - what decides
         /// whether the press's layer is worth asking for at all.</summary>
@@ -1135,6 +1195,9 @@ namespace ProjectBlock.View
             // The fire front holds cells blank while it burns across them; destroyed mid-burn it
             // would leave the board with holes it never gives back.
             Transform keepFire = fireSpread != null ? fireSpread.transform : null;
+            // The ice keeps per-cube state for every frozen cube on the board, which outlives a
+            // rebuild the way the rot's tissue and the press's shell do.
+            Transform keepIce = ice != null ? ice.transform : null;
             // The gravity field is a property of the ROUND, not of the board's contents, so it
             // survives the rebuild and is CLEARED below - a new arena starts under ordinary
             // gravity, which is the rules' own behaviour and not something this decides.
@@ -1152,7 +1215,7 @@ namespace ProjectBlock.View
                     || child == keepGravity || child == keepDolls || child == keepRot
                     || child == keepSnake || child == keepPress
                     || child == keepParasite || child == keepMapus
-                    || child == keepTalisman || child == keepFire)
+                    || child == keepTalisman || child == keepFire || child == keepIce)
                 {
                     continue;
                 }
@@ -1305,6 +1368,7 @@ namespace ProjectBlock.View
             sawRot = false;
             sawSnake = false;
             sawPress = false;
+            sawIce = false;
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -1433,6 +1497,7 @@ namespace ProjectBlock.View
                     baseColorCache[x, y] = color;
                     sawRot |= cube.HasValue && cube.Value.Kind == CubeKind.Gangrene;
                     sawPress |= cube.HasValue && cube.Value.Kind == CubeKind.Compressed;
+                    sawIce |= cube.HasValue && cube.Value.Kind == CubeKind.Ice;
                 }
             }
             RefreshGhostTraces();
@@ -1462,6 +1527,13 @@ namespace ProjectBlock.View
             if (sawPress || press != null)
             {
                 Press.Sync(this);
+            }
+            // And the ice, for the same reason: every frozen cube's front, rim and stillness are
+            // written onto the cell renderer this repaint has just re-tiled, so without this the
+            // board would paint plain water over an ice cube every time anything changed.
+            if (sawIce || ice != null)
+            {
+                Ice.Sync(this);
             }
         }
 

@@ -1103,6 +1103,32 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>
+        /// "Buzluk"'s freeze, asked every repaint and keyed on the joker's own SERIAL.
+        ///
+        /// The View works out none of it. Which cubes froze, what each one used to be, and WHICH
+        /// SIDES ARE WALL are all the report's - and the last of those is the rule the picture
+        /// exists to tell, so a View that derived it from "which cells are on the rim" would be
+        /// a second copy of it. It would also be a WRONG copy: a wall here is any neighbour that
+        /// is not play area, holes and eroded cells included.
+        /// </summary>
+        private void SyncBuzluk(RoundEngine round)
+        {
+            if (session == null || session.Jokers == null || boardView == null)
+            {
+                return;
+            }
+            IReadOnlyList<Joker> owned = session.Jokers.Jokers;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                var buzluk = owned[i] as BuzlukJoker;
+                if (buzluk != null && buzluk.LastFreeze != null)
+                {
+                    boardView.Ice.Play(boardView, buzluk.LastFreeze);
+                }
+            }
+        }
+
         /// <summary>The talisman in the player's power inventory, or null.</summary>
         private TilsimPower FindTalisman()
         {
@@ -2084,6 +2110,7 @@ namespace ProjectBlock.View
             SyncMapus(round);
             SyncTalisman(round);
             SyncFireSpread(round);
+            SyncBuzluk(round);
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

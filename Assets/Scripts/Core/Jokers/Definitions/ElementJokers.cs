@@ -346,6 +346,17 @@ namespace ProjectBlock.Core
         /// <summary>Cubes frozen this round, for the UI.</summary>
         public int FrozenThisRound { get; private set; }
 
+        /// <summary>
+        /// What froze THIS TURN, for the animation. Per-turn and meaningless across a load, so
+        /// it never goes in the save file - and because the View reads it on every repaint, it
+        /// is keyed on a SERIAL rather than on being non-null.
+        /// </summary>
+        [field: NotSaved]
+        public FreezeVisuals LastFreeze { get; private set; }
+
+        [NotSaved]
+        private int freezeSerial;
+
         public BuzlukJoker()
             : base("buzluk", "Buzluk")
         {
@@ -370,15 +381,49 @@ namespace ProjectBlock.Core
         /// only touches a wall in passing is not caught mid-fall.</summary>
         public override void AfterTurnScored(TurnContext turn)
         {
-            GameBoard board = turn.Round.Board;
+            LastFreeze = FreezeOn(turn.Round.Board, ++freezeSerial);
+            FrozenThisRound += LastFreeze.Cells.Count;
+        }
+
+        /// <summary>
+        /// THE FREEZE ITSELF, on any board - and the ONE place the rule lives.
+        ///
+        /// Public and static so the ANIMATION LAB can run it on a board of its own and get
+        /// exactly what a turn would get, reported the same way: the same bargain
+        /// SpreadJoker.SpreadOn and MapusBoss.RetargetOn both make. A lab that reimplements the
+        /// rule is a lab that agrees with itself and with nothing else - and here the thing most
+        /// worth agreeing about is WHICH SIDE is the wall, because that is what the picture draws.
+        /// </summary>
+        public static FreezeVisuals FreezeOn(GameBoard board, int serial)
+        {
+            var report = new FreezeVisuals { Serial = serial };
+            if (board == null)
+            {
+                return report;
+            }
             List<GridPos> water = board.CellsOfKind(CubeKind.Water);
             for (int i = 0; i < water.Count; i++)
             {
-                if (board.IsOnEdge(water[i]) && board.SetCubeKind(water[i], CubeKind.Ice))
+                BoardSides sides = board.EdgeSidesOf(water[i]);
+                if (sides == BoardSides.None)
                 {
-                    FrozenThisRound++;
+                    continue;
                 }
+                // The cube as it stands NOW: one line below it is ice, and "it was water" is
+                // where the animation starts from.
+                Cube? was = board.GetCube(water[i]);
+                if (!board.SetCubeKind(water[i], CubeKind.Ice))
+                {
+                    continue;
+                }
+                report.Cells.Add(new FrozenCell
+                {
+                    Cell = water[i],
+                    Was = was.Value,
+                    Sides = sides
+                });
             }
+            return report;
         }
 
         public override void ModifyScore(TurnContext turn)
