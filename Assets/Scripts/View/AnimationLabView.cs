@@ -1,4 +1,4 @@
-// PURPOSE: The ANIMATION LAB panel (F3) - a scrollable catalogue of every animation in the
+﻿// PURPOSE: The ANIMATION LAB panel (F3) - a scrollable catalogue of every animation in the
 // game plus the condition knobs that modulate them. Presentation only: it draws rows and
 // reports what was clicked, exactly like the other pickers under View/. The catalogue itself
 // and every animation it fires live in GameUiController.AnimationLab.cs.
@@ -36,12 +36,23 @@ namespace ProjectBlock.View
             public string En;
             public string Tr;
 
-            public static Row Header(string en, string tr)
+            /// <summary>Headers only: whether the group under it is open. A CLOSED header is
+            /// still drawn - it is the handle you open the group by - so a collapsed catalogue
+            /// is a short list of category names rather than an empty panel.</summary>
+            public bool Expanded;
+
+            /// <summary>Headers only: how many playable entries the group holds, shown on the
+            /// header so a closed group still says how much is in it.</summary>
+            public int Count;
+
+            public static Row Header(string en, string tr, bool expanded, int count)
             {
                 var row = new Row();
                 row.IsHeader = true;
                 row.En = en;
                 row.Tr = tr;
+                row.Expanded = expanded;
+                row.Count = count;
                 return row;
             }
 
@@ -114,6 +125,15 @@ namespace ProjectBlock.View
         private static readonly Color PanelColor = new Color(0.05f, 0.06f, 0.09f, 0.94f);
         private static readonly Color FrameColor = new Color(0.30f, 0.36f, 0.48f);
         private static readonly Color HeaderColor = new Color(0.55f, 0.72f, 0.95f);
+
+        /// <summary>A header's plate. The OPEN one is barely there - the group under it is the
+        /// thing being looked at - while the CLOSED one is a solid bar, because when everything
+        /// is shut the headers are the whole interface and have to read as a list of buttons.</summary>
+        private static readonly Color HeaderOpenColor = new Color(0.13f, 0.18f, 0.27f);
+
+        private static readonly Color HeaderClosedColor = new Color(0.16f, 0.22f, 0.33f);
+
+        private static readonly Color HeaderCountColor = new Color(0.42f, 0.54f, 0.72f);
         private static readonly Color ItemColor = new Color(0.86f, 0.89f, 0.94f);
         private static readonly Color SelectedRowColor = new Color(0.20f, 0.28f, 0.42f);
         private static readonly Color KnobRowColor = new Color(0.11f, 0.13f, 0.18f);
@@ -259,8 +279,8 @@ namespace ProjectBlock.View
                 Loc.Pick("ANIMATION LAB (F3)", "ANİMASYON LABI (F3)"),
                 90, 0.022f, TitleColor, TextOrder, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "Help", new Vector2(PanelCenterX, HelpY),
-                Loc.Pick("click plays  -  space replays  -  wheel scrolls  -  DRAG THIS BAR",
-                    "tık oynatır  -  boşluk tekrarlar  -  tekerlek kaydırır  -  BU ÇUBUĞU SÜRÜKLE"),
+                Loc.Pick("click a group to open it  -  click an entry to play  -  DRAG THIS BAR",
+                    "grubu açmak için tıkla  -  oynatmak için girdiye tıkla  -  ÇUBUĞU SÜRÜKLE"),
                 90, 0.013f, FaintColor, TextOrder, TextAnchor.MiddleCenter);
 
             DrawRows(rows, selected, scroll);
@@ -291,13 +311,31 @@ namespace ProjectBlock.View
                 Row row = rows[index];
                 if (row.IsHeader)
                 {
-                    // A header is a label with a rule under it, not a clickable row.
-                    ViewUtil.MakeText3D(transform, "Header_" + index,
-                        new Vector2(PanelLeft + 0.18f, y), row.Label.ToUpperInvariant(),
+                    // A HEADER IS A BUTTON NOW: it opens and closes its group, so it gets a
+                    // plate of its own to look pressable and a caret saying which way it is.
+                    // The rule under it stays only while the group is OPEN - a rule under a
+                    // closed header is a divider between two things that are not there.
+                    ViewUtil.MakeRect(transform, "HeaderPlate_" + index,
+                        new Vector2(PanelCenterX, y),
+                        new Vector2(PanelWidth - 0.16f, RowHeight),
+                        row.Expanded ? HeaderOpenColor : HeaderClosedColor, ContentOrder);
+                    ViewUtil.MakeText3D(transform, "HeaderCaret_" + index,
+                        new Vector2(PanelLeft + 0.18f, y), row.Expanded ? "v" : ">",
                         90, 0.0135f, HeaderColor, TextOrder, TextAnchor.MiddleLeft);
-                    ViewUtil.MakeRect(transform, "HeaderRule_" + index,
-                        new Vector2(PanelCenterX, y - 0.13f),
-                        new Vector2(PanelWidth - 0.34f, 0.015f), HeaderColor, ContentOrder);
+                    ViewUtil.MakeText3D(transform, "Header_" + index,
+                        new Vector2(PanelLeft + 0.38f, y), row.Label.ToUpperInvariant(),
+                        90, 0.0135f, HeaderColor, TextOrder, TextAnchor.MiddleLeft);
+                    // The COUNT, right-aligned: a closed group still has to say how much is in
+                    // it, or collapsing the catalogue hides how big it is as well as what it is.
+                    ViewUtil.MakeText3D(transform, "HeaderCount_" + index,
+                        new Vector2(PanelRight - 0.22f, y), row.Count.ToString(),
+                        90, 0.0125f, HeaderCountColor, TextOrder, TextAnchor.MiddleRight);
+                    if (row.Expanded)
+                    {
+                        ViewUtil.MakeRect(transform, "HeaderRule_" + index,
+                            new Vector2(PanelCenterX, y - 0.15f),
+                            new Vector2(PanelWidth - 0.34f, 0.015f), HeaderColor, ContentOrder);
+                    }
                     continue;
                 }
                 if (index == selected)

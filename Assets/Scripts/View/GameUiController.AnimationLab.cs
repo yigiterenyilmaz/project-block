@@ -42,6 +42,110 @@ namespace ProjectBlock.View
         /// <summary>What each catalogue row does. Parallel to animRows; null on a header.</summary>
         private readonly List<System.Action> animActions = new List<System.Action>();
 
+        // ---------------------------------------------------------------- collapsed categories
+        //
+        // THE CATALOGUE IS A FEW HUNDRED ROWS AND ALMOST ALL OF IT IS IRRELEVANT TO WHATEVER YOU
+        // ARE WORKING ON. Flat, finding an entry meant scrolling past every effect in the game,
+        // and the twelve visible rows were usually twelve entries of something else.
+        //
+        // So the groups COLLAPSE, and they all start closed: opening the lab now shows a short
+        // list of category names, you open the one you want, and the panel is that category. That
+        // is the whole reason for the default - a lab you keep reopening while tuning one effect
+        // should come back showing the categories, not wherever the scroll happened to be.
+        //
+        // The master catalogue (animRows / animActions) is built ONCE and never filtered. What
+        // collapsing changes is the PROJECTION below - animView maps a visible position to a
+        // master index - so no index into the catalogue can ever go stale, and the selection and
+        // the scroll work in view space where the player's eyes are.
+
+        /// <summary>For every master row, the master index of the header it belongs to; -1 for a
+        /// header itself. Written as the catalogue is built.</summary>
+        private readonly List<int> animGroupOf = new List<int>();
+
+        /// <summary>Header master indices whose group is CLOSED. Everything starts in here.</summary>
+        private readonly HashSet<int> animCollapsed = new HashSet<int>();
+
+        /// <summary>Visible position -> master index. The list the panel actually shows.</summary>
+        private readonly List<int> animView = new List<int>();
+
+        /// <summary>The rows handed to the panel, parallel to animView.</summary>
+        private readonly List<AnimationLabView.Row> animViewRows =
+            new List<AnimationLabView.Row>();
+
+        /// <summary>Playable entries under each header, by header master index - so a closed
+        /// group can still say how much is in it.</summary>
+        private readonly Dictionary<int, int> animGroupCount = new Dictionary<int, int>();
+
+        /// <summary>The header being filled while the catalogue is built.</summary>
+        private int animBuildingHeader = -1;
+
+        /// <summary>Rebuilds the visible projection from the collapsed set. Cheap - the catalogue
+        /// is a few hundred rows and this only runs when a group is opened or closed.</summary>
+        private void RebuildAnimView()
+        {
+            animView.Clear();
+            animViewRows.Clear();
+            for (int i = 0; i < animRows.Count; i++)
+            {
+                AnimationLabView.Row row = animRows[i];
+                if (row.IsHeader)
+                {
+                    int count;
+                    animGroupCount.TryGetValue(i, out count);
+                    animView.Add(i);
+                    animViewRows.Add(AnimationLabView.Row.Header(row.En, row.Tr,
+                        !animCollapsed.Contains(i), count));
+                    continue;
+                }
+                int owner = animGroupOf[i];
+                if (owner >= 0 && animCollapsed.Contains(owner))
+                {
+                    continue;
+                }
+                animView.Add(i);
+                animViewRows.Add(row);
+            }
+        }
+
+        /// <summary>Opens or closes the group a VISIBLE row belongs to, keeping the header the
+        /// player clicked under the cursor rather than letting the list jump.</summary>
+        private void ToggleAnimGroup(int viewIndex)
+        {
+            if (viewIndex < 0 || viewIndex >= animView.Count)
+            {
+                return;
+            }
+            int master = animView[viewIndex];
+            if (!animRows[master].IsHeader)
+            {
+                return;
+            }
+            if (!animCollapsed.Remove(master))
+            {
+                animCollapsed.Add(master);
+            }
+            RebuildAnimView();
+            // The header keeps its place on screen: it is what the player is looking at, and a
+            // list that scrolls out from under a click is a list that has to be found again.
+            int nowAt = animView.IndexOf(master);
+            if (nowAt >= 0)
+            {
+                animSelected = nowAt;
+                int maxScroll = Mathf.Max(0, animView.Count - AnimationLabView.VisibleRows);
+                animScroll = Mathf.Clamp(animScroll, 0, maxScroll);
+                if (nowAt < animScroll || nowAt >= animScroll + AnimationLabView.VisibleRows)
+                {
+                    animScroll = Mathf.Clamp(nowAt - 1, 0, maxScroll);
+                }
+            }
+        }
+
+        /// <summary>The master index a visible position points at, or -1.</summary>
+        private int AnimMasterAt(int viewIndex)
+        {
+            return viewIndex >= 0 && viewIndex < animView.Count ? animView[viewIndex] : -1;
+        }
+
         private int animSelected;
         private int animScroll;
         private System.Action animLastPlayed;
@@ -107,7 +211,19 @@ namespace ProjectBlock.View
                 return;
             }
             BuildAnimCatalogue();
-            animSelected = FirstPlayableRow(0, +1);
+            // EVERY GROUP CLOSED on open - see the block by animCollapsed. The catalogue is
+            // rebuilt each time the lab opens (so a language switch re-texts it), and this is
+            // what makes reopening it show the categories rather than wherever it was left.
+            animCollapsed.Clear();
+            for (int i = 0; i < animRows.Count; i++)
+            {
+                if (animRows[i].IsHeader)
+                {
+                    animCollapsed.Add(i);
+                }
+            }
+            RebuildAnimView();
+            animSelected = 0;
             animScroll = 0;
             animLoopTimer = 0f;
             animLastPlayed = null;
@@ -232,14 +348,24 @@ namespace ProjectBlock.View
             if (kb != null && (kb.downArrowKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame))
             {
                 int step = kb.downArrowKey.wasPressedThisFrame ? +1 : -1;
-                animSelected = FirstPlayableRow(animSelected + step, step);
+                // Headers are STOPS now, not rows to skip: with the catalogue closed they are
+                // the only rows there are, and opening one is the main thing the arrows do.
+                animSelected = NextAnimRow(animSelected + step);
                 ScrollSelectionIntoView();
                 RedrawAnimationLab();
                 return;
             }
             if (kb != null && kb.enterKey.wasPressedThisFrame)
             {
-                PlayAnimationRow(animSelected);
+                ActivateAnimRow(animSelected);
+                return;
+            }
+            // LEFT closes the group you are inside (and lands on its header), RIGHT opens the
+            // one under the cursor - the two keys a collapsed tree is expected to answer.
+            if (kb != null && (kb.leftArrowKey.wasPressedThisFrame
+                || kb.rightArrowKey.wasPressedThisFrame))
+            {
+                CollapseNavigate(kb.rightArrowKey.wasPressedThisFrame);
                 return;
             }
             if (mouse != null)
@@ -270,10 +396,10 @@ namespace ProjectBlock.View
                     return;
                 }
                 int row = animLab.RowAt(world);
-                if (row >= 0 && animActions[row] != null)
+                if (row >= 0 && row < animView.Count)
                 {
                     animSelected = row;
-                    PlayAnimationRow(row);
+                    ActivateAnimRow(row);
                     return;
                 }
                 // A click on the board behind the panel is not a request to close - the lab is
@@ -344,9 +470,61 @@ namespace ProjectBlock.View
             }
         }
 
-        private void PlayAnimationRow(int index)
+        /// <summary>What a row DOES when pressed: a header opens or closes, an entry plays. One
+        /// verb for the mouse and the keyboard both.</summary>
+        private void ActivateAnimRow(int viewIndex)
         {
-            if (index < 0 || index >= animActions.Count || animActions[index] == null)
+            int master = AnimMasterAt(viewIndex);
+            if (master < 0)
+            {
+                return;
+            }
+            if (animRows[master].IsHeader)
+            {
+                ToggleAnimGroup(viewIndex);
+                RedrawAnimationLab();
+                return;
+            }
+            PlayAnimationRow(viewIndex);
+        }
+
+        /// <summary>Opens the group under the cursor, or closes the one the cursor is inside and
+        /// lands on its header. Right and left, as a tree is expected to behave.</summary>
+        private void CollapseNavigate(bool open)
+        {
+            int master = AnimMasterAt(animSelected);
+            if (master < 0)
+            {
+                return;
+            }
+            if (animRows[master].IsHeader)
+            {
+                // Already in the state that key asks for: nothing to do.
+                if (open != animCollapsed.Contains(master))
+                {
+                    return;
+                }
+                ToggleAnimGroup(animSelected);
+                RedrawAnimationLab();
+                return;
+            }
+            if (open)
+            {
+                return; // an entry has nothing to open
+            }
+            int owner = animGroupOf[master];
+            int headerAt = owner >= 0 ? animView.IndexOf(owner) : -1;
+            if (headerAt >= 0)
+            {
+                ToggleAnimGroup(headerAt);
+                RedrawAnimationLab();
+            }
+        }
+
+        private void PlayAnimationRow(int viewIndex)
+        {
+            int index = AnimMasterAt(viewIndex);
+            if (index < 0 || animActions[index] == null)
             {
                 return;
             }
@@ -362,7 +540,7 @@ namespace ProjectBlock.View
 
         private void ScrollAnimationLab(int delta)
         {
-            int maxScroll = Mathf.Max(0, animRows.Count - AnimationLabView.VisibleRows);
+            int maxScroll = Mathf.Max(0, animView.Count - AnimationLabView.VisibleRows);
             animScroll = Mathf.Clamp(animScroll + delta, 0, maxScroll);
             RedrawAnimationLab();
         }
@@ -377,29 +555,25 @@ namespace ProjectBlock.View
             {
                 animScroll = animSelected - AnimationLabView.VisibleRows + 2;
             }
-            int maxScroll = Mathf.Max(0, animRows.Count - AnimationLabView.VisibleRows);
+            int maxScroll = Mathf.Max(0, animView.Count - AnimationLabView.VisibleRows);
             animScroll = Mathf.Clamp(animScroll, 0, maxScroll);
         }
 
-        /// <summary>The nearest playable row from <paramref name="from"/>, walking in
-        /// <paramref name="step"/>'s direction and wrapping. Headers are skipped.</summary>
-        private int FirstPlayableRow(int from, int step)
+        /// <summary>The next VISIBLE row, wrapping. Headers count - they are buttons now.</summary>
+        private int NextAnimRow(int from)
         {
-            if (animRows.Count == 0)
+            if (animView.Count == 0)
             {
                 return 0;
             }
-            int index = ((from % animRows.Count) + animRows.Count) % animRows.Count;
-            for (int guard = 0; guard < animRows.Count; guard++)
-            {
-                if (animActions[index] != null)
-                {
-                    return index;
-                }
-                index = ((index + step) % animRows.Count + animRows.Count) % animRows.Count;
-            }
-            return 0;
+            return ((from % animView.Count) + animView.Count) % animView.Count;
         }
+
+        // FirstPlayableRow used to live here and is gone on purpose: it walked the MASTER
+        // catalogue and skipped headers, and both halves of that are now wrong. Selection is a
+        // VISIBLE position (NextAnimRow), and a header is a row you stop on rather than step
+        // over, because with the catalogue closed the headers are the only rows there are. A
+        // master-indexed helper left lying next to a view-indexed selection is a trap.
 
         // ------------------------------------------------------------------ knobs
 
@@ -498,7 +672,7 @@ namespace ProjectBlock.View
             string status = animLastLabel.Length > 0
                 ? Loc.Pick("last: ", "son: ") + animLastLabel
                 : Loc.Pick("pick an animation", "bir animasyon seç");
-            animLab.SetContent(animRows, animSelected, animScroll, knobs, status);
+            animLab.SetContent(animViewRows, animSelected, animScroll, knobs, status);
         }
 
         private static string OnOff(bool on)
@@ -510,14 +684,24 @@ namespace ProjectBlock.View
 
         private void AddAnimHeader(string en, string tr)
         {
-            animRows.Add(AnimationLabView.Row.Header(en, tr));
+            animBuildingHeader = animRows.Count;
+            animGroupCount[animBuildingHeader] = 0;
+            // Expanded/Count on the MASTER row are placeholders - RebuildAnimView writes the
+            // live ones, because both change without the catalogue being rebuilt.
+            animRows.Add(AnimationLabView.Row.Header(en, tr, false, 0));
             animActions.Add(null);
+            animGroupOf.Add(-1);
         }
 
         private void AddAnim(string en, string tr, System.Action play)
         {
             animRows.Add(AnimationLabView.Row.Item(en, tr));
             animActions.Add(play);
+            animGroupOf.Add(animBuildingHeader);
+            if (animBuildingHeader >= 0)
+            {
+                animGroupCount[animBuildingHeader] = animGroupCount[animBuildingHeader] + 1;
+            }
         }
 
         /// <summary>Every animation in the game, grouped. Adding one here is the whole of the
@@ -527,6 +711,9 @@ namespace ProjectBlock.View
         {
             animRows.Clear();
             animActions.Clear();
+            animGroupOf.Clear();
+            animGroupCount.Clear();
+            animBuildingHeader = -1;
 
             AddAnimHeader("state", "durum");
             AddAnim("RESET - resync to the real game", "SIFIRLA - oyuna geri dön", AnimResync);
