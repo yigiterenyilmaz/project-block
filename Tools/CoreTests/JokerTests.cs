@@ -99,6 +99,12 @@ public static class JokerTests
         Hazine_HittingBothCancelsOut();
         MeydanOkuma_MarksThenPaysOnClear();
         MeydanOkuma_HalvesAndGivesUpAfterThreeMisses();
+        MeydanOkuma_SeaReadsHandDrawPileAndBoard();
+        MeydanOkuma_SeaTouchesNothingAndRepeats();
+        MeydanOkuma_ALineThatCannotGoOffIsNeverDared();
+        MeydanOkuma_LadderIsHardestFirstAndNeverAGimme();
+        MeydanOkuma_FirstDareIsTheHardestLineOnTheBoard();
+        MeydanOkuma_WaitsWhenEveryLineIsAGimme();
         Powerbank_RechargesASpentPower();
         Erosion_FirstTwoRecyclesAreFreeThenTheRimGoes();
         Erosion_RimNeverEatsTheLastCell();
@@ -2948,13 +2954,18 @@ public static class JokerTests
         joker.BaseBonus = 200;
         joker.MinDeadline = 1; // tiny deadline so every attempt misses in one tick
 
-        // A nearly-full board keeps the deadline at the floor: max(3, empty) is small only
-        // when few cells are empty, so filling the board is what makes each attempt miss fast.
-        var session = NewSession(547, 3, 1000000, 40, 1);
+        // A 3x3 board with its DIAGONAL left empty: every row and column is one cube short, so
+        // the deadline is the floor, and a deck of four-cube blocks can fill none of those single
+        // holes - every line can go off in principle and none in practice. That is an honest
+        // dare. (This test used to fill the board SOLID, which leaves lines full at rest - a
+        // state play never reaches, and one the sea rightly refuses to dare at all.)
+        var session = NewSession(547, 3, 1000000, 40, 4);
         RoundEngine round = session.CurrentRound;
         session.Jokers.Add(joker);
         session.Jokers.DispatchRoundStarted(round);
-        FillBoardSolid(round, session); // empty = 0 -> deadline = max(1, 0) = 1
+        PaintBoard(round, session, CubeKind.Normal,
+            new GridPos(1, 0), new GridPos(2, 0), new GridPos(0, 1),
+            new GridPos(2, 1), new GridPos(0, 2), new GridPos(1, 2));
 
         var seenBonuses = new List<int>();
         for (int i = 0; i < 12 && !joker.IsResolved; i++)
@@ -2977,6 +2988,353 @@ public static class JokerTests
         Check(seenBonuses.Contains(50), "the third halved it again",
             "seen " + string.Join(",", seenBonuses));
         Check(joker.IsResolved, "after three misses it gives up for the round");
+    }
+
+    /// <summary>A 7x7 board whose bottom row is full but for (3,0), and (3,1) is filled too: a
+    /// one-cell POCKET that only a single-cube block can reach. The round's deck is all
+    /// four-cube blocks; the draw pile is cut down to <paramref name="pileSize"/> of them.</summary>
+    private static GameSession MeydanPocket(int seed, int pileSize)
+    {
+        var session = NewSession(seed, 7, 1000000, 40, 4);
+        RoundEngine round = session.CurrentRound;
+        PaintBoard(round, session, CubeKind.Normal,
+            new GridPos(0, 0), new GridPos(1, 0), new GridPos(2, 0), new GridPos(4, 0),
+            new GridPos(5, 0), new GridPos(6, 0), new GridPos(3, 1));
+        while (round.Deck.DrawCount > pileSize)
+        {
+            round.Deck.Discard(round.Deck.DrawTop());
+        }
+        return session;
+    }
+
+    private static double RowZeroChance(GameSession session)
+    {
+        var joker = new MeydanOkumaJoker();
+        List<LineChance> sea = LineChanceSea.Measure(session.CurrentRound, joker.DeadlineFor,
+            LineChanceSea.DefaultSamples, 12345u);
+        foreach (LineChance line in sea)
+        {
+            if (line.IsRow && line.Index == 0)
+            {
+                return line.Chance;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// THE SEA READS ALL THREE: the hand, the draw pile and the board. One pocket, three decks.
+    ///
+    /// The designer's own example is the middle case - a line full but for one cell, with a block
+    /// that fits it already in hand. That line is going to go off, so it is never dared. The same
+    /// fitting block sitting in the DRAW PILE instead is a real chance but not a certainty, and
+    /// with no fitting block anywhere the line is nearly hopeless.
+    /// </summary>
+    private static void MeydanOkuma_SeaReadsHandDrawPileAndBoard()
+    {
+        Section("meydan okuma / the sea reads the hand, the draw pile and the board");
+
+        GameSession none = MeydanPocket(701, 3);
+        double hopeless = RowZeroChance(none);
+
+        GameSession inHand = MeydanPocket(701, 3);
+        inHand.CurrentRound.Hand.RemoveAt(0);
+        inHand.CurrentRound.Hand.Insert(0, inHand.CreateCard(Bar(1), null));
+        double certain = RowZeroChance(inHand);
+
+        GameSession inPile = MeydanPocket(701, 2);
+        inPile.CurrentRound.Deck.InsertRandomIntoDraw(inPile.CreateCard(Bar(1), null));
+        double likely = RowZeroChance(inPile);
+
+        Console.WriteLine("        pocket row 0: nothing fits " + hopeless.ToString("0.00")
+            + "  |  fits, in the draw pile " + likely.ToString("0.00")
+            + "  |  fits, in hand " + certain.ToString("0.00"));
+
+        Check(hopeless <= 0.15, "no block that fits anywhere: the pocket is nearly hopeless",
+            hopeless.ToString("0.00"));
+        Check(certain >= 0.9, "a block that fits it IN HAND: the line is about to go",
+            certain.ToString("0.00"));
+        Check(certain >= MeydanOkumaJoker.GimmeChance,
+            "so it counts as a gimme, and a gimme is never dared (the designer's example)");
+        Check(likely > hopeless && likely < certain,
+            "the same block in the DRAW PILE: a real chance, but not a certainty",
+            likely.ToString("0.00"));
+        Check(likely >= 0.35 && likely <= 0.9,
+            "and roughly the odds of drawing it in time (three cards, three turns)",
+            likely.ToString("0.00"));
+    }
+
+    /// <summary>
+    /// The sea only ever READS. It samples on clones with a generator of its own, so the board,
+    /// the hand and both piles are exactly as they were, and - the one that would be invisible -
+    /// the round's own random stream has not moved: a joker working out odds must not change
+    /// every shuffle after it.
+    /// </summary>
+    private static void MeydanOkuma_SeaTouchesNothingAndRepeats()
+    {
+        Section("meydan okuma / the sea touches nothing and gives the same answer twice");
+        GameSession a = MeydanPocket(709, 5);
+        GameSession b = MeydanPocket(709, 5);
+        RoundEngine round = a.CurrentRound;
+
+        string before = MeydanState(round);
+        var joker = new MeydanOkumaJoker();
+        List<LineChance> first = LineChanceSea.Measure(round, joker.DeadlineFor, 24, 99u);
+        List<LineChance> second = LineChanceSea.Measure(round, joker.DeadlineFor, 24, 99u);
+        Check(MeydanState(round) == before, "board, hand and both piles untouched");
+        Check(a.Rng.NextInt(0, 1000000) == b.Rng.NextInt(0, 1000000)
+                && a.Rng.NextInt(0, 1000000) == b.Rng.NextInt(0, 1000000),
+            "and the round's own random stream never moved");
+
+        bool same = first.Count == second.Count;
+        for (int i = 0; same && i < first.Count; i++)
+        {
+            same = first[i].ToString() == second[i].ToString();
+        }
+        Check(same, "the same state and seed give the same sea, line for line");
+        Check(first.Count == 14, "one entry per row and per column on a 7x7 board",
+            "count " + first.Count);
+
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        LineChanceSea.Measure(round, joker.DeadlineFor, LineChanceSea.DefaultSamples, 7u);
+        timer.Stop();
+        Console.WriteLine("        whole sea, 7x7, " + LineChanceSea.DefaultSamples
+            + " futures per line: " + timer.ElapsedMilliseconds + " ms");
+        Check(timer.ElapsedMilliseconds < 3000, "measured quickly enough to run on a turn",
+            timer.ElapsedMilliseconds + " ms");
+    }
+
+    private static string MeydanState(RoundEngine round)
+    {
+        var sb = new StringBuilder();
+        GameBoard board = round.Board;
+        for (int y = 0; y < board.Height; y++)
+        {
+            for (int x = 0; x < board.Width; x++)
+            {
+                Cube? c = board.GetCube(new GridPos(x + board.MinX, y + board.MinY));
+                sb.Append(c.HasValue ? ((int)c.Value.Kind).ToString() : ".");
+            }
+        }
+        sb.Append('|');
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            sb.Append(round.Hand[i].Id).Append(',');
+        }
+        sb.Append('|');
+        foreach (BlockCard c in round.Deck.DrawPile)
+        {
+            sb.Append(c.Id).Append(',');
+        }
+        sb.Append('|');
+        foreach (BlockCard c in round.Deck.DiscardPile)
+        {
+            sb.Append(c.Id).Append(',');
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// A LINE THAT CAN NEVER GO OFF IS NOT A HARD LINE. Seal the pocket shut ("Mapus") and both
+    /// lines through it stop being candidates at all - however hopeless they look, daring the
+    /// player to clear a sealed line would be a rigged bet.
+    /// </summary>
+    private static void MeydanOkuma_ALineThatCannotGoOffIsNeverDared()
+    {
+        Section("meydan okuma / a line that cannot go off is never dared");
+        GameSession session = MeydanPocket(719, 3);
+        RoundEngine round = session.CurrentRound;
+        round.Board.SealCell(new GridPos(3, 0));
+        var joker = new MeydanOkumaJoker();
+        List<LineChance> sea = LineChanceSea.Measure(round, joker.DeadlineFor, 16, 5u);
+        bool rowPossible = true;
+        bool colPossible = true;
+        foreach (LineChance line in sea)
+        {
+            if (line.IsRow && line.Index == 0) { rowPossible = line.Possible; }
+            if (!line.IsRow && line.Index == 3) { colPossible = line.Possible; }
+        }
+        Check(!rowPossible, "the row through the sealed cell cannot go off");
+        Check(!colPossible, "nor can the column through it");
+        foreach (LineChance line in sea)
+        {
+            line.Chance = 0; // make every line equally "hard", so only Possible can decide
+        }
+        for (uint seed = 0; seed < 20; seed++)
+        {
+            LineChance pick = MeydanOkumaJoker.Choose(sea, 0, null, seed);
+            if (pick != null && ((pick.IsRow && pick.Index == 0) || (!pick.IsRow && pick.Index == 3)))
+            {
+                Check(false, "a sealed line was dared", pick.ToString());
+                return;
+            }
+        }
+        Check(true, "and neither is ever dared, however hopeless it looks");
+    }
+
+    private static LineChance SeaLine(bool row, int index, double chance, bool possible)
+    {
+        return new LineChance
+        {
+            IsRow = row, Index = index, Gaps = 3, Deadline = 3, Chance = chance,
+            Possible = possible
+        };
+    }
+
+    /// <summary>
+    /// THE LADDER, on a sea written by hand so the rule is tested apart from the sampling.
+    /// The full-bonus dare goes on the hardest line that can go off; each halving moves toward a
+    /// more reasonable one; a gimme and an impossible line are never dared; a missed line is not
+    /// dared again straight away; and a board of nothing but gimmes gets no dare at all.
+    /// </summary>
+    private static void MeydanOkuma_LadderIsHardestFirstAndNeverAGimme()
+    {
+        Section("meydan okuma / the ladder: hardest first, gentler as it halves, never a gimme");
+        var sea = new List<LineChance>
+        {
+            SeaLine(true, 0, 0.95, true),   // a gimme
+            SeaLine(true, 1, 0.12, true),
+            SeaLine(true, 2, 0.40, true),
+            SeaLine(true, 3, 0.62, true),
+            SeaLine(true, 4, 0.00, false),  // can never go off
+            SeaLine(false, 0, 0.02, true),  // the hardest that can
+        };
+        for (uint seed = 0; seed < 16; seed++)
+        {
+            LineChance first = MeydanOkumaJoker.Choose(sea, 0, null, seed);
+            Check(first != null && !first.IsRow && first.Index == 0,
+                "attempt 1 (full bonus): the hardest line that can still go off",
+                first == null ? "none" : first.ToString());
+        }
+        LineChance second = MeydanOkumaJoker.Choose(sea, 1, null, 3u);
+        Check(second != null && second.IsRow && second.Index == 2,
+            "attempt 2 (half): a more reasonable line", second == null ? "none" : second.ToString());
+        LineChance third = MeydanOkumaJoker.Choose(sea, 2, null, 3u);
+        Check(third != null && third.IsRow && third.Index == 3,
+            "attempt 3 (quarter): more reasonable still", third == null ? "none" : third.ToString());
+        Check(third.Chance > second.Chance && second.Chance > 0.02,
+            "and the odds climb with every halving");
+
+        LineChance notAgain = MeydanOkumaJoker.Choose(sea, 1, SeaLine(true, 2, 0.40, true), 3u);
+        Check(notAgain != null && !(notAgain.IsRow && notAgain.Index == 2),
+            "the line just missed is not dared again", notAgain == null ? "none" : notAgain.ToString());
+
+        var gimmes = new List<LineChance> { SeaLine(true, 0, 0.9, true), SeaLine(false, 1, 0.8, true) };
+        Check(MeydanOkumaJoker.Choose(gimmes, 0, null, 1u) == null,
+            "a board of nothing but gimmes gets no dare - it waits for a real one");
+    }
+
+    private static TurnReport QuietTurn()
+    {
+        var report = new TurnReport();
+        report.Card = new BlockCard(1, Bar(1));
+        report.Score = new ScoreBreakdown();
+        report.ExplodedRows = new List<int>();
+        report.ExplodedColumns = new List<int>();
+        return report;
+    }
+
+    /// <summary>End to end: the first mark the joker lays sits on a line as hard as any honest
+    /// candidate in the sea it measured - within the tie width - and never on a gimme.</summary>
+    private static void MeydanOkuma_FirstDareIsTheHardestLineOnTheBoard()
+    {
+        Section("meydan okuma / the first dare is the hardest line on the board");
+        // Four-cube blocks and the pocket board: some lines are hopeless, some are not. (A board
+        // of one- and two-cube blocks gives every line a turn per missing cube and makes EVERY
+        // line a gimme - which is its own test, below.)
+        GameSession session = MeydanPocket(733, 12);
+        var joker = (MeydanOkumaJoker)session.Jokers.Add(new MeydanOkumaJoker());
+        joker.ArmAfterTurns = 0;
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+
+        TurnReport report = QuietTurn();
+        joker.AfterTurnScored(new TurnContext(session, session.Rng, session.CurrentRound, report,
+            report.Score));
+
+        bool honest = false;
+        foreach (LineChance line in joker.LastSea ?? new List<LineChance>())
+        {
+            honest |= line.Possible && line.Chance < MeydanOkumaJoker.GimmeChance;
+        }
+        Check(honest, "precondition: the board offers an honest dare");
+        Check(joker.HasActiveMark, "a dare was laid");
+        Check(joker.LastSea != null && joker.LastSea.Count > 0, "from a measured sea");
+        if (!joker.HasActiveMark || joker.LastSea == null)
+        {
+            return;
+        }
+        LineChance marked = null;
+        double hardest = double.MaxValue;
+        foreach (LineChance line in joker.LastSea)
+        {
+            if (line.Possible && line.Chance < MeydanOkumaJoker.GimmeChance)
+            {
+                hardest = Math.Min(hardest, line.Chance);
+            }
+            if (line.IsRow == joker.MarkIsRow && line.Index == joker.MarkedLine)
+            {
+                marked = line;
+            }
+        }
+        Console.WriteLine("        sea: " + string.Join("  ", joker.LastSea));
+        Check(marked != null && marked.Possible, "the marked line can go off",
+            marked == null ? "missing" : marked.ToString());
+        Check(marked.Chance < MeydanOkumaJoker.GimmeChance, "and is not a gimme",
+            marked.ToString());
+        Check(marked.Chance <= hardest + MeydanOkumaJoker.TieWidth,
+            "and is as hard as the hardest honest line", marked + " vs " + hardest.ToString("0.00"));
+        Check(joker.TurnsLeft == marked.Deadline, "with the deadline the sea measured it against");
+        Check(joker.CurrentBonus == joker.BaseBonus, "for the full bonus");
+    }
+
+    /// <summary>
+    /// A board where EVERY line is about to go gets no dare at all - and waiting a turn for a real
+    /// one must not quietly reset the bonus, which is why the bonus is worked out from how many
+    /// dares have been LAID rather than halved as it goes.
+    ///
+    /// The board is the one the measurements found: one- and two-cube blocks, played for a few
+    /// turns, with the dare's deadline of a turn per missing cube. A focused player clears
+    /// anything on it.
+    /// </summary>
+    private static void MeydanOkuma_WaitsWhenEveryLineIsAGimme()
+    {
+        Section("meydan okuma / no honest dare on the board: it waits, and loses nothing");
+        var session = NewSession(733, 7, 1000000, 40, 1, 2);
+        var joker = (MeydanOkumaJoker)session.Jokers.Add(new MeydanOkumaJoker());
+        joker.ArmAfterTurns = 0;
+        joker.BaseBonus = 160;
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        PlayTurns(session, 4);
+
+        TurnReport report = QuietTurn();
+        joker.AfterTurnScored(new TurnContext(session, session.Rng, session.CurrentRound, report,
+            report.Score));
+
+        bool anyHonest = false;
+        foreach (LineChance line in joker.LastSea ?? new List<LineChance>())
+        {
+            anyHonest |= line.Possible && line.Chance < MeydanOkumaJoker.GimmeChance;
+        }
+        Check(joker.LastSea != null && !anyHonest,
+            "precondition: every line on this board is a gimme or cannot go off");
+        Check(!joker.HasActiveMark, "so no dare is laid");
+        Check(!joker.IsResolved, "and the event is not over - it looks again next turn");
+        Check(joker.StatusText == Loc.Pick("waiting", "bekliyor"), "it says it is waiting");
+
+        // Now hand it a board with a real dare on it: the FIRST dare still pays in full.
+        GameSession pocket = MeydanPocket(733, 12);
+        var later = (MeydanOkumaJoker)pocket.Jokers.Add(new MeydanOkumaJoker());
+        later.ArmAfterTurns = 0;
+        later.BaseBonus = 160;
+        pocket.Jokers.DispatchRoundStarted(pocket.CurrentRound);
+        TurnReport quiet = QuietTurn();
+        later.AfterTurnScored(new TurnContext(session, session.Rng, session.CurrentRound, quiet,
+            quiet.Score));
+        later.AfterTurnScored(new TurnContext(pocket, pocket.Rng, pocket.CurrentRound, QuietTurn(),
+            new ScoreBreakdown()));
+        Check(later.HasActiveMark, "the first honest board gets its dare");
+        Check(later.CurrentBonus == 160, "and waiting cost it nothing - still the full bonus",
+            "bonus " + later.CurrentBonus);
     }
 
     private static void Powerbank_RechargesASpentPower()

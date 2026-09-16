@@ -9,8 +9,31 @@
 // The marked line is tracked as a 0-BASED row/column index, the same space TurnReport uses
 // for ExplodedRows / ExplodedColumns, so "did the marked line explode" is a direct lookup.
 //
+// WHICH LINE IS NOT RANDOM ANY MORE. It used to be any row or column at all, which made the
+// bonus a lottery: sometimes the full reward for a line one cube from going off with the right
+// block already in hand, sometimes a line nothing could ever fill. Now every time a mark is laid
+// the joker measures the SEA OF CHANCES (LineChanceSea) - for each line, how likely it is to be
+// cleared within the deadline, from the hand, the draw pile and the board - and walks a LADDER:
+//
+//   THE FIRST, FULL-BONUS DARE goes on the HARDEST line that can still go off at all.
+//   EACH HALVING moves toward a more reasonable line (AttemptTargets).
+//   A GIMME IS NEVER DARED, at any attempt (GimmeChance). A line full but for one cell with a
+//   block that fits it already in hand is not a dare - it is a line that is about to go.
+//   A LINE THAT CAN NEVER GO OFF IS NEVER DARED either (dead, sealed, explosions suppressed):
+//   that is a rigged bet, not a hard one.
+//   A MISSED LINE IS NOT DARED AGAIN straight away.
+//
+// When the board offers no honest dare - every line a gimme, or none that can go off - no mark
+// is laid and it looks again next turn. The bonus is worked out from how many dares have been
+// laid, so waiting a turn can never reset it back to full.
+//
+// SAVE FORMAT: the tuning below is const and the sea is [NotSaved], so no saved field changed and
+// a run saved before this still loads. The sea is re-measured from the saved board whenever it is
+// next needed, and it is seeded from that state, so a loaded run reaches the same dare.
+//
 // All numbers are BALANCE PLACEHOLDERS.
 
+using System;
 using System.Collections.Generic;
 
 namespace ProjectBlock.Core
@@ -29,6 +52,28 @@ namespace ProjectBlock.Core
         public int MinDeadline = 3;
 
         private const int MaxAttempts = 3;
+
+        /// <summary>A line at least this likely to be cleared in time is never dared - it is
+        /// going to go off anyway.</summary>
+        public const double GimmeChance = 0.75;
+
+        /// <summary>The chance each attempt aims for, in order: the full-bonus dare on the
+        /// hardest line that can still go off, then more reasonable lines as the bonus halves.
+        /// </summary>
+        public static readonly double[] AttemptTargets = { 0.0, 0.35, 0.6 };
+
+        /// <summary>Lines whose chance is this close to the best match are treated as equally
+        /// good, and one of them is chosen - so the same board does not always get the same
+        /// line, and a few per cent of sampling noise does not decide it.</summary>
+        public const double TieWidth = 0.05;
+
+        /// <summary>
+        /// The sea the last mark was chosen from, one entry per row and column. For the View and
+        /// the lab - "why this line" should be something you can look at. Per-turn and
+        /// meaningless across a load, so never saved.
+        /// </summary>
+        [field: NotSaved]
+        public List<LineChance> LastSea { get; private set; }
 
         private bool resolved;         // paid out or ran out of attempts this round
         private int attemptsMade;      // marks laid so far (1..3)
@@ -114,111 +159,141 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            if (!hasMark)
+            if (hasMark)
             {
-                // Lay the first mark once enough blocks are down.
-                if (turn.Round.TurnNumber >= ArmAfterTurns)
+                // The mark is live: did the player clear it this turn?
+                if (MarkedLineExploded(turn.Report))
                 {
-                    currentBonus = BaseBonus;
-                    LayMark(turn);
+                    turn.AddFlatScore(currentBonus, DefId);
+                    resolved = true;
+                    hasMark = false;
+                    return;
                 }
-                return;
-            }
-
-            // The mark is live: did the player clear it this turn?
-            if (MarkedLineExploded(turn.Report))
-            {
-                turn.AddFlatScore(currentBonus, DefId);
-                resolved = true;
+                // Not this turn - the deadline ticks.
+                turnsLeft--;
+                if (turnsLeft > 0)
+                {
+                    return;
+                }
+                // Missed. markedLine / markIsRow still name it, which is what keeps the next dare
+                // off the same line.
                 hasMark = false;
-                return;
+                if (attemptsMade >= MaxAttempts)
+                {
+                    resolved = true;
+                    return;
+                }
             }
-
-            // Not this turn - the deadline ticks.
-            turnsLeft--;
-            if (turnsLeft > 0)
+            else if (attemptsMade == 0 && turn.Round.TurnNumber < ArmAfterTurns)
             {
-                return;
+                return; // not until enough blocks are down
             }
-            // Missed. Re-mark for half, or give up after the third attempt.
-            if (attemptsMade >= MaxAttempts)
-            {
-                resolved = true;
-                hasMark = false;
-                return;
-            }
-            currentBonus /= 2;
             LayMark(turn);
         }
 
-        /// <summary>Marks a random row or column that has playable cells, and sets the deadline
-        /// from the empty cells of THAT line - a line already nearly full gives less time.</summary>
+        /// <summary>The deadline the dare gives a line with this many gaps. Public because the
+        /// sea has to measure odds against the SAME deadline the player will get.</summary>
+        public int DeadlineFor(int gaps)
+        {
+            return gaps > MinDeadline ? gaps : MinDeadline;
+        }
+
+        /// <summary>
+        /// Lays the next dare on the line the ladder picks from the sea of chances, or lays
+        /// nothing when the board offers no honest dare and tries again next turn.
+        /// </summary>
         private void LayMark(TurnContext turn)
         {
-            GameBoard board = turn.Round.Board;
-            var rows = new List<int>();
-            var cols = new List<int>();
-            for (int y = 0; y < board.Height; y++)
+            RoundEngine round = turn.Round;
+            uint seed = SeedFrom(round, attemptsMade);
+            LastSea = LineChanceSea.Measure(round, DeadlineFor, LineChanceSea.DefaultSamples, seed);
+            LineChance previous = attemptsMade > 0
+                ? new LineChance { IsRow = markIsRow, Index = markedLine }
+                : null;
+            LineChance pick = Choose(LastSea, attemptsMade, previous, seed);
+            if (pick == null)
             {
-                if (LineHasPlayableCell(board, false, y))
-                {
-                    rows.Add(y);
-                }
+                return;
             }
-            for (int x = 0; x < board.Width; x++)
-            {
-                if (LineHasPlayableCell(board, true, x))
-                {
-                    cols.Add(x);
-                }
-            }
-            if (rows.Count == 0 && cols.Count == 0)
-            {
-                return; // degenerate board - nothing to mark, try again next turn
-            }
-
-            // Pick an axis that actually has a line, then a line on it.
-            bool pickRow = cols.Count == 0 || (rows.Count > 0 && turn.Rng.NextInt(0, 2) == 0);
-            List<int> lines = pickRow ? rows : cols;
-            markIsRow = pickRow;
-            markedLine = lines[turn.Rng.NextInt(0, lines.Count)];
+            // The bonus comes from how many dares have been laid, never from a running halving:
+            // a turn spent waiting for an honest dare must not be able to reset it.
+            currentBonus = BaseBonus >> attemptsMade;
+            markIsRow = pick.IsRow;
+            markedLine = pick.Index;
+            turnsLeft = pick.Deadline;
             hasMark = true;
             attemptsMade++;
-
-            // The deadline counts the empty cells of the MARKED LINE only, not the whole
-            // board: you must fill exactly the gaps in that row/column to clear it.
-            int empty = EmptyCellsInLine(board, markIsRow, markedLine);
-            turnsLeft = empty > MinDeadline ? empty : MinDeadline;
         }
 
-        /// <summary>Empty PLAYABLE cells on one line - the gaps the player must still fill.</summary>
-        private static int EmptyCellsInLine(GameBoard board, bool isRow, int line)
+        /// <summary>
+        /// THE LADDER. Of the lines that can go off, are not gimmes and were not just missed, the
+        /// one whose chance is nearest this attempt's target - the first attempt's target being
+        /// zero, which is simply the hardest. Lines within TieWidth of the best are equals, and
+        /// one of them is taken by the seed. Null when nothing qualifies.
+        ///
+        /// Public and static so the rule can be tested on a sea written by hand, apart from the
+        /// sampling that produces a real one.
+        /// </summary>
+        public static LineChance Choose(IReadOnlyList<LineChance> sea, int attempt,
+            LineChance previous, uint seed)
         {
-            int empty = 0;
-            if (isRow)
+            if (sea == null)
             {
-                for (int x = 0; x < board.Width; x++)
-                {
-                    var pos = new GridPos(x + board.MinX, line + board.MinY);
-                    if (board.IsInside(pos) && !board.GetCube(pos).HasValue)
-                    {
-                        empty++;
-                    }
-                }
-                return empty;
+                return null;
             }
-            for (int y = 0; y < board.Height; y++)
+            double target = AttemptTargets[attempt < AttemptTargets.Length
+                ? attempt
+                : AttemptTargets.Length - 1];
+            double bestDistance = double.MaxValue;
+            for (int i = 0; i < sea.Count; i++)
             {
-                var pos = new GridPos(line + board.MinX, y + board.MinY);
-                if (board.IsInside(pos) && !board.GetCube(pos).HasValue)
+                if (Eligible(sea[i], previous))
                 {
-                    empty++;
+                    bestDistance = Math.Min(bestDistance, Math.Abs(sea[i].Chance - target));
                 }
             }
-            return empty;
+            if (bestDistance == double.MaxValue)
+            {
+                return null;
+            }
+            var ties = new List<LineChance>();
+            for (int i = 0; i < sea.Count; i++)
+            {
+                if (Eligible(sea[i], previous)
+                    && Math.Abs(sea[i].Chance - target) <= bestDistance + TieWidth)
+                {
+                    ties.Add(sea[i]);
+                }
+            }
+            return ties[(int)(seed % (uint)ties.Count)];
         }
 
-                private bool MarkedLineExploded(TurnReport report)
+        private static bool Eligible(LineChance line, LineChance previous)
+        {
+            if (line == null || !line.Possible || line.Chance >= GimmeChance)
+            {
+                return false;
+            }
+            return previous == null || line.IsRow != previous.IsRow || line.Index != previous.Index;
+        }
+
+        /// <summary>From the round's own state only - never its IRandomSource, which the sea must
+        /// not draw from - so a replayed save reaches the same dare from the same board.</summary>
+        private static uint SeedFrom(RoundEngine round, int attempt)
+        {
+            uint h = 2166136261u;
+            h = (h ^ (uint)round.TurnNumber) * 16777619u;
+            h = (h ^ (uint)attempt) * 16777619u;
+            h = (h ^ (uint)round.Board.OccupiedCount) * 16777619u;
+            h = (h ^ (uint)round.Deck.DrawCount) * 16777619u;
+            for (int i = 0; i < round.Hand.Count; i++)
+            {
+                h = (h ^ (uint)round.Hand[i].Id) * 16777619u;
+            }
+            return h;
+        }
+
+        private bool MarkedLineExploded(TurnReport report)
         {
             IReadOnlyList<int> exploded = markIsRow ? report.ExplodedRows : report.ExplodedColumns;
             for (int i = 0; i < exploded.Count; i++)
@@ -231,27 +306,5 @@ namespace ProjectBlock.Core
             return false;
         }
 
-        private static bool LineHasPlayableCell(GameBoard board, bool column, int index)
-        {
-            if (column)
-            {
-                for (int y = 0; y < board.Height; y++)
-                {
-                    if (board.IsInside(new GridPos(index + board.MinX, y + board.MinY)))
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            for (int x = 0; x < board.Width; x++)
-            {
-                if (board.IsInside(new GridPos(x + board.MinX, index + board.MinY)))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
     }
 }

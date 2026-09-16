@@ -1056,6 +1056,40 @@ joker, power, boss, between-turn or in-turn) feeds it without knowing the rule e
 is into the EFFECTIVE shape, so a rotation or a reshape moves the mark with the cube the player
 was shown.
 
+**"Meydan Okuma" dares a line picked off a MEASURED sea of chances** (`LineChanceSea`, in
+`Core/Jokers/LineChance.cs`). It used to mark any row or column at random, which made the bonus a
+lottery. Now, whenever a dare is laid, every row and column gets its odds of being cleared within
+the dare's own deadline (`MeydanOkumaJoker.DeadlineFor`, passed in rather than copied), and the
+joker walks a LADDER: the full-bonus first dare goes on the HARDEST line that can still go off,
+each halving aims at a more reasonable line (`AttemptTargets` 0 / 0.35 / 0.6), a line at or above
+`GimmeChance` (0.75) is never dared at any attempt, and a line that was just missed is not dared
+again straight away. **The odds are SAMPLED, not estimated**: a formula over gaps and fitting
+cards is a second definition of "can this line be filled" that disagrees with the real one (water
+falling out of a gap, a neighbouring clear re-opening a cell, a pocket nothing reaches), so each
+future plays the deadline out on a CLONE of the board with the board's own `Place`,
+`ResolveFullLines` and `SettleWaterAndReact`, in `RoundEngine.Turn`'s order. The hand is used as it
+is (frozen cards thaw, boss-locked cards are gone, the bonus hand is spent once); the DRAW PILE is
+known in content but not order, so every future shuffles it, and the discard comes back when it
+runs dry exactly as `DrawWithRules` recycles it (never past the threshold, never under
+"İmitasyon"); the player is a FOCUSED one who takes the move that puts the most cubes into the
+line's gaps. Checked against arithmetic: a one-cell pocket whose only fitting block is one of
+three cards in the draw pile, with three turns, has 2/3 odds on paper and measures 0.68; the same
+block in hand measures 1.00 (a gimme, so never dared); nothing that fits, 0.00. **It touches
+nothing**: clones only, its own xorshift seeded from the round's STATE, and the round's
+`IRandomSource` is never drawn from - odds must not shift every later shuffle, and a replayed save
+must reach the same dare. A line that can NEVER go off (dead, no required cell, a sealed "Mapus"
+cell, explosions suppressed by "Bilinmezlik") is `Possible = false` and never a candidate: a hard
+line is a dare, an impossible one is a rigged bet. When a board offers no honest dare it lays
+nothing and looks again next turn, and the bonus is worked out from how many dares have been LAID
+(`BaseBonus >> attemptsMade`), so waiting can never reset it. A line settled at one end after 12
+futures (every one or none) stops being sampled - the ladder needs no precision there, and on the
+real decks the median line sits at 0.88 - which took the whole 7x7 sea from 128 ms to 35 ms with
+identical decisions. No saved field changed (tuning is `const`, the sea is `[NotSaved]`), so older
+saves still load. **THE DEADLINE IS THE OPEN BALANCE QUESTION**: measured over 53 scattered boards
+on the three real decks, `max(3, gaps)` - a turn per missing cube - leaves 13% of boards with no
+honest dare at all and only 58% with a hard one, while `max(2, ceil(2*gaps/3))` gives every board a
+dare and fills all three rungs most evenly (53 / 41 hard / 44 middling / 44 reasonable).
+
 **Market credit ("Kredi kartı") is a SESSION rule, not joker state.** `GameSession` owns
 `Debt`, `Spend` (own points first, borrow the shortfall) and `RepayDebt` (manual, market-only);
 the joker is only the switch that turns `CreditAvailable` on and names the interest rate. The
