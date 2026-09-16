@@ -1232,6 +1232,19 @@ joker, power, boss, between-turn or in-turn) feeds it without knowing the rule e
 is into the EFFECTIVE shape, so a rotation or a reshape moves the mark with the cube the player
 was shown.
 
+**A TWO-ELEMENT CARD IS ONE ELEMENT AT A TIME, AND THE PLAYER PICKS WHICH** ("Simya", a weld;
+designer's call, 2026-09-16). It used to be both and neither - the cube took whichever element won
+a fixed priority while dynamite, ghost and mechanical, asked of the card, applied on top.
+`BlockCard.IsAlchemical` / `ElementChoices` / `ActiveElement`: `Elements` still lists everything
+(price, save, copies) but `Has()` answers only for the active choice, and every rule asks `Has()`.
+"Hedefli" is a mark, never a choice, and always applies. The choice is saved (`.active`, format 19),
+survives copies and cuts (`KeepChoiceOf`), and is changed only through
+`GameSession.ChooseCardElement`. The View (`GameUiController.Alchemy.cs`) opens a small panel
+(`ChoicePickerView.ShowCompact`) by RIGHT-CLICK, by a still PRESS-AND-HOLD on the card (the phone's
+way in, since a finger is the left button) or the pad's west button; a gear's turn, the fox and
+retro rotation are rows of that panel. The card is rebuilt wearing the chosen element
+(`ViewUtil.ShownElements`), with no animation. `Tools/UiLayoutCheck/simya.py` holds it.
+
 **"Meydan Okuma" dares a line picked off a MEASURED sea of chances** (`LineChanceSea`, in
 `Core/Jokers/LineChance.cs`). It used to mark any row or column at random, which made the bonus a
 lottery. Now, whenever a dare is laid, every row and column gets its odds of being cleared within
