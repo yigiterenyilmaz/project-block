@@ -62,7 +62,12 @@ namespace ProjectBlock.Core
         /// payment, at the score's scale.</summary>
         public int Points;
 
-        /// <summary>The count after this turn (0 again after a collapse), and what it needs.</summary>
+        /// <summary>Score per swallowed (or collapsed) cube, at the score's scale.</summary>
+        public int PointsEach;
+
+        /// <summary>The count before this turn's swallows, after them (0 again after a collapse),
+        /// and what it needs.</summary>
+        public int SwallowedBefore;
         public int SwallowedAfter;
         public int Goal;
 
@@ -87,5 +92,61 @@ namespace ProjectBlock.Core
 
         /// <summary>How many cards the other pile still had.</summary>
         public int OtherPileCount;
+    }
+}
+
+namespace ProjectBlock.Core
+{
+    /// <summary>One attempt to remove, move, retype or cover a "Kara Delik" hole that the board
+    /// refused. Reporting only - the rules never read it back.</summary>
+    public readonly struct AnchorRefusal
+    {
+        public readonly GridPos Cell;
+
+        /// <summary>The way the force pushed, when it had a way (a moving board, a shove).</summary>
+        public readonly GridPos Step;
+
+        public AnchorRefusal(GridPos cell, GridPos step)
+        {
+            Cell = cell;
+            Step = step;
+        }
+
+        public bool HasDirection
+        {
+            get { return Step.X != 0 || Step.Y != 0; }
+        }
+    }
+
+    /// <summary>Every refused attempt on a hole since the engine last cleared the log (the top of
+    /// each turn). Between turns it keeps growing, so a view remembers how many it has answered.</summary>
+    public sealed class AnchorRefusalLog
+    {
+        private readonly List<AnchorRefusal> refusals = new List<AnchorRefusal>();
+
+        /// <summary>Bumped on every Clear, so a view can tell a fresh log from a shorter one.</summary>
+        public int Generation { get; private set; }
+
+        public IReadOnlyList<AnchorRefusal> Refusals
+        {
+            get { return refusals; }
+        }
+
+        public int Count
+        {
+            get { return refusals.Count; }
+        }
+
+        internal void Add(GridPos cell, GridPos step)
+        {
+            refusals.Add(new AnchorRefusal(cell, step));
+        }
+
+        /// <summary>Public for the Animation Lab, which runs the real board on a board of its own.</summary>
+        public void Clear()
+        {
+            refusals.Clear();
+            Generation++;
+        }
     }
 }

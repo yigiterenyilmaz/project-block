@@ -72,6 +72,7 @@ public static partial class JokerTests
         KaraDelik_AVoidCardSwallowsAFilledCell();
         KaraDelik_EatsRingOnePullsRingTwoAndNothingFurther();
         KaraDelik_NothingMovesOrRemovesAHole();
+        KaraDelik_TheViewReadsTheSameRings();
         KaraDelik_FeedingTheArenaCollapsesItIntoASweep();
         KaraDelik_GravitySlipsAndSwallowsTheSmallerPile();
         Enfeksiyon_SpreadsThenDetonates();

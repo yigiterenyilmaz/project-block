@@ -281,6 +281,10 @@ namespace ProjectBlock.Core
                 if (cube.Kind == CubeKind.Obsidian || cube.Kind == CubeKind.Gold
                     || CubeRules.IsAnchored(cube))
                 {
+                    if (CubeRules.IsAnchored(cube))
+                    {
+                        AnchorRefusals.Add(at, new GridPos(dx, dy));
+                    }
                     ReportTest(report, wantedCell, dx, dy, false, at, cube.Kind,
                         IsRerouteAttempt(report, wantedCell));
                     return false; // nothing may shift these, so this way is shut

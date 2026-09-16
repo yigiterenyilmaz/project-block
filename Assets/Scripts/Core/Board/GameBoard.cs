@@ -473,6 +473,7 @@ namespace ProjectBlock.Core
                 }
                 if (cells[ix, iy].HasValue && CubeRules.IsAnchored(cells[ix, iy].Value))
                 {
+                    AnchorRefusals.Add(pos, new GridPos(0, 0));
                     continue; // "Kara Delik": the arena cannot eat the ground a hole stands on
                 }
                 if (cells[ix, iy].HasValue)

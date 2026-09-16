@@ -150,17 +150,28 @@ namespace ProjectBlock.Core
             report.Goal = GoalFor(board);
             int paid = report.PlacementSwallows.Count;
 
+            DestroyWith destroy = delegate(List<GridPos> cells)
+            {
+                return round.DestroyCubes(cells, true, true);
+            };
             if (report.Holes.Count > 0)
             {
-                Eat(round, board, report);
+                Eat(board, report, destroy);
                 paid += report.Bites.Count;
-                Pull(round, board, report);
+                if (Pull(board, report))
+                {
+                    round.NoteBoardRearranged(); // a pulled cube is not a dead one
+                }
             }
+            report.SwallowedBefore = SwallowedThisRound;
             SwallowedThisRound += report.SwallowedThisTurn;
             int collapsedCubes = 0;
             if (report.Goal > 0 && SwallowedThisRound >= report.Goal)
             {
-                collapsedCubes = Collapse(turn, board, report);
+                collapsedCubes = Collapse(board, report, destroy);
+                // A counted sweep, like the player's own: it pays, recharges, and goes off even on
+                // a board that was full a moment ago.
+                report.SweepFired = round.ForceCleanSweep();
                 SwallowedThisRound = 0;
             }
             int logical = (paid + collapsedCubes) * PointsPerCube;
@@ -169,8 +180,9 @@ namespace ProjectBlock.Core
                 turn.AddFlatScore(logical, DefId);
             }
             report.SwallowedAfter = SwallowedThisRound;
-            // The turn's score is still open here (multipliers are still to come), so this is the
-            // flat payment at the score's scale, before any multiplier.
+            // The turn's score is still open here (multipliers are still to come), so these are the
+            // flat payments at the score's scale, before any multiplier.
+            report.PointsEach = PointsPerCube * turn.Session.Config.Scoring.ScoreScale;
             report.Points = logical * turn.Session.Config.Scoring.ScoreScale;
             if (report.SwallowedThisTurn > 0 || report.Pulls.Count > 0 || report.Collapsed)
             {
@@ -178,9 +190,66 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>How a gravity step destroys: through the engine in a round, straight on the
+        /// board in the animation lab. Returns the cells that really went.</summary>
+        public delegate IReadOnlyList<GridPos> DestroyWith(List<GridPos> cells);
+
+        /// <summary>
+        /// THE GRAVITY ON ANY BOARD - eat ring 1, pull ring 2 - written into <paramref name="report"/>
+        /// (whose Holes it fills from the board). The joker runs exactly this in a round; the
+        /// animation lab runs it on a board of its own, with the board's own forced destroy, so what
+        /// the lab shows is what the rules do. Returns true when anything was pulled (the caller
+        /// re-baselines its destruction diff).
+        /// </summary>
+        public static bool RunGravity(GameBoard board, BlackHoleVisuals report, DestroyWith destroy)
+        {
+            if (report.Holes.Count == 0)
+            {
+                report.Holes.AddRange(board.CellsOfKind(CubeKind.Void));
+            }
+            if (report.Holes.Count == 0)
+            {
+                return false;
+            }
+            Eat(board, report, destroy);
+            return Pull(board, report);
+        }
+
+        /// <summary>The collapse on any board (see RunGravity). The sweep is the caller's.</summary>
+        public static int RunCollapse(GameBoard board, BlackHoleVisuals report, DestroyWith destroy)
+        {
+            return Collapse(board, report, destroy);
+        }
+
+        /// <summary>Which of a hole's rings <paramref name="cell"/> is in: 1 or 2 inside the reach,
+        /// 0 for the hole itself and for everything further out.</summary>
+        public static int RingOf(GridPos hole, GridPos cell)
+        {
+            int ring = Chebyshev(hole, cell);
+            return ring >= 1 && ring <= Reach ? ring : 0;
+        }
+
+        /// <summary>The nearest ring <paramref name="cell"/> is in of any hole on the board (1 or 2),
+        /// and which hole that is; 0 when no hole reaches it. What the View's lensing follows.</summary>
+        public static int InfluenceAt(IReadOnlyList<GridPos> holes, GridPos cell, out GridPos hole)
+        {
+            int best = 0;
+            hole = default(GridPos);
+            for (int i = 0; i < holes.Count; i++)
+            {
+                int ring = RingOf(holes[i], cell);
+                if (ring > 0 && (best == 0 || ring < best))
+                {
+                    best = ring;
+                    hole = holes[i];
+                }
+            }
+            return best;
+        }
+
         /// <summary>Ring 1 of every hole is swallowed, each cube credited to the first hole (in
         /// board order) that reaches it.</summary>
-        private static void Eat(RoundEngine round, GameBoard board, BlackHoleVisuals report)
+        private static void Eat(GameBoard board, BlackHoleVisuals report, DestroyWith destroy)
         {
             var cells = new List<GridPos>();
             var bites = new List<BlackHoleBite>();
@@ -204,7 +273,7 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            IReadOnlyList<GridPos> gone = round.DestroyCubes(cells, true, true);
+            IReadOnlyList<GridPos> gone = destroy(cells);
             foreach (BlackHoleBite bite in bites)
             {
                 if (Contains(gone, bite.Cube.Pos))
@@ -216,7 +285,7 @@ namespace ProjectBlock.Core
 
         /// <summary>The rings past 1 (up to Reach) are dragged one step in, onto the free cell of
         /// the next ring in that is nearest the hole. A cube moves at most once a turn.</summary>
-        private static void Pull(RoundEngine round, GameBoard board, BlackHoleVisuals report)
+        private static bool Pull(GameBoard board, BlackHoleVisuals report)
         {
             var moved = new List<GridPos>(); // destinations, so a cube is never pulled twice
             for (int ring = 2; ring <= Reach; ring++)
@@ -243,10 +312,7 @@ namespace ProjectBlock.Core
                     }
                 }
             }
-            if (report.Pulls.Count > 0)
-            {
-                round.NoteBoardRearranged(); // a pulled cube is not a dead one
-            }
+            return report.Pulls.Count > 0;
         }
 
         /// <summary>The free neighbour of <paramref name="from"/> on ring <paramref name="ring"/>
@@ -284,7 +350,7 @@ namespace ProjectBlock.Core
 
         /// <summary>The count reached the arena's size: everything a hole can take goes, and the
         /// sweep is set off whatever is left standing. Returns how many cubes went.</summary>
-        private static int Collapse(TurnContext turn, GameBoard board, BlackHoleVisuals report)
+        private static int Collapse(GameBoard board, BlackHoleVisuals report, DestroyWith destroy)
         {
             report.Collapsed = true;
             var cells = new List<GridPos>();
@@ -303,7 +369,7 @@ namespace ProjectBlock.Core
                 }
             }
             IReadOnlyList<GridPos> gone = cells.Count > 0
-                ? turn.Round.DestroyCubes(cells, true, true)
+                ? destroy(cells)
                 : (IReadOnlyList<GridPos>)new List<GridPos>();
             foreach (DestroyedCube cube in cubes)
             {
@@ -312,9 +378,6 @@ namespace ProjectBlock.Core
                     report.CollapseCubes.Add(cube);
                 }
             }
-            // A counted sweep, like the player's own: it pays, recharges, and goes off even on a
-            // board that was full a moment ago.
-            report.SweepFired = turn.Round.ForceCleanSweep();
             return report.CollapseCubes.Count;
         }
 

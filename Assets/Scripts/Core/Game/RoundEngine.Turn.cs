@@ -36,6 +36,7 @@ namespace ProjectBlock.Core
             var report = new TurnReport();
             // "Parazit": last turn's refusals are last turn's. Reporting only.
             MainBoard.HostRefusals.Clear();
+            MainBoard.AnchorRefusals.Clear();
             report.TurnNumber = TurnNumber;
             report.Card = card;
             report.PlayedFromBonusHand = fromBonus;

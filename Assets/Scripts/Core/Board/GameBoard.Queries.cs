@@ -26,6 +26,7 @@ namespace ProjectBlock.Core
             }
             if (CubeRules.IsAnchored(cube.Value))
             {
+                AnchorRefusals.Add(pos, new GridPos(0, 0));
                 return false; // "Kara Delik": nothing takes a hole as its host
             }
             cells[pos.X - MinX, pos.Y - MinY] = cube.Value.AsProtected();
@@ -44,6 +45,7 @@ namespace ProjectBlock.Core
             Cube? before = cells[pos.X - MinX, pos.Y - MinY];
             if (before.HasValue && CubeRules.IsAnchored(before.Value))
             {
+                AnchorRefusals.Add(pos, new GridPos(0, 0));
                 return; // "Kara Delik": a hole is never written over
             }
             if (!before.HasValue)
@@ -83,7 +85,12 @@ namespace ProjectBlock.Core
                 return false;
             }
             Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
-            if (!cube.HasValue || cube.Value.Kind == kind || CubeRules.IsAnchored(cube.Value))
+            if (cube.HasValue && CubeRules.IsAnchored(cube.Value) && cube.Value.Kind != kind)
+            {
+                AnchorRefusals.Add(pos, new GridPos(0, 0));
+                return false;
+            }
+            if (!cube.HasValue || cube.Value.Kind == kind)
             {
                 return false;
             }
@@ -697,7 +704,11 @@ namespace ProjectBlock.Core
             if ((ca.HasValue && CubeRules.IsAnchored(ca.Value))
                 || (cb.HasValue && CubeRules.IsAnchored(cb.Value)))
             {
-                return; // "Kara Delik": a hole does not travel with its line, nor is it covered
+                // "Kara Delik": a hole does not travel with its line, nor is it covered.
+                GridPos hole = ca.HasValue && CubeRules.IsAnchored(ca.Value) ? a : b;
+                GridPos other = hole.Equals(a) ? b : a;
+                AnchorRefusals.Add(hole, new GridPos(Math.Sign(other.X - hole.X), Math.Sign(other.Y - hole.Y)));
+                return;
             }
             SetCellRaw(a, cb);
             SetCellRaw(b, ca);

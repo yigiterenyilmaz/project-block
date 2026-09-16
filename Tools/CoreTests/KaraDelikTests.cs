@@ -168,7 +168,10 @@ public static partial class JokerTests
         LayHole(session, hole);
 
         Check(!board.DestroyCube(hole), "a destroy is refused");
+        board.AnchorRefusals.Clear();
         Check(!board.DestroyCubeForced(hole), "a forced destroy is refused");
+        Check(board.AnchorRefusals.Count == 1 && board.AnchorRefusals.Refusals[0].Cell.Equals(hole),
+            "and the refusal is reported for the View's hold beat");
         board.DestroyAllDestructible();
         Check(IsHole(board, hole), "dynamite's wipe leaves it");
         Check(!board.SetCubeKind(hole, CubeKind.Water), "it cannot be retyped (flood, fire, ice)");
@@ -200,6 +203,12 @@ public static partial class JokerTests
         int before = r2.Board.OccupiedCount;
         IReadOnlyList<GridPos> lost = r2.EscalateBoards();
         Check(IsHole(r2.Board, holeLow), "the escalator does not carry it");
+        bool heldUp = false;
+        foreach (AnchorRefusal refusal in r2.Board.AnchorRefusals.Refusals)
+        {
+            heldUp |= refusal.Cell.Equals(holeLow) && refusal.Step.Equals(new GridPos(0, 1));
+        }
+        Check(heldUp, "the refusal says which way the escalator pushed");
         Check(Contains(lost, below) && !r2.Board.GetCube(new GridPos(3, 4)).HasValue,
             "the cube that rode into it fell in",
             string.Join(",", lost));
@@ -230,6 +239,39 @@ public static partial class JokerTests
             }
         }
         return false;
+    }
+
+    private static void KaraDelik_TheViewReadsTheSameRings()
+    {
+        Section("kara delik / the reach the view lenses is the rules' own");
+        var holes = new List<GridPos> { new GridPos(3, 3), new GridPos(6, 3) };
+        GridPos near;
+        Check(KaraDelikJoker.InfluenceAt(holes, new GridPos(4, 4), out near) == 1 && near.Equals(holes[0]),
+            "a diagonal neighbour is ring 1");
+        Check(KaraDelikJoker.InfluenceAt(holes, new GridPos(1, 5), out near) == 2, "two out is ring 2");
+        Check(KaraDelikJoker.InfluenceAt(holes, new GridPos(0, 0), out near) == 0, "three out is nothing");
+        Check(KaraDelikJoker.InfluenceAt(holes, new GridPos(5, 3), out near) == 1 && near.Equals(holes[1]),
+            "between two holes, the nearer ring wins");
+        Check(KaraDelikJoker.InfluenceAt(holes, holes[0], out near) == 0, "the hole itself is not lensed");
+
+        // the lab's gravity is the joker's gravity
+        var board = new GameBoard(7, 7);
+        board.SetCubeAt(new GridPos(3, 3), new Cube(CubeKind.Void, 1));
+        board.SetCubeAt(new GridPos(4, 3), new Cube(CubeKind.Normal, 2));
+        board.SetCubeAt(new GridPos(5, 3), new Cube(CubeKind.Normal, 3));
+        var report = new BlackHoleVisuals();
+        KaraDelikJoker.RunGravity(board, report, delegate(List<GridPos> cells)
+        {
+            var gone = new List<GridPos>();
+            foreach (GridPos c in cells)
+            {
+                if (board.DestroyCubeForced(c)) { gone.Add(c); }
+            }
+            return gone;
+        });
+        Check(report.Bites.Count == 1 && report.Pulls.Count == 1
+                && report.Pulls[0].To.Equals(new GridPos(4, 3)),
+            "RunGravity on a bare board eats ring 1 and pulls ring 2 in, like the joker");
     }
 
     private static void KaraDelik_FeedingTheArenaCollapsesItIntoASweep()
