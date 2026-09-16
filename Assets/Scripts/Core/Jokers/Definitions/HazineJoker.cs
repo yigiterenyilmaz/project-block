@@ -11,6 +11,10 @@
 //  - hitting the treasure removes the dynamite, and vice versa - one find ends the hunt;
 //  - overtime re-arms both marks, so carrying on rolls the dice again.
 //
+// WHAT THE PLAYER SEES comes from LastFind (HazineVisuals): the marks that were blown open and
+// the effect that was really applied, written beside the code that applied it. Most of what the
+// treasure pays and everything the dynamite takes is NOT score, and the report says so.
+//
 // All numbers are BALANCE PLACEHOLDERS.
 
 using System.Collections.Generic;
@@ -36,6 +40,13 @@ namespace ProjectBlock.Core
 
         /// <summary>What the last trigger did, for the UI to announce.</summary>
         public string LastOutcome { get; private set; }
+
+        /// <summary>
+        /// This turn's find, for the View: a NEW object per find, matched by identity, never
+        /// saved, and never carrying the location of a mark that was not found. See HazineVisuals.
+        /// </summary>
+        [field: NotSaved]
+        public HazineVisuals LastFind { get; private set; }
 
         public HazineJoker()
             : base("hazine", "Hazine")
@@ -87,6 +98,7 @@ namespace ProjectBlock.Core
             TreasureCell = null;
             DynamiteCell = null;
             LastOutcome = null;
+            LastFind = null;
 
             List<GridPos> cells = PlayableCells(ctx.Round.Board);
             if (cells.Count < 2)
@@ -119,12 +131,30 @@ namespace ProjectBlock.Core
             {
                 return;
             }
+            // Written before the marks are cleared, and holding ONLY the marks that were hit.
+            var find = new HazineVisuals
+            {
+                Result = treasureHit && dynamiteHit ? HazineResult.BothCancelled
+                    : treasureHit ? HazineResult.TreasureOnly : HazineResult.DynamiteOnly
+            };
+            if (treasureHit)
+            {
+                find.Discoveries.Add(Discovery(turn.Report.DestroyedCubes, TreasureCell.Value, true));
+            }
+            if (dynamiteHit)
+            {
+                find.Discoveries.Add(Discovery(turn.Report.DestroyedCubes, DynamiteCell.Value, false));
+            }
+            find.Seed = SeedOf(find);
+            LastFind = find;
+
             if (treasureHit && dynamiteHit)
             {
                 // Both in one explosion: they cancel, and the hunt is over for this round.
                 TreasureCell = null;
                 DynamiteCell = null;
                 LastOutcome = Loc.Pick("cancelled out", "birbirini götürdü");
+                find.Effect = HazineEffect.None;
                 return;
             }
             if (treasureHit)
@@ -132,17 +162,17 @@ namespace ProjectBlock.Core
                 // Finding one clears the other - that is the confirmed rule.
                 TreasureCell = null;
                 DynamiteCell = null;
-                GrantReward(turn);
+                GrantReward(turn, find);
                 return;
             }
             TreasureCell = null;
             DynamiteCell = null;
-            ApplyPenalty(turn);
+            ApplyPenalty(turn, find);
         }
 
         // ------------------------------------------------------------------ rewards
 
-        private void GrantReward(TurnContext turn)
+        private void GrantReward(TurnContext turn, HazineVisuals find)
         {
             // Four rewards; the power refill re-rolls when there is nothing to refill, so the
             // benefit is never wasted (confirmed 2026-07-23).
@@ -151,14 +181,14 @@ namespace ProjectBlock.Core
             {
                 int pick = choices[turn.Rng.NextInt(0, choices.Count)];
                 choices.Remove(pick);
-                if (TryReward(turn, pick))
+                if (TryReward(turn, pick, find))
                 {
                     return;
                 }
             }
         }
 
-        private bool TryReward(TurnContext turn, int which)
+        private bool TryReward(TurnContext turn, int which, HazineVisuals find)
         {
             switch (which)
             {
@@ -171,7 +201,12 @@ namespace ProjectBlock.Core
                     {
                         return false; // nothing exploded to multiply - try another reward
                     }
+                    // MEASURED around the payment, so an inversion, the score scale and the floor
+                    // are all in the number the player is shown.
+                    int before = turn.Round.RoundScore;
                     turn.AddFlatScore((int)(lines * TreasureScoreBonus), DefId);
+                    find.Effect = HazineEffect.ExplosionBonus;
+                    find.ScoreDelta = turn.Round.RoundScore - before;
                     LastOutcome = Loc.Pick("treasure: 1.5x explosion", "hazine: patlama 1.5x");
                     return true;
                 }
@@ -181,15 +216,37 @@ namespace ProjectBlock.Core
                     double discount = MinDiscount + turn.Rng.NextDouble() * span;
                     turn.Session.AddMarketDiscount(discount);
                     int percent = (int)(discount * 100);
+                    find.Effect = HazineEffect.MarketDiscount;
+                    find.Amount = percent;
                     LastOutcome = Loc.Pick("treasure: " + percent + "% market discount",
                         "hazine: markette %" + percent + " indirim");
                     return true;
                 }
                 case 2:
                 {
+                    IReadOnlyList<Power> before = turn.Session.Powers.Powers;
+                    var spent = new List<Power>();
+                    for (int i = 0; i < before.Count; i++)
+                    {
+                        if (!before[i].Charged)
+                        {
+                            spent.Add(before[i]);
+                        }
+                    }
                     if (!turn.Session.Powers.RechargeOne())
                     {
                         return false; // nothing spent to refill - the benefit re-rolls
+                    }
+                    find.Effect = HazineEffect.PowerRefilled;
+                    // Which one: the power that was spent and is not any more. Read, never drawn.
+                    for (int i = 0; i < spent.Count; i++)
+                    {
+                        if (spent[i].Charged)
+                        {
+                            find.PowerId = spent[i].InstanceId;
+                            find.PowerName = spent[i].DisplayName;
+                            break;
+                        }
                     }
                     LastOutcome = Loc.Pick("treasure: a power refilled", "hazine: bir güç doldu");
                     return true;
@@ -203,6 +260,8 @@ namespace ProjectBlock.Core
                     }
                     BlockCard copy = turn.Session.CreateCard(source.Shape, source.Elements);
                     turn.Round.AddBonusCard(copy, BonusPlayOutcome.ExpireFromRound);
+                    find.Effect = HazineEffect.BonusCard;
+                    find.CardId = copy.Id;
                     LastOutcome = Loc.Pick("treasure: a bonus card", "hazine: bonus kart");
                     return true;
                 }
@@ -211,22 +270,23 @@ namespace ProjectBlock.Core
 
         // ----------------------------------------------------------------- penalties
 
-        private void ApplyPenalty(TurnContext turn)
+        private void ApplyPenalty(TurnContext turn, HazineVisuals find)
         {
             var choices = new List<int> { 0, 1, 2 };
             while (choices.Count > 0)
             {
                 int pick = choices[turn.Rng.NextInt(0, choices.Count)];
                 choices.Remove(pick);
-                if (TryPenalty(turn, pick))
+                if (TryPenalty(turn, pick, find))
                 {
                     return;
                 }
             }
+            find.Effect = HazineEffect.Fizzled;
             LastOutcome = Loc.Pick("dynamite: no effect", "dinamit: etkisiz");
         }
 
-        private bool TryPenalty(TurnContext turn, int which)
+        private bool TryPenalty(TurnContext turn, int which, HazineVisuals find)
         {
             switch (which)
             {
@@ -248,6 +308,9 @@ namespace ProjectBlock.Core
                     }
                     Power victim = charged[turn.Rng.NextInt(0, charged.Count)];
                     turn.Session.Powers.BurnCharge(victim);
+                    find.Effect = HazineEffect.PowerDrained;
+                    find.PowerId = victim.InstanceId;
+                    find.PowerName = victim.DisplayName;
                     LastOutcome = Loc.Pick("dynamite: " + victim.DisplayName + " drained",
                         "dinamit: " + victim.DisplayName + " tükendi");
                     return true;
@@ -269,6 +332,9 @@ namespace ProjectBlock.Core
                     }
                     BlockCard victim = thawed[turn.Rng.NextInt(0, thawed.Count)];
                     round.FreezeHandCard(victim.Id, FreezeTurns);
+                    find.Effect = HazineEffect.CardFrozen;
+                    find.CardId = victim.Id;
+                    find.Amount = FreezeTurns;
                     LastOutcome = Loc.Pick("dynamite: a card frozen for " + FreezeTurns,
                         "dinamit: bir kart " + FreezeTurns + " tur dondu");
                     return true;
@@ -280,6 +346,8 @@ namespace ProjectBlock.Core
                     {
                         return false;
                     }
+                    find.Effect = HazineEffect.HandDiscarded;
+                    find.Amount = round.Hand.Count;
                     round.DiscardWholeHand();
                     round.RefillHandToSize();
                     LastOutcome = Loc.Pick("dynamite: hand discarded", "dinamit: el ıskartaya gitti");
@@ -300,6 +368,35 @@ namespace ProjectBlock.Core
                 }
             }
             return false;
+        }
+
+        private static HazineDiscovery Discovery(IReadOnlyList<DestroyedCube> destroyed,
+            GridPos cell, bool treasure)
+        {
+            var found = new HazineDiscovery { Cell = cell, IsTreasure = treasure };
+            for (int i = 0; i < destroyed.Count; i++)
+            {
+                if (destroyed[i].Pos.Equals(cell))
+                {
+                    found.Cube = destroyed[i].Cube;
+                    break;
+                }
+            }
+            return found;
+        }
+
+        /// <summary>Presentation seed from the found cells only - never the round's random
+        /// source, which the reward draw is still to spend.</summary>
+        private static uint SeedOf(HazineVisuals find)
+        {
+            uint seed = 2166136261u;
+            for (int i = 0; i < find.Discoveries.Count; i++)
+            {
+                GridPos c = find.Discoveries[i].Cell;
+                seed = (seed ^ unchecked((uint)(c.X * 73856093))) * 16777619u;
+                seed = (seed ^ unchecked((uint)(c.Y * 19349663))) * 16777619u;
+            }
+            return seed;
         }
 
         private static BlockCard RandomOwnedCard(TurnContext turn)

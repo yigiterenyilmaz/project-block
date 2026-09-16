@@ -99,6 +99,7 @@ public static class JokerTests
         Hazine_BuriesTwoMarksAndPaysOutOnce();
         Hazine_DynamiteAppliesAPenalty();
         Hazine_HittingBothCancelsOut();
+        Hazine_ReportsWhatTheFindReallyDid();
         MeydanOkuma_MarksThenPaysOnClear();
         MeydanOkuma_HalvesAndGivesUpAfterThreeMisses();
         MeydanOkuma_SeaReadsHandDrawPileAndBoard();
@@ -3000,6 +3001,211 @@ public static class JokerTests
             anyFrozenAfter |= round.IsFrozen(round.Hand[i].Id);
         }
         Check(anyFrozenAfter == anyFrozenBefore, "nothing was frozen either");
+
+        HazineVisuals find = joker.LastFind;
+        Check(find != null && find.Result == HazineResult.BothCancelled
+                && find.Effect == HazineEffect.None && find.ScoreDelta == 0,
+            "the report says they cancelled and nothing was applied",
+            find == null ? "null" : find.Result + " " + find.Effect);
+        Check(find != null && find.Discoveries.Count == 2
+                && find.Find(true) != null && find.Find(true).Cell.Equals(treasure)
+                && find.Find(false) != null && find.Find(false).Cell.Equals(dynamite),
+            "with both marks where they really were");
+        Check(find != null && find.Find(true).Cube.SourceCardId == 900
+                && find.Find(false).Cube.SourceCardId == 901,
+            "and the cube each one was under, from the destruction log");
+    }
+
+    /// <summary>
+    /// THE REPORT IS THE RULES' OWN ACCOUNT. Over many seeds: a find names only the mark that was
+    /// blown open (the other one's location is never handed to the View), the effect it names is
+    /// the one that really happened (a frozen card is frozen, a drained power is spent, a
+    /// discarded hand is gone), and the score moves ONLY for the explosion bonus - by exactly the
+    /// amount reported. The treasure is driven through a real LINE here, so the one score reward
+    /// is reachable at all.
+    /// </summary>
+    private static void Hazine_ReportsWhatTheFindReallyDid()
+    {
+        Section("hazine / the report is what really happened");
+        var seenRewards = new HashSet<HazineEffect>();
+        var seenPenalties = new HashSet<HazineEffect>();
+        for (int seed = 0; seed < 40; seed++)
+        {
+            // ---- treasure, through a completed row
+            var session = NewSession(3100 + seed, 6, 1000000, 40, 1);
+            var joker = (HazineJoker)session.Jokers.Add(new HazineJoker());
+            session.Powers.Add(new BuyutecPower());
+            session.Jokers.DispatchRoundStarted(session.CurrentRound);
+            RoundEngine round = session.CurrentRound;
+            // a spent power, so "refill" has something to refill on some seeds
+            if (seed % 2 == 0)
+            {
+                session.Powers.BurnCharge(session.Powers.Powers[0]);
+            }
+            Check(joker.LastFind == null, "nothing is reported before anything is found");
+            GridPos treasure = joker.TreasureCell.Value;
+            GridPos dynamite = joker.DynamiteCell.Value;
+            var row = new List<GridPos>();
+            for (int x = round.Board.MinX; x < round.Board.MinX + round.Board.Width; x++)
+            {
+                var pos = new GridPos(x, treasure.Y);
+                if (!pos.Equals(treasure) && !pos.Equals(dynamite) && round.Board.IsInside(pos))
+                {
+                    row.Add(pos);
+                }
+            }
+            bool viaLine = row.Count == round.Board.Width - 1;
+            if (viaLine)
+            {
+                PaintBoard(round, session, CubeKind.Normal, row.ToArray());
+                // ...and one cube off that row, so the clear is not also a CLEAN SWEEP - a sweep
+                // pays instead of the line score, which would leave no line to multiply.
+                for (int y = round.Board.MinY; y < round.Board.MinY + round.Board.Height; y++)
+                {
+                    var spare = new GridPos(round.Board.MinX, y);
+                    if (y != treasure.Y && !spare.Equals(dynamite) && round.Board.IsInside(spare))
+                    {
+                        PaintBoard(round, session, CubeKind.Normal, spare);
+                        break;
+                    }
+                }
+            }
+            int scoreBefore = round.RoundScore;
+            TurnReport report;
+            if (viaLine)
+            {
+                BlockCard plug = session.CreateCard(Bar(1), new BlockElement[0]);
+                round.AddBonusCard(plug, BonusPlayOutcome.ExpireFromRound);
+                report = round.PlayFromBonus(round.BonusHand.Count - 1, treasure);
+            }
+            else
+            {
+                report = BlowUpCell(session, treasure);
+            }
+            HazineVisuals find = joker.LastFind;
+            Check(find != null && find.Result == HazineResult.TreasureOnly,
+                "a treasure find is reported as one", "seed " + seed);
+            if (find == null)
+            {
+                continue;
+            }
+            Check(find.Discoveries.Count == 1 && find.Discoveries[0].IsTreasure
+                    && find.Discoveries[0].Cell.Equals(treasure),
+                "naming only the treasure", "seed " + seed);
+            seenRewards.Add(find.Effect);
+            bool isReward = find.Effect == HazineEffect.ExplosionBonus
+                || find.Effect == HazineEffect.MarketDiscount
+                || find.Effect == HazineEffect.PowerRefilled
+                || find.Effect == HazineEffect.BonusCard;
+            Check(isReward, "a treasure applies a reward", "seed " + seed + " " + find.Effect);
+            if (find.Effect == HazineEffect.ExplosionBonus)
+            {
+                Check(find.ScoreDelta > 0, "the explosion bonus moved the score",
+                    "seed " + seed + " delta " + find.ScoreDelta);
+                Check(round.RoundScore - scoreBefore >= find.ScoreDelta,
+                    "by no more than the turn banked",
+                    (round.RoundScore - scoreBefore) + " vs " + find.ScoreDelta);
+            }
+            else
+            {
+                Check(find.ScoreDelta == 0, "a non-score reward reports no score",
+                    "seed " + seed + " " + find.Effect + " " + find.ScoreDelta);
+            }
+            if (find.Effect == HazineEffect.MarketDiscount)
+            {
+                Check(find.Amount >= 10 && find.Amount <= 30, "the discount is a real percent",
+                    "" + find.Amount);
+            }
+            if (find.Effect == HazineEffect.PowerRefilled)
+            {
+                Check(session.Powers.Powers[0].Charged
+                        && find.PowerId == session.Powers.Powers[0].InstanceId,
+                    "the refilled power is the one named, and it is charged", "id " + find.PowerId);
+            }
+            if (find.Effect == HazineEffect.BonusCard)
+            {
+                bool there = false;
+                for (int i = 0; i < round.BonusHand.Count; i++)
+                {
+                    there |= round.BonusHand[i].Card.Id == find.CardId;
+                }
+                Check(there, "the bonus card named is in the bonus hand", "id " + find.CardId);
+            }
+            HazineVisuals first = find;
+
+            // ---- the round's second arming (overtime) starts with a clean slate
+            session.Jokers.DispatchOvertimeStarted(round);
+            Check(joker.LastFind == null, "re-arming forgets the last find");
+
+            // ---- dynamite, on a fresh session
+            var s2 = NewSession(3300 + seed, 6, 1000000, 40, 1);
+            var j2 = (HazineJoker)s2.Jokers.Add(new HazineJoker());
+            s2.Powers.Add(new BuyutecPower());
+            s2.Jokers.DispatchRoundStarted(s2.CurrentRound);
+            RoundEngine r2 = s2.CurrentRound;
+            if (seed % 3 == 0)
+            {
+                s2.Powers.BurnCharge(s2.Powers.Powers[0]);
+            }
+            GridPos boom = j2.DynamiteCell.Value;
+            int score2 = r2.RoundScore;
+            var handBefore = new List<int>();
+            for (int i = 0; i < r2.Hand.Count; i++)
+            {
+                handBefore.Add(r2.Hand[i].Id);
+            }
+            BlowUpCell(s2, boom);
+            HazineVisuals bang = j2.LastFind;
+            Check(bang != null && bang.Result == HazineResult.DynamiteOnly,
+                "a dynamite find is reported as one", "seed " + seed);
+            if (bang == null)
+            {
+                continue;
+            }
+            Check(!ReferenceEquals(bang, first), "every find is a new report");
+            Check(bang.Discoveries.Count == 1 && !bang.Discoveries[0].IsTreasure
+                    && bang.Discoveries[0].Cell.Equals(boom),
+                "naming only the dynamite - never where the treasure was", "seed " + seed);
+            Check(bang.ScoreDelta == 0, "a penalty never reports score",
+                "seed " + seed + " " + bang.ScoreDelta);
+            seenPenalties.Add(bang.Effect);
+            switch (bang.Effect)
+            {
+                case HazineEffect.PowerDrained:
+                    Check(bang.PowerId == s2.Powers.Powers[0].InstanceId
+                            && !s2.Powers.Powers[0].Charged
+                            && bang.PowerName == s2.Powers.Powers[0].DisplayName,
+                        "the drained power is the one named, and it is spent");
+                    break;
+                case HazineEffect.CardFrozen:
+                    Check(r2.IsFrozen(bang.CardId) && bang.Amount == j2.FreezeTurns,
+                        "the frozen card is the one named", "id " + bang.CardId);
+                    break;
+                case HazineEffect.HandDiscarded:
+                    Check(bang.Amount == handBefore.Count && bang.Amount > 0,
+                        "the discard counts the hand that went", bang.Amount + " vs " + handBefore.Count);
+                    bool replaced = true;
+                    for (int i = 0; i < r2.Hand.Count; i++)
+                    {
+                        replaced &= !handBefore.Contains(r2.Hand[i].Id);
+                    }
+                    Check(replaced, "and that hand is really gone");
+                    break;
+                case HazineEffect.Fizzled:
+                    break;
+                default:
+                    Check(false, "a dynamite applies a penalty or fizzles",
+                        "seed " + seed + " " + bang.Effect);
+                    break;
+            }
+        }
+        Check(seenRewards.Contains(HazineEffect.ExplosionBonus)
+                && seenRewards.Contains(HazineEffect.MarketDiscount)
+                && seenRewards.Contains(HazineEffect.BonusCard),
+            "the seeds reached the score reward and at least two others",
+            string.Join(",", seenRewards));
+        Check(seenPenalties.Count >= 2, "and at least two different penalties",
+            string.Join(",", seenPenalties));
     }
 
     private static void MeydanOkuma_MarksThenPaysOnClear()
