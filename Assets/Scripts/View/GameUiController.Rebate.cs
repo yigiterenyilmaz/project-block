@@ -159,14 +159,16 @@ namespace ProjectBlock.View
             float hazineClaim = hazine != null ? hazine.ScoreClaim : 0f;
             float challengeClaim = challenge != null ? challenge.ScoreClaim : 0f;
             float quarryClaim = quarry != null ? quarry.ScoreClaim : 0f;
-            float claim = Mathf.Max(hazineClaim, Mathf.Max(challengeClaim, quarryClaim));
+            float ignitionClaim = ignition != null ? ignition.ScoreClaim : 0f;
+            float claim = Mathf.Max(Mathf.Max(hazineClaim, ignitionClaim), Mathf.Max(challengeClaim, quarryClaim));
             if (claim > warm && claim > 0.001f)
             {
                 float hs;
                 Color ink;
                 if (claim == hazineClaim) { hs = hazine.ScoreScale; ink = hazine.ScoreInk; }
                 else if (claim == challengeClaim) { hs = challenge.ScoreScale; ink = challenge.ScoreInk; }
-                else { hs = quarry.ScoreScale; ink = quarry.ScoreInk; }
+                else if (claim == quarryClaim) { hs = quarry.ScoreScale; ink = quarry.ScoreInk; }
+                else { hs = ignition.ScoreScale; ink = ignition.ScoreInk; }
                 totalText.rectTransform.localScale = new Vector3(hs, hs, 1f);
                 totalText.color = Color.Lerp(midasScoreInk, ink, claim * 0.8f);
                 return;

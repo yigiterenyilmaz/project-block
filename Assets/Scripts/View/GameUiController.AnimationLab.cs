@@ -179,12 +179,14 @@ namespace ProjectBlock.View
             StopHazine();
             StopChallenge();
             StopQuarry();
+            StopIgnition();
             StopRebate();
             // The beat-isolation entries promise that RESET puts every layer back.
             QuakeCollapseView.Layers.AllOn();
             HazineRevealView.Layers.AllOn();
             ChallengeContractView.Layers.AllOn();
             QuarryBreakView.Layers.AllOn();
+            IgnitionBurnView.Layers.AllOn();
             // The lab can show the pile spent without a payout, so RESET has to be able to give
             // it back even when no animation is running.
             if (cardLayer != null) { cardLayer.SetDrawPileShownEmpty(false); }
@@ -2191,6 +2193,122 @@ namespace ProjectBlock.View
                 {
                     QuarryBreakView.Layers.AllOn();
                     animLastLabel = Loc.Pick("elmas kazma: every layer back on", "elmas kazma: tüm katmanlar açık");
+                    if (AnimLabOpen) { RedrawAnimationLab(); }
+                });
+            AddAnim("tutuştur: single target burnout", "tutuştur: tek hedef yanması",
+                delegate { IgnitionBurnView.Layers.AllOn(); AnimIgnition(AnimIgnitionScene.Single); });
+            AddAnim("tutuştur: heat surge only", "tutuştur: yalnızca ısınma",
+                delegate
+                {
+                    AnimIgnitionOnly();
+                    IgnitionBurnView.Layers.ShowProxy = true;
+                    IgnitionBurnView.Layers.ShowHeat = true;
+                    IgnitionBurnView.Layers.ShowFlameLicks = true;
+                    AnimIgnition(AnimIgnitionScene.Single);
+                });
+            AddAnim("tutuştur: smoke birth only", "tutuştur: yalnızca duman doğuşu",
+                delegate
+                {
+                    AnimIgnitionOnly();
+                    IgnitionBurnView.Layers.ShowProxy = true;
+                    IgnitionBurnView.Layers.ShowSmokeBirth = true;
+                    AnimIgnition(AnimIgnitionScene.Single);
+                });
+            AddAnim("tutuştur: smoke climb only", "tutuştur: yalnızca duman tırmanışı",
+                delegate
+                {
+                    AnimIgnitionOnly();
+                    IgnitionBurnView.Layers.ShowProxy = true;
+                    IgnitionBurnView.Layers.ShowSmokeClimb = true;
+                    AnimIgnition(AnimIgnitionScene.Single);
+                });
+            AddAnim("tutuştur: material burnout only", "tutuştur: yalnızca malzeme yanması",
+                delegate
+                {
+                    AnimIgnitionOnly();
+                    IgnitionBurnView.Layers.ShowProxy = true;
+                    IgnitionBurnView.Layers.ShowBurnout = true;
+                    AnimIgnition(AnimIgnitionScene.Single);
+                });
+            AddAnim("tutuştur: collapse only", "tutuştur: yalnızca çöküş",
+                delegate
+                {
+                    AnimIgnitionOnly();
+                    IgnitionBurnView.Layers.ShowProxy = true;
+                    IgnitionBurnView.Layers.ShowCollapse = true;
+                    AnimIgnition(AnimIgnitionScene.Single);
+                });
+            AddAnim("tutuştur: ash + embers only", "tutuştur: yalnızca kül + kor",
+                delegate
+                {
+                    AnimIgnitionOnly();
+                    IgnitionBurnView.Layers.ShowProxy = true;
+                    IgnitionBurnView.Layers.ShowCollapse = true;
+                    IgnitionBurnView.Layers.ShowEmbers = true;
+                    IgnitionBurnView.Layers.ShowAshFlakes = true;
+                    AnimIgnition(AnimIgnitionScene.Single);
+                });
+            AddAnim("tutuştur: smoke clear only", "tutuştur: yalnızca dumanın kalkması",
+                delegate
+                {
+                    AnimIgnitionOnly();
+                    IgnitionBurnView.Layers.ShowProxy = true;
+                    IgnitionBurnView.Layers.ShowCollapse = true;
+                    IgnitionBurnView.Layers.ShowSmokeClear = true;
+                    AnimIgnition(AnimIgnitionScene.Single);
+                });
+            AddAnim("tutuştur: 3 fire, same row", "tutuştur: 3 ateş, aynı satır",
+                delegate { IgnitionBurnView.Layers.AllOn(); AnimIgnition(AnimIgnitionScene.SameRow); });
+            AddAnim("tutuştur: 3 fire, different rows", "tutuştur: 3 ateş, farklı satırlar",
+                delegate { IgnitionBurnView.Layers.AllOn(); AnimIgnition(AnimIgnitionScene.DifferentRows); });
+            AddAnim("tutuştur: bottom -> top, a 5-row wave", "tutuştur: alttan üste 5 satırlık dalga",
+                delegate { IgnitionBurnView.Layers.AllOn(); AnimIgnition(AnimIgnitionScene.FiveRows); });
+            AddAnim("tutuştur: full board, many fires", "tutuştur: dolu tahta, çok ateş",
+                delegate { IgnitionBurnView.Layers.AllOn(); AnimIgnition(AnimIgnitionScene.FullBoard); });
+            AddAnim("tutuştur: sparse fire targets", "tutuştur: seyrek ateş hedefleri",
+                delegate { IgnitionBurnView.Layers.AllOn(); AnimIgnition(AnimIgnitionScene.Sparse); });
+            AddAnim("tutuştur: high-count smoke stress (30)", "tutuştur: yüksek sayıda duman stresi (30)",
+                delegate { IgnitionBurnView.Layers.AllOn(); AnimIgnition(AnimIgnitionScene.Stress); });
+            AddAnim("tutuştur: WHOLE SCENARIO - a block lands, the row with a fire clears, the chain climbs",
+                "tutuştur: TAM SENARYO - blok iner, ateşli satır patlar, zincir yükselir",
+                delegate { IgnitionBurnView.Layers.AllOn(); AnimIgnitionScenario(); });
+            AddAnim("tutuştur: VISUAL PROXY test (fires held, burn after 3 s)",
+                "tutuştur: VEKİL testi (ateşler bekler, 3 sn sonra yanar)",
+                delegate
+                {
+                    IgnitionBurnView.Layers.AllOn();
+                    IgnitionBurnView.Layers.ShowProxyDebug = true;
+                    AnimIgnition(AnimIgnitionScene.Proxy);
+                });
+            AddAnim("tutuştur: score total (as under Genel temizlik)", "tutuştur: puan toplamı (Genel temizlik varken)",
+                delegate { IgnitionBurnView.Layers.AllOn(); AnimIgnition(AnimIgnitionScene.Score); });
+            AddAnim("tutuştur: 5-row wave at 0.5x", "tutuştur: 5 satırlık dalga 0.5x",
+                delegate { IgnitionBurnView.Layers.AllOn(); Time.timeScale = 0.5f; AnimIgnition(AnimIgnitionScene.FiveRows); });
+            AddAnim("tutuştur: single burnout at 0.25x", "tutuştur: tek yanma 0.25x",
+                delegate { IgnitionBurnView.Layers.AllOn(); Time.timeScale = 0.25f; AnimIgnition(AnimIgnitionScene.Single); });
+            AddAnim("tutuştur debug: targets", "tutuştur hata ayıklama: hedefler",
+                delegate { AnimIgnitionToggle(ref IgnitionBurnView.Layers.ShowIgnitionTargets, "targets", "hedefler"); });
+            AddAnim("tutuştur debug: row buckets (colour per row)", "tutuştur hata ayıklama: satır kovaları (satır başına renk)",
+                delegate { AnimIgnitionToggle(ref IgnitionBurnView.Layers.ShowRowBuckets, "row buckets (colour per row)", "satır kovaları (satır başına renk)"); });
+            AddAnim("tutuştur debug: wave start times", "tutuştur hata ayıklama: dalga başlama zamanları",
+                delegate { AnimIgnitionToggle(ref IgnitionBurnView.Layers.ShowWaveStartTimes, "wave start times", "dalga başlama zamanları"); });
+            AddAnim("tutuştur debug: smoke bounds", "tutuştur hata ayıklama: duman sınırları",
+                delegate { AnimIgnitionToggle(ref IgnitionBurnView.Layers.ShowSmokeBounds, "smoke bounds", "duman sınırları"); });
+            AddAnim("tutuştur debug: burn mask (cycling)", "tutuştur hata ayıklama: yanma maskesi (döngü)",
+                delegate { AnimIgnitionToggle(ref IgnitionBurnView.Layers.ShowBurnMask, "burn mask (cycling)", "yanma maskesi (döngü)"); });
+            AddAnim("tutuştur debug: ash (enlarged)", "tutuştur hata ayıklama: kül (büyütülmüş)",
+                delegate { AnimIgnitionToggle(ref IgnitionBurnView.Layers.ShowAsh, "ash (enlarged)", "kül (büyütülmüş)"); });
+            AddAnim("tutuştur debug: embers (enlarged)", "tutuştur hata ayıklama: kor (büyütülmüş)",
+                delegate { AnimIgnitionToggle(ref IgnitionBurnView.Layers.ShowEmberDebug, "embers (enlarged)", "kor (büyütülmüş)"); });
+            AddAnim("tutuştur debug: proxy", "tutuştur hata ayıklama: vekil",
+                delegate { AnimIgnitionToggle(ref IgnitionBurnView.Layers.ShowProxyDebug, "proxy", "vekil"); });
+            AddAnim("tutuştur debug: global haze band (off by default)", "tutuştur hata ayıklama: genel sıcak bant (varsayılan kapalı)",
+                delegate { AnimIgnitionToggle(ref IgnitionBurnView.Layers.ShowGlobalHazeBand, "global haze band (off by default)", "genel sıcak bant (varsayılan kapalı)"); });
+            AddAnim("tutuştur switch: ALL back on", "tutuştur anahtarı: TÜMÜ geri açık",
+                delegate
+                {
+                    IgnitionBurnView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("tutuştur: every layer back on", "tutuştur: tüm katmanlar açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
             AddAnim("harcama bonusu: the whole payout",
@@ -7571,6 +7689,252 @@ namespace ProjectBlock.View
         {
             flag = !flag;
             animLastLabel = Loc.Pick("elmas kazma " + english + ": ", "elmas kazma " + turkish + ": ") + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        // ------------------------------------------------------------------ tutuştur
+
+        // "TUTUŞTUR" IN THE LAB. A board of the lab's own with fire where the scene wants it, emptied
+        // the way the round empties it, then the joker's REPORT - those cells, those cubes, and the
+        // points (0, as the joker pays nothing without "Genel temizlik", except in the score scene) -
+        // played through Prepare/Begin, the game's own calls. The whole scenario lands a block into a
+        // row with a fire in it and runs the line's own explosion, like the game.
+
+        private enum AnimIgnitionScene
+        {
+            Single,
+            SameRow,
+            DifferentRows,
+            FiveRows,
+            FullBoard,
+            Sparse,
+            Stress,
+            Proxy,
+            Score
+        }
+
+        private uint animIgnitionSeed = 1;
+        private Coroutine animIgnitionScenario;
+
+        private List<GridPos> AnimIgnitionCells(AnimIgnitionScene scene)
+        {
+            var cells = new List<GridPos>();
+            switch (scene)
+            {
+                case AnimIgnitionScene.SameRow:
+                    cells.AddRange(new[] { new GridPos(1, 2), new GridPos(3, 2), new GridPos(5, 2) });
+                    break;
+                case AnimIgnitionScene.DifferentRows:
+                    cells.AddRange(new[] { new GridPos(1, 0), new GridPos(3, 3), new GridPos(5, 6) });
+                    break;
+                case AnimIgnitionScene.FiveRows:
+                    cells.AddRange(new[] { new GridPos(1, 0), new GridPos(4, 0), new GridPos(2, 1), new GridPos(5, 2),
+                        new GridPos(0, 3), new GridPos(3, 3), new GridPos(6, 4), new GridPos(2, 4) });
+                    break;
+                case AnimIgnitionScene.FullBoard:
+                case AnimIgnitionScene.Score:
+                    cells.AddRange(new[] { new GridPos(1, 0), new GridPos(4, 0), new GridPos(2, 1), new GridPos(5, 2),
+                        new GridPos(0, 3), new GridPos(3, 3), new GridPos(6, 4), new GridPos(1, 5), new GridPos(4, 6),
+                        new GridPos(2, 6), new GridPos(5, 5), new GridPos(3, 1), new GridPos(6, 1), new GridPos(0, 6) });
+                    if (scene == AnimIgnitionScene.Score)
+                    {
+                        cells.RemoveRange(6, cells.Count - 6);
+                    }
+                    break;
+                case AnimIgnitionScene.Sparse:
+                    cells.AddRange(new[] { new GridPos(0, 0), new GridPos(6, 2), new GridPos(1, 5), new GridPos(5, 6) });
+                    break;
+                case AnimIgnitionScene.Stress:
+                    for (int y = 0; y < 7 && cells.Count < 30; y++)
+                    {
+                        for (int x = 0; x < 7 && cells.Count < 30; x++)
+                        {
+                            if ((x + y * 2) % 5 != 0)
+                            {
+                                cells.Add(new GridPos(x, y));
+                            }
+                        }
+                    }
+                    break;
+                default:
+                    cells.Add(new GridPos(3, 2));
+                    if (scene == AnimIgnitionScene.Proxy)
+                    {
+                        cells.Add(new GridPos(1, 4));
+                    }
+                    break;
+            }
+            return cells;
+        }
+
+        private void AnimIgnition(AnimIgnitionScene scene)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || boardView == null)
+            {
+                return;
+            }
+            StopAnimIgnitionScenario();
+            EnsureIgnition();
+            ignition.Stop();
+            ignition.Forget();
+            TutusturJoker joker = FindIgniter() ?? new TutusturJoker();
+            List<GridPos> cells = AnimIgnitionCells(scene);
+            List<int> cards = AnimBossCards();
+            var board = new GameBoard(7, 7);
+            foreach (GridPos p in cells)
+            {
+                board.SetCubeAt(p, new Cube(CubeKind.Fire, cards[0]));
+            }
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            boardView.Refresh();
+            var report = new IgnitionVisuals();
+            foreach (GridPos p in cells)
+            {
+                report.Cells.Add(p);
+                report.Cubes.Add(board.GetCube(p).Value);
+                board.DestroyCube(p);
+            }
+            report.Points = scene == AnimIgnitionScene.Score
+                ? cells.Count * joker.PointsPerChainedCube * session.Config.Scoring.ScoreScale : 0;
+            report.Seed = animIgnitionSeed++ * 2654435761u;
+            boardView.Refresh();
+            ignition.Prepare(report);
+            if (scene != AnimIgnitionScene.Proxy)
+            {
+                ignition.Begin(report, 0.15f);
+            }
+            animLastLabel = Loc.Pick("tutuştur: " + scene + " (" + report.Count + " fires" + (report.Points != 0 ? ", +" + report.Points : "") + ")",
+                "tutuştur: " + scene + " (" + report.Count + " ateş" + (report.Points != 0 ? ", +" + report.Points : "") + ")");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        private void AnimIgnitionScenario()
+        {
+            StopAnimIgnitionScenario();
+            animIgnitionScenario = StartCoroutine(AnimIgnitionScenarioRoutine());
+        }
+
+        private void StopAnimIgnitionScenario()
+        {
+            if (animIgnitionScenario != null)
+            {
+                StopCoroutine(animIgnitionScenario);
+                animIgnitionScenario = null;
+            }
+        }
+
+        /// <summary>
+        /// The game's order: a row one cube short with a FIRE block in it and other fire scattered
+        /// above and below; a block lands; the turn resolves - the row and every other fire leave the
+        /// rules together; the repaint raises the far fires as proxies (Prepare, where RefreshAll
+        /// calls SyncIgnition); the line's own explosion is drawn and the chain waits for its peak
+        /// (Begin, where PlayExplosionFeedback calls PlayIgnition).
+        /// </summary>
+        private System.Collections.IEnumerator AnimIgnitionScenarioRoutine()
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || boardView == null)
+            {
+                yield break;
+            }
+            EnsureIgnition();
+            ignition.Stop();
+            ignition.Forget();
+            TutusturJoker joker = FindIgniter() ?? new TutusturJoker();
+            List<int> cards = AnimBossCards();
+            const int row = 1;
+            var gap = new GridPos(6, row);
+            var board = new GameBoard(7, 7);
+            for (int x = 0; x < 6; x++)
+            {
+                board.SetCubeAt(new GridPos(x, row), new Cube(x == 2 ? CubeKind.Fire : CubeKind.Normal, cards[x % cards.Count]));
+            }
+            var far = new[] { new GridPos(4, 0), new GridPos(1, 3), new GridPos(5, 3), new GridPos(3, 4),
+                new GridPos(0, 5), new GridPos(6, 6), new GridPos(2, 6) };
+            foreach (GridPos p in far)
+            {
+                board.SetCubeAt(p, new Cube(CubeKind.Fire, cards[0]));
+            }
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            boardView.Refresh();
+            AnimIgnitionLabel("1/4 a row one cube short, with a fire block in it; fire scattered round the board",
+                "1/4 satırda bir küp eksik, içinde bir ateş bloğu; tahtada dağınık ateşler");
+            yield return new WaitForSeconds(0.8f);
+
+            board.SetCubeAt(gap, new Cube(CubeKind.Normal, cards[cards.Count - 1]));
+            boardView.Refresh();
+            sfx.Place();
+            AnimIgnitionLabel("2/4 a block lands: the row is full", "2/4 blok iner: satır doldu");
+            yield return new WaitForSeconds(0.25f);
+
+            var report = new IgnitionVisuals();
+            report.SourceCells.Add(new GridPos(2, row));
+            foreach (GridPos p in far)
+            {
+                report.Cells.Add(p);
+                report.Cubes.Add(board.GetCube(p).Value);
+            }
+            report.Seed = animIgnitionSeed++ * 2654435761u;
+            for (int x = 0; x < 7; x++)
+            {
+                board.DestroyCube(new GridPos(x, row));
+            }
+            foreach (GridPos p in far)
+            {
+                board.DestroyCube(p);
+            }
+            boardView.Refresh();
+            ignition.Prepare(report);
+
+            FlashLine(board, board.MinY + row, true);
+            sfx.Explode();
+            ignition.Begin(report, IgnitionPeak());
+            AnimIgnitionLabel("3/4 the row with the fire explodes - at its peak, TUTUŞTUR",
+                "3/4 ateşli satır patlar - tepe noktasında TUTUŞTUR");
+            yield return new WaitForSeconds(IgnitionPeak() + 0.1f);
+            AnimIgnitionLabel("4/4 every other fire burns out, bottom row first",
+                "4/4 diğer bütün ateşler yanıp tükenir, önce alt satır");
+            animIgnitionScenario = null;
+        }
+
+        private void AnimIgnitionLabel(string english, string turkish)
+        {
+            animLastLabel = Loc.Pick("tutuştur: " + english, "tutuştur: " + turkish);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        private void AnimIgnitionOnly()
+        {
+            IgnitionBurnView.Layers.AllOn();
+            IgnitionBurnView.Layers.ShowProxy = false;
+            IgnitionBurnView.Layers.ShowActivation = false;
+            IgnitionBurnView.Layers.ShowHeat = false;
+            IgnitionBurnView.Layers.ShowFlameLicks = false;
+            IgnitionBurnView.Layers.ShowSmokeBirth = false;
+            IgnitionBurnView.Layers.ShowSmokeClimb = false;
+            IgnitionBurnView.Layers.ShowSmokeClear = false;
+            IgnitionBurnView.Layers.ShowBurnout = false;
+            IgnitionBurnView.Layers.ShowCollapse = false;
+            IgnitionBurnView.Layers.ShowEmbers = false;
+            IgnitionBurnView.Layers.ShowAshFlakes = false;
+            IgnitionBurnView.Layers.ShowScorch = false;
+            IgnitionBurnView.Layers.ShowScore = false;
+        }
+
+        private void AnimIgnitionToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("tutuştur " + english + ": ", "tutuştur " + turkish + ": ") + OnOff(flag);
             if (AnimLabOpen)
             {
                 RedrawAnimationLab();

@@ -163,6 +163,8 @@ namespace ProjectBlock.View
             PlayChallengeEvent();
             // "Elmas Kazma": the obsidian the sweep could not take, after the sweep's own wave.
             PlayQuarry(report);
+            // "Tutuştur": every other fire burns out, climbing from the source's explosion peak.
+            PlayIgnition();
             if (report.CleanSweep)
             {
                 // the sweep bling rises in pitch with every sweep this round
@@ -2122,6 +2124,7 @@ namespace ProjectBlock.View
             SyncQuake();
             SyncChallenge();
             SyncQuarry();
+            SyncIgnition();
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

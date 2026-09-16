@@ -603,6 +603,32 @@ dropped that way once each.
   colours, near, far, edge, corner, and a full board with stone in it that stays), eight beats on
   their own, a proxy test, 0.5x/0.25x, and three debug overlays (targets red / could fall yellow /
   stone grey, the wave each cube falls in, crack bounds).
+- **"Tutuştur" is a combustion wave, not twenty explosions** (`IgnitionBurnView`, `IgnitionShapes`,
+  `Resources/Shaders/IgnitionBurn`, `GameUiController.Ignition.cs`). The joker takes every fire on the
+  board through `DestroyCubes` when a fire goes up, which reaches no explosion list - the far fires
+  used to vanish with the repaint. Now the repaint raises them as proxies and holds them
+  (`SyncIgnition` -> `Prepare`), and `PlayExplosionFeedback` starts the chain at the SOURCE's own
+  explosion peak (`PlayIgnition` -> `Begin`, the line sweep's propagation and hold): a small warm
+  ripple on the source, then the fires BURN OUT row by row from the bottom - 45 ms a row, squeezed so
+  the climb never passes 350 ms, a few ms of deterministic jitter inside a row so it is never a
+  left-to-right sweep. One peak frame should say it alone: bottom clear, middle in smoke, top still
+  fire. Each cube heats (brighter middle, darker rim, a couple of small flame licks on its rim), smoke
+  is born at its BOTTOM edge, narrow and warm-lit, and climbs and widens over it; behind the smoke
+  **the burn is a material, not an alpha** - `IgnitionBurn` chars it through a baked mask that is
+  value noise pulled low toward the outline (so it chars from the edges and a few patches inward, the
+  middle last) with an ember band on the front, sampled in OBJECT space because a packed tile's UV is a
+  sub-rect; then it collapses into itself (x 0.62, y 0.45), embers and ash lift off, and the smoke
+  outlives it by a breath before lifting away - which is what reveals the empty cell. Without the
+  shader the cube tints to charcoal. Budgets step down with the count (4 / 3 / 2 puffs, embers and
+  ash shared out) so twenty fires are dense and never a grey fog. Sound per ROW, one haptic.
+  **THE VIEW DECIDES NOTHING**: `TutusturJoker.LastIgnition` (`IgnitionVisuals`, `[NotSaved]`) carries
+  the cells `DestroyCubes` returned, the cube in each taken before it went, the fire cells the turn's
+  log shows already went up (the fuse), and the points measured off the breakdown - 0 unless "Genel
+  temizlik" makes the chain pay. The lab has single / beat-isolation / same-row / different-rows /
+  five-row / full / sparse / 30-fire stress scenes, the whole scenario (a block lands in a row with a
+  fire, the line's own explosion, the chain at its peak), a proxy test, a score scene, 0.5x / 0.25x and
+  nine debug views; `Tools/UiLayoutCheck/tutustur.py` holds the lot. See `ignite_*.png` in the session
+  scratchpad.
 - **"Elmas Kazma" breaks the stone the sweep could not** (`QuarryBreakView`, `QuarryShapes`,
   `GameUiController.Quarry.cs`). The joker cracks every obsidian on a clean sweep through the
   engine's forced destruction, which reaches no explosion list - so for a long time the stone simply
