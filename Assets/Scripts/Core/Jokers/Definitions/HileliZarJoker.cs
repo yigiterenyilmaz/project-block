@@ -1,4 +1,4 @@
-// PURPOSE: "Hileli zar" - the joker that lets the player deal their own opening hand. Like
+﻿// PURPOSE: "Hileli zar" - the joker that lets the player deal their own opening hand. Like
 // "Kredi kartı" this class is the SWITCH, not the machinery: GameSession owns the pending
 // opening hand (TryPickOpeningHand / TakePendingOpeningHand) and the market UI drives the
 // picking, because this is the one joker whose whole effect happens between rounds.
@@ -42,6 +42,14 @@ namespace ProjectBlock.Core
         public bool CanPickOpeningHand
         {
             get { return !usedThisMarket; }
+        }
+
+        /// <summary>The market's own affordance: while the pick is unspent this card breathes
+        /// in the bar, so the player is told the deal is there rather than having to remember
+        /// it. See Joker.HasPendingMarketAction.</summary>
+        public override bool HasPendingMarketAction
+        {
+            get { return CanPickOpeningHand; }
         }
 
         public override string StatusText

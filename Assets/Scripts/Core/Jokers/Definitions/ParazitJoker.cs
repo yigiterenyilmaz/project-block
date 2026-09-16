@@ -55,6 +55,14 @@ namespace ProjectBlock.Core
             get { return BoundJokerInstanceId.HasValue; }
         }
 
+        /// <summary>An unbound parasite is waiting for its market attach, so its card breathes
+        /// in the bar exactly as "Hileli zar" does. Same affordance, one definition - see
+        /// Joker.HasPendingMarketAction.</summary>
+        public override bool HasPendingMarketAction
+        {
+            get { return !HasBinding; }
+        }
+
         /// <summary>Where the host cube is standing, once its block has been played - or null
         /// while the binding is still in the deck. Presentation only: the View needs a cell to
         /// hang the parasite's harness on, and it must never work one out for itself.</summary>

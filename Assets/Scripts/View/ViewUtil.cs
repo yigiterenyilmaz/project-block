@@ -1,4 +1,4 @@
-// PURPOSE: Tiny helpers for the placeholder UI (runtime-generated sprites, card colors) and
+﻿// PURPOSE: Tiny helpers for the placeholder UI (runtime-generated sprites, card colors) and
 // the PAINTED BLOCK TILES a cube is drawn on.
 // NOTE FOR AGENTS: everything under Assets/Scripts/View is intentionally disposable
 // debug presentation. Game rules NEVER live here - they belong to ProjectBlock.Core.
@@ -114,6 +114,65 @@ namespace ProjectBlock.View
             Vector2 size, Color color, int sortingOrder)
         {
             return MakePlate(parent, name, position, size, color, sortingOrder, RoundedSprite);
+        }
+
+        private static Sprite glowSprite;
+
+        /// <summary>Pixels a side of the generated glow, and how many of them the outward
+        /// falloff takes. The ramp is the sprite's 9-slice BORDER, so it keeps its width at any
+        /// card size while only the solid middle stretches - a glow scaled as a whole would be
+        /// a soft haze on a small card and a hard edge on a big one.</summary>
+        private const int GlowPixels = 64;
+
+        private const int GlowFalloff = 20;
+
+        /// <summary>
+        /// THE ONE HALO EVERY BAR CARD LIGHTS UP WITH - a white rounded plate whose alpha falls
+        /// smoothly to nothing over its outer band, 9-sliced so the band is the same width on a
+        /// desktop card and a phone slot.
+        ///
+        /// It is a GRADIENT and never a flat tinted square, for the same reason the board's
+        /// effects are: a hard-edged plate behind a card reads as a second card, while a light
+        /// that dies at its own edge reads as the card glowing. The falloff is squared so the
+        /// bright part stays tight against the silhouette instead of smearing evenly outward.
+        /// </summary>
+        public static Sprite GlowSprite
+        {
+            get
+            {
+                if (glowSprite == null)
+                {
+                    var tex = new Texture2D(GlowPixels, GlowPixels, TextureFormat.RGBA32, false);
+                    for (int y = 0; y < GlowPixels; y++)
+                    {
+                        for (int x = 0; x < GlowPixels; x++)
+                        {
+                            tex.SetPixel(x, y, new Color(1f, 1f, 1f, GlowAlpha(x, y)));
+                        }
+                    }
+                    tex.Apply();
+                    tex.filterMode = FilterMode.Bilinear;
+                    tex.wrapMode = TextureWrapMode.Clamp;
+                    glowSprite = Sprite.Create(tex, new Rect(0, 0, GlowPixels, GlowPixels),
+                        new Vector2(0.5f, 0.5f), RoundedPpu, 0, SpriteMeshType.FullRect,
+                        new Vector4(GlowFalloff, GlowFalloff, GlowFalloff, GlowFalloff));
+                }
+                return glowSprite;
+            }
+        }
+
+        /// <summary>Coverage of one pixel of the glow: solid through the middle, falling to zero
+        /// across the outer band. Distance is measured to the inner rectangle so a corner fades
+        /// on a curve rather than along a diagonal crease.</summary>
+        private static float GlowAlpha(int x, int y)
+        {
+            float px = x + 0.5f;
+            float py = y + 0.5f;
+            float cx = Mathf.Clamp(px, GlowFalloff, GlowPixels - GlowFalloff);
+            float cy = Mathf.Clamp(py, GlowFalloff, GlowPixels - GlowFalloff);
+            float distance = Mathf.Sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+            float k = 1f - Mathf.Clamp01(distance / GlowFalloff);
+            return k * k;
         }
 
         // ---- painted UI plates ---------------------------------------------------------

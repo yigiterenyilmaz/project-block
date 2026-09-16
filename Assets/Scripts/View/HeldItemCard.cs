@@ -1,4 +1,4 @@
-// PURPOSE: One VERTICAL card in the joker or power bar - the shared shape both bars draw, so the
+﻿// PURPOSE: One VERTICAL card in the joker or power bar - the shared shape both bars draw, so the
 // two can never drift apart. A tinted body (the live state colour), a frame ring (the rarity
 // colour), an ICON WELL across the top and the name and one status line under it.
 // NOTE FOR AGENTS: the well holds the joker/power icon (ViewUtil.JokerIcon/PowerIcon, by DefId);
@@ -50,6 +50,12 @@ namespace ProjectBlock.View
 
         /// <summary>The joker/power art, inside the well. Hidden when it has none yet.</summary>
         public Image Icon;
+
+        /// <summary>This card's halo, or null on a card no bar gave a glow layer to. It does NOT
+        /// live under the card: every glow is parented into one layer drawn beneath every card,
+        /// because a uGUI child always draws OVER its parent and a halo on top of the painting is
+        /// a wash over it. See CardGlowFx for what drives it.</summary>
+        public CardGlowFx Glow;
 
         /// <summary>An icon on a spent or switched-off card is dimmed rather than hidden, so the
         /// card is still recognisable while it says it cannot be used.</summary>
@@ -258,6 +264,47 @@ namespace ProjectBlock.View
             card.Status = MakeText(card.Root.transform, "Status", FontStyle.Normal, status,
                 TextAnchor.UpperCenter);
             return card;
+        }
+
+        /// <summary>Gives this card a halo in <paramref name="layer"/> - a container the bar keeps
+        /// as its FIRST child, so every glow is drawn under every card and a halo can never sit on
+        /// top of the card next door. Call once, at build time; SyncGlow then keeps it on the
+        /// slot.</summary>
+        public void AttachGlow(Transform layer)
+        {
+            if (layer == null || Glow != null)
+            {
+                return;
+            }
+            var go = new GameObject(Root.name + "_Glow");
+            go.transform.SetParent(layer, false);
+            var image = go.AddComponent<Image>();
+            image.raycastTarget = false;
+            image.sprite = ViewUtil.GlowSprite;
+            // SLICED: the falloff is the sprite's border and has to keep its width at every card
+            // size - stretched as a whole it is a haze on a phone slot and a hard rim on a
+            // desktop card.
+            image.type = Image.Type.Sliced;
+            image.enabled = false;
+            Glow = go.AddComponent<CardGlowFx>();
+            SyncGlow();
+        }
+
+        /// <summary>Puts the halo back on the card's slot. The bar calls this whenever it has
+        /// moved its slots, because the two are siblings rather than parent and child.</summary>
+        public void SyncGlow()
+        {
+            if (Glow == null)
+            {
+                return;
+            }
+            var mine = Root.GetComponent<RectTransform>();
+            var his = Glow.GetComponent<RectTransform>();
+            his.anchorMin = mine.anchorMin;
+            his.anchorMax = mine.anchorMax;
+            his.pivot = mine.pivot;
+            Glow.gameObject.SetActive(Root.activeSelf);
+            Glow.Follow(mine.anchoredPosition, mine.sizeDelta);
         }
 
         /// <summary>Shows <paramref name="sprite"/> in the well, or nothing when it is null. The

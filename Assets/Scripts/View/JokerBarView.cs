@@ -1,4 +1,4 @@
-// PURPOSE: The joker bar - one VERTICAL card per owned joker (HeldItemCard) with its hotkey,
+﻿// PURPOSE: The joker bar - one VERTICAL card per owned joker (HeldItemCard) with its hotkey,
 // name and one live status line; the full description and the sell value are in its tooltip.
 // Reads JokerInventory, never changes it (GameUiController owns input).
 // NOTE FOR AGENTS: placeholder presentation like everything else under View/. The card
@@ -57,6 +57,10 @@ namespace ProjectBlock.View
         private readonly List<HeldItemCard> panels = new List<HeldItemCard>();
         private RectTransform root;
 
+        /// <summary>The layer every card's halo lives in, kept as the strip's FIRST child so a
+        /// glow is always drawn UNDER every card - see HeldItemCard.AttachGlow.</summary>
+        private RectTransform glowLayer;
+
         /// <summary>Creates the strip under the HUD canvas. Call once.</summary>
         public void Build(Transform canvas)
         {
@@ -65,6 +69,15 @@ namespace ProjectBlock.View
             root = go.AddComponent<RectTransform>();
             root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
             UiLayout.PlaceBarRoot(root, true, topOffset);
+
+            var glowGo = new GameObject("GlowLayer");
+            glowGo.transform.SetParent(root, false);
+            glowLayer = glowGo.AddComponent<RectTransform>();
+            glowLayer.anchorMin = Vector2.zero;
+            glowLayer.anchorMax = Vector2.one;
+            glowLayer.offsetMin = Vector2.zero;
+            glowLayer.offsetMax = Vector2.zero;
+            glowLayer.SetAsFirstSibling();
         }
 
         /// <summary>How far the strip is pushed DOWN from its corner, in canvas pixels. The boss
@@ -109,6 +122,7 @@ namespace ProjectBlock.View
                 UiLayout.PlaceBarSlot(panels[i].Root.GetComponent<RectTransform>(),
                     i, showing, new Vector2(PanelWidth, PanelHeight), PanelGap, true);
                 panels[i].Layout(new Vector2(PanelWidth, PanelHeight), Compact);
+                panels[i].SyncGlow();
             }
         }
 
@@ -320,6 +334,7 @@ namespace ProjectBlock.View
             HeldItemCard card = HeldItemCard.Create(root, "Joker_" + index, NameColor, BodyColor,
                 "card_joker");
             card.SetResting(PanelColor);
+            card.AttachGlow(glowLayer);
             UiLayout.PlaceBarSlot(card.Root.GetComponent<RectTransform>(), index, index + 1,
                 new Vector2(PanelWidth, PanelHeight), PanelGap, true);
             card.Layout(new Vector2(PanelWidth, PanelHeight), Compact);

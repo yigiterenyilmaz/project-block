@@ -1,4 +1,4 @@
-// PURPOSE: The power bar on the left side of the screen - below the info text, above the
+﻿// PURPOSE: The power bar on the left side of the screen - below the info text, above the
 // discard pile. One clickable VERTICAL card per owned power (HeldItemCard) with its name and
 // charge state; the description and sell value are in its tooltip. Reads PowerInventory,
 // never changes it (GameUiController owns input).
@@ -69,6 +69,10 @@ namespace ProjectBlock.View
         private readonly List<HeldItemCard> panels = new List<HeldItemCard>();
         private RectTransform root;
 
+        /// <summary>The layer every card's halo lives in, kept as the strip's FIRST child so a
+        /// glow is always drawn UNDER every card - see HeldItemCard.AttachGlow.</summary>
+        private RectTransform glowLayer;
+
         /// <summary>Creates the strip under the HUD canvas. Call once.</summary>
         public void Build(Transform canvas)
         {
@@ -77,6 +81,15 @@ namespace ProjectBlock.View
             root = go.AddComponent<RectTransform>();
             root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
             UiLayout.PlaceBarRoot(root, false, TopOffset);
+
+            var glowGo = new GameObject("GlowLayer");
+            glowGo.transform.SetParent(root, false);
+            glowLayer = glowGo.AddComponent<RectTransform>();
+            glowLayer.anchorMin = Vector2.zero;
+            glowLayer.anchorMax = Vector2.one;
+            glowLayer.offsetMin = Vector2.zero;
+            glowLayer.offsetMax = Vector2.zero;
+            glowLayer.SetAsFirstSibling();
         }
 
         /// <summary>Re-anchors the strip and every slot in it after the layout changed.</summary>
@@ -108,6 +121,7 @@ namespace ProjectBlock.View
                 UiLayout.PlaceBarSlot(panels[i].Root.GetComponent<RectTransform>(),
                     i, showing, new Vector2(PanelWidth, PanelHeight), PanelGap, false);
                 panels[i].Layout(new Vector2(PanelWidth, PanelHeight), Compact);
+                panels[i].SyncGlow();
             }
         }
 
@@ -308,6 +322,7 @@ namespace ProjectBlock.View
             HeldItemCard card = HeldItemCard.Create(root, "Power_" + index, NameColor, BodyColor,
                 "card_power");
             card.SetResting(PanelColor);
+            card.AttachGlow(glowLayer);
             UiLayout.PlaceBarSlot(card.Root.GetComponent<RectTransform>(), index, index + 1,
                 new Vector2(PanelWidth, PanelHeight), PanelGap, false);
             card.Layout(new Vector2(PanelWidth, PanelHeight), Compact);

@@ -1,4 +1,4 @@
-// PURPOSE: The joker base type. All hooks are virtual no-ops; a concrete joker
+﻿// PURPOSE: The joker base type. All hooks are virtual no-ops; a concrete joker
 // overrides only what it needs. JokerInventory is the only thing that calls the
 // hooks. Subclass, override, and register in JokerRegistry to add one.
 
@@ -43,6 +43,24 @@ namespace ProjectBlock.Core
         public virtual string StatusText
         {
             get { return null; }
+        }
+
+        /// <summary>
+        /// True while this joker has something WAITING TO BE DONE WITH IT in the market - a pick
+        /// unspent ("Hileli zar"), a binding unmade ("Parazit"). The market UI breathes a light
+        /// around such a card, and that is the whole reason this is a generic question rather
+        /// than the bar testing for two specific jokers: the affordance is the same one every
+        /// time, so a market joker written next year gets it by overriding this.
+        ///
+        /// It says only that the joker is WAITING, never what clicking it does - that is still
+        /// the controller's business, because only it knows which panel to open.
+        ///
+        /// EXTENSION POINT: a new market-phase joker overrides this alongside its own click
+        /// handler in GameUiController.Bars.
+        /// </summary>
+        public virtual bool HasPendingMarketAction
+        {
+            get { return false; }
         }
 
         /// <summary>Unique within the session. Assigned by JokerInventory on acquisition,
