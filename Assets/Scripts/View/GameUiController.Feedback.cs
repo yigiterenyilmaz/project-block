@@ -462,8 +462,17 @@ namespace ProjectBlock.View
         /// </summary>
         private void SpawnComboPopup(int comboCount, bool bridged)
         {
+            // THE LADDER HAS A CEILING, so the popup stops promising more once it is reached.
+            // The streak itself keeps counting (jokers care, and so does the player), but a
+            // "COMBO x7" over a bonus that stopped growing at three is the popup telling the
+            // player they are being paid for something they are not - which is exactly the
+            // "what you see and what you are paid line up" rule this file already holds the
+            // first clearing turn to.
+            int cap = session != null ? session.Config.Scoring.MaxComboTier : 0;
+            bool maxed = cap > 0 && comboCount >= cap;
             FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
-                Loc.Pick("COMBO x", "KOMBO x") + comboCount + "!",
+                Loc.Pick("COMBO x", "KOMBO x") + comboCount
+                    + (maxed ? Loc.Pick("  MAX!", "  MAKS!") : "!"),
                 bridged ? BridgedComboColor : new Color(1f, 0.6f, 0.2f), 64, 0.08f);
             if (bridged)
             {

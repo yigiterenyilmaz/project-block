@@ -39,6 +39,20 @@ namespace ProjectBlock.Core
             return config.CleanSweepBonus;
         }
 
+        /// <summary>
+        /// The combo bonus for the n-th consecutive line-clearing turn.
+        ///
+        /// A SHORT LADDER THAT CLIMBS HARD (2026-09-16, designer's call). It used to be flat -
+        /// (n-1) * step, forever - so every turn of a streak was worth the same small amount more
+        /// than the last and a streak's value was all in its LENGTH. Now it caps at
+        /// ScoringConfig.MaxComboTier and the rungs below the cap ACCELERATE, so the reward is in
+        /// getting to three rather than in grinding to eleven.
+        ///
+        /// Triangular over the capped tier: rung n is worth n-1 steps on top of everything below
+        /// it, so tier 2 pays one step and tier 3 pays three. Past the cap the bonus simply stops
+        /// growing - the streak itself keeps counting, because jokers and the popup still care
+        /// about how long it really is.
+        /// </summary>
         public int ScoreCombo(int comboCount)
         {
             // The FIRST clearing turn is not a combo - it is just a clear. The bonus starts on
@@ -48,7 +62,13 @@ namespace ProjectBlock.Core
             {
                 return 0;
             }
-            return (comboCount - 1) * config.ComboBonusPerStep;
+            int tier = comboCount;
+            if (config.MaxComboTier > 0 && tier > config.MaxComboTier)
+            {
+                tier = config.MaxComboTier;
+            }
+            int steps = (tier - 1) * tier / 2;
+            return steps * config.ComboBonusPerStep;
         }
 
         public int ScoreTargetedBlock()

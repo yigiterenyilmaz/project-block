@@ -368,6 +368,12 @@ namespace ProjectBlock.Core
                     + "uçar. Elinde bozulur - her tur getirisi azalır, 5 turda yok olur.");
         }
 
+        /// <summary>It keeps proc statistics, so the tooltip prints its count even at zero.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         /// <summary>True while an antimatter card is waiting to be used.</summary>
         public bool HasCard
         {
@@ -445,6 +451,11 @@ namespace ProjectBlock.Core
             }
             paidThisRound += bonus;
             turn.AddFlatScore(bonus, DefId);
+            // ONE proc per blast, whatever it took with it: the event is the annihilation, not
+            // each cube. This is also the only visible evidence the joker paid at all - the score
+            // lands in the turn's total with everything else, so without the flash and the
+            // statistics line a player has no way to tell a 1000-point blast from a dud.
+            NoteProc(bonus, turn);
         }
 
         /// <summary>One more turn of rot, and the card is taken off the table when it is spent.

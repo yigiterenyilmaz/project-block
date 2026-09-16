@@ -1,4 +1,4 @@
-// PURPOSE: Save/load for the plain structural types - positions, shapes, cards, cubes, and
+﻿// PURPOSE: Save/load for the plain structural types - positions, shapes, cards, cubes, and
 // the two mutable config objects the rules let jokers bend (RoundRules, ScoringConfig).
 //
 // THE CARD TABLE is the important idea here. A BlockCard is a reference shared by the owned
@@ -260,6 +260,7 @@ namespace ProjectBlock.Core
             w.Write(key + ".retroPlacement", scoring.RetroPlacementBonus);
             w.Write(key + ".perLine", scoring.PointsPerLine);
             w.Write(key + ".comboStep", scoring.ComboBonusPerStep);
+            w.Write(key + ".comboCap", scoring.MaxComboTier);
             w.Write(key + ".perCubeExploded", scoring.PointsPerCubeExploded);
             w.Write(key + ".multiLine", scoring.MultiLineBonusPerExtraLine);
             w.Write(key + ".sweep", scoring.CleanSweepBonus);
@@ -276,6 +277,7 @@ namespace ProjectBlock.Core
             scoring.RetroPlacementBonus = r.ReadInt(key + ".retroPlacement");
             scoring.PointsPerLine = r.ReadInt(key + ".perLine");
             scoring.ComboBonusPerStep = r.ReadInt(key + ".comboStep");
+            scoring.MaxComboTier = r.ReadInt(key + ".comboCap");
             scoring.PointsPerCubeExploded = r.ReadInt(key + ".perCubeExploded");
             scoring.MultiLineBonusPerExtraLine = r.ReadInt(key + ".multiLine");
             scoring.CleanSweepBonus = r.ReadInt(key + ".sweep");

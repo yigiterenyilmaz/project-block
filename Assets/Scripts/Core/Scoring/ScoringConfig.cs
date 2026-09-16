@@ -30,12 +30,24 @@ namespace ProjectBlock.Core
         /// <summary>Base score per exploded full row/column.</summary>
         public int PointsPerLine = 10;
 
-        /// <summary>"kombo": the bonus on the n-th consecutive line-clearing turn is
-        /// (n - 1) * ComboBonusPerStep. The first clearing turn pays NOTHING - a combo starts on
-        /// the second one - so a streak pays 0, 5, 10, 15... A turn that clears no line resets
-        /// the streak to 0. Logical (small); the global ScoreScale lifts it. It is a regular
-        /// base field, so overtime trickles it like placement/lines.</summary>
-        public int ComboBonusPerStep = 5;
+        /// <summary>"kombo": one step of the combo ladder. The first clearing turn pays NOTHING -
+        /// a combo starts on the second one - and the rungs ACCELERATE up to MaxComboTier, so a
+        /// streak pays 0, 10, 30 and then stays there. A turn that clears no line resets the
+        /// streak to 0. Logical (small); the global ScoreScale lifts it. It is a regular base
+        /// field, so overtime trickles it like placement/lines. See
+        /// DefaultScoreCalculator.ScoreCombo for the shape.</summary>
+        public int ComboBonusPerStep = 10;
+
+        /// <summary>
+        /// "kombo": the highest rung the ladder has. Past it the streak keeps counting but stops
+        /// paying more.
+        ///
+        /// THREE (2026-09-16, designer's call). A ladder with no ceiling put a streak's whole
+        /// value in its LENGTH, which rewards a board kept artificially alive over a board played
+        /// well; a short ceiling with steep rungs asks for three good turns in a row instead, and
+        /// pays properly for them. 0 removes the cap.
+        /// </summary>
+        public int MaxComboTier = 3;
 
         /// <summary>Score per cube destroyed by a line explosion.</summary>
         public int PointsPerCubeExploded = 1;

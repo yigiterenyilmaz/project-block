@@ -229,6 +229,7 @@ public static class JokerTests
         Antimadde_OnlyFitsAPerfectOverlay();
         Antimadde_AnnihilatesEveryCubeOfThatElement();
         Antimadde_MintsFromANegativeErasureAndRots();
+        Antimadde_PaysForEveryCubeItAnnihilates();
         Eforsuz_PaysOnAPowerFreeRound();
         Eforsuz_DoublesForAPowerFreeOvertime();
         Enflasyon_RaisesTheBarEveryTurn();
@@ -934,7 +935,24 @@ public static class JokerTests
 
     // ---- Mikrodalga. The joker itself does nothing but set two rule values, so every test
     // here drives REAL turns: what is being checked is the engine's combo counter, not the
-    // joker's own bookkeeping. ComboBonusPerStep is 5, so a streak pays 0, 5, 10, 15...
+    // joker's own bookkeeping.
+    //
+    // WHAT A STREAK PAYS IS ASKED, NEVER WRITTEN DOWN HERE. These tests used to hardcode 5 / 10 /
+    // 15 off the old flat ladder, so retuning the combo broke three of them for no reason - the
+    // thing they exist to pin is the BRIDGE (does a quiet turn end the streak, and is the turn
+    // that crosses it discounted), not the size of any rung.
+
+    /// <summary>What the n-th consecutive clearing turn pays, straight from the live rule.</summary>
+    private static int ComboRung(GameSession session, int streak)
+    {
+        return new DefaultScoreCalculator(session.Config.Scoring).ScoreCombo(streak);
+    }
+
+    /// <summary>The same rung, reheated - what a turn that crosses a bridged gap pays.</summary>
+    private static int BridgedRung(GameSession session, int streak)
+    {
+        return ComboRung(session, streak) * session.Config.Rules.ComboBridgedScorePercent / 100;
+    }
 
     private static void Mikrodalga_BridgesOneQuietTurnAtHalfRate()
     {
@@ -943,8 +961,11 @@ public static class JokerTests
             "without the joker a quiet turn ends the streak",
             "got " + ComboAfterOneQuietTurn(false));
         int bridged = ComboAfterOneQuietTurn(true);
-        // Third step of the streak = 10, reheated at 50%.
-        Check(bridged == 5, "with it the streak carries on at half rate", "got " + bridged);
+        // The streak is on its THIRD clearing turn, reheated at the bridged rate.
+        int expected = BridgedRung(ComboSession(true), 3);
+        Check(bridged == expected, "with it the streak carries on at a reduced rate",
+            "got " + bridged + ", wanted " + expected);
+        Check(expected > 0, "and a reheated combo is still worth something", "" + expected);
     }
 
     private static void Mikrodalga_TwoQuietTurnsStillBreakTheStreak()
@@ -968,10 +989,13 @@ public static class JokerTests
         ClearOneRow(session, round, 0);
         ClearOneRow(session, round, 1);
         DropOneCube(round, new GridPos(2, 2));
-        Check(ClearOneRow(session, round, 3) == 5, "the turn that ends the gap is halved");
-        // Straight after it, with no gap: the fourth step pays its full 15.
-        Check(ClearOneRow(session, round, 4) == 15,
-            "the next consecutive clear is back to full rate");
+        int gapTurn = ClearOneRow(session, round, 3);
+        Check(gapTurn == BridgedRung(session, 3), "the turn that ends the gap is discounted",
+            "got " + gapTurn + ", wanted " + BridgedRung(session, 3));
+        // Straight after it, with no gap: the fourth clearing turn pays its rung in full.
+        int nextTurn = ClearOneRow(session, round, 4);
+        Check(nextTurn == ComboRung(session, 4), "the next consecutive clear is back to full rate",
+            "got " + nextTurn + ", wanted " + ComboRung(session, 4));
     }
 
     /// <summary>Clear, clear, ONE quiet turn, clear - and what that last turn's combo paid.</summary>
@@ -8331,6 +8355,61 @@ public static class JokerTests
             if (round.BonusHand[i].Card.Id == anti.Id) { stillThere = true; }
         }
         Check(!stillThere, "the card left the bonus hand with it");
+    }
+
+    /// <summary>
+    /// THE ONE THING NO ANTIMADDE TEST ACTUALLY CHECKED: that landing the key PAYS.
+    ///
+    /// Annihilation and minting were both pinned, but the annihilation test adds the card to the
+    /// bonus hand directly rather than through the joker - so the joker never knows that card is
+    /// its own, PayForAnnihilation returns early, and the whole payout path was untested. Here
+    /// the card is MINTED by the joker, exactly as a real run does it, and the score is checked
+    /// against the rule: every cube of that element ON THE BOARD, at the rotted per-cube value.
+    /// </summary>
+    private static void Antimadde_PaysForEveryCubeItAnnihilates()
+    {
+        Section("antimadde / the blast actually pays");
+        var session = NewSession(7211, 5, 1000000, 40, 1);
+        var joker = (AntimaddeJoker)session.Jokers.Add(new AntimaddeJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+        // Two fire cubes for the negative block to erase (this is what mints the key)...
+        round.Board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Fire, 7800));
+        round.Board.SetCubeAt(new GridPos(2, 1), new Cube(CubeKind.Fire, 7800));
+        BlockCard negative = session.CreateCard(Bar(2),
+            new List<BlockElement> { BlockElement.Negative });
+        round.AddBonusCard(negative, BonusPlayOutcome.ExpireFromRound);
+        round.PlayFromBonus(round.BonusHand.Count - 1, new GridPos(1, 1));
+        Check(joker.HasCard, "the key was minted");
+
+        // ...and now FOUR fire cubes elsewhere for it to annihilate, two of them under the key.
+        // The payout counts every fire cube on the BOARD, not the key's own two cells.
+        round.Board.SetCubeAt(new GridPos(0, 3), new Cube(CubeKind.Fire, 7801));
+        round.Board.SetCubeAt(new GridPos(1, 3), new Cube(CubeKind.Fire, 7801));
+        round.Board.SetCubeAt(new GridPos(3, 0), new Cube(CubeKind.Fire, 7802));
+        round.Board.SetCubeAt(new GridPos(4, 4), new Cube(CubeKind.Fire, 7802));
+
+        int perCube = joker.CurrentBonusPerCube;
+        int index = -1;
+        for (int i = 0; i < round.BonusHand.Count; i++)
+        {
+            if (round.BonusHand[i].Card.AntimatterOf.HasValue)
+            {
+                index = i;
+            }
+        }
+        Check(index >= 0, "the key is in the bonus hand");
+        TurnReport report = round.PlayFromBonus(index, new GridPos(0, 3));
+        Check(report != null && report.AnnihilatedKind == CubeKind.Fire,
+            "the key went down on a perfect fit");
+        Check(report.ExtraExplodedCells.Count == 4, "all four fire cubes went up",
+            "" + report.ExtraExplodedCells.Count);
+        int paid = FlatFrom(report.Score, joker.DefId);
+        Check(paid == 4 * perCube, "and the joker paid for every one of them",
+            "got " + paid + ", wanted " + (4 * perCube));
+        Check(paid > 0, "the payout is not zero", "" + paid);
+        Check(joker.ProcCount == 1, "one proc recorded", "" + joker.ProcCount);
     }
 
     private static void Eforsuz_PaysOnAPowerFreeRound()
