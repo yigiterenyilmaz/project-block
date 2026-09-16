@@ -179,6 +179,13 @@ namespace ProjectBlock.View
                     BlockCard rightCard = rightHit != null
                         ? CardOfSlot(round, rightHit.SlotIndex)
                         : null;
+                    // "Simya": a two-element card opens its element picker first; whatever a
+                    // right-click did to it before is a row of that picker.
+                    if (rightCard != null
+                        && OpenAlchemyPicker(round, rightHit.SlotIndex, rightHit.HomePosition))
+                    {
+                        return;
+                    }
                     if (rightCard != null)
                     {
                         // Asked through the round, not the card: a boss round can suppress every
@@ -263,11 +270,18 @@ namespace ProjectBlock.View
                         // preview under the cursor, not the card being carried over them - the
                         // card has already been read by the time it is picked up.
                         draggedCard.SetAlpha(0.4f);
+                        // "Simya": held still instead of carried, it opens the element picker
+                        // (the phone's right-click, since a finger IS the left button).
+                        ArmAlchemyHold(round, draggedCard, world);
                     }
                 }
                 return;
             }
 
+            if (TickAlchemyHold(round, mouse, world))
+            {
+                return;
+            }
             draggedCard.SnapTo(world);
             BlockCard slotCard = CardOfSlot(round, draggedCard.SlotIndex);
             BlockShape shape = slotCard != null ? round.EffectiveShape(slotCard) : null;

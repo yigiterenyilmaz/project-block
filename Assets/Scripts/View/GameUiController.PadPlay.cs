@@ -632,6 +632,12 @@ namespace ProjectBlock.View
         /// suppress every element.</summary>
         private bool PadRotateOrReshape(RoundEngine round, BlockCard card)
         {
+            // "Simya": a two-element card asks what to be; rotating and the fox are rows there.
+            CardVisual padVisual = cardLayer.VisualOfSlot(padHandSlot);
+            if (padVisual != null && OpenAlchemyPicker(round, padHandSlot, padVisual.HomePosition))
+            {
+                return true;
+            }
             if (round.CardHasElement(card, BlockElement.Mechanical))
             {
                 round.RotateCard(padHandSlot);

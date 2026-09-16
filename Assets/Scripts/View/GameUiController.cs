@@ -73,7 +73,7 @@ namespace ProjectBlock.View
         // harmless if the Full Screen Pass feature/material is not wired yet (see docs/crt-edge-bend.md).
         private static readonly int CrtBendId = Shader.PropertyToID("_CrtBend");
 
-        private enum ChoiceKind { None, PowerbankTarget, GravityDirection, BossStage }
+        private enum ChoiceKind { None, PowerbankTarget, GravityDirection, BossStage, CardElement }
 
         /// <summary>Which page of the DEBUG boss picker is showing. There are far more bosses
         /// than fit one modal, so the list pages and wraps.</summary>

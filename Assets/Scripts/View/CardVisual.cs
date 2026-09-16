@@ -177,10 +177,15 @@ namespace ProjectBlock.View
                 if (card.Elements.Count > 0 || card.IsCustom || card.IsSmuggled
                     || card.AntimatterOf.HasValue)
                 {
+                    // "Simya": a two-element card is named by the element it is BEING, set in
+                    // ‹ › so it reads as something that can be switched (right-click / hold).
+                    IReadOnlyList<BlockElement> shownElements = ViewUtil.ShownElements(card);
                     var elementLabels = new List<string>();
-                    foreach (BlockElement element in card.Elements)
+                    foreach (BlockElement element in shownElements)
                     {
-                        elementLabels.Add(ViewUtil.ElementLabel(element));
+                        elementLabels.Add(card.IsAlchemical && element != BlockElement.Targeted
+                            ? "‹ " + ViewUtil.ElementLabel(element) + " ›"
+                            : ViewUtil.ElementLabel(element));
                     }
                     // A custom (player-designed) block is always tagged just "custom", even when
                     // it carries an element - its element still colours the cubes and drives play.
@@ -212,8 +217,9 @@ namespace ProjectBlock.View
                         ? new Color(1f, 0.42f, 0.38f) // defective: a red warning
                         : card.IsSmuggled
                         ? new Color(1f, 0.72f, 0.35f) // sound smuggled goods: a milder amber
-                        : card.Elements.Count > 0
-                            ? Color.Lerp(ViewUtil.ElementColor(card.Elements[0]), Color.white, 0.4f)
+                        : shownElements.Count > 0
+                            ? Color.Lerp(ViewUtil.ElementColor(shownElements[shownElements.Count - 1]),
+                                Color.white, 0.4f)
                             : new Color(0.85f, 0.80f, 1f); // custom-only: a bright neutral tag
                     TrackText(ViewUtil.MakeText3D(transform, "ElementLabel", bandCenter,
                         bandText, 90, 0.016f, labelColor, order + 4,

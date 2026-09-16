@@ -277,14 +277,27 @@ namespace ProjectBlock.View
             }
             string title = CardTitle(card);
             var body = new StringBuilder();
+            BlockElement? active = card.ActiveElement;
+            if (active.HasValue)
+            {
+                // "Simya": say which one it is being, and how to change it.
+                body.Append(ViewUtil.WrapText(Loc.Pick(
+                    "Acts as ONE of its elements: " + ViewUtil.ElementLabel(active.Value)
+                        + ". Right-click (or press and hold) to switch.",
+                    "Elementlerinden YALNIZCA BİRİ gibi davranır: " + ViewUtil.ElementLabel(active.Value)
+                        + ". Değiştirmek için sağ tıkla (ya da basılı tut)."), 34)).Append("\n\n");
+            }
             for (int i = 0; i < card.Elements.Count; i++)
             {
                 if (i > 0) body.Append("\n\n");
                 BlockElement element = card.Elements[i];
-                body.Append(ViewUtil.ElementLabel(element)).Append('\n')
+                bool idle = active.HasValue && element != active.Value && element != BlockElement.Targeted;
+                body.Append(ViewUtil.ElementLabel(element))
+                    .Append(idle ? Loc.Pick("  (not active)", "  (pasif)") : string.Empty).Append('\n')
                     .Append(ViewUtil.WrapText(ViewUtil.ElementDescription(element), 34));
             }
-            RenderTooltip("card:" + card.Id, title, body.ToString(), nearWorld);
+            RenderTooltip("card:" + card.Id + ":" + (active.HasValue ? (int)active.Value : -1),
+                title, body.ToString(), nearWorld);
         }
 
         /// <summary>The tier headline a joker/power tooltip opens with - empty for common, so

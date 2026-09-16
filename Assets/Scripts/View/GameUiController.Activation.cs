@@ -158,6 +158,12 @@ namespace ProjectBlock.View
             {
                 return ResolveBossPick(pendingChoiceValues[index]);
             }
+            if (pendingChoice == ChoiceKind.CardElement)
+            {
+                ResolveAlchemyChoice(pendingChoiceValues[index]);
+                RefreshAll(null);
+                return true;
+            }
             var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
             if (pendingChoice == ChoiceKind.PowerbankTarget)
             {

@@ -411,9 +411,10 @@ namespace ProjectBlock.View
                         return body;
                     }
                 }
-                for (int i = 0; i < sourceCard.Elements.Count; i++)
+                IReadOnlyList<BlockElement> shown = ShownElements(sourceCard);
+                for (int i = 0; i < shown.Count; i++)
                 {
-                    Sprite fromCard = OwnTile(sourceCard.Elements[i]);
+                    Sprite fromCard = OwnTile(shown[i]);
                     if (fromCard != null)
                     {
                         return fromCard;
@@ -675,12 +676,13 @@ namespace ProjectBlock.View
             // otherwise a plain targeted card would be lime from edge to edge.
             Color color = ColorForCard(card.Id);
             BlockElement? element = null;
-            for (int i = 0; i < card.Elements.Count; i++)
+            IReadOnlyList<BlockElement> shown = ShownElements(card);
+            for (int i = 0; i < shown.Count; i++)
             {
-                if (card.Elements[i] != BlockElement.Targeted)
+                if (shown[i] != BlockElement.Targeted)
                 {
-                    color = ElementColor(card.Elements[i]);
-                    element = card.Elements[i];
+                    color = ElementColor(shown[i]);
+                    element = shown[i];
                     break;
                 }
             }
@@ -882,6 +884,28 @@ namespace ProjectBlock.View
                 case CubeKind.Snake: return Loc.Pick("snake", "yılan");
                 default: return Loc.Pick("plain", "sade");
             }
+        }
+
+        /// <summary>
+        /// The elements a card is drawn as RIGHT NOW. For almost every card that is simply its
+        /// Elements; an alchemical one ("Simya": two materials, one at a time) is its target mark,
+        /// if it has one, and the element the player made it - never the one it is not being, or
+        /// a fire+water card chosen as water would still be painted fire.
+        /// </summary>
+        public static IReadOnlyList<BlockElement> ShownElements(BlockCard card)
+        {
+            BlockElement? active = card != null ? card.ActiveElement : null;
+            if (!active.HasValue)
+            {
+                return card != null ? card.Elements : (IReadOnlyList<BlockElement>)new BlockElement[0];
+            }
+            var shown = new List<BlockElement>(2);
+            if (card.Has(BlockElement.Targeted))
+            {
+                shown.Add(BlockElement.Targeted);
+            }
+            shown.Add(active.Value);
+            return shown;
         }
 
         /// <summary>Short display name of an element for card labels.</summary>

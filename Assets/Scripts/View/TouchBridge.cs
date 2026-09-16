@@ -14,7 +14,9 @@
 //
 // RIGHT-CLICK IS A SECOND FINGER, because the game genuinely uses it (marking, selling, the
 // designer's erase) and a long press cannot be told from the beginning of a drag until it is too
-// late - by then the card has already been picked up.
+// late - by then the card has already been picked up. The ONE hold in the game is built on top of
+// that pick-up rather than in here: a "Simya" card held STILL opens its element picker
+// (GameUiController.Alchemy.cs), undoing the pick-up once it is plainly not a drag.
 //
 // ONLY WHILE A FINGER IS DOWN. Like the pad, this writes only while it is being used, so a device
 // with both a touchscreen and a mouse hands the pointer back the moment the mouse moves.
