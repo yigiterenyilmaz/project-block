@@ -785,6 +785,68 @@ namespace ProjectBlock.View
         // view, the confetti view, the bars' own Proc/Hold, SpawnComboPopup - and fabricates
         // only the argument. A retimed effect shows its new timing here for free.
 
+        /// <summary>Ripening cubes at a given stage, and/or a number of them turning to gold
+        /// this instant. The real view, the real report - only the numbers are the lab's.</summary>
+        private void AnimMetamorphosis(int turnsHeld, int turning)
+        {
+            EnsureMetamorphosis();
+            var report = new MetamorphosisVisuals();
+            if (turnsHeld > 0)
+            {
+                report.AddRipening(new GridPos(3, 3), turnsHeld, 7);
+            }
+            for (int i = 0; i < turning; i++)
+            {
+                report.AddTurned(new GridPos(2 + i, 2));
+            }
+            metamorphosis.Show(report);
+            if (turning > 0)
+            {
+                sfx.Buy();
+            }
+            animLastLabel = turning > 0
+                ? Loc.Pick(turning + " turned", turning + " dönüştü")
+                : Loc.Pick(turnsHeld + "/7", turnsHeld + "/7");
+        }
+
+        /// <summary>One cube at every stage at once - the scene that says whether the gilding
+        /// reads as a SCALE or only as marked / not marked.</summary>
+        private void AnimMetamorphosisSpread()
+        {
+            EnsureMetamorphosis();
+            var report = new MetamorphosisVisuals();
+            for (int i = 1; i <= 6; i++)
+            {
+                report.AddRipening(new GridPos(i, 3), i, 7);
+            }
+            metamorphosis.Show(report);
+        }
+
+        private IEnumerator AnimMetamorphosisClock()
+        {
+            for (int turn = 1; turn <= 6; turn++)
+            {
+                AnimMetamorphosis(turn, 0);
+                yield return new WaitForSecondsRealtime(0.5f);
+            }
+            AnimMetamorphosis(0, 1);
+        }
+
+        /// <summary>"Antimadde": the key lands and every cube of that element goes. There is no
+        /// effect of its own - the annihilation is an ordinary group destruction - so this drives
+        /// FlashCells exactly as the turn does, in the element's own colour.</summary>
+        private void AnimAntimatter(int cubes)
+        {
+            var cells = new List<GridPos>();
+            for (int i = 0; i < cubes; i++)
+            {
+                cells.Add(new GridPos(1 + (i % 5), 1 + (i / 5)));
+            }
+            FlashCells(cells, ViewUtil.ElementColor(BlockElement.Fire));
+            sfx.Explode();
+            animLastLabel = Loc.Pick(cubes + " annihilated", cubes + " yok edildi");
+        }
+
         /// <summary>Puts <paramref name="cubes"/> dynamite cubes on the board at a given charge
         /// and plays the powder for them. <paramref name="gained"/> false is a block HOLDING:
         /// the ember stays, and there is no spark and no sizzle.</summary>
@@ -3822,6 +3884,42 @@ namespace ProjectBlock.View
                 delegate { AnimConfetti(true); });
             AddAnim("eforsuz: the two side by side", "eforsuz: ikisi yan yana",
                 delegate { StartCoroutine(AnimConfettiCompare()); });
+
+            AddAnimSub("jokers", "metamorfoz", "metamorfoz", "metamorfoz");
+            AddAnim("metamorfoz: a cube starts the clock (1 of 7)",
+                "metamorfoz: sayaç başlıyor (7 turun 1.i)",
+                delegate { AnimMetamorphosis(1, 0); });
+            AddAnim("metamorfoz: halfway (4 of 7)", "metamorfoz: yarı yol (7 turun 4.ü)",
+                delegate { AnimMetamorphosis(4, 0); });
+            AddAnim("metamorfoz: ONE TURN LEFT (6 of 7)",
+                "metamorfoz: BİR TUR KALDI (7 turun 6.sı)",
+                delegate { AnimMetamorphosis(6, 0); });
+            AddAnim("metamorfoz: it TURNS to gold", "metamorfoz: ALTINA dönüyor",
+                delegate { AnimMetamorphosis(0, 1); });
+            AddAnim("metamorfoz: three turn at once", "metamorfoz: üçü birden dönüyor",
+                delegate { AnimMetamorphosis(0, 3); });
+            AddAnim("metamorfoz: the whole clock, 1 to gold",
+                "metamorfoz: tüm sayaç, 1'den altına",
+                delegate { StartCoroutine(AnimMetamorphosisClock()); });
+            AddAnim("metamorfoz: a board at every stage at once",
+                "metamorfoz: her aşamadan biri aynı anda",
+                delegate { AnimMetamorphosisSpread(); });
+
+            AddAnimSub("jokers", "antimadde", "antimadde", "antimadde");
+            AddAnim("antimadde: the key annihilates 4 cubes",
+                "antimadde: anahtar 4 küpü yok eder",
+                delegate { AnimAntimatter(4); });
+            AddAnim("antimadde: a big wipe - 12 cubes", "antimadde: büyük silme - 12 küp",
+                delegate { AnimAntimatter(12); });
+            AddAnim("antimadde: one lonely cube", "antimadde: tek küp",
+                delegate { AnimAntimatter(1); });
+            AddAnim("antimadde: the payout popup", "antimadde: puan yazısı",
+                delegate
+                {
+                    FloatingTextFx.Spawn(transform, new Vector2(0f, 2.0f),
+                        Loc.Pick("ANNIHILATED  +3000", "YOK EDİLDİ  +3000"),
+                        new Color(0.72f, 0.55f, 1f), 60, 0.08f);
+                });
 
             AddAnimSub("jokers", "simetri", "simetri", "simetri");
             AddAnim("simetri: the arena lights for a symmetric board",

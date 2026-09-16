@@ -510,13 +510,13 @@ namespace ProjectBlock.View
             // matters is no longer a flat bonus they could read off the score.
             if (factor > 1.0001)
             {
-                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.35f),
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
                     "x" + factor.ToString("0.##") + Loc.Pick(" SCORE", " PUAN"),
                     bridged ? BridgedComboColor : new Color(1f, 0.78f, 0.35f), 46, 0.09f);
             }
             if (bridged)
             {
-                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.1f),
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
                     Loc.Pick("MİKRODALGA  -  kept warm", "MİKRODALGA  -  sıcak tutuldu"),
                     BridgedComboColor, 40, 0.10f);
             }
@@ -2227,6 +2227,7 @@ namespace ProjectBlock.View
             SyncQuarry();
             SyncIgnition();
             SyncPowder();
+            SyncMetamorphosis();
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

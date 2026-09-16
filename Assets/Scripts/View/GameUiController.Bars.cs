@@ -96,7 +96,11 @@ namespace ProjectBlock.View
                 return Vector2.zero;
             }
             Vector2 world = cam.ScreenToWorldPoint(panelScreen.Value);
-            float inward = cam.orthographicSize * 0.62f;
+            // JUST CLEAR OF THE CARD, not across the screen. The first pass pushed it most of a
+            // camera height inward, which on a desktop landed the message over the market panel
+            // in the middle of the screen - nowhere near the card it was about. A card is about
+            // one world unit wide, so a little over that takes the popup off it and no further.
+            float inward = cam.orthographicSize * 0.24f;
             world.x += fromRight ? -inward : inward;
             return world;
         }

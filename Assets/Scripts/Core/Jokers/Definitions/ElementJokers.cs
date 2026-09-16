@@ -603,6 +603,11 @@ namespace ProjectBlock.Core
 
         private int goldThisRound;
 
+        /// <summary>What is ripening and what just turned, for the View. A NEW object per turn,
+        /// matched by identity; rebuilt every turn and meaningless across a load.</summary>
+        [NotSaved]
+        public MetamorphosisVisuals LastChange;
+
         public MetamorfozJoker()
             : base("metamorfoz", "Metamorfoz")
         {
@@ -657,12 +662,20 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>It keeps proc statistics, so the tooltip prints its count even at zero. What
+        /// it counts is CUBES TURNED - it pays no points, so the count is the whole story.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         public override void OnRoundStarted(RoundContext ctx)
         {
             // A new round is a new board, so no clock carries over.
             age.Clear();
             ageCard.Clear();
             goldThisRound = 0;
+            LastChange = null;
         }
 
         public override void AfterTurnScored(TurnContext turn)
@@ -719,14 +732,30 @@ namespace ProjectBlock.Core
             }
 
             // The change itself. A ripened cube leaves the clock because it stops being plain.
+            var report = new MetamorphosisVisuals();
             for (int i = 0; i < ripened.Count; i++)
             {
                 if (board.SetCubeKind(ripened[i], CubeKind.Gold))
                 {
                     goldThisRound++;
+                    report.AddTurned(ripened[i]);
                 }
                 age.Remove(ripened[i]);
                 ageCard.Remove(ripened[i]);
+            }
+            // Everything STILL on the clock, after the ripened ones have left it - so a cube that
+            // turned this turn is reported as turned and never also as nearly there.
+            foreach (KeyValuePair<GridPos, int> entry in age)
+            {
+                report.AddRipening(entry.Key, entry.Value, TurnsToRipen);
+            }
+            LastChange = report;
+            // ONE proc per TURN in which anything changed, not one per cube: what the player is
+            // being told is "the metamorphosis happened", and it happened once. No points - this
+            // joker pays in gold cubes, and a statistic that invented a score would be a lie.
+            if (report.Turned.Count > 0)
+            {
+                NoteProc(0, turn);
             }
         }
     }
