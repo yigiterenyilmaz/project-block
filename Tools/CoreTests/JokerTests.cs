@@ -108,6 +108,9 @@ public static class JokerTests
         MeydanOkuma_LadderIsHardestFirstAndNeverAGimme();
         MeydanOkuma_FirstDareIsTheHardestLineOnTheBoard();
         MeydanOkuma_WaitsWhenEveryLineIsAGimme();
+        MeydanOkuma_ReportsEveryTurnOfTheDare();
+        MeydanOkuma_ReportsThePayment();
+        MeydanOkuma_UrgencyHasOneDefinition();
         Powerbank_RechargesASpentPower();
         Erosion_FirstTwoRecyclesAreFreeThenTheRimGoes();
         Erosion_RimNeverEatsTheLastCell();
@@ -3239,6 +3242,200 @@ public static class JokerTests
             + "not the whole board", "turns " + joker.TurnsLeft);
         Check(joker.CurrentBonus == 200, "the first attempt is worth the full bonus",
             "bonus " + joker.CurrentBonus);
+    }
+
+    /// <summary>
+    /// THE CONTRACT'S WHOLE LIFE, turn by turn, off the report alone: laid, ticked, missed and
+    /// moved at half the bonus (the miss and the new line are ONE event), and the last miss
+    /// expiring. Each event is a new object and every number in it is the joker's own.
+    /// </summary>
+    private static void MeydanOkuma_ReportsEveryTurnOfTheDare()
+    {
+        Section("meydan okuma / the report follows the dare turn by turn");
+        var joker = new MeydanOkumaJoker();
+        joker.ArmAfterTurns = 0;
+        joker.BaseBonus = 200;
+        joker.MinDeadline = 2; // every line is one cube short, so every deadline is two turns
+        var session = NewSession(547, 3, 1000000, 40, 4);
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.Add(joker);
+        session.Jokers.DispatchRoundStarted(round);
+        PaintBoard(round, session, CubeKind.Normal,
+            new GridPos(1, 0), new GridPos(2, 0), new GridPos(0, 1),
+            new GridPos(2, 1), new GridPos(0, 2), new GridPos(1, 2));
+        Check(joker.LastEvent == null, "nothing is reported before the round has turns");
+
+        var events = new List<ChallengeVisuals>();
+        for (int i = 0; i < 20 && !joker.IsResolved; i++)
+        {
+            ChallengeVisuals before = joker.LastEvent;
+            bool hadMark = joker.HasActiveMark;
+            bool wasRow = joker.MarkIsRow;
+            int wasLine = joker.MarkedLine;
+            int wasBonus = joker.CurrentBonus;
+            var report = new TurnReport();
+            report.Card = new BlockCard(1, Bar(1));
+            report.Score = new ScoreBreakdown();
+            report.ExplodedRows = new List<int>();
+            report.ExplodedColumns = new List<int>();
+            joker.AfterTurnScored(new TurnContext(session, session.Rng, round, report, report.Score));
+            ChallengeVisuals ev = joker.LastEvent;
+            if (ReferenceEquals(ev, before))
+            {
+                continue; // nothing happened this turn
+            }
+            events.Add(ev);
+            if (ev.Event != ChallengeEvent.Started)
+            {
+                Check(hadMark && ev.OldIsRow == wasRow && ev.OldLine == wasLine
+                        && ev.OldBonus == wasBonus,
+                    "the OLD contract is the one that was live", ev.Event + " " + ev.OldLine);
+            }
+            if (ev.HasTarget)
+            {
+                Check(joker.HasActiveMark && ev.IsRow == joker.MarkIsRow && ev.Line == joker.MarkedLine
+                        && ev.Bonus == joker.CurrentBonus && ev.TurnsLeft == joker.TurnsLeft
+                        && ev.Attempt == joker.AttemptsMade && ev.InitialTurns == joker.InitialTurns,
+                    "the NEW contract is the joker's live one", ev.Event + " line " + ev.Line);
+            }
+        }
+        var kinds = new List<string>();
+        foreach (ChallengeVisuals ev in events)
+        {
+            kinds.Add(ev.Event + (ev.HasTarget ? "+" : "") + ":" + ev.Bonus + "/" + ev.TurnsLeft);
+        }
+        string seen = string.Join(" ", kinds);
+        Check(events.Count == 7, "seven events: start, tick, miss+move, tick, miss+move, tick, expire",
+            seen);
+        if (events.Count == 7)
+        {
+            Check(events[0].Event == ChallengeEvent.Started && events[0].Attempt == 1
+                    && events[0].Bonus == 200 && events[0].TurnsLeft == 2 && events[0].InitialTurns == 2,
+                "laid at full bonus with the whole deadline", seen);
+            Check(events[1].Event == ChallengeEvent.Ticked && events[1].TurnsLeft == 1
+                    && events[1].Urgency == ChallengeUrgency.Final,
+                "a tick that leaves one turn is the FINAL look", seen);
+            Check(events[2].Event == ChallengeEvent.Failed && events[2].HasTarget
+                    && events[2].OldBonus == 200 && events[2].Bonus == 100 && events[2].NextBonus == 100
+                    && events[2].OldAttempt == 1 && events[2].Attempt == 2,
+                "a miss names the old dare, the new line and the halved bonus - in one report", seen);
+            Check(!(events[2].OldIsRow == events[2].IsRow && events[2].OldLine == events[2].Line),
+                "and the new line is not the one just missed", seen);
+            Check(events[4].Event == ChallengeEvent.Failed && events[4].Bonus == 50
+                    && events[4].Attempt == 3, "the second miss halves again", seen);
+            Check(events[6].Event == ChallengeEvent.Expired && !events[6].HasTarget
+                    && events[6].OldBonus == 50 && events[6].OldAttempt == 3,
+                "the third miss expires with no new line", seen);
+        }
+        var distinct = new HashSet<ChallengeVisuals>(events);
+        Check(distinct.Count == events.Count, "every event is a new object");
+        ChallengeVisuals last = joker.LastEvent;
+        var quiet = new TurnReport();
+        quiet.Card = new BlockCard(1, Bar(1));
+        quiet.Score = new ScoreBreakdown();
+        quiet.ExplodedRows = new List<int>();
+        quiet.ExplodedColumns = new List<int>();
+        joker.AfterTurnScored(new TurnContext(session, session.Rng, round, quiet, quiet.Score));
+        Check(ReferenceEquals(joker.LastEvent, last), "a resolved dare writes nothing more");
+        session.Jokers.DispatchRoundStarted(round);
+        Check(joker.LastEvent == null, "and a new round forgets it");
+    }
+
+    /// <summary>The payment, driven through a REAL clear of the marked line: the report says
+    /// Succeeded, names the line that was paid, and measures what the score really moved.</summary>
+    private static void MeydanOkuma_ReportsThePayment()
+    {
+        Section("meydan okuma / the report measures the payment");
+        var session = NewSession(541, 6, 1000000, 40, 3);
+        var joker = (MeydanOkumaJoker)session.Jokers.Add(new MeydanOkumaJoker());
+        joker.ArmAfterTurns = 1;
+        joker.BaseBonus = 200;
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        RoundEngine round = session.CurrentRound;
+        int guard = 0;
+        while (!joker.HasActiveMark && guard++ < 6 && round.Status == RoundStatus.InProgress)
+        {
+            if (PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        if (!joker.HasActiveMark)
+        {
+            Check(false, "a dare was laid to be paid", "no mark");
+            return;
+        }
+        Check(joker.LastEvent != null && joker.LastEvent.Event == ChallengeEvent.Started,
+            "laying it was reported");
+        bool row = joker.MarkIsRow;
+        int line = joker.MarkedLine;
+        int bonus = joker.CurrentBonus;
+        var cells = new List<GridPos>();
+        GridPos? last = null;
+        GameBoard board = round.Board;
+        int count = row ? board.Width : board.Height;
+        for (int i = 0; i < count; i++)
+        {
+            GridPos p = row ? new GridPos(board.MinX + i, board.MinY + line)
+                : new GridPos(board.MinX + line, board.MinY + i);
+            if (!board.IsInside(p) || board.GetCube(p).HasValue)
+            {
+                continue;
+            }
+            if (last == null)
+            {
+                last = p;
+            }
+            else
+            {
+                cells.Add(p);
+            }
+        }
+        if (last == null)
+        {
+            Check(false, "the dared line had a gap to fill");
+            return;
+        }
+        PaintBoard(round, session, CubeKind.Normal, cells.ToArray());
+        // ...and a cube elsewhere, so the clear is not also a clean sweep.
+        GridPos spare = row ? new GridPos(board.MinX, board.MinY + (line == 0 ? 1 : 0))
+            : new GridPos(board.MinX + (line == 0 ? 1 : 0), board.MinY);
+        if (!board.GetCube(spare).HasValue)
+        {
+            PaintBoard(round, session, CubeKind.Normal, spare);
+        }
+        int before = round.RoundScore;
+        BlockCard plug = session.CreateCard(Bar(1), new BlockElement[0]);
+        round.AddBonusCard(plug, BonusPlayOutcome.ExpireFromRound);
+        round.PlayFromBonus(round.BonusHand.Count - 1, last.Value);
+
+        ChallengeVisuals ev = joker.LastEvent;
+        Check(ev != null && ev.Event == ChallengeEvent.Succeeded, "the clear is reported as a success",
+            ev == null ? "null" : ev.Event.ToString());
+        if (ev == null)
+        {
+            return;
+        }
+        Check(ev.OldIsRow == row && ev.OldLine == line && ev.OldBonus == bonus && !ev.HasTarget,
+            "naming the line that was paid, and no new one");
+        Check(ev.ScoreDelta == bonus * session.Config.Scoring.ScoreScale,
+            "the measured payment is the bonus at the score's scale",
+            ev.ScoreDelta + " vs " + bonus * session.Config.Scoring.ScoreScale);
+        Check(round.RoundScore - before >= ev.ScoreDelta, "and the turn banked at least that");
+        Check(joker.IsResolved && !joker.HasActiveMark, "the dare is over");
+    }
+
+    private static void MeydanOkuma_UrgencyHasOneDefinition()
+    {
+        Section("meydan okuma / urgency: calm, tension, final");
+        Check(ChallengeVisuals.UrgencyOf(3, 3) == ChallengeUrgency.Calm, "3 of 3 is calm");
+        Check(ChallengeVisuals.UrgencyOf(2, 3) == ChallengeUrgency.Tension, "2 of 3 is tension");
+        Check(ChallengeVisuals.UrgencyOf(1, 3) == ChallengeUrgency.Final, "1 of 3 is final");
+        Check(ChallengeVisuals.UrgencyOf(4, 5) == ChallengeUrgency.Calm, "4 of 5 is calm");
+        Check(ChallengeVisuals.UrgencyOf(3, 5) == ChallengeUrgency.Tension, "3 of 5 is tension");
+        Check(ChallengeVisuals.UrgencyOf(2, 0) == ChallengeUrgency.Calm,
+            "an unknown start (a loaded run) counts what is left as the whole deadline");
+        Check(ChallengeVisuals.UrgencyOf(1, 0) == ChallengeUrgency.Final, "the last turn is final regardless");
     }
 
     private static void MeydanOkuma_HalvesAndGivesUpAfterThreeMisses()

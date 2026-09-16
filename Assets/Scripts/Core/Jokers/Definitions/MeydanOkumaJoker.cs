@@ -31,6 +31,11 @@
 // a run saved before this still loads. The sea is re-measured from the saved board whenever it is
 // next needed, and it is seeded from that state, so a loaded run reaches the same dare.
 //
+// WHAT THE PLAYER SEES comes from LastEvent (ChallengeVisuals): one report per turn that says
+// whether the dare was laid, ticked, paid, missed or ran out, with the contract before and after.
+// The deadline a dare STARTED with is kept beside it for the countdown's look only, and never
+// saved (a loaded run treats the turns it has left as the whole deadline).
+//
 // All numbers are BALANCE PLACEHOLDERS.
 
 using System;
@@ -83,6 +88,14 @@ namespace ProjectBlock.Core
         private int markedLine;        // 0-based row (Y) or column (X) index
         private bool hasMark;
 
+        /// <summary>The deadline the live dare was laid with - presentation only.</summary>
+        [NotSaved]
+        private int markDeadline;
+
+        /// <summary>This turn's event for the View: a new object per event, never saved.</summary>
+        [field: NotSaved]
+        public ChallengeVisuals LastEvent { get; private set; }
+
         public MeydanOkumaJoker()
             : base("meydan_okuma", "Meydan Okuma")
         {
@@ -127,6 +140,25 @@ namespace ProjectBlock.Core
             get { return currentBonus; }
         }
 
+        /// <summary>Dares laid this round (0..3); the live one is this number.</summary>
+        public int AttemptsMade
+        {
+            get { return attemptsMade; }
+        }
+
+        /// <summary>The deadline the live dare started with (its turns left after a load).</summary>
+        public int InitialTurns
+        {
+            get { return markDeadline > 0 ? markDeadline : turnsLeft; }
+        }
+
+        /// <summary>After a miss with attempts left and no honest line yet: what the next dare
+        /// will be worth. 0 otherwise.</summary>
+        public int PendingBonus
+        {
+            get { return !resolved && !hasMark && attemptsMade > 0 ? BaseBonus >> attemptsMade : 0; }
+        }
+
         public override string StatusText
         {
             get
@@ -151,6 +183,8 @@ namespace ProjectBlock.Core
             hasMark = false;
             currentBonus = 0;
             turnsLeft = 0;
+            markDeadline = 0;
+            LastEvent = null;
         }
 
         public override void AfterTurnScored(TurnContext turn)
@@ -159,20 +193,34 @@ namespace ProjectBlock.Core
             {
                 return;
             }
+            ChallengeVisuals missed = null;
             if (hasMark)
             {
+                var before = new ChallengeVisuals
+                {
+                    OldIsRow = markIsRow,
+                    OldLine = markedLine,
+                    OldBonus = currentBonus,
+                    OldAttempt = attemptsMade
+                };
                 // The mark is live: did the player clear it this turn?
                 if (MarkedLineExploded(turn.Report))
                 {
+                    int scoreBefore = turn.Round.RoundScore;
                     turn.AddFlatScore(currentBonus, DefId);
                     resolved = true;
                     hasMark = false;
+                    before.Event = ChallengeEvent.Succeeded;
+                    before.ScoreDelta = turn.Round.RoundScore - scoreBefore;
+                    LastEvent = before;
                     return;
                 }
                 // Not this turn - the deadline ticks.
                 turnsLeft--;
                 if (turnsLeft > 0)
                 {
+                    before.Event = ChallengeEvent.Ticked;
+                    LastEvent = Live(before);
                     return;
                 }
                 // Missed. markedLine / markIsRow still name it, which is what keeps the next dare
@@ -181,14 +229,45 @@ namespace ProjectBlock.Core
                 if (attemptsMade >= MaxAttempts)
                 {
                     resolved = true;
+                    before.Event = ChallengeEvent.Expired;
+                    LastEvent = before;
                     return;
                 }
+                before.Event = ChallengeEvent.Failed;
+                before.NextBonus = BaseBonus >> attemptsMade;
+                LastEvent = before;
+                missed = before;
             }
             else if (attemptsMade == 0 && turn.Round.TurnNumber < ArmAfterTurns)
             {
                 return; // not until enough blocks are down
             }
             LayMark(turn);
+            if (!hasMark)
+            {
+                return; // no honest dare this turn - a miss stays a miss with no new line yet
+            }
+            if (missed != null)
+            {
+                Live(missed); // the miss and the new line are one event
+            }
+            else
+            {
+                LastEvent = Live(new ChallengeVisuals { Event = ChallengeEvent.Started });
+            }
+        }
+
+        /// <summary>Writes the live contract into a report.</summary>
+        private ChallengeVisuals Live(ChallengeVisuals report)
+        {
+            report.HasTarget = true;
+            report.IsRow = markIsRow;
+            report.Line = markedLine;
+            report.Bonus = currentBonus;
+            report.Attempt = attemptsMade;
+            report.TurnsLeft = turnsLeft;
+            report.InitialTurns = InitialTurns;
+            return report;
         }
 
         /// <summary>The deadline the dare gives a line with this many gaps. Public because the
@@ -221,6 +300,7 @@ namespace ProjectBlock.Core
             markIsRow = pick.IsRow;
             markedLine = pick.Index;
             turnsLeft = pick.Deadline;
+            markDeadline = pick.Deadline;
             hasMark = true;
             attemptsMade++;
         }
