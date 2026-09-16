@@ -1,8 +1,12 @@
 // PURPOSE: "Taşkın" - the water on the board OVERFLOWS into the cubes beside it and drowns them into
-// water. Not a tint: each source piles up at the edge facing a real target, swells, spills over the
-// border as a short liquid tongue, wets the target's near edge, and a film crosses the target from
-// that side while the cube under it refracts, loses its colour and contrast and runs - until the
-// water tile underneath takes the cell and settles with a broken ripple.
+// water. Not a tint, and IN THIS ORDER, which is the whole read: first the source water itself SWELLS
+// AND RISES - the water cube grows a tenth, lifts off its cell over a darker contact shadow, and piles
+// into a mound on each edge facing a real target; only once it has risen does it spill over the border
+// as a liquid tongue; only when the tongue LANDS does the target begin to turn - a film crossing it
+// from that side while the cube under it refracts, loses its colour and contrast and runs - and the
+// source sinks back as the water tile underneath takes the target and settles with a broken ripple.
+// The first pass started the target 180 ms in with a few pixels of swell, and it read as the cube
+// simply turning to water: the rise has to be SEEN before anything else happens.
 //
 // ONE TARGET, ONE TRANSFORMATION. A cube reached from two or three sides is not two or three
 // animations stacked: it is one proxy on the FloodFilm shader whose film comes in from every side
@@ -36,17 +40,23 @@ namespace ProjectBlock.View
     {
         public static class Style
         {
-            public static float Pressure = 0.11f;
-            public static float PressureBright = 0.09f;
-            public static float SwellFrom = 0.07f;
-            public static float Swell = 0.09f;
-            public static float SwellPx = 6f;
-            public static float TongueFrom = 0.10f;
-            public static float Tongue = 0.12f;
-            public static float TongueWidth = 0.22f;        // cells
-            public static float TongueRoot = 0.35f;         // cells from the source centre
-            public static float TongueReach = 0.22f;        // cells into the target
-            public static float Arrival = 0.18f;            // source clock at which the tongue lands
+            /// <summary>The source RISING: its own water grows and lifts off the cell.</summary>
+            public static float Pressure = 0.30f;
+            public static float RiseScale = 1.12f;
+            public static float RiseLift = 0.06f;           // cells
+            public static float RiseShadow = 0.35f;
+            public static float PressureBright = 0.10f;
+            public static float SwellFrom = 0.14f;
+            public static float Swell = 0.20f;
+            public static float SwellCells = 0.20f;         // how far the mound piles past the edge
+            public static float TongueFrom = 0.33f;
+            public static float Tongue = 0.20f;
+            public static float TongueWidth = 0.30f;        // cells
+            public static float TongueRoot = 0.30f;         // cells from the source centre
+            public static float TongueReach = 0.32f;        // cells into the target
+            /// <summary>When the tongue LANDS - and the target does not begin to turn before it.
+            /// </summary>
+            public static float Arrival = 0.52f;
             public static float Contact = 0.07f;
             public static float Film = 0.20f;
             public static float SubmergeFrom = 0.08f;
@@ -60,7 +70,7 @@ namespace ProjectBlock.View
             public static float RippleFrom = 0.28f;
             public static float Ripple = 0.16f;
             public static float RippleAlpha = 0.18f;
-            public static float Rebound = 0.12f;
+            public static float Rebound = 0.22f;
             public static float SourceStagger = 0.025f;
             public static int MaxDroplets = 24;
             public static Color FilmColour = new Color(0.45f, 0.82f, 0.88f);
@@ -129,10 +139,12 @@ namespace ProjectBlock.View
 
         private const int WaterOrder = 5;
         private const int ProxyOrder = 6;
-        private const int SourceOrder = 7;
-        private const int TongueOrder = 8;
-        private const int RippleOrder = 9;
-        private const int DropletOrder = 10;
+        private const int ShadowOrder = 7;
+        private const int RaisedOrder = 8;
+        private const int SourceOrder = 9;
+        private const int TongueOrder = 10;
+        private const int RippleOrder = 11;
+        private const int DropletOrder = 12;
         private const int DebugOrder = 96;
 
         private static Material filmMaterial;
@@ -173,6 +185,11 @@ namespace ProjectBlock.View
             public GridPos Cell;
             public float Start;
             public SpriteRenderer Plate;
+            public SpriteRenderer Raised;
+            public SpriteRenderer Shadow;
+            public float Amount;   // 0..1 how risen, this frame
+            public float Lift;     // world units, this frame
+            public float Scale = 1f;
             public readonly List<Vector2> Facing = new List<Vector2>();
         }
 
@@ -284,7 +301,7 @@ namespace ProjectBlock.View
                 Release(held);
             }
             held.Clear();
-            foreach (Source s in sources) { Return(s.Plate); }
+            foreach (Source s in sources) { Return(s.Plate); Return(s.Raised); Return(s.Shadow); }
             sources.Clear();
             foreach (Spill sp in spills)
             {
@@ -417,6 +434,16 @@ namespace ProjectBlock.View
                 {
                     kv.Value.Plate = Rent(SourceOrder);
                     kv.Value.Plate.sprite = QuarryShapes.Plate;
+                    // The source's OWN water, raised: the same tile on the same warp material as the
+                    // board's, so when it sinks back to scale 1 and goes it is the board's cube again.
+                    kv.Value.Raised = Rent(RaisedOrder);
+                    kv.Value.Raised.sprite = waterTile;
+                    if (waterMaterial != null)
+                    {
+                        kv.Value.Raised.sharedMaterial = waterMaterial;
+                    }
+                    kv.Value.Shadow = Rent(ShadowOrder);
+                    kv.Value.Shadow.sprite = QuarryShapes.Plate;
                     sources.Add(kv.Value);
                 }
             }
@@ -472,33 +499,50 @@ namespace ProjectBlock.View
 
         private void PaintSource(Source s, float cube)
         {
-            float k = (clock - s.Start) / Style.Pressure;
-            float last = 0f;
-            foreach (Spill sp in spills)
-            {
-                if (sp.From == s) { last = Mathf.Max(last, sp.To.First + Style.Rebound); }
-            }
-            float rebound = Mathf.Clamp01((clock - last) / Style.Rebound);
-            float level = Mathf.Clamp01(k) * (1f - rebound);
-            bool on = Layers.ShowPressure && level > 0f;
-            s.Plate.enabled = on;
-            if (k >= 0f) { Say(Sounded, SoundSourcePressure); }
+            float k = Mathf.Clamp01((clock - s.Start) / Style.Pressure);
+            if (clock >= s.Start) { Say(Sounded, SoundSourcePressure); }
+            // RISE: fast, a touch past the top, settling to its height - the water heaving up.
+            float rise = k < 1f ? 1f - (1f - k) * (1f - k) * (1f - k) + 0.08f * Mathf.Sin(k * Mathf.PI) : 1f;
+            // SINK: once the last of its tongues has landed, back down with a small undershoot.
+            float sinkFrom = s.Start + Style.Arrival + 0.05f;
+            float sk = Mathf.Clamp01((clock - sinkFrom) / Style.Rebound);
+            float sink = sk * sk * (3f - 2f * sk);
+            float amount = clock < s.Start ? 0f : rise * (1f - sink);
+            float undershoot = sk > 0.6f && sk < 1f ? -0.02f * Mathf.Sin((sk - 0.6f) / 0.4f * Mathf.PI) : 0f;
+            s.Amount = Layers.ShowPressure ? amount : 0f;
+            s.Scale = 1f + (Style.RiseScale - 1f) * s.Amount + (Layers.ShowPressure ? undershoot : 0f);
+            s.Lift = Style.RiseLift * cube * s.Amount;
+            Vector2 at = CellWorld(s.Cell);
+            bool on = Layers.ShowPressure && clock >= s.Start && sk < 1f;
+            s.Raised.enabled = on;
+            s.Shadow.enabled = on && s.Amount > 0.01f;
+            s.Plate.enabled = on && s.Amount > 0.01f;
             if (!on)
             {
                 return;
             }
-            // A little brighter and more alive - never a full-rim glow.
-            s.Plate.transform.position = CellWorld(s.Cell);
-            s.Plate.transform.localScale = new Vector3(cube, cube, 1f);
+            // The raised water covers the board's own cube exactly when it is back at scale 1.
+            s.Raised.transform.position = at + new Vector2(0f, s.Lift);
+            s.Raised.transform.localScale = new Vector3(cube * s.Scale, cube * s.Scale, 1f);
+            s.Raised.color = Color.white;
+            // A contact shadow under it, spreading as it lifts: that is what reads as RISING.
+            s.Shadow.transform.position = at + new Vector2(cube * 0.02f, -cube * 0.03f * s.Amount);
+            s.Shadow.transform.localScale = new Vector3(cube * (1f + 0.06f * s.Amount), cube * (1f + 0.06f * s.Amount), 1f);
+            s.Shadow.color = new Color(0f, 0.03f, 0.06f, Style.RiseShadow * s.Amount);
+            // And a little brighter as it heaves - never a full-rim glow.
+            s.Plate.transform.position = s.Raised.transform.position;
+            s.Plate.transform.localScale = s.Raised.transform.localScale;
             Color c = FloodShapes.Pale;
-            c.a = Style.PressureBright * level;
+            c.a = Style.PressureBright * s.Amount;
             s.Plate.color = c;
         }
 
         private void PaintSpill(Spill sp, float cube, float cell, float px)
         {
             float a = clock - sp.From.Start;
-            Vector2 src = CellWorld(sp.From.Cell);
+            // The spill leaves the RAISED water: its edge moves out and up with it.
+            Vector2 src = CellWorld(sp.From.Cell) + new Vector2(0f, sp.From.Lift);
+            float grown = cube * sp.From.Scale;
             float angle = Mathf.Atan2(sp.Dir.y, sp.Dir.x) * Mathf.Rad2Deg;
             float rebound = Mathf.Clamp01((clock - (sp.To.First + 0.05f)) / Style.Rebound);
 
@@ -508,7 +552,7 @@ namespace ProjectBlock.View
             sp.Highlight.enabled = hOn;
             if (hOn)
             {
-                sp.Highlight.transform.position = src + sp.Dir * (cube * 0.47f);
+                sp.Highlight.transform.position = src + sp.Dir * (grown * 0.47f);
                 sp.Highlight.transform.rotation = Quaternion.Euler(0f, 0f, angle + 90f);
                 sp.Highlight.transform.localScale = new Vector3(cube * 0.8f, px * 3f * 3f, 1f);
                 sp.Highlight.color = new Color(0.75f, 0.95f, 1f, 0.55f * hk);
@@ -521,14 +565,15 @@ namespace ProjectBlock.View
             sp.Swell.enabled = sOn;
             if (sOn)
             {
-                float bulge = Style.SwellPx * px * swell;
-                sp.Swell.transform.position = src + sp.Dir * (cube * 0.47f + bulge * 0.5f);
+                // A MOUND of water piling up against the edge and past it - big enough to see.
+                float bulge = Style.SwellCells * cell * swell;
+                sp.Swell.transform.position = src + sp.Dir * (grown * 0.45f + bulge * 0.5f);
                 sp.Swell.transform.rotation = Quaternion.Euler(0f, 0f, angle);
-                sp.Swell.transform.localScale = new Vector3(cube * 0.10f + bulge * 2f, cube * 0.5f, 1f);
+                sp.Swell.transform.localScale = new Vector3(cube * 0.12f + bulge * 2f, grown * 0.62f, 1f);
                 sp.Swell.color = new Color(1f, 1f, 1f, 0.85f * swell);
                 if (sk >= 1f && Layers.ShowDropletsLayer && Say(null, "swell-drop" + spills.IndexOf(sp)))
                 {
-                    Drop(src + sp.Dir * (cube * 0.5f), sp.Dir, px, cell, 1);
+                    Drop(src + sp.Dir * (grown * 0.5f + bulge), sp.Dir, px, cell, 1);
                 }
             }
 

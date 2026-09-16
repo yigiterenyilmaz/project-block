@@ -84,16 +84,23 @@ check('puan / flas / sarsinti yok', 'ScoreScale' not in view and 'ShakeCamera' n
 
 print()
 print('=== 2. BOYAMA DEGIL, BOGMA ===')
-between('kaynak basinci (sn)', num(view, 'Pressure'), 0.09, 0.14, 'basinc')
+between('kaynak KABARIP YUKSELIR (sn)', num(view, 'Pressure'), 0.24, 0.40, 'kabarma gorunmuyor')
+between('kaynak buyumesi', num(view, 'RiseScale'), 1.08, 1.16, 'kabarma gorunmuyor')
+between('kaynak yukselmesi (hucre)', num(view, 'RiseLift'), 0.03, 0.10, 'yukselme gorunmuyor')
+check('kaynak kendi SU karosuyla yukselir + golge (tahtanin kupu scale 1`de birebir)',
+      'kv.Value.Raised.sprite = waterTile;' in view and 's.Shadow' in view, 'yukselme sahte')
+check('HEDEF, kaynak yukseldikten ve dil DEGDIKTEN sonra baslar',
+      num(view, 'Arrival') >= num(view, 'Pressure') + 0.15 and num(view, 'TongueFrom') >= num(view, 'Pressure'),
+      'hedef dogrudan suya donuyor')
 between('kaynak parlakligi', num(view, 'PressureBright'), 0.06, 0.12, 'parlaklik')
-check('kenar vurgusu YALNIZ hedefe bakan kenarda', 'sp.Highlight.transform.position = src + sp.Dir * (cube * 0.47f);' in view,
+check('kenar vurgusu YALNIZ hedefe bakan kenarda', 'sp.Highlight.transform.position = src + sp.Dir * (grown * 0.47f);' in view,
       'tum kenar parliyor')
-between('kabarma (px)', num(view, 'SwellPx'), 3, 8, 'kabarma')
-between('kabarma (sn)', num(view, 'Swell'), 0.07, 0.11, 'kabarma')
-check('kabarma sprite`in tamami degil, kenarda yerel', 'sp.Swell.transform.position = src + sp.Dir' in view,
-      'tum kup buyuyor')
-between('su dili genisligi (hucre)', num(view, 'TongueWidth'), 0.14, 0.28, 'dil')
-between('su dili (sn)', num(view, 'Tongue'), 0.09, 0.15, 'dil')
+between('kenar tumsegi (hucre)', num(view, 'SwellCells'), 0.12, 0.30, 'tumsek gorunmuyor')
+between('kenar tumsegi (sn)', num(view, 'Swell'), 0.12, 0.26, 'tumsek')
+check('tumsek hedefe bakan kenarda, yukselen suyla birlikte', 'sp.Swell.transform.position = src + sp.Dir' in view
+      and 'CellWorld(sp.From.Cell) + new Vector2(0f, sp.From.Lift)' in view, 'tumsek kupten kopuk')
+between('su dili genisligi (hucre)', num(view, 'TongueWidth'), 0.2, 0.34, 'dil')
+between('su dili (sn)', num(view, 'Tongue'), 0.15, 0.25, 'dil')
 check('su dili: genis kok, daralan govde, damla uc (isin degil)',
       'Mathf.Lerp(0.48f, 0.26f' in method(shapes, 'public static Sprite Tongue') and 'tipR' in shapes,
       'lazer / dikdortgen')

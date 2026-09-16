@@ -606,10 +606,14 @@ dropped that way once each.
 - **"Taşkın" drowns cubes; it does not tint them** (`FloodView`, `FloodShapes`, `Resources/Shaders/FloodFilm`,
   `GameUiController.Flood.cs`). It shares "Yangın"'s report (`SpreadVisuals`: the sources, the targets,
   what each target WAS and which sources reached it) and FireSpreadView plays only fire, so for a long
-  time the water joker had no picture at all - Core had already written everything it needed. Each
-  source that really spills gathers pressure (a few per cent brighter, a pale highlight on the edge
-  FACING each real target and no other), swells a few pixels at that edge, and spills a short LIQUID
-  TONGUE over the border - wide at its root, a drop at its tip, never a beam. **One target is one
+  time the water joker had no picture at all - Core had already written everything it needed. **The
+  order is the read, and the first pass lost it**: it started the target 180 ms in with a few pixels of
+  swell, and a cube simply turned to water. Now each source that really spills FIRST swells and rises
+  (~0.3 s: its own water tile, on its own warp material, grows 12% and lifts off the cell over a
+  spreading contact shadow, a pale highlight and a mound of water piling past the edge FACING each real
+  target and no other), THEN spills a LIQUID TONGUE over the border - wide at its root, a drop at its
+  tip, never a beam - and the target does not begin to turn until that tongue lands (~0.52 s), after
+  which the source sinks back to scale 1, where the raised water is exactly the board's cube again. **One target is one
   transformation**: the held cell (`BoardView.HoldCells`, as for Yangın) shows the OLD face on the
   FloodFilm shader, with a film per side it was reached from (L / R / B / T progress, one mask, max-
   combined so films from two sides meet in the middle), a wavy front with a pale line that dies where
