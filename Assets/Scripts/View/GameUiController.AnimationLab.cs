@@ -180,6 +180,7 @@ namespace ProjectBlock.View
             StopChallenge();
             StopQuarry();
             StopIgnition();
+            StopFlood();
             StopRebate();
             // The beat-isolation entries promise that RESET puts every layer back.
             QuakeCollapseView.Layers.AllOn();
@@ -187,6 +188,7 @@ namespace ProjectBlock.View
             ChallengeContractView.Layers.AllOn();
             QuarryBreakView.Layers.AllOn();
             IgnitionBurnView.Layers.AllOn();
+            FloodView.Layers.AllOn();
             // The lab can show the pile spent without a payout, so RESET has to be able to give
             // it back even when no animation is running.
             if (cardLayer != null) { cardLayer.SetDrawPileShownEmpty(false); }
@@ -2309,6 +2311,145 @@ namespace ProjectBlock.View
                 {
                     IgnitionBurnView.Layers.AllOn();
                     animLastLabel = Loc.Pick("tutuştur: every layer back on", "tutuştur: tüm katmanlar açık");
+                    if (AnimLabOpen) { RedrawAnimationLab(); }
+                });
+            AddAnim("taşkın: single water -> single target", "taşkın: tek su -> tek hedef",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.Single); });
+            AddAnim("taşkın: water -> target on the RIGHT", "taşkın: su -> SAĞDAKİ hedef",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.Right); });
+            AddAnim("taşkın: water -> target on the LEFT", "taşkın: su -> SOLDAKİ hedef",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.Left); });
+            AddAnim("taşkın: water -> target ABOVE", "taşkın: su -> ÜSTTEKİ hedef",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.Top); });
+            AddAnim("taşkın: water -> target BELOW", "taşkın: su -> ALTTAKİ hedef",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.Bottom); });
+            AddAnim("taşkın: one water -> 4 targets", "taşkın: bir su -> 4 hedef",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.FourTargets); });
+            AddAnim("taşkın: two water -> the same target (films meet)", "taşkın: iki su -> aynı hedef (filmler buluşur)",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.TwoSources); });
+            AddAnim("taşkın: three water -> the same target", "taşkın: üç su -> aynı hedef",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.ThreeSources); });
+            AddAnim("taşkın: four-sided target flood", "taşkın: dört yandan hedef boğulması",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.FourSided); });
+            AddAnim("taşkın: source pressure only", "taşkın: yalnızca kaynak basıncı",
+                delegate
+                {
+                    AnimFloodOnly();
+                    FloodView.Layers.ShowPressure = true;
+                    AnimFlood(AnimFloodScene.Right);
+                });
+            AddAnim("taşkın: edge swell only", "taşkın: yalnızca kenar kabarması",
+                delegate
+                {
+                    AnimFloodOnly();
+                    FloodView.Layers.ShowSwell = true;
+                    AnimFlood(AnimFloodScene.Right);
+                });
+            AddAnim("taşkın: liquid tongue only", "taşkın: yalnızca su dili",
+                delegate
+                {
+                    AnimFloodOnly();
+                    FloodView.Layers.ShowTongue = true;
+                    AnimFlood(AnimFloodScene.Right);
+                });
+            AddAnim("taşkın: contact wetting only", "taşkın: yalnızca temas ıslanması",
+                delegate
+                {
+                    AnimFloodOnly();
+                    FloodView.Layers.ShowContact = true;
+                    FloodView.Layers.ShowDropletsLayer = true;
+                    FloodView.Layers.ShowTongue = true;
+                    AnimFlood(AnimFloodScene.Right);
+                });
+            AddAnim("taşkın: water film only", "taşkın: yalnızca su filmi",
+                delegate
+                {
+                    AnimFloodOnly();
+                    FloodView.Layers.ShowFilm = true;
+                    AnimFlood(AnimFloodScene.Right);
+                });
+            AddAnim("taşkın: refraction only", "taşkın: yalnızca kırılma",
+                delegate
+                {
+                    AnimFloodOnly();
+                    FloodView.Layers.ShowFilm = true;
+                    FloodView.Layers.ShowRefractionLayer = true;
+                    AnimFlood(AnimFloodScene.Right);
+                });
+            AddAnim("taşkın: submergence only", "taşkın: yalnızca suya batma",
+                delegate
+                {
+                    AnimFloodOnly();
+                    FloodView.Layers.ShowFilm = true;
+                    FloodView.Layers.ShowSubmerge = true;
+                    AnimFlood(AnimFloodScene.Right);
+                });
+            AddAnim("taşkın: liquefaction only", "taşkın: yalnızca sıvılaşma",
+                delegate
+                {
+                    AnimFloodOnly();
+                    FloodView.Layers.ShowFilm = true;
+                    FloodView.Layers.ShowLiquefy = true;
+                    AnimFlood(AnimFloodScene.Right);
+                });
+            AddAnim("taşkın: water crossfade only", "taşkın: yalnızca suya geçiş",
+                delegate
+                {
+                    AnimFloodOnly();
+                    FloodView.Layers.ShowCrossfade = true;
+                    AnimFlood(AnimFloodScene.Right);
+                });
+            AddAnim("taşkın: ripple settle only", "taşkın: yalnızca halka oturması",
+                delegate
+                {
+                    AnimFloodOnly();
+                    FloodView.Layers.ShowRippleLayer = true;
+                    FloodView.Layers.ShowDropletsLayer = true;
+                    AnimFlood(AnimFloodScene.Right);
+                });
+            AddAnim("taşkın: sparse multi-source", "taşkın: seyrek çok kaynak",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.Sparse); });
+            AddAnim("taşkın: dense board", "taşkın: yoğun tahta",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.Dense); });
+            AddAnim("taşkın: high target count", "taşkın: yüksek hedef sayısı",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.HighCount); });
+            AddAnim("taşkın: special cube test (the view converts exactly what Core converts)", "taşkın: özel küp testi (görünüm tam Core'un çevirdiğini çevirir)",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.Special); });
+            AddAnim("taşkın: no secondary spread (one ring only)", "taşkın: ikinci yayılma yok (tek halka)",
+                delegate { FloodView.Layers.AllOn(); AnimFlood(AnimFloodScene.NoSecondary); });
+            AddAnim("taşkın: water falls FIRST, then Taşkın (ordering)", "taşkın: önce su düşer, SONRA taşkın (sıra)",
+                delegate { FloodView.Layers.AllOn(); AnimFloodOrdering(); });
+            AddAnim("taşkın: full sequence at 0.5x", "taşkın: tam dizi 0.5x",
+                delegate { FloodView.Layers.AllOn(); Time.timeScale = 0.5f; AnimFlood(AnimFloodScene.TwoSources); });
+            AddAnim("taşkın: full sequence at 0.25x", "taşkın: tam dizi 0.25x",
+                delegate { FloodView.Layers.AllOn(); Time.timeScale = 0.25f; AnimFlood(AnimFloodScene.Right); });
+            AddAnim("taşkın debug: sources", "taşkın hata ayıklama: kaynaklar",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowFloodSources, "sources", "kaynaklar"); });
+            AddAnim("taşkın debug: targets", "taşkın hata ayıklama: hedefler",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowFloodTargets, "targets", "hedefler"); });
+            AddAnim("taşkın debug: incoming directions (L red, R blue, T yellow, B green)", "taşkın hata ayıklama: geliş yönleri (sol kırmızı, sağ mavi, üst sarı, alt yeşil)",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowIncomingDirections, "incoming directions (L red, R blue, T yellow, B green)", "geliş yönleri (sol kırmızı, sağ mavi, üst sarı, alt yeşil)"); });
+            AddAnim("taşkın debug: liquid tongues", "taşkın hata ayıklama: su dilleri",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowLiquidTongues, "liquid tongues", "su dilleri"); });
+            AddAnim("taşkın debug: water film mask", "taşkın hata ayıklama: su filmi maskesi",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowWaterFilmMask, "water film mask", "su filmi maskesi"); });
+            AddAnim("taşkın debug: refraction (x6)", "taşkın hata ayıklama: kırılma (x6)",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowRefraction, "refraction (x6)", "kırılma (x6)"); });
+            AddAnim("taşkın debug: old cube proxy", "taşkın hata ayıklama: eski küp vekili",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowOldCubeProxy, "old cube proxy", "eski küp vekili"); });
+            AddAnim("taşkın debug: water renderer alone", "taşkın hata ayıklama: yalnızca su çizimi",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowWaterRenderer, "water renderer alone", "yalnızca su çizimi"); });
+            AddAnim("taşkın debug: ripple (enlarged)", "taşkın hata ayıklama: halka (büyütülmüş)",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowRipple, "ripple (enlarged)", "halka (büyütülmüş)"); });
+            AddAnim("taşkın debug: droplets (enlarged)", "taşkın hata ayıklama: damlacıklar (büyütülmüş)",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowDroplets, "droplets (enlarged)", "damlacıklar (büyütülmüş)"); });
+            AddAnim("taşkın debug: source stagger", "taşkın hata ayıklama: kaynak gecikmesi",
+                delegate { AnimFloodToggle(ref FloodView.Layers.ShowSourceStagger, "source stagger", "kaynak gecikmesi"); });
+            AddAnim("taşkın switch: ALL back on", "taşkın anahtarı: TÜMÜ geri açık",
+                delegate
+                {
+                    FloodView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("taşkın: every layer back on", "taşkın: tüm katmanlar açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
             AddAnim("harcama bonusu: the whole payout",
@@ -7935,6 +8076,237 @@ namespace ProjectBlock.View
         {
             flag = !flag;
             animLastLabel = Loc.Pick("tutuştur " + english + ": ", "tutuştur " + turkish + ": ") + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        // ------------------------------------------------------------------ taşkın
+
+        // "TAŞKIN" IN THE LAB. Every scene lays out a board of the lab's own and runs THE REAL RULE on
+        // it - SpreadJoker.SpreadOn(board, Water) - so the targets, the sides each one is reached from
+        // and what each one used to be are the rule's answers; then the report is played through
+        // FloodView.Play, the game's own call.
+
+        private enum AnimFloodScene
+        {
+            Single,
+            Right,
+            Left,
+            Top,
+            Bottom,
+            FourTargets,
+            TwoSources,
+            ThreeSources,
+            FourSided,
+            Sparse,
+            Dense,
+            HighCount,
+            Special,
+            NoSecondary
+        }
+
+        private Coroutine animFloodOrdering;
+
+        private void AnimFloodLayout(AnimFloodScene scene, GameBoard board, List<int> cards, List<GridPos> water)
+        {
+            int card = 0;
+            System.Action<int, int> cube = (x, y) =>
+            {
+                board.SetCubeAt(new GridPos(x, y), new Cube(CubeKind.Normal, cards[card++ % cards.Count]));
+            };
+            switch (scene)
+            {
+                case AnimFloodScene.Single:
+                case AnimFloodScene.Right:
+                    water.Add(new GridPos(2, 3)); cube(3, 3);
+                    break;
+                case AnimFloodScene.Left:
+                    water.Add(new GridPos(4, 3)); cube(3, 3);
+                    break;
+                case AnimFloodScene.Top:
+                    water.Add(new GridPos(3, 2)); cube(3, 3);
+                    break;
+                case AnimFloodScene.Bottom:
+                    water.Add(new GridPos(3, 4)); cube(3, 3);
+                    break;
+                case AnimFloodScene.FourTargets:
+                    water.Add(new GridPos(3, 3)); cube(2, 3); cube(4, 3); cube(3, 2); cube(3, 4);
+                    break;
+                case AnimFloodScene.TwoSources:
+                    water.Add(new GridPos(2, 3)); water.Add(new GridPos(3, 2)); cube(3, 3);
+                    break;
+                case AnimFloodScene.ThreeSources:
+                    water.Add(new GridPos(2, 3)); water.Add(new GridPos(3, 2)); water.Add(new GridPos(4, 3)); cube(3, 3);
+                    break;
+                case AnimFloodScene.FourSided:
+                    water.Add(new GridPos(2, 3)); water.Add(new GridPos(3, 2)); water.Add(new GridPos(4, 3));
+                    water.Add(new GridPos(3, 4)); cube(3, 3);
+                    break;
+                case AnimFloodScene.Sparse:
+                    water.Add(new GridPos(1, 1)); cube(2, 1); cube(1, 2);
+                    water.Add(new GridPos(5, 5)); cube(4, 5);
+                    water.Add(new GridPos(5, 1)); cube(5, 2); cube(6, 1);
+                    break;
+                case AnimFloodScene.Dense:
+                case AnimFloodScene.HighCount:
+                    for (int y = 0; y < 7; y++)
+                    {
+                        for (int x = 0; x < 7; x++)
+                        {
+                            if ((x * 3 + y * 5) % (scene == AnimFloodScene.Dense ? 7 : 4) == 0)
+                            {
+                                water.Add(new GridPos(x, y));
+                            }
+                            else if (scene == AnimFloodScene.HighCount || (x + y) % 2 == 0)
+                            {
+                                cube(x, y);
+                            }
+                        }
+                    }
+                    break;
+                case AnimFloodScene.Special:
+                    // Obsidian and gold beside water, an EMPTY cell beside water: the view converts
+                    // exactly what the rule converted, whatever that is.
+                    water.Add(new GridPos(3, 3));
+                    board.SetCubeAt(new GridPos(2, 3), new Cube(CubeKind.Obsidian, cards[0]));
+                    board.SetCubeAt(new GridPos(4, 3), new Cube(CubeKind.Gold, cards[0]));
+                    cube(3, 4);
+                    break;
+                case AnimFloodScene.NoSecondary:
+                    // water, A, B in a row: only A is a target; B must not be drawn catching.
+                    water.Add(new GridPos(1, 3)); cube(2, 3); cube(3, 3); cube(4, 3);
+                    break;
+            }
+        }
+
+        private void AnimFlood(AnimFloodScene scene)
+        {
+            StopAnimFloodOrdering();
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || boardView == null)
+            {
+                return;
+            }
+            EnsureFlood();
+            flood.Stop();
+            flood.Forget();
+            List<int> cards = AnimBossCards();
+            var board = new GameBoard(7, 7);
+            var water = new List<GridPos>();
+            AnimFloodLayout(scene, board, cards, water);
+            foreach (GridPos p in water)
+            {
+                board.SetCubeAt(p, new Cube(CubeKind.Water, cards[0]));
+            }
+            // THE REAL RULE, on the lab's own board.
+            SpreadVisuals report = SpreadJoker.SpreadOn(board, CubeKind.Water, Time.frameCount);
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            boardView.Refresh();
+            flood.Play(report);
+            string extra = scene == AnimFloodScene.Special
+                ? Loc.Pick(" - Core converts obsidian and gold too; the empty cell is no target",
+                    " - Core obsidyen ve altını da çevirir; boş hücre hedef değil")
+                : scene == AnimFloodScene.NoSecondary
+                    ? Loc.Pick(" - only the first cube, one ring", " - yalnızca ilk küp, tek halka")
+                    : "";
+            animLastLabel = Loc.Pick(report.Sources.Count + " water flooded " + report.Targets.Count + " cubes",
+                report.Sources.Count + " su " + report.Targets.Count + " küpü boğdu") + extra;
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>Water standing in the air falls first; only then is Taşkın used - the order the
+        /// game guarantees, because the joker does not settle the water it makes.</summary>
+        private void AnimFloodOrdering()
+        {
+            StopAnimFloodOrdering();
+            animFloodOrdering = StartCoroutine(AnimFloodOrderingRoutine());
+        }
+
+        private void StopAnimFloodOrdering()
+        {
+            if (animFloodOrdering != null)
+            {
+                StopCoroutine(animFloodOrdering);
+                animFloodOrdering = null;
+            }
+        }
+
+        private System.Collections.IEnumerator AnimFloodOrderingRoutine()
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || boardView == null)
+            {
+                yield break;
+            }
+            EnsureFlood();
+            flood.Stop();
+            flood.Forget();
+            List<int> cards = AnimBossCards();
+            var board = new GameBoard(7, 7);
+            // A floor, and a gap between two cubes on it: the water lands IN the gap, beside the two
+            // cubes it will flood - without completing any line.
+            for (int x = 0; x < 6; x++)
+            {
+                board.SetCubeAt(new GridPos(x, 0), new Cube(CubeKind.Normal, cards[x % cards.Count]));
+            }
+            board.SetCubeAt(new GridPos(2, 1), new Cube(CubeKind.Normal, cards[1 % cards.Count]));
+            board.SetCubeAt(new GridPos(4, 1), new Cube(CubeKind.Normal, cards[2 % cards.Count]));
+            board.SetCubeAt(new GridPos(3, 5), new Cube(CubeKind.Water, cards[0]));
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            boardView.Refresh();
+            animLastLabel = Loc.Pick("taşkın: 1/3 water standing in the air", "taşkın: 1/3 havada duran su");
+            if (AnimLabOpen) { RedrawAnimationLab(); }
+            yield return new WaitForSeconds(0.6f);
+
+            var frames = new List<IReadOnlyList<WaterMove>>();
+            board.SettleWaterAndReact(frames);
+            bool fell = false;
+            boardView.PlayWaterAnimation(frames, delegate { fell = true; });
+            animLastLabel = Loc.Pick("taşkın: 2/3 the water falls and settles", "taşkın: 2/3 su düşer ve oturur");
+            if (AnimLabOpen) { RedrawAnimationLab(); }
+            float guard = 0f;
+            while (!fell && guard < 3f)
+            {
+                guard += Time.deltaTime;
+                yield return null;
+            }
+            boardView.Refresh();
+            yield return new WaitForSeconds(0.25f);
+
+            SpreadVisuals report = SpreadJoker.SpreadOn(board, CubeKind.Water, Time.frameCount);
+            boardView.Refresh();
+            flood.Play(report);
+            animLastLabel = Loc.Pick("taşkın: 3/3 only then Taşkın - " + report.Targets.Count + " cubes",
+                "taşkın: 3/3 ancak sonra taşkın - " + report.Targets.Count + " küp");
+            if (AnimLabOpen) { RedrawAnimationLab(); }
+            animFloodOrdering = null;
+        }
+
+        private void AnimFloodOnly()
+        {
+            FloodView.Layers.AllOn();
+            FloodView.Layers.ShowPressure = false;
+            FloodView.Layers.ShowSwell = false;
+            FloodView.Layers.ShowTongue = false;
+            FloodView.Layers.ShowContact = false;
+            FloodView.Layers.ShowFilm = false;
+            FloodView.Layers.ShowRefractionLayer = false;
+            FloodView.Layers.ShowSubmerge = false;
+            FloodView.Layers.ShowLiquefy = false;
+            FloodView.Layers.ShowCrossfade = false;
+            FloodView.Layers.ShowRippleLayer = false;
+            FloodView.Layers.ShowDropletsLayer = false;
+        }
+
+        private void AnimFloodToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("taşkın " + english + ": ", "taşkın " + turkish + ": ") + OnOff(flag);
             if (AnimLabOpen)
             {
                 RedrawAnimationLab();

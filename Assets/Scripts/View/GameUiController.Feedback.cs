@@ -2119,6 +2119,7 @@ namespace ProjectBlock.View
             SyncMapus(round);
             SyncTalisman(round);
             SyncFireSpread(round);
+            SyncFlood();
             SyncBuzluk(round);
             SyncRebate(round);
             SyncQuake();

@@ -603,6 +603,30 @@ dropped that way once each.
   colours, near, far, edge, corner, and a full board with stone in it that stays), eight beats on
   their own, a proxy test, 0.5x/0.25x, and three debug overlays (targets red / could fall yellow /
   stone grey, the wave each cube falls in, crack bounds).
+- **"Taşkın" drowns cubes; it does not tint them** (`FloodView`, `FloodShapes`, `Resources/Shaders/FloodFilm`,
+  `GameUiController.Flood.cs`). It shares "Yangın"'s report (`SpreadVisuals`: the sources, the targets,
+  what each target WAS and which sources reached it) and FireSpreadView plays only fire, so for a long
+  time the water joker had no picture at all - Core had already written everything it needed. Each
+  source that really spills gathers pressure (a few per cent brighter, a pale highlight on the edge
+  FACING each real target and no other), swells a few pixels at that edge, and spills a short LIQUID
+  TONGUE over the border - wide at its root, a drop at its tip, never a beam. **One target is one
+  transformation**: the held cell (`BoardView.HoldCells`, as for Yangın) shows the OLD face on the
+  FloodFilm shader, with a film per side it was reached from (L / R / B / T progress, one mask, max-
+  combined so films from two sides meet in the middle), a wavy front with a pale line that dies where
+  water already lies, and under the film the cube refracts a pixel, loses its colour FIRST and its
+  contrast SECOND before the water's colour lies over it (a straight blue tint is the failure), then
+  runs a few pixels as it dissolves. Under that proxy the cell's REAL water - the water tile on its own
+  warp material - rises while the old face goes, so releasing the cells hands over to the same picture;
+  a broken ripple and a few droplets settle it, and the source's swell draws back. **The old face comes
+  from the report, never the board** - the board is already painted as water when this runs. Only the
+  report's sources spill; a cube that just became water only settles (one ring). The joker is used from
+  the bar and does not settle its water (the next placement does), so a flood never overlaps a water
+  fall. Idle swirl speed is NOT changed per cell: the warp shader runs off `_Time`, so a per-renderer
+  speed jump would visibly skip the swirl's phase. No score, no flash, no shake. The lab runs the real
+  `SpreadOn` on boards of its own: every direction, one water into four, two / three / four sides into
+  one, ten beat-isolation entries, sparse / dense / high-count, a special-cube test (Core converts
+  obsidian and gold too; the view follows), a one-ring test, a water-falls-then-Taşkın ordering scene,
+  0.5x / 0.25x and eleven debug views; `Tools/UiLayoutCheck/taskin.py` holds the lot. See `flood_mock.png`.
 - **"Tutuştur" is a combustion wave, not twenty explosions** (`IgnitionBurnView`, `IgnitionShapes`,
   `Resources/Shaders/IgnitionBurn`, `GameUiController.Ignition.cs`). The joker takes every fire on the
   board through `DestroyCubes` when a fire goes up, which reaches no explosion list - the far fires
