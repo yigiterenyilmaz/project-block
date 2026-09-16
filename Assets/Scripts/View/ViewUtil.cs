@@ -1205,7 +1205,13 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            float step = textMesh.characterSize * textMesh.fontSize * OutlineThickness;
+            // A TextMesh glyph is characterSize * fontSize / 10 world units tall - the same
+            // relationship DeckOverlayView.EstimateTextWidth is built on. DROPPING THAT /10 is
+            // what made the first pass a smear rather than an edge: the offsets came out at 55%
+            // of a glyph's height, which is not an outline, it is the word printed again in
+            // black behind itself.
+            float glyphHeight = textMesh.characterSize * textMesh.fontSize * 0.1f;
+            float step = glyphHeight * OutlineThickness;
             var copies = new TextMesh[OutlineOffsets.Length];
             for (int i = 0; i < OutlineOffsets.Length; i++)
             {
@@ -1247,7 +1253,10 @@ namespace ProjectBlock.View
         /// and laid on the board. A very dark blue-grey sits in the same family as the arena.</summary>
         private static readonly Color OutlineInk = new Color(0.04f, 0.05f, 0.08f, 0.95f);
 
-        private const float OutlineThickness = 0.055f;
+        /// <summary>The outline's reach as a fraction of the GLYPH's height. Six per cent reads
+        /// as an edge at every size this game draws text at; past about ten it starts to close
+        /// the counters of the letters, and past twenty it is a drop shadow.</summary>
+        private const float OutlineThickness = 0.06f;
 
         /// <summary>
         /// Re-colours a text AND the outline under it. Anything that animates a TextMesh's colour
