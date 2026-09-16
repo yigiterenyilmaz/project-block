@@ -31,6 +31,10 @@ namespace ProjectBlock.Core
                 }
                 var dead = new DestroyedCube(entry.Key, entry.Value);
                 batch.Add(dead);
+                if (!targetingMirrorWorld || MirrorBoard == null)
+                {
+                    destructionFeed.Add(dead); // the main world's, in or out of a turn
+                }
                 if (currentReport == null)
                 {
                     continue;
@@ -297,8 +301,69 @@ namespace ProjectBlock.Core
             return MirrorHasAnyMove;
         }
 
+        /// <summary>
+        /// EVERY cube the MAIN world has lost this round, in the order it went, whatever took it
+        /// and whenever: a line, a fire chain, a joker or power at the end of a turn, the boss,
+        /// a dead-end rescue, a power used between turns. Reporting only, never saved (a loaded
+        /// round starts it empty). A reader keeps its own cursor into it - "Hazine" does - so
+        /// destruction that happens after the reader's own hook has run is not lost; it is
+        /// simply read at the next settle point (see DispatchDestructionSettled).
+        /// </summary>
+        internal IReadOnlyList<DestroyedCube> DestructionFeed
+        {
+            get { return destructionFeed; }
+        }
+
+        private readonly List<DestroyedCube> destructionFeed = new List<DestroyedCube>();
+
+        /// <summary>The turn that is resolving right now, or null between turns.</summary>
+        internal TurnContext CurrentTurnContext
+        {
+            get { return currentTurn; }
+        }
+
+        private int deadEndCheckDepth;
+
+        /// <summary>Tells the jokers that destruction has come to rest: after the end-of-turn
+        /// effects (the boss included), after a dead-end rescue, and after a power or joker used
+        /// between turns.</summary>
+        private void SettleDestruction()
+        {
+            if (session != null)
+            {
+                session.Jokers.DispatchDestructionSettled(this);
+            }
+        }
+
+        /// <summary>
+        /// Re-asks "is there still a move?" after something changed the HAND between turns (a
+        /// penalty that discarded or froze it). A no-op inside a turn, which asks on its own at
+        /// step 10, and inside a dead-end check, which asks again when the rescue is done.
+        /// </summary>
+        internal void RecheckDeadEndBetweenTurns()
+        {
+            if (currentReport != null || deadEndCheckDepth > 0 || Status != RoundStatus.InProgress)
+            {
+                return;
+            }
+            CheckForNoPlayableMove();
+        }
+
         /// <summary>Base lose condition: no held block (hand or bonus) fits the board.</summary>
         private void CheckForNoPlayableMove()
+        {
+            deadEndCheckDepth++;
+            try
+            {
+                CheckForNoPlayableMoveInner();
+            }
+            finally
+            {
+                deadEndCheckDepth--;
+            }
+        }
+
+        private void CheckForNoPlayableMoveInner()
         {
             // Hand, bonus hand, then the mirror - "Öteki dünya" means neither world can end the
             // round on its own, so a world with nowhere to play merely sits the turn out and the
@@ -342,6 +407,7 @@ namespace ProjectBlock.Core
                 && hooks.TryRescueFromDeadEnd(new RoundContext(session, rng, this)))
             {
                 Loss = null;
+                SettleDestruction(); // a quake can bring down a buried mark ("Hazine")
                 CheckForNoPlayableMove(); // the rescue may not have been enough
                 return;
             }

@@ -368,6 +368,9 @@ namespace ProjectBlock.Core
             {
                 Boss.AfterTurnScored(currentTurn);
             }
+            // 8.1 everything that could destroy a cube at the end of this turn has run, in any
+            //     inventory order and the boss included - readers of the destruction feed act now.
+            SettleDestruction();
 
             // 8.5 the arena erodes if the draw pile has run dry too often. After the hooks, so a
             // joker that refilled the hand in step 8 is counted too; before the threshold and

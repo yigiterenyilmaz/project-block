@@ -364,6 +364,15 @@ namespace ProjectBlock.Core
         {
         }
 
+        /// <summary>Destruction has come to rest: after every end-of-turn effect (the boss
+        /// included), after a dead-end rescue, and after a power or joker used between turns. A
+        /// joker that cares WHERE cubes were lost reads RoundEngine.DestructionFeed from its own
+        /// cursor here ("Hazine"), so no source and no inventory order can slip past it.
+        /// ctx.Round.CurrentTurnContext is the resolving turn, or null between turns.</summary>
+        public virtual void OnDestructionSettled(RoundContext ctx)
+        {
+        }
+
         /// <summary>The board filled up and nothing in hand fits - the round is about to be
         /// lost. A joker with a way to open a gap ("Deprem") acts here and returns true; the
         /// engine then re-checks for a legal move. Return false to let the loss stand.</summary>

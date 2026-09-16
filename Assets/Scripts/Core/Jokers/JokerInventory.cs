@@ -406,6 +406,7 @@ namespace ProjectBlock.Core
             }
             if (ran)
             {
+                DispatchDestructionSettled(round);
                 RaiseChanged();
             }
             return ran;
@@ -602,6 +603,35 @@ namespace ProjectBlock.Core
             {
                 EndInversion(inverted, turn.Score);
             }
+        }
+
+        /// <summary>See Joker.OnDestructionSettled. Inside a turn the "Terslik" window is open
+        /// exactly as for the turn's other joker hooks, since a joker may pay score here.</summary>
+        public void DispatchDestructionSettled(RoundEngine round)
+        {
+            if (round == null)
+            {
+                return;
+            }
+            TurnContext turn = round.CurrentTurnContext;
+            RoundContext ctx = RoundCtx(round);
+            List<Joker> batch = Snapshot();
+            bool inverted = turn != null && BeginInversion(round, turn.Score);
+            try
+            {
+                for (int i = 0; i < batch.Count; i++)
+                {
+                    if (!IsGated(batch[i], round))
+                    {
+                        batch[i].OnDestructionSettled(ctx);
+                    }
+                }
+            }
+            finally
+            {
+                EndInversion(inverted, turn != null ? turn.Score : null);
+            }
+            RaiseChanged();
         }
 
         public void AfterTurnScored(TurnContext turn)

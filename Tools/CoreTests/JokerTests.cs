@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Text;
 using ProjectBlock.Core;
 
-public static class JokerTests
+public static partial class JokerTests
 {
     private static int passed;
     private static int failed;
@@ -100,8 +100,11 @@ public static class JokerTests
         MarketDiscount_CutsPricesForOneVisit();
         Hazine_BuriesTwoMarksAndPaysOutOnce();
         Hazine_DynamiteAppliesAPenalty();
-        Hazine_HittingBothCancelsOut();
         Hazine_ReportsWhatTheFindReallyDid();
+        Hazine_APowerBetweenTurnsBlowsAMarkOpen();
+        Hazine_LateDestructionInTheTurnCountsAndBothCancel();
+        Hazine_AFindOnTheCrossingTurnIsStillShown();
+        Hazine_TheExplosionBonusIsHalfWhatTheLineBanked();
         MeydanOkuma_MarksThenPaysOnClear();
         MeydanOkuma_HalvesAndGivesUpAfterThreeMisses();
         MeydanOkuma_SeaReadsHandDrawPileAndBoard();
@@ -3110,64 +3113,6 @@ public static class JokerTests
             "outcome " + joker.LastOutcome);
     }
 
-    private static void Hazine_HittingBothCancelsOut()
-    {
-        Section("hazine / hitting both cancels out");
-        var session = NewSession(523, 6, 1000000, 40, 1);
-        var joker = (HazineJoker)session.Jokers.Add(new HazineJoker());
-        session.Jokers.DispatchRoundStarted(session.CurrentRound);
-        RoundEngine round = session.CurrentRound;
-
-        GridPos treasure = joker.TreasureCell.Value;
-        GridPos dynamite = joker.DynamiteCell.Value;
-        int handBefore = round.Hand.Count;
-        bool anyFrozenBefore = false;
-        for (int i = 0; i < round.Hand.Count; i++)
-        {
-            anyFrozenBefore |= round.IsFrozen(round.Hand[i].Id);
-        }
-
-        // ONE turn whose destruction log covers BOTH marks. Driving that through a real
-        // placement would need the two random cells to be adjacent, so the turn is built
-        // directly - the rule under test is what the joker does with such a log.
-        var score = new ScoreBreakdown();
-        TurnContext turn = FakeTurnWithRound(session, score);
-        turn.Report.DestroyedCubes = new List<DestroyedCube>
-        {
-            new DestroyedCube(treasure, new Cube(CubeKind.Normal, 900)),
-            new DestroyedCube(dynamite, new Cube(CubeKind.Normal, 901))
-        };
-        joker.AfterTurnScored(turn);
-
-        Check(!joker.TreasureCell.HasValue && !joker.DynamiteCell.HasValue,
-            "both marks are gone");
-        Check(!string.IsNullOrEmpty(joker.LastOutcome),
-            "the cancellation was reported", "outcome " + joker.LastOutcome);
-        Check(score.FlatBonus == 0 && score.LateFlat == 0, "no reward was paid",
-            "flat " + score.FlatBonus + " late " + score.LateFlat);
-        Check(round.Hand.Count == handBefore, "and no penalty wrecked the hand",
-            round.Hand.Count + " vs " + handBefore);
-        bool anyFrozenAfter = false;
-        for (int i = 0; i < round.Hand.Count; i++)
-        {
-            anyFrozenAfter |= round.IsFrozen(round.Hand[i].Id);
-        }
-        Check(anyFrozenAfter == anyFrozenBefore, "nothing was frozen either");
-
-        HazineVisuals find = joker.LastFind;
-        Check(find != null && find.Result == HazineResult.BothCancelled
-                && find.Effect == HazineEffect.None && find.ScoreDelta == 0,
-            "the report says they cancelled and nothing was applied",
-            find == null ? "null" : find.Result + " " + find.Effect);
-        Check(find != null && find.Discoveries.Count == 2
-                && find.Find(true) != null && find.Find(true).Cell.Equals(treasure)
-                && find.Find(false) != null && find.Find(false).Cell.Equals(dynamite),
-            "with both marks where they really were");
-        Check(find != null && find.Find(true).Cube.SourceCardId == 900
-                && find.Find(false).Cube.SourceCardId == 901,
-            "and the cube each one was under, from the destruction log");
-    }
-
     /// <summary>
     /// THE REPORT IS THE RULES' OWN ACCOUNT. Over many seeds: a find names only the mark that was
     /// blown open (the other one's location is never handed to the View), the effect it names is
@@ -3285,9 +3230,9 @@ public static class JokerTests
             }
             HazineVisuals first = find;
 
-            // ---- the round's second arming (overtime) starts with a clean slate
+            // ---- the round's second arming (overtime) keeps the find for the View
             session.Jokers.DispatchOvertimeStarted(round);
-            Check(joker.LastFind == null, "re-arming forgets the last find");
+            Check(ReferenceEquals(joker.LastFind, first), "re-arming keeps the last find (matched by identity)");
 
             // ---- dynamite, on a fresh session
             var s2 = NewSession(3300 + seed, 6, 1000000, 40, 1);
