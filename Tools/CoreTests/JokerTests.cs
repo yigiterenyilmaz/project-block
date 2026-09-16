@@ -69,6 +69,11 @@ public static partial class JokerTests
         KapaliEkonomi_PaysWhenNothingWasBought();
         Ihale_LocksUntilTheAuctionedJokerLeaves();
         KaraDelik_VoidBlockSwallowsWhatLandsOnIt();
+        KaraDelik_AVoidCardSwallowsAFilledCell();
+        KaraDelik_EatsRingOnePullsRingTwoAndNothingFurther();
+        KaraDelik_NothingMovesOrRemovesAHole();
+        KaraDelik_FeedingTheArenaCollapsesItIntoASweep();
+        KaraDelik_GravitySlipsAndSwallowsTheSmallerPile();
         Enfeksiyon_SpreadsThenDetonates();
         BabaOcagi_BuriesPlayedCardsInTheDrawPile();
         Konfuzyon_SplitsAndSwapsThePilesEachTurn();
@@ -1918,9 +1923,13 @@ public static partial class JokerTests
 
         BlockCard victim = session.CreateCard(Bar(1), null);
         round.Board.Place(victim, new GridPos(2, 2));
-        Check(!round.Board.GetCube(new GridPos(2, 2)).HasValue,
-            "both the arriving cube and the void are gone");
-        Check(round.Board.OccupiedCount == 0, "occupancy stayed consistent",
+        Check(round.Board.GetCube(new GridPos(2, 2)).HasValue
+                && round.Board.GetCube(new GridPos(2, 2)).Value.Kind == CubeKind.Void,
+            "the arriving cube fell in and the hole stays");
+        Check(round.Board.LastPlacementSwallows.Count == 1
+                && round.Board.LastPlacementSwallows[0].Cube.SourceCardId == victim.Id,
+            "and the board says what it swallowed");
+        Check(round.Board.OccupiedCount == 1, "occupancy stayed consistent",
             "occupied " + round.Board.OccupiedCount);
     }
 

@@ -411,6 +411,22 @@ namespace ProjectBlock.Core
             circuitExplodedCells.AddRange(cells);
         }
 
+        /// <summary>"Kara Delik": what the black holes took AT PLACEMENT this turn - a void card
+        /// laid over a cube, and every cube of a block that landed on a hole. The first kind is
+        /// also in DestroyedCubes; the second never landed, so it is only here. The joker counts
+        /// and pays for both from this list.</summary>
+        public IReadOnlyList<DestroyedCube> VoidSwallows
+        {
+            get { return voidSwallows; }
+        }
+
+        private readonly List<DestroyedCube> voidSwallows = new List<DestroyedCube>();
+
+        internal void AddVoidSwallows(IEnumerable<DestroyedCube> cubes)
+        {
+            voidSwallows.AddRange(cubes);
+        }
+
         public IReadOnlyList<GridPos> TargetedExplodedCells
         {
             get { return targetedExplodedCells; }

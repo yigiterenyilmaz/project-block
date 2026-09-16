@@ -92,8 +92,14 @@ namespace ProjectBlock.Core
                 && Has(card, BlockElement.Negative);
             if (!mainWorldSitsOut && !fallsThrough && !antimatter && !negative)
             {
+                if (Has(card, BlockElement.Void))
+                {
+                    SwallowUnderVoidCard(card, origin, report);
+                }
                 report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
                     Has(card, BlockElement.Ghost));
+                // "Kara Delik": what landed on a hole fell in.
+                report.AddVoidSwallows(Board.LastPlacementSwallows);
                 // "Hedefli": the block's one shot is live from the moment it lands until the
                 // first of its cubes breaks (see RoundEngine.Targeted).
                 ArmTargetedBlock(card);
@@ -313,7 +319,7 @@ namespace ProjectBlock.Core
             // 6. card disposition
             if (fromBonus)
             {
-                if (bonusOutcome == BonusPlayOutcome.ToDiscard)
+                if (bonusOutcome == BonusPlayOutcome.ToDiscard && !Has(card, BlockElement.Void))
                 {
                     DisposeCard(card);
                 }
@@ -337,6 +343,17 @@ namespace ProjectBlock.Core
                 if (Boss != null)
                 {
                     Boss.OnBonusCardPlayed(currentTurn);
+                }
+            }
+            else if (!mainWorldSitsOut && Has(card, BlockElement.Void))
+            {
+                // "Kara Delik": the hole IS the card now, and it never leaves the board - so the
+                // card does not go round the piles to be laid a second time.
+                Deck.RemoveFromRound(card);
+                report.PlayedCardExpired = true;
+                if (!Rules.SkipStandardRefill)
+                {
+                    RefillHand();
                 }
             }
             else if (!mainWorldSitsOut)
@@ -447,6 +464,52 @@ namespace ProjectBlock.Core
                 TurnResolved(report);
             }
             return report;
+        }
+
+        /// <summary>
+        /// "Kara Delik": a void card laid over cubes swallows them BEFORE it lands, through the
+        /// engine (forced - gold and obsidian go too), so the log, the tally and the sweep
+        /// pre-condition all see them. Reported in VoidSwallows for the joker to count and pay.
+        /// </summary>
+        private void SwallowUnderVoidCard(BlockCard card, GridPos origin, TurnReport report)
+        {
+            var targets = new List<GridPos>();
+            var cubes = new List<DestroyedCube>();
+            foreach (GridPos offset in EffectiveShape(card).Cells)
+            {
+                GridPos pos = origin + offset;
+                Cube? cube = Board.IsInside(pos) ? Board.GetCube(pos) : null;
+                if (cube.HasValue && CubeRules.CanBeSwallowed(cube.Value))
+                {
+                    targets.Add(pos);
+                    cubes.Add(new DestroyedCube(pos, cube.Value));
+                }
+            }
+            if (targets.Count == 0)
+            {
+                return;
+            }
+            ResyncSnapshot(); // this turn's diff starts from the board as it stands
+            IReadOnlyList<GridPos> gone = DestroyCubes(targets, true, true);
+            for (int i = 0; i < cubes.Count; i++)
+            {
+                if (Contains(gone, cubes[i].Pos))
+                {
+                    report.AddVoidSwallows(new[] { cubes[i] });
+                }
+            }
+        }
+
+        private static bool Contains(IReadOnlyList<GridPos> cells, GridPos cell)
+        {
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (cells[i].Equals(cell))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>

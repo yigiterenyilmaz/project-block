@@ -44,9 +44,10 @@ namespace ProjectBlock.Core
         /// (RoundEngine.SetFoxShape; right-click opens the picker).</summary>
         Fox = 9,
 
-        /// <summary>"Kara delik" joker only: a 1x1 trap. Blocks may be placed on top of it,
-        /// but the cube that lands there is destroyed on contact and the void goes with it.
-        /// Round-scoped - these cards never join the owned deck.</summary>
+        /// <summary>"Kara Delik" joker only: a 1x1 BLACK HOLE. It may be laid on any cell, a
+        /// filled one included (what stands there is swallowed), and once down nothing removes or
+        /// moves it; a cube that lands on it falls in. The card is spent when it is laid, and
+        /// these cards never join the owned deck. See KaraDelikJoker.</summary>
         Void = 10,
 
         /// <summary>The anti-block: it may be placed ON TOP of existing cubes and ERASES

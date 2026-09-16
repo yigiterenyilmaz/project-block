@@ -28,6 +28,11 @@ namespace ProjectBlock.Core
             {
                 return AntimatterFits(card, origin);
             }
+            // "Kara Delik": a hole may be laid over a cube as well as on an empty cell.
+            if (Has(card, BlockElement.Void))
+            {
+                return Board.CanPlaceVoid(EffectiveShape(card), origin);
+            }
             return Board.CanPlace(EffectiveShape(card), origin, Has(card, BlockElement.Ghost),
                 Has(card, BlockElement.Negative));
         }

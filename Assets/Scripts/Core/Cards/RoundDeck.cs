@@ -201,6 +201,22 @@ namespace ProjectBlock.Core
             ShuffleCount++;
         }
 
+        /// <summary>"Kara Delik" losing control: a whole pile is swallowed and sits out the rest of
+        /// the round (the run deck is untouched, so every card is back next round). Returns the
+        /// cards, top first for the draw pile and most recent first for the discard.</summary>
+        public IReadOnlyList<BlockCard> SwallowPile(bool fromDrawPile)
+        {
+            List<BlockCard> pile = fromDrawPile ? drawPile : discardPile;
+            var swallowed = new List<BlockCard>(pile.Count);
+            for (int i = pile.Count - 1; i >= 0; i--)
+            {
+                swallowed.Add(pile[i]);
+            }
+            pile.Clear();
+            removedFromRound.AddRange(swallowed);
+            return swallowed;
+        }
+
         /// <summary>
         /// Removes up to <paramref name="count"/> random cards from the draw pile until round end
         /// (overtime clean-sweep rule). Returns the removed cards.

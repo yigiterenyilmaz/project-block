@@ -924,6 +924,7 @@ namespace ProjectBlock.View
                 case BlockElement.Mechanical: return Loc.Pick("GEARS", "ÇARK");
                 case BlockElement.Fox: return Loc.Pick("FOX", "TİLKİ");
                 case BlockElement.Targeted: return Loc.Pick("TARGETED", "HEDEFLİ");
+                case BlockElement.Void: return Loc.Pick("BLACK HOLE", "KARA DELİK");
                 default: return element.ToString().ToUpperInvariant();
             }
         }
@@ -980,6 +981,14 @@ namespace ProjectBlock.View
                         "İşaretli tek küpü onun hedefidir. Önce HEDEFİ patlatırsan blok bonus "
                             + "verir ve tümüyle patlar; önce başka bir küpü giderse bloğun "
                             + "etkisi kalmaz - orada öylece durur.");
+                case BlockElement.Void:
+                    return Loc.Pick(
+                        "Goes on any cell, even a filled one, and nothing can ever remove it. Each "
+                            + "turn it eats the blocks next to it and pulls in the ring beyond; a "
+                            + "block laid on it falls in.",
+                        "Dolu hücre dahil her yere konur ve hiçbir şey onu kaldıramaz. Her tur "
+                            + "yanındaki blokları yutar, bir ötesindekileri kendine çeker; üstüne "
+                            + "konan blok içine düşer.");
                 default:
                     return string.Empty;
             }

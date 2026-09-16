@@ -1,5 +1,5 @@
 ﻿// PURPOSE: The jokers wired into the run economy and the market: Kapalı Ekonomi,
-// ihale, Kara delik, Enfeksiyon.
+// ihale, Enfeksiyon. ("Kara Delik" has a file of its own: KaraDelikJoker.cs.)
 //
 // "Powerbank" lives here too, now that powers exist: it is the only joker that reaches into
 // the power inventory.
@@ -173,102 +173,6 @@ namespace ProjectBlock.Core
             {
                 auctionedName = null;
             }
-        }
-    }
-
-    /// <summary>"Kara delik" - every clean sweep hands the player a 1x1 void block. A void
-    /// block can be dropped onto an occupied cell; the cube that lands on it is swallowed
-    /// and the void is used up. The cards are round-scoped and never join the owned deck.</summary>
-    public sealed class KaraDelikJoker : Joker
-    {
-        /// <summary>How many void blocks may exist at the same time within one round.</summary>
-        public int MaxLiveVoidBlocks = 2;
-
-        /// <summary>Void blocks handed out this round.</summary>
-        public int GrantedThisRound { get; private set; }
-
-        private readonly List<int> liveVoidCardIds = new List<int>();
-
-        public KaraDelikJoker()
-            : base("kara_delik", "Kara Delik")
-        {
-            SetDescription(
-                "Every clean sweep adds a 1x1 void block to your discard. A void block "
-                    + "can be placed on a filled cell and swallows whatever lands on it.",
-                "Her temizlikte ıskartana 1x1 boşluk bloğu ekler. Boşluk bloğu "
-                    + "dolu hücreye konabilir ve üstüne geleni yutar.");
-        }
-
-        public override string StatusText
-        {
-            get { return Loc.Pick(GrantedThisRound + " voids", GrantedThisRound + " boşluk"); }
-        }
-
-        public override void OnRoundStarted(RoundContext ctx)
-        {
-            GrantedThisRound = 0;
-            liveVoidCardIds.Clear();
-        }
-
-        public override void AfterCleanSweep(TurnContext turn)
-        {
-            PruneSpent(turn.Round);
-            if (liveVoidCardIds.Count >= MaxLiveVoidBlocks)
-            {
-                return;
-            }
-            BlockCard card = MakeVoidCard(turn.Session);
-            liveVoidCardIds.Add(card.Id);
-            GrantedThisRound++;
-            // Into the discard, so it joins the pile economy and can be drawn later. In
-            // overtime the sweep reshuffles the discard right after this, which is the
-            // deliberate reward: the void block goes straight into the fresh draw pile.
-            turn.Round.Deck.Discard(card);
-        }
-
-        /// <summary>Forgets void blocks that are no longer anywhere in the round's piles or
-        /// hand, so the cap counts blocks that still exist rather than blocks ever made.</summary>
-        private void PruneSpent(RoundEngine round)
-        {
-            for (int i = liveVoidCardIds.Count - 1; i >= 0; i--)
-            {
-                if (!IsStillAround(round, liveVoidCardIds[i]))
-                {
-                    liveVoidCardIds.RemoveAt(i);
-                }
-            }
-        }
-
-        private static bool IsStillAround(RoundEngine round, int cardId)
-        {
-            for (int i = 0; i < round.Hand.Count; i++)
-            {
-                if (round.Hand[i].Id == cardId)
-                {
-                    return true;
-                }
-            }
-            foreach (BlockCard card in round.Deck.DrawPile)
-            {
-                if (card.Id == cardId)
-                {
-                    return true;
-                }
-            }
-            foreach (BlockCard card in round.Deck.DiscardPile)
-            {
-                if (card.Id == cardId)
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private static BlockCard MakeVoidCard(GameSession session)
-        {
-            BlockShape single = BlockShape.FromCells(new[] { new GridPos(0, 0) });
-            return session.CreateCard(single, new[] { BlockElement.Void });
         }
     }
 

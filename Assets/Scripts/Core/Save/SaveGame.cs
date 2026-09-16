@@ -60,7 +60,9 @@ namespace ProjectBlock.Core
         // fields above. Neither 17 writes both, so both are refused.
         // 19 (2026-09-16): "Simya" - a card with two elements is ONE of them at a time, the player's
         // choice, and every card now saves which (".active"). Older files do not carry it.
-        public const int FormatVersion = 19;
+        // 20 (2026-09-16): "Kara Delik" is a black hole that pulls, eats and collapses the board, and
+        // its joker now saves how much it swallowed and how often its gravity slipped.
+        public const int FormatVersion = 20;
 
         private const string VersionKey = "version";
 
