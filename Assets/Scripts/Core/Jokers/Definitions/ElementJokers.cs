@@ -201,6 +201,11 @@ namespace ProjectBlock.Core
         /// <summary>Points per cube taken by the chain.</summary>
         public int PointsPerChainedCube = 4;
 
+        /// <summary>This turn's chain, for the View: a new object per chain, never saved.
+        /// </summary>
+        [field: NotSaved]
+        public IgnitionVisuals LastIgnition { get; private set; }
+
         public TutusturJoker()
             : base("tutustur", "Tutuştur")
         {
@@ -220,11 +225,46 @@ namespace ProjectBlock.Core
             {
                 return;
             }
+            // For the View, taken BEFORE the chain runs: what lit it, and what stood where it burns.
+            var report = new IgnitionVisuals();
+            IReadOnlyList<DestroyedCube> log = turn.Report.DestroyedCubes;
+            for (int i = 0; i < log.Count; i++)
+            {
+                if (log[i].Cube.Kind == CubeKind.Fire)
+                {
+                    report.SourceCells.Add(log[i].Pos);
+                }
+            }
+            var before = new Dictionary<GridPos, Cube>();
+            for (int i = 0; i < fire.Count; i++)
+            {
+                Cube? cube = turn.Round.Board.GetCube(fire[i]);
+                if (cube.HasValue)
+                {
+                    before[fire[i]] = cube.Value;
+                }
+            }
             IReadOnlyList<GridPos> burned = turn.Round.DestroyCubes(fire, true);
             // The chain itself is the effect; it pays only under "Genel temizlik".
+            int paidBefore = turn.Score.FlatBonus + turn.Score.LateFlat;
             if (burned.Count > 0 && turn.Round.ExternalDestructionScores)
             {
                 turn.Score.AddFlat(burned.Count * PointsPerChainedCube, DefId);
+            }
+            if (burned.Count > 0)
+            {
+                report.Points = (turn.Score.FlatBonus + turn.Score.LateFlat - paidBefore) * turn.Score.ScoreScale;
+                uint seed = 2166136261u;
+                for (int i = 0; i < burned.Count; i++)
+                {
+                    Cube cube;
+                    report.Cells.Add(burned[i]);
+                    report.Cubes.Add(before.TryGetValue(burned[i], out cube) ? cube : new Cube(CubeKind.Fire, 0));
+                    seed = (seed ^ unchecked((uint)(burned[i].X * 73856093))) * 16777619u;
+                    seed = (seed ^ unchecked((uint)(burned[i].Y * 19349663))) * 16777619u;
+                }
+                report.Seed = seed;
+                LastIgnition = report;
             }
         }
 

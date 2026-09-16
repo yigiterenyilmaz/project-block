@@ -1540,9 +1540,27 @@ public static class JokerTests
         };
         turn.Report.DestroyedCubes = destroyed;
 
+        Check(joker.LastIgnition == null, "nothing is reported before a chain");
         joker.AfterLineExplosion(turn);
         Check(round.Board.CountCubesOfKind(CubeKind.Fire) == 0,
             "every fire cube went up", "left " + round.Board.CountCubesOfKind(CubeKind.Fire));
+        IgnitionVisuals chain = joker.LastIgnition;
+        Check(chain != null && chain.Count == 3
+                && chain.Cells.Contains(new GridPos(0, 0)) && chain.Cells.Contains(new GridPos(3, 3))
+                && chain.Cells.Contains(new GridPos(4, 1)),
+            "the report names exactly the fire the chain took", chain == null ? "null" : "" + chain.Count);
+        Check(chain != null && chain.SourceCells.Count == 1 && chain.SourceCells[0].Equals(new GridPos(2, 2)),
+            "and the fire that lit it, from the turn's own log");
+        bool allFire = chain != null;
+        if (chain != null)
+        {
+            foreach (Cube c in chain.Cubes)
+            {
+                allFire &= c.Kind == CubeKind.Fire;
+            }
+        }
+        Check(allFire && chain.Cubes.Count == chain.Cells.Count, "with each cube taken before it went");
+        Check(chain != null && chain.Points == 0, "and no points, because the chain paid none");
         // A joker's destruction is not worth points by itself - only under "Genel temizlik".
         Check(score.FlatBonus == 0, "without Genel temizlik the chain pays nothing",
             "got " + score.FlatBonus);
@@ -1555,6 +1573,11 @@ public static class JokerTests
         joker.AfterLineExplosion(paidTurn);
         Check(paidScore.FlatBonus > 0, "with Genel temizlik the chain pays",
             "got " + paidScore.FlatBonus);
+        Check(joker.LastIgnition != null && !ReferenceEquals(joker.LastIgnition, chain)
+                && joker.LastIgnition.Points == paidScore.FlatBonus * paidScore.ScoreScale
+                && joker.LastIgnition.PointsEach * joker.LastIgnition.Count == joker.LastIgnition.Points,
+            "a new report per chain, with the points measured off the breakdown",
+            joker.LastIgnition == null ? "null" : joker.LastIgnition.Points + " vs " + paidScore.FlatBonus);
     }
 
     private static void Spread_ConvertsOneRingOnly()
