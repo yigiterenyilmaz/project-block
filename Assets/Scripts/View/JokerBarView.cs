@@ -282,6 +282,19 @@ namespace ProjectBlock.View
         /// edge, so the wind-up reads as the card being pulled off the strip.</summary>
         private const float TiltSign = 1f;
 
+        /// <summary>ANIMATION LAB ONLY: forces the attention breath on one panel. The breath is
+        /// normally derived from Joker.HasPendingMarketAction during a market, which is a state
+        /// the lab cannot reach - and an effect the lab cannot show is an effect nobody can
+        /// look at. What it LOOKS like is still entirely CardGlowFx.</summary>
+        public void SetAttentionForLab(int index, bool on)
+        {
+            if (index < 0 || index >= panels.Count || panels[index].Glow == null)
+            {
+                return;
+            }
+            panels[index].Glow.SetAttention(on, CardGlowFx.AttentionColour);
+        }
+
         /// <summary>Quick scale pulse on the panel showing that joker (activation feedback).</summary>
         public void PulseJoker(int instanceId)
         {

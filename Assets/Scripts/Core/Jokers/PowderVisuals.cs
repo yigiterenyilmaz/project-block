@@ -49,7 +49,10 @@ namespace ProjectBlock.Core
             get { return Cells.Count; }
         }
 
-        internal void Add(GridPos cell, int charges, int cap, bool gained)
+        /// <summary>PUBLIC so the animation lab can build one. The lab fabricates ARGUMENTS and
+        /// drives the real view code, which is the whole bargain it makes - and a report it
+        /// cannot construct is an effect it cannot show.</summary>
+        public void Add(GridPos cell, int charges, int cap, bool gained)
         {
             Cells.Add(cell);
             Charges.Add(charges);

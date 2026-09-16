@@ -779,6 +779,170 @@ namespace ProjectBlock.View
             animTypedThisFrame += c;
         }
 
+        // ------------------------------------------------- this session's joker animations
+        //
+        // Every one of these goes through the SAME seam the game goes through - SyncPowder's
+        // view, the confetti view, the bars' own Proc/Hold, SpawnComboPopup - and fabricates
+        // only the argument. A retimed effect shows its new timing here for free.
+
+        /// <summary>Puts <paramref name="cubes"/> dynamite cubes on the board at a given charge
+        /// and plays the powder for them. <paramref name="gained"/> false is a block HOLDING:
+        /// the ember stays, and there is no spark and no sizzle.</summary>
+        private void AnimPowder(int charges, bool gained, int cubes)
+        {
+            EnsurePowder();
+            var report = new PowderVisuals();
+            for (int i = 0; i < cubes; i++)
+            {
+                report.Add(new GridPos(2 + i, 3), charges, 5, gained);
+            }
+            powder.Show(report);
+            if (gained)
+            {
+                sfx.Fuse(charges / 5f);
+            }
+            animLastLabel = Loc.Pick("powder " + charges + "/5", "barut " + charges + "/5");
+        }
+
+        /// <summary>Four blocks at four ripenesses at once - the scene that says whether the
+        /// ember actually reads as a SCALE rather than as "lit or not".</summary>
+        private void AnimPowderSpread()
+        {
+            EnsurePowder();
+            var report = new PowderVisuals();
+            for (int i = 0; i < 4; i++)
+            {
+                report.Add(new GridPos(1 + i * 2, 3), i + 2, 5, true);
+            }
+            powder.Show(report);
+            sfx.Fuse(1f);
+        }
+
+        private void AnimPowderPitchSweep()
+        {
+            StartCoroutine(PowderPitchRoutine());
+        }
+
+        private IEnumerator PowderPitchRoutine()
+        {
+            for (int charge = 1; charge <= 5; charge++)
+            {
+                AnimPowder(charge, true, 1);
+                yield return new WaitForSecondsRealtime(0.45f);
+            }
+        }
+
+        private void AnimConfetti(bool heavy)
+        {
+            EnsureConfetti();
+            confetti.Play(heavy, heavy ? 7 : 3);
+            sfx.Buy();
+            animLastLabel = heavy
+                ? Loc.Pick("overtime rain", "uzatma yağmuru")
+                : Loc.Pick("ordinary rain", "normal yağmur");
+        }
+
+        private IEnumerator AnimConfettiCompare()
+        {
+            AnimConfetti(false);
+            yield return new WaitForSecondsRealtime(1.6f);
+            AnimConfetti(true);
+        }
+
+        private IEnumerator AnimComboLadder()
+        {
+            SpawnComboPopup(2, false, 1.5);
+            yield return new WaitForSecondsRealtime(0.9f);
+            SpawnComboPopup(3, false, 3.0);
+        }
+
+        /// <summary>Fires the proc light on the first joker or power held. Both bars are brought
+        /// back for it - the lab hides the joker strip so the panel is not drawn over.</summary>
+        private void AnimGlowProc(bool joker)
+        {
+            if (joker)
+            {
+                if (AnimShowJokerBar())
+                {
+                    jokerBar.ProcJoker(session.Jokers.Jokers[0].InstanceId);
+                }
+                return;
+            }
+            if (AnimHasPower())
+            {
+                powerBar.ProcPower(session.Powers.Powers[0].InstanceId);
+            }
+        }
+
+        /// <summary>
+        /// The market's breath, forced on. It is normally driven by Joker.HasPendingMarketAction
+        /// during a market, which is a state the lab cannot reach - so the scene drives the halo
+        /// directly. Everything about how it LOOKS is still CardGlowFx's.
+        /// </summary>
+        private void AnimGlowAttention(bool on)
+        {
+            if (!AnimShowJokerBar())
+            {
+                return;
+            }
+            jokerBar.SetAttentionForLab(0, on);
+        }
+
+        private IEnumerator AnimHoldWindUp(bool joker)
+        {
+            if (joker && !AnimShowJokerBar())
+            {
+                yield break;
+            }
+            if (!joker && !AnimHasPower())
+            {
+                yield break;
+            }
+            const float hold = 0.55f;
+            float time = 0f;
+            while (time < hold)
+            {
+                time += Time.unscaledDeltaTime;
+                float k = Mathf.Clamp01(time / hold);
+                if (joker)
+                {
+                    jokerBar.SetHoldProgress(0, k);
+                }
+                else
+                {
+                    powerBar.SetHoldProgress(0, k);
+                }
+                yield return null;
+            }
+            // Released at full load: the sale is what the wind-up was winding up to.
+            if (joker)
+            {
+                jokerBar.SetHoldProgress(-1, 0f);
+                jokerBar.AnimateJokerSold(0, session);
+            }
+            else
+            {
+                powerBar.SetHoldProgress(-1, 0f);
+                powerBar.AnimatePowerSold(0, session);
+            }
+            sfx.Buy();
+        }
+
+        private void AnimGlowReset()
+        {
+            jokerBar.SetHoldProgress(-1, 0f);
+            powerBar.SetHoldProgress(-1, 0f);
+            jokerBar.SetAttentionForLab(0, false);
+            if (powder != null)
+            {
+                powder.Clear();
+            }
+            if (confetti != null)
+            {
+                confetti.Clear();
+            }
+        }
+
         // ------------------------------------------------------------------ knobs
 
         private void CycleAnimKnob(int knob, int step)
@@ -3607,6 +3771,81 @@ namespace ProjectBlock.View
                 "ham - eldeki kart: kaldır, sürükle, yerine bırak", AnimRawCardFeel);
             AddAnim("RAW - Devre cooking, slowed right down (heat, cracks, ash)",
                 "ham - Devre pişmesi, iyice yavaşlatılmış (ısı, çatlak, kül)", AnimRawCircuitSlow);
+            // ---- THIS SESSION'S JOKERS. Every one of these drives the real seam the game
+            // drives; what the lab fabricates is only the report or the index it needs.
+
+            AddAnimSub("jokers", "barut", "barut tedarikçisi", "barut tedarikçisi");
+            AddAnim("barut: one charge lands (spark + ember)",
+                "barut: tek şarj (kıvılcım + köz)",
+                delegate { AnimPowder(1, true, 1); });
+            AddAnim("barut: charge 2 of 5", "barut: 5 şarjın 2.si",
+                delegate { AnimPowder(2, true, 1); });
+            AddAnim("barut: charge 3 of 5", "barut: 5 şarjın 3.sü",
+                delegate { AnimPowder(3, true, 1); });
+            AddAnim("barut: charge 4 of 5", "barut: 5 şarjın 4.sü",
+                delegate { AnimPowder(4, true, 1); });
+            AddAnim("barut: FULL - grows, beats faster, stays lit",
+                "barut: DOLU - büyür, hızlanır, yanık kalır",
+                delegate { AnimPowder(5, true, 1); });
+            AddAnim("barut: a full block HOLDING (no spark, no sizzle)",
+                "barut: dolu blok BEKLİYOR (kıvılcım/tıslama yok)",
+                delegate { AnimPowder(5, false, 1); });
+            AddAnim("barut: a 4-cube block charging", "barut: 4 küplük blok şarj oluyor",
+                delegate { AnimPowder(3, true, 4); });
+            AddAnim("barut: four blocks at different ripeness",
+                "barut: dört blok farklı olgunlukta",
+                delegate { AnimPowderSpread(); });
+            AddAnim("barut: the fuse pitch, empty to full",
+                "barut: fitil sesi, boştan doluya",
+                delegate { AnimPowderPitchSweep(); });
+
+            AddAnimSub("jokers", "mikrodalga", "mikrodalga", "mikrodalga");
+            AddAnim("mikrodalga: an ORDINARY combo (combo knob)",
+                "mikrodalga: NORMAL kombo (kombo ayarı)",
+                delegate { SpawnComboPopup(Mathf.Max(2, animCombo), false, animCombo >= 3 ? 3.0 : 1.5); });
+            AddAnim("mikrodalga: the BRIDGED combo - kept warm",
+                "mikrodalga: KÖPRÜLENEN kombo - sıcak tutuldu",
+                delegate { SpawnComboPopup(Mathf.Max(2, animCombo), true, animCombo >= 3 ? 2.0 : 1.25); });
+            AddAnim("mikrodalga: the ladder, x1.5 then x3",
+                "mikrodalga: merdiven, x1.5 sonra x3",
+                delegate { StartCoroutine(AnimComboLadder()); });
+            AddAnim("mikrodalga: MAX - the ladder has topped out",
+                "mikrodalga: MAKS - merdiven doldu",
+                delegate { SpawnComboPopup(7, false, 3.0); });
+
+            AddAnimSub("jokers", "eforsuz", "eforsuz galibiyet", "eforsuz galibiyet");
+            AddAnim("eforsuz: a power-free round pays (confetti)",
+                "eforsuz: güçsüz raunt öder (konfeti)",
+                delegate { AnimConfetti(false); });
+            AddAnim("eforsuz: a power-free OVERTIME - twice the rain",
+                "eforsuz: güçsüz UZATMA - iki katı yağmur",
+                delegate { AnimConfetti(true); });
+            AddAnim("eforsuz: the two side by side", "eforsuz: ikisi yan yana",
+                delegate { StartCoroutine(AnimConfettiCompare()); });
+
+            AddAnimSub("jokers", "simetri", "simetri", "simetri");
+            AddAnim("simetri: the arena lights for a symmetric board",
+                "simetri: simetrik tahtada alan ışıldar",
+                delegate { FlashBoard(new Color(0.62f, 0.74f, 1f)); });
+
+            AddAnimSub("general", "barglow", "bar cards: the glow", "bar kartları: ışık");
+            AddAnim("glow: a joker PROCS (flash + pulse)", "ışık: joker TETİKLENDİ",
+                delegate { AnimGlowProc(true); });
+            AddAnim("glow: a power procs", "ışık: güç tetiklendi",
+                delegate { AnimGlowProc(false); });
+            AddAnim("glow: ATTENTION breath ON (market invite)",
+                "ışık: DAVET nefesi AÇIK", delegate { AnimGlowAttention(true); });
+            AddAnim("glow: attention breath off", "ışık: davet nefesi kapalı",
+                delegate { AnimGlowAttention(false); });
+            AddAnim("glow: the HOLD wind-up, empty to sold",
+                "ışık: BASILI TUTMA gerilimi, boştan satışa",
+                delegate { StartCoroutine(AnimHoldWindUp(true)); });
+            AddAnim("glow: the hold wind-up on a POWER",
+                "ışık: GÜÇ üzerinde basılı tutma gerilimi",
+                delegate { StartCoroutine(AnimHoldWindUp(false)); });
+            AddAnim("glow: RESET (every light off)", "ışık: SIFIRLA (tüm ışıklar kapalı)",
+                delegate { AnimGlowReset(); });
+
             AddAnimSub("sequences", "sequences", "full sequences", "tam diziler");
             AddAnim("TURN: line clear", "TUR: satır patlaması", AnimTurnLineClear);
             AddAnim("TURN: clean sweep", "TUR: temizlik", AnimTurnCleanSweep);
