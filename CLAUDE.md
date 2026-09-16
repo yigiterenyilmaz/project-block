@@ -1258,6 +1258,26 @@ way in, since a finger is the left button) or the pad's west button; a gear's tu
 retro rotation are rows of that panel. The card is rebuilt wearing the chosen element
 (`ViewUtil.ShownElements`), with no animation. `Tools/UiLayoutCheck/simya.py` holds it.
 
+**"KARA DELIK" IS A REAL BLACK HOLE** (designer's call, 2026-09-16; `KaraDelikJoker.cs`). Every
+clean sweep puts a 1x1 void card in the discard. Laid on ANY cell - over a cube too, which is
+swallowed through the engine (`RoundEngine.SwallowUnderVoidCard`, forced: gold and obsidian go) - it
+becomes a hole that NEVER leaves: `CubeRules.IsAnchored` is asked by every board write (forced
+destroy, forget, the escalator, the centrifuge and retro's row collapse - which lift the holes, move
+everything else and put them back, a cube carried into one falling in - the press, a line swap,
+`SetCubeAt`, `SetCubeKind`, the parasite, erosion, `RestoreFrom`, the snake). The card is spent (the
+hole IS the card), a block landing on a hole loses that cube into it
+(`GameBoard.LastPlacementSwallows` -> `TurnReport.VoidSwallows`), it fills its cell for lines and
+never blocks a sweep. Every turn, in `AfterLineExplosion`, ring 1 (Chebyshev) is EATEN and ring 2 is
+PULLED one step in (`GameBoard.MoveCube`, then `NoteBoardRearranged` - a pull is not a death); ring 3
+feels nothing. A parasite host, the snake, a mine and a press capsule are never taken
+(`CubeRules.CanBeSwallowed`). Each swallowed cube pays `PointsPerCube` and is counted; when the
+round's count reaches the arena's play cells the board COLLAPSES (every other takeable cube
+destroyed, each paying) and `ForceCleanSweep` goes off however full it was, then the count restarts.
+The price, rolled in `AfterTurnScored`: at `DeckSwallowChancePercent` the gravity swallows the
+SMALLER non-empty pile (a tie takes the discard, `RoundDeck.SwallowPile`) for the rest of the round,
+at most twice a round. `LastTurn` / `LastDeckSwallow` are the View's reports; save format 20.
+Pinned in `Tools/CoreTests/KaraDelikTests.cs`.
+
 **"Meydan Okuma" dares a line picked off a MEASURED sea of chances** (`LineChanceSea`, in
 `Core/Jokers/LineChance.cs`). It used to mark any row or column at random, which made the bonus a
 lottery. Now, whenever a dare is laid, every row and column gets its odds of being cleared within
