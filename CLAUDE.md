@@ -1278,6 +1278,35 @@ SMALLER non-empty pile (a tie takes the discard, `RoundDeck.SwallowPile`) for th
 at most twice a round. `LastTurn` / `LastDeckSwallow` are the View's reports; save format 20.
 Pinned in `Tools/CoreTests/KaraDelikTests.cs`.
 
+**THE HOLE IS DRAWN AS A PHYSICAL ANOMALY, NOT A BLACK CIRCLE** (`BlackHoleView`, `BlackHoleShapes`,
+`GameUiController.BlackHole.cs`, `Resources/Shaders/BlackHole` + `BlackHoleMatter`). Three layers or
+it does not read: an EVENT HORIZON with no detail in it and a hair of bent light that is brightest on
+the approaching side only (an even bright ring read as a button), an ACCRETION DISK of two bands at
+two speeds whose matter drifts INWARD (a rigidly turning noise reads as a spinning texture), dark and
+cold with one local warm highlight, and a DISTORTION FIELD written through the board's own renderers
+for every cube in ring 1 or 2 (`KaraDelikJoker.InfluenceAt` - the view never picks a radius; ring 3 is
+untouched): stretched toward the hole, squeezed across it, dragged, near edge bent, near side darker,
+the tile's own warp copied in so water keeps swirling, ice left alone. Picture only - no cell, hitbox
+or input moves. With the shaders there, the board leaves a hole cell as an empty slot and the view
+draws it; without them the void tile stays and nothing here runs. The MASS layer is a broken, grainy
+second density band outside the disk that fills with `SwallowedThisRound / GoalFor` - the first mock
+made it an even grey ring, which is a HUD gauge. The repaint after a turn raises proxies and holds the
+pull destinations (`Prepare`); the gravity plays from `PlayExplosionFeedback` after the turn's lines
+(`Begin`): grip (disk quickens, targets lean in), the real pulls (accelerating, a pixel of overshoot),
+the swallows (lock, a 0.35-0.7 turn spiral, spaghettification to 1.4 x 0.25 kept readable until the
+last quarter, drained and darkened last, and whatever crossed the horizon clipped PER RENDERER - never
+a fade, never an outward burst, a mass pulse instead), per-cube `+X` for up to three and one rolling
+total past that, then the COLLAPSE: saturation, a breath of silence with every remaining cube tugged
+in, a thin dark-to-amber break running out in distance buckets, each cube compressing and bursting in
+its OWN colour. That sweep suppresses the ordinary cleanse wave and its shake (`sweepIsHoleCollapse`).
+The DEVOUR opens a faint bent corridor to the chosen pile only, leans and thins the stack, peels 3-6
+proxy cards into the horizon (a transient horizon at the board edge when no hole stands), and leaves a
+sunken lens residue that shows only while that pile is BOTH voided this round and empty - an empty
+pile is an ordinary slot. `GameBoard.AnchorRefusals` (reporting only, cleared each turn) drives the
+"it will not budge" beat. The lab has 23 scenes running `KaraDelikJoker.RunGravity` / `RunCollapse`,
+the real `Place` and `ShiftRowsUp` on its own board, plus layer switches and four debug views;
+`Tools/UiLayoutCheck/karadelik.py` holds the lot. Mocks: `hole_*.png` in the session scratchpad.
+
 **"Meydan Okuma" dares a line picked off a MEASURED sea of chances** (`LineChanceSea`, in
 `Core/Jokers/LineChance.cs`). It used to mark any row or column at random, which made the bonus a
 lottery. Now, whenever a dare is laid, every row and column gets its odds of being cleared within
