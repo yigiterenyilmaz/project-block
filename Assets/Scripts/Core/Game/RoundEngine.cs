@@ -1,4 +1,4 @@
-// PURPOSE: The turn-by-turn state machine of ONE round - the heart of the game rules
+﻿// PURPOSE: The turn-by-turn state machine of ONE round - the heart of the game rules
 // (partial: run state, construction, and the board-reshaping powers). The turn
 // resolution order and the central rules live across this class's partial files:
 //   .Turn        - ResolvePlacement, the ordered turn resolver
@@ -471,7 +471,8 @@ namespace ProjectBlock.Core
         private readonly Dictionary<int, int> cardPlacedSize = new Dictionary<int, int>();
 
         /// <summary>Consecutive line-clearing turns this round (the "kombo" streak). Each turn
-        /// that explodes >=1 line increments it and pays comboCount*ComboBonusPerStep; a turn
+        /// that explodes >=1 line increments it and MULTIPLIES that turn's score by the rung
+        /// ScoringConfig.ComboMultipliers names for it; a turn
         /// that clears nothing resets it to 0. Lives for the round - a fresh RoundEngine per
         /// round starts it at 0 - and RedrawHand never touches it (it resolves no turn).</summary>
         private int comboCount;

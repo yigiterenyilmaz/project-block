@@ -40,35 +40,45 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
-        /// The combo bonus for the n-th consecutive line-clearing turn.
+        /// The multiplier the n-th consecutive line-clearing turn applies to its own score.
         ///
-        /// A SHORT LADDER THAT CLIMBS HARD (2026-09-16, designer's call). It used to be flat -
-        /// (n-1) * step, forever - so every turn of a streak was worth the same small amount more
-        /// than the last and a streak's value was all in its LENGTH. Now it caps at
-        /// ScoringConfig.MaxComboTier and the rungs below the cap ACCELERATE, so the reward is in
-        /// getting to three rather than in grinding to eleven.
+        /// A MULTIPLIER, NOT A FLAT BONUS (2026-09-16, designer's call), and this is the second
+        /// retune in a row for the same underlying reason. A flat bonus is worth least exactly
+        /// when the turn is biggest - a streak built on four-line clears with a scoring build
+        /// behind it got the same handful of points as one built on single rows - so a streak
+        /// never actually felt like it was compounding. A multiplier makes the streak worth
+        /// whatever the turns inside it are worth, which is what a combo is supposed to mean.
         ///
-        /// Triangular over the capped tier: rung n is worth n-1 steps on top of everything below
-        /// it, so tier 2 pays one step and tier 3 pays three. Past the cap the bonus simply stops
-        /// growing - the streak itself keeps counting, because jokers and the popup still care
-        /// about how long it really is.
+        /// A SHORT LADDER, from ScoringConfig.ComboMultipliers: x1, x1.5, x3, and the last entry
+        /// holds for every turn past it. Getting to three is the reward; grinding to eleven is
+        /// not. The streak itself keeps counting past the table, because jokers and the popup
+        /// still care how long it really is.
+        ///
+        /// MIND WHAT A MULTIPLIER MULTIPLIES. It is applied through ScoreBreakdown.AddMultiplier,
+        /// so it scales the base values AND every joker flat bonus on the turn - which is a real
+        /// power increase over the flat version, and deliberate. It also means the combo is NOT
+        /// trickled in overtime the way the old flat bonus was (see OvertimeRegularScoreFactor):
+        /// multipliers were always exempt, so a streak is now worth full value there.
         /// </summary>
-        public int ScoreCombo(int comboCount)
+        public double ComboMultiplier(int comboCount)
         {
-            // The FIRST clearing turn is not a combo - it is just a clear. The bonus starts on
-            // the second consecutive clearing turn, which is also where the "COMBO x2" popup
+            // The FIRST clearing turn is not a combo - it is just a clear. The multiplier starts
+            // on the second consecutive clearing turn, which is also where the "COMBO x2" popup
             // starts, so what the player sees and what they are paid line up.
-            if (comboCount < 2)
+            double[] table = config.ComboMultipliers;
+            if (comboCount < 2 || table == null || table.Length == 0)
             {
-                return 0;
+                return 1.0;
             }
-            int tier = comboCount;
-            if (config.MaxComboTier > 0 && tier > config.MaxComboTier)
+            // The table is indexed by streak, 1-based: entry 0 is the first clearing turn. Past
+            // the end the last entry holds, which is what caps the ladder.
+            int index = comboCount - 1;
+            if (index >= table.Length)
             {
-                tier = config.MaxComboTier;
+                index = table.Length - 1;
             }
-            int steps = (tier - 1) * tier / 2;
-            return steps * config.ComboBonusPerStep;
+            double factor = table[index];
+            return factor > 0.0 ? factor : 1.0;
         }
 
         public int ScoreTargetedBlock()

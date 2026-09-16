@@ -459,7 +459,7 @@ namespace ProjectBlock.Core
 
         /// <summary>The "kombo" streak after this turn: how many consecutive turns (including
         /// this one) have cleared >=1 line. 0 on a turn that cleared no line. Drives the UI
-        /// combo popup and the BaseCombo score.</summary>
+        /// combo popup and the combo MULTIPLIER (see ComboMultiplier below).</summary>
         public int ComboCount { get; internal set; }
 
         /// <summary>
@@ -474,10 +474,10 @@ namespace ProjectBlock.Core
         /// </summary>
         public bool ComboBridged { get; internal set; }
 
-        /// <summary>What the bridged combo actually paid, LOGICAL. Without the bridge the streak
-        /// would have reset and this turn would have been the first of a new one, which pays
-        /// nothing at all - so the whole of this is what the bridge was worth.</summary>
-        public int ComboBridgedBonus { get; internal set; }
+        /// <summary>The multiplier the combo applied to this turn, or 1.0 on a turn with no
+        /// combo. Reporting only - the popup prints it, and it is what says how much a streak is
+        /// actually doing when the flat number it used to show no longer exists.</summary>
+        public double ComboMultiplier { get; internal set; } = 1.0;
 
         /// <summary>Every cube removed this turn, from any source (lines, fire chains,
         /// dynamite, joker effects), with the value it held. Grows as the turn resolves.</summary>

@@ -62,9 +62,10 @@ namespace ProjectBlock.Core
         // has fired and what it has paid), so the reflection walk writes two more entries for
         // EVERY joker in the file rather than for one of them - an 18's content block goes out
         // of step on the first joker it reads.
-        // 20 (2026-09-16): the combo ladder gained a CEILING (ScoringConfig.MaxComboTier), and
-        // the scoring block is positional - a 19 does not write it and reading one would go out
-        // of step on every field after the combo step.
+        // 20 (2026-09-16): the combo became a MULTIPLIER ladder (ScoringConfig.ComboMultipliers)
+        // instead of a flat per-step bonus, so the scoring block - which is positional - now
+        // writes the ladder's length and its rungs where the step and the cap used to be. A 19
+        // goes out of step on every field after it.
         public const int FormatVersion = 20;
 
         private const string VersionKey = "version";

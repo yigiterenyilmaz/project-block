@@ -1,4 +1,4 @@
-// PURPOSE: One turn's score, assembled in pieces so several jokers can modify it
+﻿// PURPOSE: One turn's score, assembled in pieces so several jokers can modify it
 // without fighting over a single int. CONFIRMED ORDERING: base values -> all flat
 // additions (inventory order) -> all multipliers (inventory order) -> floor ONCE,
 // then scale. RoundEngine fills the Base* fields; jokers add via TurnContext.
@@ -20,10 +20,6 @@ namespace ProjectBlock.Core
 
         /// <summary>Clean-sweep bonus, if the sweep fired this turn.</summary>
         public int BaseSweep { get; internal set; }
-
-        /// <summary>"kombo" bonus for a consecutive line-clearing turn (0 when no line cleared
-        /// or the streak just reset). A regular base field, so overtime trickles it.</summary>
-        public int BaseCombo { get; internal set; }
 
         /// <summary>Per-turn payout of the gold cubes sitting on the board.</summary>
         public int BaseGold { get; internal set; }
@@ -73,7 +69,7 @@ namespace ProjectBlock.Core
         /// <summary>Everything before jokers touched it.</summary>
         public int BaseTotal
         {
-            get { return BasePlacement + BaseLines + BaseSweep + BaseCombo + BaseGold + BaseTargeted; }
+            get { return BasePlacement + BaseLines + BaseSweep + BaseGold + BaseTargeted; }
         }
 
         /// <summary>
@@ -150,12 +146,17 @@ namespace ProjectBlock.Core
         /// <summary>"Titizlik": wipes every base source EXCEPT the clean sweep. Done in one
         /// place, just before finalization, rather than at each assignment - that way a base
         /// source added later cannot quietly forget to obey the boss. The overtime win bonus
-        /// survives on purpose: it is paid FOR a sweep, so it is sweep money.</summary>
+        /// survives on purpose: it is paid FOR a sweep, so it is sweep money.
+        ///
+        /// THE COMBO SURVIVES TOO, now that it is a MULTIPLIER rather than a base field. That is
+        /// the same rule these bosses already follow - they rewrite base VALUES and a joker's own
+        /// bonuses land on top - and it costs the boss nothing in the case it is aimed at: with
+        /// every base source wiped there is nothing for a multiplier to multiply, so it only ever
+        /// scales what a joker was already being allowed to pay.</summary>
         internal void KeepOnlyCleanSweep()
         {
             BasePlacement = 0;
             BaseLines = 0;
-            BaseCombo = 0;
             BaseGold = 0;
             BaseTargeted = 0;
         }
@@ -178,7 +179,6 @@ namespace ProjectBlock.Core
             BasePlacement = 0;
             BaseLines = 0;
             BaseSweep = 0;
-            BaseCombo = 0;
             BaseGold = 0;
             BaseTargeted = 0;
             BaseOvertimeBonus = 0;

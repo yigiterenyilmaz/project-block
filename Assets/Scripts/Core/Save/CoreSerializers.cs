@@ -259,8 +259,14 @@ namespace ProjectBlock.Core
             w.Write(key + ".perCubePlaced", scoring.PointsPerCubePlaced);
             w.Write(key + ".retroPlacement", scoring.RetroPlacementBonus);
             w.Write(key + ".perLine", scoring.PointsPerLine);
-            w.Write(key + ".comboStep", scoring.ComboBonusPerStep);
-            w.Write(key + ".comboCap", scoring.MaxComboTier);
+            // The combo LADDER, length first - a jokerthat lengthens or reshapes it would
+            // otherwise come back the wrong length on a load.
+            int comboRungs = scoring.ComboMultipliers != null ? scoring.ComboMultipliers.Length : 0;
+            w.Write(key + ".comboRungs", comboRungs);
+            for (int i = 0; i < comboRungs; i++)
+            {
+                w.Write(key + ".comboMult." + i, scoring.ComboMultipliers[i]);
+            }
             w.Write(key + ".perCubeExploded", scoring.PointsPerCubeExploded);
             w.Write(key + ".multiLine", scoring.MultiLineBonusPerExtraLine);
             w.Write(key + ".sweep", scoring.CleanSweepBonus);
@@ -276,8 +282,13 @@ namespace ProjectBlock.Core
             scoring.PointsPerCubePlaced = r.ReadInt(key + ".perCubePlaced");
             scoring.RetroPlacementBonus = r.ReadInt(key + ".retroPlacement");
             scoring.PointsPerLine = r.ReadInt(key + ".perLine");
-            scoring.ComboBonusPerStep = r.ReadInt(key + ".comboStep");
-            scoring.MaxComboTier = r.ReadInt(key + ".comboCap");
+            int comboRungs = r.ReadInt(key + ".comboRungs");
+            var rungs = new double[comboRungs];
+            for (int i = 0; i < comboRungs; i++)
+            {
+                rungs[i] = r.ReadDouble(key + ".comboMult." + i);
+            }
+            scoring.ComboMultipliers = rungs;
             scoring.PointsPerCubeExploded = r.ReadInt(key + ".perCubeExploded");
             scoring.MultiLineBonusPerExtraLine = r.ReadInt(key + ".multiLine");
             scoring.CleanSweepBonus = r.ReadInt(key + ".sweep");

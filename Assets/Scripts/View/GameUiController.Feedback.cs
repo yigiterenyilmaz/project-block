@@ -300,7 +300,8 @@ namespace ProjectBlock.View
             // what actually pays out - not the destruction-only comboStreak that drives shake.
             if (report.ComboCount >= 2)
             {
-                SpawnComboPopup(report.ComboCount, report.ComboBridged);
+                SpawnComboPopup(report.ComboCount, report.ComboBridged,
+                    report.ComboMultiplier);
             }
             if (report.CleanSweep)
             {
@@ -445,7 +446,7 @@ namespace ProjectBlock.View
 
         private void SpawnComboPopup(int comboCount)
         {
-            SpawnComboPopup(comboCount, false);
+            SpawnComboPopup(comboCount, false, 1.0);
         }
 
         /// <summary>
@@ -460,7 +461,7 @@ namespace ProjectBlock.View
         /// celebration of the full bonus: a reheated combo pays part of what an unbroken one
         /// would (RoundRules.ComboBridgedScorePercent).
         /// </summary>
-        private void SpawnComboPopup(int comboCount, bool bridged)
+        private void SpawnComboPopup(int comboCount, bool bridged, double factor)
         {
             // THE LADDER HAS A CEILING, so the popup stops promising more once it is reached.
             // The streak itself keeps counting (jokers care, and so does the player), but a
@@ -468,12 +469,21 @@ namespace ProjectBlock.View
             // player they are being paid for something they are not - which is exactly the
             // "what you see and what you are paid line up" rule this file already holds the
             // first clearing turn to.
-            int cap = session != null ? session.Config.Scoring.MaxComboTier : 0;
-            bool maxed = cap > 0 && comboCount >= cap;
+            double[] ladder = session != null ? session.Config.Scoring.ComboMultipliers : null;
+            bool maxed = ladder != null && ladder.Length > 0 && comboCount >= ladder.Length;
             FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
                 Loc.Pick("COMBO x", "KOMBO x") + comboCount
                     + (maxed ? Loc.Pick("  MAX!", "  MAKS!") : "!"),
                 bridged ? BridgedComboColor : new Color(1f, 0.6f, 0.2f), 64, 0.08f);
+            // THE MULTIPLIER IS THE POINT NOW, so it is printed: a streak that says only "x3"
+            // as a COUNT tells the player nothing about what it is worth, and the number that
+            // matters is no longer a flat bonus they could read off the score.
+            if (factor > 1.0001)
+            {
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.35f),
+                    "x" + factor.ToString("0.##") + Loc.Pick(" SCORE", " PUAN"),
+                    bridged ? BridgedComboColor : new Color(1f, 0.78f, 0.35f), 46, 0.09f);
+            }
             if (bridged)
             {
                 FloatingTextFx.Spawn(transform, new Vector2(0f, 2.1f),

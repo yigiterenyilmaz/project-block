@@ -202,8 +202,11 @@ namespace ProjectBlock.Core
         /// This joker only ever sets two numbers on RoundRules; the turn resolver is what
         /// declines to reset the streak and what discounts the bonus. So it cannot know it has
         /// done anything until the report says so - TurnReport.ComboBridged is that word, and
-        /// ComboBridgedBonus is what the save was worth (the whole bonus: without the bridge the
-        /// streak would have reset and the turn would have paid nothing).
+        /// and the combo is a MULTIPLIER now, so there is no flat number to credit it with: what
+        /// the bridge was worth is however much of the turn that multiplier scaled, which is not
+        /// knowable here without re-deriving the whole breakdown. The COUNT is the statistic that
+        /// matters for this joker anyway - "how many combos have I saved" - so it notes a proc
+        /// worth no points, and its status line says the count rather than a total.
         ///
         /// Counted here rather than in the engine because the engine must not know which joker
         /// set the allowance - a boss or a future power could set it too, and the rule would
@@ -213,7 +216,7 @@ namespace ProjectBlock.Core
         {
             if (turn.Report != null && turn.Report.ComboBridged)
             {
-                NoteProc(turn.Report.ComboBridgedBonus, turn);
+                NoteProc(0, turn);
             }
         }
 

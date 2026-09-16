@@ -30,24 +30,20 @@ namespace ProjectBlock.Core
         /// <summary>Base score per exploded full row/column.</summary>
         public int PointsPerLine = 10;
 
-        /// <summary>"kombo": one step of the combo ladder. The first clearing turn pays NOTHING -
-        /// a combo starts on the second one - and the rungs ACCELERATE up to MaxComboTier, so a
-        /// streak pays 0, 10, 30 and then stays there. A turn that clears no line resets the
-        /// streak to 0. Logical (small); the global ScoreScale lifts it. It is a regular base
-        /// field, so overtime trickles it like placement/lines. See
-        /// DefaultScoreCalculator.ScoreCombo for the shape.</summary>
-        public int ComboBonusPerStep = 10;
-
         /// <summary>
-        /// "kombo": the highest rung the ladder has. Past it the streak keeps counting but stops
-        /// paying more.
+        /// "kombo": what the n-th consecutive line-clearing turn MULTIPLIES its own score by,
+        /// indexed from the first clearing turn. x1, x1.5, x3 (2026-09-16, designer's call) - and
+        /// the LAST ENTRY HOLDS for every turn past it, which is what caps the ladder without a
+        /// separate cap field to keep in step with the table.
         ///
-        /// THREE (2026-09-16, designer's call). A ladder with no ceiling put a streak's whole
-        /// value in its LENGTH, which rewards a board kept artificially alive over a board played
-        /// well; a short ceiling with steep rungs asks for three good turns in a row instead, and
-        /// pays properly for them. 0 removes the cap.
+        /// A turn that clears no line resets the streak. These are multipliers, so the global
+        /// ScoreScale does not apply to them - they scale whatever the turn was already worth,
+        /// base values and joker flat bonuses alike.
+        ///
+        /// Lengthening the table is how the ladder gets longer; changing the last entry is how
+        /// its ceiling moves. BALANCE PLACEHOLDERS, like everything else here.
         /// </summary>
-        public int MaxComboTier = 3;
+        public double[] ComboMultipliers = { 1.0, 1.5, 3.0 };
 
         /// <summary>Score per cube destroyed by a line explosion.</summary>
         public int PointsPerCubeExploded = 1;

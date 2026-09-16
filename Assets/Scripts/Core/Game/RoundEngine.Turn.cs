@@ -238,11 +238,12 @@ namespace ProjectBlock.Core
                 CollapseRetroLines(explosion.Rows);
             }
 
-            // COMBO ("kombo"): consecutive line-clearing turns stack a growing bonus. A turn
-            // that explodes >=1 row/column continues the streak (1,2,3...) and pays
-            // comboCount*step; a turn that clears no line resets it. RedrawHand never reaches
-            // here, so a redraw does not break the streak. BaseCombo is a regular base field,
-            // so overtime trickles it like the rest of the regular score.
+            // COMBO ("kombo"): consecutive line-clearing turns stack a growing MULTIPLIER. A turn
+            // that explodes >=1 row/column continues the streak (1,2,3...) and multiplies its own
+            // score by the rung ScoringConfig.ComboMultipliers names - x1, x1.5, x3, the last
+            // entry holding - and a turn that clears no line resets it. RedrawHand never reaches
+            // here, so a redraw does not break the streak. The combo is a MULTIPLIER, so unlike
+            // the regular base score it is NOT trickled in overtime - multipliers never were.
             //
             // "Mikrodalga" bends the RESET, not the streak: while Rules.ComboBridgeTurns allows
             // it, a quiet turn is merely counted instead of ending the run, and the clear that
@@ -253,18 +254,26 @@ namespace ProjectBlock.Core
             if (report.ExplodedRows.Count + report.ExplodedColumns.Count > 0)
             {
                 comboCount++;
-                int comboBonus = scorer.ScoreCombo(comboCount);
+                double comboFactor = scorer.ComboMultiplier(comboCount);
                 if (comboBlankTurns > 0)
                 {
-                    comboBonus = comboBonus * Rules.ComboBridgedScorePercent / 100;
+                    // A REHEATED COMBO DISCOUNTS THE EXCESS, NEVER THE FACTOR. Halving a
+                    // multiplier of 1.5 gives 0.75, which would make the bridged turn score LESS
+                    // than no combo at all - the discount has to eat into what the combo ADDS
+                    // above 1, so 1.5 becomes 1.25 and 3 becomes 2 at fifty per cent.
+                    comboFactor = 1.0
+                        + (comboFactor - 1.0) * Rules.ComboBridgedScorePercent / 100.0;
                     // Reported so the popup can say a gap was crossed and "Mikrodalga" can count
-                    // the save as its own. Without the bridge the streak would have reset and
-                    // this turn would have paid nothing, so the whole bonus is what it was worth.
+                    // the save as its own: without the bridge the streak would have reset and
+                    // this turn would have had no multiplier at all.
                     report.ComboBridged = true;
-                    report.ComboBridgedBonus = comboBonus;
                 }
                 comboBlankTurns = 0;
-                breakdown.BaseCombo = comboBonus;
+                report.ComboMultiplier = comboFactor;
+                // Through the breakdown's own multiplier stage, so it composes with every joker
+                // multiplier exactly as one of them would - a combo can never overwrite a
+                // joker's factor and a joker can never overwrite the combo's.
+                breakdown.AddMultiplier(comboFactor, "base.combo");
             }
             else if (comboCount > 0 && comboBlankTurns < Rules.ComboBridgeTurns)
             {

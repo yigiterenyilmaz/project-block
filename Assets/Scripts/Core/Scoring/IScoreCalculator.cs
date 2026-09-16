@@ -21,10 +21,17 @@ namespace ProjectBlock.Core
         /// <summary>Bonus for emptying the board ("temizlik").</summary>
         int ScoreCleanSweep();
 
-        /// <summary>Bonus for the <paramref name="comboCount"/>-th consecutive line-clearing
-        /// turn (the "kombo" streak). Count is 1-based, and a combo STARTS ON THE SECOND
-        /// clearing turn: anything below 2 pays 0.</summary>
-        int ScoreCombo(int comboCount);
+        /// <summary>
+        /// The MULTIPLIER the <paramref name="comboCount"/>-th consecutive line-clearing turn
+        /// applies to that turn's score (the "kombo" streak). Count is 1-based, and a combo
+        /// STARTS ON THE SECOND clearing turn: anything below 2 returns 1.0, which is no
+        /// multiplier at all.
+        ///
+        /// It is a MULTIPLIER rather than a flat bonus (2026-09-16, designer's call): a streak
+        /// is supposed to make the turns inside it worth more, and a flat bonus is worth least
+        /// exactly when the turn is biggest. See DefaultScoreCalculator for the table.
+        /// </summary>
+        double ComboMultiplier(int comboCount);
 
         /// <summary>Per-turn bonus for gold cubes sitting on the board.</summary>
         int ScoreGoldBonus(int goldCubesOnBoard);

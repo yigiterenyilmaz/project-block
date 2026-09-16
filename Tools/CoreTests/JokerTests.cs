@@ -942,30 +942,40 @@ public static class JokerTests
     // thing they exist to pin is the BRIDGE (does a quiet turn end the streak, and is the turn
     // that crosses it discounted), not the size of any rung.
 
-    /// <summary>What the n-th consecutive clearing turn pays, straight from the live rule.</summary>
-    private static int ComboRung(GameSession session, int streak)
+    /// <summary>The multiplier the n-th consecutive clearing turn applies, from the live rule.</summary>
+    private static double ComboRung(GameSession session, int streak)
     {
-        return new DefaultScoreCalculator(session.Config.Scoring).ScoreCombo(streak);
+        return new DefaultScoreCalculator(session.Config.Scoring).ComboMultiplier(streak);
     }
 
-    /// <summary>The same rung, reheated - what a turn that crosses a bridged gap pays.</summary>
-    private static int BridgedRung(GameSession session, int streak)
+    /// <summary>The same rung, reheated. A bridged combo discounts what the multiplier ADDS
+    /// above 1, never the factor itself - halving 1.5 would give 0.75 and make the bridged turn
+    /// worth LESS than no combo at all.</summary>
+    private static double BridgedRung(GameSession session, int streak)
     {
-        return ComboRung(session, streak) * session.Config.Rules.ComboBridgedScorePercent / 100;
+        return 1.0 + (ComboRung(session, streak) - 1.0)
+            * session.Config.Rules.ComboBridgedScorePercent / 100.0;
+    }
+
+    private static bool Near(double a, double b)
+    {
+        return System.Math.Abs(a - b) < 0.0001;
     }
 
     private static void Mikrodalga_BridgesOneQuietTurnAtHalfRate()
     {
         Section("mikrodalga / a combo across one quiet turn");
-        Check(ComboAfterOneQuietTurn(false) == 0,
+        Check(Near(ComboAfterOneQuietTurn(false), 1.0),
             "without the joker a quiet turn ends the streak",
             "got " + ComboAfterOneQuietTurn(false));
-        int bridged = ComboAfterOneQuietTurn(true);
+        double bridged = ComboAfterOneQuietTurn(true);
         // The streak is on its THIRD clearing turn, reheated at the bridged rate.
-        int expected = BridgedRung(ComboSession(true), 3);
-        Check(bridged == expected, "with it the streak carries on at a reduced rate",
+        double expected = BridgedRung(ComboSession(true), 3);
+        Check(Near(bridged, expected), "with it the streak carries on at a reduced rate",
             "got " + bridged + ", wanted " + expected);
-        Check(expected > 0, "and a reheated combo is still worth something", "" + expected);
+        Check(expected > 1.0, "and a reheated combo still multiplies", "" + expected);
+        Check(expected < ComboRung(ComboSession(true), 3),
+            "but by less than an unbroken streak would", "" + expected);
     }
 
     private static void Mikrodalga_TwoQuietTurnsStillBreakTheStreak()
@@ -977,7 +987,7 @@ public static class JokerTests
         ClearOneRow(session, round, 1);
         DropOneCube(round, new GridPos(1, 2));
         DropOneCube(round, new GridPos(3, 2));
-        Check(ClearOneRow(session, round, 3) == 0,
+        Check(Near(ClearOneRow(session, round, 3), 1.0),
             "the second quiet turn resets the streak after all");
     }
 
@@ -989,17 +999,18 @@ public static class JokerTests
         ClearOneRow(session, round, 0);
         ClearOneRow(session, round, 1);
         DropOneCube(round, new GridPos(2, 2));
-        int gapTurn = ClearOneRow(session, round, 3);
-        Check(gapTurn == BridgedRung(session, 3), "the turn that ends the gap is discounted",
+        double gapTurn = ClearOneRow(session, round, 3);
+        Check(Near(gapTurn, BridgedRung(session, 3)), "the turn that ends the gap is discounted",
             "got " + gapTurn + ", wanted " + BridgedRung(session, 3));
-        // Straight after it, with no gap: the fourth clearing turn pays its rung in full.
-        int nextTurn = ClearOneRow(session, round, 4);
-        Check(nextTurn == ComboRung(session, 4), "the next consecutive clear is back to full rate",
+        // Straight after it, with no gap: the fourth clearing turn gets its rung in full.
+        double nextTurn = ClearOneRow(session, round, 4);
+        Check(Near(nextTurn, ComboRung(session, 4)),
+            "the next consecutive clear is back to full rate",
             "got " + nextTurn + ", wanted " + ComboRung(session, 4));
     }
 
-    /// <summary>Clear, clear, ONE quiet turn, clear - and what that last turn's combo paid.</summary>
-    private static int ComboAfterOneQuietTurn(bool withJoker)
+    /// <summary>Clear, clear, ONE quiet turn, clear - and the multiplier that last turn got.</summary>
+    private static double ComboAfterOneQuietTurn(bool withJoker)
     {
         GameSession session = ComboSession(withJoker);
         RoundEngine round = session.CurrentRound;
@@ -1022,12 +1033,12 @@ public static class JokerTests
     }
 
     /// <summary>Paints four cells of a row, drops the fifth as a real turn, and returns the
-    /// combo bonus that turn was paid.</summary>
-    private static int ClearOneRow(GameSession session, RoundEngine round, int y)
+    /// combo MULTIPLIER that turn got (1.0 for no combo).</summary>
+    private static double ClearOneRow(GameSession session, RoundEngine round, int y)
     {
         PaintBoard(round, session, CubeKind.Normal, new GridPos(0, y), new GridPos(1, y),
             new GridPos(2, y), new GridPos(3, y));
-        return DropOneCube(round, new GridPos(4, y)).Score.BaseCombo;
+        return DropOneCube(round, new GridPos(4, y)).ComboMultiplier;
     }
 
     private static TurnReport DropOneCube(RoundEngine round, GridPos cell)
@@ -10911,8 +10922,7 @@ public static class JokerTests
         TurnReport strictTurn = PlayOneCard(strict.CurrentRound);
         Check(strictTurn.Score.BasePlacement == 0, "under the boss the placement pays nothing",
             "placement " + strictTurn.Score.BasePlacement);
-        Check(strictTurn.Score.BaseGold == 0 && strictTurn.Score.BaseCombo == 0,
-            "and so do gold and combo");
+        Check(strictTurn.Score.BaseGold == 0, "and so does gold");
         Check(strictTurn.Score.Total == 0, "so the whole turn is worth nothing",
             "total " + strictTurn.Score.Total);
 
