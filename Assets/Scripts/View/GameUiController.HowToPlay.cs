@@ -1,4 +1,4 @@
-// PURPOSE: GameUiController's how-to-play screen - the only place the game explains itself
+﻿// PURPOSE: GameUiController's how-to-play screen - the only place the game explains itself
 // to someone who has not read the design doc.
 //
 // PAGED, NOT SCROLLED: the body is a fixed box and uGUI Text simply CLIPS what does not fit,
@@ -289,7 +289,7 @@ namespace ProjectBlock.View
                     "   Stick / D-pad  move to whatever is that way on the shelf - blocks run",
                     "                  down the left, jokers over powers on the right",
                     "   A              buy the offer you are on",
-                    "   LT + A         take it FREE instead, if you have the smuggler",
+                    "   A on KAÇAKÇI then an offer   take it FREE, if you have the smuggler",
                     "   X              reroll the shelf you are on",
                     "   Y              start the next round",
                     "   RB (hold)      the joker strip - step it, A sells the one you stop on",
@@ -476,7 +476,7 @@ namespace ProjectBlock.View
                     "   Çubuk / Yön    o yönde ne varsa ona geçer - bloklar solda bir sütun,",
                     "                  jokerler ve güçler sağda alt alta",
                     "   A              üstünde durduğun ürünü satın al",
-                    "   LT + A         kaçakçın varsa BEDAVA al",
+                    "   KAÇAKÇI'da A sonra ürün      kaçakçın varsa BEDAVA al",
                     "   X              üstünde durduğun rafı yenile",
                     "   Y              sonraki raundu başlat",
                     "   RB (basılı)    joker barı - gez, A üstünde durduğunu satar",

@@ -517,6 +517,27 @@ namespace ProjectBlock.View
                 new Color(0.85f, 0.88f, 0.95f), 40, 0.06f);
         }
 
+        /// <summary>
+        /// "Kaçakçı" is ARMED and waiting for the shelf to be clicked.
+        ///
+        /// It is a MODE rather than a panel, which is what makes it different from the other two
+        /// market jokers: nothing is picked from a list, the next ordinary purchase simply costs
+        /// nothing. So there is no overlay to suppress the card's breath, and the breath is what
+        /// says the joker still has a haul in it - the ARMED state gets its own message instead.
+        /// </summary>
+        private bool smuggleArmed;
+
+        /// <summary>Arms the free item. Cleared by taking it, by leaving the market, and by any
+        /// click that is not an offer - an armed mode that outlives the screen it was armed on is
+        /// a mode that will spend itself on something the player did not mean.</summary>
+        private void ArmSmuggle()
+        {
+            smuggleArmed = true;
+            messageText.text = Loc.Pick(
+                "KAÇAKÇI ARMED - click anything on the shelf and it is FREE   [Esc] cancel",
+                "KAÇAKÇI HAZIR - raftan neye tıklarsan BEDAVA   [Esc] iptal");
+        }
+
         /// <summary>A TAP on a joker in the market: whatever that joker's market verb is, or a
         /// hint that it has none. The two market jokers keep their own flows.</summary>
         private void UseJokerInMarket(int index)
@@ -536,6 +557,12 @@ namespace ProjectBlock.View
             if (zar != null && zar.CanPickOpeningHand)
             {
                 StartHileliPick(zar);
+                return;
+            }
+            var kacakci = joker as KacakciJoker;
+            if (kacakci != null && session.CanSmuggle)
+            {
+                ArmSmuggle();
                 return;
             }
             HintHoldToSell(jokerBar.PanelScreenCenter(index));
@@ -569,12 +596,12 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            // "Kaçakçı": hold SHIFT to take the offer for free instead of paying for it. One per
-            // market visit, and the goods may be junk - which is why it is a deliberate modifier
-            // and not the default click.
-            Keyboard keys = Keyboard.current;
-            BuyOffer(offerIndex, session.CanSmuggle && keys != null
-                && (keys.leftShiftKey.isPressed || keys.rightShiftKey.isPressed));
+            // "Kaçakçı": the free item is ARMED by clicking the joker and spent by the next
+            // thing bought. See ArmSmuggle - it used to be SHIFT+click, which is a modifier no
+            // player was ever going to find on a joker whose whole point is that it is there.
+            bool free = smuggleArmed && session.CanSmuggle;
+            smuggleArmed = false;
+            BuyOffer(offerIndex, free);
         }
 
         /// <summary>Selling one card off the collection screen, and everything the view does

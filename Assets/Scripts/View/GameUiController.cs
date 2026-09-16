@@ -569,6 +569,7 @@ namespace ProjectBlock.View
             overtimeTurns = 0;
             retroFallHand = -1; // no piece is mid-fall across a round boundary
             ClearConfetti();    // the market's celebration does not follow you into the round
+            smuggleArmed = false; // an armed free item does not survive the shop it was armed in
 
             // The whole screen, through the SAME method every other repaint goes through.
             //
@@ -1160,6 +1161,15 @@ namespace ProjectBlock.View
                 {
                     return;
                 }
+            }
+            // "Kaçakçı" armed and waiting for the shelf: Escape disarms it rather than pausing.
+            // An armed mode is a thing to get out of, and the key that means "get out of this"
+            // has to get out of the innermost one first.
+            if (kb != null && kb.escapeKey.wasPressedThisFrame && smuggleArmed)
+            {
+                smuggleArmed = false;
+                RefreshAll(null);
+                return;
             }
             // THE LAST Escape handler: every modal above returns before reaching this, and
             // HandleJokerInput has just consumed Escape if a joker/power was awaiting a target.

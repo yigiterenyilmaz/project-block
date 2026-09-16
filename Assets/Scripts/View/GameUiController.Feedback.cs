@@ -2530,8 +2530,11 @@ namespace ProjectBlock.View
             infoText.text = sb.ToString();
             // "Kaçakçı": the free item is invisible unless the market says so.
             messageText.text = session.CanSmuggle
-                ? Loc.Pick(PadOr("SHIFT+click an offer: take it FREE (may be defective)", "LT + A on an offer: take it FREE (may be defective)"),
-                    PadOr("Bir ürüne SHIFT+tık: BEDAVA al (defolu çıkabilir)", "Bir üründe LT + A: BEDAVA al (defolu çıkabilir)"))
+                ? Loc.Pick(
+                    PadOr("Click KAÇAKÇI, then an offer: take it FREE (may be defective)",
+                        "A on KAÇAKÇI, then an offer: take it FREE (may be defective)"),
+                    PadOr("KAÇAKÇI'ya tıkla, sonra bir ürüne: BEDAVA (defolu çıkabilir)",
+                        "KAÇAKÇI'da A, sonra bir ürüne: BEDAVA (defolu çıkabilir)"))
                 : string.Empty;
         }
 

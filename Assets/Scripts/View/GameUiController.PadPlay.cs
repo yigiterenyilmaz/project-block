@@ -337,7 +337,12 @@ namespace ProjectBlock.View
             {
                 // "Kaçakçı" rides the left trigger here for the same reason SHIFT carries it on
                 // the mouse: taking the free one is a deliberate modifier, not the plain buy.
-                BuyOffer(padMarketIndex, session.CanSmuggle && padLeftTriggerHeld);
+                // "Kaçakçı" is ARMED on its own card now (A on it in the joker strip), exactly
+                // as the mouse arms it - the held trigger was the pad's half of a SHIFT modifier
+                // nobody could find. LT still works as a shortcut for a player who knows it.
+                bool free = session.CanSmuggle && (smuggleArmed || padLeftTriggerHeld);
+                smuggleArmed = false;
+                BuyOffer(padMarketIndex, free);
                 return true;
             }
             return false;

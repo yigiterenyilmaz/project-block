@@ -1,4 +1,4 @@
-// PURPOSE: "Kaçakçı" - one item per market visit, free. The catch is that free goods come off the
+﻿// PURPOSE: "Kaçakçı" - one item per market visit, free. The catch is that free goods come off the
 // back of a lorry, and roughly half of them are defective.
 //
 // AND IT DOES NOT LAST. A smuggler who keeps delivering gets caught: after it has handed over
@@ -74,13 +74,15 @@ namespace ProjectBlock.Core
             : base("kacakci", "Kaçakçı")
         {
             SetDescription(
-                "Take ONE market item per visit for free - but smuggled goods are defective about "
+                "CLICK THIS JOKER, then buy anything on the shelf and it costs NOTHING - one item "
+                    + "per market visit. But smuggled goods are defective about "
                     + "half the time. A defective block falls straight through the board and off "
                     + "the screen, wasting the turn; a broken joker is dead in boss rounds or dead "
                     + "outright; a broken power arrives empty and fills four times slower. You "
                     + "keep whatever you took. After it has delivered THREE SOUND items it is "
                     + "caught and gone - junk does not count against it.",
-                "Her market ziyaretinde BİR ürünü bedavaya al - ama kaçak malın yarısı defolu "
+                "BU JOKERE TIKLA, sonra raftan neyi alırsan BEDAVA gelsin - her market "
+                    + "ziyaretinde bir ürün. Ama kaçak malın yarısı defolu "
                     + "çıkar. Defolu blok tahtaya tutunmaz, aşağı düşüp ekrandan çıkar ve turu "
                     + "boşa harcarsın; defolu joker patron rauntlarında ya da hiçbir zaman "
                     + "çalışmaz; defolu güç boş gelir ve dört kat yavaş dolar. Aldığın senin kalır. "
@@ -93,6 +95,21 @@ namespace ProjectBlock.Core
         /// well as in the removal, so a smuggler that has delivered its three can never hand over
         /// a fourth even if something delayed it leaving.</summary>
         public override bool EnablesSmuggling
+        {
+            get { return !IsSpent; }
+        }
+
+        /// <summary>
+        /// The market's own affordance: while this smuggler still has a haul in it, its card
+        /// breathes in the bar and a TAP arms the free item - the same "click me, then do the
+        /// thing" the other market jokers use.
+        ///
+        /// It answers only whether the joker has anything left; whether THIS VISIT's free item is
+        /// already spent is a session rule (GameSession.CanSmuggle) and the controller asks that
+        /// as well before it lights anything up. Keeping the two apart is what lets the card go
+        /// quiet for the rest of a market without the joker pretending to be finished.
+        /// </summary>
+        public override bool HasPendingMarketAction
         {
             get { return !IsSpent; }
         }

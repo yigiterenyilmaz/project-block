@@ -385,7 +385,11 @@ namespace ProjectBlock.View
             if (panel.Glow != null)
             {
                 bool waiting = !AttentionSuppressed && session.Phase == GamePhase.Market
-                    && !silenced && joker.HasPendingMarketAction;
+                    && !silenced && joker.HasPendingMarketAction
+                    // "Kaçakçı" still has hauls left but THIS VISIT's free item may be spent,
+                    // which is a session rule the joker cannot see. A card that goes on inviting
+                    // a click that now does nothing is worse than one that never invited it.
+                    && (!joker.EnablesSmuggling || session.CanSmuggle);
                 panel.Glow.SetAttention(waiting, CardGlowFx.AttentionColour);
             }
 
