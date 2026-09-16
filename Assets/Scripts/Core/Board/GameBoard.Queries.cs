@@ -471,6 +471,53 @@ namespace ProjectBlock.Core
 
         /// <summary>Both halves have to be real play area for the comparison to mean anything.</summary>
         /// <summary>
+        /// Is the board the same turned UPSIDE DOWN - cell (x, y) matching (W-1-x, H-1-y)?
+        ///
+        /// THIS IS A THIRD KIND OF SYMMETRY AND IT IS NOT EITHER MIRROR. A board can be perfectly
+        /// symmetric to the eye - the shape a player deliberately built - and fail both mirror
+        /// tests, because a rotation is not a reflection. "Simetri" recognised only reflections
+        /// and so read a rotationally symmetric arena as no symmetry at all, which is the one
+        /// thing a joker about the board's shape must never do.
+        ///
+        /// Note the two mirrors together IMPLY this one, so a caller that pays for both must not
+        /// also pay for this - see SimetriJoker, which takes the best single answer.
+        /// </summary>
+        public bool IsRotationallySymmetric()
+        {
+            return RotationBreaks() == 0;
+        }
+
+        /// <summary>Cells breaking the 180-degree rotation - 0 exactly when
+        /// IsRotationallySymmetric is true. Same reporting job as the mirror counts.</summary>
+        public int RotationBreaks()
+        {
+            int breaks = 0;
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    int mx = Width - 1 - x;
+                    int my = Height - 1 - y;
+                    // Each PAIR is looked at once - without this every disagreement is counted
+                    // twice and the "how far off" readout reads double.
+                    if (my * Width + mx <= y * Width + x)
+                    {
+                        continue;
+                    }
+                    if (!playable[x, y] || dead[x, y] || !playable[mx, my] || dead[mx, my])
+                    {
+                        continue;
+                    }
+                    if (cells[x, y].HasValue != cells[mx, my].HasValue)
+                    {
+                        breaks++;
+                    }
+                }
+            }
+            return breaks;
+        }
+
+        /// <summary>
         /// HOW MANY CELLS ARE BREAKING the left-right mirror - 0 exactly when IsMirroredLeftRight
         /// is true. It exists so "Simetri" can say how close the board is instead of only saying
         /// no: a joker that pays for a board shape and reports nothing but "watching" gives the

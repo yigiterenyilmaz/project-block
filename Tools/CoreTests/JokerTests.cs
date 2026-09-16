@@ -222,6 +222,8 @@ public static class JokerTests
         Obsidian_PaysRentForEveryLineThatGoesThroughIt();
         Obsidian_RentIsPerLineAndFollowsTheAxisBosses();
         Simetri_TheBoardKnowsItsOwnSymmetry();
+        Simetri_ARotatedBoardIsSymmetricToo();
+        Simetri_RotationBreaksCountPairsOnce();
         Simetri_SleepsFiveTurnsAndAgainAfterEverySweep();
         Simetri_PaysOneAxisAndTriplesForBoth();
         Barut_ChargesDynamiteThatSurvives();
@@ -8138,6 +8140,89 @@ public static class JokerTests
         board.SetCubeAt(new GridPos(4, 4), new Cube(CubeKind.Fire, 2));
         Check(board.IsMirroredLeftRight() && board.IsMirroredTopBottom(),
             "and it is judged on occupancy, not on what kind of cube sits there");
+    }
+
+    /// <summary>
+    /// A ROTATION IS NOT A REFLECTION, and this is the exact 7x7 arena that proved it: a board a
+    /// player built and read as obviously symmetric, which failed BOTH mirror tests because it is
+    /// symmetric about its CENTRE POINT rather than about either middle line.
+    ///
+    /// Rows 1 and 5 are each other reversed, so are rows 2 and 4, and rows 0, 3 and 6 are
+    /// palindromes - which is point symmetry exactly, and no reflection at all.
+    /// </summary>
+    private static void Simetri_ARotatedBoardIsSymmetricToo()
+    {
+        Section("simetri / the board that is symmetric turned upside down");
+        string[] rows =
+        {
+            "XX.X.XX",
+            "XX....X",
+            ".....X.",
+            ".X.X.X.",
+            ".X.....",
+            "X....XX",
+            "XX.X.XX"
+        };
+        var board = new GameBoard(7, 7);
+        for (int y = 0; y < 7; y++)
+        {
+            for (int x = 0; x < 7; x++)
+            {
+                if (rows[y][x] == 'X')
+                {
+                    board.SetCubeAt(new GridPos(x, y), new Cube(CubeKind.Normal, 1));
+                }
+            }
+        }
+        Check(!board.IsMirroredLeftRight(), "it is NOT a left-right mirror");
+        Check(!board.IsMirroredTopBottom(), "nor a top-bottom one");
+        Check(board.IsRotationallySymmetric(), "but it IS the same turned upside down");
+        Check(board.RotationBreaks() == 0, "with nothing breaking the rotation",
+            "" + board.RotationBreaks());
+
+        // AND THE JOKER PAYS FOR IT - the whole point of recognising the third shape. Driven as
+        // a real turn, like the mirror test beside it: the board is left one cube short of the
+        // rotation and that cube is played.
+        var session = NewSession(7212, 7, 1000000, 40, 1);
+        var joker = (SimetriJoker)session.Jokers.Add(new SimetriJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        PlayTurns(session, joker.WakesOnTurn);
+        Check(joker.IsAwake, "awake after five real turns", "" + joker.TurnsSinceReset);
+
+        ClearBoard(round.Board);
+        for (int y = 0; y < 7; y++)
+        {
+            for (int x = 0; x < 7; x++)
+            {
+                // Everything but the top-left corner, which the turn itself puts down.
+                if (rows[y][x] == 'X' && !(x == 0 && y == 0))
+                {
+                    round.Board.SetCubeAt(new GridPos(x, y), new Cube(CubeKind.Normal, 7213));
+                }
+            }
+        }
+        TurnReport report = PlayAt(round, new GridPos(0, 0));
+        Check(report != null, "the last cube went down");
+        Check(round.Board.IsRotationallySymmetric(), "the board is rotationally symmetric now");
+        Check(FlatFrom(report.Score, joker.DefId) == joker.OneAxisBonus,
+            "and a rotated board paid the single bonus",
+            "" + FlatFrom(report.Score, joker.DefId));
+    }
+
+    /// <summary>Breaking the rotation by ONE cube is reported as one cell, not two - the pair is
+    /// looked at once, or every "how far off" readout reads double.</summary>
+    private static void Simetri_RotationBreaksCountPairsOnce()
+    {
+        Section("simetri / how far off the rotation is");
+        var board = new GameBoard(5, 5);
+        Check(board.RotationBreaks() == 0, "an empty board is rotationally symmetric");
+        board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 1));
+        Check(board.RotationBreaks() == 1, "one lonely corner is ONE cell off, not two",
+            "" + board.RotationBreaks());
+        board.SetCubeAt(new GridPos(4, 4), new Cube(CubeKind.Normal, 1));
+        Check(board.RotationBreaks() == 0, "its opposite corner restores it",
+            "" + board.RotationBreaks());
     }
 
     private static void Simetri_SleepsFiveTurnsAndAgainAfterEverySweep()

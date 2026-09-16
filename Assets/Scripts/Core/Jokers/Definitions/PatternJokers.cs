@@ -23,8 +23,14 @@ namespace ProjectBlock.Core
     /// for free. With it, symmetry is something you have to build again, deliberately, out of a
     /// board you have already cleared once.
     ///
-    /// Symmetry is judged on OCCUPANCY (GameBoard.IsMirroredLeftRight / IsMirroredTopBottom): a cell
-    /// holds a cube or it does not. Matching the KINDS as well would be nearly impossible to do on
+    /// THREE SHAPES COUNT, not two: either mirror, and the board being the same turned UPSIDE
+    /// DOWN (GameBoard.IsRotationallySymmetric). A rotation is not a reflection, so a board a
+    /// player deliberately built to be symmetric could fail both mirror tests and read as no
+    /// symmetry at all - which is the one thing a joker about the board's shape must never do.
+    /// Both mirrors imply the rotation, so the three are ranked rather than summed.
+    ///
+    /// Symmetry is judged on OCCUPANCY (GameBoard.IsMirroredLeftRight / IsMirroredTopBottom /
+    /// IsRotationallySymmetric): a cell holds a cube or it does not. Matching the KINDS as well would be nearly impossible to do on
     /// purpose, and this joker is about the silhouette you leave behind.
     /// </summary>
     public sealed class SimetriJoker : Joker
@@ -46,17 +52,20 @@ namespace ProjectBlock.Core
         /// how close the board is. Presentation only, refreshed every turn.</summary>
         private int breaksLeftRight = -1;
         private int breaksTopBottom = -1;
+        private int breaksRotation = -1;
 
         public SimetriJoker()
             : base("simetri", "Simetri")
         {
             SetDescription(
-                "Leave the board mirrored across the middle and it pays; mirrored on BOTH axes "
-                    + "pays triple. It wakes on the 5th turn - and a clean sweep puts it back to "
-                    + "sleep for another 5, so an empty board never counts.",
-                "Tahtayı ortadan simetrik bırakırsan puan verir; İKİ eksende birden simetrikse üç "
-                    + "katını verir. 5. turda uyanır - ve her temizlik onu 5 tur daha uykuya "
-                    + "yatırır, yani boş tahta hiçbir zaman sayılmaz.");
+                "Leave the board SYMMETRIC and it pays - mirrored across either middle, or the "
+                    + "same turned upside down. Mirrored on BOTH axes pays triple. It wakes on the "
+                    + "5th turn - and a clean sweep puts it back to sleep for another 5, so an "
+                    + "empty board never counts.",
+                "Tahtayı SİMETRİK bırakırsan puan verir - iki ortadan birine göre aynaysa ya da "
+                    + "180 derece döndürünce aynı çıkıyorsa. İKİ eksende birden aynaysa üç katını "
+                    + "verir. 5. turda uyanır - ve her temizlik onu 5 tur daha uykuya yatırır, "
+                    + "yani boş tahta hiçbir zaman sayılmaz.");
         }
 
         /// <summary>Turns since the round began or the last sweep, whichever is later.</summary>
@@ -88,6 +97,10 @@ namespace ProjectBlock.Core
                 // about whether the thing they are building is working.
                 int nearest = breaksLeftRight < 0 ? -1
                     : (breaksTopBottom < breaksLeftRight ? breaksTopBottom : breaksLeftRight);
+                if (breaksRotation >= 0 && (nearest < 0 || breaksRotation < nearest))
+                {
+                    nearest = breaksRotation;
+                }
                 return nearest > 0
                     ? Loc.Pick(nearest + " off mirror", nearest + " kaldı")
                     : Loc.Pick("watching", "bakıyor");
@@ -100,6 +113,7 @@ namespace ProjectBlock.Core
             paidThisRound = 0;
             breaksLeftRight = -1;
             breaksTopBottom = -1;
+            breaksRotation = -1;
         }
 
         /// <summary>A sweep sends it back to sleep. The board it left behind is empty, which is
@@ -122,12 +136,22 @@ namespace ProjectBlock.Core
             GameBoard board = turn.Round.MainBoard;
             breaksLeftRight = board.MirrorBreaksLeftRight();
             breaksTopBottom = board.MirrorBreaksTopBottom();
+            breaksRotation = board.RotationBreaks();
             bool leftRight = breaksLeftRight == 0;
             bool topBottom = breaksTopBottom == 0;
-            if (!leftRight && !topBottom)
+            // A board can be symmetric WITHOUT being a mirror: turned upside down it comes out
+            // the same. That is what a player sees as symmetry just as readily as a reflection,
+            // and recognising only reflections made a deliberately built rotational board read
+            // as no symmetry at all.
+            bool rotational = breaksRotation == 0;
+            if (!leftRight && !topBottom && !rotational)
             {
                 return;
             }
+            // BOTH MIRRORS IMPLY THE ROTATION, so the three are ranked rather than added: the
+            // double mirror is the hard one and pays triple, and everything else - one mirror, or
+            // the rotation on its own - pays once. Summing them would quietly pay the triple
+            // twice over.
             int bonus = leftRight && topBottom
                 ? OneAxisBonus * BothAxesMultiplier
                 : OneAxisBonus;
