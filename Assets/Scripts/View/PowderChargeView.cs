@@ -64,8 +64,24 @@ namespace ProjectBlock.View
 
         private const float FastPulse = 0.55f;
 
+        /// <summary>
+        /// A FULL BLOCK IS ITS OWN STATE, not just the top of the ramp. At the cap the block is
+        /// worth everything it will ever be worth and every further turn of holding it is pure
+        /// risk, so it stops being "nearly ready" and starts being "take this now": the ember
+        /// grows past the ramp, beats faster than the ramp ever reaches, and its brightness
+        /// swings wider instead of sitting at a steady high.
+        ///
+        /// Read off PowderVisuals.Full rather than from fullness >= 1, because what counts as
+        /// full is the rules' business and the cap is a balance number that moves.
+        /// </summary>
+        private const float FullPulse = 0.30f;
+
+        private const float FullGrow = 1.45f;
+
         private readonly List<SpriteRenderer> embers = new List<SpriteRenderer>();
         private readonly List<float> emberFullness = new List<float>();
+        private readonly List<bool> emberFull = new List<bool>();
+        private readonly List<Vector3> emberBase = new List<Vector3>();
         private readonly List<SpriteRenderer> sparks = new List<SpriteRenderer>();
         private readonly List<float> sparkTime = new List<float>();
         private readonly List<float> sparkFullness = new List<float>();
@@ -97,8 +113,15 @@ namespace ProjectBlock.View
                 SpriteRenderer ember = ViewUtil.MakeRounded(transform, "Ember_" + i, at,
                     new Vector2(cell * EmberSize, cell * EmberSize),
                     Color.Lerp(CoolEmber, HotEmber, full), EmberOrder);
+                bool atCap = report.Full[i];
+                if (atCap)
+                {
+                    ember.transform.localScale = new Vector3(FullGrow, FullGrow, 1f);
+                }
                 embers.Add(ember);
                 emberFullness.Add(full);
+                emberFull.Add(atCap);
+                emberBase.Add(ember.transform.localScale);
                 SpawnSpark(at, cell, full);
             }
         }
@@ -126,13 +149,21 @@ namespace ProjectBlock.View
                     continue;
                 }
                 float full = emberFullness[i];
-                float period = Mathf.Lerp(SlowPulse, FastPulse, full);
+                bool atCap = emberFull[i];
+                float period = atCap ? FullPulse : Mathf.Lerp(SlowPulse, FastPulse, full);
                 float k = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * Mathf.PI * 2f / period);
                 Color c = Color.Lerp(CoolEmber, HotEmber, full);
                 // Even at full the ember never reaches opaque: the cube under it has to stay the
                 // thing the player is looking at.
-                c.a = Mathf.Lerp(0.26f, 0.80f, full) * Mathf.Lerp(0.55f, 1f, k);
+                c.a = Mathf.Lerp(0.26f, 0.80f, full) * Mathf.Lerp(atCap ? 0.35f : 0.55f, 1f, k);
                 embers[i].color = c;
+                if (atCap)
+                {
+                    // The beat is in the SIZE as well at the cap - written from the stored base,
+                    // never from the transform's own current scale.
+                    float swell = 1f + 0.16f * k;
+                    embers[i].transform.localScale = emberBase[i] * swell;
+                }
             }
             // THE SPARK: out fast, gone. Reverse iteration so a finished one can be dropped.
             for (int i = sparks.Count - 1; i >= 0; i--)
@@ -170,6 +201,8 @@ namespace ProjectBlock.View
             }
             embers.Clear();
             emberFullness.Clear();
+            emberFull.Clear();
+            emberBase.Clear();
         }
 
         /// <summary>Takes everything down - a new round, a rebuilt board, leaving the round.</summary>

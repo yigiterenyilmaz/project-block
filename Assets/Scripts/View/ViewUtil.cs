@@ -760,8 +760,35 @@ namespace ProjectBlock.View
                 : element.HasValue && perCube
                     ? CubeTile(element.Value)
                     : CubeTile(CubeKind.Normal, card);
+            // "ANTİMADDE": an antimatter key is the NEGATIVE of the element it annihilates - it
+            // is made of the opposite of that stuff, so it is drawn as the opposite of it. The
+            // element's own colour, inverted and darkened, which is the one treatment that can
+            // never collide with a real element's palette: every ordinary block is a colour, and
+            // this is a colour's absence. It also means gold's key reads blue and water's orange
+            // without a table of anti-colours anybody has to keep in step.
+            if (card.AntimatterOf.HasValue)
+            {
+                tile = CubeTile(CubeKind.Normal, card);
+                tint = AntimatterColor(CubeDisplayColor(new Cube(card.AntimatterOf.Value, -1)));
+                return tile;
+            }
             tint = CubeTileColor(tile, color);
             return tile;
+        }
+
+        /// <summary>
+        /// The colour of ANTIMATTER of something: the channel-wise inverse, pulled down and a
+        /// little toward the cold, so it reads as a void of that element rather than as a
+        /// different element. Kept off pure black - a black cube is a hole in the board - and off
+        /// full saturation, which would make it look like an ordinary coloured block again.
+        /// </summary>
+        public static Color AntimatterColor(Color of)
+        {
+            var inverted = new Color(1f - of.r, 1f - of.g, 1f - of.b, of.a);
+            // Darkened toward a cold indigo: the inverse alone is still a bright colour, and
+            // brightness is what says "solid matter" on this board.
+            var voidTone = new Color(0.10f, 0.09f, 0.16f);
+            return Color.Lerp(inverted, voidTone, 0.42f);
         }
 
         /// <summary>What COLOUR to draw a cube in, given the tile it ended up on: white when

@@ -8435,7 +8435,12 @@ public static class JokerTests
         long before = session.TotalScore;
         session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
         session.Jokers.DispatchMarketEntered();
-        Check(joker.LastPaid == joker.Bonus, "it paid the bonus", "" + joker.LastPaid);
+        // A QUARTER OF THE ROUND'S OWN BAR, not a flat number - asked of the round rather than
+        // restated, so retuning the share cannot break this test for the wrong reason.
+        int share = round.ScoreThreshold * joker.BonusPercentOfThreshold / 100;
+        Check(joker.LastPaid == share, "it paid a share of the round's threshold",
+            "got " + joker.LastPaid + ", wanted " + share);
+        Check(joker.LastPaid > 0, "and that share is worth something", "" + joker.LastPaid);
         Check(session.TotalScore > before, "and it landed in the purse",
             before + " -> " + session.TotalScore);
 
@@ -8466,7 +8471,8 @@ public static class JokerTests
 
         session.Jokers.DispatchRoundEnded(round, RoundOutcome.Advanced);
         session.Jokers.DispatchMarketEntered();
-        Check(joker.LastPaid == joker.Bonus * joker.OvertimeMultiplier,
+        int otShare = round.ScoreThreshold * joker.BonusPercentOfThreshold / 100;
+        Check(joker.LastPaid == otShare * joker.OvertimeMultiplier,
             "a power-free overtime pays double", "" + joker.LastPaid);
     }
 

@@ -63,6 +63,16 @@ namespace ProjectBlock.Core
             get { return false; }
         }
 
+        /// <summary>
+        /// The run's ScoreScale, handed over on acquisition so a joker's own StatusText can print
+        /// SCREEN numbers. Jokers do their arithmetic in the logical economy, and a status line
+        /// that prints that raw says "+495" next to a tooltip saying "earned +4950" for the same
+        /// points - which reads as two different numbers rather than one in two units.
+        ///
+        /// Presentation only: never multiply a PAYOUT by this, only a number being shown.
+        /// </summary>
+        public int ScoreScale { get; internal set; } = 1;
+
         /// <summary>Unique within the session. Assigned by JokerInventory on acquisition,
         /// so two copies of the same joker are still distinguishable.</summary>
         public int InstanceId { get; internal set; }

@@ -236,19 +236,51 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>How far through a press-and-hold the joker at <paramref name="index"/> is,
-        /// so the card says a sale is coming before it happens. -1 takes the light off every
-        /// card, which is what a release or a cancel does.</summary>
+        /// <summary>
+        /// THE WIND-UP. A hold is a commitment, so the card has to LOAD before it goes: it draws
+        /// back and tightens as the finger stays down, and the last fifth tenses hard - which is
+        /// what tells the player the release is about to sell rather than use.
+        ///
+        /// It is a SQUEEZE, not a shrink: the card narrows while keeping most of its height and
+        /// leans a couple of degrees, because a uniformly scaled card just looks further away.
+        /// It also RECOILS at the very end (a hair past its own size) so the sale has something
+        /// to release from. The base scale is written from a constant, never read back off the
+        /// transform, or a per-frame scale compounds - the trap the ice seating already hit.
+        /// </summary>
         public void SetHoldProgress(int index, float progress)
         {
             for (int i = 0; i < panels.Count; i++)
             {
+                bool mine = i == index;
+                float k = mine ? Mathf.Clamp01(progress) : 0f;
                 if (panels[i].Glow != null)
                 {
-                    panels[i].Glow.SetHold(i == index ? progress : 0f, CardGlowFx.HoldColour);
+                    panels[i].Glow.SetHold(k, CardGlowFx.HoldColour);
                 }
+                Transform tr = panels[i].Root.transform;
+                if (k <= 0f)
+                {
+                    if (tr.localScale != Vector3.one || tr.localRotation != Quaternion.identity)
+                    {
+                        tr.localScale = Vector3.one;
+                        tr.localRotation = Quaternion.identity;
+                    }
+                    continue;
+                }
+                // Eased so the load is gentle early and bites late.
+                float load = k * k;
+                // The last fifth SNAPS a little wider - the recoil before the release.
+                float recoil = k > 0.8f ? (k - 0.8f) / 0.2f : 0f;
+                float squeeze = 1f - 0.10f * load + 0.06f * recoil;
+                float stretch = 1f - 0.03f * load + 0.02f * recoil;
+                tr.localScale = new Vector3(squeeze, stretch, 1f);
+                tr.localRotation = Quaternion.Euler(0f, 0f, -2.2f * load * TiltSign);
             }
         }
+
+        /// <summary>Which way a loading card leans. The two bars lean AWAY from their own screen
+        /// edge, so the wind-up reads as the card being pulled off the strip.</summary>
+        private const float TiltSign = 1f;
 
         /// <summary>Quick scale pulse on the panel showing that joker (activation feedback).</summary>
         public void PulseJoker(int instanceId)

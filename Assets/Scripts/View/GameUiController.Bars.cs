@@ -76,6 +76,31 @@ namespace ProjectBlock.View
             return true;
         }
 
+        /// <summary>
+        /// Where a popup about a BAR CARD may actually be seen.
+        ///
+        /// The bars are uGUI on a screen-space-overlay canvas and FloatingTextFx is a world-space
+        /// TextMesh - and an overlay canvas composites over ALL world geometry, whatever sorting
+        /// order the text asks for. So a popup spawned at a panel's own position is drawn behind
+        /// the card it is about, every time.
+        ///
+        /// Rather than move the popups onto a canvas, they are nudged INWARD off the bar: the
+        /// joker strip is down the right edge and the power strip down the left, so pushing
+        /// toward the middle puts the text over the board where nothing covers it - and next to
+        /// the card it belongs to, which is where it wants to be anyway.
+        /// </summary>
+        private Vector2 BarPopupAnchor(Vector2? panelScreen, bool fromRight)
+        {
+            if (!panelScreen.HasValue)
+            {
+                return Vector2.zero;
+            }
+            Vector2 world = cam.ScreenToWorldPoint(panelScreen.Value);
+            float inward = cam.orthographicSize * 0.62f;
+            world.x += fromRight ? -inward : inward;
+            return world;
+        }
+
         /// <summary>In the market, a HELD press on a joker panel sells it for its SellValue.
         /// Reached only from HandleBarHold, which owns every press on a bar card.</summary>
         private bool SellJokerAt(int index)
@@ -92,7 +117,7 @@ namespace ProjectBlock.View
             {
                 if (panelScreen.HasValue)
                 {
-                    Vector2 at = cam.ScreenToWorldPoint(panelScreen.Value);
+                    Vector2 at = BarPopupAnchor(panelScreen, true);
                     FloatingTextFx.Spawn(transform, at,
                         Loc.Pick("PAY THE DEBT FIRST", "ÖNCE BORCU ÖDE"),
                         new Color(1f, 0.45f, 0.4f), 48, 0.05f);
@@ -104,8 +129,7 @@ namespace ProjectBlock.View
             sfx.Buy();
             if (panelScreen.HasValue)
             {
-                Vector2 world = cam.ScreenToWorldPoint(panelScreen.Value);
-                FloatingTextFx.Spawn(transform, world, "+" + paid,
+                FloatingTextFx.Spawn(transform, BarPopupAnchor(panelScreen, true), "+" + paid,
                     new Color(1f, 0.92f, 0.45f), 60, 0.05f);
             }
             marketView.Show(session);
@@ -129,8 +153,7 @@ namespace ProjectBlock.View
             sfx.Buy();
             if (panelScreen.HasValue)
             {
-                Vector2 world = cam.ScreenToWorldPoint(panelScreen.Value);
-                FloatingTextFx.Spawn(transform, world, "+" + paid,
+                FloatingTextFx.Spawn(transform, BarPopupAnchor(panelScreen, false), "+" + paid,
                     new Color(1f, 0.92f, 0.45f), 60, 0.05f);
             }
             marketView.Show(session); // affordability colors follow the new balance
@@ -453,7 +476,7 @@ namespace ProjectBlock.View
             {
                 // A power has nothing to do in the market, so a tap only says so - silently
                 // doing nothing reads as a dropped click.
-                HintHoldToSell(powerBar.PanelScreenCenter(index));
+                HintHoldToSell(powerBar.PanelScreenCenter(index), false);
             }
             return true;
         }
@@ -475,11 +498,16 @@ namespace ProjectBlock.View
         /// it the player has no way to discover the gesture.</summary>
         private void HintHoldToSell(Vector2? panelScreen)
         {
+            HintHoldToSell(panelScreen, true);
+        }
+
+        private void HintHoldToSell(Vector2? panelScreen, bool fromRight)
+        {
             if (!panelScreen.HasValue)
             {
                 return;
             }
-            Vector2 world = cam.ScreenToWorldPoint(panelScreen.Value);
+            Vector2 world = BarPopupAnchor(panelScreen, fromRight);
             FloatingTextFx.Spawn(transform, world,
                 Loc.Pick("HOLD TO SELL", "SATMAK İÇİN BASILI TUT"),
                 new Color(0.85f, 0.88f, 0.95f), 40, 0.06f);

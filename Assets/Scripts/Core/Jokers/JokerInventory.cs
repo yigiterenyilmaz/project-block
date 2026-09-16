@@ -1,4 +1,4 @@
-// PURPOSE: The player's jokers and the ONE place they are called from. Session-scoped
+﻿// PURPOSE: The player's jokers and the ONE place they are called from. Session-scoped
 // (it outlives every RoundEngine) and the single implementation of ITurnHooks.
 //
 // TWO RULES THIS FILE ENFORCES SO NO JOKER HAS TO:
@@ -107,6 +107,7 @@ namespace ProjectBlock.Core
         /// applying them again would compound them on every load.</summary>
         internal void AddRestored(Joker joker)
         {
+            joker.ScoreScale = session != null ? session.Config.Scoring.ScoreScale : 1;
             jokers.Add(joker);
         }
 
@@ -118,6 +119,7 @@ namespace ProjectBlock.Core
                 throw new ArgumentNullException("joker");
             }
             joker.InstanceId = nextInstanceId++;
+            joker.ScoreScale = session != null ? session.Config.Scoring.ScoreScale : 1;
             jokers.Add(joker);
             joker.ResetCharges();
             joker.OnAcquired(SessionCtx());

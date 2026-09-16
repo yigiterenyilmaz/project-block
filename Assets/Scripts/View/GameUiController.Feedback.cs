@@ -248,8 +248,38 @@ namespace ProjectBlock.View
             for (int i = 0; i < report.ProcedJokers.Count; i++)
             {
                 jokerBar.ProcJoker(report.ProcedJokers[i]);
+                PlayArenaProc(report.ProcedJokers[i]);
             }
         }
+
+        /// <summary>
+        /// A joker whose subject is THE WHOLE BOARD lights the board as well as its own card.
+        ///
+        /// "Simetri" pays for the shape the arena is left in, so a flash confined to a card in
+        /// the corner says nothing about what was actually rewarded - the player needs to see the
+        /// thing that scored, which is the arena itself. It goes through FlashBoard, the ripple
+        /// the two other whole-arena events already use, so a board-wide joker and a board-wide
+        /// clear speak the same way.
+        ///
+        /// Kept to jokers that are genuinely about the board: an ordinary payout lighting the
+        /// arena would make every turn look like a clean sweep.
+        /// </summary>
+        private void PlayArenaProc(int instanceId)
+        {
+            if (session == null || session.Jokers == null)
+            {
+                return;
+            }
+            Joker fired = session.Jokers.Find(instanceId);
+            if (fired is SimetriJoker)
+            {
+                FlashBoard(SymmetryProcColor);
+            }
+        }
+
+        /// <summary>"Simetri"'s own colour - a cool mirror-blue, so its ripple is never confused
+        /// with the sweep's cyan or a blast's orange.</summary>
+        private static readonly Color SymmetryProcColor = new Color(0.62f, 0.74f, 1f);
 
         /// <summary>Particles, shake, combo popups and the sweep celebration for one turn.</summary>
         private void HandleBlastFeedback(RoundEngine round, TurnReport report)

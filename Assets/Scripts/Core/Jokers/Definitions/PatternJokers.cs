@@ -75,7 +75,7 @@ namespace ProjectBlock.Core
                         (WakesOnTurn - turnsSinceReset) + " tur sonra");
                 }
                 return paidThisRound > 0
-                    ? "+" + paidThisRound
+                    ? "+" + (long)paidThisRound * ScoreScale
                     : Loc.Pick("watching", "bakıyor");
             }
         }
@@ -115,6 +115,13 @@ namespace ProjectBlock.Core
                 : OneAxisBonus;
             paidThisRound += bonus;
             turn.AddFlatScore(bonus, DefId);
+            NoteProc(bonus, turn);
+        }
+
+        /// <summary>It keeps proc statistics, so the tooltip prints its count even at zero.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
         }
     }
 
@@ -225,7 +232,7 @@ namespace ProjectBlock.Core
                     return Loc.Pick(charges + " charged", charges + " barut");
                 }
                 return paidThisRound > 0
-                    ? "+" + paidThisRound
+                    ? "+" + (long)paidThisRound * ScoreScale
                     : Loc.Pick("no dynamite", "dinamit yok");
             }
         }
@@ -341,8 +348,11 @@ namespace ProjectBlock.Core
     /// </summary>
     public sealed class AntimaddeJoker : Joker
     {
-        /// <summary>Score per annihilated cube, before decay.</summary>
-        public int BonusPerCube = 25;
+        /// <summary>Score per annihilated cube, before decay. Raised from 25 (2026-09-16,
+        /// designer's call): landing this key is the hardest single thing in the game - a perfect
+        /// overlay, on a shape you did not choose, before it rots - and 25 a cube made a good
+        /// blast worth about one line clear.</summary>
+        public int BonusPerCube = 60;
 
         /// <summary>Turns the card survives in hand. It vanishes at the end of the last one.</summary>
         public int TurnsBeforeDecay = 5;
@@ -410,7 +420,7 @@ namespace ProjectBlock.Core
                         + (TurnsBeforeDecay - turnsHeld) + Loc.Pick("", " tur");
                 }
                 return paidThisRound > 0
-                    ? "+" + paidThisRound
+                    ? "+" + (long)paidThisRound * ScoreScale
                     : Loc.Pick("waiting", "bekliyor");
             }
         }
@@ -552,8 +562,16 @@ namespace ProjectBlock.Core
     /// </summary>
     public sealed class EforsuzGalibiyetJoker : Joker
     {
-        /// <summary>Paid on entering the market after a power-free round.</summary>
-        public int Bonus = 60;
+        /// <summary>
+        /// What a power-free round pays, as a PERCENT OF THE ROUND'S OWN THRESHOLD - a quarter
+        /// (2026-09-16, designer's call).
+        ///
+        /// It was a flat 60, which is a full round's work in round 1 and a rounding error by
+        /// round 12: the feat gets harder every round while the reward stayed still, so the joker
+        /// quietly stopped being worth its slot halfway through a run. A share of the bar keeps
+        /// it worth the same FRACTION of a round's effort for the whole run.
+        /// </summary>
+        public int BonusPercentOfThreshold = 25;
 
         /// <summary>What a power-free OVERTIME is worth, as a multiple of the above.</summary>
         public int OvertimeMultiplier = 2;
@@ -561,6 +579,11 @@ namespace ProjectBlock.Core
         private bool usedAPowerThisRound;
         private bool wentToOvertime;
         private int lastPaid;
+
+        /// <summary>The threshold of the round that just ended, in LOGICAL points - captured at
+        /// OnRoundEnded because by the time the market pays, the session has moved on to the next
+        /// round and its bar is a different number.</summary>
+        private int lastRoundThreshold;
 
         /// <summary>True when the payout it last made was the OVERTIME one. Presentation only -
         /// the celebration is bigger for the harder version of the feat - and read alongside
@@ -578,10 +601,12 @@ namespace ProjectBlock.Core
             : base("eforsuz_galibiyet", "Eforsuz Galibiyet")
         {
             SetDescription(
-                "Finish a round without using a single power and the market pays you a bonus as "
-                    + "you walk in. Do it on a round you took into OVERTIME and came out of alive, "
-                    + "and it pays double. One power anywhere in the round forfeits it.",
-                "Bir raundu tek bir güç kullanmadan bitir, markete girerken bonus alırsın. Aynısını "
+                "Finish a round without using a single power and the market pays you a QUARTER of "
+                    + "that round's target as you walk in. Do it on a round you took into OVERTIME "
+                    + "and came out of alive, and it pays double. One power anywhere in the round "
+                    + "forfeits it.",
+                "Bir raundu tek bir güç kullanmadan bitir, markete girerken o rauntun hedefinin "
+                    + "DÖRTTE BİRİNİ alırsın. Aynısını "
                     + "UZATMAYA gidip sağ çıktığın bir raunttta yaparsan iki katını verir. Raundun "
                     + "herhangi bir yerinde bir güç kullanmak hakkını yakar.");
         }
@@ -636,6 +661,10 @@ namespace ProjectBlock.Core
             if (ctx.Round != null)
             {
                 wentToOvertime = ctx.Round.ContinueCount > 0;
+                // The bar this round actually had to clear - RoundEngine.ScoreThreshold, never
+                // Config.ScoreThreshold, because a boss may have asked for less and the payout
+                // must be a share of what was really beaten.
+                lastRoundThreshold = ctx.Round.ScoreThreshold;
             }
         }
 
@@ -649,7 +678,12 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            lastPaid = wentToOvertime ? Bonus * OvertimeMultiplier : Bonus;
+            int share = lastRoundThreshold * BonusPercentOfThreshold / 100;
+            if (share < 1)
+            {
+                share = 1;
+            }
+            lastPaid = wentToOvertime ? share * OvertimeMultiplier : share;
             lastPaidWasOvertime = wentToOvertime;
             // GrantCurrency, not AddCurrency: this is money from nowhere, and the ledger has to
             // be able to tell it apart from a sale.
