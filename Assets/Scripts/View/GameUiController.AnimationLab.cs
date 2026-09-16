@@ -29,6 +29,13 @@ namespace ProjectBlock.View
     {
         private AnimationLabView animLab;
 
+        /// <summary>Where the pointer was, in the panel's own terms, when the drag began. Kept
+        /// as a GRAB OFFSET rather than a start position so the panel does not jump to centre
+        /// itself on the cursor the moment it is picked up.</summary>
+        private Vector2 animDragGrab;
+
+        private bool animDragging;
+
         /// <summary>The catalogue, rebuilt on every open so a language switch re-texts it.</summary>
         private readonly List<AnimationLabView.Row> animRows = new List<AnimationLabView.Row>();
 
@@ -117,6 +124,7 @@ namespace ProjectBlock.View
         private void CloseAnimationLab()
         {
             animLab.Hide();
+            animDragging = false;
             // Every knob that reaches outside the panel is put back: a lab left at 0.25x or with
             // the arena dark would look like a bug the moment it was forgotten about.
             Time.timeScale = 1f;
@@ -187,6 +195,19 @@ namespace ProjectBlock.View
         /// </summary>
         private void HandleAnimationLabInput(Keyboard kb, Mouse mouse)
         {
+            // SHIFT+F3 PUTS THE PANEL BACK. Dragged somewhere awkward - or moved on a wide
+            // monitor and reopened on a laptop - it has to be recoverable without editing a
+            // preferences file, and the clamp alone cannot undo a deliberate choice.
+            if (kb != null && kb.f3Key.wasPressedThisFrame
+                && (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed))
+            {
+                animLab.ResetPosition();
+                animDragging = false;
+                animLastLabel = Loc.Pick("panel back to its resting place",
+                    "panel eski yerine döndü");
+                RedrawAnimationLab();
+                return;
+            }
             if (kb != null && (kb.escapeKey.wasPressedThisFrame || kb.f3Key.wasPressedThisFrame))
             {
                 CloseAnimationLab();
@@ -219,6 +240,13 @@ namespace ProjectBlock.View
                     return;
                 }
             }
+            // THE PANEL IS DRAGGABLE BY ITS TITLE BAR. Handled before anything else reads the
+            // mouse, and while a drag is running nothing else may: releasing over a row would
+            // otherwise play whatever the panel was dropped on top of.
+            if (mouse != null && TickAnimationLabDrag(mouse))
+            {
+                return;
+            }
             if (mouse != null
                 && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame))
             {
@@ -241,6 +269,45 @@ namespace ProjectBlock.View
                 // a tool you keep open while you watch. Only Esc/F3 closes it.
             }
             TickAnimationLoop();
+        }
+
+        /// <summary>
+        /// Picking the panel up, carrying it and putting it down.
+        ///
+        /// Returns true on any frame it owned the mouse, so the caller stops there: a release
+        /// over a catalogue row must not also play that row, which is what makes a draggable
+        /// panel feel broken.
+        ///
+        /// The position is clamped into the camera on every frame rather than only on release,
+        /// so the panel cannot be carried off the screen and dropped there - and the clamp keeps
+        /// the TITLE BAR reachable in particular, because a panel you cannot grab is a panel you
+        /// cannot bring back.
+        /// </summary>
+        private bool TickAnimationLabDrag(UnityEngine.InputSystem.Mouse mouse)
+        {
+            Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+            if (animDragging)
+            {
+                if (!mouse.leftButton.isPressed)
+                {
+                    animDragging = false;
+                    animLastLabel = Loc.Pick("panel moved (shift+F3 puts it back)",
+                        "panel taşındı (shift+F3 eski yerine koyar)");
+                    RedrawAnimationLab();
+                    return true;
+                }
+                animLab.Offset = animLab.ClampOffset(world - animDragGrab, cam);
+                return true;
+            }
+            if (mouse.leftButton.wasPressedThisFrame && animLab.TitleBarContains(world))
+            {
+                animDragging = true;
+                // The grab point, so the panel keeps its relationship to the cursor instead of
+                // snapping its origin under it.
+                animDragGrab = world - animLab.Offset;
+                return true;
+            }
+            return false;
         }
 
         private void TickAnimationLoop()

@@ -1164,6 +1164,17 @@ level, board darkness, and a 0.1x-2x time scale for watching one frame by frame)
 `View/AnimationLabView.cs` + `GameUiController.AnimationLab.cs` and is the way to work on an
 animation without having to reach the game state that normally triggers it.
 
+**The panel is DRAGGABLE by its title bar** (shift+F3 puts it back; the place is remembered in
+`PlayerPrefs` across sessions), because it is a side panel and some scenes play under wherever it
+happens to be. The whole panel is built in world space under ONE root, so the drag is that root's
+position and nothing inside it knows: the layout constants stay the panel's own coordinates and
+every hit test converts a world point into them first (`ToPanel`) — building the rows at moved
+positions instead would have put the offset in twelve places and left it out of the thirteenth.
+Only the title bar grabs, so a drag can never be confused with playing a row, and the drag OWNS
+the mouse for its frames so releasing over a row does not also fire it. The offset is clamped into
+the camera every frame rather than on release, and the clamp keeps the **title bar** on screen in
+particular: a panel that can be dropped where it cannot be grabbed is a panel that is gone.
+
 The rule it follows: **it drives the real animation code, never a copy.** An entry calls the
 same method the game calls and only fabricates the ARGUMENTS, so a retimed animation shows its
 new timing there for free. That is why `CardLayerView.PlayDebugAnimation` and the small

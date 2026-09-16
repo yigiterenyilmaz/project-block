@@ -5,11 +5,18 @@
 //
 // DELIBERATELY A SIDE PANEL, not a fullscreen modal: nearly every animation in this game
 // plays on the arena, the hand row or the two piles, so covering them would defeat the point.
-// It occupies the empty right-hand column and leaves the whole board visible.
+// It starts in the empty right-hand column and leaves the whole board visible.
 //
 // AND IT STAYS ONE COLUMN. A scene whose subject lands under this panel is the SCENE's problem -
 // it should be laid out somewhere visible - not a reason to spread the catalogue across the
 // board it exists to let you watch.
+//
+// BUT IT CAN BE PICKED UP AND MOVED. Drag its title bar and it goes wherever you want; the place
+// is remembered between sessions. The whole panel is built in world space under ONE root, so the
+// drag is that root's position and nothing inside it knows: the layout constants below stay the
+// panel's OWN coordinates, and every hit test converts a world point into them first (see
+// ToPanel). Building the rows at moved positions instead would have put the offset in twelve
+// places and left it out of the thirteenth.
 //
 // Rebuilt from scratch on every change (cheap at this scale), like MarketView.
 
@@ -75,8 +82,18 @@ namespace ProjectBlock.View
         /// <summary>Catalogue lines drawn at once. The list scrolls past this.</summary>
         public const int VisibleRows = 12;
 
-        // The panel sits under the joker bar (which is on the screen-space HUD canvas and
-        // would otherwise draw over it) and clear of the board's right edge at 3.25.
+        /// <summary>Where the panel has been dragged to, in world units, remembered across
+        /// sessions. Zero is the resting place the constants below describe.</summary>
+        private const string OffsetKeyX = "animlab.offset.x";
+        private const string OffsetKeyY = "animlab.offset.y";
+
+        /// <summary>How tall the drag handle is, measured down from the panel's top edge - the
+        /// title and the help line. Anywhere else on the panel is a click, not a grab.</summary>
+        private const float TitleBarHeight = 0.86f;
+
+        // The panel RESTS under the joker bar (which is on the screen-space HUD canvas and
+        // would otherwise draw over it) and clear of the board's right edge at 3.25. These are
+        // the panel's own coordinates and do not move when it is dragged.
         private const float PanelLeft = 3.84f;
         private const float PanelRight = 8.84f;
         private const float PanelTop = 3.62f;
@@ -118,6 +135,97 @@ namespace ProjectBlock.View
 
         public bool IsOpen { get; private set; }
 
+        private Vector2 offset;
+        private bool offsetRead;
+
+        /// <summary>
+        /// Where the panel has been put, in world units off its resting place.
+        ///
+        /// Read from PlayerPrefs the first time it is asked for, so a place you chose in one
+        /// session is still yours in the next - a tool you move every time you open it is a tool
+        /// that has not really been moved.
+        /// </summary>
+        public Vector2 Offset
+        {
+            get
+            {
+                if (!offsetRead)
+                {
+                    offsetRead = true;
+                    offset = new Vector2(PlayerPrefs.GetFloat(OffsetKeyX, 0f),
+                        PlayerPrefs.GetFloat(OffsetKeyY, 0f));
+                }
+                return offset;
+            }
+            set
+            {
+                offsetRead = true;
+                offset = value;
+                transform.localPosition = new Vector3(value.x, value.y, 0f);
+                PlayerPrefs.SetFloat(OffsetKeyX, value.x);
+                PlayerPrefs.SetFloat(OffsetKeyY, value.y);
+            }
+        }
+
+        /// <summary>Puts it back where it started.</summary>
+        public void ResetPosition()
+        {
+            Offset = Vector2.zero;
+        }
+
+        /// <summary>
+        /// A world point in the PANEL's own coordinates.
+        ///
+        /// Every hit test goes through this, which is what lets the layout constants stay
+        /// absolute and the drag stay one number. Miss it in one place and that one control
+        /// keeps answering at the panel's old position after it has been moved.
+        /// </summary>
+        private Vector2 ToPanel(Vector2 world)
+        {
+            return world - Offset;
+        }
+
+        /// <summary>
+        /// True while the point is on the TITLE BAR - the strip that picks the panel up.
+        ///
+        /// Only the title bar, so dragging can never be confused with playing a row: the rows
+        /// are what this panel is for, and a tool that sometimes moves when you meant to click
+        /// is worse than one that does not move at all.
+        /// </summary>
+        public bool TitleBarContains(Vector2 world)
+        {
+            Vector2 p = ToPanel(world);
+            return p.x >= PanelLeft && p.x <= PanelRight
+                && p.y <= PanelTop && p.y >= PanelTop - TitleBarHeight;
+        }
+
+        /// <summary>
+        /// Keeps the panel reachable: wherever it is dragged, a margin of it stays inside the
+        /// camera, and the TITLE BAR always does - otherwise it could be dropped somewhere it
+        /// can never be picked up from again.
+        /// </summary>
+        public Vector2 ClampOffset(Vector2 wanted, Camera cam)
+        {
+            if (cam == null)
+            {
+                return wanted;
+            }
+            float halfY = cam.orthographicSize;
+            float halfX = halfY * cam.aspect;
+            Vector3 eye = cam.transform.position;
+            // How much of the panel must stay on screen. Simulated across 16:9, 4:3 and a
+            // portrait phone: at every aspect and every corner this keeps the title bar fully
+            // visible and this much of the panel's width with it.
+            const float keep = 2f;
+            float minX = eye.x - halfX + keep - PanelRight;
+            float maxX = eye.x + halfX - keep - PanelLeft;
+            // The top of the panel may not go above the screen, or the handle leaves with it.
+            float maxY = eye.y + halfY - TitleBarHeight * 0.5f - PanelTop;
+            float minY = eye.y - halfY + keep - PanelTop;
+            return new Vector2(Mathf.Clamp(wanted.x, Mathf.Min(minX, maxX), Mathf.Max(minX, maxX)),
+                Mathf.Clamp(wanted.y, Mathf.Min(minY, maxY), Mathf.Max(minY, maxY)));
+        }
+
         private static float PanelWidth
         {
             get { return PanelRight - PanelLeft; }
@@ -137,6 +245,8 @@ namespace ProjectBlock.View
         {
             Clear();
             IsOpen = true;
+            // The root carries the drag, so a rebuild cannot lose it.
+            transform.localPosition = new Vector3(Offset.x, Offset.y, 0f);
 
             float height = PanelTop - PanelBottom;
             var center = new Vector2(PanelCenterX, (PanelTop + PanelBottom) * 0.5f);
@@ -149,8 +259,8 @@ namespace ProjectBlock.View
                 Loc.Pick("ANIMATION LAB (F3)", "ANİMASYON LABI (F3)"),
                 90, 0.022f, TitleColor, TextOrder, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "Help", new Vector2(PanelCenterX, HelpY),
-                Loc.Pick("click plays  -  space replays  -  wheel scrolls",
-                    "tık oynatır  -  boşluk tekrarlar  -  tekerlek kaydırır"),
+                Loc.Pick("click plays  -  space replays  -  wheel scrolls  -  DRAG THIS BAR",
+                    "tık oynatır  -  boşluk tekrarlar  -  tekerlek kaydırır  -  BU ÇUBUĞU SÜRÜKLE"),
                 90, 0.013f, FaintColor, TextOrder, TextAnchor.MiddleCenter);
 
             DrawRows(rows, selected, scroll);
@@ -247,14 +357,15 @@ namespace ProjectBlock.View
         /// padding and everything outside the list all answer -1).</summary>
         public int RowAt(Vector2 world)
         {
-            if (world.x < PanelLeft || world.x > PanelRight)
+            Vector2 p = ToPanel(world);
+            if (p.x < PanelLeft || p.x > PanelRight)
             {
                 return -1;
             }
             for (int i = 0; i < drawnRowIndices.Count; i++)
             {
                 if (drawnRowIndices[i] >= 0
-                    && Mathf.Abs(world.y - drawnRowY[i]) <= RowPitch * 0.5f)
+                    && Mathf.Abs(p.y - drawnRowY[i]) <= RowPitch * 0.5f)
                 {
                     return drawnRowIndices[i];
                 }
@@ -265,13 +376,14 @@ namespace ProjectBlock.View
         /// <summary>Knob index under a world point, or -1.</summary>
         public int KnobAt(Vector2 world)
         {
-            if (world.x < PanelLeft || world.x > PanelRight)
+            Vector2 p = ToPanel(world);
+            if (p.x < PanelLeft || p.x > PanelRight)
             {
                 return -1;
             }
             for (int i = 0; i < knobY.Count; i++)
             {
-                if (Mathf.Abs(world.y - knobY[i]) <= KnobPitch * 0.5f)
+                if (Mathf.Abs(p.y - knobY[i]) <= KnobPitch * 0.5f)
                 {
                     return i;
                 }
@@ -283,8 +395,9 @@ namespace ProjectBlock.View
         /// tell "clicked the lab" from "clicked the board behind it".</summary>
         public bool PanelContains(Vector2 world)
         {
-            return world.x >= PanelLeft && world.x <= PanelRight
-                && world.y >= PanelBottom && world.y <= PanelTop;
+            Vector2 p = ToPanel(world);
+            return p.x >= PanelLeft && p.x <= PanelRight
+                && p.y >= PanelBottom && p.y <= PanelTop;
         }
 
         public void Hide()
