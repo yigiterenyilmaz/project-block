@@ -603,6 +603,35 @@ dropped that way once each.
   colours, near, far, edge, corner, and a full board with stone in it that stays), eight beats on
   their own, a proxy test, 0.5x/0.25x, and three debug overlays (targets red / could fall yellow /
   stone grey, the wave each cube falls in, crack bounds).
+- **"Elmas Kazma" breaks the stone the sweep could not** (`QuarryBreakView`, `QuarryShapes`,
+  `GameUiController.Quarry.cs`). The joker cracks every obsidian on a clean sweep through the
+  engine's forced destruction, which reaches no explosion list - so for a long time the stone simply
+  vanished under the sweep's wave and the player could not tell it from the cubes the sweep took.
+  **THE ORDER IS THE MESSAGE**: the repaint that follows the turn has already emptied those cells, so
+  that repaint raises the stones as PROXIES and holds them (`SyncQuarry` -> `Prepare`); the break is
+  started from `PlayExplosionFeedback` (`PlayQuarry` -> `Begin`) and waits out the sweep's own charge
+  and wave (read off `BoardCleanseView.Style`) plus a breath. The sweep takes its cubes, the obsidian
+  is left standing, and only then does the pickaxe act. **Not an explosion recoloured**: a cold
+  resonance (a pale plate at a few per cent, a reflection on the TOP and LEFT edges only - on all four
+  it is a selection box - and a stress point at the crack junction), crystal cracks GROWN along
+  three straight runs each (a main crack in two arms, one arm of a second line, up to two branches:
+  never a web), a 60 ms anticipation that nudges the stone against the strike, one TAPERED strike
+  (bright head, thinning to nothing behind - parallel sides are a laser) landing on the junction, a
+  compression ALONG the strike (a pivot turned to the strike and scaled there, the stone
+  counter-turned inside it) and then the break: **the shards are the stone** - its own tile cut into
+  wedges by the lines through the junction (`QuarryShapes.SplitSquare` + `Wedge`, `OverrideGeometry`
+  on the tile's texture, pivoted on the cube centre), heavy pieces that leave fast and stop, with a cold
+  edge and a little rhombus dust between them. No flash, no smoke, no camera, no pickaxe sprite: the
+  pickaxe is the motion. **THE VIEW DECIDES NOTHING**: `ElmasKazmaJoker.LastQuarry` (`QuarryVisuals`,
+  `[NotSaved]`) carries the cells `DestroyCubes` RETURNED, the cube in each taken before it went, and
+  the points MEASURED off the turn's breakdown (flat + late flat, at the score's scale); the faces are
+  the board's own (`TryCubeLook`). One to three stones show their own value, four or more one total -
+  and never before the break. Many stones are a wave (25 ms, squeezed to 120 ms), past ten the strikes
+  land in three ticks and the detail steps down to hold the shard and dust budgets. The lab has
+  seven beat-isolation entries, one / two / four / eight / sixteen stones, the sweep scene (the real
+  sweep over the lab board, then the break), a proxy test, the subtotal mode, 0.5x / 0.25x and nine
+  debug views; `Tools/UiLayoutCheck/elmas_kazma.py` holds the lot. See `quarry_mock*.png` in the
+  session scratchpad.
 - **"Hazine" is two DRAWN bursts with code around them, and the code is what makes them true**
   (`HazineRevealView`, `FrameSequenceFx`, `HazineShapes`, `GameUiController.Hazine.cs`). The art is
   two eight-frame sheets at `Resources/Art/Fx/hazine_treasure_sheet` / `hazine_dynamite_sheet`,

@@ -161,6 +161,8 @@ namespace ProjectBlock.View
             SyncHazine(round, report);
             // "Meydan Okuma": the dare paid, missed or moved - as this turn's lines go.
             PlayChallengeEvent();
+            // "Elmas Kazma": the obsidian the sweep could not take, after the sweep's own wave.
+            PlayQuarry(report);
             if (report.CleanSweep)
             {
                 // the sweep bling rises in pitch with every sweep this round
@@ -2119,6 +2121,7 @@ namespace ProjectBlock.View
             SyncRebate(round);
             SyncQuake();
             SyncChallenge();
+            SyncQuarry();
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

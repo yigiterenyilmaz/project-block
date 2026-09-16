@@ -155,14 +155,18 @@ namespace ProjectBlock.View
             // "Hazine" writes its own shape (a gain punches, an inverted loss dips and goes red),
             // and takes the label only while its claim is the strongest.
             // "Meydan Okuma"'s paid wager does the same with its own gold punch.
+            // "Elmas Kazma"'s value lands with a small punch and a breath of ice-white.
             float hazineClaim = hazine != null ? hazine.ScoreClaim : 0f;
             float challengeClaim = challenge != null ? challenge.ScoreClaim : 0f;
-            float claim = Mathf.Max(hazineClaim, challengeClaim);
+            float quarryClaim = quarry != null ? quarry.ScoreClaim : 0f;
+            float claim = Mathf.Max(hazineClaim, Mathf.Max(challengeClaim, quarryClaim));
             if (claim > warm && claim > 0.001f)
             {
-                bool hazineLeads = hazineClaim >= challengeClaim;
-                float hs = hazineLeads ? hazine.ScoreScale : challenge.ScoreScale;
-                Color ink = hazineLeads ? hazine.ScoreInk : challenge.ScoreInk;
+                float hs;
+                Color ink;
+                if (claim == hazineClaim) { hs = hazine.ScoreScale; ink = hazine.ScoreInk; }
+                else if (claim == challengeClaim) { hs = challenge.ScoreScale; ink = challenge.ScoreInk; }
+                else { hs = quarry.ScoreScale; ink = quarry.ScoreInk; }
                 totalText.rectTransform.localScale = new Vector3(hs, hs, 1f);
                 totalText.color = Color.Lerp(midasScoreInk, ink, claim * 0.8f);
                 return;

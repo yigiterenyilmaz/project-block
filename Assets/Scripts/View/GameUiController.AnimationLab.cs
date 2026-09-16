@@ -178,11 +178,13 @@ namespace ProjectBlock.View
             StopAnimQuake();
             StopHazine();
             StopChallenge();
+            StopQuarry();
             StopRebate();
             // The beat-isolation entries promise that RESET puts every layer back.
             QuakeCollapseView.Layers.AllOn();
             HazineRevealView.Layers.AllOn();
             ChallengeContractView.Layers.AllOn();
+            QuarryBreakView.Layers.AllOn();
             // The lab can show the pile spent without a payout, so RESET has to be able to give
             // it back even when no animation is running.
             if (cardLayer != null) { cardLayer.SetDrawPileShownEmpty(false); }
@@ -2033,6 +2035,155 @@ namespace ProjectBlock.View
                 {
                     ChallengeContractView.Layers.AllOn();
                     animLastLabel = Loc.Pick("meydan okuma: every layer back on", "meydan okuma: tüm katmanlar açık");
+                    if (AnimLabOpen) { RedrawAnimationLab(); }
+                });
+            AddAnim("elmas kazma: single obsidian - attunement", "elmas kazma: tek obsidyen - rezonans",
+                delegate
+                {
+                    AnimQuarryOnly();
+                    QuarryBreakView.Layers.ShowAttunement = true;
+                    AnimQuarry(1, false, "single obsidian - attunement", "tek obsidyen - rezonans");
+                });
+            AddAnim("elmas kazma: single obsidian - crack growth", "elmas kazma: tek obsidyen - çatlak büyümesi",
+                delegate
+                {
+                    AnimQuarryOnly();
+                    QuarryBreakView.Layers.ShowCracks = true;
+                    AnimQuarry(1, false, "single obsidian - crack growth", "tek obsidyen - çatlak büyümesi");
+                });
+            AddAnim("elmas kazma: single obsidian - strike only", "elmas kazma: tek obsidyen - yalnızca darbe",
+                delegate
+                {
+                    AnimQuarryOnly();
+                    QuarryBreakView.Layers.ShowCracks = true;
+                    QuarryBreakView.Layers.ShowStrike = true;
+                    AnimQuarry(1, false, "single obsidian - strike only", "tek obsidyen - yalnızca darbe");
+                });
+            AddAnim("elmas kazma: single obsidian - compression", "elmas kazma: tek obsidyen - sıkışma",
+                delegate
+                {
+                    AnimQuarryOnly();
+                    QuarryBreakView.Layers.ShowCracks = true;
+                    QuarryBreakView.Layers.ShowCompression = true;
+                    AnimQuarry(1, false, "single obsidian - compression", "tek obsidyen - sıkışma");
+                });
+            AddAnim("elmas kazma: single obsidian - shatter", "elmas kazma: tek obsidyen - kırılma",
+                delegate
+                {
+                    AnimQuarryOnly();
+                    QuarryBreakView.Layers.ShowShards = true;
+                    AnimQuarry(1, false, "single obsidian - shatter", "tek obsidyen - kırılma");
+                });
+            AddAnim("elmas kazma: single obsidian - crystal chips", "elmas kazma: tek obsidyen - kristal kırıntılar",
+                delegate
+                {
+                    AnimQuarryOnly();
+                    QuarryBreakView.Layers.ShowDust = true;
+                    QuarryBreakView.Layers.ShowStrike = true;
+                    AnimQuarry(1, false, "single obsidian - crystal chips", "tek obsidyen - kristal kırıntılar");
+                });
+            AddAnim("elmas kazma: single obsidian - score reward", "elmas kazma: tek obsidyen - puan ödülü",
+                delegate
+                {
+                    AnimQuarryOnly();
+                    QuarryBreakView.Layers.ShowScore = true;
+                    QuarryBreakView.Layers.ShowShards = true;
+                    AnimQuarry(1, false, "single obsidian - score reward", "tek obsidyen - puan ödülü");
+                });
+            AddAnim("elmas kazma: full single sequence", "elmas kazma: tam tek dizi",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    
+                    AnimQuarry(1, false, "full single sequence", "tam tek dizi");
+                });
+            AddAnim("elmas kazma: 2 obsidian", "elmas kazma: 2 obsidyen",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    
+                    AnimQuarry(2, false, "2 obsidian", "2 obsidyen");
+                });
+            AddAnim("elmas kazma: 4 obsidian", "elmas kazma: 4 obsidyen",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    
+                    AnimQuarry(4, false, "4 obsidian", "4 obsidyen");
+                });
+            AddAnim("elmas kazma: 8 obsidian", "elmas kazma: 8 obsidyen",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    
+                    AnimQuarry(8, false, "8 obsidian", "8 obsidyen");
+                });
+            AddAnim("elmas kazma: 16 obsidian (stress)", "elmas kazma: 16 obsidyen (stres)",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    
+                    AnimQuarry(16, false, "16 obsidian (stress)", "16 obsidyen (stres)");
+                });
+            AddAnim("elmas kazma: CLEANUP -> obsidian remains -> diamond break", "elmas kazma: TEMİZLİK -> obsidyen kalır -> elmas kırar",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    
+                    AnimQuarry(5, true, "CLEANUP -> obsidian remains -> diamond break", "TEMİZLİK -> obsidyen kalır -> elmas kırar");
+                });
+            AddAnim("elmas kazma: score subtotal mode (6 stones, one total)", "elmas kazma: toplam puan modu (6 taş, tek toplam)",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    QuarryBreakView.Layers.ShowScoreValue = true;
+                    AnimQuarry(6, false, "score subtotal mode (6 stones, one total)", "toplam puan modu (6 taş, tek toplam)");
+                });
+            AddAnim("elmas kazma: VISUAL PROXY test (stones held, break after 3 s)",
+                "elmas kazma: VEKİL testi (taşlar bekler, 3 sn sonra kırılır)",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    QuarryBreakView.Layers.ShowObsidianProxy = true;
+                    AnimQuarry(3, false, "proxy test", "vekil testi", true);
+                });
+            AddAnim("elmas kazma: full single at 0.5x", "elmas kazma: tam tek 0.5x",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    Time.timeScale = 0.5f;
+                    AnimQuarry(1, false, "0.5x", "0.5x");
+                });
+            AddAnim("elmas kazma: full single at 0.25x", "elmas kazma: tam tek 0.25x",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    Time.timeScale = 0.25f;
+                    AnimQuarry(1, false, "0.25x", "0.25x");
+                });
+            AddAnim("elmas kazma debug: targets", "elmas kazma hata ayıklama: hedefler",
+                delegate { AnimQuarryToggle(ref QuarryBreakView.Layers.ShowDiamondTargets, "targets", "hedefler"); });
+            AddAnim("elmas kazma debug: obsidian proxy", "elmas kazma hata ayıklama: obsidyen vekili",
+                delegate { AnimQuarryToggle(ref QuarryBreakView.Layers.ShowObsidianProxy, "obsidian proxy", "obsidyen vekili"); });
+            AddAnim("elmas kazma debug: crack paths (main cyan, branches blue)", "elmas kazma hata ayıklama: çatlak yolları (ana camgöbeği, dallar mavi)",
+                delegate { AnimQuarryToggle(ref QuarryBreakView.Layers.ShowCrackPaths, "crack paths (main cyan, branches blue)", "çatlak yolları (ana camgöbeği, dallar mavi)"); });
+            AddAnim("elmas kazma debug: strike axis", "elmas kazma hata ayıklama: darbe ekseni",
+                delegate { AnimQuarryToggle(ref QuarryBreakView.Layers.ShowStrikeAxis, "strike axis", "darbe ekseni"); });
+            AddAnim("elmas kazma debug: compression", "elmas kazma hata ayıklama: sıkışma",
+                delegate { AnimQuarryToggle(ref QuarryBreakView.Layers.ShowCompressionDebug, "compression", "sıkışma"); });
+            AddAnim("elmas kazma debug: shards (big orange, small green)", "elmas kazma hata ayıklama: parçalar (büyük turuncu, küçük yeşil)",
+                delegate { AnimQuarryToggle(ref QuarryBreakView.Layers.ShowShardsDebug, "shards (big orange, small green)", "parçalar (büyük turuncu, küçük yeşil)"); });
+            AddAnim("elmas kazma debug: crystal dust (enlarged)", "elmas kazma hata ayıklama: kristal toz (büyütülmüş)",
+                delegate { AnimQuarryToggle(ref QuarryBreakView.Layers.ShowCrystalDust, "crystal dust (enlarged)", "kristal toz (büyütülmüş)"); });
+            AddAnim("elmas kazma debug: score value", "elmas kazma hata ayıklama: puan değeri",
+                delegate { AnimQuarryToggle(ref QuarryBreakView.Layers.ShowScoreValue, "score value", "puan değeri"); });
+            AddAnim("elmas kazma debug: global resonance path", "elmas kazma hata ayıklama: genel rezonans yolu",
+                delegate { AnimQuarryToggle(ref QuarryBreakView.Layers.ShowGlobalResonance, "global resonance path", "genel rezonans yolu"); });
+            AddAnim("elmas kazma switch: ALL back on", "elmas kazma anahtarı: TÜMÜ geri açık",
+                delegate
+                {
+                    QuarryBreakView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("elmas kazma: every layer back on", "elmas kazma: tüm katmanlar açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
             AddAnim("harcama bonusu: the whole payout",
@@ -7178,6 +7329,119 @@ namespace ProjectBlock.View
             flag = !flag;
             animLastLabel = Loc.Pick("meydan okuma " + english + ": ", "meydan okuma " + turkish + ": ")
                 + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        // ------------------------------------------------------------------ elmas kazma
+
+        // "ELMAS KAZMA" IN THE LAB. A board of the lab's own with obsidian where the scene wants it
+        // (and ordinary cubes round it for the sweep scene), emptied the way the round empties it,
+        // then the joker's REPORT - those cells, those cubes, and the joker's own PointsPerObsidian
+        // at the round's score scale - played through Prepare/Begin, the game's own calls. The
+        // sweep scene launches the real sweep over the lab board and lets the pickaxe wait for it.
+
+        private static readonly GridPos[] AnimQuarryCells =
+        {
+            new GridPos(3, 3), new GridPos(1, 5), new GridPos(5, 1), new GridPos(5, 5),
+            new GridPos(1, 1), new GridPos(3, 0), new GridPos(0, 3), new GridPos(6, 3),
+            new GridPos(3, 6), new GridPos(2, 2), new GridPos(4, 4), new GridPos(2, 4),
+            new GridPos(4, 2), new GridPos(0, 6), new GridPos(6, 0), new GridPos(6, 6)
+        };
+
+        private uint animQuarrySeed = 1;
+
+        private void AnimQuarry(int count, bool sweep, string english, string turkish, bool holdOnly = false)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || boardView == null)
+            {
+                return;
+            }
+            EnsureQuarry();
+            quarry.Stop();
+            quarry.Forget();
+            ElmasKazmaJoker joker = FindPickaxe() ?? new ElmasKazmaJoker();
+            var board = new GameBoard(7, 7);
+            List<int> cards = AnimBossCards();
+            var stones = new List<GridPos>();
+            for (int i = 0; i < count && i < AnimQuarryCells.Length; i++)
+            {
+                stones.Add(AnimQuarryCells[i]);
+                board.SetCubeAt(AnimQuarryCells[i], new Cube(CubeKind.Obsidian, cards[0]));
+            }
+            if (sweep)
+            {
+                // The ordinary cubes the sweep takes, round the stone it cannot.
+                for (int y = 0; y < 7; y++)
+                {
+                    for (int x = 0; x < 7; x++)
+                    {
+                        var p = new GridPos(x, y);
+                        if (!board.GetCube(p).HasValue && (x * 5 + y * 3) % 3 != 0)
+                        {
+                            board.SetCubeAt(p, new Cube(CubeKind.Normal, cards[(x + y) % cards.Count]));
+                        }
+                    }
+                }
+            }
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+            boardView.Refresh();
+            var report = new QuarryVisuals();
+            foreach (GridPos p in stones)
+            {
+                report.Cells.Add(p);
+                report.Cubes.Add(board.GetCube(p).Value);
+            }
+            report.Points = stones.Count * joker.PointsPerObsidian * session.Config.Scoring.ScoreScale;
+            report.Seed = animQuarrySeed++ * 2654435761u;
+            // Emptied the way the round empties it: the whole board, then a repaint.
+            for (int y = 0; y < 7; y++)
+            {
+                for (int x = 0; x < 7; x++)
+                {
+                    board.DestroyCube(new GridPos(x, y));
+                }
+            }
+            boardView.Refresh();
+            quarry.Prepare(report);
+            if (!holdOnly)
+            {
+                if (sweep)
+                {
+                    EmitSweepConfetti();
+                }
+                quarry.Begin(report, sweep ? QuarryAfterSweep() : 0.15f);
+            }
+            animLastLabel = Loc.Pick("elmas kazma: " + english + " (" + report.Count + " stones, +" + report.Points + ")",
+                "elmas kazma: " + turkish + " (" + report.Count + " taş, +" + report.Points + ")");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        /// <summary>Every beat off; the entry turns on the ones it shows. Switches go in BEFORE.
+        /// </summary>
+        private void AnimQuarryOnly()
+        {
+            QuarryBreakView.Layers.AllOn();
+            QuarryBreakView.Layers.ShowAttunement = false;
+            QuarryBreakView.Layers.ShowCracks = false;
+            QuarryBreakView.Layers.ShowStrike = false;
+            QuarryBreakView.Layers.ShowCompression = false;
+            QuarryBreakView.Layers.ShowShards = false;
+            QuarryBreakView.Layers.ShowDust = false;
+            QuarryBreakView.Layers.ShowScore = false;
+            QuarryBreakView.Layers.ShowGlobalGlint = false;
+        }
+
+        private void AnimQuarryToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("elmas kazma " + english + ": ", "elmas kazma " + turkish + ": ") + OnOff(flag);
             if (AnimLabOpen)
             {
                 RedrawAnimationLab();
