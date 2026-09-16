@@ -106,7 +106,7 @@ rebate = strip_comments(read('Assets', 'Scripts', 'View', 'GameUiController.Reba
 board = strip_comments(read('Assets', 'Scripts', 'View', 'BoardView.cs'))
 lab_raw = read('Assets', 'Scripts', 'View', 'GameUiController.AnimationLab.cs')
 lab = strip_comments(lab_raw)
-tests = read('Tools', 'CoreTests', 'JokerTests.cs')
+tests = read('Tools', 'CoreTests', 'JokerTests.cs') + read('Tools', 'CoreTests', 'HazineRuleTests.cs')
 fx = os.path.join(ROOT, 'Assets', 'Resources', 'Art', 'Fx')
 
 print('=== 1. RAPOR CORE`UN, VIEW HESAPLAMIYOR ===')
@@ -116,17 +116,28 @@ check('LastFind [NotSaved] ve kimlikle eslenir',
 check('her bulus YENI bir rapor nesnesi',
       'var find = new HazineVisuals' in joker,
       'ayni nesne yeniden yazilirsa View ikinciyi oynamaz')
-check('yeniden gomulunce (tur/uzatma) rapor unutuluyor',
-      'LastFind = null;' in method(joker, 'private void Arm('),
-      'uzatmada eski bulus yeniden oynayabilir')
+check('YENI raunt raporu unutur; uzatma (esigi gecen tur) UNUTMAZ',
+      'LastFind = null;' in method(joker, 'public override void OnRoundStarted(')
+      and 'LastFind = null;' not in method(joker, 'private void Arm(')
+      and 'LastFind = null;' not in method(joker, 'public override void OnOvertimeStarted('),
+      'esigi gecen turdaki bulus odenip gosterilmez')
+check('isaret HER yikimla acilir: motorun yikim akisi imlecle okunur (tur disi guc, sagdaki joker, boss, Deprem)',
+      'public override void OnDestructionSettled(' in joker
+      and 'ctx.Round.DestructionFeed' in joker
+      and 'feedCursor = ctx.Round.DestructionFeed.Count;' in method(joker, 'private void Arm(')
+      and 'public override void AfterTurnScored(' not in joker,
+      'bazi yikimlar hazineyi acmiyor')
+check('patlama bonusu hattin BANKALADIGININ yarisi (uzatma vergisi dahil)',
+      'score.RegularScoreFactor' in joker,
+      'uzatmada bonus hattin bes kati')
 check('etki, UYGULANDIGI satirin yaninda yaziliyor (7 etki + etkisiz)',
       all(('HazineEffect.' + e) in joker for e in
           ['ExplosionBonus', 'MarketDiscount', 'PowerRefilled', 'BonusCard',
            'PowerDrained', 'CardFrozen', 'HandDiscarded', 'Fizzled', 'None']),
       'bir etki raporlanmiyor')
 check('skor OLCULUYOR (RoundScore once/sonra), kopyalanmiyor',
-      'int before = turn.Round.RoundScore;' in joker
-      and 'find.ScoreDelta = turn.Round.RoundScore - before;' in joker,
+      'int before = ctx.Round.RoundScore;' in joker
+      and 'find.ScoreDelta = ctx.Round.RoundScore - before;' in joker,
       'Terslik / olcek / taban sayiya girmez')
 check('rastgelelik: rapor tohumu hucrelerden, tur rng`sinden DEGIL',
       'Rng' not in method(joker, 'private static uint SeedOf(')
@@ -309,7 +320,7 @@ check('iptal: skor, oz ve ceza yok',
       and 'find.Effect = HazineEffect.None;' in joker,
       'iptal bir sey oduyor gibi gorunur')
 check('iptal testi rapora bakiyor',
-      'the report says they cancelled and nothing was applied' in tests,
+      'one settle took both, so they cancel' in tests,
       'iptal raporu dogrulanmamis')
 
 print()

@@ -736,6 +736,19 @@ dropped that way once each.
   cells the report names beside how many the view draws at), each drawing alone and everything but
   the drawing, 0.25x runs with a frame-index + ms readout, a cell outline of what the report names,
   and eleven switches; `Tools/UiLayoutCheck/hazine.py` holds the lot.
+  **A MARK IS BLOWN OPEN BY ANY DESTRUCTION OF ITS CUBE, WHENEVER IT HAPPENS.** The joker used to
+  read the turn's log from its own `AfterTurnScored`, and three things slipped past it: a power used
+  between turns (the cube was gone, the mark stayed buried), anything destroying after that hook in
+  the same turn (a joker further right, the boss, "Deprem"'s rescue) and inventory order deciding
+  which counted. The engine now keeps `RoundEngine.DestructionFeed` (every main-world cube lost this
+  round, reporting only, not saved) and raises `Joker.OnDestructionSettled` after the end-of-turn
+  effects (boss included, step 8.1), after a dead-end rescue and after every power or joker used
+  between turns; Hazine reads the feed from its own cursor there, and a penalty that changed the
+  hand between turns re-asks the dead-end question (`RecheckDeadEndBetweenTurns`). Overtime re-arms
+  the marks but does NOT forget the last find (it opens on the crossing turn, a step after that
+  turn's find was paid), and the explosion bonus is half of what the line BANKED, overtime tax
+  included. The View reveals a between-turn find right after the activation. Pinned in
+  `Tools/CoreTests/HazineRuleTests.cs`.
 - **"Harcama bonusu" is the empty pile PAYING YOU BACK** (`RebateView`, `RebateShapes`,
   `GameUiController.Rebate.cs`). The mechanic is not "you scored some points" — it is "you spent
   the resource and the spending refunded you" — so the payout may not simply appear beside the
