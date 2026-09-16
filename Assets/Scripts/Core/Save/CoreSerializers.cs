@@ -1,4 +1,4 @@
-// PURPOSE: Save/load for the plain structural types - positions, shapes, cards, cubes, and
+﻿// PURPOSE: Save/load for the plain structural types - positions, shapes, cards, cubes, and
 // the two mutable config objects the rules let jokers bend (RoundRules, ScoringConfig).
 //
 // THE CARD TABLE is the important idea here. A BlockCard is a reference shared by the owned
@@ -87,6 +87,9 @@ namespace ProjectBlock.Core
             // "Hedefli": which cube is the target, -1 for an ordinary card. Rolled once when the
             // card was minted, so it has to travel - re-rolling it on load would move the mark.
             w.Write(key + ".target", card.TargetCellIndex);
+            // "Simya": which of a two-element card's elements the player made it. Losing it on a
+            // reload would turn a water block the player chose back into fire.
+            w.Write(key + ".active", card.ActiveChoice);
             WriteShape(w, key + ".shape", card.Shape);
             IReadOnlyList<BlockElement> elements = card.Elements;
             w.Write(key + ".elements.count", elements.Count);
@@ -119,6 +122,7 @@ namespace ProjectBlock.Core
             bool bought = r.ReadBool(key + ".bought");
             int antimatter = r.ReadInt(key + ".antimatter");
             int target = r.ReadInt(key + ".target");
+            int active = r.ReadInt(key + ".active");
             BlockShape shape = ReadShape(r, key + ".shape");
             int elementCount = r.ReadInt(key + ".elements.count");
             var elements = new List<BlockElement>(elementCount);
@@ -129,8 +133,10 @@ namespace ProjectBlock.Core
             bool perCube = r.ReadBool(key + ".percube");
             if (!perCube)
             {
-                return Marked(new BlockCard(id, shape, elements, custom), smuggled, bought,
+                BlockCard plain = Marked(new BlockCard(id, shape, elements, custom), smuggled, bought,
                     falls, antimatter, target);
+                plain.ActiveChoice = active;
+                return plain;
             }
             int cubes = r.ReadInt(key + ".percube.count");
             var layout = new List<BlockElement?>(cubes);

@@ -1,4 +1,4 @@
-// PURPOSE: The one entry point for saving and loading a run. Core produces and consumes a
+﻿// PURPOSE: The one entry point for saving and loading a run. Core produces and consumes a
 // STRING; where that string is stored is the platform layer's business (the View writes it
 // under Application.persistentDataPath), which is what keeps Core free of UnityEngine.
 //
@@ -58,7 +58,9 @@ namespace ProjectBlock.Core
         // 18 (2026-09-14): merged with a separate 17 - "Hidrolik pres" now remembers WHICH cell
         // of its patch the player chose to keep the cube (pressCell), on top of the Enfeksiyon
         // fields above. Neither 17 writes both, so both are refused.
-        public const int FormatVersion = 18;
+        // 19 (2026-09-16): "Simya" - a card with two elements is ONE of them at a time, the player's
+        // choice, and every card now saves which (".active"). Older files do not carry it.
+        public const int FormatVersion = 19;
 
         private const string VersionKey = "version";
 

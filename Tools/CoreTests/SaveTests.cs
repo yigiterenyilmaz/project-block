@@ -1,4 +1,4 @@
-// Round-trip tests for the save format and the structural serializers.
+﻿// Round-trip tests for the save format and the structural serializers.
 // Compiled INTO the Core assembly, so internal members (GameBoard.Save/Load) are reachable.
 
 using System;
@@ -176,7 +176,8 @@ public static class SaveTests
         CheckEqual(7, back.Id, "card id");
         CheckEqual(shape.CanonicalKey, back.Shape.CanonicalKey, "card shape");
         Check(back.Has(BlockElement.Fire), "card keeps fire");
-        Check(back.Has(BlockElement.Gold), "card keeps gold");
+        Check(back.ElementChoices.Count == 2 && back.ElementChoices[1] == BlockElement.Gold && !back.Has(BlockElement.Gold),
+            "card keeps gold, as the element it is not being");
         Check(!back.IsCustom, "card is not custom");
         Check(!back.HasPerCubeElements, "card is not per-cube");
     }

@@ -64,6 +64,7 @@ namespace ProjectBlock.Core
             foreach (List<GridPos> half in halves)
             {
                 BlockCard piece = ctx.Session.CreateCard(BlockShape.FromCells(half), elements);
+                piece.KeepChoiceOf(whole);
                 round.AddBonusCard(piece, BonusPlayOutcome.ExpireFromRound);
             }
             return true;

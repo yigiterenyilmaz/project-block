@@ -1,7 +1,18 @@
-// PURPOSE: One card in the player's collection. A card is the deck-side identity of a
+﻿// PURPOSE: One card in the player's collection. A card is the deck-side identity of a
 // block; the board only stores cubes (with the source card id) once a card is played.
 // Elements come from the market ("bloklar markette çeşitli türlerle çıkabilir");
-// starting-deck cards are plain. Usually 0-1 elements; "Simya" (future joker) deals 2.
+// starting-deck cards are plain. Usually 0-1 elements; "Simya" deals 2, and a weld can join two.
+//
+// A CARD WITH TWO ELEMENTS IS ONE OF THEM AT A TIME, AND THE PLAYER PICKS WHICH (designer's call,
+// 2026-09-16). It used to be both and neither: the cube took whichever element came first in a
+// fixed priority (fire beat water, water beat gold...) while dynamite, ghost and mechanical, which
+// are asked of the card rather than the cube, all applied on top - so a FIRE+WATER card was simply
+// fire with a lie on its label, and a WATER+DYNAMITE card looked like water and blew up. Now such a
+// card is ALCHEMICAL: Elements still lists everything it carries (pricing, the save, a copy), but
+// Has() answers only for the ACTIVE choice, and every rule in the game asks Has() - placement, the
+// cube kind, fire chains, dynamite, ghost, mechanical, fox, "Midas" in the hand. "Hedefli" is a mark
+// on one cube rather than what the block is made of, so it is never one of the choices and always
+// applies.
 // EXTENSION POINT: attached joker cubes ("Parazit") and upgrade data belong here later.
 
 using System.Collections.Generic;
@@ -176,16 +187,94 @@ namespace ProjectBlock.Core
                 distinct.Count == 0 ? NoElements : distinct.ToArray(), perCube, true);
         }
 
+        /// <summary>What an alchemical card may be: its elements, less "Hedefli" (a mark, not a
+        /// material). Empty when the card is not alchemical.</summary>
+        public IReadOnlyList<BlockElement> ElementChoices
+        {
+            get
+            {
+                var choices = new List<BlockElement>();
+                if (cellElements == null)
+                {
+                    for (int i = 0; i < elements.Length; i++)
+                    {
+                        if (elements[i] != BlockElement.Targeted)
+                        {
+                            choices.Add(elements[i]);
+                        }
+                    }
+                }
+                return choices.Count >= 2 ? choices : (IReadOnlyList<BlockElement>)NoElements;
+            }
+        }
+
+        /// <summary>True when the card carries two or more elements and behaves as ONE of them -
+        /// the player's choice. Per-cube designed blocks are never alchemical: each cube already
+        /// is exactly one thing.</summary>
+        public bool IsAlchemical
+        {
+            get { return ElementChoices.Count >= 2; }
+        }
+
+        /// <summary>Index into ElementChoices of the element the card is being. 0 - the card's
+        /// original element, the one Simya added the second to - until the player picks.</summary>
+        public int ActiveChoice { get; internal set; }
+
+        /// <summary>The element an alchemical card is being right now; null on any other card.
+        /// </summary>
+        public BlockElement? ActiveElement
+        {
+            get
+            {
+                IReadOnlyList<BlockElement> choices = ElementChoices;
+                if (choices.Count < 2)
+                {
+                    return null;
+                }
+                return choices[ActiveChoice >= 0 && ActiveChoice < choices.Count ? ActiveChoice : 0];
+            }
+        }
+
         public bool Has(BlockElement element)
         {
+            BlockElement? active = ActiveElement;
             for (int i = 0; i < elements.Length; i++)
             {
                 if (elements[i] == element)
                 {
+                    // An alchemical card is only the element it is being.
+                    return !active.HasValue || element == BlockElement.Targeted || element == active.Value;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Makes this card the element <paramref name="element"/>. False when the card is
+        /// not alchemical or cannot be that element.</summary>
+        internal bool Choose(BlockElement element)
+        {
+            IReadOnlyList<BlockElement> choices = ElementChoices;
+            for (int i = 0; i < choices.Count; i++)
+            {
+                if (choices[i] == element)
+                {
+                    ActiveChoice = i;
                     return true;
                 }
             }
             return false;
+        }
+
+        /// <summary>A copy, a cut piece or anything else minted from <paramref name="source"/>
+        /// keeps being what the source was being - a player who made a water block of a
+        /// fire+water card does not get fire back by duplicating it.</summary>
+        internal void KeepChoiceOf(BlockCard source)
+        {
+            BlockElement? active = source != null ? source.ActiveElement : null;
+            if (active.HasValue)
+            {
+                Choose(active.Value);
+            }
         }
 
         public override string ToString()

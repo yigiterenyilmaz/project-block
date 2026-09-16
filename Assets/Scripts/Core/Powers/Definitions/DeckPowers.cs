@@ -74,6 +74,7 @@ namespace ProjectBlock.Core
                 // Fresh ids: the copies are their own cards, so the board can tell their
                 // cubes apart from the original's (fire chains, "Kazı çalışması"...).
                 BlockCard copy = ctx.Session.CreateCard(source.Shape, source.Elements);
+                copy.KeepChoiceOf(source);
                 ctx.Round.AddBonusCard(copy, BonusPlayOutcome.ExpireFromRound);
             }
             return true;
@@ -236,6 +237,7 @@ namespace ProjectBlock.Core
             for (int i = 0; i < count; i++)
             {
                 BlockCard copy = ctx.Session.CreateCard(source.Shape, source.Elements);
+                copy.KeepChoiceOf(source);
                 ctx.Round.AddBonusCard(copy, BonusPlayOutcome.ExpireFromRound);
             }
         }
@@ -397,6 +399,7 @@ namespace ProjectBlock.Core
         private static void AddCopy(GameSession session, RoundEngine round, BlockCard source)
         {
             BlockCard copy = session.CreateCard(source.Shape, source.Elements);
+            copy.KeepChoiceOf(source);
             round.AddBonusCard(copy, BonusPlayOutcome.ExpireFromRound);
         }
     }

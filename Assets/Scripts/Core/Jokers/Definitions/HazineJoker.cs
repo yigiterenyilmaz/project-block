@@ -259,6 +259,7 @@ namespace ProjectBlock.Core
                         return false;
                     }
                     BlockCard copy = turn.Session.CreateCard(source.Shape, source.Elements);
+                    copy.KeepChoiceOf(source);
                     turn.Round.AddBonusCard(copy, BonusPlayOutcome.ExpireFromRound);
                     find.Effect = HazineEffect.BonusCard;
                     find.CardId = copy.Id;

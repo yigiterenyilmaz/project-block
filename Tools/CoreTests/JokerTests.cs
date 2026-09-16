@@ -64,6 +64,8 @@ public static class JokerTests
         Buzluk_FreezesAtWallsAndDoesNotBlockSweep();
         Buzluk_AHoleIsAWallToo();
         Simya_GivesOfferedElementalBlocksASecondElement();
+        Simya_ADoubledCardIsOneElementThePlayerPicks();
+        Simya_TheChoiceSurvivesCopiesAndASave();
         KapaliEkonomi_PaysWhenNothingWasBought();
         Ihale_LocksUntilTheAuctionedJokerLeaves();
         KaraDelik_VoidBlockSwallowsWhatLandsOnIt();
@@ -1753,6 +1755,90 @@ public static class JokerTests
             "count " + doubled.Elements.Count);
         Check(doubled.Has(BlockElement.Fire), "the original element is kept");
         Check(doubled.Id == fire.Id, "the offer keeps its card id");
+    }
+
+    /// <summary>
+    /// A two-element card is ONE of its elements, the player's pick - never both, never a fixed
+    /// priority. Driven through real placements: the cube kind it lays follows the choice, and the
+    /// card-level rules (dynamite here) apply only when that is what it is being.
+    /// </summary>
+    private static void Simya_ADoubledCardIsOneElementThePlayerPicks()
+    {
+        Section("simya / a doubled card is one element, chosen");
+        var session = NewSession(131, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+
+        BlockCard card = session.CreateCard(Bar(1), new[] { BlockElement.Water, BlockElement.Fire });
+        Check(card.IsAlchemical && card.ElementChoices.Count == 2, "two elements make it alchemical");
+        Check(card.ActiveElement == BlockElement.Water, "it starts as its FIRST element (the one Simya kept)",
+            "" + card.ActiveElement);
+        Check(card.Has(BlockElement.Water) && !card.Has(BlockElement.Fire),
+            "and it is only that - fire no longer wins by priority");
+        Check(CubeRules.KindForCard(card) == CubeKind.Water, "so it lays water");
+
+        round.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
+        round.PlayFromBonus(round.BonusHand.Count - 1, new GridPos(0, 0));
+        Check(round.Board.GetCube(new GridPos(0, 0)).HasValue
+                && round.Board.GetCube(new GridPos(0, 0)).Value.Kind == CubeKind.Water,
+            "placed as water");
+
+        BlockCard second = session.CreateCard(Bar(1), new[] { BlockElement.Water, BlockElement.Fire });
+        round.AddBonusCard(second, BonusPlayOutcome.ExpireFromRound);
+        Check(session.ChooseCardElement(second.Id, BlockElement.Fire), "the player can make it fire");
+        Check(second.Has(BlockElement.Fire) && !second.Has(BlockElement.Water), "and then it is only fire");
+        round.PlayFromBonus(round.BonusHand.Count - 1, new GridPos(3, 5));
+        Check(round.Board.GetCube(new GridPos(3, 5)).HasValue
+                && round.Board.GetCube(new GridPos(3, 5)).Value.Kind == CubeKind.Fire,
+            "placed as fire");
+
+        BlockCard bomb = session.CreateCard(Bar(1), new[] { BlockElement.Fire, BlockElement.Dynamite });
+        Check(!bomb.Has(BlockElement.Dynamite) && !round.CardHasElement(bomb, BlockElement.Dynamite),
+            "a fire+dynamite card being fire is NOT also dynamite");
+        Check(session.ChooseCardElement(bomb.Id, BlockElement.Dynamite) == false,
+            "a card that is not in the hand, bonus hand or deck cannot be chosen for");
+        round.AddBonusCard(bomb, BonusPlayOutcome.ExpireFromRound);
+        Check(session.ChooseCardElement(bomb.Id, BlockElement.Dynamite), "once held, it can be");
+        Check(bomb.Has(BlockElement.Dynamite) && !bomb.Has(BlockElement.Fire)
+                && CubeRules.KindForCard(bomb) == CubeKind.Dynamite,
+            "and as dynamite it is dynamite through and through");
+        Check(!session.ChooseCardElement(bomb.Id, BlockElement.Gold), "an element it does not carry is refused");
+
+        BlockCard single = session.CreateCard(Bar(1), new[] { BlockElement.Fire });
+        round.AddBonusCard(single, BonusPlayOutcome.ExpireFromRound);
+        Check(!single.IsAlchemical && !session.ChooseCardElement(single.Id, BlockElement.Fire),
+            "a one-element card has nothing to choose");
+
+        BlockCard marked = session.CreateCard(Bar(1), new[] { BlockElement.Targeted, BlockElement.Fire });
+        Check(!marked.IsAlchemical && marked.Has(BlockElement.Targeted) && marked.Has(BlockElement.Fire),
+            "a target mark is not a material: target + fire is simply both");
+        BlockCard markedPair = session.CreateCard(Bar(1),
+            new[] { BlockElement.Targeted, BlockElement.Fire, BlockElement.Water });
+        Check(markedPair.IsAlchemical && markedPair.Has(BlockElement.Targeted)
+                && markedPair.Has(BlockElement.Fire) && !markedPair.Has(BlockElement.Water),
+            "and with two materials, the mark stays while the material is chosen");
+    }
+
+    private static void Simya_TheChoiceSurvivesCopiesAndASave()
+    {
+        Section("simya / the choice is kept");
+        var session = NewSession(137, 6, 1000000, 40, 1);
+        BlockCard card = session.CreateCard(Bar(2), new[] { BlockElement.Fire, BlockElement.Water });
+        session.CurrentRound.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
+        Check(session.ChooseCardElement(card.Id, BlockElement.Water), "chosen in the bonus hand");
+
+        BlockCard copy = session.CreateCard(card.Shape, card.Elements);
+        copy.KeepChoiceOf(card);
+        Check(copy.ActiveElement == BlockElement.Water, "a copy keeps being what the source was");
+
+        GameSession back = SaveGame.Load(SaveGame.Save(session), new GameConfig());
+        BlockCard reloaded = null;
+        foreach (BonusSlot slot in back.CurrentRound.BonusHand)
+        {
+            if (slot.Card.Id == card.Id) { reloaded = slot.Card; }
+        }
+        Check(reloaded != null && reloaded.ActiveElement == BlockElement.Water
+                && reloaded.Has(BlockElement.Water) && !reloaded.Has(BlockElement.Fire),
+            "a save keeps the choice", reloaded == null ? "missing" : "" + reloaded.ActiveElement);
     }
 
     private static void KapaliEkonomi_PaysWhenNothingWasBought()
