@@ -1,4 +1,4 @@
-// PURPOSE: "Barut tedarikçisi" wired up - the one place PowderChargeView is reached from.
+﻿// PURPOSE: "Barut tedarikçisi" wired up - the one place PowderChargeView is reached from.
 //
 // ONE MOMENT, unlike the pickaxe's two: charging is not destruction, so there is nothing to hold
 // proxies through and nothing to wait for. The charges are banked in AfterTurnScored, and the
@@ -67,7 +67,13 @@ namespace ProjectBlock.View
             if (report != null && !ReferenceEquals(report, lastPowderPlayed))
             {
                 lastPowderPlayed = report;
-                PlayPowderSizzle(report);
+                // A turn in which nothing actually took a charge is silent: every standing block
+                // is reported every turn now (so its ember survives), and sounding for all of
+                // them would sizzle once a turn forever once a block capped.
+                if (report.AnyGained)
+                {
+                    PlayPowderSizzle(report);
+                }
             }
             else if (report == null)
             {
@@ -86,7 +92,7 @@ namespace ProjectBlock.View
             float ripest = 0f;
             for (int i = 0; i < report.Count; i++)
             {
-                if (report.Fullness[i] > ripest)
+                if (report.Gained[i] && report.Fullness[i] > ripest)
                 {
                     ripest = report.Fullness[i];
                 }

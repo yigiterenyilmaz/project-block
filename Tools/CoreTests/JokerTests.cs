@@ -8259,7 +8259,7 @@ public static class JokerTests
         // And the powder ACCELERATES, so the charges are worth their triangular sum rather than
         // their count - asked of the joker rather than restated here, so the test cannot drift
         // from the rule it is pinning.
-        int expected = 2 * joker.PowderUnits(charges) * joker.BonusPerChargePerCube;
+        int expected = 2 * joker.PowderUnits(charges) * joker.UnitValue(round.ScoreThreshold);
         Check(FlatFrom(report.Score, joker.DefId) == expected,
             "and both cubes paid every charge they had banked",
             FlatFrom(report.Score, joker.DefId) + " vs " + expected);

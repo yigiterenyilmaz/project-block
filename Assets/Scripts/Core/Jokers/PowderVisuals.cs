@@ -1,4 +1,4 @@
-// PURPOSE: "Barut tedarikçisi" telling the View what its powder did this turn - which cells took
+﻿// PURPOSE: "Barut tedarikçisi" telling the View what its powder did this turn - which cells took
 // another charge and how close to the cap each one now is. REPORTING ONLY: the rules have already
 // banked the charges, and the View never counts a charge, never reads the board and never works
 // out which cube belongs to which block.
@@ -32,17 +32,47 @@ namespace ProjectBlock.Core
         /// <summary>True for a cell whose block has hit the cap and will take no more.</summary>
         public readonly List<bool> Full = new List<bool>();
 
+        /// <summary>
+        /// True for a cell whose block took a charge THIS turn.
+        ///
+        /// It is the difference between the EVENT and the STATE, and both have to be reported or
+        /// the View cannot tell them apart: a capped block gains nothing and must not sizzle or
+        /// spark again, but its ember has to STAY LIT until the cubes are actually gone - it is
+        /// still holding all that powder, which is the whole thing the player is deciding about.
+        /// Reporting only the gainers made a block go dark at the exact moment it became most
+        /// valuable.
+        /// </summary>
+        public readonly List<bool> Gained = new List<bool>();
+
         public int Count
         {
             get { return Cells.Count; }
         }
 
-        internal void Add(GridPos cell, int charges, int cap)
+        internal void Add(GridPos cell, int charges, int cap, bool gained)
         {
             Cells.Add(cell);
             Charges.Add(charges);
             Fullness.Add(cap > 0 ? charges / (float)cap : 1f);
             Full.Add(charges >= cap);
+            Gained.Add(gained);
+        }
+
+        /// <summary>True if anything actually took a charge this turn - what the sizzle asks,
+        /// so a board of nothing but capped blocks stays quiet.</summary>
+        public bool AnyGained
+        {
+            get
+            {
+                for (int i = 0; i < Gained.Count; i++)
+                {
+                    if (Gained[i])
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
         }
     }
 }

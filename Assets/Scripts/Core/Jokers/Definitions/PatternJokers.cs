@@ -42,6 +42,11 @@ namespace ProjectBlock.Core
         private int turnsSinceReset;
         private int paidThisRound;
 
+        /// <summary>Cells breaking each mirror as of the last turn, so the status line can say
+        /// how close the board is. Presentation only, refreshed every turn.</summary>
+        private int breaksLeftRight = -1;
+        private int breaksTopBottom = -1;
+
         public SimetriJoker()
             : base("simetri", "Simetri")
         {
@@ -74,8 +79,17 @@ namespace ProjectBlock.Core
                     return Loc.Pick("wakes in " + (WakesOnTurn - turnsSinceReset),
                         (WakesOnTurn - turnsSinceReset) + " tur sonra");
                 }
-                return paidThisRound > 0
-                    ? "+" + (long)paidThisRound * ScoreScale
+                if (paidThisRound > 0)
+                {
+                    return "+" + (long)paidThisRound * ScoreScale;
+                }
+                // HOW FAR OFF, not just "no". A board one cube short of a mirror and a board
+                // nowhere near it both used to read "watching", which tells the player nothing
+                // about whether the thing they are building is working.
+                int nearest = breaksLeftRight < 0 ? -1
+                    : (breaksTopBottom < breaksLeftRight ? breaksTopBottom : breaksLeftRight);
+                return nearest > 0
+                    ? Loc.Pick(nearest + " off mirror", nearest + " kaldı")
                     : Loc.Pick("watching", "bakıyor");
             }
         }
@@ -84,6 +98,8 @@ namespace ProjectBlock.Core
         {
             turnsSinceReset = 0;
             paidThisRound = 0;
+            breaksLeftRight = -1;
+            breaksTopBottom = -1;
         }
 
         /// <summary>A sweep sends it back to sleep. The board it left behind is empty, which is
@@ -104,8 +120,10 @@ namespace ProjectBlock.Core
             // The MAIN board only: "Öteki dünya" opening a second arena must not pay twice for a
             // joker balanced against one.
             GameBoard board = turn.Round.MainBoard;
-            bool leftRight = board.IsMirroredLeftRight();
-            bool topBottom = board.IsMirroredTopBottom();
+            breaksLeftRight = board.MirrorBreaksLeftRight();
+            breaksTopBottom = board.MirrorBreaksTopBottom();
+            bool leftRight = breaksLeftRight == 0;
+            bool topBottom = breaksTopBottom == 0;
             if (!leftRight && !topBottom)
             {
                 return;
@@ -144,9 +162,17 @@ namespace ProjectBlock.Core
     /// </summary>
     public sealed class BarutTedarikcisiJoker : Joker
     {
-        /// <summary>Score per POWDER UNIT, per dynamite cube destroyed. See PowderUnits for what
-        /// a unit is - it is not the same thing as a charge any more.</summary>
-        public int BonusPerChargePerCube = 3;
+        /// <summary>
+        /// What one POWDER UNIT on one cube is worth, as a FRACTION OF THE ROUND'S OWN THRESHOLD
+        /// - 0.4% (2026-09-16, designer's call). See PowderUnits for what a unit is.
+        ///
+        /// It was a flat 3, and a flat number ages the same way "Eforsuz galibiyet"'s did: a
+        /// fully nursed 4-cube block was worth thirty rounds' work in round 1 and a rounding
+        /// error by round 15, while the thing being asked of the player - keep dynamite standing
+        /// on a filling board for five turns - got HARDER every round. A share of the bar keeps
+        /// the reward matched to the effort for the whole run.
+        /// </summary>
+        public double BonusFractionPerChargePerCube = 0.004;
 
         /// <summary>
         /// Charges a block can bank, in TURNS - charges are per turn and are wiped at every round
@@ -171,6 +197,14 @@ namespace ProjectBlock.Core
         ///
         /// BALANCE PLACEHOLDER, like every number here.
         /// </summary>
+        /// <summary>What one powder unit on one cube pays against a given threshold. Floored at
+        /// 1 so the very first round still pays something rather than rounding to nothing.</summary>
+        public int UnitValue(int roundThreshold)
+        {
+            int value = (int)(roundThreshold * BonusFractionPerChargePerCube);
+            return value < 1 ? 1 : value;
+        }
+
         public int PowderUnits(int charges)
         {
             if (charges > MaxCharges)
@@ -258,6 +292,9 @@ namespace ProjectBlock.Core
         private void PayForWhatWentUp(TurnContext turn)
         {
             IReadOnlyList<DestroyedCube> destroyed = turn.Report.DestroyedCubes;
+            // The round's OWN bar, read live - RoundEngine.ScoreThreshold and never Config's, so
+            // a boss that lowered it pays a share of what is really being asked.
+            int perUnit = UnitValue(turn.Round != null ? turn.Round.ScoreThreshold : 0);
             int bonus = 0;
             for (int i = 0; i < destroyed.Count; i++)
             {
@@ -268,7 +305,7 @@ namespace ProjectBlock.Core
                 int charges;
                 if (chargesByCard.TryGetValue(destroyed[i].Cube.SourceCardId, out charges))
                 {
-                    bonus += PowderUnits(charges) * BonusPerChargePerCube;
+                    bonus += PowderUnits(charges) * perUnit;
                 }
             }
             if (bonus <= 0)
@@ -313,15 +350,13 @@ namespace ProjectBlock.Core
                 chargesByCard.TryGetValue(entry.Key, out had);
                 int now = had < MaxCharges ? had + 1 : MaxCharges;
                 next[entry.Key] = now;
-                // A block at the cap takes nothing, so it is not reported: the sizzle and the
-                // mark say "this gained something", and a full block gaining nothing must not
-                // sound every turn for the rest of the round.
-                if (now > had)
+                // EVERY charged cell is reported, every turn, so its ember stays lit for as long
+                // as the block stands - a capped block is the one holding the most powder and
+                // must not go dark. Whether it GAINED this turn is carried separately, and that
+                // is what the sizzle and the spark key off.
+                for (int i = 0; i < entry.Value.Count; i++)
                 {
-                    for (int i = 0; i < entry.Value.Count; i++)
-                    {
-                        report.Add(entry.Value[i], now, MaxCharges);
-                    }
+                    report.Add(entry.Value[i], now, MaxCharges, now > had);
                 }
             }
             chargesByCard.Clear();

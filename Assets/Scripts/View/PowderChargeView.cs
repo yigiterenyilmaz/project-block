@@ -122,7 +122,12 @@ namespace ProjectBlock.View
                 emberFullness.Add(full);
                 emberFull.Add(atCap);
                 emberBase.Add(ember.transform.localScale);
-                SpawnSpark(at, cell, full);
+                // Only a cell that GAINED this turn flares. A capped block keeps its ember - it
+                // is the one holding the most powder - but it has nothing new to announce.
+                if (report.Gained[i])
+                {
+                    SpawnSpark(at, cell, full);
+                }
             }
         }
 

@@ -1,4 +1,4 @@
-// PURPOSE: GameBoard queries & bookkeeping - cube writes/retyping, snapshots and
+﻿// PURPOSE: GameBoard queries & bookkeeping - cube writes/retyping, snapshots and
 // restore, neighbours/edges, cube counts, explosion prediction, sweep/placement
 // existence checks, and ASCII debug rendering.
 
@@ -470,6 +470,51 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Both halves have to be real play area for the comparison to mean anything.</summary>
+        /// <summary>
+        /// HOW MANY CELLS ARE BREAKING the left-right mirror - 0 exactly when IsMirroredLeftRight
+        /// is true. It exists so "Simetri" can say how close the board is instead of only saying
+        /// no: a joker that pays for a board shape and reports nothing but "watching" gives the
+        /// player no way to tell a board one cube short from a board nowhere near.
+        ///
+        /// Counts CELLS, not pairs: two cells disagree, and the player has to change one of them.
+        /// </summary>
+        public int MirrorBreaksLeftRight()
+        {
+            int breaks = 0;
+            for (int x = 0; x < Width / 2; x++)
+            {
+                int mirrored = Width - 1 - x;
+                for (int y = 0; y < Height; y++)
+                {
+                    if (ColumnPairComparable(x, mirrored, y)
+                        && cells[x, y].HasValue != cells[mirrored, y].HasValue)
+                    {
+                        breaks++;
+                    }
+                }
+            }
+            return breaks;
+        }
+
+        /// <summary>The horizontal-axis twin of MirrorBreaksLeftRight.</summary>
+        public int MirrorBreaksTopBottom()
+        {
+            int breaks = 0;
+            for (int y = 0; y < Height / 2; y++)
+            {
+                int mirrored = Height - 1 - y;
+                for (int x = 0; x < Width; x++)
+                {
+                    if (RowPairComparable(x, y, mirrored)
+                        && cells[x, y].HasValue != cells[x, mirrored].HasValue)
+                    {
+                        breaks++;
+                    }
+                }
+            }
+            return breaks;
+        }
+
         private bool ColumnPairComparable(int x, int mirroredX, int y)
         {
             return playable[x, y] && !dead[x, y]
