@@ -165,6 +165,10 @@ namespace ProjectBlock.View
             PlayQuarry(report);
             // "Tutuştur": every other fire burns out, climbing from the source's explosion peak.
             PlayIgnition();
+            // "Kara Delik": the gravity after the turn's own lines, the devour after the gravity. A
+            // sweep that IS the hole's collapse is drawn by the hole, not by the ordinary wave.
+            sweepIsHoleCollapse = TakeHoleCollapse(report);
+            PlayBlackHole(report);
             if (report.CleanSweep)
             {
                 // the sweep bling rises in pitch with every sweep this round
@@ -263,9 +267,10 @@ namespace ProjectBlock.View
             // A turn whose only explosion was a loose group ("Hedefli" payout, a late reshape
             // clear) does not shake: the group explosion keeps the screen still. A cleared line,
             // TNT and a clean sweep keep theirs.
-            if (report.CubesExploded > 0 || report.DynamiteTriggered || report.CleanSweep)
+            bool ordinarySweep = report.CleanSweep && !sweepIsHoleCollapse;
+            if (report.CubesExploded > 0 || report.DynamiteTriggered || ordinarySweep)
             {
-                ShakeForBlast(report.DynamiteTriggered, report.CleanSweep, comboStreak);
+                ShakeForBlast(report.DynamiteTriggered, ordinarySweep, comboStreak);
             }
             if (report.DynamiteTriggered)
             {
@@ -485,11 +490,14 @@ namespace ProjectBlock.View
             // the arena and off the bottom of the screen - nothing landed, so there is nothing to
             // blast, only something to drop.
             DropFellThroughCubes(report);
-            if (report.CleanSweep)
+            if (report.CleanSweep && !sweepIsHoleCollapse)
             {
                 EmitSweepConfetti();
             }
         }
+
+        /// <summary>True for the feedback pass whose sweep is "Kara Delik"'s collapse.</summary>
+        private bool sweepIsHoleCollapse;
 
         /// <summary>The warm orange every blast is drawn in. Still the colour of everything
         /// that is not a cleared LINE - loose cells, a targeted payout, a late reshape - which
@@ -2126,6 +2134,7 @@ namespace ProjectBlock.View
             SyncChallenge();
             SyncQuarry();
             SyncIgnition();
+            SyncBlackHole(round);
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

@@ -182,6 +182,8 @@ namespace ProjectBlock.View
             StopIgnition();
             StopFlood();
             StopRebate();
+            StopBlackHole();
+            StopAnimBlackHole();
             // The beat-isolation entries promise that RESET puts every layer back.
             QuakeCollapseView.Layers.AllOn();
             HazineRevealView.Layers.AllOn();
@@ -189,6 +191,7 @@ namespace ProjectBlock.View
             QuarryBreakView.Layers.AllOn();
             IgnitionBurnView.Layers.AllOn();
             FloodView.Layers.AllOn();
+            BlackHoleView.Layers.AllOn();
             // The lab can show the pile spent without a payout, so RESET has to be able to give
             // it back even when no animation is running.
             if (cardLayer != null) { cardLayer.SetDrawPileShownEmpty(false); }
@@ -2452,6 +2455,7 @@ namespace ProjectBlock.View
                     animLastLabel = Loc.Pick("taşkın: every layer back on", "taşkın: tüm katmanlar açık");
                     if (AnimLabOpen) { RedrawAnimationLab(); }
                 });
+            BuildAnimBlackHoleCatalogue();
             AddAnim("harcama bonusu: the whole payout",
                 "harcama bonusu: bütün ödeme",
                 delegate { AnimRebate(1, false, "empty pile pays back", "boş deste geri ödedi"); });

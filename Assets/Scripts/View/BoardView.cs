@@ -231,6 +231,8 @@ namespace ProjectBlock.View
 
         private IceFreezeView ice;
 
+        private BlackHoleView blackHoles;
+
         private QuakeCollapseView quake;
 
         private ParasiteHostView parasite;
@@ -577,6 +579,48 @@ namespace ProjectBlock.View
             {
                 quake.Stop();
             }
+        }
+
+        /// <summary>
+        /// "Kara Delik"'s layer: every hole on the board as a living anomaly - horizon, disk, the mass
+        /// it has taken - and the lensing it writes THROUGH the cell renderers of the cubes in its
+        /// reach, plus everything its gravity does in a turn. Owned here for the ice's reason: half of
+        /// it is presence that has to follow every repaint. Made on first use and kept through a
+        /// rebuild.
+        /// </summary>
+        public BlackHoleView BlackHoles
+        {
+            get
+            {
+                if (blackHoles == null)
+                {
+                    var go = new GameObject("BlackHoles");
+                    go.transform.SetParent(transform, false);
+                    blackHoles = go.AddComponent<BlackHoleView>();
+                }
+                return blackHoles;
+            }
+        }
+
+        /// <summary>True once the holes' layer exists.</summary>
+        public bool HasBlackHoles
+        {
+            get { return blackHoles != null; }
+        }
+
+        /// <summary>Takes the holes and their lensing down, without making the view if there is none.</summary>
+        public void StopBlackHoles()
+        {
+            if (blackHoles != null)
+            {
+                blackHoles.Stop();
+            }
+        }
+
+        /// <summary>True while an effect is holding this cell blank.</summary>
+        public bool IsHeld(GridPos cell)
+        {
+            return heldCells.Contains(cell);
         }
 
         /// <summary>The face a cube would be drawn with on this board: its tile and its tint.
@@ -1287,6 +1331,9 @@ namespace ProjectBlock.View
             // A collapse in flight holds the arena's tremor; destroyed mid-quake the board would be
             // left turned a fraction of a degree.
             Transform keepQuake = quake != null ? quake.transform : null;
+            // The holes keep their lensed renderers and their events; the Refresh below re-syncs
+            // them to the new arena.
+            Transform keepHoles = blackHoles != null ? blackHoles.transform : null;
             // The gravity field is a property of the ROUND, not of the board's contents, so it
             // survives the rebuild and is CLEARED below - a new arena starts under ordinary
             // gravity, which is the rules' own behaviour and not something this decides.
@@ -1305,7 +1352,7 @@ namespace ProjectBlock.View
                     || child == keepSnake || child == keepPress
                     || child == keepParasite || child == keepMapus
                     || child == keepTalisman || child == keepFire || child == keepIce
-                    || child == keepQuake)
+                    || child == keepQuake || child == keepHoles)
                 {
                     continue;
                 }
@@ -1459,6 +1506,7 @@ namespace ProjectBlock.View
             sawSnake = false;
             sawPress = false;
             sawIce = false;
+            sawHole = false;
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -1514,6 +1562,18 @@ namespace ProjectBlock.View
                         baseColorCache[x, y] = EmptyColor;
                         preWashCache[x, y] = EmptyColor;
                         sawSnake = true;
+                        continue;
+                    }
+                    // "KARA DELİK" DRAWS ITSELF TOO, when its shaders are there: the cell is an empty
+                    // slot under the hole, which is exactly what a hole in the board should be.
+                    if (cube.HasValue && cube.Value.Kind == CubeKind.Void && BlackHoleView.Available)
+                    {
+                        ViewUtil.ApplyTile(cellRenderers[x, y], null, cellSize * EmptyFill);
+                        cellRenderers[x, y].color = EmptyColor;
+                        kindCache[x, y] = null;
+                        baseColorCache[x, y] = EmptyColor;
+                        preWashCache[x, y] = EmptyColor;
+                        sawHole = true;
                         continue;
                     }
                     // A CUBE is a painted tile and fills its cell; an EMPTY cell stays the flat
@@ -1625,7 +1685,16 @@ namespace ProjectBlock.View
             {
                 Ice.Sync(this);
             }
+            // And the holes, LAST: the lensing is written onto the renderers everything above has
+            // just re-tiled.
+            if (sawHole || blackHoles != null)
+            {
+                BlackHoles.Sync(this);
+            }
         }
+
+        /// <summary>True on the last repaint that left a cell to a black hole.</summary>
+        private bool sawHole;
 
         /// <summary>Ghost cubes hanging outside the grid render as faint traces.</summary>
         private void RefreshGhostTraces()
