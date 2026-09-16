@@ -20,9 +20,10 @@ namespace ProjectBlock.Core
         Transparent = 5,
         Dynamite = 7,
 
-        /// <summary>"Kara delik" trap: placeable-over like Transparent, but the cube that
-        /// lands on it is destroyed instead, and the void is consumed. Indestructible and
-        /// sweep-exempt, so it survives line explosions/sweeps and persists until sprung.</summary>
+        /// <summary>"Kara Delik": a BLACK HOLE. Placeable-over like Transparent, but a cube that
+        /// lands on it is swallowed and the hole stays. Anchored (CubeRules.IsAnchored): nothing
+        /// removes, moves, retypes or covers it. Sweep-exempt, and it fills its cell for lines.
+        /// The joker makes it pull and eat what is around it (KaraDelikJoker).</summary>
         Void = 9,
 
         /// <summary>"Mayın" power: an armed empty cell. Behaves like Void on contact - the
@@ -112,8 +113,8 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Can a LINE EXPLOSION destroy this cube? Obsidian and gold never break, and
-        /// void does not either - a "Kara delik" trap is indestructible and only vanishes when a
-        /// cube lands on it (consumed on contact in GameBoard.Place). A Parazit host IS
+        /// void does not either - a "Kara Delik" hole never leaves the board at all (see
+        /// IsAnchored). A Parazit host IS
         /// destructible here on purpose - a player-completed line is the only thing that breaks it.</summary>
         public static bool IsDestructible(Cube cube)
         {
@@ -138,6 +139,27 @@ namespace ProjectBlock.Core
         public static bool IsExternallyDestructible(Cube cube)
         {
             return !cube.Protected && IsDestructible(cube);
+        }
+
+        /// <summary>"Kara Delik": a black hole is ANCHORED - nothing removes it, moves it, retypes
+        /// it or covers it, whatever the source (lines, sweeps, powers, bosses, moving boards,
+        /// rewinds, erosion). Every board write that could touch a cube asks this.</summary>
+        public static bool IsAnchored(Cube cube)
+        {
+            return cube.Kind == CubeKind.Void;
+        }
+
+        /// <summary>"Kara Delik": can a black hole take this cube - pull it, eat it, or be laid
+        /// over it? Everything, gold and obsidian included, except another hole, a "Parazit" host
+        /// (only the player's line breaks that), the boss's own snake, a "Mayın" trap and a
+        /// hydraulic press capsule (whose stored cubes would be lost with it).</summary>
+        public static bool CanBeSwallowed(Cube cube)
+        {
+            return !IsAnchored(cube)
+                && !cube.Protected
+                && cube.Kind != CubeKind.Snake
+                && cube.Kind != CubeKind.Mine
+                && cube.Kind != CubeKind.Compressed;
         }
 
         /// <summary>The cube kind a card's cubes take when placed (first board-state

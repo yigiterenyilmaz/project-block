@@ -87,6 +87,51 @@ namespace ProjectBlock.Core
             return insideCount >= 1;
         }
 
+        /// <summary>"Kara Delik": the cubes the last Place dropped into a black hole - they never
+        /// landed, so they are in no destruction log. Cleared by every Place. Reporting only.</summary>
+        public readonly List<DestroyedCube> LastPlacementSwallows = new List<DestroyedCube>();
+
+        /// <summary>"Kara Delik": may a void card be laid on <paramref name="origin"/>? Like any
+        /// block, except that an occupied cell does not refuse it as long as a black hole can
+        /// take what stands there (the engine swallows it first).</summary>
+        public bool CanPlaceVoid(BlockShape shape, GridPos origin)
+        {
+            foreach (GridPos offset in shape.Cells)
+            {
+                GridPos pos = origin + offset;
+                if (!IsInside(pos) || IsSealed(pos))
+                {
+                    return false;
+                }
+                Cube? occupant = cells[pos.X - MinX, pos.Y - MinY];
+                if (occupant.HasValue && !CubeRules.CanBeSwallowed(occupant.Value))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>"Kara Delik": moves one cube a step (the pull). Refused for a hole, onto
+        /// anything but an empty play cell, and onto a sealed cell. The cube keeps its kind and
+        /// its card. The caller re-baselines the destruction diff: this is a move, not a death.</summary>
+        public bool MoveCube(GridPos from, GridPos to)
+        {
+            if (!IsInside(from) || !IsInside(to) || IsSealed(to))
+            {
+                return false;
+            }
+            Cube? cube = cells[from.X - MinX, from.Y - MinY];
+            if (!cube.HasValue || CubeRules.IsAnchored(cube.Value)
+                || cells[to.X - MinX, to.Y - MinY].HasValue)
+            {
+                return false;
+            }
+            cells[from.X - MinX, from.Y - MinY] = null;
+            cells[to.X - MinX, to.Y - MinY] = cube;
+            return true;
+        }
+
         /// <summary>Places the card's cubes. Caller must have validated with CanPlace.
         /// Transparent cubes underneath are replaced.</summary>
         public IReadOnlyList<GridPos> Place(BlockCard card, GridPos origin)
@@ -111,6 +156,7 @@ namespace ProjectBlock.Core
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
             }
             var placed = new List<GridPos>(shape.Size);
+            LastPlacementSwallows.Clear();
             // "Vanilya" (boss round): the card's element is ignored, so every cube it stamps is
             // an ordinary one - including the per-cube elements of a designed block.
             CubeKind cardKind = IgnoreElements ? CubeKind.Normal : CubeRules.KindForCard(card);
@@ -138,11 +184,15 @@ namespace ProjectBlock.Core
                 if (IsInside(pos))
                 {
                     Cube? occupant = cells[pos.X - MinX, pos.Y - MinY];
-                    if (occupant.HasValue && (occupant.Value.Kind == CubeKind.Void
-                        || occupant.Value.Kind == CubeKind.Mine))
+                    if (occupant.HasValue && occupant.Value.Kind == CubeKind.Void)
                     {
-                        // Traps: "Kara delik" swallows the arriving cube, "Mayın" blows it up.
-                        // Either way both are gone, so nothing is placed.
+                        // "Kara Delik": the arriving cube falls in and the hole stays.
+                        LastPlacementSwallows.Add(new DestroyedCube(pos, new Cube(kind, card.Id)));
+                        continue;
+                    }
+                    if (occupant.HasValue && occupant.Value.Kind == CubeKind.Mine)
+                    {
+                        // "Mayın" blows the arriving cube up and is spent with it.
                         cells[pos.X - MinX, pos.Y - MinY] = null;
                         OccupiedCount--;
                         continue;

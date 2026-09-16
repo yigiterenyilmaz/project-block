@@ -349,6 +349,11 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
+            Cube? standing = board.GetCube(cell);
+            if (standing.HasValue && CubeRules.IsAnchored(standing.Value))
+            {
+                return false; // "Kara Delik": a hole is a wall even to the snake
+            }
             int blocking = snake.Count > 2 ? snake.Count - 1 : snake.Count;
             for (int i = 0; i < blocking; i++)
             {

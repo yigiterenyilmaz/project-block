@@ -50,7 +50,8 @@ namespace ProjectBlock.Core
         internal bool TransplantElement(GridPos cell, BlockCard card, BlockElement gene)
         {
             Cube? cube = Board.GetCube(cell);
-            if (card == null || !cube.HasValue || borrowedGenes.ContainsKey(card.Id))
+            if (card == null || !cube.HasValue || borrowedGenes.ContainsKey(card.Id)
+                || CubeRules.IsAnchored(cube.Value))
             {
                 return false;
             }

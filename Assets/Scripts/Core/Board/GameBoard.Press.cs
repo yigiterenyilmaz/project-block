@@ -90,7 +90,7 @@ namespace ProjectBlock.Core
         {
             visuals = null;
             List<GridPos> patch = PatchAt(anchor);
-            if (patch == null || !patch.Contains(pressCell))
+            if (patch == null || !patch.Contains(pressCell) || PatchHoldsAnchor(anchor))
             {
                 return null;
             }
@@ -278,7 +278,8 @@ namespace ProjectBlock.Core
             while (IsInside(at) && cells[at.X - MinX, at.Y - MinY].HasValue)
             {
                 Cube cube = cells[at.X - MinX, at.Y - MinY].Value;
-                if (cube.Kind == CubeKind.Obsidian || cube.Kind == CubeKind.Gold)
+                if (cube.Kind == CubeKind.Obsidian || cube.Kind == CubeKind.Gold
+                    || CubeRules.IsAnchored(cube))
                 {
                     ReportTest(report, wantedCell, dx, dy, false, at, cube.Kind,
                         IsRerouteAttempt(report, wantedCell));
@@ -422,7 +423,26 @@ namespace ProjectBlock.Core
         /// <summary>True when a 2x2 press could be applied here at all.</summary>
         public bool CanCompressAt(GridPos anchor)
         {
-            return PatchAt(anchor) != null;
+            return PatchAt(anchor) != null && !PatchHoldsAnchor(anchor);
+        }
+
+        /// <summary>"Kara Delik": a patch with a hole in it cannot be taken into storage.</summary>
+        private bool PatchHoldsAnchor(GridPos anchor)
+        {
+            List<GridPos> patch = PatchAt(anchor);
+            if (patch == null)
+            {
+                return false;
+            }
+            foreach (GridPos cell in patch)
+            {
+                Cube? cube = cells[cell.X - MinX, cell.Y - MinY];
+                if (cube.HasValue && CubeRules.IsAnchored(cube.Value))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

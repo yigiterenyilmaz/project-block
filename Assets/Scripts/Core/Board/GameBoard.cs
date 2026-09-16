@@ -471,6 +471,10 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
+                if (cells[ix, iy].HasValue && CubeRules.IsAnchored(cells[ix, iy].Value))
+                {
+                    continue; // "Kara Delik": the arena cannot eat the ground a hole stands on
+                }
                 if (cells[ix, iy].HasValue)
                 {
                     cells[ix, iy] = null;
