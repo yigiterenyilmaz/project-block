@@ -578,7 +578,7 @@ dropped that way once each.
   **BOOL** (`TurnReport.DrawPileEmptiedThisTurn`), not on a tally, so a turn in which the pile
   dried twice pays ONCE. A View hung off "the draw pile just emptied" would be watching the right
   fact and still be wrong, because it could not know the payment had already been made; it watches
-  the PAYMENT, keyed on a SERIAL. Both are pinned in `HarcamaBonusu_PaysWhenDrawPileEmpties` and
+  the PAYMENT, keyed on the report ITSELF. Both are pinned in `HarcamaBonusu_PaysWhenDrawPileEmpties` and
   by a lab scene that fires the seam twice with one report.
   **BOTH ANCHORS ARE ASKED FOR**: the source is the real draw pile’s position and its real
   width (`CardLayerView.PileWorldWidth`), the target the real score label through
@@ -675,7 +675,7 @@ dropped that way once each.
   and `IsOnEdge` defers to it — one definition, the one the rule already used. A wall is any
   neighbour that is not PLAY AREA, so a cell beside a hole or an eroded cell is against one;
   nobody coded that and `Buzluk_AHoleIsAWallToo` pins it cell by cell. `FreezeVisuals` is
-  reporting only, `[NotSaved]`, keyed on a SERIAL, and the baseline is byte-identical.
+  reporting only, `[NotSaved]`, keyed on the report itself, and the baseline is byte-identical.
   **FIVE THINGS WERE GOT WRONG ON PAPER AND FIXED BY RENDERING THEM** (the mock is in the
   scratchpad; `ice_field` / `ice_growth` / `ice_final.png`). The ice must be built from the face's
   own LUMINANCE, never lerped toward a blue — luminance is where the tile's frame, bevel and lit
@@ -1208,6 +1208,17 @@ Only the title bar grabs, so a drag can never be confused with playing a row, an
 the mouse for its frames so releasing over a row does not also fire it. The offset is clamped into
 the camera every frame rather than on release, and the clamp keeps the **title bar** on screen in
 particular: a panel that can be dropped where it cannot be grabbed is a panel that is gone.
+
+**A PER-TURN REPORT IS MATCHED BY IDENTITY, NEVER BY ITS SERIAL.** Every joker that hands the
+View a `[NotSaved]` report (`SpreadVisuals`, `FreezeVisuals`, `RebateVisuals`,
+`MidasPayoutVisuals`) writes a NEW object per use, and the view remembers the object it last
+played (`ReferenceEquals`). They used to compare `report.Serial` against the last serial played,
+and that was wrong in a way no single run shows: a serial restarts at 1 with every new joker,
+while the views outlive a run (they are kept through `BoardView.Rebuild`, or live on the
+controller), so a new run's first event was silently skipped whenever the run before had fired
+exactly as many times. Identity is right in all three cases that matter - a repaint hands back the
+same object, a new use writes a new one, and a loaded save has none - and each effect's checker
+refuses a `Serial ==` comparison in its view.
 
 The rule it follows: **it drives the real animation code, never a copy.** An entry calls the
 same method the game calls and only fabricates the ARGUMENTS, so a retimed animation shows its

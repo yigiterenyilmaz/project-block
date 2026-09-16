@@ -313,6 +313,11 @@ check('SES kancalari birakilmis',
       'SoundFreezeBegin' in view and 'SoundCrystalLock' in view,
       'ses tasarimi icin tutamak yok')
 
+_fresh = strip_comments(read('Assets', 'Scripts', 'View', 'IceFreezeView.cs'))
+check('rapor KENDISIYLE karsilastiriliyor (seriyle degil)',
+      'ReferenceEquals(report, lastPlayed)' in _fresh and 'Serial == ' not in _fresh,
+      'seri her yeni jokerde 1 den basliyor - yeni kosuda ilk animasyon sessizce atlanir')
+
 print('=== 9. LAB ===')
 for scene in ('AnimIceScene.Bottom', 'AnimIceScene.Top', 'AnimIceScene.Left',
               'AnimIceScene.Right', 'AnimIceScene.CornerBottomLeft',

@@ -106,6 +106,11 @@ check('skor hedefi gercek HUD etiketinden, sabit koordinat degil',
       'totalText.rectTransform.position' in wire and 'ScreenToWorldPoint' in wire,
       'sabit ekran koordinati - telefonda bosluga ucar')
 
+_fresh = strip_comments(read('Assets', 'Scripts', 'View', 'MidasPayoutView.cs'))
+check('rapor KENDISIYLE karsilastiriliyor (seriyle degil)',
+      'ReferenceEquals(report, lastPlayed)' in _fresh and 'Serial == ' not in _fresh,
+      'seri her yeni jokerde 1 den basliyor - yeni kosuda ilk odeme sessizce atlanir')
+
 print('=== 4. HER TUR CALISACAK: OLCU ===')
 total = (num(view, r'Wake = ([\d.]+)f') or 0) + (num(view, r'Hold = ([\d.]+)f') or 0) \
     + (num(view, r'Shrink = ([\d.]+)f') or 0) + (num(view, r'FlightFar = ([\d.]+)f') or 0)

@@ -267,7 +267,15 @@ namespace ProjectBlock.View
         }
 
         private RebateVisuals report;
-        private int playedSerial = -1;
+        /// <summary>
+        /// The report last played, compared by IDENTITY rather than by serial.
+        ///
+        /// Serials restart at 1 with every new joker, and this view outlives a run - so keyed on the
+        /// serial, a new run's first event was silently skipped whenever the run before had fired
+        /// exactly as many times. Every use writes a NEW report object, a repaint hands back the
+        /// same one, and a loaded save has none at all, so identity is right in all three cases.
+        /// </summary>
+        private RebateVisuals lastPlayed;
         private Vector2 source;
         private Vector2 target;
         private float pileWidth = 1.5f;
@@ -344,11 +352,11 @@ namespace ProjectBlock.View
         /// </summary>
         public void Play(RebateVisuals paid, Vector2 drawPile, Vector2 score, float pileWide)
         {
-            if (paid == null || paid.Serial == playedSerial)
+            if (paid == null || ReferenceEquals(paid, lastPlayed))
             {
                 return;
             }
-            playedSerial = paid.Serial;
+            lastPlayed = paid;
             report = paid;
             source = drawPile;
             target = score;

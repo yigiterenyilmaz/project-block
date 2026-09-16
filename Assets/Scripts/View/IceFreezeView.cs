@@ -307,7 +307,15 @@ namespace ProjectBlock.View
         private readonly List<SpriteRenderer> spare = new List<SpriteRenderer>();
         private readonly List<GridPos> gone = new List<GridPos>();
         private MaterialPropertyBlock block;
-        private int playedSerial = -1;
+        /// <summary>
+        /// The report last played, compared by IDENTITY rather than by serial.
+        ///
+        /// Serials restart at 1 with every new joker, and this view outlives a run - so keyed on the
+        /// serial, a new run's first event was silently skipped whenever the run before had fired
+        /// exactly as many times. Every use writes a NEW report object, a repaint hands back the
+        /// same one, and a loaded save has none at all, so identity is right in all three cases.
+        /// </summary>
+        private FreezeVisuals lastPlayed;
         private float clock;
         private float completeAt = -1f;
 
@@ -346,11 +354,11 @@ namespace ProjectBlock.View
         public void Play(BoardView board, FreezeVisuals report)
         {
             owner = board;
-            if (report == null || report.Serial == playedSerial)
+            if (report == null || ReferenceEquals(report, lastPlayed))
             {
                 return;
             }
-            playedSerial = report.Serial;
+            lastPlayed = report;
             if (!report.Any)
             {
                 return;
@@ -448,7 +456,7 @@ namespace ProjectBlock.View
                 Return(glints[i].Sprite);
             }
             glints.Clear();
-            playedSerial = -1;
+            lastPlayed = null;
             completeAt = -1f;
         }
 

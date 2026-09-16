@@ -170,6 +170,11 @@ check('YALNIZ ATES: ayni rapor Taskin`i da tasiyor, o baska bir dil',
       'report.Kind != CubeKind.Fire' in view,
       'su, atesin diliyle ciziliyor')
 
+_fresh = strip_comments(read('Assets', 'Scripts', 'View', 'FireSpreadView.cs'))
+check('rapor KENDISIYLE karsilastiriliyor (seriyle degil)',
+      'ReferenceEquals(report, lastPlayed)' in _fresh and 'Serial == ' not in _fresh,
+      'seri her yeni jokerde 1 den basliyor - yeni kosuda ilk animasyon sessizce atlanir')
+
 print('=== 7. LAB ===')
 for scene in ('AnimFireScene.One', 'AnimFireScene.Four', 'AnimFireScene.TwoIntoOne',
               'AnimFireScene.Crowded', 'AnimFireScene.NoReSpread'):

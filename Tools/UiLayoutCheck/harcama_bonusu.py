@@ -107,9 +107,12 @@ check('joker BOOL okuyor, sayac degil',
 check('rapor SERIAL tasiyor ve her odemede artiyor',
       'public int Serial' in visuals_raw and '++rebateSerial' in joker,
       'ayni odeme her repaint`te yeniden oynar')
-check('view SERIAL`e bakiyor, olaya degil',
-      'paid.Serial == playedSerial' in view,
-      'view "deste bosaldi"ya baglanmis - ayni turda iki kez oynar, olmayan para soz verir')
+# Once "paid.Serial == playedSerial" isteniyordu. O kalip YENI KOSUDA ilk odemeyi yutuyordu:
+# seri her yeni jokerde 1'den basliyor, view ise kosular arasinda yasiyor. Raporun KENDISI
+# karsilastiriliyor artik - her odeme yeni bir nesne, repaint ayni nesneyi veriyor.
+check('view ODEMEYE bakiyor (raporun kendisi), olaya ya da seriye degil',
+      'ReferenceEquals(paid, lastPlayed)' in view and 'Serial == ' not in view,
+      'view "deste bosaldi"ya ya da seriye baglanmis - ayni turda iki kez oynar ya da yeni kosuda ilk odemeyi yutar')
 check('rapor [NotSaved]',
       '[field: NotSaved]' in joker_raw and 'LastRebate' in joker_raw,
       'per-turn rapor kayda siziyor')

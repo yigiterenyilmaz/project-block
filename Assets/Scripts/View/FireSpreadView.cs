@@ -246,7 +246,15 @@ namespace ProjectBlock.View
 
         private float span;
 
-        private int lastSerial = -1;
+        /// <summary>
+        /// The report last played, compared by IDENTITY rather than by serial.
+        ///
+        /// Serials restart at 1 with every new joker, and this view outlives a run - so keyed on the
+        /// serial, a new run's first event was silently skipped whenever the run before had fired
+        /// exactly as many times. Every use writes a NEW report object, a repaint hands back the
+        /// same one, and a loaded save has none at all, so identity is right in all three cases.
+        /// </summary>
+        private SpreadVisuals lastPlayed;
 
         private MaterialPropertyBlock block;
 
@@ -261,12 +269,12 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// Plays one use of the joker. Keyed on the report's SERIAL: the game asks every repaint
+        /// Plays one use of the joker. Keyed on the report ITSELF: the game asks every repaint
         /// and the spread must not restart because something else redrew the board.
         /// </summary>
         public void Play(BoardView view, SpreadVisuals report)
         {
-            if (view == null || report == null || !report.Any || report.Serial == lastSerial)
+            if (view == null || report == null || !report.Any || ReferenceEquals(report, lastPlayed))
             {
                 return;
             }
@@ -277,7 +285,7 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            lastSerial = report.Serial;
+            lastPlayed = report;
             Stop();
             owner = view;
             cellSize = view.CellWorldSize;

@@ -393,7 +393,15 @@ namespace ProjectBlock.View
 
         private float span;
 
-        private int lastSerial = -1;
+        /// <summary>
+        /// The report last played, compared by IDENTITY rather than by serial.
+        ///
+        /// Serials restart at 1 with every new joker, and this view outlives a run - so keyed on the
+        /// serial, a new run's first event was silently skipped whenever the run before had fired
+        /// exactly as many times. Every use writes a NEW report object, a repaint hands back the
+        /// same one, and a loaded save has none at all, so identity is right in all three cases.
+        /// </summary>
+        private MidasPayoutVisuals lastPlayed;
 
         private TextMesh total;
 
@@ -421,17 +429,17 @@ namespace ProjectBlock.View
         /// <summary>
         /// Plays one turn's payout. <paramref name="spots"/> must line up with report.Sources.
         ///
-        /// Keyed on the report's SERIAL: the game asks every repaint, and a payout must not
+        /// Keyed on the report ITSELF: the game asks every repaint, and a payout must not
         /// restart because the hand was redrawn behind it.
         /// </summary>
         public void Play(MidasPayoutVisuals report, List<SourceSpot> spots, Vector2 score,
             Vector2 totalPlace)
         {
-            if (report == null || !report.Any || spots == null || report.Serial == lastSerial)
+            if (report == null || !report.Any || spots == null || ReferenceEquals(report, lastPlayed))
             {
                 return;
             }
-            lastSerial = report.Serial;
+            lastPlayed = report;
             Stop();
             scoreAt = score;
             totalSpot = totalPlace;
