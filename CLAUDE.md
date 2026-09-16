@@ -611,7 +611,8 @@ dropped that way once each.
   bright core, the generator's red/yellow fringe (saturated colour under alpha 32) and loose specks
   removed, and on the treasure every faint texel taken to the frame's own gold - pale ivory at
   alpha 0.1 reads as a cold grey smear on a dark board. `FrameSequenceFx` plays a sheet with a
-  duration PER FRAME (the animator's table: the peak holds longest), pooled, on the OWNER's clock so
+  duration PER FRAME (the animator's table: the peak holds longest - played at `Style.Tempo`
+  1.35, which keeps its shape; at 1 it read as slow, and the drawings are 1.7 / 1.75 cells), pooled, on the OWNER's clock so
   the lab's time scale slows the drawing and the code together, and a negative clock is a delay.
   **A sheet on its own is a sticker**, so everything else is laid on particular DRAWN frames: a beat
   of anticipation (the dynamite's is tension, a swell and a pinch) in the 50ms between the cube

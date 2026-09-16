@@ -59,7 +59,7 @@ def method(src, signature):
 
 
 def floats(src, name):
-    m = re.search(name + r'\s*=\s*\{([^}]*)\}', src)
+    m = re.search(name + r'\s*=\s*(?:\{|AtTempo\()([^})]*)[})]', src)
     if not m:
         return []
     return [float(x.strip().rstrip('f')) for x in m.group(1).split(',') if x.strip()]
@@ -210,8 +210,13 @@ check('isik tepe opakligi hazine 0.12-0.22, dinamit 0.15-0.30 (%.2f / %.2f)' % (
       0.12 <= tp <= 0.22 and 0.15 <= dp <= 0.30, 'isik ya gorunmez ya ekran flasi')
 ts = num(view, r'TreasureSize = ([\d.]+)f', 0)
 ds = num(view, r'DynamiteSize = ([\d.]+)f', 0)
-check('cizim boyu 1.0-1.4 hucre (%.2f / %.2f)' % (ts, ds),
-      1.0 <= ts <= 1.4 and 1.0 <= ds <= 1.4, 'patlama komsulari yutar ya da kaybolur')
+check('cizim boyu 1.2-1.9 hucre (%.2f / %.2f)' % (ts, ds),
+      1.2 <= ts <= 1.9 and 1.2 <= ds <= 1.9, 'patlama komsulari yutar ya da kaybolur')
+tempo = num(view, r'const float Tempo = ([\d.]+)f', 0)
+check('tempo tablolarin SEKLINI korur, yalniz hizi degistirir (1.0-1.6: %.2f)' % tempo,
+      1.0 <= tempo <= 1.6 and 'ms[i] /= Tempo;' in view
+      and 'CancelMs = AtTempo(' in view,
+      'kare sureleri tek tek oynanmis ya da iptal kuyrugu farkli hizda')
 check('isik kendi kenarinda SIFIRA iniyor (kare/disk plaka degil)',
       't * t * (3f - 2f * t) * t' in method(shapes, 'private static float LightAt('),
       'isik bir cikartma gibi okunur')

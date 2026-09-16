@@ -46,13 +46,26 @@ namespace ProjectBlock.View
         public static class Style
         {
             // ---- the drawings, and the animator's own timing (ms per frame)
-            public static readonly float[] TreasureMs = { 70f, 80f, 90f, 100f, 120f, 100f, 90f, 90f };
-            public static readonly float[] DynamiteMs = { 70f, 70f, 65f, 80f, 90f, 100f, 100f, 90f };
+            /// <summary>Playback rate over the animator's tables. The TABLES keep their shape (the
+            /// peak still holds longest); this only says how fast the whole drawing runs. At 1 it
+            /// read as slow on the board (designer, 2026-09-16).</summary>
+            public const float Tempo = 1.35f;
+            public static readonly float[] TreasureMs = AtTempo(70f, 80f, 90f, 100f, 120f, 100f, 90f, 90f);
+            public static readonly float[] DynamiteMs = AtTempo(70f, 70f, 65f, 80f, 90f, 100f, 100f, 90f);
+
+            private static float[] AtTempo(params float[] ms)
+            {
+                for (int i = 0; i < ms.Length; i++)
+                {
+                    ms[i] /= Tempo;
+                }
+                return ms;
+            }
 
             /// <summary>Drawn size in CELLS. The packed frames reach 0.98 of their half-box at
             /// the peak, so these are the burst's diameter at its widest.</summary>
-            public static float TreasureSize = 1.40f;
-            public static float DynamiteSize = 1.40f;
+            public static float TreasureSize = 1.70f;
+            public static float DynamiteSize = 1.75f;
 
             /// <summary>Which drawn frame is the PEAK - the number lands on it, and so does the
             /// dynamite's knock and the treasure's glint.</summary>
@@ -145,7 +158,7 @@ namespace ProjectBlock.View
             public const int CancelCutFrame = 3;
             public static float CancelFlight = 0.26f;
             public static float CancelSize = 0.90f;
-            public static readonly float[] CancelMs = { 70f, 80f, 90f };
+            public static readonly float[] CancelMs = AtTempo(70f, 80f, 90f);
             public static Color CancelTint = new Color(0.86f, 0.84f, 0.78f, 0.85f);
             public static float CancelLabelTime = 0.55f;
 
