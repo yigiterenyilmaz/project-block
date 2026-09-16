@@ -85,10 +85,11 @@ check('puan / flas / sarsinti yok', 'ScoreScale' not in view and 'ShakeCamera' n
 print()
 print('=== 2. BOYAMA DEGIL, BOGMA ===')
 between('kaynak KABARIP YUKSELIR (sn)', num(view, 'Pressure'), 0.24, 0.40, 'kabarma gorunmuyor')
-between('kaynak yukselmesi (hucre)', num(view, 'RiseLift'), 0.03, 0.10, 'yukselme gorunmuyor')
+check('kaynak yerinde sisir, kaymaz (RiseLift 0)', num(view, 'RiseLift') == 0, 'yana/yukari kayiyor')
 swell = read('Assets', 'Resources', 'Shaders', 'FloodSwell.shader')
-check('kaynak SIVI gibi kabarir: kubbe + hedefe lob + dalgali yuzey + kopuk + kabarcik (sprite olcegi DEGIL)',
-      all(k in swell for k in ['float dome', 'float lobe', 'd += a * 0.022', 'float foam', 'float bubble'])
+check('kaynak SIVI gibi, HER YANDAN ESIT kabarir ve fokurdar (tek kubbe / tek yana lob YOK, sprite olcegi DEGIL)',
+      all(k in swell for k in ['float h = 0.49 + 0.12 * a;', 'BOILING', 'float foam', 'float bubble'])
+      and 'float dome' not in swell and 'if (_Spill > 0.0001)' in swell
       and 'kv.Value.Raised.sharedMaterial = SwellMaterial;' in view
       and 'cube * s.Scale, cube * s.Scale' not in view, 'blok sadece buyuyor')
 check('lob yalniz GERCEK hedef yonlerine (Facing)', 'foreach (Vector2 f in s.Facing)' in view, 'her yone lob')

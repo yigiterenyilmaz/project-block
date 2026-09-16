@@ -609,12 +609,14 @@ dropped that way once each.
   time the water joker had no picture at all - Core had already written everything it needed. **The
   order is the read, and the first pass lost it**: it started the target 180 ms in with a few pixels of
   swell, and a cube simply turned to water; the second scaled the water cube up, and a block getting
-  bigger is not water either. Now each source that really spills FIRST heaves up AS A LIQUID (~0.3 s,
-  `Resources/Shaders/FloodSwell`: an SDF body of its own water on a quad 2.2 cells wide - the cube's
-  rounded box smooth-unioned with a dome rising out of its top and a lobe toward each REAL target, its
-  outline rippling, the water churning inside, froth at the surface and bubbles rising through it,
-  its hard frame melting into the body; at amount 0 it is exactly the cube, so it comes and goes over
-  the board's cube unseen), THEN spills a LIQUID TONGUE over the border - wide at its root, a drop at
+  bigger is not water either, and the third - a dome heaving out of the top and a lobe growing with it -
+  read as irregular. Now each source that really spills FIRST swells AS A LIQUID, EVENLY ON EVERY SIDE
+  AND BOILING (~0.3 s, `Resources/Shaders/FloodSwell`: an SDF pillow of its own water on a quad 2.2
+  cells wide - the cube's rounded box grown the same on all four sides with its corners rounding off,
+  bubbles swelling out of its surface all the way round and sinking back, bubbles boiling up through
+  it, froth even round its rim, its hard frame melting into the body; at amount 0 it is exactly the
+  cube, so it comes and goes over the board's cube unseen), THEN - a separate beat (`_Spill`) - a short
+  lobe opens toward each REAL target and spills a LIQUID TONGUE over the border - wide at its root, a drop at
   its tip, never a beam - and the target does not begin to turn until that tongue lands (~0.52 s),
   after which the source sinks back. **One target is one
   transformation**: the held cell (`BoardView.HoldCells`, as for Yangın) shows the OLD face on the

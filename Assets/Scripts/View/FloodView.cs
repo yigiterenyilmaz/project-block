@@ -1,8 +1,8 @@
 // PURPOSE: "Taşkın" - the water on the board OVERFLOWS into the cubes beside it and drowns them into
 // water. Not a tint, and IN THIS ORDER, which is the whole read: first the source water itself SWELLS
-// AND RISES AS A LIQUID (FloodSwell: its surface wobbles, a dome heaves out of its top, a lobe bulges
-// toward each real target, it churns, froths and throws up bubbles - a scaled block was the pass
-// before, and a block getting bigger is not water); only once it has risen does it spill over the border
+// AS A LIQUID, EVENLY ON EVERY SIDE AND BOILING (FloodSwell: a pillow of its own water, bubbles swelling
+// out of its surface all round, bubbles rising through it, froth at its rim - a scaled block, then a
+// lop-sided heave, were the passes before); only once it has swelled does it spill over the border
 // as a liquid tongue; only when the tongue LANDS does the target begin to turn - a film crossing it
 // from that side while the cube under it refracts, loses its colour and contrast and runs - and the
 // source sinks back as the water tile underneath takes the target and settles with a broken ripple.
@@ -45,7 +45,7 @@ namespace ProjectBlock.View
             public static float Pressure = 0.30f;
             /// <summary>The swell's quad, in cells: room for the dome and the lobes.</summary>
             public static float SwellSpan = 2.2f;
-            public static float RiseLift = 0.05f;           // cells (the shader lifts the body by this)
+            public static float RiseLift = 0f;              // cells: it swells in place, it does not lift
             public static float RiseShadow = 0.35f;
             public static float PressureBright = 0.10f;
             public static float SwellFrom = 0.14f;
@@ -159,6 +159,7 @@ namespace ProjectBlock.View
         private static readonly int SpanId = Shader.PropertyToID("_Span");
         private static readonly int AmountId = Shader.PropertyToID("_Amount");
         private static readonly int DirsId = Shader.PropertyToID("_Dirs");
+        private static readonly int SpillId = Shader.PropertyToID("_Spill");
         private static readonly int FilmId = Shader.PropertyToID("_Film");
         private static readonly int SubmergeId = Shader.PropertyToID("_Submerge");
         private static readonly int LiquefyId = Shader.PropertyToID("_Liquefy");
@@ -584,17 +585,22 @@ namespace ProjectBlock.View
             block.SetFloat(SpanId, Style.SwellSpan);
             block.SetFloat(AmountId, s.Amount);
             block.SetVector(DirsId, dirs);
+            // The overflow lobe is its own beat: it opens as the tongue sets off and closes as the
+            // source sinks back.
+            float spillK = Mathf.Clamp01((clock - s.Start - (Style.TongueFrom - 0.04f)) / 0.12f);
+            block.SetFloat(SpillId, Layers.ShowSwell ? spillK * (1f - sink) : 0f);
             block.SetFloat(ClockId, clock);
             block.SetFloat(SeedId, (Hash(s.Cell) % 628) / 100f);
             s.Raised.SetPropertyBlock(block);
-            // Froth thrown off the top as it heaves.
+            // Froth spat off every side as it boils.
             if (s.Amount > 0.8f && Layers.ShowDropletsLayer && Say(null, "froth" + sources.IndexOf(s)))
             {
-                Vector2 top = at + new Vector2(0f, cube * 0.75f);
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < 4; i++)
                 {
-                    var d = new Vector2(-0.6f + 0.6f * i, 1f).normalized;
-                    AddBit(top, top + d * cube * 0.18f, 0.20f, cube * 0.035f);
+                    float ang = (i + 0.5f) * Mathf.PI * 0.5f;
+                    var d = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang));
+                    Vector2 from = at + d * cube * 0.62f;
+                    AddBit(from, from + d * cube * 0.16f, 0.20f, cube * 0.035f);
                 }
             }
             // A contact shadow under it, spreading as it lifts: that is what reads as RISING.
