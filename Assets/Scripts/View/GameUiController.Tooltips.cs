@@ -1,4 +1,4 @@
-// PURPOSE: GameUiController hover tooltips - detecting what the mouse is over and
+﻿// PURPOSE: GameUiController hover tooltips - detecting what the mouse is over and
 // filling/positioning the tooltip panel for cards, jokers and powers.
 //
 // THE PANEL IS UI, ON ITS OWN OVERLAY CANVAS ABOVE THE HUD'S (see BuildTooltipCanvas). It used
@@ -397,12 +397,42 @@ namespace ProjectBlock.View
             {
                 body += "\n" + Loc.Pick("Off in overtime", "Uzatmada kapalı");
             }
+            body += ProcStatsLine(joker);
             body += "\n" + Loc.Pick("Sell ", "Satış ")
                 + session.Jokers.SellValueOf(joker) * session.Config.Scoring.ScoreScale;
             // The key carries a text hash so a live-changing description/status (Halüsinasyon's
             // current form, a charge flipping) rebuilds the panel instead of showing stale text.
             RenderTooltip("heldjoker:" + joker.InstanceId + "#" + (title + body).GetHashCode(),
                 title, body, nearWorld, rarity);
+        }
+
+        /// <summary>
+        /// WHAT THIS JOKER HAS ACTUALLY DONE THIS RUN - how often it has fired and what it has
+        /// paid. Generic, so every joker that calls NoteProc in Core gets these two numbers and
+        /// nothing here has to know which jokers exist.
+        ///
+        /// Nothing is printed for a joker that has never fired, and no points for one that has
+        /// never been credited with any: a run-long "0 times" on a joker bought this minute is
+        /// noise, and "0 points" on a rule-bender is a lie about what it is for.
+        ///
+        /// The points are SCALED on the way out, like every other number the UI prints -
+        /// ProcPoints is kept in the logical economy the joker's own fields are written in.
+        /// </summary>
+        private string ProcStatsLine(Joker joker)
+        {
+            if (joker.ProcCount <= 0)
+            {
+                return string.Empty;
+            }
+            string line = "\n" + Loc.Pick("Fired ", "Çalıştı ") + joker.ProcCount
+                + Loc.Pick(joker.ProcCount == 1 ? " time" : " times", " kez");
+            if (joker.ProcPoints != 0)
+            {
+                long scaled = joker.ProcPoints * session.Config.Scoring.ScoreScale;
+                line += Loc.Pick("  -  earned ", "  -  kazandırdı ")
+                    + (scaled > 0 ? "+" : string.Empty) + scaled;
+            }
+            return line;
         }
 
         /// <summary>Tooltip for a held power in the bar: name, live description, and status.</summary>

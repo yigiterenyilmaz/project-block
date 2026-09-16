@@ -257,6 +257,9 @@ namespace ProjectBlock.Core
             }
             paidThisRound += bonus;
             turn.AddFlatScore(bonus, DefId);
+            // ONE proc per detonation, however many cubes went up in it: what the player is
+            // being told is "the powder paid out", and that happened once.
+            NoteProc(bonus, turn);
         }
 
         /// <summary>Rebuilt from the board every turn rather than tracked by hand: a block that is

@@ -165,6 +165,11 @@ namespace ProjectBlock.View
             PlayQuarry(report);
             // "Tutuştur": every other fire burns out, climbing from the source's explosion peak.
             PlayIgnition();
+            // EVERY JOKER THAT FIRED THIS TURN lights up, from the one channel Core reports them
+            // on. Here rather than at the repaint because a proc is an EVENT and belongs with the
+            // turn's other events - a flash on the repaint frame lands before the line it was
+            // paid for has even broken.
+            PlayJokerProcs(report);
             if (report.CleanSweep)
             {
                 // the sweep bling rises in pitch with every sweep this round
@@ -227,6 +232,25 @@ namespace ProjectBlock.View
                 + report.CircuitExplodedCells.Count;
         }
 
+        /// <summary>
+        /// Lights every joker the turn says fired. ONE seam for all of them: a joker earns its
+        /// flash by calling NoteProc in Core, and nothing here knows which jokers exist.
+        ///
+        /// The ids are matched against the bar as they come, so a joker sold mid-turn simply
+        /// finds no panel and lights nothing - there is no bookkeeping to go stale.
+        /// </summary>
+        private void PlayJokerProcs(TurnReport report)
+        {
+            if (report == null || jokerBar == null)
+            {
+                return;
+            }
+            for (int i = 0; i < report.ProcedJokers.Count; i++)
+            {
+                jokerBar.ProcJoker(report.ProcedJokers[i]);
+            }
+        }
+
         /// <summary>Particles, shake, combo popups and the sweep celebration for one turn.</summary>
         private void HandleBlastFeedback(RoundEngine round, TurnReport report)
         {
@@ -276,7 +300,7 @@ namespace ProjectBlock.View
             // what actually pays out - not the destruction-only comboStreak that drives shake.
             if (report.ComboCount >= 2)
             {
-                SpawnComboPopup(report.ComboCount);
+                SpawnComboPopup(report.ComboCount, report.ComboBridged);
             }
             if (report.CleanSweep)
             {
@@ -421,10 +445,38 @@ namespace ProjectBlock.View
 
         private void SpawnComboPopup(int comboCount)
         {
+            SpawnComboPopup(comboCount, false);
+        }
+
+        /// <summary>
+        /// The combo popup, and whether "Mikrodalga" is the only reason there is one.
+        ///
+        /// A BRIDGED combo says so, because otherwise the joker is invisible at the exact moment
+        /// it does its work: the player cleared no line last turn, so by every rule they know
+        /// the streak should have died - and it did not. A second line under the count, in the
+        /// joker's own warmer colour, is what turns "that is odd" into "that is my joker".
+        ///
+        /// It is also the one popup that reports a DISCOUNT, so it must not read as a
+        /// celebration of the full bonus: a reheated combo pays part of what an unbroken one
+        /// would (RoundRules.ComboBridgedScorePercent).
+        /// </summary>
+        private void SpawnComboPopup(int comboCount, bool bridged)
+        {
             FloatingTextFx.Spawn(transform, new Vector2(0f, 2.6f),
                 Loc.Pick("COMBO x", "KOMBO x") + comboCount + "!",
-                new Color(1f, 0.6f, 0.2f), 64, 0.08f);
+                bridged ? BridgedComboColor : new Color(1f, 0.6f, 0.2f), 64, 0.08f);
+            if (bridged)
+            {
+                FloatingTextFx.Spawn(transform, new Vector2(0f, 2.1f),
+                    Loc.Pick("MİKRODALGA  -  kept warm", "MİKRODALGA  -  sıcak tutuldu"),
+                    BridgedComboColor, 40, 0.10f);
+            }
         }
+
+        /// <summary>A bridged combo's own colour: the ordinary combo orange pulled toward the
+        /// microwave's warmer amber, so the two read as the same event at different temperatures
+        /// rather than as two unrelated popups.</summary>
+        private static readonly Color BridgedComboColor = new Color(1f, 0.78f, 0.32f);
 
         private void SpawnSweepPopup()
         {

@@ -171,6 +171,67 @@ namespace ProjectBlock.Core
             return marketValue;
         }
 
+        // ---------------------------------------------------------------- proc statistics
+
+        /// <summary>
+        /// HOW OFTEN THIS JOKER HAS ACTUALLY FIRED, and what it has paid while doing it - kept
+        /// for the WHOLE RUN, because "has this earned its slot" is a question about the run and
+        /// not about the round you happen to be in.
+        ///
+        /// It is opt-in rather than derived from the score log, and deliberately so: half the
+        /// interesting jokers pay nothing at the moment they fire ("Mikrodalga" bends a rule and
+        /// the score it saves lands in a BASE field), so a counter read off the contributions
+        /// would miss exactly the ones worth counting. A joker says when it went off.
+        ///
+        /// What the bar and the tooltip do with these is generic, so any joker that calls
+        /// NoteProc gets the flash and the two statistics lines for free.
+        ///
+        /// EXTENSION POINT: call NoteProc from wherever a joker's effect actually lands. Call it
+        /// ONCE per firing - not once per cube, not once per hook.
+        /// </summary>
+        private int procCount;
+
+        private long procPoints;
+
+        /// <summary>Times this joker has fired this run.</summary>
+        public int ProcCount
+        {
+            get { return procCount; }
+        }
+
+        /// <summary>Points this joker has been credited with over the run, in the LOGICAL
+        /// economy - the same units a joker's own bonus fields are written in, so the UI scales
+        /// it exactly as it scales every other number.</summary>
+        public long ProcPoints
+        {
+            get { return procPoints; }
+        }
+
+        /// <summary>
+        /// Records one firing, worth <paramref name="points"/> (0 for a joker whose effect is not
+        /// score). Pass the turn so the flash can be reported to the View; a null turn still
+        /// counts the proc, which is what a market-phase or round-end effect does.
+        ///
+        /// Points are NOT clamped at zero here: a joker that costs the player points has fired
+        /// just as much as one that paid, and a statistic that hides the losses is a lie about
+        /// the joker. ProcCount, on the other hand, only ever goes up.
+        /// </summary>
+        protected void NoteProc(int points, TurnContext turn)
+        {
+            procCount++;
+            procPoints += points;
+            if (turn != null && turn.Report != null)
+            {
+                turn.Report.ProcedJokers.Add(InstanceId);
+            }
+        }
+
+        /// <summary>A firing with no turn to report it on (market, round end).</summary>
+        protected void NoteProc(int points)
+        {
+            NoteProc(points, null);
+        }
+
         /// <summary>Value the joker earned by itself (the three kumbara jokers).</summary>
         public int AccruedValue { get; private set; }
 

@@ -91,6 +91,11 @@ namespace ProjectBlock.View
 
         private float topOffset;
 
+        /// <summary>Set while a panel this bar's own click opened is on screen, so the card that
+        /// opened it stops asking to be clicked. The controller owns it, because only the
+        /// controller knows what is modal.</summary>
+        public bool AttentionSuppressed { get; set; }
+
         /// <summary>Re-anchors the strip and every slot in it after the layout changed.</summary>
         public void RelayoutForScreen()
         {
@@ -195,6 +200,44 @@ namespace ProjectBlock.View
             return (Vector2)((corners[0] + corners[2]) * 0.5f);
         }
 
+        /// <summary>
+        /// THE PROC LIGHT - this joker just fired. One seam for every joker in the game: the
+        /// controller walks TurnReport.ProcedJokers and calls this, so a joker gets the flash by
+        /// noting a proc in Core rather than by anything here learning its name.
+        ///
+        /// It is the ACTIVATION pulse plus the halo, because a proc and a use should look like
+        /// the same KIND of event - what differs is that nobody clicked this one.
+        /// </summary>
+        public void ProcJoker(int instanceId)
+        {
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i].Root.activeSelf && panels[i].InstanceId == instanceId)
+                {
+                    if (panels[i].Glow != null)
+                    {
+                        panels[i].Glow.Proc(CardGlowFx.ProcColour);
+                    }
+                    StartCoroutine(PulseRoutine(panels[i].Root.transform));
+                    return;
+                }
+            }
+        }
+
+        /// <summary>How far through a press-and-hold the joker at <paramref name="index"/> is,
+        /// so the card says a sale is coming before it happens. -1 takes the light off every
+        /// card, which is what a release or a cancel does.</summary>
+        public void SetHoldProgress(int index, float progress)
+        {
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i].Glow != null)
+                {
+                    panels[i].Glow.SetHold(i == index ? progress : 0f, CardGlowFx.HoldColour);
+                }
+            }
+        }
+
         /// <summary>Quick scale pulse on the panel showing that joker (activation feedback).</summary>
         public void PulseJoker(int instanceId)
         {
@@ -277,6 +320,17 @@ namespace ProjectBlock.View
             panel.Title.color = panel.Ink(
                 rarity == Rarity.Common ? NameColor : RarityPalette.Accent(rarity));
             panel.Hotkey.color = panel.Title.color;
+
+            // THE BREATH: a market joker with something still to be done with it. Asked
+            // generically (Joker.HasPendingMarketAction), so this bar never tests for a DefId -
+            // see the file header. Suppressed while a picker of its own is open, because a card
+            // cannot be inviting you to do the thing you are already doing.
+            if (panel.Glow != null)
+            {
+                bool waiting = !AttentionSuppressed && session.Phase == GamePhase.Market
+                    && !silenced && joker.HasPendingMarketAction;
+                panel.Glow.SetAttention(waiting, CardGlowFx.AttentionColour);
+            }
 
             panel.Hotkey.text = index < 9 ? (index + 1).ToString() : string.Empty;
             panel.Title.text = joker.DisplayName;

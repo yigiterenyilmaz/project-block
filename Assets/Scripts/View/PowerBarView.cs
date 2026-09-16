@@ -193,6 +193,37 @@ namespace ProjectBlock.View
             return (Vector2)((corners[0] + corners[2]) * 0.5f);
         }
 
+        /// <summary>The proc light for a power - the same seam and the same look the joker bar
+        /// gives a joker, so the two bars cannot drift apart about what "it fired" looks like.</summary>
+        public void ProcPower(int instanceId)
+        {
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i].Root.activeSelf && panels[i].InstanceId == instanceId)
+                {
+                    if (panels[i].Glow != null)
+                    {
+                        panels[i].Glow.Proc(CardGlowFx.ProcColour);
+                    }
+                    StartCoroutine(PulseRoutine(panels[i].Root.transform));
+                    return;
+                }
+            }
+        }
+
+        /// <summary>How far through a press-and-hold the power at <paramref name="index"/> is.
+        /// -1 takes the light off every card.</summary>
+        public void SetHoldProgress(int index, float progress)
+        {
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i].Glow != null)
+                {
+                    panels[i].Glow.SetHold(i == index ? progress : 0f, CardGlowFx.HoldColour);
+                }
+            }
+        }
+
         /// <summary>Quick scale pulse on the panel showing that power (use feedback).</summary>
         public void PulsePower(int instanceId)
         {

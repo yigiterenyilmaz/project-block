@@ -1,4 +1,4 @@
-// PURPOSE: The full record of ONE resolved placement - what was placed, what
+﻿// PURPOSE: The full record of ONE resolved placement - what was placed, what
 // exploded/was destroyed, the score breakdown, and the round status afterwards.
 // A post-fact notification for the View; jokers get their own mid-turn hooks.
 
@@ -213,6 +213,19 @@ namespace ProjectBlock.Core
     /// <summary>Immutable-after-resolution record of one turn.</summary>
     public sealed class TurnReport
     {
+        /// <summary>
+        /// THE JOKERS THAT FIRED THIS TURN, by instance id, in the order they went off.
+        ///
+        /// Reporting only, and the ONE channel the bar's proc light reads: a joker announces
+        /// itself through Joker.NoteProc and the View lights whatever is named here, so a new
+        /// joker gets the flash by noting a proc rather than by anything in View learning its
+        /// name. Never saved and rebuilt every turn - it is what just happened, not state.
+        ///
+        /// A joker may appear TWICE if it genuinely fired twice in one turn; the View treats a
+        /// repeat as a second event, which is what it is.
+        /// </summary>
+        public List<int> ProcedJokers { get; } = new List<int>();
+
         public int TurnNumber { get; internal set; }
         public BlockCard Card { get; internal set; }
         public bool PlayedFromBonusHand { get; internal set; }
@@ -448,6 +461,23 @@ namespace ProjectBlock.Core
         /// this one) have cleared >=1 line. 0 on a turn that cleared no line. Drives the UI
         /// combo popup and the BaseCombo score.</summary>
         public int ComboCount { get; internal set; }
+
+        /// <summary>
+        /// True when THIS turn's combo only counted because a quiet turn was bridged
+        /// ("Mikrodalga"). The streak did not survive on its own - it was asleep and this clear
+        /// woke it up.
+        ///
+        /// It is the ENGINE that bends the reset (see RoundEngine.Turn), so the engine is what
+        /// reports it: the joker only sets the allowance on RoundRules and would otherwise never
+        /// learn that its rule had done anything. The combo popup says so, and the joker reads it
+        /// to count its own proc.
+        /// </summary>
+        public bool ComboBridged { get; internal set; }
+
+        /// <summary>What the bridged combo actually paid, LOGICAL. Without the bridge the streak
+        /// would have reset and this turn would have been the first of a new one, which pays
+        /// nothing at all - so the whole of this is what the bridge was worth.</summary>
+        public int ComboBridgedBonus { get; internal set; }
 
         /// <summary>Every cube removed this turn, from any source (lines, fire chains,
         /// dynamite, joker effects), with the value it held. Grows as the turn resolves.</summary>

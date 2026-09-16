@@ -179,7 +179,36 @@ namespace ProjectBlock.Core
 
         public override string StatusText
         {
-            get { return Loc.Pick("combo kept warm", "kombo sıcak tutuluyor"); }
+            get
+            {
+                // The count is the joker's whole story: this one bends a rule and pays nothing
+                // directly, so "how many combos have I actually saved" is the only way a player
+                // can tell it is earning its slot.
+                return ProcCount > 0
+                    ? Loc.Pick(ProcCount + " saved", ProcCount + " kurtarma")
+                    : Loc.Pick("combo kept warm", "kombo sıcak tutuluyor");
+            }
+        }
+
+        /// <summary>
+        /// THE BRIDGE IS THE ENGINE'S, SO THE PROC IS READ BACK RATHER THAN DECIDED HERE.
+        ///
+        /// This joker only ever sets two numbers on RoundRules; the turn resolver is what
+        /// declines to reset the streak and what discounts the bonus. So it cannot know it has
+        /// done anything until the report says so - TurnReport.ComboBridged is that word, and
+        /// ComboBridgedBonus is what the save was worth (the whole bonus: without the bridge the
+        /// streak would have reset and the turn would have paid nothing).
+        ///
+        /// Counted here rather than in the engine because the engine must not know which joker
+        /// set the allowance - a boss or a future power could set it too, and the rule would
+        /// still be the rule.
+        /// </summary>
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            if (turn.Report != null && turn.Report.ComboBridged)
+            {
+                NoteProc(turn.Report.ComboBridgedBonus, turn);
+            }
         }
 
         public override void OnAcquired(SessionContext ctx)

@@ -257,6 +257,11 @@ namespace ProjectBlock.Core
                 if (comboBlankTurns > 0)
                 {
                     comboBonus = comboBonus * Rules.ComboBridgedScorePercent / 100;
+                    // Reported so the popup can say a gap was crossed and "Mikrodalga" can count
+                    // the save as its own. Without the bridge the streak would have reset and
+                    // this turn would have paid nothing, so the whole bonus is what it was worth.
+                    report.ComboBridged = true;
+                    report.ComboBridgedBonus = comboBonus;
                 }
                 comboBlankTurns = 0;
                 breakdown.BaseCombo = comboBonus;
