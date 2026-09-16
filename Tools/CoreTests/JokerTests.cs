@@ -1458,21 +1458,61 @@ public static class JokerTests
         // cube parked in the far corner does not block the sweep, so the sweep fires and
         // the joker gets to crack it - driven through a REAL turn, not a synthetic one.
         var session = NewSession(73, 4, 1000000, 40, 4);
-        session.Jokers.Add(new ElmasKazmaJoker());
+        var joker = (ElmasKazmaJoker)session.Jokers.Add(new ElmasKazmaJoker());
         RoundEngine round = session.CurrentRound;
 
-        PaintBoard(round, session, CubeKind.Obsidian, new GridPos(3, 3));
-        Check(round.Board.CountCubesOfKind(CubeKind.Obsidian) == 1, "one obsidian cube parked");
+        PaintBoard(round, session, CubeKind.Obsidian, new GridPos(3, 3), new GridPos(0, 2));
+        Check(round.Board.CountCubesOfKind(CubeKind.Obsidian) == 2, "two obsidian cubes parked");
+        Check(joker.LastQuarry == null, "nothing is reported before a sweep");
 
         bool sweptClean = false;
+        TurnReport swept = null;
         round.TurnResolved += r =>
         {
             if (r.CleanSweep)
             {
                 sweptClean = true;
+                swept = r;
             }
         };
         PlayTurns(session, 1);
+        QuarryVisuals quarry = joker.LastQuarry;
+        Check(quarry != null && quarry.Count == 2
+                && quarry.Cells.Contains(new GridPos(3, 3)) && quarry.Cells.Contains(new GridPos(0, 2)),
+            "the report names exactly the obsidian the pickaxe took",
+            quarry == null ? "null" : "" + quarry.Count);
+        if (quarry != null && swept != null)
+        {
+            bool allObsidian = true;
+            foreach (Cube c in quarry.Cubes)
+            {
+                allObsidian &= c.Kind == CubeKind.Obsidian;
+            }
+            Check(allObsidian && quarry.Cubes.Count == quarry.Cells.Count,
+                "with the cube that stood in each, taken before it went");
+            int paid = 0;
+            foreach (ScoreContribution c in swept.Score.Contributions)
+            {
+                if (c.Source == joker.DefId)
+                {
+                    paid += c.Flat;
+                }
+            }
+            Check(quarry.Points == paid * swept.Score.ScoreScale
+                    && quarry.Points == 2 * joker.PointsPerObsidian * swept.Score.ScoreScale
+                    && quarry.PointsEach * 2 == quarry.Points,
+                "and the points are the joker's own share of the turn, at the score's scale",
+                quarry.Points + " vs " + paid * swept.Score.ScoreScale);
+            bool inLists = false;
+            foreach (GridPos p in quarry.Cells)
+            {
+                for (int i = 0; i < swept.ExtraExplodedCells.Count; i++)
+                {
+                    inLists |= swept.ExtraExplodedCells[i].Equals(p);
+                }
+            }
+            Check(!inLists, "the break is not an explosion (no list would have drawn it)");
+        }
         Check(sweptClean, "clearing the row swept the board despite the obsidian");
         Check(round.Board.CountCubesOfKind(CubeKind.Obsidian) == 0,
             "the sweep cracked the obsidian",

@@ -129,10 +129,16 @@ namespace ProjectBlock.Core
 
     /// <summary>"elmas kazma" - a clean sweep cracks the obsidian too, and pays for it.
     /// Obsidian is indestructible by the normal rules, so this uses the engine's forced
-    /// destruction. The cracked cubes do NOT trigger a second sweep (one per turn).</summary>
+    /// destruction. The cracked cubes do NOT trigger a second sweep (one per turn).
+    /// What it broke and what it paid go to the View as LastQuarry (QuarryVisuals).</summary>
     public sealed class ElmasKazmaJoker : Joker
     {
         public int PointsPerObsidian = 25;
+
+        /// <summary>This sweep's break, for the View: a new object per sweep, never saved.
+        /// </summary>
+        [field: NotSaved]
+        public QuarryVisuals LastQuarry { get; private set; }
 
         public ElmasKazmaJoker()
             : base("elmas_kazma", "Elmas Kazma")
@@ -151,10 +157,39 @@ namespace ProjectBlock.Core
             }
             // countsForSweep: the sweep already fired this turn, so this cannot re-trigger it,
             // but the cubes must still show up in the destruction log and counters.
+            // The faces are taken BEFORE the destroy - by the time anything is drawn the cells
+            // are empty, and what stood there is the whole subject of the animation.
+            var before = new Dictionary<GridPos, Cube>();
+            for (int i = 0; i < obsidian.Count; i++)
+            {
+                Cube? cube = turn.Round.Board.GetCube(obsidian[i]);
+                if (cube.HasValue)
+                {
+                    before[obsidian[i]] = cube.Value;
+                }
+            }
             IReadOnlyList<GridPos> cracked = turn.Round.DestroyCubes(obsidian, true, true);
             if (cracked.Count > 0)
             {
+                ScoreBreakdown score = turn.Score;
+                int paidBefore = score.FlatBonus + score.LateFlat;
                 turn.AddFlatScore(cracked.Count * PointsPerObsidian, DefId);
+                var report = new QuarryVisuals
+                {
+                    Points = (score.FlatBonus + score.LateFlat - paidBefore) * score.ScoreScale
+                };
+                uint seed = 2166136261u;
+                for (int i = 0; i < cracked.Count; i++)
+                {
+                    Cube cube;
+                    report.Cells.Add(cracked[i]);
+                    report.Cubes.Add(before.TryGetValue(cracked[i], out cube)
+                        ? cube : new Cube(CubeKind.Obsidian, 0));
+                    seed = (seed ^ unchecked((uint)(cracked[i].X * 73856093))) * 16777619u;
+                    seed = (seed ^ unchecked((uint)(cracked[i].Y * 19349663))) * 16777619u;
+                }
+                report.Seed = seed;
+                LastQuarry = report;
             }
         }
     }
