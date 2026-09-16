@@ -273,7 +273,8 @@ namespace ProjectBlock.Core
 
         private bool usedThisRound;
 
-        /// <summary>Cells the quake brought down, for the UI's shake-and-blast. Reused list.</summary>
+        /// <summary>Cells the quake was asked to bring down. Working buffer - the View reads
+        /// LastQuake, which holds what actually came down.</summary>
         private readonly List<GridPos> lastCollapsed = new List<GridPos>();
 
         public IReadOnlyList<GridPos> LastCollapsedCells
@@ -281,9 +282,18 @@ namespace ProjectBlock.Core
             get { return lastCollapsed; }
         }
 
-        /// <summary>Quakes this run. The UI watches it change to fire the shake exactly once
-        /// per collapse, without Core having to know a view exists.</summary>
+        /// <summary>Quakes this run. Kept because it is saved state - removing it would change
+        /// the save format - but NOT for the View any more: a counter the View compares against
+        /// its own memory skipped a new run's first quake and replayed an old one after a load.
+        /// </summary>
         public int CollapseCount { get; private set; }
+
+        /// <summary>
+        /// What the last quake brought down, for the animation. A new object per quake, matched
+        /// by identity in the View, and never saved - see QuakeVisuals.
+        /// </summary>
+        [field: NotSaved]
+        public QuakeVisuals LastQuake { get; private set; }
 
         public DepremJoker()
             : base("deprem", "Deprem")
@@ -317,31 +327,87 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            List<GridPos> candidates = DestructibleCells(ctx.Round.Board);
-            if (candidates.Count == 0)
+            GameBoard board = ctx.Round.Board;
+            List<GridPos> chosen = ChooseCollapse(board, ctx.Rng, CollapseFraction);
+            if (chosen.Count == 0)
             {
                 return false; // nothing an earthquake could bring down
             }
-
-            int count = (int)System.Math.Ceiling(candidates.Count * CollapseFraction);
-            if (count < 1)
-            {
-                count = 1;
-            }
             lastCollapsed.Clear();
-            for (int i = 0; i < count && candidates.Count > 0; i++)
+            lastCollapsed.AddRange(chosen);
+
+            // What stood there, taken BEFORE it goes: once the engine has emptied the cells the
+            // board cannot say what fell, and "what fell" is the animation.
+            var standing = new Dictionary<GridPos, Cube>();
+            foreach (GridPos cell in chosen)
             {
-                int index = ctx.Rng.NextInt(0, candidates.Count);
-                lastCollapsed.Add(candidates[index]);
-                candidates.RemoveAt(index);
+                Cube? cube = board.GetCube(cell);
+                if (cube.HasValue)
+                {
+                    standing[cell] = cube.Value;
+                }
             }
 
             usedThisRound = true;
             CollapseCount++;
             // countsForSweep: false - a quake is explicitly not a temizlik, so it can
             // neither score nor hand out a sweep.
-            ctx.Round.DestroyCubes(lastCollapsed, false);
+            IReadOnlyList<GridPos> gone = ctx.Round.DestroyCubes(lastCollapsed, false);
+
+            // The report is what was ACTUALLY emptied, not what was asked for: a destroy can be
+            // refused, and a cube drawn falling that is still standing is a lie on the board.
+            var report = new QuakeVisuals();
+            uint seed = 2166136261u;
+            foreach (GridPos cell in gone)
+            {
+                Cube was;
+                if (!standing.TryGetValue(cell, out was))
+                {
+                    continue;
+                }
+                report.Cells.Add(cell);
+                report.Cubes.Add(was);
+                seed = (seed ^ (uint)(cell.X * 73856093 ^ cell.Y * 19349663)) * 16777619u;
+            }
+            report.Seed = seed ^ (uint)CollapseCount;
+            LastQuake = report;
             return true;
+        }
+
+        /// <summary>
+        /// WHICH CUBES THE QUAKE TAKES, on any board - and the one place that rule lives.
+        ///
+        /// A quarter of the cubes that can be brought down (rounded up, at least one), drawn from
+        /// <paramref name="rng"/> in board order. Public and static so the ANIMATION LAB can run it
+        /// on a board of its own and get exactly the cells a round would, the same bargain
+        /// SpreadJoker.SpreadOn and BuzlukJoker.FreezeOn make. The draw order is unchanged from
+        /// when this lived inline, so the round's random stream is spent exactly as before.
+        /// </summary>
+        public static List<GridPos> ChooseCollapse(GameBoard board, IRandomSource rng,
+            double fraction)
+        {
+            var chosen = new List<GridPos>();
+            if (board == null || rng == null)
+            {
+                return chosen;
+            }
+            List<GridPos> candidates = DestructibleCells(board);
+            if (candidates.Count == 0)
+            {
+                return chosen;
+            }
+            int count = (int)System.Math.Ceiling(candidates.Count * fraction);
+            if (count < 1)
+            {
+                count = 1;
+            }
+            for (int i = 0; i < count && candidates.Count > 0; i++)
+            {
+                int index = rng.NextInt(0, candidates.Count);
+                chosen.Add(candidates[index]);
+                candidates.RemoveAt(index);
+            }
+            return chosen;
         }
 
         private static List<GridPos> DestructibleCells(GameBoard board)

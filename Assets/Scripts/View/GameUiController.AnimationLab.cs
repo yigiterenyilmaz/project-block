@@ -175,6 +175,7 @@ namespace ProjectBlock.View
             StopAnimMidas();
             StopAnimFire();
             StopAnimIce();
+            StopAnimQuake();
             StopRebate();
             // The lab can show the pile spent without a payout, so RESET has to be able to give
             // it back even when no animation is running.
@@ -1650,6 +1651,162 @@ namespace ProjectBlock.View
             AddAnim("Yangın switch: the settle", "yangın anahtarı: oturma",
                 delegate { AnimFireToggle(ref FireSpreadView.Layers.ShowSettle,
                     "settle", "oturma"); });
+            AddAnim("deprem: one cube collapses",
+                "deprem: bir küp çöküyor",
+                delegate { AnimQuake(AnimQuakeScene.One); });
+            AddAnim("deprem: three cubes",
+                "deprem: üç küp",
+                delegate { AnimQuake(AnimQuakeScene.Three); });
+            AddAnim("deprem: five cubes",
+                "deprem: beş küp",
+                delegate { AnimQuake(AnimQuakeScene.Five); });
+            AddAnim("deprem: ten cubes",
+                "deprem: on küp",
+                delegate { AnimQuake(AnimQuakeScene.Ten); });
+            AddAnim("deprem: STRESS - twenty cubes",
+                "deprem: STRES - yirmi küp",
+                delegate { AnimQuake(AnimQuakeScene.Twenty); });
+            AddAnim("deprem: mixed cube colours",
+                "deprem: karışık renkli küpler",
+                delegate { AnimQuake(AnimQuakeScene.MixedColours); });
+            AddAnim("deprem: targets next to each other",
+                "deprem: yan yana hedefler",
+                delegate { AnimQuake(AnimQuakeScene.Near); });
+            AddAnim("deprem: targets far apart",
+                "deprem: birbirinden uzak hedefler",
+                delegate { AnimQuake(AnimQuakeScene.Far); });
+            AddAnim("deprem: targets on the edge",
+                "deprem: kenardaki hedefler",
+                delegate { AnimQuake(AnimQuakeScene.Edge); });
+            AddAnim("deprem: targets in the corners",
+                "deprem: köşedeki hedefler",
+                delegate { AnimQuake(AnimQuakeScene.Corner); });
+            AddAnim("deprem: a FULL board, as a dead end leaves it (stone stays)",
+                "deprem: DOLU tahta, çıkmaz sokağın bıraktığı gibi (taş kalır)",
+                delegate { AnimQuake(AnimQuakeScene.FullBoard); });
+            AddAnim("deprem beat: the arena's tremor, alone",
+                "deprem vuruş: arenanın sarsıntısı, tek başına",
+                delegate { AnimQuakeOnly("tremor", "sarsıntı",
+                    delegate { QuakeCollapseView.Layers.ShowBoardTremor = true; }); });
+            AddAnim("deprem beat: target stress, alone",
+                "deprem vuruş: hedefteki stres, tek başına",
+                delegate { AnimQuakeOnly("target stress", "hedef stresi",
+                    delegate { QuakeCollapseView.Layers.ShowTargetStress = true; }); });
+            AddAnim("deprem beat: the crack opening, alone (cube hidden)",
+                "deprem vuruş: yarığın açılması, tek başına (küp gizli)",
+                delegate { AnimQuakeOnly("fissure", "yarık",
+                    delegate
+                    {
+                        QuakeCollapseView.Layers.ShowFissure = true;
+                        QuakeCollapseView.Layers.ShowCubeProxy = false;
+                    }); });
+            AddAnim("deprem beat: the cube letting go, alone",
+                "deprem vuruş: küpün kopması, tek başına",
+                delegate { AnimQuakeOnly("detach", "kopma",
+                    delegate
+                    {
+                        QuakeCollapseView.Layers.ShowTargetStress = true;
+                        QuakeCollapseView.Layers.ShowDetach = true;
+                    }); });
+            AddAnim("deprem beat: the sink behind the ground line, alone",
+                "deprem vuruş: zemin çizgisinin arkasına gömülme, tek başına",
+                delegate { AnimQuakeOnly("drop", "gömülme",
+                    delegate
+                    {
+                        QuakeCollapseView.Layers.ShowFissure = true;
+                        QuakeCollapseView.Layers.ShowDrop = true;
+                    }); });
+            AddAnim("deprem beat: dust and crumbs",
+                "deprem vuruş: toz ve kırıntılar",
+                delegate { AnimQuakeOnly("dust + crumbs", "toz + kırıntı",
+                    delegate
+                    {
+                        QuakeCollapseView.Layers.ShowDrop = true;
+                        QuakeCollapseView.Layers.ShowDust = true;
+                        QuakeCollapseView.Layers.ShowCrumbs = true;
+                    }); });
+            AddAnim("deprem beat: the fault closing, alone (cube hidden)",
+                "deprem vuruş: yarığın kapanması, tek başına (küp gizli)",
+                delegate { AnimQuakeOnly("fault close", "yarık kapanması",
+                    delegate
+                    {
+                        QuakeCollapseView.Layers.ShowFissure = true;
+                        QuakeCollapseView.Layers.ShowFaultClose = true;
+                        QuakeCollapseView.Layers.ShowCubeProxy = false;
+                    }); });
+            AddAnim("deprem: PROXY TEST - without the proxy the cubes just vanish",
+                "deprem: VEKİL TESTİ - vekil olmadan küpler anında kaybolur",
+                delegate { AnimQuakeOnly("no proxy", "vekil yok",
+                    delegate
+                    {
+                        QuakeCollapseView.Layers.AllOn();
+                        QuakeCollapseView.Layers.ShowCubeProxy = false;
+                    }); });
+            AddAnim("deprem: five cubes at 0.5x",
+                "deprem: beş küp 0.5x",
+                delegate
+                {
+                    Time.timeScale = 0.5f;
+                    AnimQuake(AnimQuakeScene.Five);
+                });
+            AddAnim("deprem: one cube at 0.25x (every beat apart)",
+                "deprem: bir küp 0.25x (her vuruş ayrı)",
+                delegate
+                {
+                    Time.timeScale = 0.25f;
+                    AnimQuake(AnimQuakeScene.One);
+                });
+            AddAnim("deprem debug: targets (red) / could fall (yellow) / stone (grey)",
+                "deprem hata ayıklama: hedef (kırmızı) / düşebilir (sarı) / taş (gri)",
+                delegate
+                {
+                    AnimQuakeToggle(ref QuakeCollapseView.Layers.ShowTargets, "targets", "hedefler");
+                    AnimQuake(AnimQuakeScene.FullBoard);
+                });
+            AddAnim("deprem debug: the wave each cube falls in",
+                "deprem hata ayıklama: her küpün düştüğü dalga",
+                delegate
+                {
+                    AnimQuakeToggle(ref QuakeCollapseView.Layers.ShowFaultPhase, "fault phase",
+                        "fay fazı");
+                    AnimQuake(AnimQuakeScene.Ten);
+                });
+            AddAnim("deprem debug: crack bounds",
+                "deprem hata ayıklama: yarık sınırları",
+                delegate
+                {
+                    AnimQuakeToggle(ref QuakeCollapseView.Layers.ShowFissureBounds, "fissure bounds",
+                        "yarık sınırları");
+                    AnimQuake(AnimQuakeScene.Five);
+                });
+            AddAnim("deprem switch: the ground line (drop mask) on/off",
+                "deprem anahtarı: zemin çizgisi (düşme maskesi) aç/kapa",
+                delegate { AnimQuakeToggle(ref QuakeCollapseView.Layers.ShowDropMask, "drop mask",
+                    "düşme maskesi"); });
+            AddAnim("deprem switch: dust on/off",
+                "deprem anahtarı: toz aç/kapa",
+                delegate { AnimQuakeToggle(ref QuakeCollapseView.Layers.ShowDust, "dust", "toz"); });
+            AddAnim("deprem switch: crumbs on/off",
+                "deprem anahtarı: kırıntılar aç/kapa",
+                delegate { AnimQuakeToggle(ref QuakeCollapseView.Layers.ShowCrumbs, "crumbs",
+                    "kırıntılar"); });
+            AddAnim("deprem switch: the arena's tremor on/off",
+                "deprem anahtarı: arena sarsıntısı aç/kapa",
+                delegate { AnimQuakeToggle(ref QuakeCollapseView.Layers.ShowBoardTremor, "tremor",
+                    "sarsıntı"); });
+            AddAnim("deprem switch: the cube proxy on/off",
+                "deprem anahtarı: küp vekili aç/kapa",
+                delegate { AnimQuakeToggle(ref QuakeCollapseView.Layers.ShowCubeProxy, "proxy",
+                    "vekil"); });
+            AddAnim("deprem switch: ALL layers back on",
+                "deprem anahtarı: TÜM katmanlar geri açık",
+                delegate
+                {
+                    QuakeCollapseView.Layers.AllOn();
+                    animLastLabel = Loc.Pick("deprem: every layer back on",
+                        "deprem: tüm katmanlar geri açık");
+                    if (AnimLabOpen) { RedrawAnimationLab(); }
+                });
             AddAnim("harcama bonusu: the whole payout",
                 "harcama bonusu: bütün ödeme",
                 delegate { AnimRebate(1, false, "empty pile pays back", "boş deste geri ödedi"); });
@@ -6017,6 +6174,194 @@ namespace ProjectBlock.View
             AnimFire(scene);
             animLastLabel = Loc.Pick(english + " - alone (RESET puts every layer back)",
                 turkish + " - tek başına (RESET tüm katmanları geri açar)");
+        }
+
+        // ------------------------------------------------------------------ deprem
+
+        // "DEPREM" IN THE LAB. Every scene lays a board out and then runs the joker's OWN choice,
+        // DepremJoker.ChooseCollapse, on it - so which cubes sink is the rule's answer, and the
+        // label reports how many it took rather than how many the scene meant. What the lab
+        // controls is only the LAYOUT: how many cubes could fall, and where they stand. A cube
+        // the scene puts down as obsidian or gold is there to be seen NOT falling.
+
+        private enum AnimQuakeScene
+        {
+            One,
+            Three,
+            Five,
+            Ten,
+            Twenty,
+            MixedColours,
+            Near,
+            Far,
+            Edge,
+            Corner,
+            FullBoard
+        }
+
+        private int animQuakeSeed = 1;
+
+        private void AnimQuake(AnimQuakeScene scene)
+        {
+            StopAnimQuake();
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (round == null || boardView == null)
+            {
+                return;
+            }
+            var board = new GameBoard(7, 7);
+            List<int> cards = AnimBossCards();
+            double fraction = new DepremJoker().CollapseFraction;
+            var cells = new List<GridPos>();
+            switch (scene)
+            {
+                case AnimQuakeScene.One:
+                    AnimQuakeRect(cells, 2, 3, 4, 3);                 // three cubes: a quarter is one
+                    break;
+                case AnimQuakeScene.Three:
+                    AnimQuakeRect(cells, 0, 2, 5, 3);                 // twelve
+                    break;
+                case AnimQuakeScene.Five:
+                    AnimQuakeRect(cells, 1, 1, 5, 4);                 // twenty
+                    break;
+                case AnimQuakeScene.Ten:
+                    AnimQuakeRect(cells, 0, 0, 6, 5);
+                    cells.RemoveRange(40, cells.Count - 40);          // forty
+                    break;
+                case AnimQuakeScene.Twenty:
+                    AnimQuakeRect(cells, 0, 0, 6, 5);
+                    cells.RemoveRange(40, cells.Count - 40);
+                    fraction = 0.5;                                   // the stress test: half of forty
+                    break;
+                case AnimQuakeScene.MixedColours:
+                    AnimQuakeRect(cells, 1, 1, 5, 4);
+                    break;
+                case AnimQuakeScene.Near:
+                    AnimQuakeRect(cells, 2, 3, 5, 4);                 // a tight block of eight
+                    break;
+                case AnimQuakeScene.Far:
+                    foreach (var p in new[] { new GridPos(0, 0), new GridPos(6, 0), new GridPos(0, 6),
+                        new GridPos(6, 6), new GridPos(3, 0), new GridPos(0, 3), new GridPos(6, 3),
+                        new GridPos(3, 6) })
+                    {
+                        cells.Add(p);
+                    }
+                    break;
+                case AnimQuakeScene.Edge:
+                    for (int i = 0; i < 7; i++)
+                    {
+                        cells.Add(new GridPos(i, 0));
+                        cells.Add(new GridPos(i, 6));
+                        if (i > 0 && i < 6)
+                        {
+                            cells.Add(new GridPos(0, i));
+                            cells.Add(new GridPos(6, i));
+                        }
+                    }
+                    break;
+                case AnimQuakeScene.Corner:
+                    cells.Add(new GridPos(0, 0));
+                    cells.Add(new GridPos(6, 0));
+                    cells.Add(new GridPos(0, 6));
+                    cells.Add(new GridPos(6, 6));
+                    fraction = 0.5;
+                    break;
+                case AnimQuakeScene.FullBoard:
+                    AnimQuakeRect(cells, 0, 0, 6, 6);                 // as a dead end leaves it
+                    break;
+            }
+            bool mixed = scene == AnimQuakeScene.MixedColours || scene == AnimQuakeScene.FullBoard;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                int card = cards.Count == 0 ? 101 : mixed ? cards[i % cards.Count] : cards[0];
+                board.SetCubeAt(cells[i], new Cube(CubeKind.Normal, card));
+            }
+            if (scene == AnimQuakeScene.FullBoard)
+            {
+                // Stone a quake cannot touch, to be seen NOT falling.
+                board.SetCubeKind(new GridPos(1, 1), CubeKind.Obsidian);
+                board.SetCubeKind(new GridPos(5, 1), CubeKind.Gold);
+                board.SetCubeKind(new GridPos(3, 3), CubeKind.Obsidian);
+                board.SetCubeKind(new GridPos(1, 5), CubeKind.Gold);
+                board.SetCubeKind(new GridPos(5, 5), CubeKind.Obsidian);
+            }
+            boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
+
+            // THE RULE'S OWN CHOICE, then the cubes come off the board exactly as the engine takes
+            // them, and a repaint records the faces the board last showed.
+            List<GridPos> chosen = DepremJoker.ChooseCollapse(board,
+                new SeededRandom(animQuakeSeed++), fraction);
+            var report = new QuakeVisuals();
+            foreach (GridPos cell in chosen)
+            {
+                Cube? cube = board.GetCube(cell);
+                if (cube.HasValue && board.DestroyCube(cell))
+                {
+                    report.Cells.Add(cell);
+                    report.Cubes.Add(cube.Value);
+                }
+            }
+            report.Seed = (uint)(animQuakeSeed * 2654435761u);
+            boardView.Refresh();
+            boardView.Quake.Play(boardView, report);
+            animLastLabel = Loc.Pick(
+                "the quake took " + report.Cells.Count + " of " + cells.Count + " cubes",
+                "deprem " + cells.Count + " küpten " + report.Cells.Count + " tanesini aldı");
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
+        }
+
+        private static void AnimQuakeRect(List<GridPos> cells, int x0, int y0, int x1, int y1)
+        {
+            for (int y = y0; y <= y1; y++)
+            {
+                for (int x = x0; x <= x1; x++)
+                {
+                    cells.Add(new GridPos(x, y));
+                }
+            }
+        }
+
+        private void StopAnimQuake()
+        {
+            if (boardView != null)
+            {
+                boardView.StopQuake();
+            }
+        }
+
+        /// <summary>One beat on its own. Switches go in BEFORE the quake plays.</summary>
+        private void AnimQuakeOnly(string english, string turkish, System.Action on)
+        {
+            QuakeCollapseView.Layers.AllOn();
+            QuakeCollapseView.Layers.ShowBoardTremor = false;
+            QuakeCollapseView.Layers.ShowTargetStress = false;
+            QuakeCollapseView.Layers.ShowFissure = false;
+            QuakeCollapseView.Layers.ShowDetach = false;
+            QuakeCollapseView.Layers.ShowDrop = false;
+            QuakeCollapseView.Layers.ShowDust = false;
+            QuakeCollapseView.Layers.ShowCrumbs = false;
+            QuakeCollapseView.Layers.ShowFaultClose = false;
+            if (on != null)
+            {
+                on();
+            }
+            AnimQuake(AnimQuakeScene.One);
+            animLastLabel = Loc.Pick(english + " - alone (RESET puts every layer back)",
+                turkish + " - tek başına (RESET tüm katmanları geri açar)");
+        }
+
+        private void AnimQuakeToggle(ref bool flag, string english, string turkish)
+        {
+            flag = !flag;
+            animLastLabel = Loc.Pick("deprem " + english + ": ", "deprem " + turkish + ": ")
+                + OnOff(flag);
+            if (AnimLabOpen)
+            {
+                RedrawAnimationLab();
+            }
         }
 
         // ------------------------------------------------------------------ harcama bonusu

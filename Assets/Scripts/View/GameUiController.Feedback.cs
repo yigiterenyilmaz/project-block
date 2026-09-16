@@ -2112,6 +2112,7 @@ namespace ProjectBlock.View
             SyncFireSpread(round);
             SyncBuzluk(round);
             SyncRebate(round);
+            SyncQuake();
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

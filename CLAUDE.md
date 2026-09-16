@@ -560,6 +560,49 @@ dropped that way once each.
   `Tilsim_ReclaimedGroundIsSparseNotRectangular` pins it shape by shape (a lone cell, gaps down a
   column, two columns, an L, four corners with holes between them, and a far cell that grows the
   bounds and nothing else), asserting the mask cell by cell rather than counting.
+- **"Deprem" is the ARENA losing its footing, not an explosion** (`QuakeCollapseView`,
+  `QuakeShapes`, `Resources/Shaders/QuakeDrop`). The rescue brings down a quarter of the
+  destructible cubes when no move is left, pays nothing and is never a sweep - and it used to be
+  drawn as a burst of dust on every cell, the explosion sound and a CAMERA shake, which is a line
+  clear's language with no line in it. It is now nine beats on one clock, about three quarters of a
+  second: a MICRO TREMOR of the arena itself (a pixel or two and a fifth of a degree, four controlled
+  impulses; the camera, the hand and the HUD do not move), a REVEAL that shows the targets only once
+  the quake has been felt everywhere, STRESS (a pixel of settle, the shadow spreading, a pressure
+  mark or two in the cube's OWN colour darkened - never a white crack, nothing is breaking), the FAULT
+  opening under it, DETACH, the SINK, dust and crumbs thrown sideways and falling, the fault CLOSING
+  with no glow, and one small SETTLE of the arena. The waves a cube falls in come from a hash of its
+  cell and the quake's seed - never a left-to-right scan and never one frame.
+  **SINKING IS NOT SHRINKING.** A cube that shrinks and fades reads as deleted. When something sinks
+  the GROUND LINE climbs its face: the clip line rises from the cube's base to past the crack's near
+  edge, a ragged ledge rides on it, and the cube only settles a little, tips about its own BASE and
+  darkens. The clip is per renderer (`QuakeDrop`, a world-space line in a property block) because a
+  SpriteMask reveals every masked sprite in its range - two cubes collapsing side by side would show
+  through each other's cracks, which is the trap `ColdSinkView` records.
+  **THE CRACK TOOK THREE BAKES.** A jagged shape with ONE flat edge is a skyline in 2D: the first was
+  a symmetric wedge with a single tip (a Christmas tree), the second an opening rising off a straight
+  lip (a mountain range). A crack has no flat edge - two broken plates pulling apart, ragged on BOTH
+  sides, widest off its middle, hairlines running on from it. And it is invisible without the FAR
+  plate's edge catching the light: a charcoal crack on a dark slate cell was simply not there on
+  the first render. See `quake_cracks2.png` / `quake_collapse2.png` in the scratchpad.
+  **THE ARENA HAS ONE TRANSFORM WRITER.** `OvertimePressureView` already writes the board's scale and
+  position every frame through `SetPressure`; a tremor writing the same transform would fight it and
+  whichever ran last would win. So `SetPressure` and `SetTremor` only record their own term and
+  `ApplyArenaTransform` composes them - scale AND turn about the board's own centre, knock and tremor
+  on top; with no turn it is exactly the squeeze it always was.
+  **THE VIEW DECIDES NOTHING.** `QuakeVisuals` carries the cells the engine ACTUALLY emptied (the
+  return of `RoundEngine.DestroyCubes`, not the list asked for) and the cube that stood in each,
+  snapshotted before it went; the choice itself lives in one static, `DepremJoker.ChooseCollapse`,
+  with the round's random stream spent in exactly the order it always was (baseline byte-identical),
+  and the lab runs that static on boards of its own. The fallen cubes are PROXIES drawn from the face
+  the board last showed (`TryCubeLook`, which keeps a blind round blind); a water cube's swirl stops
+  for the fifth of a second it sinks. The old path watched `CollapseCount` against a dictionary of
+  counts keyed by joker instance id that was never cleared, so a new run silently skipped its first
+  quake - it is gone, and the report is matched by identity like every other. Not done, on purpose:
+  the half-pixel inertia of the cubes that stay, which would mean moving board-owned renderers one by
+  one against every repaint. The lab has eleven scenes (one/three/five/ten/twenty cubes, mixed
+  colours, near, far, edge, corner, and a full board with stone in it that stays), eight beats on
+  their own, a proxy test, 0.5x/0.25x, and three debug overlays (targets red / could fall yellow /
+  stone grey, the wave each cube falls in, crack bounds).
 - **"Harcama bonusu" is the empty pile PAYING YOU BACK** (`RebateView`, `RebateShapes`,
   `GameUiController.Rebate.cs`). The mechanic is not "you scored some points" — it is "you spent
   the resource and the spending refunded you" — so the payout may not simply appear beside the

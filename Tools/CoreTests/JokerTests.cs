@@ -84,6 +84,8 @@ public static class JokerTests
         BoardOrigin_CoordinatesSurviveGrowingLeftAndDown();
         Board_SwapLinesMovesWholeRows();
         Deprem_CollapsesAQuarterInsteadOfLosing();
+        Deprem_ReportsWhatActuallyFell();
+        Deprem_ChoosesOnlyWhatCanBeBroughtDown();
         KentselDonusum_SwapsLinesToEscapeADeadEnd();
         Rescue_DeclineEndsTheRound();
         BuldozerPower_FlattensATwoWideBandAndCountsForNothing();
@@ -2425,6 +2427,9 @@ public static class JokerTests
             round.RoundScore + " vs " + scoreBefore);
         Check(round.CleanSweepCount == sweeps, "and never counted as a clean sweep");
         Check(joker.LastCollapsedCells.Count > 0, "the collapsed cells are reported for the UI");
+        Check(joker.LastQuake != null && joker.LastQuake.Cells.Count == before - expected,
+            "and the quake's report carries exactly the cubes that came down",
+            joker.LastQuake == null ? "no report" : joker.LastQuake.Cells.Count.ToString());
 
         // Once per round: a second dead end in the same round is fatal.
         FillBoardSolid(round, session);
@@ -2432,6 +2437,90 @@ public static class JokerTests
         Check(round.Status == RoundStatus.Lost, "the second dead end ends the round",
             "status " + round.Status);
         Check(round.Loss == LossReason.NoPlayableMove, "for the right reason");
+    }
+
+    /// <summary>
+    /// THE REPORT IS WHAT FELL, not what was asked for and not what the View would guess. Every
+    /// cell in it is empty now, every cube in it is the one that stood there BEFORE the collapse
+    /// (the board can no longer say), and a second quake writes a NEW report object - which is
+    /// what the View matches on, so a new run's first quake can never be mistaken for an old one.
+    /// </summary>
+    private static void Deprem_ReportsWhatActuallyFell()
+    {
+        Section("deprem / the report is what actually fell");
+        var session = NewSession(433, 4, 1000000, 40, 1);
+        var joker = (DepremJoker)session.Jokers.Add(new DepremJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        RoundEngine round = session.CurrentRound;
+        Check(joker.LastQuake == null, "no report before any quake");
+
+        FillBoardSolid(round, session);
+        round.Board.SetCubeKind(new GridPos(0, 0), CubeKind.Fire);
+        round.Board.SetCubeKind(new GridPos(1, 0), CubeKind.Water);
+        var before = new Dictionary<GridPos, CubeKind>();
+        foreach (GridPos cell in AllPlayableCells(round.Board))
+        {
+            before[cell] = round.Board.GetCube(cell).Value.Kind;
+        }
+        round.DebugCheckForDeadEnd();
+
+        QuakeVisuals quake = joker.LastQuake;
+        Check(quake != null && quake.Any, "the quake reported itself");
+        if (quake == null)
+        {
+            return;
+        }
+        Check(quake.Cells.Count == quake.Cubes.Count, "one snapshot per fallen cell");
+        bool allEmpty = true;
+        bool kindsKept = true;
+        for (int i = 0; i < quake.Cells.Count; i++)
+        {
+            allEmpty &= !round.Board.GetCube(quake.Cells[i]).HasValue;
+            kindsKept &= quake.Cubes[i].Kind == before[quake.Cells[i]];
+        }
+        Check(allEmpty, "every reported cell really is empty now");
+        Check(kindsKept, "and each snapshot is the cube that stood there before it fell");
+
+        // A new round, a new dead end: a new report OBJECT.
+        joker.OnRoundStarted(new RoundContext(session, session.Rng, round));
+        FillBoardSolid(round, session);
+        round.DebugCheckForDeadEnd();
+        Check(joker.LastQuake != null && !ReferenceEquals(joker.LastQuake, quake),
+            "the next quake writes a new report object - the View matches on identity");
+    }
+
+    /// <summary>
+    /// The choice lives in one static the lab can run on a board of its own, and it only ever
+    /// takes cubes that can be brought down: obsidian, gold and a parasite's host are not shaken
+    /// loose, however many of them there are.
+    /// </summary>
+    private static void Deprem_ChoosesOnlyWhatCanBeBroughtDown()
+    {
+        Section("deprem / the choice: one rule, destructible cubes only");
+        var session = NewSession(439, 5, 1000000, 40, 1);
+        GameBoard board = session.CurrentRound.Board;
+        FillBoardSolid(session.CurrentRound, session);
+        var hard = new HashSet<GridPos>();
+        for (int x = 0; x < 5; x++)
+        {
+            board.SetCubeKind(new GridPos(x, 0), x % 2 == 0 ? CubeKind.Obsidian : CubeKind.Gold);
+            hard.Add(new GridPos(x, 0));
+        }
+        int destructible = 25 - 5;
+
+        List<GridPos> a = DepremJoker.ChooseCollapse(board, new SeededRandom(7), 0.25);
+        List<GridPos> b = DepremJoker.ChooseCollapse(board, new SeededRandom(7), 0.25);
+        Check(a.Count == (int)Math.Ceiling(destructible * 0.25),
+            "a quarter of the DESTRUCTIBLE cubes, rounded up", a.Count + " of " + destructible);
+        bool noneHard = true;
+        foreach (GridPos cell in a)
+        {
+            noneHard &= !hard.Contains(cell);
+        }
+        Check(noneHard, "never obsidian or gold");
+        Check(string.Join(";", a) == string.Join(";", b),
+            "the same board and the same draw give the same cells");
+        Check(board.OccupiedCount == 25, "and choosing takes nothing off the board");
     }
 
     /// <summary>Fills a board solid so the next no-move check hits a dead end.</summary>

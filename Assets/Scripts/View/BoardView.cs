@@ -231,6 +231,8 @@ namespace ProjectBlock.View
 
         private IceFreezeView ice;
 
+        private QuakeCollapseView quake;
+
         private ParasiteHostView parasite;
 
         private MapusSealView mapus;
@@ -548,6 +550,43 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>
+        /// "Deprem"'s collapse. Owned here because the tremor moves THIS transform and because
+        /// the fallen cubes are drawn as proxies in the board's own space, riding the tremor with
+        /// the cells they fell out of.
+        /// </summary>
+        public QuakeCollapseView Quake
+        {
+            get
+            {
+                if (quake == null)
+                {
+                    var go = new GameObject("QuakeCollapse");
+                    go.transform.SetParent(transform, false);
+                    quake = go.AddComponent<QuakeCollapseView>();
+                }
+                return quake;
+            }
+        }
+
+        /// <summary>Ends the collapse and puts the arena back still, without making the view if
+        /// there is none.</summary>
+        public void StopQuake()
+        {
+            if (quake != null)
+            {
+                quake.Stop();
+            }
+        }
+
+        /// <summary>The face a cube would be drawn with on this board: its tile and its tint.
+        /// For an effect that has the CUBE but no longer has a cell showing it.</summary>
+        public void CubeFace(Cube cube, out Sprite tile, out Color colour)
+        {
+            tile = ViewUtil.CubeTile(cube.Kind, CardOf(cube));
+            colour = ViewUtil.CubeTileColor(cube, tile);
+        }
+
         /// <summary>Puts every ice cube back to a plain renderer, without making the view if
         /// there is none.</summary>
         public void StopIceFreeze()
@@ -786,11 +825,46 @@ namespace ProjectBlock.View
         /// towards the origin instead of squeezing it where it stands; the offset undoes that.</summary>
         public void SetPressure(float squeeze, Vector2 knock)
         {
-            float s = 1f - Mathf.Clamp(squeeze, 0f, 0.25f);
+            pressureScale = 1f - Mathf.Clamp(squeeze, 0f, 0.25f);
+            pressureKnock = knock;
+            ApplyArenaTransform();
+        }
+
+        /// <summary>
+        /// "Deprem"'s tremor: the ARENA moves, a pixel or two and a fraction of a degree, while
+        /// the camera, the hand and the HUD stay exactly where they are - an earthquake is
+        /// something the board suffers, not something the screen does.
+        ///
+        /// It is a SECOND TERM on this transform rather than a second writer of it. The overtime
+        /// pressure already writes the scale and the position every frame, and two systems each
+        /// writing the transform end with whichever ran last winning; so both setters only record
+        /// their own part and ApplyArenaTransform composes them.
+        /// </summary>
+        public void SetTremor(Vector2 offset, float degrees)
+        {
+            tremorOffset = offset;
+            tremorDegrees = degrees;
+            ApplyArenaTransform();
+        }
+
+        private float pressureScale = 1f;
+        private Vector2 pressureKnock;
+        private Vector2 tremorOffset;
+        private float tremorDegrees;
+
+        /// <summary>Scale AND turn about the board's own centre, then knock and tremor on top.
+        /// With no turn this is exactly the squeeze SetPressure always wrote.</summary>
+        private void ApplyArenaTransform()
+        {
+            float s = pressureScale;
+            Quaternion turn = Quaternion.Euler(0f, 0f, tremorDegrees);
+            Vector3 centre = new Vector3(pressureCentre.x, pressureCentre.y, 0f);
+            Vector3 turnedCentre = turn * (centre * s);
             transform.localScale = new Vector3(s, s, 1f);
-            transform.localPosition = new Vector3(
-                pressureCentre.x * (1f - s) + knock.x,
-                pressureCentre.y * (1f - s) + knock.y, 0f);
+            transform.localRotation = turn;
+            transform.localPosition = centre - turnedCentre
+                + new Vector3(pressureKnock.x + tremorOffset.x,
+                    pressureKnock.y + tremorOffset.y, 0f);
         }
 
         /// <summary>Where the arena stands, kept for SetPressure to squeeze about.</summary>
@@ -1198,6 +1272,9 @@ namespace ProjectBlock.View
             // The ice keeps per-cube state for every frozen cube on the board, which outlives a
             // rebuild the way the rot's tissue and the press's shell do.
             Transform keepIce = ice != null ? ice.transform : null;
+            // A collapse in flight holds the arena's tremor; destroyed mid-quake the board would be
+            // left turned a fraction of a degree.
+            Transform keepQuake = quake != null ? quake.transform : null;
             // The gravity field is a property of the ROUND, not of the board's contents, so it
             // survives the rebuild and is CLEARED below - a new arena starts under ordinary
             // gravity, which is the rules' own behaviour and not something this decides.
@@ -1215,7 +1292,8 @@ namespace ProjectBlock.View
                     || child == keepGravity || child == keepDolls || child == keepRot
                     || child == keepSnake || child == keepPress
                     || child == keepParasite || child == keepMapus
-                    || child == keepTalisman || child == keepFire || child == keepIce)
+                    || child == keepTalisman || child == keepFire || child == keepIce
+                    || child == keepQuake)
                 {
                     continue;
                 }

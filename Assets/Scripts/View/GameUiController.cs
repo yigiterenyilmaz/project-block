@@ -128,9 +128,6 @@ namespace ProjectBlock.View
         private PressureVesselView pressureVessel;
         private LineSwapPickerView lineSwapPicker;
 
-        /// <summary>Quake count last seen per Deprem joker, so the shake fires once per collapse.</summary>
-        private readonly System.Collections.Generic.Dictionary<int, int> seenQuakes =
-            new System.Collections.Generic.Dictionary<int, int>();
         private int comboStreak;
         private readonly List<InfectedCell> infectionBuffer = new List<InfectedCell>();
         private Text infoText;

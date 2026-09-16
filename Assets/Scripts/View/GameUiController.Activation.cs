@@ -896,7 +896,7 @@ namespace ProjectBlock.View
         // ------------------------------------------------------- dead-end rescue flow
 
         /// <summary>Called after every action: if the round has paused on a dead end, put the
-        /// row/column arrows up; if a quake just brought the board down, shake the screen.</summary>
+        /// row/column arrows up; if a quake just brought the board down, play the collapse.</summary>
         private void SyncRescueState()
         {
             RoundEngine round = session != null ? session.CurrentRound : null;
@@ -904,7 +904,7 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            PlayPendingQuake(round);
+            SyncQuake();
 
             bool paused = round.Status == RoundStatus.AwaitingRescue;
             if (paused && !lineSwapPicker.IsOpen)
@@ -917,34 +917,30 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>"Deprem": the quake counter moving means a collapse just happened, so the
-        /// screen shakes and the fallen cubes blast - once per collapse.</summary>
-        private void PlayPendingQuake(RoundEngine round)
+        /// <summary>
+        /// "Deprem"'s collapse, from the joker's own report, matched by IDENTITY.
+        ///
+        /// It used to watch the joker's CollapseCount against a dictionary of counts it had seen,
+        /// keyed by instance id, and never cleared - so a new run (whose ids start again at 1)
+        /// silently skipped its first quake, and a loaded save could replay an old one. It also
+        /// played the wrong thing: dust bursts, the explosion sound and a CAMERA shake, which is
+        /// the language of a line clear. A quake is the arena losing its footing; see
+        /// QuakeCollapseView. Asked from here and from the repaint, and harmless twice.
+        /// </summary>
+        private void SyncQuake()
         {
+            if (session == null || session.Jokers == null || boardView == null)
+            {
+                return;
+            }
             IReadOnlyList<Joker> jokers = session.Jokers.Jokers;
             for (int i = 0; i < jokers.Count; i++)
             {
                 var deprem = jokers[i] as DepremJoker;
-                if (deprem == null)
+                if (deprem != null && deprem.LastQuake != null)
                 {
-                    continue;
+                    boardView.Quake.Play(boardView, deprem.LastQuake);
                 }
-                int seen;
-                seenQuakes.TryGetValue(deprem.InstanceId, out seen);
-                if (deprem.CollapseCount <= seen)
-                {
-                    continue;
-                }
-                seenQuakes[deprem.InstanceId] = deprem.CollapseCount;
-
-                var dust = new Color(0.72f, 0.62f, 0.5f);
-                IReadOnlyList<GridPos> fallen = deprem.LastCollapsedCells;
-                for (int c = 0; c < fallen.Count; c++)
-                {
-                    blastFx.EmitAt(boardView.CellToWorld(fallen[c]), dust, 7);
-                }
-                sfx.Explode();
-                ShakeCamera(0.3f, 0.55f); // the big one - this is an earthquake
             }
         }
 
