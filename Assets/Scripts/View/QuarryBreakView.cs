@@ -633,6 +633,8 @@ namespace ProjectBlock.View
             s.Pivot.localScale = new Vector3(along * scale, across * scale, 1f);
             Quaternion undo = Quaternion.Euler(0f, 0f, -degrees);
             s.Proxy.enabled = standing && Layers.ShowProxy;
+            // On the pivot, which IS the stone's position: nothing local may move it off.
+            s.Proxy.transform.localPosition = Vector3.zero;
             s.Proxy.transform.localRotation = undo;
             s.Proxy.transform.localScale = new Vector3(size, size, 1f);
             s.Proxy.color = Layers.ShowObsidianProxy && DebugAllowed
@@ -642,11 +644,13 @@ namespace ProjectBlock.View
             bool attuning = Layers.ShowAttunement && standing && t >= s.AttuneAt;
             float cool = attuning ? Mathf.Max(wake, t > s.AttuneAt + Style.Attune ? 0.35f : 0f) : 0f;
             s.Cool.enabled = cool > 0f && Layers.ShowProxy;
+            s.Cool.transform.localPosition = Vector3.zero;
             s.Cool.transform.localRotation = undo;
             s.Cool.transform.localScale = new Vector3(size, size, 1f);
             // A pale cold plate at a few per cent: a little lighter and a little less purple.
             s.Cool.color = new Color(0.80f, 0.90f, 1f, 0.06f * cool);
             s.Rim.enabled = cool > 0f;
+            s.Rim.transform.localPosition = Vector3.zero;
             s.Rim.transform.localRotation = undo;
             s.Rim.transform.localScale = new Vector3(size, size, 1f);
             s.Rim.color = new Color(QuarryShapes.Ice.r, QuarryShapes.Ice.g, QuarryShapes.Ice.b, 0.30f * cool);
@@ -1152,6 +1156,11 @@ namespace ProjectBlock.View
             r.sortingOrder = order;
             r.enabled = false;
             r.color = Color.white;
+            // ALL THREE are reset. A pooled renderer keeps the LOCAL position of its last use (a
+            // shard or a speck placed in world space), and one re-parented under a stone's pivot
+            // then sits that far from the stone - which is how the proxies once turned up off the
+            // board while their cracks were still on it.
+            r.transform.localPosition = Vector3.zero;
             r.transform.localRotation = Quaternion.identity;
             r.transform.localScale = Vector3.one;
             return r;

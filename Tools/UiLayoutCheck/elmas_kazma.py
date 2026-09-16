@@ -214,6 +214,10 @@ check('lab puani jokerden okuyor', 'joker.PointsPerObsidian * session.Config.Sco
       'lab kendi sayisi')
 check('lab temizlik sahnesi gercek temizligi oynatir', 'EmitSweepConfetti();' in method(lab, 'private void AnimQuarry('),
       'temizlik -> obsidyen kalir okunamiyor')
+check('havuzdan gelen parca yerel konumu SIFIRLANIR (vekil pivottan kaymaz)',
+      'r.transform.localPosition = Vector3.zero;' in method(view, 'private SpriteRenderer Rent(')
+      and 's.Proxy.transform.localPosition = Vector3.zero;' in view,
+      'vekiller tahtanin disina kayiyor')
 check('lab obsidyeni ZORLA kirar (DestroyCube obsidyeni reddeder, tas tahtada kalir)',
       'board.DestroyCubeForced(p);' in method(lab, 'private void AnimQuarry('),
       'labda obsidyen tahtada kaliyor - kirilmamis gibi gorunur')
