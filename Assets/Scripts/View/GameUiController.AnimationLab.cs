@@ -7397,12 +7397,19 @@ namespace ProjectBlock.View
             }
             report.Points = stones.Count * joker.PointsPerObsidian * session.Config.Scoring.ScoreScale;
             report.Seed = animQuarrySeed++ * 2654435761u;
-            // Emptied the way the round empties it: the whole board, then a repaint.
+            // Emptied the way the round empties it: the whole board, then a repaint. The stone goes
+            // through the FORCED destroy, as the joker's does - DestroyCube refuses obsidian (that
+            // is the rule the pickaxe exists to break), and a stone left on the lab's board stays
+            // drawn under the break, which reads as the obsidian not breaking at all.
             for (int y = 0; y < 7; y++)
             {
                 for (int x = 0; x < 7; x++)
                 {
-                    board.DestroyCube(new GridPos(x, y));
+                    var p = new GridPos(x, y);
+                    if (!board.DestroyCube(p))
+                    {
+                        board.DestroyCubeForced(p);
+                    }
                 }
             }
             boardView.Refresh();

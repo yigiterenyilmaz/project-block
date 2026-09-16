@@ -214,6 +214,9 @@ check('lab puani jokerden okuyor', 'joker.PointsPerObsidian * session.Config.Sco
       'lab kendi sayisi')
 check('lab temizlik sahnesi gercek temizligi oynatir', 'EmitSweepConfetti();' in method(lab, 'private void AnimQuarry('),
       'temizlik -> obsidyen kalir okunamiyor')
+check('lab obsidyeni ZORLA kirar (DestroyCube obsidyeni reddeder, tas tahtada kalir)',
+      'board.DestroyCubeForced(p);' in method(lab, 'private void AnimQuarry('),
+      'labda obsidyen tahtada kaliyor - kirilmamis gibi gorunur')
 check('lab oyunun yolundan (Prepare / Begin)', 'quarry.Prepare(report);' in lab and 'quarry.Begin(report' in lab,
       'lab kopya oynatiyor')
 check('RESET durdurur ve katmanlari acar', 'StopQuarry();' in method(lab, 'private void AnimResync()')
