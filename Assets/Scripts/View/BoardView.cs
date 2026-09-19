@@ -1109,8 +1109,7 @@ namespace ProjectBlock.View
                             new Vector2(Random.Range(-0.2f, 0.2f), Random.Range(0.8f, 1.4f)), 0.09f);
                         return;
                     case CubeKind.Water:
-                        EmitAmbient(world, new Color(0.4f, 0.65f, 1f),
-                            new Vector2(0f, Random.Range(-0.5f, -0.2f)), 0.07f);
+                        EmitWaterAmbient(world);
                         return;
                     case CubeKind.Gold:
                         EmitAmbient(world + Random.insideUnitCircle * 0.2f,
@@ -1122,6 +1121,51 @@ namespace ProjectBlock.View
                         return;
                 }
             }
+        }
+
+        /// <summary>
+        /// WATER's own ambience. It used to be one cornflower dot from the cube's exact centre,
+        /// falling straight down - a colour the aqua tile does not have, from a point water
+        /// never leaks from, in a direction the arena may not even pull ("Kütleçekim merkezi").
+        ///
+        /// Now it is mostly DRIPS: a droplet forms somewhere along the cube's DOWNHILL edge (the
+        /// board's own WaterFlow), in one of the tile's own colours, and runs off along the flow
+        /// with a little sideways wander. Now and then a small pale BUBBLE rises inside the cube
+        /// instead, against the flow - the one thing that says there is liquid in there.
+        /// </summary>
+        private void EmitWaterAmbient(Vector2 centre)
+        {
+            GridPos flow = board != null ? board.WaterFlow : new GridPos(0, -1);
+            var down = new Vector2(flow.X, flow.Y);
+            var across = new Vector2(-down.y, down.x);
+            float half = cellSize * 0.5f;
+            if (Random.value < 0.25f)
+            {
+                // A bubble: inside the cube, drifting up-stream, small and nearly white.
+                Vector2 inside = centre + across * Random.Range(-0.3f, 0.3f) * cellSize
+                    + down * Random.Range(-0.1f, 0.3f) * cellSize;
+                EmitAmbient(inside, WaterShade(0.85f, 1f, 0.7f),
+                    -down * Random.Range(0.12f, 0.25f) + across * Random.Range(-0.05f, 0.05f),
+                    Random.Range(0.035f, 0.055f));
+                return;
+            }
+            Vector2 lip = centre + down * half * 0.92f + across * Random.Range(-0.8f, 0.8f) * half;
+            EmitAmbient(lip, WaterShade(0.1f, 0.7f, 0.95f),
+                down * Random.Range(0.25f, 0.6f) + across * Random.Range(-0.08f, 0.08f),
+                Random.Range(0.05f, 0.085f));
+        }
+
+        /// <summary>A colour off the water tile's own ramp - deep teal through aqua to foam -
+        /// picked between <paramref name="from"/> and <paramref name="to"/> (0 deep, 1 foam).</summary>
+        private static Color WaterShade(float from, float to, float alpha)
+        {
+            float k = Random.Range(from, to);
+            Color deep = new Color(0.18f, 0.59f, 0.65f);
+            Color mid = new Color(0.53f, 0.87f, 0.87f);
+            Color foam = new Color(0.82f, 0.96f, 0.97f);
+            Color c = k < 0.5f ? Color.Lerp(deep, mid, k * 2f) : Color.Lerp(mid, foam, (k - 0.5f) * 2f);
+            c.a = alpha;
+            return c;
         }
 
         private void EmitAmbient(Vector2 world, Color color, Vector2 velocity, float size)
@@ -3030,11 +3074,15 @@ namespace ProjectBlock.View
             }
             var back = new Vector2(-flow.X, -flow.Y);
             var sideways = new Vector2(-back.y, back.x);
-            for (int i = 0; i < 3; i++)
+            // Thrown off the face the drop LANDED on - the leading edge, not its middle - in the
+            // tile's own colours, a spread of sizes and speeds, fanning out to both sides.
+            Vector2 face = world - back * cellSize * 0.42f;
+            for (int i = 0; i < 6; i++)
             {
-                EmitAmbient(world, new Color(0.55f, 0.75f, 1f),
-                    back * Random.Range(0.5f, 1.1f) + sideways * Random.Range(-0.5f, 0.5f),
-                    0.055f);
+                float side = (i % 2 == 0 ? 1f : -1f) * Random.Range(0.2f, 1f);
+                EmitAmbient(face + sideways * side * cellSize * 0.35f, WaterShade(0.35f, 1f, 0.95f),
+                    back * Random.Range(0.4f, 1.2f) + sideways * side * Random.Range(0.3f, 0.8f),
+                    Random.Range(0.04f, 0.075f));
             }
         }
 
