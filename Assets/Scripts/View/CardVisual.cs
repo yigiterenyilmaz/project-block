@@ -123,6 +123,17 @@ namespace ProjectBlock.View
             visual.FaceUp = faceUp;
             visual.HomePosition = position;
             visual.BuildSprites(card, faceUp, bonusTint, sortingOrder, displayShape);
+            // "Parazit": a card carrying a rider shows it wherever it is drawn - the hand, the
+            // deck list, the sell screen, the piles - because it is asked for HERE, once.
+            if (card != null && faceUp && RiderLookup != null)
+            {
+                int cell;
+                Sprite icon;
+                if (RiderLookup(card.Id, out cell, out icon))
+                {
+                    visual.SetRider(cell, icon);
+                }
+            }
             return visual;
         }
 
@@ -148,6 +159,7 @@ namespace ProjectBlock.View
                     bodySize - new Vector2(FaceEdge * 2f, FaceEdge * 2f),
                     bonusTint ? BonusFaceColor : FaceColor, order + 1), order + 1);
                 BlockShape shape = displayShape != null ? displayShape : card.Shape;
+                builtShape = shape;
                 // "Hedefli" is a mark on ONE cube, not a colour for the whole block, so it is
                 // skipped when picking the block's body colour - otherwise a plain targeted card
                 // would be lime from edge to edge and the mark would be invisible.
@@ -341,6 +353,68 @@ namespace ProjectBlock.View
             textRenderers.Add(textMesh.GetComponent<MeshRenderer>());
             textBaseOrders.Add(baseOrder);
             textBaseColors.Add(textMesh.color);
+        }
+
+        /// <summary>Answers "does a joker ride this card, on which cube, with which icon?". Set
+        /// once by the controller, which alone knows the binding; null means nothing rides.</summary>
+        public delegate bool RiderQuery(int cardId, out int cellIndex, out Sprite icon);
+
+        public static RiderQuery RiderLookup;
+
+        /// <summary>The shape the face was drawn with, so a mark can find one of its cubes.</summary>
+        private BlockShape builtShape;
+
+        private SpriteRenderer riderPlate;
+        private SpriteRenderer riderIcon;
+        private int riderIndex = -1;
+
+        /// <summary>
+        /// "Parazit": the joker riding one cube of this block, drawn ON that cube - a dark disc
+        /// with the passenger's own icon - so a player holding the block can see what throwing it
+        /// away, or losing that cube, would cost. <paramref name="cellIndex"/> is into the shape
+        /// the card was drawn with; -1 (or no icon) takes the mark off.
+        ///
+        /// Built on first use and then only moved or toggled, like SetFrozen: the pieces are
+        /// tracked so the drag fade and the sorting boost reach them, and a tracked renderer
+        /// must never be destroyed out from under that list.
+        /// </summary>
+        public void SetRider(int cellIndex, Sprite icon)
+        {
+            bool show = icon != null && builtShape != null && FaceUp
+                && cellIndex >= 0 && cellIndex < builtShape.Cells.Count;
+            if (!show)
+            {
+                if (riderPlate != null)
+                {
+                    riderPlate.enabled = false;
+                    riderIcon.enabled = false;
+                }
+                riderIndex = -1;
+                return;
+            }
+            float mini = MiniCubeSize(builtShape);
+            Vector2 at = MiniCubeLocal(builtShape, builtShape.Cells[cellIndex]);
+            if (riderPlate == null)
+            {
+                riderPlate = ViewUtil.MakeRounded(transform, "RiderPlate", at,
+                    new Vector2(mini * 0.86f, mini * 0.86f), new Color(0.07f, 0.05f, 0.09f, 0.9f),
+                    baseOrder + 3);
+                Track(riderPlate, baseOrder + 3);
+                var go = new GameObject("RiderIcon");
+                go.transform.SetParent(transform, false);
+                riderIcon = go.AddComponent<SpriteRenderer>();
+                riderIcon.sortingOrder = baseOrder + 4;
+                Track(riderIcon, baseOrder + 4);
+            }
+            riderIndex = cellIndex;
+            riderPlate.transform.localPosition = new Vector3(at.x, at.y, 0f);
+            riderIcon.sprite = icon;
+            float native = Mathf.Max(icon.bounds.size.x, icon.bounds.size.y, 0.0001f);
+            float scale = mini * 0.78f / native;
+            riderIcon.transform.localPosition = new Vector3(at.x, at.y, 0f);
+            riderIcon.transform.localScale = new Vector3(scale, scale, 1f);
+            riderPlate.enabled = true;
+            riderIcon.enabled = true;
         }
 
         /// <summary>Fades the whole card (1 = opaque). Used while dragging so the board

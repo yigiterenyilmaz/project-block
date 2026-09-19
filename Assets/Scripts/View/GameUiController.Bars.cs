@@ -240,7 +240,7 @@ namespace ProjectBlock.View
             jokerBar.Refresh(session, null);
         }
 
-        /// <summary>In the market, a TAP on an unbound Parazit starts the attach flow.</summary>
+        /// <summary>In the market, a TAP on an unbound Parazit opens its attach panel.</summary>
         private void StartParazitAttachAt(int index)
         {
             var parazit = session.Jokers.Jokers[index] as ParazitJoker;
@@ -248,103 +248,59 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            parazitStep = ParazitStep.PickJoker;
-            parazitInstanceId = parazit.InstanceId;
-            jokerBar.Refresh(session, null);
-            messageText.text = Loc.Pick(
-                "Parazit: click the joker to attach   [Esc] cancel",
-                "Parazit: takılacak jokere tıkla   [Esc] iptal");
+            OpenParazitPanel(parazit);
         }
 
-        /// <summary>In the market, clicking an unbound Parazit starts the attach flow instead
-        /// of selling it. Returns true if it handled the click.</summary>
-        private bool TryStartParazitAttach(Mouse mouse)
+        /// <summary>The whole bind on one panel (ParasiteAttachView): who rides, which block,
+        /// which cube. The candidates are every joker but Parazit and any already riding.</summary>
+        private void OpenParazitPanel(ParazitJoker parazit)
         {
-            int index = jokerBar.JokerIndexAt(mouse.position.ReadValue());
-            if (index < 0 || index >= session.Jokers.Count)
+            var candidates = new List<Joker>();
+            IReadOnlyList<Joker> owned = session.Jokers.Jokers;
+            for (int i = 0; i < owned.Count; i++)
             {
-                return false;
-            }
-            var parazit = session.Jokers.Jokers[index] as ParazitJoker;
-            if (parazit == null || parazit.HasBinding)
-            {
-                return false;
+                if (owned[i].InstanceId != parazit.InstanceId && !owned[i].Attachment.HasValue)
+                {
+                    candidates.Add(owned[i]);
+                }
             }
             parazitStep = ParazitStep.PickJoker;
             parazitInstanceId = parazit.InstanceId;
-            messageText.text = Loc.Pick(
-                "Parazit: click the joker to attach   [Esc] cancel",
-                "Parazit: takılacak jokere tıkla   [Esc] iptal");
-            return true;
+            HideTooltip();
+            parasitePanel.Show(candidates, session.OwnedCards);
+            jokerBar.Refresh(session, null);
+            messageText.text = Loc.Pick("Parazit: pick who rides, the block and the cube   [Esc] cancel",
+                "Parazit: binecek jokeri, bloğu ve küpü seç   [Esc] iptal");
         }
 
-        /// <summary>Drives the three picks of a Parazit attach (joker -> owned card -> cube).</summary>
+        /// <summary>One frame of the attach panel. It owns the pointer while it is open.</summary>
         private void HandleParazitFlow(Mouse mouse)
         {
-            if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
+            if (mouse == null || !parasitePanel.IsOpen)
             {
                 return;
             }
             Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
-            switch (parazitStep)
+            float scroll = mouse.scroll.ReadValue().y;
+            ParasiteAttachView.Action action = parasitePanel.Handle(world,
+                mouse.leftButton.wasPressedThisFrame, scroll);
+            if (action == ParasiteAttachView.Action.Cancel)
             {
-                case ParazitStep.PickJoker:
-                {
-                    int ji = jokerBar.JokerIndexAt(mouse.position.ReadValue());
-                    if (ji < 0 || ji >= session.Jokers.Count)
-                    {
-                        return;
-                    }
-                    Joker chosen = session.Jokers.Jokers[ji];
-                    if (chosen.InstanceId == parazitInstanceId || chosen.Attachment.HasValue)
-                    {
-                        return; // Parazit cannot ride itself or an already-bound joker
-                    }
-                    parazitTargetJoker = chosen.InstanceId;
-                    parazitStep = ParazitStep.PickCard;
-                    deckOverlay.ResetScroll();
-                    deckOverlay.Show(session.OwnedCards);
-                    messageText.text = Loc.Pick(
-                        "Parazit: pick a deck card   [Esc] cancel",
-                        "Parazit: desteden bir kart seç   [Esc] iptal");
-                    break;
-                }
-                case ParazitStep.PickCard:
-                {
-                    BlockCard card = deckOverlay.CardAt(world);
-                    if (card == null)
-                    {
-                        return;
-                    }
-                    parazitCardId = card.Id;
-                    deckOverlay.Hide();
-                    parazitStep = ParazitStep.PickCube;
-                    cubePicker.Show(card.Shape, Loc.Pick(
-                        "Parazit: pick the host cube   [Esc] cancel",
-                        "Parazit: konak küpü seç   [Esc] iptal"));
-                    break;
-                }
-                case ParazitStep.PickCube:
-                {
-                    int cellIndex = cubePicker.CellAt(world);
-                    if (cellIndex < 0)
-                    {
-                        return;
-                    }
-                    bool ok = session.TryAttachJokerToCard(parazitTargetJoker, parazitCardId, cellIndex);
-                    Debug.Log("[block_bonk] Parazit attach " + (ok ? "succeeded" : "failed"));
-                    if (ok)
-                    {
-                        sfx.Buy();
-                    }
-                    cubePicker.Hide();
-                    parazitStep = ParazitStep.None;
-                            marketView.Show(session);
-                    jokerBar.Refresh(session, null);
-                    UpdateHud();
-                    break;
-                }
+                CancelParazit();
+                return;
             }
+            if (action != ParasiteAttachView.Action.Confirm)
+            {
+                return;
+            }
+            bool ok = session.TryAttachJokerToCard(parasitePanel.SelectedJokerId,
+                parasitePanel.SelectedCardId, parasitePanel.SelectedCell);
+            Debug.Log("[block_bonk] Parazit attach " + (ok ? "succeeded" : "failed"));
+            if (ok)
+            {
+                sfx.Buy();
+            }
+            CancelParazit();
         }
 
         private void CancelParazit()
@@ -353,11 +309,16 @@ namespace ProjectBlock.View
             parazitInstanceId = 0;
             parazitTargetJoker = 0;
             parazitCardId = 0;
+            parasitePanel.Hide();
             cubePicker.Hide();
             deckOverlay.Hide();
             if (session != null && session.Phase == GamePhase.Market)
             {
                 marketView.Show(session);
+            }
+            if (session != null)
+            {
+                jokerBar.Refresh(session, null);
             }
             UpdateHud();
         }

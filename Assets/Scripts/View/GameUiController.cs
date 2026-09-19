@@ -170,6 +170,7 @@ namespace ProjectBlock.View
         private int parazitTargetJoker;
         private int parazitCardId;
         private CubePickerView cubePicker;
+        private ParasiteAttachView parasitePanel;
         private WeldPickerView weldPicker;
         private MineShuffleView mineShuffle;
 
@@ -460,6 +461,10 @@ namespace ProjectBlock.View
             cubePicker.Hide();
             ClearChoice();
             parazitStep = ParazitStep.None;
+            if (parasitePanel != null)
+            {
+                parasitePanel.Hide();
+            }
             foxPickSlot = -1;
             sellCardsMode = false;
             hileliPickMode = false;
@@ -513,6 +518,10 @@ namespace ProjectBlock.View
             hileliPickMode = false;
             hileliSelection.Clear();
             parazitStep = ParazitStep.None;
+            if (parasitePanel != null)
+            {
+                parasitePanel.Hide();
+            }
             cubePicker.Hide();
             waterAnimating = false;
             supurgeAnimating = false;

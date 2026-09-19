@@ -1,7 +1,7 @@
 // PURPOSE: A modal that draws one block's shape as numbered, clickable cells so the player
-// can point at a specific cube of it ("Parazit" choosing the host cube). The clicked index
-// matches BlockShape.Cells order, which is exactly what GameSession.TryAttachJokerToCard
-// expects as the cell index. Placeholder presentation like everything else under View/.
+// can point at specific cubes of it ("Neşter" choosing where to cut). The clicked index
+// matches BlockShape.Cells order. "Parazit" used to pick its host cube here too; it has its own
+// panel now (ParasiteAttachView). Placeholder presentation like everything else under View/.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;

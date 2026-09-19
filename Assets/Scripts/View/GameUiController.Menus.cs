@@ -444,6 +444,10 @@ namespace ProjectBlock.View
             // Any half-armed flow dies with the run presentation.
             ClearChoice();
             parazitStep = ParazitStep.None;
+            if (parasitePanel != null)
+            {
+                parasitePanel.Hide();
+            }
             pendingTargetJokerId = null;
             pendingTargetPowerId = null;
             pendingOltaMark = false;

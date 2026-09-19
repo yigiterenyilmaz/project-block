@@ -224,6 +224,10 @@ namespace ProjectBlock.View
             cubeGo.transform.SetParent(transform, false);
             cubePicker = cubeGo.AddComponent<CubePickerView>();
 
+            var parasiteGo = new GameObject("ParasitePanel");
+            parasiteGo.transform.SetParent(transform, false);
+            parasitePanel = parasiteGo.AddComponent<ParasiteAttachView>();
+
             var mineGo = new GameObject("MineShuffle");
             mineGo.transform.SetParent(transform, false);
             mineShuffle = mineGo.AddComponent<MineShuffleView>();
