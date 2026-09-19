@@ -7,10 +7,14 @@
 // and an explosion inside that region is what feeds the creature living there. The player farms
 // the same square over and over: fill it, blow it up, fill it again.
 //
-// IT LIVES FOR THE WHOLE RUN. Marked once, in the first round after the joker is acquired, and
-// it survives every round change (the board is rebuilt but the region is coordinates). Which
-// also means its DEATH IS PERMANENT: a dead creature leaves the joker inert for the rest of the
-// run, taking up a slot until it is sold. That is the bet.
+// IT LIVES ACROSS ROUNDS. Marked once, in the first round after the joker is acquired, and it
+// survives every round change (the board is rebuilt but the region is coordinates).
+//
+// DEATH IS COMPLETE, AND IT COSTS TWO ROUNDS. A creature that starves dies outright: its size,
+// its banked food and its place on the board are all gone, and nothing of it carries on. The
+// joker then sits empty for the rest of the round it died in AND the whole round after that,
+// and only the round after THAT lays a brand-new mark - a size-1 creature somewhere new. That is
+// the bet: not the end of the joker, but two rounds of a dead slot and starting over from nothing.
 //
 // THE TENSION. Growing pays better and pays more per cube - but a bigger creature needs more
 // food to grow again, starves FASTER, and costs far more when it shrinks. Feeding it as hard as
@@ -45,9 +49,15 @@ namespace ProjectBlock.Core
         /// <summary>Penalty when it dies outright.</summary>
         public int DeathPenalty = 150;
 
+        /// <summary>Whole rounds it stays empty AFTER the round it died in. 1 = out for the
+        /// death round and the next one, back the round after.</summary>
+        public int RestRoundsAfterDeath = 1;
+
         // ---- the creature. All of it survives round changes; only death ends it. ----
         private bool marked;
         private bool dead;
+        /// <summary>While dead: whole rounds still to sit out before a new creature is laid.</summary>
+        private int restRoundsLeft;
         private GridPos anchor;
         private int size = 1;
         private int food;
@@ -63,19 +73,21 @@ namespace ProjectBlock.Core
                 "Marks a patch of the board and puts something alive in it. Every cube you "
                     + "explode inside it feeds it; a turn with none starves it. Fed enough it "
                     + "GROWS and pays much more per cube - but a bigger creature starves faster "
-                    + "and costs far more when it shrinks. Starve it to death and this joker is "
-                    + "finished for the run.",
+                    + "and costs far more when it shrinks. Starve it to death and it is gone for "
+                    + "good - this joker sits empty for that round and the next, then a new one "
+                    + "hatches somewhere else, starting from nothing.",
                 "Oyun alanında bir bölgeyi işaretler ve içine canlı bir şey koyar. O bölgede "
                     + "patlattığın her küp onu besler; hiç patlatmadığın tur onu aç bırakır. "
                     + "Yeterince beslenirse BÜYÜR ve küp başına çok daha fazla öder - ama büyük "
                     + "yaratık daha çabuk açlıktan ölür ve küçüldüğünde çok daha pahalıya gelir. "
-                    + "Açlıktan öldürürsen bu joker koşunun kalanı için biter.");
+                    + "Açlıktan ölürse tamamen ölür - joker o raunt ve sonraki raunt boş kalır, "
+                    + "ardından başka bir yerde sıfırdan yeni biri doğar.");
         }
 
         // ------------------------------------------------------------------ state, for the UI
 
         /// <summary>The cells the creature occupies right now, for the UI to mark. Empty before
-        /// it is marked and after it dies.</summary>
+        /// it is marked and while it is dead.</summary>
         public IReadOnlyList<GridPos> Region
         {
             get { return region; }
@@ -141,7 +153,11 @@ namespace ProjectBlock.Core
             {
                 if (dead)
                 {
-                    return Loc.Pick("dead", "öldü");
+                    int back = restRoundsLeft + 1;
+                    return back <= 1
+                        ? Loc.Pick("dead · new one next round", "öldü · sonraki raunt yenisi gelir")
+                        : Loc.Pick("dead · new one in " + back + " rounds",
+                            "öldü · " + back + " raunt sonra yenisi gelir");
                 }
                 if (!marked)
                 {
@@ -160,11 +176,21 @@ namespace ProjectBlock.Core
         /// CELL, and whatever the player later builds there is what gets eaten.
         ///
         /// Every later round leaves the creature exactly as it was: it is coordinates, and the
-        /// board being rebuilt does not move them.
+        /// board being rebuilt does not move them. A DEAD creature sits its rest rounds out here,
+        /// and the first round after them lays a new mark exactly as the first one was laid.
         /// </summary>
         public override void OnRoundStarted(RoundContext ctx)
         {
-            if (dead || marked || ctx.Round == null)
+            if (dead)
+            {
+                if (restRoundsLeft > 0)
+                {
+                    restRoundsLeft--;
+                    return;
+                }
+                dead = false; // rested: a new creature is laid below, from nothing
+            }
+            if (marked || ctx.Round == null)
             {
                 return;
             }
@@ -287,10 +313,16 @@ namespace ProjectBlock.Core
                 RebuildRegion(board);
                 return;
             }
-            // Nothing left to shed.
+            // Nothing left to shed: it dies COMPLETELY. Nothing of it survives - not its size, its
+            // food or its place - and the joker sits out its rest rounds before a new one.
             turn.AddFlatScore(-DeathPenalty, DefId);
             NoteProc(-DeathPenalty, turn);
             dead = true;
+            marked = false;
+            restRoundsLeft = RestRoundsAfterDeath;
+            size = 1;
+            food = 0;
+            hungryTurns = 0;
             region.Clear();
         }
 

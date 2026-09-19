@@ -9970,7 +9970,7 @@ public static class JokerTests
 
     private static void Besleme_StarvesAndFinallyDies()
     {
-        Section("besleme / neglected it starves, dies, and leaves the joker inert");
+        Section("besleme / neglected it starves, dies, sits out two rounds, then starts over");
         var session = NewSession(9202, 7, 1000000, 40, 1);
         var pet = (BeslemeJoker)session.Jokers.Add(new BeslemeJoker());
         RoundEngine round = session.CurrentRound;
@@ -9986,10 +9986,15 @@ public static class JokerTests
             "alive " + pet.IsAlive + " after " + guard + " turns");
         Check(pet.Region.Count == 0, "and it is gone from the board");
 
-        // Dead is dead: another round must not bring it back.
+        // Dead is out for the round it died in AND the next one...
         session.Jokers.DispatchRoundStarted(session.CurrentRound);
-        Check(pet.IsDead && !pet.IsAlive,
-            "a new round does not resurrect it - the joker is spent for the run");
+        Check(pet.IsDead && !pet.IsAlive && pet.Region.Count == 0,
+            "the round after its death, the joker is still empty");
+        // ...and the round after that a NEW creature hatches, from nothing.
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        Check(pet.IsAlive && pet.Size == 1 && pet.Food == 0 && pet.Region.Count == 1,
+            "two rounds on, a brand-new 1x1 creature is laid",
+            "alive " + pet.IsAlive + " size " + pet.Size + " food " + pet.Food);
     }
 
     private static void Besleme_ItsBillNeverPushesTheRoundBackwards()
