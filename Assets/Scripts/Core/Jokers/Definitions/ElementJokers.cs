@@ -148,6 +148,12 @@ namespace ProjectBlock.Core
                 "Temizlik yapınca obsidyenler de patlar ve puan verir.");
         }
 
+        /// <summary>Statistics: one proc per sweep that broke stone, worth what it paid.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         public override void AfterCleanSweep(TurnContext turn)
         {
             List<GridPos> obsidian = turn.Round.Board.CellsOfKind(CubeKind.Obsidian);
@@ -174,6 +180,7 @@ namespace ProjectBlock.Core
                 ScoreBreakdown score = turn.Score;
                 int paidBefore = score.FlatBonus + score.LateFlat;
                 turn.AddFlatScore(cracked.Count * PointsPerObsidian, DefId);
+                NoteProc(score.FlatBonus + score.LateFlat - paidBefore, turn);
                 var report = new QuarryVisuals
                 {
                     Points = (score.FlatBonus + score.LateFlat - paidBefore) * score.ScoreScale
@@ -212,6 +219,21 @@ namespace ProjectBlock.Core
             SetDescription(
                 "When one fire block explodes, ALL fire blocks on the board explode.",
                 "Bir ateş bloğu patlayınca alandaki TÜM ateş blokları patlar.");
+        }
+
+        /// <summary>Statistics: one proc per chain, worth what it paid (nothing unless "Genel
+        /// temizlik" makes a joker's destruction score).</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
+        /// <summary>Fire cubes the chain has taken over the run.</summary>
+        private int cubesBurned;
+
+        public override string StatusText
+        {
+            get { return Loc.Pick(cubesBurned + " burned", cubesBurned + " küp yandı"); }
         }
 
         public override void AfterLineExplosion(TurnContext turn)
@@ -257,6 +279,8 @@ namespace ProjectBlock.Core
             }
             if (burned.Count > 0)
             {
+                cubesBurned += burned.Count;
+                NoteProc(turn.Score.FlatBonus + turn.Score.LateFlat - paidBefore, turn);
                 report.Points = (turn.Score.FlatBonus + turn.Score.LateFlat - paidBefore) * turn.Score.ScoreScale;
                 uint seed = 2166136261u;
                 for (int i = 0; i < burned.Count; i++)
