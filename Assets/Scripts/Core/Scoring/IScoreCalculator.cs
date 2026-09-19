@@ -55,5 +55,9 @@ namespace ProjectBlock.Core
         /// <summary>Flat bonus added to a placement's score while retro (tetris) mode is on
         /// (ScoringConfig.RetroPlacementBonus). The engine adds it in ResolvePlacement.</summary>
         int RetroPlacementBonus { get; }
+
+        /// <summary>Extra percent a clear (and its sweep) pays when water FELL into place to
+        /// make it (ScoringConfig.WaterFallBonusPercent).</summary>
+        int WaterFallBonusPercent { get; }
     }
 }

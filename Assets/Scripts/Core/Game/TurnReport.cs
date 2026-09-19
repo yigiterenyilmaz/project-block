@@ -227,6 +227,11 @@ namespace ProjectBlock.Core
         public List<int> ProcedJokers { get; } = new List<int>();
 
         public int TurnNumber { get; internal set; }
+
+        /// <summary>Exploded lines this turn that only filled because WATER FELL into them - the
+        /// ones that paid ScoringConfig.WaterFallBonusPercent more. 0 on most turns. Reporting,
+        /// for the View's popup; the score already contains the bonus.</summary>
+        public int WaterFallLines { get; internal set; }
         public BlockCard Card { get; internal set; }
         public bool PlayedFromBonusHand { get; internal set; }
         public GridPos Origin { get; internal set; }

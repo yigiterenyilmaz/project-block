@@ -112,6 +112,11 @@ namespace ProjectBlock.Core
             get { return config.ScoreScale; }
         }
 
+        public int WaterFallBonusPercent
+        {
+            get { return config.WaterFallBonusPercent; }
+        }
+
         public int RetroPlacementBonus
         {
             get { return config.RetroPlacementBonus; }

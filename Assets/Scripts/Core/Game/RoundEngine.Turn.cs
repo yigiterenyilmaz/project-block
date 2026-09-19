@@ -149,8 +149,10 @@ namespace ProjectBlock.Core
             LineExplosionResult explosion = LineExplosionsSuppressed
                 ? LineExplosionResult.None
                 : Board.ResolveFullLines(Rules.RetroMode);
+            bool linesAfterSettle = false;
             if (explosion.LineCount == 0 && !LineExplosionsSuppressed)
             {
+                linesAfterSettle = true;
                 Board.SettleWaterAndReact(waterFrames); // nothing exploded in place -> water falls
                 ResyncSnapshot(); // water moved, nothing died - re-baseline the destruction diff
                 if (!cleanSampleLocked)
@@ -216,6 +218,18 @@ namespace ProjectBlock.Core
                 breakdown.BaseLines = ScoreLineExplosionScored(explosion, cubesExploded)
                     // "Karantina" charges for the cubes that stood in its zones.
                     + AdjustExplosionScore(explosion.ExplodedCells);
+                // WATER THAT FELL INTO PLACE pays more - but only for the lines it really filled.
+                int waterLines = linesAfterSettle
+                    ? WaterFallLines(explosion, waterFrames, report.WaterFramesBeforeExplosion)
+                    : 0;
+                if (waterLines > 0 && breakdown.BaseLines > 0)
+                {
+                    report.WaterFallLines = waterLines;
+                    waterFallTurn = TurnNumber;
+                    breakdown.BaseLines += (int)Math.Round(breakdown.BaseLines
+                        * scorer.WaterFallBonusPercent / 100.0
+                        * waterLines / explosion.LineCount);
+                }
                 Board.SettleWaterAndReact(waterFrames); // explosions pull the floor out from water
                 ResyncSnapshot();
             }

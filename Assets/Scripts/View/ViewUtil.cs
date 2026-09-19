@@ -1000,8 +1000,11 @@ namespace ProjectBlock.View
                     return Loc.Pick("When one cube explodes, the whole block goes with it.",
                         "Bir küpü patlayınca bloğun tamamı onunla birlikte patlar.");
                 case BlockElement.Water:
-                    return Loc.Pick("Falls and spreads each turn; turns touching fire to obsidian.",
-                        "Her tur düşer ve yayılır; değdiği ateşi obsidyene çevirir.");
+                    return Loc.Pick("Falls and spreads each turn; turns touching fire to obsidian. "
+                            + "A line the water FALLS into place to complete - and the sweep it "
+                            + "makes - pays 33% more.",
+                        "Her tur düşer ve yayılır; değdiği ateşi obsidyene çevirir. Suyun "
+                            + "DÜŞEREK tamamladığı satır - ve yaptığı temizlik - %33 fazla öder.");
                 case BlockElement.Obsidian:
                     return Loc.Pick(
                         "Indestructible, and ignored by the clean-sweep check. Every row or "

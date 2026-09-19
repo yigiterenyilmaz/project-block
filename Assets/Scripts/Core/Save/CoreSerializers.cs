@@ -259,6 +259,7 @@ namespace ProjectBlock.Core
             w.Write(key + ".perCubePlaced", scoring.PointsPerCubePlaced);
             w.Write(key + ".retroPlacement", scoring.RetroPlacementBonus);
             w.Write(key + ".perLine", scoring.PointsPerLine);
+            w.Write(key + ".waterFall", scoring.WaterFallBonusPercent);
             // The combo LADDER, length first - a jokerthat lengthens or reshapes it would
             // otherwise come back the wrong length on a load.
             int comboRungs = scoring.ComboMultipliers != null ? scoring.ComboMultipliers.Length : 0;
@@ -282,6 +283,7 @@ namespace ProjectBlock.Core
             scoring.PointsPerCubePlaced = r.ReadInt(key + ".perCubePlaced");
             scoring.RetroPlacementBonus = r.ReadInt(key + ".retroPlacement");
             scoring.PointsPerLine = r.ReadInt(key + ".perLine");
+            scoring.WaterFallBonusPercent = r.ReadInt(key + ".waterFall");
             int comboRungs = r.ReadInt(key + ".comboRungs");
             var rungs = new double[comboRungs];
             for (int i = 0; i < comboRungs; i++)

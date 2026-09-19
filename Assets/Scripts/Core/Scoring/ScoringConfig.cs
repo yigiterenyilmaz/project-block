@@ -31,6 +31,15 @@ namespace ProjectBlock.Core
         public int PointsPerLine = 10;
 
         /// <summary>
+        /// WATER THAT FALLS INTO PLACE pays this much more, in percent (designer's call,
+        /// 2026-09-19): a line that only filled because water SETTLED into it, and a clean sweep
+        /// such a clear leads to. Only lines that really took a fallen water cube count - see
+        /// RoundEngine.WaterFallLines. A multiplier on the base values, so ScoreScale does not
+        /// apply to it.
+        /// </summary>
+        public int WaterFallBonusPercent = 33;
+
+        /// <summary>
         /// "kombo": what the n-th consecutive line-clearing turn MULTIPLIES its own score by,
         /// indexed from the first clearing turn. x1, x1.5, x3 (2026-09-16, designer's call) - and
         /// the LAST ENTRY HOLDS for every turn past it, which is what caps the ladder without a

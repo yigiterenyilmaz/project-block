@@ -40,6 +40,7 @@ public static class JokerTests
         Iade_SwapsOneCardInPlace();
         Kumbara_AccrueAndSell();
         Water_ExplodesInPlaceBeforeFalling();
+        Water_AFallIntoPlaceIsCountedOnlyWhereItLands();
         Market_CardSellValueByElement();
         Market_StocksAndSellsJokers();
         Market_NeverOffersOwnedJokers();
@@ -11963,6 +11964,33 @@ public static class JokerTests
         LineExplosionResult afterFall = settleFirst.ResolveFullLines();
         Check(afterFall.LineCount == 0,
             "settling first would drop the water and miss the line", "lines " + afterFall.LineCount);
+    }
+
+    private static void Water_AFallIntoPlaceIsCountedOnlyWhereItLands()
+    {
+        Section("water / a line the water FELL into counts for the bonus, another does not");
+        // Row 0 is one cube short at column 1; the water sits above that gap and falls into it.
+        var b = new GameBoard(3, 3);
+        b.Place(new BlockCard(1, Bar(1)), new GridPos(0, 0));
+        b.Place(new BlockCard(2, Bar(1)), new GridPos(2, 0));
+        b.Place(new BlockCard(3, Bar(1), new[] { BlockElement.Water }), new GridPos(1, 2));
+        var frames = new List<IReadOnlyList<WaterMove>>();
+        b.SettleWaterAndReact(frames);
+        LineExplosionResult lines = b.ResolveFullLines();
+        Check(lines.LineCount == 1, "the fallen water completed row 0", "lines " + lines.LineCount);
+        Check(RoundEngine.WaterFallLines(lines, frames, frames.Count) == 1,
+            "and that line is counted as filled by the fall");
+
+        // Row 0 full of plain cubes, the water falling into a DIFFERENT column that no line wants.
+        var c = new GameBoard(3, 3);
+        c.Place(new BlockCard(4, Bar(3)), new GridPos(0, 0));
+        c.Place(new BlockCard(5, Bar(1), new[] { BlockElement.Water }), new GridPos(1, 2));
+        var dry = new List<IReadOnlyList<WaterMove>>();
+        c.SettleWaterAndReact(dry);
+        LineExplosionResult other = c.ResolveFullLines();
+        Check(RoundEngine.WaterFallLines(other, dry, dry.Count) == 0,
+            "a line the water never reached earns nothing extra",
+            "lines " + other.LineCount + ", counted " + RoundEngine.WaterFallLines(other, dry, dry.Count));
     }
 
     private static void Market_CardSellValueByElement()

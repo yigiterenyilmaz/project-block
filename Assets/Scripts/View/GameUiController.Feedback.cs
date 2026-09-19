@@ -250,6 +250,14 @@ namespace ProjectBlock.View
                 jokerBar.ProcJoker(report.ProcedJokers[i]);
                 PlayArenaProc(report.ProcedJokers[i]);
             }
+            // WATER THAT FELL INTO PLACE paid its bonus: say so over the arena, once.
+            if (report.WaterFallLines > 0)
+            {
+                FloatingTextFx.Spawn(transform, MainBoardCenter + new Vector2(0f, 1.6f),
+                    Loc.Pick("WATER FALL +" + session.Config.Scoring.WaterFallBonusPercent + "%",
+                        "SU DÜŞTÜ +%" + session.Config.Scoring.WaterFallBonusPercent),
+                    new Color(0.53f, 0.87f, 0.87f), 60, 0.06f);
+            }
         }
 
         /// <summary>

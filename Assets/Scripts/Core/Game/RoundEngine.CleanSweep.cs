@@ -105,6 +105,12 @@ namespace ProjectBlock.Core
             if (counts)
             {
                 int sweepBonus = PriceCleanSweep();
+                // The sweep a WATER FALL led to pays the water bonus too - the player's own sweep
+                // only, on the turn the water filled the lines (see RoundEngine.WaterFall).
+                if (!external && WaterFellIntoPlaceThisTurn)
+                {
+                    sweepBonus += (int)Math.Round(sweepBonus * scorer.WaterFallBonusPercent / 100.0);
+                }
                 if (scoreFinalized)
                 {
                     // A sweep triggered by an end-of-turn effect still belongs to this turn.
