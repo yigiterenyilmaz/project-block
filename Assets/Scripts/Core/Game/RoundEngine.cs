@@ -775,7 +775,7 @@ namespace ProjectBlock.Core
                 return;
             }
             bool changed = false;
-            while (BoardErosionCount < owed)
+            while (BoardErosionCount < owed && Loss == null)
             {
                 BoardErosionCount++;
                 changed |= ErodeOnce(BoardErosionCount, mode);
@@ -850,46 +850,45 @@ namespace ProjectBlock.Core
             return cells;
         }
 
+        /// <summary>Dead-zone steps a round survives. The step after the last one ends it.</summary>
+        internal const int DeadZoneSteps = 3;
+
         /// <summary>
-        /// Hollows the board out from the middle: a step x step square of DEAD cells centred on
-        /// the current board. Step 1 is the single centre cell, step 2 a 2x2, step 3 a 3x3.
+        /// Spreads the DEAD ZONE from the middle of the board: 1x1 on the first step, 3x3 on the
+        /// second, 5x5 on the third - and the fourth ends the round (LossReason.DeadZoneOverran).
         ///
-        /// An even-sided square cannot sit exactly in the middle of an odd-sided board, so it is
-        /// biased toward the lower coordinates ((size - n) / 2 truncates). Odd steps land dead
-        /// centre, and because the centre is recomputed on the CURRENT board every step, the dead
-        /// region is simply the union of the squares placed so far - cells never come back.
-        ///
-        /// The cells are eaten, not just emptied: they kill their rows and columns for good.
+        /// A dead-zone cell is still play area (see GameBoard.Blight): blocks may be placed on
+        /// it, it still holds its line up and the line still explodes, but a row or column that
+        /// touches the zone PAYS NOTHING. Nothing is destroyed and nothing leaves the board, so
+        /// the zone takes away the part of the arena worth playing for without ever taking away
+        /// the place to put a block. Centred on the CURRENT board each step, so the rim eating
+        /// in beside it ("Both") keeps it in the middle.
         /// </summary>
         private bool ErodeCentre(int step)
         {
-            int w = step < Board.Width ? step : Board.Width;
-            int h = step < Board.Height ? step : Board.Height;
+            if (step > DeadZoneSteps)
+            {
+                DeclareLoss(LossReason.DeadZoneOverran);
+                return false;
+            }
+            int side = 2 * step - 1;
+            int w = side < Board.Width ? side : Board.Width;
+            int h = side < Board.Height ? side : Board.Height;
             if (w < 1 || h < 1)
             {
                 return false;
             }
             int startX = Board.MinX + (Board.Width - w) / 2;
             int startY = Board.MinY + (Board.Height - h) / 2;
-            var doomed = new List<GridPos>();
+            var zone = new List<GridPos>();
             for (int x = 0; x < w; x++)
             {
                 for (int y = 0; y < h; y++)
                 {
-                    doomed.Add(new GridPos(startX + x, startY + y));
+                    zone.Add(new GridPos(startX + x, startY + y));
                 }
             }
-            // Destroy through the engine first so the destruction log and the per-card
-            // bookkeeping see it; MarkDead then clears anything that resisted (a Parazit host
-            // cannot squat on a cell that no longer exists) and eats the cells themselves.
-            DestroyCubes(doomed, false, true);
-            List<GridPos> eaten = Board.MarkDead(doomed);
-            if (eaten.Count == 0)
-            {
-                return false;
-            }
-            LogDestruction();
-            return true;
+            return Board.Blight(zone).Count > 0;
         }
 
         /// <summary>"Kayıt defteri": while true, emptying the board is no longer a sweep.

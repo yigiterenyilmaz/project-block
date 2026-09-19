@@ -360,6 +360,7 @@ namespace ProjectBlock.Core
                     board.sealedCells.Add(source.sealedCells[i]);
                 }
             }
+            board.CopyBlightFrom(source);
             return board;
         }
 
@@ -406,6 +407,7 @@ namespace ProjectBlock.Core
             }
             clone.IgnoreElements = source.IgnoreElements;
             clone.WaterFlow = source.WaterFlow;
+            clone.CopyBlightFrom(source);
             return clone;
         }
 

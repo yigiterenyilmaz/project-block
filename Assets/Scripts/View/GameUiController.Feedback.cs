@@ -2630,6 +2630,10 @@ namespace ProjectBlock.View
                 {
                     sb.Append(Loc.Pick("  eaten ", "  yenen ")).Append(round.Board.DeadCellCount);
                 }
+                if (round.Board.BlightedCellCount > 0)
+                {
+                    sb.Append(Loc.Pick("  dead zone ", "  ölü bölge ")).Append(round.Board.BlightedCellCount);
+                }
                 if (round.FreeDeckRecyclesLeft > 0)
                 {
                     sb.Append(Loc.Pick("   free reshuffles ", "   bedava karma "))
@@ -2637,8 +2641,12 @@ namespace ProjectBlock.View
                 }
                 else
                 {
-                    sb.Append(Loc.Pick("   ERODING - next reshuffle eats the board",
-                        "   ERİYOR - sıradaki karma alanı yiyor"));
+                    bool zone = round.Config.Erosion != ShuffleErosion.FromOutside;
+                    sb.Append(zone
+                        ? Loc.Pick("   ERODING - next reshuffle grows the dead zone",
+                            "   ERİYOR - sıradaki karma ölü bölgeyi büyütür")
+                        : Loc.Pick("   ERODING - next reshuffle eats the board",
+                            "   ERİYOR - sıradaki karma alanı yiyor"));
                 }
                 sb.Append('\n');
             }
@@ -2833,6 +2841,9 @@ namespace ProjectBlock.View
                 case LossReason.LineWithoutDoll:
                     return Loc.Pick("you exploded a line with no doll in it (Matruşka)",
                         "içinde bebek olmayan bir sıra patlattın (Matruşka)");
+                case LossReason.DeadZoneOverran:
+                    return Loc.Pick("the dead zone swallowed the arena (the deck ran dry once too often)",
+                        "ölü bölge alanı yuttu (deste çok kez bitti)");
                 case LossReason.PetWentHungry:
                     return Loc.Pick("the deck ran dry with the pet still unfed (Tamagotchi)",
                         "deste bitti, Tamagotchi hâlâ açtı");

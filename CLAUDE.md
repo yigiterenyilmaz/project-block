@@ -1119,11 +1119,15 @@ dropped that way once each.
   land after that step — the dead-end check is later than 8.6, and "Dört kutup" bills you there.
 - **Board erosion is the anti-stalling clock.** Each band also names a `ShuffleErosion`: past
   `RoundRules.FreeDeckRecycles` (2), every time the draw pile runs DRY the arena loses a piece —
-  the rim (1-5), a growing centre hole (6-11), or both (12-15). It is counted in
+  the rim (1-5), a growing centre DEAD ZONE (6-11), or both (12-15). It is counted in
   `RoundEngine.DeckRecycleCount`, NOT `RoundDeck.ShuffleCount` (that also counts reshuffles the
-  rules and jokers order), and applied once centrally at turn step 8.5. A cell eaten this way
-  (`GameBoard.MarkDead`) KILLS its row and column — unlike a plain hole in the bounding box,
-  which is merely skipped. Never conflate the two.
+  rules and jokers order), and applied once centrally at turn step 8.5. The dead zone
+  (`GameBoard.Blight`, designer's call 2026-09-19) grows 1x1 → 3x3 → 5x5 and the fourth step
+  loses the round (`LossReason.DeadZoneOverran`). A zone cell is still PLAY AREA — blocks go on
+  it, its lines still fill and explode — but a row or column touching it PAYS NOTHING
+  (`RoundEngine.BuildLineScore`). It is not the `dead` mask: a dead cell (`MarkDead`) cannot be
+  built on and KILLS its row and column, unlike a plain hole in the bounding box, which is
+  merely skipped. Never conflate the three.
 - Turkish design terms → code names: el = `Hand`/turn, çekme destesi = `RoundDeck.DrawPile`,
   ıskarta = discard, oyun destesi = `GameSession.OwnedCards`, raunt = round,
   temizlik = clean sweep, bonus el = bonus hand, eşik = `RoundConfig.ScoreThreshold`,

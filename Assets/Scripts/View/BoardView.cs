@@ -59,6 +59,11 @@ namespace ProjectBlock.View
         /// the player has to see what the stalling cost them, and that its row/column is dead.</summary>
         private static readonly Color DeadColor = new Color(0.30f, 0.10f, 0.12f, 0.85f);
 
+        /// <summary>A DEAD-ZONE cell (shuffle erosion): still play area, but any row or column
+        /// touching it scores nothing. The eroded scar's hue, darker and fully opaque, so it reads
+        /// as ground you can still stand on rather than as a hole.</summary>
+        private static readonly Color BlightColor = new Color(0.22f, 0.075f, 0.09f);
+
         /// <summary>An empty cell a boss has sealed off ("Mapus") - it reads as barred, not
         /// as a cube, because nothing can be placed there but nothing occupies it either.
         /// Deliberately COLD, not another scar red: an eaten cell (DeadColor) is gone for good
@@ -1559,6 +1564,14 @@ namespace ProjectBlock.View
                     if (IsQuarantined(gp))
                     {
                         color = Drained(color);
+                    }
+                    // SHUFFLE EROSION'S DEAD ZONE: still play area, but a line through it pays
+                    // nothing, so it has to read as spoiled ground rather than as a hole. Empty it
+                    // takes the scar colour outright; a cube standing on it is only dulled toward
+                    // it, because the cube is still a real cube that will explode with its line.
+                    if (board.IsBlighted(gp))
+                    {
+                        color = cube.HasValue ? Color.Lerp(color, BlightColor, 0.38f) : BlightColor;
                     }
                     // "Kangren": a line the rot took WHOLE can never explode again, which the
                     // player has to be able to see - an unexplodable full line otherwise reads as

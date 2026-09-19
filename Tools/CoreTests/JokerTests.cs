@@ -4017,72 +4017,72 @@ public static class JokerTests
 
     private static void Erosion_CentreHoleKillsItsRowAndColumn()
     {
-        Section("erosion / the centre hole kills its row and column for good");
+        Section("erosion / the dead zone is still play area, but its lines pay nothing");
         var session = NewErodingSession(703, 5, 40, ShuffleErosion.FromCenter, 1);
         RoundEngine round = session.CurrentRound;
         int cellsBefore = round.Board.PlayableCellCount;
 
         round.DebugForceDeckRecycle();
         round.DebugForceDeckRecycle();
-        Check(round.Board.PlayableCellCount == cellsBefore, "the free recycles change nothing");
+        Check(round.Board.BlightedCellCount == 0, "the free recycles change nothing");
 
         round.DebugForceDeckRecycle();
         var centre = new GridPos(round.Board.MinX + 2, round.Board.MinY + 2);
-        Check(round.Board.IsDead(centre), "the middle cell of a 5x5 was eaten");
-        Check(!round.Board.IsInside(centre), "an eaten cell is not play area");
-        Check(round.Board.PlayableCellCount == cellsBefore - 1, "one cell fewer to fill",
+        Check(round.Board.IsBlighted(centre), "the middle cell of a 5x5 is in the dead zone");
+        Check(round.Board.IsInside(centre) && !round.Board.IsDead(centre),
+            "and it is still play area - a block may go there");
+        Check(round.Board.PlayableCellCount == cellsBefore, "no cell was taken off the board",
             round.Board.PlayableCellCount.ToString());
-        Check(round.Board.Width == 5 && round.Board.Height == 5,
-            "centre erosion does not shrink the bounding box");
 
-        // Fill everything that is still playable. The eaten cell's row and column must NOT
-        // explode - that is the punishment - while the other rows/columns must.
+        // Fill everything. Every line still goes off - the zone does not hold one up - but the
+        // row and the column through it pay nothing.
         FillBoardSolid(round, session);
         LineExplosionResult lines = round.Board.ResolveFullLines();
-        Check(!ListHas(lines.Rows, 2), "row 2 runs through the hole, so it never explodes",
-            "rows " + string.Join(",", lines.Rows));
-        Check(!ListHas(lines.Columns, 2), "column 2 likewise",
-            "cols " + string.Join(",", lines.Columns));
-        Check(lines.Rows.Count == 4 && lines.Columns.Count == 4,
-            "the other four rows and columns still clear normally",
+        Check(lines.Rows.Count == 5 && lines.Columns.Count == 5,
+            "all five rows and five columns still explode",
             lines.Rows.Count + " rows / " + lines.Columns.Count + " cols");
+        LineExplosionScore paid = round.BuildLineScore(lines, lines.ExplodedCells.Count, true);
+        Check(paid.Rows == 4 && paid.Columns == 4,
+            "but row 2 and column 2 touch the zone and are not paid",
+            paid.Rows + " rows / " + paid.Columns + " cols paid");
+        Check(paid.Cubes == 25 - 1,
+            "and the one cube only those two lines took pays nothing either",
+            paid.Cubes + " cubes paid");
     }
 
     private static void Erosion_CentreHoleGrowsAndStaysASuperset()
     {
-        Section("erosion / the centre hole grows 1x1 -> 2x2 -> 3x3 and never gives cells back");
+        Section("erosion / the dead zone grows 1x1 -> 3x3 -> 5x5, and the next one ends the round");
         var session = NewErodingSession(704, 7, 40, ShuffleErosion.FromCenter, 1);
         RoundEngine round = session.CurrentRound;
         round.DebugForceDeckRecycle();
         round.DebugForceDeckRecycle();
 
         round.DebugForceDeckRecycle();
-        Check(round.Board.DeadCellCount == 1, "step 1 eats the single centre cell",
-            round.Board.DeadCellCount.ToString());
+        Check(round.Board.BlightedCellCount == 1, "step 1 is the single centre cell",
+            round.Board.BlightedCellCount.ToString());
         var first = new GridPos(round.Board.MinX + 3, round.Board.MinY + 3);
-        Check(round.Board.IsDead(first), "and it is the exact centre of a 7x7");
+        Check(round.Board.IsBlighted(first), "and it is the exact centre of a 7x7");
 
         round.DebugForceDeckRecycle();
-        Check(round.Board.DeadCellCount == 4, "step 2 eats a 2x2",
-            round.Board.DeadCellCount.ToString());
-        Check(round.Board.IsDead(first), "the first cell is still dead - the hole only grows");
+        Check(round.Board.BlightedCellCount == 9, "step 2 is a 3x3",
+            round.Board.BlightedCellCount.ToString());
+        Check(round.Board.IsBlighted(first), "still holding the first cell");
 
         round.DebugForceDeckRecycle();
-        Check(round.Board.DeadCellCount == 9, "step 3 eats a 3x3",
-            round.Board.DeadCellCount.ToString());
-        Check(round.Board.IsDead(first), "and it still contains everything eaten before");
+        Check(round.Board.BlightedCellCount == 25, "step 3 is a 5x5",
+            round.Board.BlightedCellCount.ToString());
+        Check(round.Loss == null, "and the round is still alive");
 
-        // A 3x3 hole in a 7x7 kills rows 2,3,4 and columns 2,3,4: only 4+4 lines are left alive.
-        FillBoardSolid(round, session);
-        LineExplosionResult lines = round.Board.ResolveFullLines();
-        Check(lines.Rows.Count == 4 && lines.Columns.Count == 4,
-            "three rows and three columns are dead for the rest of the round",
-            lines.Rows.Count + " rows / " + lines.Columns.Count + " cols");
+        round.DebugForceDeckRecycle();
+        Check(round.Loss == LossReason.DeadZoneOverran,
+            "the fourth time the deck runs dry the round is lost",
+            round.Loss.HasValue ? round.Loss.Value.ToString() : "no loss");
     }
 
     private static void Erosion_BothStylesHitTogether()
     {
-        Section("erosion / the last band loses the rim AND is hollowed out at once");
+        Section("erosion / the last band loses the rim AND grows the dead zone at once");
         var session = NewErodingSession(705, 9, 40, ShuffleErosion.Both, 1);
         RoundEngine round = session.CurrentRound;
         round.DebugForceDeckRecycle();
@@ -4091,17 +4091,14 @@ public static class JokerTests
         round.DebugForceDeckRecycle();
         Check(round.Board.Width == 8 && round.Board.Height == 8, "the rim went: 9x9 -> 8x8",
             round.Board.Width + "x" + round.Board.Height);
-        Check(round.Board.DeadCellCount == 1, "and the centre was hollowed at the same time",
-            round.Board.DeadCellCount.ToString());
+        Check(round.Board.BlightedCellCount == 1, "and the dead zone started at the same time",
+            round.Board.BlightedCellCount.ToString());
 
         round.DebugForceDeckRecycle();
         Check(round.Board.Width == 7 && round.Board.Height == 7, "then 7x7",
             round.Board.Width + "x" + round.Board.Height);
-        Check(round.Board.DeadCellCount >= 4, "with a bigger hole",
-            round.Board.DeadCellCount.ToString());
-        Check(round.Board.PlayableCellCount < 49 - 3,
-            "so the arena collapses much faster than either style alone",
-            round.Board.PlayableCellCount.ToString());
+        Check(round.Board.BlightedCellCount >= 9, "with a 3x3 zone",
+            round.Board.BlightedCellCount.ToString());
     }
 
     private static void Erosion_EatenCubesCostNoScoreAndNoSweep()
@@ -4130,21 +4127,19 @@ public static class JokerTests
 
     private static void Erosion_EatsThroughIndestructibleAndProtectedCubes()
     {
-        Section("erosion / obsidian and a Parazit host cannot squat on a cell that ceases to exist");
+        Section("erosion / the dead zone leaves the cubes standing in it alone");
         var session = NewErodingSession(707, 5, 40, ShuffleErosion.FromCenter, 1);
         RoundEngine round = session.CurrentRound;
         round.DebugForceDeckRecycle();
         round.DebugForceDeckRecycle();
 
         var centre = new GridPos(round.Board.MinX + 2, round.Board.MinY + 2);
-        round.Board.SetCubeAt(centre, new Cube(CubeKind.Obsidian, 9200));
-        round.Board.SetCubeProtected(centre); // the toughest cube in the game
-        Check(round.Board.GetCube(centre).HasValue, "a protected obsidian cube sits in the middle");
+        round.Board.SetCubeAt(centre, new Cube(CubeKind.Normal, 9200));
 
         round.DebugForceDeckRecycle();
-        Check(round.Board.IsDead(centre), "the cell was eaten anyway");
-        Check(!round.Board.GetCube(centre).HasValue, "and the cube with it");
-        Check(round.Board.OccupiedCount == 0, "the occupied count stayed honest");
+        Check(round.Board.IsBlighted(centre), "the cell joined the dead zone");
+        Check(round.Board.GetCube(centre).HasValue, "and the cube on it is still there");
+        Check(round.Board.OccupiedCount == 1, "the occupied count agrees");
     }
 
     private static void Erosion_NoneLeavesTheBoardAlone()

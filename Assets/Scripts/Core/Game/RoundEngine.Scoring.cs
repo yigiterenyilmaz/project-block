@@ -442,16 +442,29 @@ namespace ProjectBlock.Core
         /// <summary>Splits an explosion into the counts a boss round prices ("Ufuk"/"Kule" pay
         /// for one axis only). <paramref name="honourDeadZone"/> drops retro dead-zone rows and
         /// cubes; the between-turn path passes false, keeping its long-standing behaviour.</summary>
-        private LineExplosionScore BuildLineScore(LineExplosionResult explosion, int cubesExploded,
+        internal LineExplosionScore BuildLineScore(LineExplosionResult explosion, int cubesExploded,
             bool honourDeadZone)
         {
             bool deadZone = honourDeadZone && Rules.DeadZoneRows > 0;
+            // SHUFFLE EROSION'S dead zone (GameBoard.Blight): a line touching it still goes off,
+            // but pays nothing - neither the line nor the cubes it alone took. Checked on both
+            // paths, in-turn and between turns. With no blight this is exactly the old count.
+            bool blight = Board.BlightedCellCount > 0;
             int scoredRows = 0;
             for (int i = 0; i < explosion.Rows.Count; i++)
             {
-                if (!deadZone || !IsDeadRow(explosion.Rows[i]))
+                int y = explosion.Rows[i];
+                if ((!deadZone || !IsDeadRow(y)) && !(blight && Board.RowTouchesBlight(y)))
                 {
                     scoredRows++;
+                }
+            }
+            int scoredColumns = 0;
+            for (int i = 0; i < explosion.Columns.Count; i++)
+            {
+                if (!(blight && Board.ColumnTouchesBlight(explosion.Columns[i])))
+                {
+                    scoredColumns++;
                 }
             }
             int deadCubes = 0;
@@ -465,11 +478,21 @@ namespace ProjectBlock.Core
                     deadCubes++;
                     continue; // scores for nothing, on either axis
                 }
-                if (Contains(explosion.Rows, cell.Y))
+                bool inRow = Contains(explosion.Rows, cell.Y)
+                    && !(blight && Board.RowTouchesBlight(cell.Y));
+                bool inColumn = Contains(explosion.Columns, cell.X)
+                    && !(blight && Board.ColumnTouchesBlight(cell.X));
+                if (blight && !inRow && !inColumn
+                    && (Contains(explosion.Rows, cell.Y) || Contains(explosion.Columns, cell.X)))
+                {
+                    deadCubes++;
+                    continue; // every exploded line through it touched the dead zone
+                }
+                if (inRow)
                 {
                     rowCubes++;
                 }
-                if (Contains(explosion.Columns, cell.X))
+                if (inColumn)
                 {
                     columnCubes++;
                 }
@@ -478,7 +501,7 @@ namespace ProjectBlock.Core
             int rowObsidian;
             int columnObsidian;
             CountObsidianInLines(explosion, deadZone, out rowObsidian, out columnObsidian);
-            return new LineExplosionScore(scoredRows, explosion.Columns.Count, scoredCubes,
+            return new LineExplosionScore(scoredRows, scoredColumns, scoredCubes,
                 rowCubes, columnCubes, rowObsidian, columnObsidian);
         }
 
@@ -503,7 +526,7 @@ namespace ProjectBlock.Core
             for (int i = 0; i < explosion.Rows.Count; i++)
             {
                 int y = explosion.Rows[i];
-                if (deadZone && IsDeadRow(y))
+                if ((deadZone && IsDeadRow(y)) || Board.RowTouchesBlight(y))
                 {
                     continue;
                 }
@@ -518,6 +541,10 @@ namespace ProjectBlock.Core
             for (int i = 0; i < explosion.Columns.Count; i++)
             {
                 int x = explosion.Columns[i];
+                if (Board.ColumnTouchesBlight(x))
+                {
+                    continue; // a line on the dead zone pays nothing, obsidian included
+                }
                 for (int y = Board.MinY; y < Board.MinY + Board.Height; y++)
                 {
                     if (deadZone && IsDeadRow(y))

@@ -68,6 +68,7 @@ namespace ProjectBlock.Core
                 index++;
             }
             CoreSerializers.WritePosList(w, key + ".sealed", sealedCells);
+            SaveBlight(w, key);
 
             // "Kangren" dead lines. Exactly the argument the two masks make above: a line the rot
             // took whole can never explode again, so restoring the cubes without it would change
@@ -143,6 +144,7 @@ namespace ProjectBlock.Core
                 board.outsideCubes[at] = CoreSerializers.ReadCube(r, key + ".outside." + i);
             }
             board.sealedCells.AddRange(CoreSerializers.ReadPosList(r, key + ".sealed"));
+            board.LoadBlight(r, key);
 
             int rotRows = r.ReadInt(key + ".rotRows.count");
             for (int i = 0; i < rotRows; i++)

@@ -21,12 +21,12 @@ namespace ProjectBlock.Core
         /// 7x7 becomes 6x6, then 5x5, then 4x4.</summary>
         FromOutside = 1,
 
-        /// <summary>The middle goes: a square hole in the centre of the board, 1x1 on the first
-        /// erosion, 2x2 on the second, 3x3 on the third. Those cells are DEAD - a row or column
-        /// running through one of them can never be filled, so it can never explode again.</summary>
+        /// <summary>A DEAD ZONE spreads from the centre: 1x1 on the first erosion, 3x3 on the
+        /// second, 5x5 on the third, and the fourth ends the round. Blocks can still be placed in
+        /// it and its lines still explode, but a row or column touching it scores nothing.</summary>
         FromCenter = 2,
 
-        /// <summary>Both at once, every erosion: the rim shrinks AND the centre hole grows.</summary>
+        /// <summary>Both at once, every erosion: the rim shrinks AND the dead zone grows.</summary>
         Both = 3
     }
 }
