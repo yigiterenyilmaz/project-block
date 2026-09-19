@@ -1239,6 +1239,8 @@ Parazit ships last, but nothing in v1 blocks it because the two hard prerequisit
 
 ### Powerbank — `XL`
 
+> **2026-09-19: artık bir GÜÇ** (`PowerbankPower`), joker değil. Harcanmış bir gücü seçip doldurur; kendisi de her güç gibi temizlik ya da yeni raunt ile dolar ve o turun güç kullanımı sayılır. Aşağıdaki notlar joker sürümüne aittir.
+
 **Bekleyen alt sistem:** güçler
 
 **Kullanacağı mevcut kancalar:**

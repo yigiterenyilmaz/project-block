@@ -3933,21 +3933,25 @@ public static class JokerTests
 
     private static void Powerbank_RechargesASpentPower()
     {
-        Section("powerbank / refills a power without a sweep");
+        Section("powerbank / a power that refills another power without a sweep");
         var session = NewSession(367, 8, 1000000, 40, 1);
         var power = (BuyutecPower)session.Powers.Add(new BuyutecPower());
-        var joker = (PowerbankJoker)session.Jokers.Add(new PowerbankJoker());
-        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        var bank = (PowerbankPower)session.Powers.Add(new PowerbankPower());
+        RoundEngine round = session.CurrentRound;
 
-        Check(!session.Jokers.CanActivate(joker.InstanceId),
-            "refuses while every power is already charged");
+        Check(!session.Powers.CanUse(bank.InstanceId, ActivationTarget.None),
+            "refuses while every other power is already charged");
 
         session.Powers.TryUse(power.InstanceId, ActivationTarget.None);
         Check(!power.Charged, "the power was spent");
-        Check(session.Jokers.CanActivate(joker.InstanceId), "now it has something to do");
-        Check(session.Jokers.TryActivate(joker.InstanceId, ActivationTarget.None), "powerbank ran");
+        Check(!session.Powers.CanUse(bank.InstanceId, ActivationTarget.PowerChoice(power.InstanceId)),
+            "one power a turn: the bank waits for the next turn");
+
+        PlayOneCard(round);
+        Check(session.Powers.TryUse(bank.InstanceId, ActivationTarget.PowerChoice(power.InstanceId)),
+            "next turn the bank runs on the power it was pointed at");
         Check(power.Charged, "the power is charged again");
-        Check(!session.Jokers.CanActivate(joker.InstanceId), "its own single charge is spent");
+        Check(!bank.Charged, "and the bank spent its own charge doing it");
     }
 
     private static bool ListHas(IReadOnlyList<int> list, int value)

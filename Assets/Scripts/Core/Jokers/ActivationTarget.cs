@@ -130,6 +130,13 @@ namespace ProjectBlock.Core
             return new ActivationTarget(handIndex, null);
         }
 
+        /// <summary>Another POWER, by instance id ("Powerbank"'s pick). It rides in HandIndex:
+        /// a power that asks for this asks for nothing else.</summary>
+        public static ActivationTarget PowerChoice(int powerInstanceId)
+        {
+            return new ActivationTarget(powerInstanceId, null);
+        }
+
         public static ActivationTarget Board(GridPos cell)
         {
             return new ActivationTarget(null, cell);

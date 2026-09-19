@@ -23,14 +23,6 @@ namespace ProjectBlock.View
                 Debug.Log("[block_bonk] " + joker.DisplayName + " cannot be used right now.");
                 return;
             }
-            // One joker asks the player for a value first, via a modal picker (Batak is now a
-            // power - its picker is opened from BeginPowerActivation instead).
-            var powerbank = joker as PowerbankJoker;
-            if (powerbank != null)
-            {
-                OpenPowerbankPicker(powerbank);
-                return;
-            }
             if (joker.Targeting != ActivationTargeting.None)
             {
                 pendingTargetJokerId = joker.InstanceId;
@@ -48,7 +40,9 @@ namespace ProjectBlock.View
                 "Batak: kaç turda temizlersin?"));
         }
 
-        private void OpenPowerbankPicker(PowerbankJoker powerbank)
+        /// <summary>"Powerbank": which spent power to refill. Its own id rides in
+        /// pendingChoiceJokerId, the same slot the gravity picker keeps its power in.</summary>
+        private void OpenPowerbankPicker(PowerbankPower powerbank)
         {
             pendingChoice = ChoiceKind.PowerbankTarget;
             pendingChoiceJokerId = powerbank.InstanceId;
@@ -57,7 +51,7 @@ namespace ProjectBlock.View
             IReadOnlyList<Power> powers = session.Powers.Powers;
             for (int i = 0; i < powers.Count; i++)
             {
-                if (!powers[i].Charged)
+                if (!powers[i].Charged && powers[i] != powerbank)
                 {
                     pendingChoiceValues.Add(powers[i].InstanceId);
                     labels.Add(powers[i].DisplayName);
@@ -161,11 +155,13 @@ namespace ProjectBlock.View
             var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
             if (pendingChoice == ChoiceKind.PowerbankTarget)
             {
-                var powerbank = session.Jokers.Find(pendingChoiceJokerId) as PowerbankJoker;
-                if (powerbank != null && powerbank.RechargeChosen(ctx, pendingChoiceValues[index]))
+                Power powerbank = session.Powers.Find(pendingChoiceJokerId);
+                if (powerbank != null)
                 {
-                    Debug.Log("[block_bonk] Powerbank recharged power #" + pendingChoiceValues[index]);
-                    jokerBar.PulseJoker(pendingChoiceJokerId);
+                    // Through the normal power path: the charge, the one-power-per-turn rule
+                    // and the FX capture behave exactly as they do for every other power.
+                    RunPowerActivation(powerbank,
+                        ActivationTarget.PowerChoice(pendingChoiceValues[index]));
                 }
             }
             else if (pendingChoice == ChoiceKind.GravityDirection)
@@ -365,6 +361,18 @@ namespace ProjectBlock.View
                 || power.Targeting == ActivationTargeting.BoardArea)
             {
                 BeginWorkshopTargeting(power);
+                return;
+            }
+            // "Powerbank" asks WHICH spent power to refill - a list, not a place.
+            var bank = power as PowerbankPower;
+            if (bank != null)
+            {
+                if (!session.Powers.CanUse(bank.InstanceId, ActivationTarget.None))
+                {
+                    Debug.Log("[block_bonk] " + power.DisplayName + " has nothing to refill.");
+                    return;
+                }
+                OpenPowerbankPicker(bank);
                 return;
             }
             // A DIRECTION is not a place on the board, so it is asked for with a picker rather

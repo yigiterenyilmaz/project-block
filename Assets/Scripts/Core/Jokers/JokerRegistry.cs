@@ -49,7 +49,6 @@ namespace ProjectBlock.Core
             Register(() => new ImitasyonJoker());
             Register(() => new FraksiyonJoker());
             Register(() => new ParazitJoker());
-            Register(() => new PowerbankJoker());
             Register(() => new TutumlulukJoker());
             Register(() => new GenelTemizlikJoker());
             Register(() => new HafizaJoker());

@@ -1166,7 +1166,7 @@ Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.
 
-The roster now stands at **52 jokers, 35 powers and 37 bosses** (registry counts); of the
+The roster now stands at **51 jokers, 36 powers and 37 bosses** (registry counts); of the
 originally planned powers only "Dolly" is left, set aside by the designer.
 See `docs/jokers-plan.md`.
 
