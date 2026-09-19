@@ -21,6 +21,8 @@ namespace ProjectBlock.Core
             cards.WriteRefs(w, key + ".discard", discardPile);
             cards.WriteRefs(w, key + ".removed", removedFromRound);
             w.Write(key + ".shuffles", ShuffleCount);
+            w.Write(key + ".rolesAlternate", PileRolesAlternate);
+            w.Write(key + ".pilesSwapped", PilesSwapped);
         }
 
         internal void Load(SaveReader r, string key, CardTable cards)
@@ -32,6 +34,8 @@ namespace ProjectBlock.Core
             discardPile.AddRange(cards.ReadRefs(r, key + ".discard"));
             removedFromRound.AddRange(cards.ReadRefs(r, key + ".removed"));
             ShuffleCount = r.ReadInt(key + ".shuffles");
+            PileRolesAlternate = r.ReadBool(key + ".rolesAlternate");
+            PilesSwapped = r.ReadBool(key + ".pilesSwapped");
         }
 
         /// <summary>Every card the piles are holding, so the save's card table can collect the

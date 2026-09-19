@@ -20,13 +20,23 @@ namespace ProjectBlock.View
         // See UiLayout - the desktop values are the constants that used to sit right here.
         public static Vector2 DrawPilePos
         {
-            get { return UiLayout.Active.DrawPile; }
+            get { return slotsSwapped ? UiLayout.Active.DiscardPile : UiLayout.Active.DrawPile; }
         }
 
         public static Vector2 DiscardPilePos
         {
-            get { return UiLayout.Active.DiscardPile; }
+            get { return slotsSwapped ? UiLayout.Active.DrawPile : UiLayout.Active.DiscardPile; }
         }
+
+        /// <summary>
+        /// "Konfüzyon": the two piles are two FIXED physical piles whose roles alternate every
+        /// turn (RoundDeck.PilesSwapped). The pile that started as the draw pile stays in the
+        /// draw slot, so while it is the discard the two ROLES sit in each other's slots. Every
+        /// flight and hit test goes through DrawPilePos / DiscardPilePos, so they all follow.
+        /// It used to be drawn as two fixed roles instead: every played card flew to the right
+        /// and sat face-up on top of it, while the rules had just shuffled it into the other pile.
+        /// </summary>
+        private static bool slotsSwapped;
 
         private static Vector2 HandCenter
         {
@@ -478,6 +488,7 @@ namespace ProjectBlock.View
         private void SyncInternal(RoundEngine round, TurnReport report, bool animate)
         {
             BuildPilesIfNeeded();
+            ApplyPileSlots(round);
 
             int handCount = round.Hand.Count;
             int totalCount = handCount + round.BonusHand.Count;
@@ -522,12 +533,10 @@ namespace ProjectBlock.View
                     }
                     else
                     {
-                        // "Baba Ocağı" buries played cards into the DRAW pile, not the
-                        // discard, so the card flies to whichever pile actually received it.
-                        Vector2 playedTarget = round.Rules.PlayedCardsReturnToDrawPile
-                            ? DrawPilePos
-                            : DiscardPilePos;
-                        visual.FlyToAndDestroy(playedTarget, DiscardDuration);
+                        // The card flies to whichever pile ACTUALLY holds it now: the draw pile
+                        // under "Baba Ocağı" (buried there), and under "Konfüzyon" the pile it
+                        // went into before the roles swapped - asked of the piles, not guessed.
+                        visual.FlyToAndDestroy(PileHolding(round, report.Card), DiscardDuration);
                     }
                 }
                 else
@@ -601,9 +610,16 @@ namespace ProjectBlock.View
                 }
                 if (report.BurnedCard != null)
                 {
+                    // The burned card goes where the rules put it. Under "Baba Ocağı" that is
+                    // back INTO the draw pile, so it lifts off the top face-up and sinks back
+                    // in - flying it to the discard showed a card going somewhere it never went.
+                    Vector2 burnTo = PileHolding(round, report.BurnedCard);
+                    Vector2 burnFrom = burnTo == DrawPilePos
+                        ? DrawPilePos + new Vector2(0f, 1.1f)
+                        : DrawPilePos;
                     CardVisual burnFx = CardVisual.Create(transform, "BurnFx", report.BurnedCard,
-                        true, false, DrawPilePos, FxOrder);
-                    burnFx.FlyToAndDestroy(DiscardPilePos, DiscardDuration);
+                        true, false, burnFrom, FxOrder);
+                    burnFx.FlyToAndDestroy(burnTo, DiscardDuration);
                 }
             }
 
@@ -1144,9 +1160,49 @@ namespace ProjectBlock.View
                 1, MaxStackLayers);
         }
 
+        /// <summary>Where a card that just left play went: the draw pile if the rules put it
+        /// there, otherwise the discard.</summary>
+        private static Vector2 PileHolding(RoundEngine round, BlockCard card)
+        {
+            IReadOnlyList<BlockCard> draw = round.Deck.DrawPile;
+            for (int i = 0; i < draw.Count; i++)
+            {
+                if (draw[i] == card)
+                {
+                    return DrawPilePos;
+                }
+            }
+            return DiscardPilePos;
+        }
+
+        /// <summary>Puts each pile root in the slot its role currently occupies (see
+        /// slotsSwapped). A no-op on every round without "Konfüzyon".</summary>
+        private void ApplyPileSlots(RoundEngine round)
+        {
+            slotsSwapped = round != null && round.Deck.PileRolesAlternate && round.Deck.PilesSwapped;
+            if (drawPileRoot != null)
+            {
+                drawPileRoot.localPosition = new Vector3(DrawPilePos.x, DrawPilePos.y, 0f);
+            }
+            if (discardPileRoot != null)
+            {
+                discardPileRoot.localPosition = new Vector3(DiscardPilePos.x, DiscardPilePos.y, 0f);
+            }
+        }
+
         private void UpdatePiles(RoundEngine round)
         {
+            ApplyPileSlots(round);
             drawCountLabel.text = round.Deck.DrawCount.ToString();
+            // The count normally sits ON the pile's face. When the top card is shown face-up
+            // ("Insider", "Baba Ocağı", "Büyüteç") that face is information, so the count steps
+            // off it to just above the card's top edge - below Büyüteç's peek, which starts
+            // higher up.
+            bool topShown = (round.Rules.RevealTopDrawCard || round.Rules.RevealedDrawCount > 0)
+                && round.Deck.DrawCount > 0;
+            drawCountLabel.transform.localPosition = topShown
+                ? new Vector3(0f, CardVisual.BodyHeight * 0.5f + 0.2f, 0f)
+                : new Vector3(0f, 0.42f, 0f);
             // The stack fans up-and-right one step per layer, so its visible middle moves as the
             // pile shrinks. The labels ride along, or they would slide off a thinning pile.
             float fan = (LayersFor(round.Deck.DrawCount) - 1) * StackOffset * 0.5f;
@@ -1211,8 +1267,10 @@ namespace ProjectBlock.View
         private void UpdateDiscardTop(RoundEngine round)
         {
             IReadOnlyList<BlockCard> discardPile = round.Deck.DiscardPile;
-            // "Fraksiyon" hides the discard top after a swap (until the next reshuffle).
-            BlockCard top = !round.Rules.HideDiscardTop && discardPile.Count > 0
+            // "Fraksiyon" hides the discard top after a swap (until the next reshuffle), and
+            // "Konfüzyon"'s piles are both shuffled every turn - neither has a top worth showing.
+            BlockCard top = !round.Rules.HideDiscardTop && !round.Deck.PileRolesAlternate
+                && discardPile.Count > 0
                 ? discardPile[discardPile.Count - 1]
                 : null;
             int topId = top != null ? top.Id : -1;

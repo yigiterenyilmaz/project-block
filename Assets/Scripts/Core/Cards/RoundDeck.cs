@@ -99,6 +99,26 @@ namespace ProjectBlock.Core
             rng.Shuffle(discardPile);
         }
 
+        /// <summary>
+        /// "Konfüzyon": the two piles are two FIXED physical piles whose ROLES alternate. True
+        /// once the round's draw pile has been split that way (SplitDrawIntoDiscard). Reporting
+        /// for the View, which then keeps each pile in its own slot and moves the roles between
+        /// them instead of pretending the left one is always the draw pile.
+        /// </summary>
+        public bool PileRolesAlternate { get; private set; }
+
+        /// <summary>With alternating roles: true while the pile that STARTED as the draw pile is
+        /// the current discard. Flipped by <see cref="SwapPileRoles"/> and nothing else.</summary>
+        public bool PilesSwapped { get; private set; }
+
+        /// <summary>"Konfüzyon"'s per-turn swap: exactly SwapPiles, plus the note of which
+        /// physical pile now holds which role.</summary>
+        public void SwapPileRoles()
+        {
+            SwapPiles();
+            PilesSwapped = !PilesSwapped;
+        }
+
         /// <summary>Swaps the two piles wholesale: what you drew from becomes what you
         /// discard to and vice versa ("Konfüzyon", "Fraksiyon").</summary>
         public void SwapPiles()
@@ -157,6 +177,7 @@ namespace ProjectBlock.Core
         /// the larger half when the count is odd, so the two piles differ by at most one.</summary>
         public void SplitDrawIntoDiscard()
         {
+            PileRolesAlternate = true;
             int keep = drawPile.Count - drawPile.Count / 2;
             while (drawPile.Count > keep)
             {

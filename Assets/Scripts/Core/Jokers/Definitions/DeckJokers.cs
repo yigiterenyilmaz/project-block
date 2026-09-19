@@ -121,7 +121,7 @@ namespace ProjectBlock.Core
             // vice versa. Then each pile is shuffled within ITSELF (the two are never merged), so
             // neither pile's order is predictable - the card you discarded this turn is somewhere
             // inside its pile, not handed straight back on top.
-            turn.Round.Deck.SwapPiles();
+            turn.Round.Deck.SwapPileRoles();
             turn.Round.Deck.ShufflePilesSeparately();
             TurnsSeen++;
         }
