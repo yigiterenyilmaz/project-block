@@ -291,7 +291,7 @@ namespace ProjectBlock.Core
     /// <summary>
     /// "Enfeksiyon" - the player infects ONE cell. It does not spread on its own; it watches
     /// whatever block sits on it, and once that same block has held the cell for 3 turns the
-    /// whole block detonates. Only the FIRST detonation spreads the infection, once, into a
+    /// cube ON THAT CELL detonates (only that cube - the rest of the block stays). Only the FIRST detonation spreads the infection, once, into a
     /// 3x3 plus around the cell - that is the most it ever grows. Activated once per round.
     /// </summary>
     public sealed class EnfeksiyonJoker : Joker
@@ -351,13 +351,19 @@ namespace ProjectBlock.Core
             : base("enfeksiyon", "Enfeksiyon")
         {
             SetDescription(
-                "Infect one cube. When the same block has sat on it for 3 turns the whole "
-                    + "block detonates. The first detonation spreads the infection once into "
-                    + "a 3x3 plus - and no further.",
-                "Bir küpü enfekte edersin. Aynı blok o karede 3 tur durursa blok tümüyle "
-                    + "patlar. İlk patlama enfeksiyonu bir kez 3x3 artı şeklinde yayar - "
-                    + "daha fazla değil.");
+                "Infect one cube. When the same block has sat on it for 3 turns, the cube on "
+                    + "that cell detonates - only that cube, not the rest of its block. The first "
+                    + "detonation spreads the infection once into a 3x3 plus - and no further.",
+                "Bir küpü enfekte edersin. Aynı blok o karede 3 tur durursa o karedeki küp "
+                    + "patlar - yalnızca o küp, bloğun geri kalanı değil. İlk patlama "
+                    + "enfeksiyonu bir kez 3x3 artı şeklinde yayar - daha fazla değil.");
             ChargesPerRound = 1;
+        }
+
+        /// <summary>Statistics: one proc per detonation.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
         }
 
         /// <summary>The player points at the cube to infect.</summary>
@@ -470,15 +476,20 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
-                List<GridPos> blockCells = CellsOfCard(board, cardId);
-                if (blockCells.Count == 0)
+                // ONLY THE INFECTED CUBE (designer's call, 2026-09-19). It used to take every
+                // cube of the block sitting on the cell, which read as the infection wiping a
+                // block it had barely touched.
+                Cube? here = board.GetCube(cell);
+                if (!here.HasValue || here.Value.SourceCardId != cardId)
                 {
-                    continue; // block already gone this turn (overlapping infection)
+                    continue; // gone already this turn (overlapping infection)
                 }
-                IReadOnlyList<GridPos> blown = turn.Round.DestroyCubes(blockCells, true);
+                IReadOnlyList<GridPos> blown = turn.Round.DestroyCubes(new List<GridPos> { cell }, true);
                 if (blown.Count > 0)
                 {
                     lastDetonated.AddRange(blown);
+                    NoteProc(turn.Round.ExternalDestructionScores
+                        ? blown.Count * PointsPerInfectedCube : 0, turn);
                     // The detonation is the joker's destruction: it pays only under "Genel
                     // temizlik".
                     if (turn.Round.ExternalDestructionScores)
@@ -533,20 +544,6 @@ namespace ProjectBlock.Core
                 Turns = 0
             };
             lastSpread.Add(cell);
-        }
-
-        private static List<GridPos> CellsOfCard(GameBoard board, int cardId)
-        {
-            var cells = new List<GridPos>();
-            foreach (GridPos cell in board.GetOccupiedCells())
-            {
-                Cube? cube = board.GetCube(cell);
-                if (cube.HasValue && cube.Value.SourceCardId == cardId)
-                {
-                    cells.Add(cell);
-                }
-            }
-            return cells;
         }
     }
 }
