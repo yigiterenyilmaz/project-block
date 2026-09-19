@@ -285,7 +285,7 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>Shared body of "Yangın" and "Taşkın": once per round, every cube next to a
+    /// <summary>Shared body of "Yangın" and "Taşkın": once per TURN, every cube next to a
     /// cube of the source kind becomes that kind too. One ring only - no chain reaction,
     /// which would trivially convert the whole board.</summary>
     public abstract class SpreadJoker : Joker
@@ -315,10 +315,38 @@ namespace ProjectBlock.Core
         [NotSaved]
         private int spreadSerial;
 
+        /// <summary>Cubes this joker has turned over the whole run.</summary>
+        private int cubesConverted;
+
         public override void OnRoundStarted(RoundContext ctx)
         {
             base.OnRoundStarted(ctx);
             LastSpread = null;
+        }
+
+        /// <summary>ONCE PER TURN, not per round: the charge comes back as every turn ends. It
+        /// is still one charge, so it cannot be spent twice before a block is placed.</summary>
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            GrantCharge();
+        }
+
+        /// <summary>Statistics: every use is a proc, and the card says how many cubes it has
+        /// turned in total - which is what the spread has actually been worth.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                string ready = ChargesLeft > 0 ? Loc.Pick("ready", "hazır") : Loc.Pick("used", "kullanıldı");
+                return cubesConverted > 0
+                    ? ready + Loc.Pick("  ·  " + cubesConverted + " turned", "  ·  " + cubesConverted + " küp döndü")
+                    : ready;
+            }
         }
 
         public override bool CanActivate(RoundContext ctx)
@@ -335,6 +363,8 @@ namespace ProjectBlock.Core
                 return false;
             }
             LastSpread = SpreadOn(ctx.Round.Board, SpreadKind, ++spreadSerial);
+            cubesConverted += LastSpread.Targets.Count;
+            NoteProc(0);
             return true;
         }
 
@@ -392,27 +422,27 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Yangın" - once per round, fire spreads to its neighbours.</summary>
+    /// <summary>"Yangın" - once per turn, fire spreads to its neighbours.</summary>
     public sealed class YanginJoker : SpreadJoker
     {
         public YanginJoker()
             : base("yangin", "Yangın", CubeKind.Fire)
         {
             SetDescription(
-                "Once per round: the blocks around fire blocks turn to fire too.",
-                "Raunt başına 1 kez: ateş bloklarının etrafındaki bloklar da ateş olur.");
+                "Once per turn: the blocks around fire blocks turn to fire too.",
+                "Tur başına 1 kez: ateş bloklarının etrafındaki bloklar da ateş olur.");
         }
     }
 
-    /// <summary>"Taşkın" - once per round, water spreads to its neighbours.</summary>
+    /// <summary>"Taşkın" - once per turn, water spreads to its neighbours.</summary>
     public sealed class TaskinJoker : SpreadJoker
     {
         public TaskinJoker()
             : base("taskin", "Taşkın", CubeKind.Water)
         {
             SetDescription(
-                "Once per round: the blocks around water blocks turn to water too.",
-                "Raunt başına 1 kez: su bloklarının etrafındaki bloklar da su olur.");
+                "Once per turn: the blocks around water blocks turn to water too.",
+                "Tur başına 1 kez: su bloklarının etrafındaki bloklar da su olur.");
         }
     }
 
