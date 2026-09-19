@@ -2001,6 +2001,52 @@ namespace ProjectBlock.View
             Refresh();
         }
 
+        private SpriteRenderer riderPlate;
+        private SpriteRenderer riderIcon;
+
+        /// <summary>
+        /// "Parazit": the passenger's own ICON, standing on the host cube, over the harness
+        /// ParasiteHostView wraps it in. The harness says "this cube is held"; the icon says WHO
+        /// is riding it, which is what a line through that cube is about to cost. Null cell (or
+        /// icon) takes it off. Asked every repaint by the controller, which alone knows the
+        /// binding - this only draws it.
+        /// </summary>
+        public void SetParasiteRider(GridPos? cell, Sprite icon)
+        {
+            bool show = cell.HasValue && icon != null && board != null && board.IsInside(cell.Value);
+            if (!show)
+            {
+                if (riderPlate != null)
+                {
+                    riderPlate.enabled = false;
+                    riderIcon.enabled = false;
+                }
+                return;
+            }
+            if (riderPlate == null)
+            {
+                riderPlate = ViewUtil.MakeRounded(transform, "ParasiteRiderPlate", Vector2.zero,
+                    Vector2.one, new Color(0.07f, 0.05f, 0.09f, 0.82f), 16);
+                var go = new GameObject("ParasiteRiderIcon");
+                go.transform.SetParent(transform, false);
+                riderIcon = go.AddComponent<SpriteRenderer>();
+                riderIcon.sortingOrder = 17;
+            }
+            // In a corner of the cube rather than over its middle: the middle is where the
+            // harness's nest and passenger sit, and the two must not be one blob.
+            Vector2 at = CellToWorld(cell.Value) + new Vector2(cellSize * 0.24f, cellSize * 0.24f);
+            float size = cellSize * 0.44f;
+            riderPlate.transform.localPosition = new Vector3(at.x, at.y, 0f);
+            riderPlate.transform.localScale = new Vector3(size, size, 1f);
+            riderIcon.sprite = icon;
+            float native = Mathf.Max(icon.bounds.size.x, icon.bounds.size.y, 0.0001f);
+            float scale = size * 0.9f / native;
+            riderIcon.transform.localPosition = new Vector3(at.x, at.y, 0f);
+            riderIcon.transform.localScale = new Vector3(scale, scale, 1f);
+            riderPlate.enabled = true;
+            riderIcon.enabled = true;
+        }
+
         /// <summary>Marks where "Besleme"'s creature lives. Pass null to clear it.</summary>
         public void ShowCreature(IReadOnlyList<GridPos> cells)
         {

@@ -76,6 +76,7 @@ public static class JokerTests
         Imitasyon_HandTracksTheDiscardPile();
         Fraksiyon_SplitsAtRoundStartAndAllowsOneSwap();
         Parazit_FreesASlotAndDiesWithItsHostCube();
+        Parazit_ThePassengerDiesWhenItsBlockIsThrownAway();
         Powers_CentralRulesHold();
         Powers_BoardEffects();
         Powers_DeckEffects();
@@ -2047,6 +2048,74 @@ public static class JokerTests
 
         session.Jokers.Remove(joker);
         Check(session.Config.Rules.RevealedDiscardCount == 0, "removal hides the discard again");
+    }
+
+    private static void Parazit_ThePassengerDiesWhenItsBlockIsThrownAway()
+    {
+        Section("parazit / a discarded or sold host block takes the passenger with it");
+        // Sold in the market.
+        var session = NewSession(234, 3, 10, 6, 3);
+        session.Jokers.Add(new ParazitJoker());
+        var passenger = (CimriKumbaraJoker)session.Jokers.Add(new CimriKumbaraJoker());
+        if (!ReachMarket(session))
+        {
+            Check(false, "could not reach the market to bind", "phase " + session.Phase);
+            return;
+        }
+        BlockCard host = session.OwnedCards[0];
+        Check(session.TryAttachJokerToCard(passenger.InstanceId, host.Id, 0), "binding accepted");
+        session.SellCard(host);
+        Check(session.Jokers.Find(passenger.InstanceId) == null,
+            "selling the host block destroyed the passenger");
+
+        // Discarded unplayed in a round: swapped out of the hand.
+        var second = NewSession(235, 3, 10, 6, 3);
+        second.Jokers.Add(new ParazitJoker());
+        var rider = (CimriKumbaraJoker)second.Jokers.Add(new CimriKumbaraJoker());
+        if (!ReachMarket(second))
+        {
+            Check(false, "could not reach the market to bind (2)", "phase " + second.Phase);
+            return;
+        }
+        BlockCard block = second.OwnedCards[0];
+        Check(second.TryAttachJokerToCard(rider.InstanceId, block.Id, 0), "second binding accepted");
+        second.LeaveMarket();
+        RoundEngine round = second.CurrentRound;
+        int guard = 0;
+        int at = -1;
+        while (at < 0 && guard++ < 30 && round.Status == RoundStatus.InProgress)
+        {
+            for (int i = 0; i < round.Hand.Count; i++)
+            {
+                if (round.Hand[i].Id == block.Id) { at = i; }
+            }
+            if (at < 0) { round.RedrawHand(); }
+        }
+        Check(at >= 0, "the host block reached the hand");
+        if (at < 0) { return; }
+        Check(second.Jokers.Find(rider.InstanceId) != null, "the passenger is alive while it is held");
+        round.ReplaceHandCard(at);
+        Check(second.Jokers.Find(rider.InstanceId) == null,
+            "throwing the host block away unplayed destroyed the passenger");
+    }
+
+    /// <summary>Plays the current round until it reaches the market. False if it never does.</summary>
+    private static bool ReachMarket(GameSession session)
+    {
+        int guard = 0;
+        while (session.Phase == GamePhase.Round && guard++ < 40)
+        {
+            if (session.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
+            {
+                session.CurrentRound.DecideAdvance(true);
+                break;
+            }
+            if (PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        return session.Phase == GamePhase.Market;
     }
 
     private static void Parazit_FreesASlotAndDiesWithItsHostCube()

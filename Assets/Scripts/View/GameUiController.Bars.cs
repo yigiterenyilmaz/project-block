@@ -323,6 +323,22 @@ namespace ProjectBlock.View
             UpdateHud();
         }
 
+        /// <summary>CardVisual.RiderLookup: the one place the View asks who rides which card.</summary>
+        private bool LookUpRider(int cardId, out int cellIndex, out Sprite icon)
+        {
+            cellIndex = -1;
+            icon = null;
+            ParazitJoker parasite = session != null ? FindParasite() : null;
+            if (parasite == null || !parasite.HasBinding || parasite.HostCardId != cardId)
+            {
+                return false;
+            }
+            Joker bound = session.Jokers.Find(parasite.PassengerIdentity(session).InstanceId);
+            icon = bound != null ? ViewUtil.JokerIcon(bound.DefId) : null;
+            cellIndex = parasite.HostCellIndex;
+            return icon != null;
+        }
+
         /// <summary>Last Joker.LooseProcs seen per joker instance.</summary>
         private readonly Dictionary<int, int> looseProcsSeen = new Dictionary<int, int>();
 
@@ -348,6 +364,42 @@ namespace ProjectBlock.View
                 }
                 looseProcsSeen[joker.InstanceId] = joker.LooseProcs;
             }
+        }
+
+        /// <summary>
+        /// "Parazit": hands the binding to the two places it is drawn - the host cube's icon in
+        /// the HAND (CardLayerView.Riders, read on the next sync) and on the BOARD once the block
+        /// has been played (BoardView.SetParasiteRider). The joker is the only source; neither
+        /// view works out a binding for itself.
+        /// </summary>
+        private void RefreshParasiteRiders(RoundEngine round)
+        {
+            cardLayer.Riders.Clear();
+            ParazitJoker parasite = FindParasite();
+            Joker bound = parasite != null && parasite.HasBinding
+                ? session.Jokers.Find(parasite.PassengerIdentity(session).InstanceId)
+                : null;
+            Sprite icon = bound != null ? ViewUtil.JokerIcon(bound.DefId) : null;
+            if (bound == null || icon == null)
+            {
+                boardView.SetParasiteRider(null, null);
+                return;
+            }
+            cardLayer.Riders[parasite.HostCardId] = new CardLayerView.RiderMark
+            {
+                CellIndex = parasite.HostCellIndex,
+                Icon = icon
+            };
+            GridPos? host = parasite.HostPosition;
+            if (host.HasValue && round != null && round.Board != null)
+            {
+                Cube? cube = round.Board.GetCube(host.Value);
+                if (!cube.HasValue || cube.Value.SourceCardId != parasite.HostCardId)
+                {
+                    host = null;
+                }
+            }
+            boardView.SetParasiteRider(host, icon);
         }
 
         // ---------------------------------------------------------------- press and hold to sell

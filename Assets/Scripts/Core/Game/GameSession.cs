@@ -733,6 +733,7 @@ namespace ProjectBlock.Core
             {
                 return 0;
             }
+            Jokers.DispatchCardLost(null, card);
             NoteDeckChanged();
             // Sell values live in the same currency as the scaled run economy.
             int value = Config.Market.SellValue(card) * Config.Scoring.ScoreScale;
@@ -874,6 +875,7 @@ namespace ProjectBlock.Core
                     // Out of the piles too, so it cannot still be drawn this round.
                     CurrentRound.TaxCardOutOfRound(card);
                 }
+                Jokers.DispatchCardLost(Phase == GamePhase.Round ? CurrentRound : null, card);
                 taken++;
             }
             if (taken > 0)

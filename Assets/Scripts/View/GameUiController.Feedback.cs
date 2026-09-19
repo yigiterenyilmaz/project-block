@@ -2251,6 +2251,7 @@ namespace ProjectBlock.View
             boardView.ClearPreview();
             RefreshMirrorWorld();
             RefreshInfections(report);
+            RefreshParasiteRiders(round);
             cardLayer.Sync(round, report);
             // AFTER the hand is laid out, never before: the payout is drawn on the held cards and
             // they are not where the player will see them until this call has run.

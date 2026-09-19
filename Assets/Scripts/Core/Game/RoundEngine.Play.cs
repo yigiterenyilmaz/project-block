@@ -437,7 +437,7 @@ namespace ProjectBlock.Core
                 throw new ArgumentOutOfRangeException("handIndex");
             }
             BlockCard returned = Hand.RemoveAt(handIndex);
-            DisposeCard(returned);
+            DiscardUnplayed(returned);
             BlockCard drawn = DrawWithRules();
             if (drawn == null)
             {
@@ -468,7 +468,7 @@ namespace ProjectBlock.Core
         {
             while (Hand.Count > 0)
             {
-                DisposeCard(Hand.RemoveAt(Hand.Count - 1));
+                DiscardUnplayed(Hand.RemoveAt(Hand.Count - 1));
             }
         }
 
@@ -482,9 +482,21 @@ namespace ProjectBlock.Core
         {
             while (Hand.Count > 0)
             {
-                DisposeCard(Hand.RemoveAt(Hand.Count - 1));
+                DiscardUnplayed(Hand.RemoveAt(Hand.Count - 1));
             }
             Deck.ShuffleDiscardIntoDraw();
+        }
+
+        /// <summary>A card going into a pile WITHOUT having been played (a redraw, a swap, a
+        /// burn). Exactly DisposeCard, plus the one thing a play does not do: the jokers are told
+        /// the card was lost ("Parazit"'s passenger goes down with its block).</summary>
+        private void DiscardUnplayed(BlockCard card)
+        {
+            DisposeCard(card);
+            if (session != null)
+            {
+                session.Jokers.DispatchCardLost(this, card);
+            }
         }
 
         private void EnsurePlacingAllowed()

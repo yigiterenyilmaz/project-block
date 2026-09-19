@@ -453,8 +453,18 @@ namespace ProjectBlock.Core
             return card;
         }
 
-        /// <summary>Reserved: a power was used. Powerbank refills one use here.</summary>
+        /// <summary>A power was used.</summary>
         public virtual void OnPowerUsed(RoundContext ctx, string powerId)
+        {
+        }
+
+        /// <summary>
+        /// A card was LOST without being played: sent from the hand (or the top of the draw
+        /// pile) into a pile unplayed - a redraw, a swap, a burn - or taken out of the deck
+        /// altogether (sold, taxed). "Parazit" is what this is for: a joker riding a block goes
+        /// down with the block. <paramref name="ctx"/> is a RoundContext when a round is running.
+        /// </summary>
+        public virtual void OnCardLost(SessionContext ctx, BlockCard card)
         {
         }
 

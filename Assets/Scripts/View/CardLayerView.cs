@@ -38,6 +38,17 @@ namespace ProjectBlock.View
         /// </summary>
         private static bool slotsSwapped;
 
+        /// <summary>"Parazit": a joker riding one cube of a block, as the hand draws it.</summary>
+        public struct RiderMark
+        {
+            public int CellIndex;
+            public Sprite Icon;
+        }
+
+        /// <summary>Which held cards carry a rider, keyed by card id. The CONTROLLER fills it
+        /// from the joker before every sync; this class never asks who is bound to what.</summary>
+        public readonly Dictionary<int, RiderMark> Riders = new Dictionary<int, RiderMark>();
+
         private static Vector2 HandCenter
         {
             get { return UiLayout.Active.HandCenter; }
@@ -599,6 +610,15 @@ namespace ProjectBlock.View
                 // it ("Alıkoyma" holds a card for one turn, "Hazine" longer), and it is the same
                 // question the drag path asks before refusing the pick-up.
                 visual.SetFrozen(round.IsFrozen(id));
+                RiderMark rider;
+                if (Riders.TryGetValue(id, out rider))
+                {
+                    visual.SetRider(rider.CellIndex, rider.Icon);
+                }
+                else
+                {
+                    visual.SetRider(-1, null);
+                }
             }
 
             // pile-to-pile effects

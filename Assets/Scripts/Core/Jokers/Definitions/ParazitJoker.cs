@@ -12,6 +12,9 @@
 //     since a card spends most of a round in the piles.
 //  4. If Parazit itself leaves the inventory, the bound joker simply comes home: it starts
 //     occupying a slot again rather than being destroyed.
+//  5. (designer's call, 2026-09-19) The host BLOCK being discarded unplayed - a redraw, a
+//     swap, a burn - or leaving the deck (sold, taxed) kills the passenger, the same as its
+//     cube breaking. Heard through Joker.OnCardLost.
 //
 // HOW THE HOST CUBE IS TRACKED: cubes on the board only carry their SOURCE CARD, not which
 // cube of the block they are. So the binding stores a cell INDEX, and the moment the host
@@ -38,21 +41,36 @@ namespace ProjectBlock.Core
         /// <summary>Where the host cube currently sits, once the block has been placed.</summary>
         private GridPos? hostPos;
 
+        /// <summary>The turn the last "it held" proc was noted on - presentation only.</summary>
+        [NotSaved]
+        private int lastHeldTurn = -1;
+
         public ParazitJoker()
             : base("parazit", "Parazit")
         {
             SetDescription(
-                "In the market, attach a joker to a cube of a block in your deck. That joker "
-                    + "takes no slot. Its host cube is sweep-exempt and unbreakable by other "
-                    + "jokers and powers - only a line you complete destroys it (and the joker).",
-                "Markette bir jokeri destendeki bir bloğun küpüne takarsın. O joker slot "
-                    + "işgal etmez. Konak küp temizliğe girmez ve başka joker/güçlerle kırılmaz "
-                    + "- sadece senin tamamladığın bir satır onu (ve jokeri) yok eder.");
+                "In the market, attach a joker to a cube of a block in your deck - its icon rides "
+                    + "on that cube. That joker takes no slot. Its host cube is sweep-exempt and "
+                    + "unbreakable by other jokers and powers - only a line you complete destroys "
+                    + "it, and the joker with it. If the block is DISCARDED without being played, "
+                    + "or leaves your deck, the joker is destroyed too.",
+                "Markette bir jokeri destendeki bir bloğun küpüne takarsın - simgesi o küpün "
+                    + "üstünde durur. O joker slot işgal etmez. Konak küp temizliğe girmez ve "
+                    + "başka joker/güçlerle kırılmaz - sadece senin tamamladığın bir satır onu, "
+                    + "jokerle birlikte, yok eder. Blok oynanmadan ISKARTAYA giderse ya da "
+                    + "destenden çıkarsa joker de yok olur.");
         }
 
         public bool HasBinding
         {
             get { return BoundJokerInstanceId.HasValue; }
+        }
+
+        /// <summary>Statistics and the proc light: it fires when it binds, and on every turn its
+        /// host cube shrugs off something that tried to break it.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
         }
 
         /// <summary>An unbound parasite is waiting for its market attach, so its card breathes
@@ -124,6 +142,7 @@ namespace ProjectBlock.Core
             HostCardId = card.Id;
             HostCellIndex = cellIndex;
             hostPos = null;
+            NoteProc(0);
             return true;
         }
 
@@ -150,6 +169,18 @@ namespace ProjectBlock.Core
         public override void OnRoundStarted(RoundContext ctx)
         {
             hostPos = null; // the board is fresh; the host cube is back in the piles
+        }
+
+        /// <summary>The host BLOCK was thrown away unplayed (redrawn, swapped, burned) or left
+        /// the deck (sold, taxed): the passenger goes with it, exactly as if its cube had been
+        /// broken. A block you play is not lost - its cube is on the board, and only a line
+        /// breaks that.</summary>
+        public override void OnCardLost(SessionContext ctx, BlockCard card)
+        {
+            if (HasBinding && card != null && card.Id == HostCardId)
+            {
+                KillPassenger(ctx.Session);
+            }
         }
 
         // Destruction can happen at either point in a turn, so both hooks run the same check.
@@ -184,6 +215,21 @@ namespace ProjectBlock.Core
                 }
                 KillPassenger(turn.Session);
                 return;
+            }
+            // It held: something tried to break the host this turn and was refused.
+            IReadOnlyList<HostRefusal> refused = turn.Round.Board.HostRefusals.Refusals;
+            for (int i = 0; i < refused.Count; i++)
+            {
+                if (refused[i].Cell.Equals(hostPos.Value))
+                {
+                    // Track runs twice a turn (after the lines, after the score): one proc.
+                    if (turn.Round.TurnNumber != lastHeldTurn)
+                    {
+                        lastHeldTurn = turn.Round.TurnNumber;
+                        NoteProc(0, turn);
+                    }
+                    break;
+                }
             }
             // Host cube survived this turn: (re)assert its protection so external jokers and
             // powers cannot break it and it stays out of the clean-sweep check. Only the cube

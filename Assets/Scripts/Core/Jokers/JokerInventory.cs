@@ -534,6 +534,25 @@ namespace ProjectBlock.Core
             RaiseChanged();
         }
 
+        /// <summary>A card was lost unplayed - see Joker.OnCardLost. <paramref name="round"/>
+        /// is null outside a round (a sale in the market).</summary>
+        public void DispatchCardLost(RoundEngine round, BlockCard card)
+        {
+            if (card == null)
+            {
+                return;
+            }
+            SessionContext ctx = round != null ? RoundCtx(round) : SessionCtx();
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
+            {
+                if (!IsGated(batch[i], round))
+                {
+                    batch[i].OnCardLost(ctx, card);
+                }
+            }
+        }
+
         public void DispatchMarketLeft(bool anythingPurchased)
         {
             SessionContext ctx = SessionCtx();

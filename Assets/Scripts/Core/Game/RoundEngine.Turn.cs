@@ -358,7 +358,7 @@ namespace ProjectBlock.Core
                 report.BurnedCard = DrawWithRules();
                 if (report.BurnedCard != null)
                 {
-                    DisposeCard(report.BurnedCard);
+                    DiscardUnplayed(report.BurnedCard);
                 }
                 // Bonus plays do not refill the hand - the hand was not touched. Unless the
                 // boss says otherwise: "Feda" makes the whole hand the price of a bonus card.
