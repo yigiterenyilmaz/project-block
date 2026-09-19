@@ -1255,8 +1255,8 @@ public static class JokerTests
         // placeholder that will move. A View drawing "+60" would one day lie about the score.
         RebateVisuals report = joker.LastRebate;
         Check(report != null, "the payout reported itself");
-        Check(report.Payout == joker.PointsPerEmptyDrawPile,
-            "the receipt carries the joker's OWN amount, never a constant",
+        Check(report.Payout == joker.PointsPerEmptyDrawPile * session.Config.Scoring.ScoreScale,
+            "the receipt carries the joker's OWN amount in screen points, never a constant",
             report == null ? "no report" : "payout " + report.Payout);
         Check(report.TimesThisRound == joker.TriggeredThisRound,
             "and how many times it has paid this round",

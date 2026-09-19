@@ -105,7 +105,9 @@ namespace ProjectBlock.Core
             LastRebate = new RebateVisuals
             {
                 Serial = ++rebateSerial,
-                Payout = PointsPerEmptyDrawPile,
+                // SCREEN points: the receipt is read next to the score label, and it used to
+                // print the logical number (+6 for a payout of 60).
+                Payout = PointsPerEmptyDrawPile * (turn.Score.ScoreScale < 1 ? 1 : turn.Score.ScoreScale),
                 TimesThisRound = TriggeredThisRound,
                 ThresholdPassed = turn.Round.ThresholdPassed
             };

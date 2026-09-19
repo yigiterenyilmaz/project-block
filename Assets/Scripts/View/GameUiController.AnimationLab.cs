@@ -8932,8 +8932,15 @@ namespace ProjectBlock.View
 
         private int animRebateSerial;
 
-        /// <summary>What the joker would actually pay. Read, never written here.</summary>
+        /// <summary>What the joker would actually pay, in SCREEN points as the receipt shows it.
+        /// Read, never written here.</summary>
         private int AnimRebateAmount()
+        {
+            int scale = session != null ? Mathf.Max(1, session.Config.Scoring.ScoreScale) : 1;
+            return AnimRebateLogical() * scale;
+        }
+
+        private int AnimRebateLogical()
         {
             if (session != null && session.Jokers != null)
             {
