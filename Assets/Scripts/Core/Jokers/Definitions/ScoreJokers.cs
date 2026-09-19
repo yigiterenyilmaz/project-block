@@ -390,6 +390,13 @@ namespace ProjectBlock.Core
             get { return true; }
         }
 
+        /// <summary>How many times the switch has paid for something, on the card itself - it
+        /// has no other number, and without one the card under the bar says nothing at all.</summary>
+        public override string StatusText
+        {
+            get { return Loc.Pick(ProcCount + "x", ProcCount + " kez"); }
+        }
+
         /// <summary>How much of the engine's meter this joker has already counted. Saved (no
         /// [NotSaved]) so a run resumed mid-round cannot count the same points twice.</summary>
         private int creditSeen;

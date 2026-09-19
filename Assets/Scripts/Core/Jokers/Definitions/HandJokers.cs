@@ -135,6 +135,7 @@ namespace ProjectBlock.Core
         private readonly System.Collections.Generic.List<BlockCard> carried =
             new System.Collections.Generic.List<BlockCard>();
         private int baseHandSize = -1;
+        private int cardsCarriedTotal;
 
         public HafizaJoker()
             : base("hafiza", "Hafıza")
@@ -146,9 +147,36 @@ namespace ProjectBlock.Core
                     + "büyüklüğünü aşan kartlar rastgele atılır.");
         }
 
+        /// <summary>Cards this joker has carried across a round boundary over the whole run.
+        /// The LIFETIME total, not what it is holding - that is what says whether owning it has
+        /// been worth a slot.</summary>
+        public int CardsCarriedTotal
+        {
+            get { return cardsCarriedTotal; }
+        }
+
+        /// <summary>
+        /// NO proc statistics: how many rounds it happened to fire in says nothing about this
+        /// joker. The status line says the two things that do, each in a full sentence - a bare
+        /// "0 carried  ·  total 2" read as a riddle. Between rounds it names what is WAITING to
+        /// come over; otherwise it names what it has brought over in the whole run.
+        /// </summary>
         public override string StatusText
         {
-            get { return Loc.Pick(carried.Count + " carried", carried.Count + " taşınan"); }
+            get
+            {
+                if (carried.Count > 0)
+                {
+                    return Loc.Pick(carried.Count + " card(s) waiting for next round",
+                        "sonraki rauntta " + carried.Count + " kart gelecek");
+                }
+                if (cardsCarriedTotal > 0)
+                {
+                    return Loc.Pick(cardsCarriedTotal + " card(s) carried so far",
+                        "şimdiye dek " + cardsCarriedTotal + " kart taşıdı");
+                }
+                return Loc.Pick("nothing carried yet", "henüz kart taşımadı");
+            }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
@@ -178,6 +206,9 @@ namespace ProjectBlock.Core
             {
                 carried.RemoveAt(ctx.Rng.NextInt(0, carried.Count));
             }
+            // Counted AFTER the trim, so the total is what really crossed the boundary and not
+            // what was picked up before the excess was thrown away.
+            cardsCarriedTotal += carried.Count;
         }
 
         private static bool IsOwned(GameSession session, int cardId)
