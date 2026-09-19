@@ -53,7 +53,11 @@ namespace ProjectBlock.Core
                 {
                     DeclareLoss(LossReason.ForbiddenCleanSweep); // "Çıkmaz", between turns
                 }
-                AddScoreOutsideTurn(PriceCleanSweep());
+                // This whole branch only exists while "Genel temizlik" is held, so the bonus is
+                // entirely the switch's doing.
+                int betweenTurns = PriceCleanSweep();
+                CreditExternalScore(betweenTurns);
+                AddScoreOutsideTurn(betweenTurns);
                 if (session != null)
                 {
                     session.Powers.RechargeAll();
@@ -93,6 +97,11 @@ namespace ProjectBlock.Core
             // sweep FX - it just pays no bonus, no overtime win bonus, and recharges no power.
             bool counts = !external || Rules.CountExternalSweeps;
 
+            // Credit "Genel temizlik" for what the switch was worth here, and ONLY when the
+            // switch is what made this sweep count - the player's own placement sweep always
+            // counted and owes the joker nothing. See RoundEngine.ExternalScoreCredited.
+            bool switchMadeItCount = external && counts;
+
             if (counts)
             {
                 int sweepBonus = PriceCleanSweep();
@@ -102,6 +111,10 @@ namespace ProjectBlock.Core
                     // The line score was banked several steps ago, so it stands - the swallow
                     // rule below only applies while the turn's score is still open.
                     AddLateTurnScore(sweepBonus, "base.sweep");
+                    if (switchMadeItCount)
+                    {
+                        CreditExternalScore(sweepBonus);
+                    }
                 }
                 else
                 {
@@ -111,6 +124,16 @@ namespace ProjectBlock.Core
                     // same event, and paying both made one turn worth most of a round.
                     // Only a sweep that actually pays swallows the lines - an uncounted external
                     // sweep (no "Genel temizlik") must not leave the turn with nothing at all.
+                    //
+                    // Which is exactly why the joker is credited with the DIFFERENCE here and not
+                    // with the whole bonus: without the switch this turn would still have paid
+                    // its lines, so what the switch actually bought the player is the sweep bonus
+                    // MINUS the line score it swallowed. Crediting the gross would flatter the
+                    // card on precisely the turns where the trade was close to even.
+                    if (switchMadeItCount)
+                    {
+                        CreditExternalScore(sweepBonus - breakdown.BaseLines);
+                    }
                     breakdown.BaseLines = 0;
                     breakdown.BaseSweep += sweepBonus;
                 }
@@ -141,6 +164,10 @@ namespace ProjectBlock.Core
                         breakdown.BaseOvertimeBonus += winBonus;
                     }
                     currentReport.OvertimeWinBonus += winBonus;
+                    if (switchMadeItCount)
+                    {
+                        CreditExternalScore(winBonus);
+                    }
                 }
             }
 

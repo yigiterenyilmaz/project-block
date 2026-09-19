@@ -427,13 +427,24 @@ namespace ProjectBlock.View
             {
                 return string.Empty;
             }
-            string line = "\n" + Loc.Pick("Fired ", "Çalıştı ") + joker.ProcCount
-                + Loc.Pick(joker.ProcCount == 1 ? " time" : " times", " kez");
+            int fired = joker.ProcCount;
+            // WRITTEN AS A SENTENCE, NOT AS A FIELD. "Çalıştı 0 kez" is the verb first and the
+            // count after it, which is neither Turkish nor anything a person would say - Turkish
+            // puts the verb last, and a zero is said as "it has not happened", never as "it
+            // happened zero times". English gets the same treatment ("once", not "1 times").
+            string line = "\n" + (fired == 0
+                ? Loc.Pick("Not fired yet", "Henüz çalışmadı")
+                : Loc.Pick(fired == 1 ? "Fired once" : "Fired " + fired + " times",
+                    fired + " kez çalıştı"));
             if (joker.ProcPoints != 0)
             {
+                // A SIGNED TALLY rather than a second verb: "+360 puan" and "-240 puan" both
+                // read, while "kazandırdı" would have to become "kaybettirdi" the moment a joker
+                // costs the player points - and this one ("Besleme") routinely does. It also
+                // keeps the line short enough not to run out of the panel.
                 long scaled = joker.ProcPoints * session.Config.Scoring.ScoreScale;
-                line += Loc.Pick("  -  earned ", "  -  kazandırdı ")
-                    + (scaled > 0 ? "+" : string.Empty) + scaled;
+                line += "  ·  " + (scaled > 0 ? "+" : string.Empty) + scaled
+                    + Loc.Pick(" pts", " puan");
             }
             return line;
         }

@@ -121,8 +121,10 @@ namespace ProjectBlock.Core
                 // power completes (ResolveFullLinesOutsideTurn).
                 if (ExternalDestructionScores)
                 {
-                    AddScoreOutsideTurn(PriceLines(BuildLineScore(lines,
-                        lines.ExplodedCells.Count, false)));
+                    int external = PriceLines(BuildLineScore(lines,
+                        lines.ExplodedCells.Count, false));
+                    CreditExternalScore(external);
+                    AddScoreOutsideTurn(external);
                 }
                 if (currentReport != null)
                 {

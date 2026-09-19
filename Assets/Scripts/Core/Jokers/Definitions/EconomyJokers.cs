@@ -483,7 +483,12 @@ namespace ProjectBlock.Core
                     // temizlik".
                     if (turn.Round.ExternalDestructionScores)
                     {
-                        turn.AddFlatScore(blown.Count * PointsPerInfectedCube, DefId);
+                        int paid = blown.Count * PointsPerInfectedCube;
+                        turn.AddFlatScore(paid, DefId);
+                        // This payment exists only because "Genel temizlik" is held, so it is
+                        // part of what that joker has been worth - see
+                        // RoundEngine.ExternalScoreCredited. Reporting only.
+                        turn.Round.CreditExternalScore(paid);
                     }
                     turn.Round.TryResolveCleanSweep();
                     if (!hasSpread)

@@ -249,7 +249,11 @@ namespace ProjectBlock.Core
             int paidBefore = turn.Score.FlatBonus + turn.Score.LateFlat;
             if (burned.Count > 0 && turn.Round.ExternalDestructionScores)
             {
-                turn.Score.AddFlat(burned.Count * PointsPerChainedCube, DefId);
+                int paid = burned.Count * PointsPerChainedCube;
+                turn.Score.AddFlat(paid, DefId);
+                // Only "Genel temizlik" makes the chain pay at all, so the points are part of
+                // what that joker has been worth - see RoundEngine.ExternalScoreCredited.
+                turn.Round.CreditExternalScore(paid);
             }
             if (burned.Count > 0)
             {

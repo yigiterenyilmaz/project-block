@@ -99,6 +99,15 @@ namespace ProjectBlock.Core
             get { return brokenThisRound; }
         }
 
+        /// <summary>It keeps proc statistics, so the tooltip prints its count even at zero. That
+        /// zero is the point for THIS joker in particular: a circuit has no deadline, so a player
+        /// who has never managed to finish one has a card that looks busy - it traces, it waits,
+        /// its status line counts cells - while having paid nothing all run.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         public override string StatusText
         {
             get
@@ -233,8 +242,15 @@ namespace ProjectBlock.Core
             // only breaks when the PLAYER has filled every cell of it by placing blocks, so this
             // explosion is the player's own, like a completed line. The cubes that had already
             // gone this turn were part of the circuit too, so the whole circuit is paid for.
-            turn.AddFlatScore(cells * turn.Scoring.PointsPerCubeExploded, DefId);
-            turn.AddFlatScore(BreakBonus + cells * BonusPerCell, DefId);
+            int perCube = cells * turn.Scoring.PointsPerCubeExploded;
+            int circuitBonus = BreakBonus + cells * BonusPerCell;
+            turn.AddFlatScore(perCube, DefId);
+            turn.AddFlatScore(circuitBonus, DefId);
+            // ONE proc for the BREAK - the joker's whole event, and its only one. Worth both
+            // halves of what it just paid, because the per-cube rate is only paid here at all
+            // BECAUSE the circuit broke: splitting it off would undercount what holding this
+            // joker has actually been worth.
+            NoteProc(perCube + circuitBonus, turn);
             path.Clear();
             armed = false;
         }

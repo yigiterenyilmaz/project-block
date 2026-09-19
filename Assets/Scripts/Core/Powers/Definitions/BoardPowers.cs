@@ -294,7 +294,12 @@ namespace ProjectBlock.Core
                 // temizlik".
                 if (ctx.Round.ExternalDestructionScores)
                 {
-                    ctx.Round.AddScoreOutsideTurn(echoed.Count * PointsPerEchoedCube);
+                    int paid = echoed.Count * PointsPerEchoedCube;
+                    // Only "Genel temizlik" makes a replayed explosion pay, so the points are
+                    // part of what that joker has been worth - see
+                    // RoundEngine.ExternalScoreCredited.
+                    ctx.Round.CreditExternalScore(paid);
+                    ctx.Round.AddScoreOutsideTurn(paid);
                 }
                 ctx.Round.TryResolveCleanSweep();
             }

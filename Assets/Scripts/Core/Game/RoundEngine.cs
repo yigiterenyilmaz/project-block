@@ -609,9 +609,11 @@ namespace ProjectBlock.Core
             {
                 // Priced through the boss too ("Ufuk"/"Kule" govern every line clear), but with
                 // no dead-zone adjustment - that is this path's long-standing behaviour.
-                AddScoreOutsideTurn(PriceLines(
+                int external = PriceLines(
                     BuildLineScore(lines, lines.ExplodedCells.Count, false))
-                    + AdjustExplosionScore(lines.ExplodedCells));
+                    + AdjustExplosionScore(lines.ExplodedCells);
+                CreditExternalScore(external);
+                AddScoreOutsideTurn(external);
             }
             TryResolveCleanSweep();
         }
@@ -912,6 +914,36 @@ namespace ProjectBlock.Core
         internal bool ExternalDestructionScores
         {
             get { return Rules.CountExternalSweeps; }
+        }
+
+        /// <summary>
+        /// WHAT THE GATE ABOVE HAS BEEN WORTH THIS ROUND, in logical points. Running total,
+        /// never reset mid-round; the engine is per-round, so it restarts on its own.
+        ///
+        /// It exists because "Genel temizlik" is the hardest joker in the game to put a number
+        /// on. It has no hook that fires and pays nothing itself - it flips ONE rule, and the
+        /// points that follows land in BASE fields and in other content's bonuses, credited to
+        /// nobody. A statistic read off the score contributions would say it had earned zero for
+        /// a whole run, which is the exact failure Joker.NoteProc's own comment warns about.
+        ///
+        /// So the ENGINE says what the switch was worth: every site that pays ONLY because the
+        /// switch is on credits it here, and the joker reads the difference at the end of each
+        /// turn. Reporting only - no rule reads it back, and the score itself is untouched.
+        ///
+        /// EXTENSION POINT: a new payment gated on ExternalDestructionScores (or on
+        /// Rules.CountExternalSweeps directly) belongs in this meter too. Credit the NOMINAL
+        /// amount, before any cap or inversion, exactly as every other joker's statistic counts
+        /// the bonus it asked for.
+        /// </summary>
+        internal int ExternalScoreCredited { get; private set; }
+
+        /// <summary>Records score that exists only because external destruction counts.</summary>
+        internal void CreditExternalScore(int points)
+        {
+            if (points > 0)
+            {
+                ExternalScoreCredited += points;
+            }
         }
 
         /// <summary>Powers used since the last placement. The confirmed rule is at most ONE

@@ -124,6 +124,17 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>It keeps proc statistics, so the tooltip prints its count even at zero.
+        /// What it counts is FEEDINGS AND BILLS - every turn the creature ate, shrank or died -
+        /// because those are the turns it did something, and a hungry turn it survived did
+        /// nothing at all. The points run BOTH WAYS on purpose: a pet that has cost you more
+        /// than it has paid is exactly what the player needs to see before deciding to keep
+        /// feeding it.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         public override string StatusText
         {
             get
@@ -225,7 +236,11 @@ namespace ProjectBlock.Core
             hungryTurns = 0;
             timesFed += fed;
             // The pay-off, scaled by size: this is the entire reason to grow.
-            turn.AddFlatScore(fed * BonusPerFedCube * size, DefId);
+            int bonus = fed * BonusPerFedCube * size;
+            turn.AddFlatScore(bonus, DefId);
+            // ONE proc per TURN the creature ate, not one per cube: what the player is being told
+            // is "it fed", and it fed once. The nest's own pulse already answers cube by cube.
+            NoteProc(bonus, turn);
 
             food += fed;
             while (food >= FoodToGrow && TryGrow(board))
@@ -262,7 +277,11 @@ namespace ProjectBlock.Core
             if (size > 1)
             {
                 // It sheds a ring, and the bill is for the size it FELL FROM.
-                turn.AddFlatScore(-ShrinkPenalty * size, DefId);
+                int bill = -ShrinkPenalty * size;
+                turn.AddFlatScore(bill, DefId);
+                // A bill is a firing too. NoteProc does not clamp, deliberately - a statistic
+                // that hid the losses would be a lie about what this joker has cost you.
+                NoteProc(bill, turn);
                 size--;
                 food = 0;
                 RebuildRegion(board);
@@ -270,6 +289,7 @@ namespace ProjectBlock.Core
             }
             // Nothing left to shed.
             turn.AddFlatScore(-DeathPenalty, DefId);
+            NoteProc(-DeathPenalty, turn);
             dead = true;
             region.Clear();
         }

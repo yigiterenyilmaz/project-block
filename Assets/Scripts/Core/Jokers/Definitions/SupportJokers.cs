@@ -44,6 +44,30 @@ namespace ProjectBlock.Core
         private int commonTimer;
         private int rareTimer;
 
+        /// <summary>
+        /// The last delivery of fuel, for the VIEW to draw. Reporting only, and [NotSaved]: it is
+        /// what just happened rather than state, it is rebuilt by the next delivery, and it is
+        /// meaningless across a load - a restored run has no animation waiting to play.
+        ///
+        /// A turn due for BOTH clocks overwrites this with the second tier's delivery, which is
+        /// correct: the View is asked on the repaint that follows the turn, and both tiers landing
+        /// at once is one event to the player. The common tier's own powers are already charged by
+        /// then, so nothing is lost but a stagger.
+        /// </summary>
+        [NotSaved]
+        public SeamRefuelVisuals LastRefuel;
+
+        /// <summary>
+        /// It keeps statistics, so the tooltip prints its count from zero. What that count means
+        /// here is POWERS REFUELLED, not ticks: the effect lands once per power (that is where the
+        /// seam is actually spent), and counting it that way makes the number directly comparable
+        /// with the capacity the card is already showing.
+        /// </summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         public YerAltiKaynaklariJoker()
             : base("yer_alti_kaynaklari", "Yer Altı Kaynakları")
         {
@@ -149,6 +173,7 @@ namespace ProjectBlock.Core
             }
             PowerInventory powers = turn.Session.Powers;
             IReadOnlyList<Power> all = powers.Powers;
+            SeamRefuelVisuals delivered = null;
             for (int i = 0; i < all.Count && capacityLeft >= cost; i++)
             {
                 Power power = all[i];
@@ -161,7 +186,27 @@ namespace ProjectBlock.Core
                 if (powers.Recharge(power.InstanceId))
                 {
                     capacityLeft -= cost;
+                    // ONE FIRING PER POWER REFILLED. That is where the effect actually lands and
+                    // where the seam is actually spent - a tick that was due but found every
+                    // power charged has not fired at all, and one that fuelled three powers has
+                    // fired three times. Worth 0 points: this joker's effect is not score.
+                    NoteProc(0, turn);
+                    // Written HERE rather than before the loop, so a tick that delivers nothing
+                    // leaves no report for the View to draw.
+                    if (delivered == null)
+                    {
+                        delivered = new SeamRefuelVisuals();
+                        delivered.Tier = rarity;
+                        delivered.Capacity = Capacity;
+                    }
+                    delivered.PowerInstanceIds.Add(power.InstanceId);
+                    delivered.CapacitySpent += cost;
                 }
+            }
+            if (delivered != null)
+            {
+                delivered.CapacityLeft = capacityLeft;
+                LastRefuel = delivered;
             }
         }
     }

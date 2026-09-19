@@ -3926,6 +3926,58 @@ namespace ProjectBlock.View
                 "simetri: simetrik tahtada alan ışıldar",
                 delegate { FlashBoard(new Color(0.62f, 0.74f, 1f)); });
 
+            AddAnimSub("jokers", "besleme", "besleme", "besleme");
+            AddAnim("besleme: a FEED procs (nest + card + points)",
+                "besleme: BESLENME tetiklenir (yuva + kart + puan)",
+                delegate { StartCoroutine(AnimBesleme(0)); });
+            AddAnim("besleme: a BIGGER creature pays far more",
+                "besleme: BÜYÜK yaratık çok daha fazla öder",
+                delegate { StartCoroutine(AnimBesleme(1)); });
+            AddAnim("besleme: it SHRINKS - a bill procs too",
+                "besleme: KÜÇÜLÜR - fatura da tetiklenir",
+                delegate { StartCoroutine(AnimBesleme(2)); });
+            AddAnim("besleme: it STARVES TO DEATH", "besleme: AÇLIKTAN ÖLÜR",
+                delegate { StartCoroutine(AnimBesleme(3)); });
+
+            AddAnimSub("jokers", "devre", "devre", "devre");
+            AddAnim("devre: the BREAK procs (heat + card + payout)",
+                "devre: KIRILMA tetiklenir (ısı + kart + ödeme)",
+                delegate { StartCoroutine(AnimDevreProc()); });
+
+            AddAnimSub("jokers", "yeralti", "yer altı kaynakları", "yer altı kaynakları");
+            AddAnim("seam: ONE power refuelled (the whole fill)",
+                "damar: TEK güç dolduruldu (tüm dolum)",
+                delegate { AnimSeamRefuel(1, false); });
+            AddAnim("seam: two powers, one pump", "damar: iki güç, tek pompa",
+                delegate { AnimSeamRefuel(2, false); });
+            AddAnim("seam: every power held, squeezed into one pump",
+                "damar: tüm güçler, tek pompaya sıkıştırılmış",
+                delegate { AnimSeamRefuel(int.MaxValue, false); });
+            AddAnim("seam: THE DREGS - the last of it, and it stalls",
+                "damar: SON KALAN - takılarak dolar",
+                delegate { AnimSeamRefuel(1, true); });
+            AddAnim("seam: the joker's own proc light", "damar: jokerin kendi ışığı",
+                delegate { AnimJokerProcNamed<YerAltiKaynaklariJoker>(); });
+            AddAnim("seam: RUN THE REAL RULES on the powers held",
+                "damar: TUTULAN güçlerde GERÇEK kuralları çalıştır", AnimSeamRealRules);
+            AddAnim("seam: stop every fill", "damar: tüm dolumları durdur",
+                delegate { StopSeamRefuels(); });
+
+            AddAnimSub("jokers", "kolaypara", "kolay para", "kolay para");
+            AddAnim("kolay para: a placement PROCS (card + points)",
+                "kolay para: YERLEŞTİRME tetiklenir (kart + puan)",
+                delegate { StartCoroutine(AnimKolayPara(4)); });
+            AddAnim("kolay para: a single cube", "kolay para: tek küp",
+                delegate { StartCoroutine(AnimKolayPara(1)); });
+
+            AddAnimSub("jokers", "geneltemizlik", "genel temizlik", "genel temizlik");
+            AddAnim("genel temizlik: the SWITCH pays (card + what it was worth)",
+                "genel temizlik: ANAHTAR ödedi (kart + ne kazandırdığı)",
+                delegate { StartCoroutine(AnimGenelTemizlik(false)); });
+            AddAnim("genel temizlik: an external SWEEP pays",
+                "genel temizlik: dışarıdan gelen TEMİZLİK ödedi",
+                delegate { StartCoroutine(AnimGenelTemizlik(true)); });
+
             AddAnimSub("general", "barglow", "bar cards: the glow", "bar kartları: ışık");
             AddAnim("glow: a joker PROCS (flash + pulse)", "ışık: joker TETİKLENDİ",
                 delegate { AnimGlowProc(true); });
@@ -4174,6 +4226,40 @@ namespace ProjectBlock.View
         /// Draw "devre izi" first: the overload reads its route off the live trace, exactly as
         /// it does in a real turn, so there has to be a cable there to break.
         /// </summary>
+        /// <summary>
+        /// "Devre"'s proc, WHOLE - the counterpart of the plain "circuit BREAKS" entry above,
+        /// which shows the board's half alone. The joker now notes a proc when the circuit goes,
+        /// so the card flashes in the bar as well, and the payout says what the break was worth.
+        ///
+        /// The card fires at the RUPTURE, not with the heat: the circuit has to be seen to break
+        /// before the joker can be seen to be paid for it, or the two read as one flash.
+        ///
+        /// THE NUMBER IS THE JOKER'S OWN (BreakBonus, BonusPerCell and the round's own per-cube
+        /// rate, over the real path length), scaled the way the UI scales every other number.
+        /// </summary>
+        private IEnumerator AnimDevreProc()
+        {
+            var circuit = new DevreJoker();
+            IReadOnlyList<GridPos> path = AnimCircuitPath();
+            boardView.ShowCircuit(path);
+            boardView.HoldCircuitBlocks(AnimCircuitCubes(path));
+            yield return new WaitForSecondsRealtime(0.45f);
+
+            AnimCircuitBreak();
+            yield return new WaitForSecondsRealtime(CircuitOverloadView.RuptureTime);
+
+            AnimGlowProc(true);
+            int cells = path.Count;
+            long paid = (cells * session.Config.Scoring.PointsPerCubeExploded
+                + circuit.BreakBonus + cells * circuit.BonusPerCell)
+                * session.Config.Scoring.ScoreScale;
+            Vector2 at = cells > 0
+                ? boardView.CellToWorld(path[cells / 2]) + new Vector2(0f, 0.55f)
+                : new Vector2(0f, 2.0f);
+            FloatingTextFx.Spawn(transform, at, "+" + paid,
+                new Color(1f, 0.82f, 0.42f), 60, 0.08f);
+        }
+
         private void AnimCircuitBreak()
         {
             IReadOnlyList<GridPos> path = AnimCircuitPath();
@@ -4791,6 +4877,114 @@ namespace ProjectBlock.View
         {
             change();
             boardView.Refresh();
+        }
+
+        /// <summary>
+        /// "Besleme"'s proc, WHOLE. The joker now notes a proc every turn its creature ate or
+        /// billed the player, and the event has two halves that mean different things: the nest's
+        /// own pulse says WHERE it happened, the card's flash in the bar says WHICH joker did it.
+        /// Neither on its own is the animation, which is exactly why this entry exists beside the
+        /// plain "creature nest + FEED" one - that shows the board reaction alone.
+        ///
+        /// A feed is ONE proc for the TURN but the nest reacts cube by cube, so the pulses run
+        /// across the region and the card fires once over the top of them.
+        ///
+        /// THE NUMBERS ARE THE JOKER'S OWN - read off a real BeslemeJoker and scaled the way the
+        /// UI scales every other number. A hand-typed "+72" here is a picture that will one day
+        /// lie about the score.
+        ///
+        /// kind: 0 fed at 1x1, 1 fed at 3x3, 2 shrank from 3x3, 3 starved to death.
+        /// </summary>
+        private IEnumerator AnimBesleme(int kind)
+        {
+            var pet = new BeslemeJoker();
+            int scale = session.Config.Scoring.ScoreScale;
+            int size = kind == 0 || kind == 3 ? 1 : 3;
+            List<GridPos> region = AnimCreatureRegion(size);
+            if (region.Count == 0)
+            {
+                yield break;
+            }
+            AnimTintMarker(delegate { boardView.ShowCreature(region); });
+            yield return new WaitForSecondsRealtime(0.35f);
+
+            if (kind <= 1)
+            {
+                for (int i = 0; i < region.Count; i++)
+                {
+                    boardView.PlayCreatureFeed(region[i]);
+                    yield return new WaitForSecondsRealtime(0.06f);
+                }
+                AnimGlowProc(true);
+                AnimBeslemePopup(region,
+                    region.Count * pet.BonusPerFedCube * size * scale,
+                    new Color(0.58f, 0.88f, 0.46f));
+                yield break;
+            }
+
+            // A BILL IS A FIRING TOO, and it must not look like a feed: nothing pulses, the nest
+            // simply loses ground. The card still flashes, because the player has to be able to
+            // tell WHICH joker just charged them.
+            yield return new WaitForSecondsRealtime(0.25f);
+            AnimGlowProc(true);
+            if (kind == 2)
+            {
+                // It sheds a ring, and the bill is for the size it FELL FROM - so the popup is
+                // computed at 3 while the nest is redrawn at 2.
+                AnimBeslemePopup(region, -pet.ShrinkPenalty * size * scale,
+                    new Color(0.95f, 0.62f, 0.35f));
+                List<GridPos> shrunk = AnimCreatureRegion(size - 1);
+                AnimTintMarker(delegate { boardView.ShowCreature(shrunk); });
+                yield break;
+            }
+            AnimBeslemePopup(region, -pet.DeathPenalty * scale,
+                new Color(0.95f, 0.40f, 0.38f));
+            AnimTintMarker(delegate { boardView.ShowCreature(null); });
+        }
+
+        /// <summary>The creature's own geometry: a size x size square centred on the arena,
+        /// holding only real play area - the same shape BeslemeJoker.RebuildRegion builds, so the
+        /// lab's nest is the nest the rules would lay.</summary>
+        private List<GridPos> AnimCreatureRegion(int size)
+        {
+            var cells = new List<GridPos>();
+            GameBoard board = AnimBoard();
+            if (board == null || size < 1)
+            {
+                return cells;
+            }
+            int startX = board.MinX + (board.Width - size) / 2;
+            int startY = board.MinY + (board.Height - size) / 2;
+            for (int x = 0; x < size; x++)
+            {
+                for (int y = 0; y < size; y++)
+                {
+                    var cell = new GridPos(startX + x, startY + y);
+                    if (board.IsInside(cell))
+                    {
+                        cells.Add(cell);
+                    }
+                }
+            }
+            return cells;
+        }
+
+        /// <summary>The proc's points, over the nest itself rather than at a written-down corner -
+        /// a payout that says nothing about where it came from is half an animation.</summary>
+        private void AnimBeslemePopup(List<GridPos> region, long points, Color colour)
+        {
+            Vector2 at = new Vector2(0f, 2.0f);
+            if (region != null && region.Count > 0)
+            {
+                var sum = Vector2.zero;
+                for (int i = 0; i < region.Count; i++)
+                {
+                    sum += boardView.CellToWorld(region[i]);
+                }
+                at = sum / region.Count + new Vector2(0f, 0.55f);
+            }
+            FloatingTextFx.Spawn(transform, at,
+                (points > 0 ? "+" : string.Empty) + points, colour, 60, 0.08f);
         }
 
         /// <summary>

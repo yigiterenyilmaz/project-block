@@ -2243,6 +2243,9 @@ namespace ProjectBlock.View
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);
             powerBar.Refresh(session, pendingTargetPowerId);
+            // AFTER the power bar, never before: "Yer altı kaynakları"'s fill UNCOVERS a card the
+            // bar has already painted charged, so the charged card has to be there to uncover.
+            SyncSeam();
             SyncRetroPresentation();
             SyncRescueState();
         }

@@ -66,7 +66,7 @@ namespace ProjectBlock.Core
         // instead of a flat per-step bonus, so the scoring block - which is positional - now
         // writes the ladder's length and its rungs where the step and the cap used to be. A 19
         // goes out of step on every field after it.
-        public const int FormatVersion = 20;
+        public const int FormatVersion = 21;
 
         private const string VersionKey = "version";
 

@@ -256,6 +256,300 @@ namespace ProjectBlock.View
         /// edge, so the wind-up reads as the card being pulled off the strip.</summary>
         private const float TiltSign = -1f;
 
+        // ------------------------------------------------------------------ the REFUEL
+        //
+        // "Yer altı kaynakları" pumping fuel into a spent power, and it is deliberately NOT the
+        // proc light. A proc says "this fired"; a refuel says "this was empty and is now full",
+        // which is a change of STATE and needs to be seen happening - otherwise the only evidence
+        // the joker did anything is a card two panels away that briefly went bright.
+        //
+        // THE CARD IS UNCOVERED, NOT REPAINTED. By the time this runs the bar has already been
+        // refreshed, so the panel underneath is ALREADY drawn charged - the ready colour, the lit
+        // title, the undimmed icon. So the animation lays a spent-grey wash over the whole card
+        // and then lets the fuel level rise through it: what the fill leaves behind is the real
+        // charged card, revealed from the bottom up. Nothing here writes a colour the bar owns,
+        // which is what stops the next Refresh from fighting it - the same bargain BoardView.
+        // HoldCells makes for the press and the board moves.
+        //
+        // THE LEVEL IS THE WHOLE EFFECT. A flash of amber over a card says "something happened
+        // here"; a rising level says "it is filling", and the moment it tops out is the moment
+        // the power is usable again. So the fill is eased like a tank filling against back
+        // pressure - quick off the bottom, slowing into the last fifth - and the meniscus is a
+        // separate bright line, because a gradient alone reads as a glow rather than a surface.
+        //
+        // No particles, no shake, no camera. The loudest moment is the meniscus touching the top.
+
+        private static class Refuel
+        {
+            /// <summary>The wash that hides the charged card until the fuel reveals it.</summary>
+            public static readonly Color Spent = new Color(0.10f, 0.10f, 0.11f, 0.88f);
+
+            /// <summary>The fuel. A deep seam-amber - warm, and nowhere near the proc light's
+            /// cyan or the hold's red, so three things happening to one card stay three things.
+            /// </summary>
+            public static readonly Color Fuel = new Color(0.86f, 0.55f, 0.16f, 0.62f);
+
+            /// <summary>The surface of the fuel. Brighter than the body and thin, which is what
+            /// makes the level a LEVEL instead of a gradient.</summary>
+            public static readonly Color Surface = new Color(1f, 0.82f, 0.42f, 0.95f);
+
+            /// <summary>The last of the seam: duller and colder, because there is not much left.
+            /// </summary>
+            public static readonly Color DrySurface = new Color(0.78f, 0.62f, 0.44f, 0.80f);
+
+            public const float OpenSeconds = 0.10f;   // the wash arrives
+            public const float RiseSeconds = 0.46f;   // the level climbs
+            public const float HoldSeconds = 0.07f;   // full, before it clears
+            public const float ClearSeconds = 0.22f;  // the amber goes, the card stands
+
+            /// <summary>Height of the meniscus as a share of the card.</summary>
+            public const float SurfaceThickness = 0.035f;
+
+            /// <summary>Gap between one power and the next in a single delivery, and the ceiling
+            /// the whole delivery is SQUEEZED into rather than lengthened past - four powers
+            /// refuelled is one pump of the seam, not four events in a row.</summary>
+            public const float Stagger = 0.09f;
+
+            public const float MaxStaggerTotal = 0.36f;
+        }
+
+        /// <summary>The wash + fill + meniscus for one panel, made once and reused. Kept beside
+        /// the panels rather than on HeldItemCard because nothing else in the game fills a
+        /// card.</summary>
+        private sealed class RefuelOverlay
+        {
+            public GameObject Root;
+            public Image Wash;
+            public Image Fill;
+            public Image Surface;
+        }
+
+        private readonly Dictionary<int, RefuelOverlay> refuelOverlays =
+            new Dictionary<int, RefuelOverlay>();
+
+        /// <summary>Bumped by StopRefuels; a fill whose generation is stale gives up quietly.
+        /// </summary>
+        private int refuelGeneration;
+
+        /// <summary>
+        /// Fuel arriving in one power. <paramref name="delay"/> staggers a delivery of several,
+        /// and <paramref name="dregs"/> is true when this was the last the seam had to give - the
+        /// fuel comes in duller and the level hesitates before it tops out.
+        ///
+        /// Call AFTER Refresh, always: the card underneath has to be showing its charged state
+        /// for the fill to have anything to uncover.
+        /// </summary>
+        public void RefuelPower(int instanceId, float delay, bool dregs)
+        {
+            for (int i = 0; i < panels.Count; i++)
+            {
+                if (panels[i].Root.activeSelf && panels[i].InstanceId == instanceId)
+                {
+                    StartCoroutine(RefuelRoutine(i, Mathf.Max(0f, delay), dregs));
+                    return;
+                }
+            }
+        }
+
+        /// <summary>The whole delivery. The stagger is squeezed rather than the total lengthened,
+        /// so however many powers the seam fuelled it stays one pump.</summary>
+        public void RefuelPowers(IReadOnlyList<int> instanceIds, bool dregs)
+        {
+            if (instanceIds == null || instanceIds.Count == 0)
+            {
+                return;
+            }
+            float step = Refuel.Stagger;
+            if (step * (instanceIds.Count - 1) > Refuel.MaxStaggerTotal)
+            {
+                step = Refuel.MaxStaggerTotal / (instanceIds.Count - 1);
+            }
+            for (int i = 0; i < instanceIds.Count; i++)
+            {
+                // Only the LAST power of the delivery wears the dregs: the seam ran out on it.
+                bool last = dregs && i == instanceIds.Count - 1;
+                RefuelPower(instanceIds[i], step * i, last);
+            }
+        }
+
+        /// <summary>
+        /// Takes every fill down at once - the board's teardown and the lab's RESET.
+        ///
+        /// A GENERATION rather than StopAllCoroutines, which would also kill the pulse and the
+        /// sale's shrink-then-refresh - and that one leaves the bar showing a power that has
+        /// already been sold.
+        /// </summary>
+        public void StopRefuels()
+        {
+            refuelGeneration++;
+            foreach (KeyValuePair<int, RefuelOverlay> pair in refuelOverlays)
+            {
+                if (pair.Value.Root != null)
+                {
+                    pair.Value.Root.SetActive(false);
+                }
+            }
+            for (int i = 0; i < panels.Count; i++)
+            {
+                panels[i].Root.transform.localScale = Vector3.one;
+            }
+        }
+
+        private System.Collections.IEnumerator RefuelRoutine(int index, float delay, bool dregs)
+        {
+            int generation = refuelGeneration;
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+            if (generation != refuelGeneration || index >= panels.Count
+                || !panels[index].Root.activeSelf)
+            {
+                yield break;
+            }
+            RefuelOverlay skin = EnsureRefuelOverlay(index);
+            Transform card = panels[index].Root.transform;
+            skin.Root.SetActive(true);
+            skin.Root.transform.SetAsLastSibling();
+
+            // 1. THE CARD OPENS. The wash arrives over the whole panel, hiding the charged state
+            //    the bar has already painted, and the card draws down a little - this is the
+            //    thing being opened up rather than something landing on it.
+            float time = 0f;
+            while (time < Refuel.OpenSeconds)
+            {
+                time += Time.deltaTime;
+                float k = Mathf.Clamp01(time / Refuel.OpenSeconds);
+                SetRefuelLevel(skin, 0f, 0f, k * Refuel.Spent.a, dregs);
+                card.localScale = new Vector3(1f - 0.02f * k, 1f - 0.03f * k, 1f);
+                yield return null;
+                if (generation != refuelGeneration) { yield break; }
+            }
+
+            // 2. THE LEVEL CLIMBS. Eased out, so it comes off the bottom quickly and settles into
+            //    the last fifth - a tank filling against its own back pressure. The dregs STALL
+            //    just short of full, which is the seam having to be squeezed for the last of it.
+            time = 0f;
+            while (time < Refuel.RiseSeconds)
+            {
+                time += Time.deltaTime;
+                float t = Mathf.Clamp01(time / Refuel.RiseSeconds);
+                float level = 1f - (1f - t) * (1f - t);
+                if (dregs)
+                {
+                    // A hesitation across the last quarter of the climb, never a reversal: the
+                    // level may stop, but fuel that went back down would be a lie about the rules.
+                    level = Mathf.Min(level, t < 0.82f ? 0.88f : level);
+                }
+                SetRefuelLevel(skin, level, 1f, Refuel.Spent.a, dregs);
+                card.localScale = new Vector3(1f - 0.02f * (1f - level), 1f - 0.03f * (1f - level), 1f);
+                yield return null;
+                if (generation != refuelGeneration) { yield break; }
+            }
+
+            // 3. FULL. The meniscus touches the top and flares for a breath - the one loud frame,
+            //    and the frame on which the power is usable again.
+            SetRefuelLevel(skin, 1f, 1.35f, 0f, dregs);
+            card.localScale = Vector3.one;
+            if (panels[index].Glow != null)
+            {
+                panels[index].Glow.Proc(dregs ? Refuel.DrySurface : Refuel.Surface);
+            }
+            yield return new WaitForSeconds(Refuel.HoldSeconds);
+            if (generation != refuelGeneration) { yield break; }
+
+            // 4. THE FUEL CLEARS and the charged card is simply standing there, with a small
+            //    overshoot to settle on. Nothing is repainted: the card was already right.
+            time = 0f;
+            while (time < Refuel.ClearSeconds)
+            {
+                time += Time.deltaTime;
+                float k = Mathf.Clamp01(time / Refuel.ClearSeconds);
+                SetRefuelLevel(skin, 1f, 1f - k, 0f, dregs, 1f - k);
+                float settle = 1f + 0.05f * Mathf.Sin(k * Mathf.PI);
+                card.localScale = new Vector3(settle, settle, 1f);
+                yield return null;
+                if (generation != refuelGeneration) { yield break; }
+            }
+            card.localScale = Vector3.one;
+            skin.Root.SetActive(false);
+        }
+
+        /// <summary>
+        /// Writes one frame of the fill. The level is a share of the card's HEIGHT and is written
+        /// as anchors, never as a scale, so it stays exact at every panel size - a phone's square
+        /// slot and a desktop's tall card fill to the same place.
+        /// </summary>
+        private static void SetRefuelLevel(RefuelOverlay skin, float level, float surface,
+            float washAlpha, bool dregs, float fuelAlpha = 1f)
+        {
+            level = Mathf.Clamp01(level);
+            var fill = skin.Fill.rectTransform;
+            fill.anchorMin = new Vector2(0f, 0f);
+            fill.anchorMax = new Vector2(1f, level);
+
+            // The wash covers what the fuel has NOT reached, so the charged card under it is
+            // uncovered from the bottom up.
+            var wash = skin.Wash.rectTransform;
+            wash.anchorMin = new Vector2(0f, level);
+            wash.anchorMax = new Vector2(1f, 1f);
+
+            float half = Refuel.SurfaceThickness * 0.5f;
+            var line = skin.Surface.rectTransform;
+            line.anchorMin = new Vector2(0f, Mathf.Clamp01(level - half));
+            line.anchorMax = new Vector2(1f, Mathf.Clamp01(level + half));
+
+            Color spent = Refuel.Spent;
+            spent.a = washAlpha;
+            skin.Wash.color = spent;
+
+            Color fuel = dregs ? Refuel.DrySurface : Refuel.Fuel;
+            fuel.a = Refuel.Fuel.a * fuelAlpha;
+            skin.Fill.color = fuel;
+
+            Color top = dregs ? Refuel.DrySurface : Refuel.Surface;
+            top.a = top.a * Mathf.Clamp01(surface) * fuelAlpha;
+            skin.Surface.color = top;
+            skin.Surface.enabled = top.a > 0.004f && level > 0.001f;
+        }
+
+        private RefuelOverlay EnsureRefuelOverlay(int index)
+        {
+            RefuelOverlay existing;
+            if (refuelOverlays.TryGetValue(index, out existing) && existing.Root != null)
+            {
+                return existing;
+            }
+            var skin = new RefuelOverlay();
+            skin.Root = new GameObject("Refuel");
+            skin.Root.transform.SetParent(panels[index].Root.transform, false);
+            var rect = skin.Root.AddComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            // Drawn in the order they stack: the wash hides the card, the fuel sits in front of
+            // it, and the meniscus is the frontmost thing on the panel.
+            skin.Wash = MakeRefuelPart(skin.Root.transform, "Wash");
+            skin.Fill = MakeRefuelPart(skin.Root.transform, "Fill");
+            skin.Surface = MakeRefuelPart(skin.Root.transform, "Surface");
+            skin.Root.SetActive(false);
+            refuelOverlays[index] = skin;
+            return skin;
+        }
+
+        private static Image MakeRefuelPart(Transform parent, string name)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var image = go.AddComponent<Image>();
+            image.raycastTarget = false; // the panel underneath still takes the click
+            var rect = image.rectTransform;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            return image;
+        }
+
         /// <summary>Quick scale pulse on the panel showing that power (use feedback).</summary>
         public void PulsePower(int instanceId)
         {

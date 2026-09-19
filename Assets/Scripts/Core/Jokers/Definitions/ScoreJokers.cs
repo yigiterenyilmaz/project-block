@@ -191,6 +191,19 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>
+        /// It keeps statistics, and for a MULTIPLIER they are the only way to know what it is
+        /// worth. "+%14 to everything" is the rate, not the return: the same rate is worth
+        /// nothing on a weak turn and a great deal on a strong one, so the rate alone cannot tell
+        /// the player whether thinning the deck has paid for the cards they sold. The tally
+        /// answers that, and the two numbers sit side by side - the rate on the card, the points
+        /// it has actually added in the tooltip.
+        /// </summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         /// <summary>The deck this run was dealt, and what it holds now. Both are remembered
         /// rather than read live, because StatusText has no session to ask - which is why the
         /// joker listens to OnDeckChanged as well as scoring: a sale happens in the MARKET, with
@@ -227,6 +240,61 @@ namespace ProjectBlock.Core
                 // every other joker's flat alike. ModifyScore is the only hook it is legal from
                 // - the engine finalizes the score immediately after.
                 turn.Score.AddMultiplier(1.0 + percent / 100.0, DefId);
+            }
+        }
+
+        /// <summary>
+        /// WHAT THE MULTIPLIER WAS ACTUALLY WORTH THIS TURN. Measured here rather than in
+        /// ModifyScore because a multiplier's value is not knowable when it is applied: jokers
+        /// dispatch in inventory order, so the flat bonuses and the multipliers that land AFTER
+        /// this one are part of what it ends up lifting. By AfterTurnScored the engine has
+        /// finalized the score and the breakdown is settled.
+        ///
+        /// The arithmetic is the breakdown's own, run twice - once with the turn's multiplier as
+        /// it stands and once with this joker's factor divided back out - and the difference is
+        /// the points that exist only because this card is held. Late flats are deliberately
+        /// outside it: the engine does not multiply them, so claiming them would be a lie. Kept
+        /// in the LOGICAL economy, like every other ProcPoints, and the UI scales it on the way
+        /// out.
+        ///
+        /// THE FACTOR IS READ BACK OFF THE CONTRIBUTION rather than recomputed, so "Terslik"
+        /// needs no special case: the boss turns the multiplier into its reciprocal inside
+        /// AddMultiplier, and reading what was really applied makes the tally correctly report a
+        /// LOSS on those turns instead of the bonus it did not give.
+        ///
+        /// It counts WITHOUT a flash (the turn-less NoteProc): this joker lifts nearly every turn
+        /// in the run, and a card that strobes the bar every single turn stops meaning anything -
+        /// the proc light is for events, and a passive rate is not one.
+        /// </summary>
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            ScoreBreakdown score = turn.Score;
+            if (score.Total <= 0)
+            {
+                return; // the turn paid nothing, so nothing here lifted anything
+            }
+            double factor = 1.0;
+            System.Collections.Generic.IReadOnlyList<ScoreContribution> entries =
+                score.Contributions;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].Source == DefId && entries[i].Multiplier != 1.0)
+                {
+                    factor *= entries[i].Multiplier;
+                }
+            }
+            if (factor == 1.0)
+            {
+                return;
+            }
+            double multiplied = score.BaseTotal * score.RegularScoreFactor
+                + score.BaseOvertimeBonus + score.FlatBonus;
+            double gained = multiplied * score.Multiplier
+                - multiplied * (score.Multiplier / factor);
+            int extra = (int)System.Math.Round(gained);
+            if (extra != 0)
+            {
+                NoteProc(extra);
             }
         }
 
@@ -301,6 +369,29 @@ namespace ProjectBlock.Core
                     + "şarj eder. Normalde alanı temizler ama puan vermez.");
         }
 
+        /// <summary>
+        /// THE HARDEST JOKER IN THE GAME TO PUT A NUMBER ON, and the reason it keeps statistics
+        /// is that a player cannot possibly keep them by eye. It has no hook that fires and it
+        /// pays nothing itself: it flips ONE rule, and the points that follow land in the base
+        /// line and sweep fields, in a power's echo, in a fire chain - credited to nobody. So
+        /// "Genel temizlik" is a card you could hold for a whole run with no idea whether it had
+        /// ever been worth its slot.
+        ///
+        /// The engine answers that (RoundEngine.ExternalScoreCredited): every payment that exists
+        /// ONLY because the switch is on is credited there, and this reads the difference at the
+        /// end of each turn. A firing is therefore "the switch paid for something this turn",
+        /// which is the event the player would call a proc, and the tally is what the switch has
+        /// been worth.
+        /// </summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
+        /// <summary>How much of the engine's meter this joker has already counted. Saved (no
+        /// [NotSaved]) so a run resumed mid-round cannot count the same points twice.</summary>
+        private int creditSeen;
+
         public override void OnAcquired(SessionContext ctx)
         {
             ctx.Rules.CountExternalSweeps = true;
@@ -315,6 +406,51 @@ namespace ProjectBlock.Core
         public override void OnRoundStarted(RoundContext ctx)
         {
             ctx.Rules.CountExternalSweeps = true;
+            // The meter lives on the RoundEngine and so restarts with every round. What this
+            // joker remembers has to restart with it, or the first turn of round two would look
+            // like the switch had gone backwards.
+            creditSeen = 0;
+        }
+
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            CollectCredit(turn);
+        }
+
+        /// <summary>A between-turn payment (a power's echo, a board-clear with no placement
+        /// resolving) that the round ended on would otherwise never be counted - the turn that
+        /// would have collected it never comes.</summary>
+        public override void OnRoundEnded(RoundContext ctx, RoundOutcome outcome)
+        {
+            CollectCredit(null, ctx.Round);
+        }
+
+        private void CollectCredit(TurnContext turn)
+        {
+            CollectCredit(turn, turn != null ? turn.Round : null);
+        }
+
+        private void CollectCredit(TurnContext turn, RoundEngine round)
+        {
+            if (round == null)
+            {
+                return;
+            }
+            int credited = round.ExternalScoreCredited;
+            // A LOADED run, or a fresh engine, restarts the meter below what was last seen. Take
+            // the meter's word for it rather than counting the whole of it again.
+            if (credited < creditSeen)
+            {
+                creditSeen = credited;
+                return;
+            }
+            int gained = credited - creditSeen;
+            if (gained <= 0)
+            {
+                return;
+            }
+            creditSeen = credited;
+            NoteProc(gained, turn);
         }
     }
 
