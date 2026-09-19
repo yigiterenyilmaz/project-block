@@ -2181,6 +2181,17 @@ namespace ProjectBlock.View
             return list;
         }
 
+        /// <summary>A pile as a list with its TOP card first.</summary>
+        private static List<BlockCard> TopFirst(IReadOnlyList<BlockCard> pile)
+        {
+            var list = new List<BlockCard>(pile.Count);
+            for (int i = pile.Count - 1; i >= 0; i--)
+            {
+                list.Add(pile[i]);
+            }
+            return list;
+        }
+
         private static BlockCard CardOfSlot(RoundEngine round, int slot)
         {
             if (slot < 0)

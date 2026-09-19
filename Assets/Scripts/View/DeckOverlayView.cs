@@ -70,6 +70,10 @@ namespace ProjectBlock.View
         /// the whole shelf legible underneath it.</summary>
         private static readonly Color PanelColor = new Color(0.05f, 0.06f, 0.08f, 1f);
         private static readonly Color PanelFrameColor = new Color(0.30f, 0.34f, 0.44f);
+
+        /// <summary>The DISCARD viewer's frame: a rust edge instead of the deck's slate, so the
+        /// two lists cannot be mistaken for one another at a glance.</summary>
+        private static readonly Color DiscardFrameColor = new Color(0.55f, 0.32f, 0.24f);
         private static readonly Color DimColor = new Color(0f, 0f, 0f, 0.82f);
         private static readonly Color TitleColor = new Color(1f, 0.92f, 0.45f);
         private static readonly Color HintColor = new Color(0.70f, 0.75f, 0.82f);
@@ -99,6 +103,9 @@ namespace ProjectBlock.View
         private IReadOnlyList<BlockCard> lastCards;
         private bool lastSellMode;
         private bool lastShapeMode;
+        /// <summary>-1 for every list but the discard viewer; otherwise how big the WHOLE
+        /// discard pile is, of which the list shows the revealed top.</summary>
+        private int lastDiscardTotal = -1;
         private int totalRows;
 
         private readonly List<Vector2> entryCenters = new List<Vector2>();
@@ -123,8 +130,31 @@ namespace ProjectBlock.View
         /// itself is laid out identically either way.</summary>
         public void Show(IReadOnlyList<BlockCard> cards, bool sellMode)
         {
+            lastDiscardTotal = -1;
             ShowList(cards, sellMode, false);
         }
+
+        /// <summary>"Fraksiyon": the revealed top of the DISCARD pile, newest first. Not the
+        /// deck: its own title (with how much of the pile is shown), its own frame colour, and
+        /// the pile's own order kept rather than sorted - which card went in last is the point.</summary>
+        public void ShowDiscard(IReadOnlyList<BlockCard> revealedNewestFirst, int pileSize)
+        {
+            lastPileIsDraw = false;
+            lastDiscardTotal = pileSize < 0 ? 0 : pileSize;
+            ShowList(revealedNewestFirst, false, false);
+        }
+
+        /// <summary>"Konfüzyon": a whole PILE, face up, top card first - the draw pile or the
+        /// discard. Same look as the discard viewer; the title says which pile it is.</summary>
+        public void ShowPile(IReadOnlyList<BlockCard> topFirst, bool drawPile)
+        {
+            lastPileIsDraw = drawPile;
+            lastDiscardTotal = topFirst.Count;
+            ShowList(topFirst, false, false);
+        }
+
+        /// <summary>With the pile viewer: true when it is showing the DRAW pile.</summary>
+        private bool lastPileIsDraw;
 
         /// <summary>The FOX picker: the shapes the deck can offer, one entry each, every one of
         /// them drawn as a fox block. The caller builds those stand-in cards (they are not owned
@@ -132,6 +162,7 @@ namespace ProjectBlock.View
         /// and that clicking is a CHOICE rather than a sale.</summary>
         public void ShowShapes(IReadOnlyList<BlockCard> shapeCards)
         {
+            lastDiscardTotal = -1;
             ShowList(shapeCards, false, true);
         }
 
@@ -143,8 +174,12 @@ namespace ProjectBlock.View
             Hide();
             IsOpen = true;
 
+            bool discardMode = lastDiscardTotal >= 0;
             var sorted = new List<BlockCard>(cards);
-            sorted.Sort(CompareCards);
+            if (!discardMode)
+            {
+                sorted.Sort(CompareCards);
+            }
             float pitch = SpacingY;
             int columns = ColumnsFor(sorted.Count, shapeMode);
             totalRows = (sorted.Count + columns - 1) / columns;
@@ -180,7 +215,18 @@ namespace ProjectBlock.View
             // they are is one of the things that decides how wide the panel is. The fox picker
             // keeps its title short on purpose - what taking a shape does is in the tooltip on
             // each one, and a sentence up here would be the only reason the panel was wide.
-            string title = shapeMode
+            string title = discardMode && lastPileIsDraw
+                ? Loc.Pick("DRAW PILE  -  " + sorted.Count + " cards, top first",
+                    "ÇEKME DESTESİ  -  " + sorted.Count + " kart, en üstteki önde")
+                : discardMode
+                ? (sorted.Count < lastDiscardTotal
+                    ? Loc.Pick("DISCARD  -  top " + sorted.Count + " of " + lastDiscardTotal
+                            + ", newest first",
+                        "ISKARTA  -  " + lastDiscardTotal + " kartın üstteki " + sorted.Count
+                            + " tanesi, en yenisi önde")
+                    : Loc.Pick("DISCARD  -  " + sorted.Count + " cards, newest first",
+                        "ISKARTA  -  " + sorted.Count + " kart, en yenisi önde"))
+                : shapeMode
                 ? Loc.Pick("PICK A SHAPE", "ŞEKİL SEÇ")
                 : sellMode
                     ? Loc.Pick("SELL CARDS  -  hover for details, click to sell",
@@ -211,7 +257,8 @@ namespace ProjectBlock.View
             var panelCenter = new Vector2(0f, (panelTop + panelBottom) * 0.5f);
             var panelSize = new Vector2(panelHalfWidth * 2f, panelTop - panelBottom);
             ViewUtil.MakeRect(transform, "PanelFrame", panelCenter,
-                panelSize + new Vector2(0.22f, 0.22f), PanelFrameColor, FrameOrder);
+                panelSize + new Vector2(0.22f, 0.22f),
+                discardMode ? DiscardFrameColor : PanelFrameColor, FrameOrder);
             ViewUtil.MakeRect(transform, "Panel", panelCenter, panelSize, PanelColor, PanelOrder);
             panelBoundsCenter = panelCenter;
             panelBoundsHalf = panelSize * 0.5f + new Vector2(0.11f, 0.11f);

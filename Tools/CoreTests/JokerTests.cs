@@ -71,6 +71,7 @@ public static class JokerTests
         KaraDelik_VoidBlockSwallowsWhatLandsOnIt();
         Enfeksiyon_SpreadsThenDetonates();
         BabaOcagi_BuriesPlayedCardsInTheDrawPile();
+        BabaOcagi_ADecksWorthOfPlaysCostsThreeCards();
         Konfuzyon_SplitsAndSwapsThePilesEachTurn();
         Imitasyon_HandTracksTheDiscardPile();
         Fraksiyon_SplitsAtRoundStartAndAllowsOneSwap();
@@ -1934,6 +1935,27 @@ public static class JokerTests
         session.Jokers.Remove(joker);
         Check(!session.Config.Rules.PlayedCardsReturnToDrawPile, "removal restores discarding");
         Check(!session.Config.Rules.RevealTopDrawCard, "removal hides the top card again");
+    }
+
+    private static void BabaOcagi_ADecksWorthOfPlaysCostsThreeCards()
+    {
+        Section("baba_ocagi / every deck's worth of plays takes 3 cards off the deck for good");
+        var session = NewSession(212, 8, 1000000, 12, 1);
+        session.Jokers.Add(new BabaOcagiJoker());
+        int deck = session.OwnedCards.Count;
+
+        PlayTurns(session, deck - 1);
+        Check(session.OwnedCards.Count == deck, "one play short of the deck's size, nothing is taken",
+            session.OwnedCards.Count + " vs " + deck);
+        PlayTurns(session, 1);
+        Check(session.OwnedCards.Count == deck - 3, "the play that completes the count takes three",
+            session.OwnedCards.Count + " vs " + deck);
+
+        // The next cycle is measured against the SMALLER deck.
+        int smaller = session.OwnedCards.Count;
+        PlayTurns(session, smaller);
+        Check(session.OwnedCards.Count == smaller - 3, "and the next one is the smaller deck's worth",
+            session.OwnedCards.Count + " vs " + smaller);
     }
 
     private static void Konfuzyon_SplitsAndSwapsThePilesEachTurn()

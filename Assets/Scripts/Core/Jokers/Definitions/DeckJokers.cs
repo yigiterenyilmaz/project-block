@@ -6,7 +6,8 @@
 // (the hand must always refill; in overtime an empty draw pile ends the run). Every joker
 // here moves cards between the piles, so each one either softens or sharpens those losses:
 //   Baba Ocağı  - the discard stays empty and cards keep coming back: the deck effectively
-//                  never runs out, which nearly removes the deck-out loss.
+//                  never runs out, which nearly removes the deck-out loss - so it charges
+//                  three cards off the deck every time a deck's worth of cards is played.
 //   Konfüzyon - the discard becomes a live draw source every other turn, so overtime
 //                  loses its "the discard never comes back" bite.
 //   İmitasyon    - hand size tracks the discard, so it can demand more cards than the draw
@@ -18,18 +19,70 @@
 namespace ProjectBlock.Core
 {
     /// <summary>"Baba Ocağı" - played cards are buried at a random depth in the draw pile
-    /// instead of going to the discard, and the top of the draw pile is always visible.</summary>
+    /// instead of going to the discard, and the top of the draw pile is always visible.
+    ///
+    /// THE PRICE OF A DECK THAT NEVER RUNS OUT. With nothing ever reaching the discard the
+    /// draw pile cannot run dry, which switches off every deck-out loss and the erosion clock
+    /// with them. So the house takes its rent instead: every time the player has played as
+    /// many cards as the deck holds, three random cards leave the deck for the rest of the run
+    /// (GameSession.TaxOwnedCards - the same path the tax bosses use, which also refuses to
+    /// shrink the deck below a playable hand).</summary>
     public sealed class BabaOcagiJoker : Joker
     {
+        /// <summary>Cards taken out of the run deck each time the count comes round.</summary>
+        public int CardsLostPerCycle = 3;
+
+        /// <summary>Cards played since the deck last paid. Counts across rounds.</summary>
+        private int playedSinceRent;
+
+        /// <summary>Cards this joker has taken out of the deck over the run.</summary>
+        private int cardsLost;
+
         public BabaOcagiJoker()
             : base("baba_ocagi", "Baba Ocağı")
         {
             SetDescription(
                 "Played cards are buried at a random depth of the draw pile instead of "
-                    + "being discarded. The pile's top card is always visible.",
+                    + "being discarded, so the deck never runs out. The pile's top card is "
+                    + "always visible. Every time you have played as many cards as your deck "
+                    + "holds, 3 random cards leave your deck for the rest of the run.",
                 "Kartlar ıskartaya değil, çekme destesinin rastgele bir yerine "
-                    + "girer. Destenin en üstteki kartı hep görünür.");
+                    + "girer, deste hiç bitmez. Destenin en üstteki kartı hep görünür. "
+                    + "Destendeki kart sayısı kadar kart oynadığında destenden rastgele 3 kart "
+                    + "oyunun kalanı için çıkar.");
             IsLegendary = true;
+        }
+
+        public override string StatusText
+        {
+            get
+            {
+                return Loc.Pick(playedSinceRent + " played", playedSinceRent + " oynandı")
+                    + (cardsLost > 0 ? Loc.Pick("  ·  " + cardsLost + " lost",
+                        "  ·  " + cardsLost + " kart gitti") : string.Empty);
+            }
+        }
+
+        /// <summary>Statistics: one proc per rent collected.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
+        /// <summary>Counts the card this turn played, and collects the rent when the count
+        /// reaches the deck's current size.</summary>
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            if (turn.Report.Card == null)
+            {
+                return;
+            }
+            int lost = DeckRent.Collect(turn, ref playedSinceRent, CardsLostPerCycle);
+            cardsLost += lost;
+            if (lost > 0)
+            {
+                NoteProc(0, turn);
+            }
         }
 
         public override void OnAcquired(SessionContext ctx)
@@ -79,11 +132,17 @@ namespace ProjectBlock.Core
                 "After the opening hand is dealt, the draw pile is split into two equal piles "
                     + "kept separate and never merged. Each turn the two roles swap - you draw "
                     + "from one and discard into the other, and which is which flips every turn - "
-                    + "and at the end of every turn each pile is shuffled within itself. Hand +1.",
+                    + "and at the end of every turn each pile is shuffled within itself. Click "
+                    + "either pile to see what is in it. Hand +1. The deck never runs out, so "
+                    + "every time you have played as many cards as your deck holds, 3 random "
+                    + "cards leave your deck for the rest of the run.",
                 "Açılış eli dağıtıldıktan sonra çekme destesi iki eşit desteye bölünür, asla "
                     + "birbirine karışmazlar. Her tur roller yer değiştirir - birinden çeker, "
                     + "diğerine atarsın, hangisinin hangisi olduğu her tur değişir - ve her tur "
-                    + "sonunda her deste kendi içinde karılır. El +1.");
+                    + "sonunda her deste kendi içinde karılır. İçini görmek için iki desteye de "
+                    + "tıklayabilirsin. El +1. Deste hiç bitmez; bu yüzden destendeki kart "
+                    + "sayısı kadar kart oynadığında destenden rastgele 3 kart oyunun kalanı "
+                    + "için çıkar.");
             IsLegendary = true;
         }
 
@@ -93,7 +152,10 @@ namespace ProjectBlock.Core
             {
                 bool normal = TurnsSeen % 2 == 0;
                 return Loc.Pick(normal ? "normal flow" : "reversed flow",
-                    (normal ? "normal" : "ters") + " yön");
+                    (normal ? "normal" : "ters") + " yön")
+                    + Loc.Pick("  ·  " + playedSinceRent + " played", "  ·  " + playedSinceRent + " oynandı")
+                    + (cardsLost > 0 ? Loc.Pick("  ·  " + cardsLost + " lost",
+                        "  ·  " + cardsLost + " kart gitti") : string.Empty);
             }
         }
 
@@ -115,8 +177,27 @@ namespace ProjectBlock.Core
             ctx.Round.Deck.SplitDrawIntoDiscard();
         }
 
+        /// <summary>Cards taken out of the run deck each time the count comes round - the same
+        /// rent "Baba Ocağı" charges, for the same reason: neither deck can run dry.</summary>
+        public int CardsLostPerCycle = 3;
+
+        private int playedSinceRent;
+        private int cardsLost;
+
+        /// <summary>Statistics: one proc per rent collected.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         public override void AfterTurnScored(TurnContext turn)
         {
+            int lost = DeckRent.Collect(turn, ref playedSinceRent, CardsLostPerCycle);
+            cardsLost += lost;
+            if (lost > 0)
+            {
+                NoteProc(0, turn);
+            }
             // Roles toggle for next turn: this turn's discard becomes next turn's draw pile and
             // vice versa. Then each pile is shuffled within ITSELF (the two are never merged), so
             // neither pile's order is predictable - the card you discarded this turn is somewhere
@@ -335,6 +416,33 @@ namespace ProjectBlock.Core
             rules.RevealedDiscardCount = round.Deck.DiscardCount / 2;
             rules.HideDiscardTop = false;
             SwapAvailable = true;
+        }
+    }
+
+    /// <summary>
+    /// THE RENT a deck that can never run dry pays ("Baba Ocağı", "Konfüzyon"): every time the
+    /// player has played as many cards as the deck holds, a few random cards leave the deck for
+    /// the rest of the run, through GameSession.TaxOwnedCards (which never shrinks it below a
+    /// playable hand). One definition, so the two jokers cannot drift apart.
+    /// </summary>
+    internal static class DeckRent
+    {
+        /// <summary>Counts the card this turn played into <paramref name="played"/> and, when
+        /// the count reaches the deck's current size, collects. Returns the cards taken.</summary>
+        public static int Collect(TurnContext turn, ref int played, int cardsPerCycle)
+        {
+            if (turn.Report.Card == null)
+            {
+                return 0;
+            }
+            played++;
+            int deckSize = turn.Session.OwnedCards.Count;
+            if (deckSize <= 0 || played < deckSize)
+            {
+                return 0;
+            }
+            played = 0;
+            return turn.Session.TaxOwnedCards(cardsPerCycle, turn.Rng);
         }
     }
 }

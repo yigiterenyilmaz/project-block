@@ -207,6 +207,17 @@ namespace ProjectBlock.View
                 }
                 if (mouse.leftButton.wasPressedThisFrame)
                 {
+                    // "Konfüzyon": both piles are live decks the player draws from in turn, so
+                    // each one opens its OWN contents rather than the owned-deck list.
+                    if (round.Deck.PileRolesAlternate
+                        && (cardLayer.IsDrawPileAt(world) || cardLayer.IsDiscardPileAt(world)))
+                    {
+                        bool draw = cardLayer.IsDrawPileAt(world);
+                        deckOverlay.ResetScroll();
+                        deckOverlay.ShowPile(TopFirst(draw ? round.Deck.DrawPile
+                            : round.Deck.DiscardPile), draw);
+                        return;
+                    }
                     if (cardLayer.IsDrawPileAt(world))
                     {
                         deckOverlay.ResetScroll();
@@ -219,7 +230,8 @@ namespace ProjectBlock.View
                         && !round.Rules.HideDiscardTop)
                     {
                         deckOverlay.ResetScroll();
-                        deckOverlay.Show(RevealedDiscardCards(round));
+                        deckOverlay.ShowDiscard(RevealedDiscardCards(round),
+                            round.Deck.DiscardCount);
                         return;
                     }
                     CardVisual hit = cardLayer.CardAt(world);
