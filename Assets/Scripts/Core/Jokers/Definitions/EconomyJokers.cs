@@ -190,9 +190,11 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"Kara delik" - every clean sweep hands the player a 1x1 void block. A void
-    /// block can be dropped onto an occupied cell; the cube that lands on it is swallowed
-    /// and the void is used up. The cards are round-scoped and never join the owned deck.</summary>
+    /// <summary>"Kara delik" - every clean sweep hands the player a void block, cut to the shape
+    /// of a random card of the deck (designer's call, 2026-09-19 - it used to be a 1x1). A void
+    /// block can be dropped onto occupied cells; each cube that lands on one of its cubes is
+    /// swallowed and that void cube is used up. The cards are round-scoped and never join the
+    /// owned deck.</summary>
     public sealed class KaraDelikJoker : Joker
     {
         /// <summary>How many void blocks may exist at the same time within one round.</summary>
@@ -207,10 +209,18 @@ namespace ProjectBlock.Core
             : base("kara_delik", "Kara Delik")
         {
             SetDescription(
-                "Every clean sweep adds a 1x1 void block to your discard. A void block "
-                    + "can be placed on a filled cell and swallows whatever lands on it.",
-                "Her temizlikte ıskartana 1x1 boşluk bloğu ekler. Boşluk bloğu "
-                    + "dolu hücreye konabilir ve üstüne geleni yutar.");
+                "Every clean sweep adds a void block to your discard, shaped like a random "
+                    + "block of your deck. A void block can be placed over filled cells, and "
+                    + "each of its cubes swallows whatever lands on it.",
+                "Her temizlikte ıskartana, destendeki rastgele bir bloğun şeklinde bir boşluk "
+                    + "bloğu ekler. Boşluk bloğu dolu hücrelerin üstüne konabilir ve her küpü "
+                    + "üstüne geleni yutar.");
+        }
+
+        /// <summary>Statistics: one proc per void block handed out.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
         }
 
         public override string StatusText
@@ -231,9 +241,10 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            BlockCard card = MakeVoidCard(turn.Session);
+            BlockCard card = MakeVoidCard(turn.Session, turn.Rng);
             liveVoidCardIds.Add(card.Id);
             GrantedThisRound++;
+            NoteProc(0, turn);
             // Into the discard, so it joins the pile economy and can be drawn later. In
             // overtime the sweep reshuffles the discard right after this, which is the
             // deliberate reward: the void block goes straight into the fresh draw pile.
@@ -279,10 +290,22 @@ namespace ProjectBlock.Core
             return false;
         }
 
-        private static BlockCard MakeVoidCard(GameSession session)
+        private static BlockCard MakeVoidCard(GameSession session, IRandomSource rng)
         {
-            BlockShape single = BlockShape.FromCells(new[] { new GridPos(0, 0) });
-            return session.CreateCard(single, new[] { BlockElement.Void });
+            return session.CreateCard(VoidShape(session, rng), new[] { BlockElement.Void });
+        }
+
+        /// <summary>THE void block's shape: a random card of the owned deck, or a single cube
+        /// when there is no deck to draw from. Public so the debug gallery deals the same thing
+        /// the joker does.</summary>
+        public static BlockShape VoidShape(GameSession session, IRandomSource rng)
+        {
+            IReadOnlyList<BlockCard> deck = session.OwnedCards;
+            if (deck.Count == 0 || rng == null)
+            {
+                return BlockShape.FromCells(new[] { new GridPos(0, 0) });
+            }
+            return deck[rng.NextInt(0, deck.Count)].Shape;
         }
     }
 

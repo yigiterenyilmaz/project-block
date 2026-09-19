@@ -1858,6 +1858,14 @@ public static class JokerTests
         Check(round.Deck.DiscardCount == discardBefore + 1, "a void block went to the discard",
             "discard " + round.Deck.DiscardCount);
         Check(joker.GrantedThisRound == 1, "counted the grant");
+        BlockCard granted = round.Deck.DiscardPile[round.Deck.DiscardCount - 1];
+        bool deckShape = false;
+        foreach (BlockCard owned in session.OwnedCards)
+        {
+            if (owned.Shape.CanonicalKey == granted.Shape.CanonicalKey) { deckShape = true; }
+        }
+        Check(granted.Has(BlockElement.Void) && deckShape,
+            "and it is shaped like a block of the deck", granted.Shape.ToString());
 
         // The void must swallow whatever is placed on top of it.
         BlockCard voidCard = session.CreateCard(Bar(1), new[] { BlockElement.Void });

@@ -367,7 +367,10 @@ namespace ProjectBlock.Core
             {
                 throw new InvalidOperationException("Bonus cards can only be added during a round.");
             }
-            BlockShape shape = Config.Deck.ShapeGenerator.NextShape(rng);
+            // A VOID block is dealt the way "Kara delik" makes one: a random shape of the deck.
+            BlockShape shape = element == BlockElement.Void
+                ? KaraDelikJoker.VoidShape(this, rng)
+                : Config.Deck.ShapeGenerator.NextShape(rng);
             var card = new BlockCard(nextCardId++, shape, new[] { element });
             AssignTargetCube(card, rng);
             CurrentRound.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
