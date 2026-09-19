@@ -217,8 +217,7 @@ namespace ProjectBlock.View
         /// controller walks TurnReport.ProcedJokers and calls this, so a joker gets the flash by
         /// noting a proc in Core rather than by anything here learning its name.
         ///
-        /// It is the ACTIVATION pulse plus the halo, because a proc and a use should look like
-        /// the same KIND of event - what differs is that nobody clicked this one.
+        /// It is the halo alone: the card never moves for a proc (a use still pulses it).
         /// </summary>
         public void ProcJoker(int instanceId)
         {
@@ -226,11 +225,13 @@ namespace ProjectBlock.View
             {
                 if (panels[i].Root.activeSelf && panels[i].InstanceId == instanceId)
                 {
+                    // The halo ONLY - the card itself stays put. A proc is the joker reporting,
+                    // not the card being handled, and a card that jumps every turn it fires is
+                    // a strip that never sits still.
                     if (panels[i].Glow != null)
                     {
                         panels[i].Glow.Proc(CardGlowFx.ProcColour);
                     }
-                    StartCoroutine(PulseRoutine(panels[i].Root.transform));
                     return;
                 }
             }

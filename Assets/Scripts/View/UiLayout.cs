@@ -570,19 +570,24 @@ namespace ProjectBlock.View
                 float x = fromRight ? 1f : 0f;
                 rect.anchorMin = new Vector2(x, 1f);
                 rect.anchorMax = new Vector2(x, 1f);
-                rect.pivot = new Vector2(x, 1f);
-                float across = (fromRight ? -column : column) * (panel.x + gap);
-                rect.anchoredPosition = new Vector2(across, -row * (panel.y + gap));
+                // Pivoted on the card's MIDDLE, with the position moved by half a card to keep
+                // the corner where it was: every scale on a slot (the proc pulse, the hold
+                // squeeze) grows about the pivot, and on a corner pivot the card slid away from
+                // its screen edge - left and down on the joker bar - each time it fired.
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                float across = (fromRight ? -column : column) * (panel.x + gap)
+                    + (fromRight ? -0.5f : 0.5f) * panel.x;
+                rect.anchoredPosition = new Vector2(across, -row * (panel.y + gap) - 0.5f * panel.y);
                 return;
             }
             rect.anchorMin = new Vector2(0.5f, 1f);
             rect.anchorMax = new Vector2(0.5f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
             // Centred on however many are showing, so the row grows outward from the middle
             // rather than off one end.
             float step = panel.x + gap;
             rect.anchoredPosition = new Vector2(
-                (index - (count - 1) * 0.5f) * step, 0f);
+                (index - (count - 1) * 0.5f) * step, -0.5f * panel.y);
         }
 
         // =================================================================== choosing

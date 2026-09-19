@@ -304,9 +304,8 @@ namespace ProjectBlock.View
             his.anchorMax = mine.anchorMax;
             // THE HALO IS PIVOTED ON ITS OWN MIDDLE, WHATEVER THE CARD IS PIVOTED ON.
             //
-            // A bar card's pivot is a CORNER - UiLayout.PlaceBarSlot pivots the right-hand strip
-            // on (1, 1) and the left-hand one on (0, 1), so each column grows from its own screen
-            // edge. Copying that pivot and then growing sizeDelta to make the halo bigger than
+            // A bar card's pivot USED to be a corner - UiLayout.PlaceBarSlot pivoted the right-hand
+            // strip on (1, 1) and the left-hand one on (0, 1) (it is centred now). Copying that pivot and then growing sizeDelta to make the halo bigger than
             // the card grows it AWAY FROM THAT CORNER ONLY: on the joker bar the light appeared
             // down the left edge and under the bottom and nowhere else, which is precisely the
             // "it only glows on two sides" this fixes.

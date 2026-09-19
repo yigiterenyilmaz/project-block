@@ -205,7 +205,6 @@ namespace ProjectBlock.View
                     {
                         panels[i].Glow.Proc(CardGlowFx.ProcColour);
                     }
-                    StartCoroutine(PulseRoutine(panels[i].Root.transform));
                     return;
                 }
             }

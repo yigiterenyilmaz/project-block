@@ -375,9 +375,9 @@ namespace ProjectBlock.View
         // whose pick is spent still cannot be sold by accident and one with a pick left can still
         // be sold without spending it first.
         //
-        // The hold is armed on press and settled on RELEASE, never mid-hold: a sale that fires
-        // while the button is still down gives the player nothing to abort into. Dragging off the
-        // card cancels it, which is the standard escape hatch for a press-and-hold.
+        // The hold is armed on press. A tap is settled on RELEASE; a hold sells the moment the
+        // gauge fills, button still down. Dragging off the card before then cancels it, which is
+        // the standard escape hatch for a press-and-hold.
 
         /// <summary>How long a bar card must be held for the press to become a SALE. Long enough
         /// that it cannot be hit by a click, short enough not to feel like a punishment.</summary>
@@ -403,7 +403,7 @@ namespace ProjectBlock.View
 
         /// <summary>
         /// Called every frame in the market. Arms a press on a bar card, keeps the hold light on
-        /// it, and settles the press when the button comes up: a tap USES, a completed hold SELLS.
+        /// it, and settles the press: a tap USES on release, a completed hold SELLS as soon as it fills.
         ///
         /// Returns true on the frames it owned the press, so the market's other click handlers
         /// (the shelf, the deck button, the piles) only ever see presses that were not on a bar.
@@ -450,14 +450,16 @@ namespace ProjectBlock.View
                 ClearBarHold();
                 return true;
             }
-            if (mouse.leftButton.isPressed)
+            // A FULL gauge sells at once, button still down - making the player let go after the
+            // gauge has already said "sold" was one step too many. Dragging off before it fills
+            // is still the way out.
+            bool sell = HeldLongEnough;
+            if (mouse.leftButton.isPressed && !sell)
             {
                 float progress = Mathf.Clamp01((Time.unscaledTime - heldSince) / SellHoldSeconds);
                 ShowHoldProgress(progress);
                 return true;
             }
-            // Released: the press is settled here and nowhere else.
-            bool sell = HeldLongEnough;
             HeldBar bar = heldBar;
             int index = heldIndex;
             ClearBarHold();
