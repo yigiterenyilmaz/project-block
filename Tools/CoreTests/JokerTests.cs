@@ -1797,27 +1797,22 @@ public static class JokerTests
 
     private static void KapaliEkonomi_PaysWhenNothingWasBought()
     {
-        Section("kapali_ekonomi / saving pays");
+        Section("kapali_ekonomi / every skipped market adds a score percentage");
         var session = NewSession(101, 6, 40, 24, 1);
         var joker = (KapaliEkonomiJoker)session.Jokers.Add(new KapaliEkonomiJoker());
-        joker.PointsPerTurnWhenSaving = 8;
         var ctx = new SessionContext(session, session.Rng);
 
         joker.OnMarketLeft(ctx, true);
-        joker.OnRoundStarted(new RoundContext(session, session.Rng, session.CurrentRound));
-        Check(joker.ActiveBonus == 0, "buying something pays nothing", "got " + joker.ActiveBonus);
+        Check(joker.BonusPercent == 0, "buying something adds nothing", "got " + joker.BonusPercent);
 
         joker.OnMarketLeft(ctx, false);
-        joker.OnRoundStarted(new RoundContext(session, session.Rng, session.CurrentRound));
-        Check(joker.ActiveBonus == 8, "skipping the market pays per turn", "got " + joker.ActiveBonus);
-
-        joker.OnMarketLeft(ctx, false);
-        joker.OnRoundStarted(new RoundContext(session, session.Rng, session.CurrentRound));
-        Check(joker.ActiveBonus == 16, "the streak stacks", "got " + joker.ActiveBonus);
+        Check(joker.BonusPercent == 5, "a skip with no boss down adds 5%", "got " + joker.BonusPercent);
 
         var score = new ScoreBreakdown();
+        score.BasePlacement = 100;
         joker.ModifyScore(FakeTurnWithRound(session, score));
-        Check(score.FlatBonus == 16, "the bonus lands on the turn", "got " + score.FlatBonus);
+        Check(System.Math.Abs(score.Multiplier - 1.05) < 1e-9, "and lifts the turn by 5%",
+            "multiplier " + score.Multiplier);
     }
 
     private static void Ihale_LocksUntilTheAuctionedJokerLeaves()

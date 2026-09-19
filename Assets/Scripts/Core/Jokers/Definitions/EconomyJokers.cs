@@ -1,8 +1,7 @@
 ﻿// PURPOSE: The jokers wired into the run economy and the market: Kapalı Ekonomi,
 // ihale, Kara delik, Enfeksiyon.
 //
-// "Powerbank" lives here too, now that powers exist: it is the only joker that reaches into
-// the power inventory.
+// ("Powerbank" used to live here; it is a power now - Powers/Definitions/PowerbankPower.cs.)
 //
 // All numbers are BALANCE PLACEHOLDERS.
 
@@ -10,115 +9,100 @@ using System.Collections.Generic;
 
 namespace ProjectBlock.Core
 {
-    /// <summary>"Kapalı Ekonomi" - skip the market and the next round pays for it.
-    /// The bonus lands on every turn of that round, so it counts toward the threshold and
-    /// cannot hand the player a free advance offer before a single block is placed.</summary>
+    /// <summary>"Kapalı Ekonomi" - skip the market and your score grows.
+    ///
+    /// (designer's call, 2026-09-19) Every market left WITHOUT buying adds a percentage to a
+    /// score bonus that stays for the rest of the run: 5% for a skip, and 2.5% more per skip for
+    /// every boss defeated before it. Skipping after round 1 (no boss yet) and after round 7 (two
+    /// bosses down) is 5% + 10% = 15%. The bonus is a MULTIPLIER on every turn's score, so it
+    /// lifts whatever the turn earned - base values and the other jokers' flat bonuses alike.
+    /// Buying something does not take the bonus away; it simply adds nothing that market.</summary>
     public sealed class KapaliEkonomiJoker : Joker
     {
-        public int PointsPerTurnWhenSaving = 8;
+        /// <summary>Percent added by a skip with no boss beaten yet.</summary>
+        public double PercentPerSkip = 5.0;
 
-        /// <summary>Consecutive markets left without buying. The bonus scales with it.</summary>
-        public int SavedStreak { get; private set; }
+        /// <summary>Extra percent per skip for every boss already defeated.</summary>
+        public double PercentPerBossDefeated = 2.5;
 
-        /// <summary>Bonus active during the current round (frozen at round start).</summary>
-        public int ActiveBonus { get; private set; }
+        /// <summary>The accumulated bonus, in percent.</summary>
+        public double BonusPercent { get; private set; }
+
+        /// <summary>Markets skipped over the run.</summary>
+        public int MarketsSkipped { get; private set; }
 
         public KapaliEkonomiJoker()
             : base("kapali_ekonomi", "Kapalı Ekonomi")
         {
             SetDescription(
-                "Buy nothing at the market and the next round pays a score bonus every turn.",
-                "Marketten bir şey almazsan sonraki raunt her tur puan bonusu alırsın.");
+                "Every market you leave without buying anything adds +5% to all the points you "
+                    + "score for the rest of the run - and +2.5% more per skip for every boss "
+                    + "you have defeated.",
+                "Hiçbir şey almadan çıktığın her market, oyunun kalanında kazandığın tüm "
+                    + "puanlara +%5 ekler - yendiğin her patron için her atlamada +%2,5 daha.");
         }
 
         public override string StatusText
         {
             get
             {
-                return ActiveBonus > 0
-                    ? Loc.Pick("+" + ActiveBonus + "/turn", "+" + ActiveBonus + "/tur")
-                    : Loc.Pick("saving " + SavedStreak, "biriktir " + SavedStreak);
+                string pct = BonusPercent.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+                return Loc.Pick("+" + pct + "% score", "puan +%" + pct);
             }
+        }
+
+        /// <summary>Statistics: one proc per skip, and the tooltip's points are what the bonus
+        /// has actually added.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
         }
 
         public override void OnMarketLeft(SessionContext ctx, bool anythingPurchased)
         {
-            SavedStreak = anythingPurchased ? 0 : SavedStreak + 1;
+            if (anythingPurchased)
+            {
+                return;
+            }
+            MarketsSkipped++;
+            BonusPercent += PercentPerSkip + PercentPerBossDefeated * BossesDefeated(ctx.Session);
+            NoteProc(0);
         }
 
-        public override void OnRoundStarted(RoundContext ctx)
+        /// <summary>Boss stages already survived. A boss stage carries the number of the round
+        /// it follows, so every round up to this one whose boss has been played counts - and this
+        /// round's own only once we are past its boss (InBossStage).</summary>
+        private static int BossesDefeated(GameSession session)
         {
-            ActiveBonus = SavedStreak * PointsPerTurnWhenSaving;
+            int beaten = 0;
+            for (int r = 1; r <= session.RoundNumber; r++)
+            {
+                if (!session.Config.Progression.HasBossStageAfter(r))
+                {
+                    continue;
+                }
+                if (r < session.RoundNumber || session.InBossStage)
+                {
+                    beaten++;
+                }
+            }
+            return beaten;
         }
 
         public override void ModifyScore(TurnContext turn)
         {
-            if (ActiveBonus > 0)
+            if (BonusPercent <= 0)
             {
-                turn.Score.AddFlat(ActiveBonus, DefId);
+                return;
             }
-        }
-    }
-
-    /// <summary>"Powerbank" - once per round, puts one spent power back on charge without
-    /// needing a clean sweep. Player-activated so the timing is a real decision.
-    /// It refuses to fire when every power is already charged, so the charge is not wasted.</summary>
-    public sealed class PowerbankJoker : Joker
-    {
-        public PowerbankJoker()
-            : base("powerbank", "Powerbank")
-        {
-            SetDescription(
-                "Once per round, recharges a spent power without waiting for a clean sweep.",
-                "Raunt başına 1 kez, harcanmış bir gücü temizlik beklemeden doldurur.");
-            ChargesPerRound = 1;
-        }
-
-        public override string StatusText
-        {
-            get { return ChargesLeft > 0 ? Loc.Pick("ready", "hazır") : Loc.Pick("used", "kullanıldı"); }
-        }
-
-        public override bool CanActivate(RoundContext ctx)
-        {
-            if (ChargesLeft <= 0 || ctx.Round.Status != RoundStatus.InProgress)
+            int before = turn.Score.Total;
+            turn.Score.AddMultiplier(1.0 + BonusPercent / 100.0, DefId);
+            int scale = turn.Score.ScoreScale < 1 ? 1 : turn.Score.ScoreScale;
+            int gained = (turn.Score.Total - before) / scale;
+            if (gained > 0)
             {
-                return false;
+                NoteProc(gained, turn);
             }
-            IReadOnlyList<Power> powers = ctx.Session.Powers.Powers;
-            for (int i = 0; i < powers.Count; i++)
-            {
-                if (!powers[i].Charged)
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        public override bool Activate(RoundContext ctx, ActivationTarget target)
-        {
-            if (!CanActivate(ctx) || !TrySpendCharge())
-            {
-                return false;
-            }
-            return ctx.Session.Powers.RechargeOne();
-        }
-
-        /// <summary>Recharges a SPECIFIC spent power (the UI lets the player choose which).
-        /// Spends the joker's own charge only if the target power actually recharges.</summary>
-        public bool RechargeChosen(RoundContext ctx, int powerInstanceId)
-        {
-            if (!CanActivate(ctx))
-            {
-                return false;
-            }
-            Power target = ctx.Session.Powers.Find(powerInstanceId);
-            if (target == null || target.Charged || !TrySpendCharge())
-            {
-                return false;
-            }
-            return ctx.Session.Powers.Recharge(powerInstanceId);
         }
     }
 
