@@ -427,10 +427,37 @@ namespace ProjectBlock.View
                 && Mathf.Abs(a.b - b.b) < 0.003f;
         }
 
+        private bool laidOut;
+        private Vector2 lastSize;
+        private bool lastCompact;
+        private bool laidOutNameOnly;
+
+        /// <summary>True when the status line has nothing in it, so the name has the plate alone.</summary>
+        private bool NameOnly
+        {
+            get { return Status == null || string.IsNullOrEmpty(Status.text); }
+        }
+
+        /// <summary>Writes the status line, and lays the card out again when that line went from
+        /// empty to written or back - which is what moves the name between the top of the plate
+        /// and its middle.</summary>
+        public void SetStatus(string text)
+        {
+            Status.text = text;
+            if (laidOut && NameOnly != laidOutNameOnly)
+            {
+                Layout(lastSize, lastCompact);
+            }
+        }
+
         /// <summary>Places everything inside a card of <paramref name="size"/> canvas pixels. A
         /// <paramref name="compact"/> card (the phone row) has no room for the status line.</summary>
         public void Layout(Vector2 size, bool compact)
         {
+            laidOut = true;
+            lastSize = size;
+            lastCompact = compact;
+            laidOutNameOnly = NameOnly;
             if (Painted)
             {
                 LayoutPainted(size, compact);
@@ -444,7 +471,9 @@ namespace ProjectBlock.View
             Place(Well.rectTransform, new Vector2(0f, -pad), new Vector2(wellWidth, wellHeight));
 
             float below = size.y - pad - wellHeight;
-            float titleHeight = compact ? below - pad : below * 0.52f;
+            // A card with nothing to say under its name gives the name the whole space, CENTRED
+            // in it, instead of leaving it at the top over an empty line.
+            float titleHeight = compact || NameOnly ? below - pad : below * 0.52f;
             Place(Title.rectTransform, new Vector2(0f, -pad - wellHeight - 2f),
                 new Vector2(size.x - pad * 2f, titleHeight));
             // Type follows the card's width, so resizing the bars in UiLayout is the only change a
@@ -503,7 +532,7 @@ namespace ProjectBlock.View
             float plateHeight = size.y * (anatomy.PlateBottom - anatomy.PlateTop);
             float plateMiddle = (anatomy.PlateLeft + anatomy.PlateRight) * 0.5f - 0.5f;
             float plateTop = size.y * anatomy.PlateTop;
-            float titleHeight = compact ? plateHeight : plateHeight * 0.62f;
+            float titleHeight = compact || NameOnly ? plateHeight : plateHeight * 0.62f;
             Place(Title.rectTransform, new Vector2(size.x * plateMiddle, -plateTop),
                 new Vector2(plateWidth, titleHeight));
             Title.resizeTextMaxSize = Mathf.RoundToInt(size.x * 0.13f);

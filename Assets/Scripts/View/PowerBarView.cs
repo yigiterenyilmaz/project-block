@@ -631,7 +631,7 @@ namespace ProjectBlock.View
             panel.Hotkey.text = string.Empty;
             panel.Title.text = power.DisplayName;
             panel.SetIcon(ViewUtil.PowerIcon(power.DefId), silenced || !power.Charged);
-            panel.Status.text = StatusLine(power, session, silenced);
+            panel.SetStatus(StatusLine(power, session, silenced));
         }
 
         /// <summary>The one line a vertical card has room for: a boss outranks the charge state,

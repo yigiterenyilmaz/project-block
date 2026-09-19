@@ -397,7 +397,7 @@ namespace ProjectBlock.View
             panel.Hotkey.text = index < 9 ? (index + 1).ToString() : string.Empty;
             panel.Title.text = joker.DisplayName;
             panel.SetIcon(ViewUtil.JokerIcon(joker.DefId), silenced);
-            panel.Status.text = StatusLine(joker, silenced, inverted);
+            panel.SetStatus(StatusLine(joker, silenced, inverted));
             // "Parazit": a joker riding a block wears the parasite on its card too.
             ParasiteCardFx.Apply(panel.Root, joker.Attachment.HasValue);
         }

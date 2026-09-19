@@ -867,6 +867,9 @@ namespace ProjectBlock.View
                 case BlockElement.Transparent: return new Color(0.75f, 0.85f, 0.9f);
                 case BlockElement.Ghost: return new Color(0.78f, 0.78f, 0.95f);
                 case BlockElement.Negative: return new Color(0.16f, 0.16f, 0.2f);
+                // "Kara delik": it had NO case here, so its band label came out the default grey
+                // - lerped a little toward white, dim on the dark band - and nearly unreadable.
+                case BlockElement.Void: return new Color(0.62f, 0.38f, 0.98f);
                 case BlockElement.Dynamite: return new Color(0.88f, 0.2f, 0.15f);
                 case BlockElement.Mechanical: return new Color(0.6f, 0.65f, 0.7f);
                 case BlockElement.Fox: return new Color(0.85f, 0.5f, 0.2f);
@@ -982,6 +985,7 @@ namespace ProjectBlock.View
                 case BlockElement.Transparent: return Loc.Pick("GLASS", "CAM");
                 case BlockElement.Ghost: return Loc.Pick("GHOST", "HAYALET");
                 case BlockElement.Negative: return Loc.Pick("NEGATIVE", "NEGATİF");
+                case BlockElement.Void: return Loc.Pick("VOID", "BOŞLUK");
                 case BlockElement.Dynamite: return "TNT";
                 case BlockElement.Mechanical: return Loc.Pick("GEARS", "ÇARK");
                 case BlockElement.Fox: return Loc.Pick("FOX", "TİLKİ");
@@ -1028,6 +1032,12 @@ namespace ProjectBlock.View
                             + "the cells end up empty. Obsidian and gold refuse it.",
                         "Mevcut blokların ÜSTÜNE konur ve onları siler. Geriye hiçbir şey "
                             + "bırakmaz, kareler boşalır. Obsidyen ve altın kabul etmez.");
+                case BlockElement.Void:
+                    return Loc.Pick(
+                        "Place it over filled cells too. Each of its cubes swallows the next cube "
+                            + "that lands on it, and both are gone.",
+                        "Dolu hücrelerin üstüne de konabilir. Her küpü üstüne gelen ilk küpü "
+                            + "yutar ve ikisi de yok olur.");
                 case BlockElement.Dynamite:
                     return Loc.Pick("If the whole block explodes the turn it lands, the board is cleared.",
                         "Blok tek seferde tümüyle patlarsa tüm alan temizlenir.");

@@ -22,6 +22,9 @@ namespace ProjectBlock.View
         private Color outlineInk;
         private string lastText;
         private Color lastColor;
+        private MeshRenderer inkRenderer;
+        private MeshRenderer[] copyRenderers;
+        private int lastOrder = int.MinValue;
 
         public void Bind(TextMesh text, TextMesh[] outlineCopies, Color ink_)
         {
@@ -30,6 +33,13 @@ namespace ProjectBlock.View
             outlineInk = ink_;
             lastText = text != null ? text.text : null;
             lastColor = text != null ? text.color : Color.white;
+            inkRenderer = text != null ? text.GetComponent<MeshRenderer>() : null;
+            copyRenderers = new MeshRenderer[outlineCopies.Length];
+            for (int i = 0; i < outlineCopies.Length; i++)
+            {
+                copyRenderers[i] = outlineCopies[i] != null
+                    ? outlineCopies[i].GetComponent<MeshRenderer>() : null;
+            }
         }
 
         private void LateUpdate()
@@ -37,6 +47,21 @@ namespace ProjectBlock.View
             if (ink == null || copies == null)
             {
                 return;
+            }
+            // THE ORDER FOLLOWS TOO. A card re-sorts its text after it is built (the hand fan
+            // flattens every card to one order, a hovered card is boosted), and copies left at
+            // the order they were born with ended up OVER their own ink - a label that looked
+            // dark and smudged for no visible reason.
+            if (inkRenderer != null && inkRenderer.sortingOrder != lastOrder)
+            {
+                lastOrder = inkRenderer.sortingOrder;
+                for (int i = 0; i < copyRenderers.Length; i++)
+                {
+                    if (copyRenderers[i] != null)
+                    {
+                        copyRenderers[i].sortingOrder = lastOrder - 1;
+                    }
+                }
             }
             bool textChanged = ink.text != lastText;
             bool colorChanged = ink.color != lastColor;
