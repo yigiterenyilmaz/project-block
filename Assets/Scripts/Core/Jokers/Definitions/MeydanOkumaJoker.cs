@@ -3,6 +3,11 @@
 // it re-marks somewhere else for half the bonus; miss that and it halves again; miss the
 // third and it gives up for the round. Land any one of them and it is done for the round.
 //
+// (designer's call, 2026-09-19) THE BONUS IS A SHARE OF THE ROUND'S BAR - 15% of
+// RoundEngine.ScoreThreshold, fixed when the round starts - so it stays worth chasing in round
+// fifteen. And A MISS IS ALSO clearing ANY OTHER line while the dare is live: the dare moves and
+// halves at once, exactly as if its deadline had run out.
+//
 // The whole event happens once per round: once it pays out OR runs out of attempts, it
 // stays quiet until the next round.
 //
@@ -27,9 +32,10 @@
 // is laid and it looks again next turn. The bonus is worked out from how many dares have been
 // laid, so waiting a turn can never reset it back to full.
 //
-// SAVE FORMAT: the tuning below is const and the sea is [NotSaved], so no saved field changed and
-// a run saved before this still loads. The sea is re-measured from the saved board whenever it is
-// next needed, and it is seeded from that state, so a loaded run reaches the same dare.
+// SAVE FORMAT: the tuning below is const and the sea is [NotSaved]. (The share-of-the-bar rework
+// added saved fields, and the format version moved with it.) The sea is re-measured from the
+// saved board whenever it is next needed, and it is seeded from that state, so a loaded run
+// reaches the same dare.
 //
 // WHAT THE PLAYER SEES comes from LastEvent (ChallengeVisuals): one report per turn that says
 // whether the dare was laid, ticked, paid, missed or ran out, with the contract before and after.
@@ -50,8 +56,19 @@ namespace ProjectBlock.Core
         /// so the player is not asked to fill a line on an empty board.</summary>
         public int ArmAfterTurns = 3;
 
-        /// <summary>Bonus for clearing the FIRST mark. Halves on every miss.</summary>
-        public int BaseBonus = 150;
+        /// <summary>A FIXED bonus for clearing the first mark, overriding the share below. 0 (the
+        /// default) means "use BaseSharePercent of the round's threshold". Halves on every miss.</summary>
+        public int BaseBonus = 0;
+
+        /// <summary>The first dare's bonus as a percentage of the round's score threshold.</summary>
+        public double BaseSharePercent = 15.0;
+
+        /// <summary>This round's first-dare bonus, fixed at round start (logical points).</summary>
+        private int roundBase;
+
+        /// <summary>Points this joker has paid over the run, in SCREEN points - what the card
+        /// shows under it.</summary>
+        private long pointsEarned;
 
         /// <summary>Floor for the deadline, in turns: max(3, empty cells in the marked line).</summary>
         public int MinDeadline = 3;
@@ -101,11 +118,13 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "A few turns in, it dares you to clear a marked row or column within a "
-                    + "deadline for a bonus. Miss it and it moves and halves the bonus, up to "
-                    + "three tries; clear any one and it is done for the round.",
+                    + "deadline, for 15% of the round's target score. If the deadline runs out, "
+                    + "or you clear ANY other line first, the dare moves and the bonus halves - "
+                    + "up to three tries; clear the marked one and it is done for the round.",
                 "Birkaç tur sonra işaretlediği bir satırı ya da sütunu süre dolmadan "
-                    + "patlatman için bonus vaat eder. Tutturamazsan yer değiştirip bonusu "
-                    + "yarıya böler, en fazla üç deneme; birini tutturursan o raunt biter.");
+                    + "patlatman için rauntun hedef puanının %15'ini vaat eder. Süre dolarsa ya "
+                    + "da önce BAŞKA bir satır/sütun patlatırsan hedef yer değiştirir ve bonus "
+                    + "yarıya iner - en fazla üç deneme; işaretliyi patlatınca o raunt biter.");
         }
 
         /// <summary>True once the event is over for the round (paid out or three misses).</summary>
@@ -156,7 +175,32 @@ namespace ProjectBlock.Core
         /// will be worth. 0 otherwise.</summary>
         public int PendingBonus
         {
-            get { return !resolved && !hasMark && attemptsMade > 0 ? BaseBonus >> attemptsMade : 0; }
+            get { return !resolved && !hasMark && attemptsMade > 0 ? RoundBase >> attemptsMade : 0; }
+        }
+
+        /// <summary>The first dare's bonus this round: the fixed override when one is set,
+        /// otherwise the share fixed at round start.</summary>
+        public int RoundBase
+        {
+            get { return BaseBonus > 0 ? BaseBonus : roundBase; }
+        }
+
+        /// <summary>What the first dare of a round with this bar would be worth - for the lab,
+        /// which has no round of the joker's own to read it from.</summary>
+        public int BaseBonusFor(RoundEngine round)
+        {
+            if (BaseBonus > 0)
+            {
+                return BaseBonus;
+            }
+            int threshold = round != null ? round.ScoreThreshold : 0;
+            return Math.Max(1, (int)Math.Round(threshold * BaseSharePercent / 100.0));
+        }
+
+        /// <summary>Statistics: one proc per dare landed, worth what it paid.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
         }
 
         public override string StatusText
@@ -167,17 +211,16 @@ namespace ProjectBlock.Core
                 {
                     return Loc.Pick("done", "bitti");
                 }
-                if (!hasMark)
-                {
-                    return Loc.Pick("waiting", "bekliyor");
-                }
-                string what = markIsRow ? Loc.Pick("row", "satır") : Loc.Pick("col", "sütun");
-                return what + " " + markedLine + " · " + turnsLeft + Loc.Pick("t", "t");
+                // The POINTS it has earned, never the line - the line is drawn on the board.
+                return pointsEarned > 0
+                    ? Loc.Pick("+" + pointsEarned + " earned", "+" + pointsEarned + " kazandı")
+                    : Loc.Pick("nothing earned yet", "henüz kazanmadı");
             }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
         {
+            roundBase = BaseBonusFor(ctx.Round);
             resolved = false;
             attemptsMade = 0;
             hasMark = false;
@@ -208,15 +251,22 @@ namespace ProjectBlock.Core
                 {
                     int scoreBefore = turn.Round.RoundScore;
                     turn.AddFlatScore(currentBonus, DefId);
+                    NoteProc(currentBonus, turn);
                     resolved = true;
                     hasMark = false;
                     before.Event = ChallengeEvent.Succeeded;
                     before.ScoreDelta = turn.Round.RoundScore - scoreBefore;
+                    pointsEarned += Math.Max(0, before.ScoreDelta);
                     LastEvent = before;
                     return;
                 }
-                // Not this turn - the deadline ticks.
+                // Not this turn - the deadline ticks. Clearing ANY OTHER line first is a miss on
+                // the spot: the dare was for THAT line.
                 turnsLeft--;
+                if (OtherLineExploded(turn.Report))
+                {
+                    turnsLeft = 0;
+                }
                 if (turnsLeft > 0)
                 {
                     before.Event = ChallengeEvent.Ticked;
@@ -234,7 +284,7 @@ namespace ProjectBlock.Core
                     return;
                 }
                 before.Event = ChallengeEvent.Failed;
-                before.NextBonus = BaseBonus >> attemptsMade;
+                before.NextBonus = RoundBase >> attemptsMade;
                 LastEvent = before;
                 missed = before;
             }
@@ -296,7 +346,7 @@ namespace ProjectBlock.Core
             }
             // The bonus comes from how many dares have been laid, never from a running halving:
             // a turn spent waiting for an honest dare must not be able to reset it.
-            currentBonus = BaseBonus >> attemptsMade;
+            currentBonus = RoundBase >> attemptsMade;
             markIsRow = pick.IsRow;
             markedLine = pick.Index;
             turnsLeft = pick.Deadline;
@@ -371,6 +421,28 @@ namespace ProjectBlock.Core
                 h = (h ^ (uint)round.Hand[i].Id) * 16777619u;
             }
             return h;
+        }
+
+        /// <summary>True if a row or column OTHER than the dared one went off this turn.</summary>
+        private bool OtherLineExploded(TurnReport report)
+        {
+            IReadOnlyList<int> rows = report.ExplodedRows;
+            IReadOnlyList<int> columns = report.ExplodedColumns;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (!markIsRow || rows[i] != markedLine)
+                {
+                    return true;
+                }
+            }
+            for (int i = 0; i < columns.Count; i++)
+            {
+                if (markIsRow || columns[i] != markedLine)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private bool MarkedLineExploded(TurnReport report)

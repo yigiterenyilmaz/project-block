@@ -1228,7 +1228,9 @@ must reach the same dare. A line that can NEVER go off (dead, no required cell, 
 cell, explosions suppressed by "Bilinmezlik") is `Possible = false` and never a candidate: a hard
 line is a dare, an impossible one is a rigged bet. When a board offers no honest dare it lays
 nothing and looks again next turn, and the bonus is worked out from how many dares have been LAID
-(`BaseBonus >> attemptsMade`), so waiting can never reset it. A line settled at one end after 12
+(`RoundBase >> attemptsMade`), so waiting can never reset it. The first dare is worth 15% of the
+round's threshold (`BaseSharePercent`, fixed at round start; designer's call 2026-09-19), and
+clearing ANY OTHER line while a dare is live is a miss on the spot - the dare moves and halves. A line settled at one end after 12
 futures (every one or none) stops being sampled - the ladder needs no precision there, and on the
 real decks the median line sits at 0.88 - which took the whole 7x7 sea from 128 ms to 35 ms with
 identical decisions. No saved field changed (tuning is `const`, the sea is `[NotSaved]`), so older

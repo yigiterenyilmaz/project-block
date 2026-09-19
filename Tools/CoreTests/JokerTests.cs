@@ -114,6 +114,7 @@ public static class JokerTests
         MeydanOkuma_ReportsThePayment();
         MeydanOkuma_UrgencyHasOneDefinition();
         Powerbank_RechargesASpentPower();
+        MeydanOkuma_TheBonusIsAShareOfTheBar();
         Erosion_FirstTwoRecyclesAreFreeThenTheRimGoes();
         Erosion_RimNeverEatsTheLastCell();
         Erosion_CentreHoleKillsItsRowAndColumn();
@@ -3878,7 +3879,8 @@ public static class JokerTests
         Check(marked.Chance <= hardest + MeydanOkumaJoker.TieWidth,
             "and is as hard as the hardest honest line", marked + " vs " + hardest.ToString("0.00"));
         Check(joker.TurnsLeft == marked.Deadline, "with the deadline the sea measured it against");
-        Check(joker.CurrentBonus == joker.BaseBonus, "for the full bonus");
+        Check(joker.CurrentBonus == joker.RoundBase, "for the full bonus",
+            joker.CurrentBonus + " vs " + joker.RoundBase);
     }
 
     /// <summary>
@@ -3913,7 +3915,6 @@ public static class JokerTests
             "precondition: every line on this board is a gimme or cannot go off");
         Check(!joker.HasActiveMark, "so no dare is laid");
         Check(!joker.IsResolved, "and the event is not over - it looks again next turn");
-        Check(joker.StatusText == Loc.Pick("waiting", "bekliyor"), "it says it is waiting");
 
         // Now hand it a board with a real dare on it: the FIRST dare still pays in full.
         GameSession pocket = MeydanPocket(733, 12);
@@ -3929,6 +3930,16 @@ public static class JokerTests
         Check(later.HasActiveMark, "the first honest board gets its dare");
         Check(later.CurrentBonus == 160, "and waiting cost it nothing - still the full bonus",
             "bonus " + later.CurrentBonus);
+    }
+
+    private static void MeydanOkuma_TheBonusIsAShareOfTheBar()
+    {
+        Section("meydan okuma / the first dare is worth 15% of the round's threshold");
+        var session = NewSession(3310, 7, 2000, 30, 1);
+        var joker = (MeydanOkumaJoker)session.Jokers.Add(new MeydanOkumaJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        Check(joker.RoundBase == 300, "a bar of 2000 makes the first dare worth 300",
+            "base " + joker.RoundBase);
     }
 
     private static void Powerbank_RechargesASpentPower()
