@@ -52,21 +52,28 @@ namespace ProjectBlock.Core
             : base("hazine", "Hazine")
         {
             SetDescription(
-                "Every round one hidden cell gets treasure and another gets dynamite. Explode "
-                    + "the treasure for a reward, the dynamite for a penalty - hitting both at "
-                    + "once cancels out, and finding either removes the other.",
-                "Her raunt gizlice bir kareye hazine, bir kareye dinamit konur. Hazineyi "
-                    + "patlatırsan ödül, dinamiti patlatırsan ceza alırsın - ikisine birden "
-                    + "denk gelirsen birbirini götürür, birini bulmak diğerini kaldırır.");
+                "Every round one hidden cell gets treasure and another gets dynamite. Hitting "
+                    + "both at once cancels out, and finding either removes the other.\n"
+                    + "TREASURE (one of): the explosion pays 1.5x, a 10-30% market discount, a "
+                    + "spent power refilled, or a bonus card.\n"
+                    + "DYNAMITE (one of): a charged power drained, a card frozen for 3 turns, "
+                    + "or your hand discarded.",
+                "Her raunt gizlice bir kareye hazine, bir kareye dinamit konur. İkisine birden "
+                    + "denk gelirsen birbirini götürür, birini bulmak diğerini kaldırır.\n"
+                    + "HAZİNE (biri): patlama 1,5 kat öder, markette %10-30 indirim, harcanmış "
+                    + "bir güç dolar ya da bir bonus kart.\n"
+                    + "DİNAMİT (biri): dolu bir güç boşalır, bir kart 3 tur donar ya da elin "
+                    + "ıskartaya gider.");
         }
 
         public override string StatusText
         {
             get
             {
+                // Once something went off, say WHAT: the prize or the punishment it really dealt.
                 if (!TreasureCell.HasValue && !DynamiteCell.HasValue)
                 {
-                    return Loc.Pick("found", "bulundu");
+                    return LastOutcome ?? Loc.Pick("found", "bulundu");
                 }
                 if (!TreasureCell.HasValue)
                 {
