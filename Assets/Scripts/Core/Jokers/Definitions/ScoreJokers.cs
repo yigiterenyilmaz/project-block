@@ -459,32 +459,96 @@ namespace ProjectBlock.Core
     /// <summary>"Kolay para" - placing blocks pays. Base placement scores nothing on its own
     /// (ScoringConfig.PointsPerCubePlaced is 0, held for exactly this), so this joker is what
     /// turns cubes placed into points: every cube of the block you play this turn adds a flat
-    /// bonus, which the multiplier stage still lifts. The small per-cube number is logical -
-    /// the global ScoreScale multiplies it up like every other score.</summary>
+    /// bonus, which the multiplier stage still lifts.
+    ///
+    /// THE BONUS IS A SHARE OF THE ROUND'S BAR (RoundEngine.ScoreThreshold, read live so a boss
+    /// that lowers the bar lowers this too), not a fixed number: a flat +2 was worth a real
+    /// chunk of round one and nothing at all by round twelve. A share is usually a FRACTION of
+    /// a logical point, so the remainder is carried to the next placement rather than floored
+    /// away - over a round it pays exactly its share.</summary>
     public sealed class KolayParaJoker : Joker
     {
-        /// <summary>Points per cube placed this turn.</summary>
-        public int PointsPerCube = 2;
+        /// <summary>Share of the round's threshold paid per cube placed (0.001 = 0.1%).</summary>
+        public double ThresholdSharePerCube = 0.001;
+
+        /// <summary>The fraction of a logical point owed but not yet paid.</summary>
+        private double owed;
+
+        /// <summary>What one cube pays right now, in SCREEN points - the tooltip's number.
+        /// Refreshed whenever a round starts or a block is scored; [NotSaved] because it is a
+        /// display cache, rebuilt the moment the round is touched.</summary>
+        [NotSaved]
+        private double shownPerCube = -1;
 
         public KolayParaJoker()
             : base("kolay_para", "Kolay Para")
         {
             SetDescription(
-                "Placing a block scores points - one bonus for every cube you place.",
-                "Blok koymak puan kazandırır - koyduğun her küp için bonus.");
+                "Placing a block scores points - every cube you place pays 0.1% of the round's "
+                    + "target score.",
+                "Blok koymak puan kazandırır - koyduğun her küp, rauntun hedef puanının "
+                    + "%0.1'ini kazandırır.");
         }
 
         public override string StatusText
         {
-            get { return Loc.Pick("+" + PointsPerCube + "/cube", "+" + PointsPerCube + "/küp"); }
+            get
+            {
+                if (shownPerCube < 0)
+                {
+                    return Loc.Pick("0.1% of target/cube", "hedefin %0.1'i/küp");
+                }
+                string v = shownPerCube.ToString(shownPerCube < 10 ? "0.#" : "0",
+                    System.Globalization.CultureInfo.InvariantCulture);
+                return Loc.Pick("+" + v + "/cube", "+" + v + "/küp");
+            }
+        }
+
+        public override void OnRoundStarted(RoundContext ctx)
+        {
+            Remember(ctx.Round, ctx.Scoring.ScoreScale);
+        }
+
+        private void Remember(RoundEngine round, int scale)
+        {
+            if (round != null)
+            {
+                shownPerCube = round.ScoreThreshold * ThresholdSharePerCube * scale;
+            }
+        }
+
+        /// <summary>
+        /// It keeps statistics. This is a joker whose whole worth is a small number repeated a
+        /// great many times, which is exactly the case a running total answers and a description
+        /// cannot: "+2 a cube" says nothing about whether it has earned its slot back, and the
+        /// tally does. Printed from ZERO, so a card held through a round that placed nothing
+        /// still says so rather than going silent.
+        /// </summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
         }
 
         public override void ModifyScore(TurnContext turn)
         {
+            Remember(turn.Round, turn.Score.ScoreScale);
             int cubes = turn.Report.PlacedCells != null ? turn.Report.PlacedCells.Count : 0;
             if (cubes > 0)
             {
-                turn.Score.AddFlat(cubes * PointsPerCube, DefId);
+                owed += cubes * turn.Round.ScoreThreshold * ThresholdSharePerCube;
+                int bonus = (int)System.Math.Floor(owed);
+                owed -= bonus;
+                if (bonus <= 0)
+                {
+                    return;
+                }
+                turn.Score.AddFlat(bonus, DefId);
+                // ONE FIRING PER PLACEMENT, not one per cube: the block is what the player played
+                // and the block is what paid. The points are the NOMINAL bonus, like every other
+                // joker's - what a later multiplier stage does with it is not this joker's to
+                // claim, and what "Terslik" does to it is the boss's doing rather than a firing
+                // that did not happen.
+                NoteProc(bonus, turn);
             }
         }
     }

@@ -11172,7 +11172,7 @@ public static class JokerTests
         session.Config.Scoring.PointsPerCubePlaced = 10; // a turn that really does earn something
         var joker = (KolayParaJoker)session.Jokers.Add(new KolayParaJoker());
         // A penalty far bigger than anything the turn can earn.
-        joker.PointsPerCube = 100000;
+        joker.ThresholdSharePerCube = 1.0; // the whole bar, per cube
         RoundEngine round = session.CurrentRound;
         round.SetBoss(new TerslikBoss());
         session.Jokers.DispatchRoundStarted(round);
@@ -11297,6 +11297,7 @@ public static class JokerTests
             session.LeaveMarket();
             RoundEngine plain = session.CurrentRound;
             Check(!plain.InvertsJokerScore, "the next round is not inverted");
+            joker.ThresholdSharePerCube = 0.5; // a small bar would otherwise pay a fraction
             TurnReport report = PlayOneCard(plain);
             int gave = 0;
             foreach (ScoreContribution c in report.Score.Contributions)

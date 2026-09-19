@@ -102,11 +102,13 @@ namespace ProjectBlock.View
         // -------------------------------------------------------------------- kolay para
 
         /// <summary>A placement paying out: the cells light, then the card procs and the
-        /// joker's OWN number (PointsPerCube x cubes, scaled) rises.</summary>
+        /// joker's OWN number (its share of the bar x cubes, scaled) rises.</summary>
         private IEnumerator AnimKolayPara(int cubes)
         {
             var easy = new KolayParaJoker();
-            long paid = (long)cubes * easy.PointsPerCube * session.Config.Scoring.ScoreScale;
+            long paid = (long)System.Math.Round(cubes * easy.ThresholdSharePerCube
+                * (session.CurrentRound != null ? session.CurrentRound.ScoreThreshold : 0)
+                * session.Config.Scoring.ScoreScale);
             List<GridPos> cells = AnimCells(cubes);
             if (cells.Count > 0)
             {
