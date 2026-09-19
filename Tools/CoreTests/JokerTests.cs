@@ -1822,24 +1822,29 @@ public static class JokerTests
 
     private static void Ihale_LocksUntilTheAuctionedJokerLeaves()
     {
-        Section("ihale / one auction at a time");
+        Section("ihale / one auction at a time, priced at 20% of the total");
         var session = NewSession(103, 6, 40, 24, 1);
         var ihale = (IhaleJoker)session.Jokers.Add(new IhaleJoker());
         session.Jokers.Add(new CimriKumbaraJoker());
 
         session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        Check(!session.Jokers.ActiveAuctionInstanceId.HasValue,
+            "with no points yet there is nothing to auction");
+
+        session.GrantCurrency(10000);
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
         Check(session.Jokers.ActiveAuctionInstanceId.HasValue, "an auction opened");
         int firstTarget = session.Jokers.ActiveAuctionInstanceId.Value;
         Joker auctioned = session.Jokers.Find(firstTarget);
-        Check(auctioned.AuctionPremium > 0, "the premium is on the joker",
-            "premium " + auctioned.AuctionPremium);
-        Check(session.Jokers.SellValueOf(auctioned)
-            > session.Config.Market.JokerSellValue(RarityTable.For(auctioned.DefId)),
-            "sell value went up");
+        Check(auctioned.AuctionPremium * session.Config.Scoring.ScoreScale == 2000,
+            "the premium is 20% of the total", "premium " + auctioned.AuctionPremium);
 
+        session.GrantCurrency(50000);
         session.Jokers.DispatchRoundStarted(session.CurrentRound);
         Check(session.Jokers.ActiveAuctionInstanceId == firstTarget,
             "no new auction while the first is unsold");
+        Check(auctioned.AuctionPremium * session.Config.Scoring.ScoreScale == 2000,
+            "and its price stays what it was when it opened");
 
         session.Jokers.Sell(auctioned);
         Check(!session.Jokers.ActiveAuctionInstanceId.HasValue, "selling opens the lock");

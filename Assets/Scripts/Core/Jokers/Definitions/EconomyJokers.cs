@@ -122,30 +122,49 @@ namespace ProjectBlock.Core
         }
     }
 
-    /// <summary>"ihale" - every round it puts an extra price on one random joker (itself
-    /// included). No new auction opens until that one is sold, so the player is nudged to
-    /// actually let go of something.</summary>
+    /// <summary>"ihale" - opens an auction on one random joker: it puts a premium of 20% of
+    /// your CURRENT total points on that joker's sell price. The price is set once, when the
+    /// auction opens, and only a new auction - after that joker is sold or destroyed - sets
+    /// another.</summary>
     public sealed class IhaleJoker : Joker
     {
-        public int BasePremium = 40;
-        public int PremiumPerRound = 15;
+        /// <summary>Share of the run's total points the premium is worth, in percent.</summary>
+        public double PremiumPercent = 20.0;
 
         public IhaleJoker()
             : base("ihale", "İhale")
         {
             SetDescription(
-                "At every round start it puts a premium on a random joker's sell price. "
-                    + "No new auction opens until that joker is sold.",
-                "Her raunt başında rastgele bir jokere ek satış fiyatı biçer. "
-                    + "O joker satılana kadar yeni ihale açılmaz.");
+                "At a round start it picks a random joker and adds 20% of your current total "
+                    + "points to its sell price. No new auction opens until that joker is sold; "
+                    + "the price is fixed when the auction opens.",
+                "Raunt başında rastgele bir joker seçer ve o anki toplam puanının %20'sini "
+                    + "satış fiyatına ekler. O joker satılana kadar yeni ihale açılmaz; fiyat "
+                    + "ihale açılınca sabitlenir.");
         }
 
         public override string StatusText
         {
-            get { return auctionedName ?? Loc.Pick("no auction", "ihale yok"); }
+            get
+            {
+                if (auctionedName == null)
+                {
+                    return Loc.Pick("no auction", "ihale yok");
+                }
+                return auctionedName + "  +" + auctionedPremiumShown;
+            }
         }
 
         private string auctionedName;
+
+        /// <summary>The premium as the market shows it (screen points).</summary>
+        private long auctionedPremiumShown;
+
+        /// <summary>Statistics: one proc per auction opened.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
 
         public override void OnRoundStarted(RoundContext ctx)
         {
@@ -160,9 +179,19 @@ namespace ProjectBlock.Core
                 return;
             }
             Joker target = all[ctx.Rng.NextInt(0, all.Count)];
-            int premium = BasePremium + PremiumPerRound * (ctx.Round.Config.RoundNumber - 1);
+            // The premium is written in LOGICAL points (the sale multiplies by ScoreScale), and
+            // the total is in screen points, so the share is divided back down.
+            int scale = ctx.Scoring.ScoreScale < 1 ? 1 : ctx.Scoring.ScoreScale;
+            long share = (long)System.Math.Round(ctx.Session.TotalScore * PremiumPercent / 100.0);
+            int premium = (int)System.Math.Min(int.MaxValue, share / scale);
+            if (premium <= 0)
+            {
+                return; // nothing to auction yet - an empty auction would only lock the next one
+            }
             inventory.SetAuctionPremium(target, premium);
             auctionedName = target.DisplayName;
+            auctionedPremiumShown = (long)premium * scale;
+            NoteProc(0);
         }
 
         /// <summary>The auctioned joker left the inventory (sold or destroyed): the lock
@@ -172,6 +201,7 @@ namespace ProjectBlock.Core
             if (!ctx.Session.Jokers.ActiveAuctionInstanceId.HasValue)
             {
                 auctionedName = null;
+                auctionedPremiumShown = 0;
             }
         }
     }
