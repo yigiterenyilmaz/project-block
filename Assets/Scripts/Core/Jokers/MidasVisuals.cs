@@ -48,7 +48,7 @@ namespace ProjectBlock.Core
         /// not need this file rewritten.</summary>
         public int GoldCubes;
 
-        /// <summary>What this card paid: GoldCubes * PointsPerGoldCube.</summary>
+        /// <summary>What this card paid, in screen points: GoldCubes * PointsPerGoldCube.</summary>
         public int Subtotal;
     }
 
@@ -61,10 +61,10 @@ namespace ProjectBlock.Core
         public int Serial;
 
         /// <summary>The live value of the joker's own field, never a number the View knows.
-        /// </summary>
+        /// In SCREEN points (x ScoreScale), like every number in this report.</summary>
         public int PointsPerGoldCube;
 
-        /// <summary>What the joker actually added to this turn's score.</summary>
+        /// <summary>What the joker actually added to this turn's score, in screen points.</summary>
         public int TotalScore;
 
         public readonly List<MidasGoldSource> Sources = new List<MidasGoldSource>();

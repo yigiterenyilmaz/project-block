@@ -55,6 +55,13 @@ namespace ProjectBlock.Core
             get { return Loc.Pick(GoldCubesHeld + " gold cubes", GoldCubesHeld + " altın küp"); }
         }
 
+        /// <summary>Statistics: one proc per turn it paid, worth what it paid - the tooltip then
+        /// shows the points Midas has earned over the run.</summary>
+        public override bool TracksProcs
+        {
+            get { return true; }
+        }
+
         public override void OnRoundStarted(RoundContext ctx)
         {
             GoldCubesHeld = 0;
@@ -66,33 +73,37 @@ namespace ProjectBlock.Core
             // THE SCORE IS UNCHANGED: the same cubes counted the same way, and the same one
             // AddFlat at the end. What is new is that the counting WRITES DOWN where each cube
             // came from, because the payout animation is per cube and the View may not recount.
+            // The report is in SCREEN points (x ScoreScale), the numbers the score label shows:
+            // it used to carry the logical ones, so the payout drew "+2" for a cube worth 20.
+            int scale = turn.Score.ScoreScale < 1 ? 1 : turn.Score.ScoreScale;
             var report = new MidasPayoutVisuals
             {
                 Serial = ++payoutSerial,
-                PointsPerGoldCube = PointsPerGoldCubeHeld
+                PointsPerGoldCube = PointsPerGoldCubeHeld * scale
             };
             int cubes = 0;
             RoundEngine round = turn.Round;
             for (int i = 0; i < round.Hand.Count; i++)
             {
-                cubes += Count(round, round.Hand[i], false, i, report);
+                cubes += Count(round, round.Hand[i], false, i, report, scale);
             }
             for (int i = 0; i < round.BonusHand.Count; i++)
             {
-                cubes += Count(round, round.BonusHand[i].Card, true, i, report);
+                cubes += Count(round, round.BonusHand[i].Card, true, i, report, scale);
             }
             GoldCubesHeld = cubes;
-            report.TotalScore = cubes * PointsPerGoldCubeHeld;
+            report.TotalScore = cubes * PointsPerGoldCubeHeld * scale;
             LastPayout = report;
             if (cubes > 0)
             {
-                turn.Score.AddFlat(report.TotalScore, DefId);
+                turn.Score.AddFlat(cubes * PointsPerGoldCubeHeld, DefId);
+                NoteProc(cubes * PointsPerGoldCubeHeld, turn);
             }
         }
 
         /// <summary>Counts one held card and, when it pays, records it as a source.</summary>
         private int Count(RoundEngine round, BlockCard card, bool bonus, int slot,
-            MidasPayoutVisuals report)
+            MidasPayoutVisuals report, int scale)
         {
             int cubes = GoldCubesOf(round, card);
             if (cubes <= 0)
@@ -107,7 +118,7 @@ namespace ProjectBlock.Core
                 // THE EFFECTIVE SHAPE, the one the card is being drawn in - see GoldCubesOf.
                 Shape = round.EffectiveShape(card),
                 GoldCubes = cubes,
-                Subtotal = cubes * PointsPerGoldCubeHeld
+                Subtotal = cubes * PointsPerGoldCubeHeld * scale
             });
             return cubes;
         }

@@ -182,6 +182,8 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // The joker's field is LOGICAL; the report is in screen points, as the joker's own is.
+            pointsPerCube *= Mathf.Max(1, session.Config.Scoring.ScoreScale);
             var report = new MidasPayoutVisuals
             {
                 Serial = Time.frameCount,
