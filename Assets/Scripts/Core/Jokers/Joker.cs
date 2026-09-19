@@ -252,7 +252,20 @@ namespace ProjectBlock.Core
             {
                 turn.Report.ProcedJokers.Add(InstanceId);
             }
+            else
+            {
+                LooseProcs++;
+            }
         }
+
+        /// <summary>
+        /// Firings that had NO TURN to report them on - a market sale, a round start, an
+        /// activation between turns. The View watches this count rise and flashes the card, so
+        /// those procs get the same light as the ones a TurnReport carries. Presentation only:
+        /// not saved, and it restarts at zero on a load (which flashes nothing).
+        /// </summary>
+        [field: NotSaved]
+        public int LooseProcs { get; private set; }
 
         /// <summary>A firing with no turn to report it on (market, round end).</summary>
         protected void NoteProc(int points)

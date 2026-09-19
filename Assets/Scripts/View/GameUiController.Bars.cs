@@ -362,6 +362,33 @@ namespace ProjectBlock.View
             UpdateHud();
         }
 
+        /// <summary>Last Joker.LooseProcs seen per joker instance.</summary>
+        private readonly Dictionary<int, int> looseProcsSeen = new Dictionary<int, int>();
+
+        /// <summary>
+        /// Flashes a joker whose proc had no turn to ride on (a round start, a sale, a use
+        /// between turns) - the same light TurnReport.ProcedJokers gives the rest. A joker seen
+        /// for the first time is only recorded, so a load or a purchase never flashes.
+        /// </summary>
+        private void PlayLooseProcs()
+        {
+            if (session == null || session.Jokers == null || jokerBar == null)
+            {
+                return;
+            }
+            IReadOnlyList<Joker> owned = session.Jokers.Jokers;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                Joker joker = owned[i];
+                int seen;
+                if (looseProcsSeen.TryGetValue(joker.InstanceId, out seen) && joker.LooseProcs > seen)
+                {
+                    jokerBar.ProcJoker(joker.InstanceId);
+                }
+                looseProcsSeen[joker.InstanceId] = joker.LooseProcs;
+            }
+        }
+
         // ---------------------------------------------------------------- press and hold to sell
         //
         // SELLING IS THE DESTRUCTIVE VERB, SO IT IS THE ONE THAT COSTS EFFORT. A single click on a
