@@ -172,6 +172,9 @@ namespace ProjectBlock.View
         private CubePickerView cubePicker;
         private ParasiteAttachView parasitePanel;
         private WeldPickerView weldPicker;
+
+        /// <summary>"Neşter"'s cut editor.</summary>
+        private NesterEditorView nesterEditor;
         private MineShuffleView mineShuffle;
 
         /// <summary>The last shuffle "Mayın eşeği" announced. Watched so the dance runs once per
@@ -459,6 +462,7 @@ namespace ProjectBlock.View
             batakBet.Hide();
             blockDesigner.Hide();
             cubePicker.Hide();
+            nesterEditor.Hide();
             ClearChoice();
             parazitStep = ParazitStep.None;
             if (parasitePanel != null)
