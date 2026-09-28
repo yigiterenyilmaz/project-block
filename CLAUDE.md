@@ -384,7 +384,16 @@ dropped that way once each.
   activation plays the compression INSTEAD of the cluster burst a board-targeting power would get,
   because the press destroys nothing. See `docs/hidrolik-pres-*.png` — and judge a face at the size a CELL is, never
   blown up.
-- **"Tılsım" is paid for in one round and delivered in the next** (`TalismanView`,
+- **"Tılsım" now delivers its ground on the board IN PLAY** (designer's call, 2026-09-23: the
+  next-round delivery read as the power doing nothing). `RoundEngine.GrantBonusGround` →
+  `GameBoard.CreateWithBonusGround` grows the live board on ANY side (the origin moves, as with an
+  inflation) and only the reclaimed cells become playable + optional; a new round's fresh arena
+  ends the gift. `CanReclaim` is now always true, `BoardView.Rebuild` centres the ARENA even when
+  bonus ground lies left/below it, and `TalismanView` holds the ground report (`pendingGround`)
+  until the claim has grown, then reveals it on the same board. `PowerFxView` also summons a
+  charm over the arena for the activation. The history below describes the old two-round flow:
+  the beats are the same, they now follow one another on one board.
+  (Original notes: `TalismanView`,
   `TalismanShapes`, `Resources/Shaders/TalismanSpirit`). Ghost blocks may be played hanging off the
   board's edge, and the cubes that land outside persist as dead traces that no line, sweep or
   explosion ever touches. Tılsım harvests them — 15 points each — and reclaims the ground they

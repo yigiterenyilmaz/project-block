@@ -3,9 +3,9 @@
 // the rot, the snake, the press, the parasite and Mapus, because most of what it draws is a
 // PRESENCE that outlives every repaint - and one of its beats outlives the round itself.
 //
-// WHAT MAKES THIS POWER DIFFERENT FROM EVERY OTHER EFFECT IN THE GAME: it is paid for in one round
-// and delivered in the next, with a market screen in between. So it cannot be one animation. It is
-// five, and the gap between the second and the third is a round boundary:
+// It used to be paid for in one round and delivered in the next; the ground now lands on the board
+// IN PLAY, the moment the power runs, and lasts until the round ends. The five beats are the same,
+// they just follow one another on one board (the reveal waits for the claim - `pendingGround`):
 //
 //   HARVEST   the ghosts are taken. Not the ordinary cluster burst - that is a material break, and
 //             this is a SPIRITUAL one: each ghost lights from within in its OWN colour, its shell
@@ -13,12 +13,11 @@
 //             kernel. Every ghost scores; only the ones the rules can reclaim from leave a seed.
 //   CLAIM     the ground the harvest bought goes DARK, cell by cell, as vines grow out of the
 //             board's edge and reach it. What is there is NOT ground - it is a curse stain, a
-//             promise, and the player must not be able to mistake it for somewhere they can play
-//             THIS round, because they cannot. The darkness is built from the exact reclaimed
+//             promise that the reveal keeps a moment later. The darkness is built from the exact reclaimed
 //             cells (TalismanStain) and the plant is what carries it out over them; what fills
 //             in between them is the plant's own shadow rather than more plant
 //             (TalismanTendril).
-//   REVEAL    next round, the board is built with the ground in it. The vines lift and retract and
+//   REVEAL    once the claim has grown, the board already has the ground in it. The vines lift and retract and
 //             what was underneath them all along is solid bonus floor.
 //   PRESENCE  and then it just sits there for a round, which is the part the player actually looks
 //             at. Four OPEN corner runes and no closed frame: an ordinary cell has a structural
@@ -857,9 +856,18 @@ namespace ProjectBlock.View
 
         private float recallClock = -1f;
 
-        private int lastActivation;
+        // MATCHED BY IDENTITY, never by serial (see CLAUDE.md): the power writes a new report per
+        // use, and a serial restarts with every round and every run.
+        private object lastActivation;
 
-        private int lastGround;
+        private object lastGround;
+
+        /// <summary>Ground granted by the harvest that is still playing: its reveal waits until
+        /// the claim has finished growing over it, so the player sees harvest -> overgrowth ->
+        /// the cover lifting off the new ground, in that order, on the SAME board.</summary>
+        private TalismanGroundVisuals pendingGround;
+
+        private float pendingWait = -1f;
 
         private MaterialPropertyBlock block;
 
@@ -887,7 +895,7 @@ namespace ProjectBlock.View
         /// <summary>True while anything is playing - what the lab waits on.</summary>
         public bool Busy
         {
-            get { return harvestClock >= 0f || revealClock >= 0f || recallClock >= 0f; }
+            get { return harvestClock >= 0f || revealClock >= 0f || recallClock >= 0f || pendingGround != null; }
         }
 
         /// <summary>
@@ -898,11 +906,11 @@ namespace ProjectBlock.View
         /// </summary>
         public void PlayHarvest(BoardView view, TalismanActivationVisuals report)
         {
-            if (view == null || report == null || report.Serial == lastActivation)
+            if (view == null || report == null || ReferenceEquals(report, lastActivation))
             {
                 return;
             }
-            lastActivation = report.Serial;
+            lastActivation = report;
             Bind(view);
             ClearHarvest();
             ClearClaims();
@@ -971,9 +979,35 @@ namespace ProjectBlock.View
             }
             Bind(view);
             bool has = report != null && report.Any;
-            if (has && report.Serial != lastGround)
+            if (has && !ReferenceEquals(report, lastGround))
             {
-                lastGround = report.Serial;
+                lastGround = report;
+                if (harvestClock >= 0f && claims.Count > 0)
+                {
+                    // The claim is still growing over this ground: hold the floor under it now and
+                    // lift the cover once it has finished.
+                    float span = 0f;
+                    for (int i = 0; i < claims.Count; i++)
+                    {
+                        span = Mathf.Max(span, claims[i].Span - claims[i].Clock);
+                    }
+                    pendingGround = report;
+                    pendingWait = span + 0.45f;
+                    ReleaseFloor();
+                    HoldFloor(view, report.Cells);
+                    return;
+                }
+                ApplyGround(view, report);
+            }
+            else if (!has && pendingGround == null && ground.Count > 0 && recallClock < 0f)
+            {
+                BeginRecall();
+            }
+        }
+
+        private void ApplyGround(BoardView view, TalismanGroundVisuals report)
+        {
+            {
                 ClearClaims();
                 ClearGround();
                 for (int i = 0; i < report.Cells.Count; i++)
@@ -997,7 +1031,10 @@ namespace ProjectBlock.View
                 recallClock = -1f;
                 HoldFloor(view, report.Cells);
             }
-            else if (!has && ground.Count > 0 && recallClock < 0f)
+        }
+
+        private void BeginRecall()
+        {
             {
                 // The board no longer carries the gift: it is being taken back.
                 recallClock = 0f;
@@ -1015,6 +1052,8 @@ namespace ProjectBlock.View
 
         public void Stop()
         {
+            pendingGround = null;
+            pendingWait = -1f;
             ClearHarvest();
             ClearClaims();
             ClearGround();
@@ -2257,11 +2296,21 @@ namespace ProjectBlock.View
 
         private void Update()
         {
-            if (harvests.Count == 0 && claims.Count == 0 && ground.Count == 0)
+            if (harvests.Count == 0 && claims.Count == 0 && ground.Count == 0 && pendingGround == null)
             {
                 return;
             }
             float dt = Time.deltaTime;
+            if (pendingGround != null)
+            {
+                pendingWait -= dt;
+                if (pendingWait <= 0f && owner != null)
+                {
+                    TalismanGroundVisuals report = pendingGround;
+                    pendingGround = null;
+                    ApplyGround(owner, report);
+                }
+            }
             // THE VINES GROW ON THEIR OWN CLOCK. It runs on past the end of the growth so the
             // idle beats below have a stable base to work from, and it is what every runner's
             // window is measured against.

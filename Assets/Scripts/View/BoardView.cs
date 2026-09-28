@@ -1386,8 +1386,13 @@ namespace ProjectBlock.View
             // dead ones, which are eroded arena and still stand on the plate. Bonus ground is
             // optional by definition, so it falls outside it - which is the point, because it is
             // a gift lying beside the board rather than part of it.
-            int arenaWide = 1;
-            int arenaHigh = 1;
+            // Bonus ground can lie on ANY side (it is granted mid-round, and the live board grows
+            // left and down as freely as an inflation does), so the arena's lowest index is
+            // measured too and the grid is offset so the ARENA, not the store, sits centred.
+            int arenaMinX = int.MaxValue;
+            int arenaMinY = int.MaxValue;
+            int arenaMaxX = 0;
+            int arenaMaxY = 0;
             for (int x = 0; x < board.Width; x++)
             {
                 for (int y = 0; y < board.Height; y++)
@@ -1398,18 +1403,22 @@ namespace ProjectBlock.View
                     {
                         continue;
                     }
-                    if (x + 1 > arenaWide)
-                    {
-                        arenaWide = x + 1;
-                    }
-                    if (y + 1 > arenaHigh)
-                    {
-                        arenaHigh = y + 1;
-                    }
+                    arenaMinX = Mathf.Min(arenaMinX, x);
+                    arenaMinY = Mathf.Min(arenaMinY, y);
+                    arenaMaxX = Mathf.Max(arenaMaxX, x);
+                    arenaMaxY = Mathf.Max(arenaMaxY, y);
                 }
             }
+            if (arenaMinX == int.MaxValue)
+            {
+                arenaMinX = 0;
+                arenaMinY = 0;
+            }
+            int arenaWide = arenaMaxX - arenaMinX + 1;
+            int arenaHigh = arenaMaxY - arenaMinY + 1;
             cellSize = Mathf.Min(maxWorldSize / arenaWide, maxWorldSize / arenaHigh);
-            bottomLeft = center - new Vector2(arenaWide, arenaHigh) * (cellSize * 0.5f);
+            bottomLeft = center - new Vector2(arenaWide, arenaHigh) * (cellSize * 0.5f)
+                - new Vector2(arenaMinX, arenaMinY) * cellSize;
 
             // The board's surface is GENERATED - a plate with a bevelled frame and a recess per
             // cell - rather than the flat rectangle this used to be. See BoardSurfaceView.
