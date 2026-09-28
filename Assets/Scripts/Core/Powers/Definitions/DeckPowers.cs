@@ -18,8 +18,9 @@ namespace ProjectBlock.Core
             : base("cimbiz", "Cımbız")
         {
             SetDescription(
-                "Rotates a held block of your choice (it does not need to be mechanical).",
-                "Elindeki seçtiğin bloğu çevirir (mekanik blok olması gerekmez).");
+                "Rotates a held block of your choice by the angle you pick (it does not need to "
+                    + "be mechanical).",
+                "Elindeki seçtiğin bloğu seçtiğin açıyla çevirir (mekanik blok olması gerekmez).");
         }
 
         public override ActivationTargeting Targeting
@@ -36,7 +37,18 @@ namespace ProjectBlock.Core
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
         {
-            ctx.Round.RotateCard(target.HandIndex.Value, true);
+            // How many clockwise quarter turns the player chose (1, 2 or 3), carried in Offset.X;
+            // one when nothing says otherwise.
+            int steps = target.Offset.HasValue ? target.Offset.Value.X : 1;
+            steps = ((steps % 4) + 4) % 4;
+            if (steps == 0)
+            {
+                return false;
+            }
+            for (int i = 0; i < steps; i++)
+            {
+                ctx.Round.RotateCard(target.HandIndex.Value, true);
+            }
             return true;
         }
     }
@@ -317,6 +329,13 @@ namespace ProjectBlock.Core
         private int? markedCardId;
         private bool markedInHand;
 
+        /// <summary>The card marked this round, or null - the View puts a mark on that card.
+        /// </summary>
+        public int? MarkedCardId
+        {
+            get { return markedCardId; }
+        }
+
         public BukulmePower()
             : base("bukulme", "Bükülme")
         {
@@ -339,8 +358,8 @@ namespace ProjectBlock.Core
             get
             {
                 return markedCardId.HasValue
-                    ? Loc.Pick("marked #" + markedCardId.Value, "işaretli #" + markedCardId.Value)
-                    : Loc.Pick("idle", "boşta");
+                    ? Loc.Pick("A card is marked", "Bir kart işaretli")
+                    : Loc.Pick("Idle", "Boşta");
             }
         }
 

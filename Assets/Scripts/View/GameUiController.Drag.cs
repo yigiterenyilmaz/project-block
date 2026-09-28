@@ -47,6 +47,30 @@ namespace ProjectBlock.View
             if (workshopPowerId.HasValue)
             {
                 ShowPressPreview(world);
+                ShowGeneHover(world);
+                SyncCardMarks(world);
+                if (nesterEditor.IsOpen)
+                {
+                    Power cutting = session.Powers.Find(workshopPowerId.Value);
+                    if (cutting != null)
+                    {
+                        PollNesterEditor(cutting);
+                    }
+                    return;
+                }
+                if (weldPicker.IsOpen)
+                {
+                    weldPicker.HoverAt(world);
+                    Power welding = session.Powers.Find(workshopPowerId.Value);
+                    if (welding != null)
+                    {
+                        HandleWeldKeys(welding);
+                        if (!workshopPowerId.HasValue)
+                        {
+                            return; // Enter welded it
+                        }
+                    }
+                }
                 if (mouse.leftButton.wasPressedThisFrame && HandleWorkshopClick(world))
                 {
                     return;
@@ -56,6 +80,10 @@ namespace ProjectBlock.View
             if (pendingTargetPowerId.HasValue)
             {
                 Power aiming = session.Powers.Find(pendingTargetPowerId.Value);
+                if (aiming != null && HandleLiveAim(aiming, world, mouse))
+                {
+                    return;
+                }
                 // Live blast preview while aiming a board-targeting power (Çaprazlama).
                 if (aiming != null && !pendingOltaMark
                     && (aiming.Targeting == ActivationTargeting.BoardCell
@@ -64,7 +92,9 @@ namespace ProjectBlock.View
                     GridPos hoverCell;
                     if (boardView.TryWorldToCell(world, out hoverCell))
                     {
-                        ActivationTarget at = ActivationTarget.Board(hoverCell);
+                        ActivationTarget at = aiming is BuldozerPower
+                            ? new ActivationTarget(null, hoverCell, bulldozerAxis, null, null)
+                            : ActivationTarget.Board(hoverCell);
                         // "Hidrolik pres" has its own aiming language: the 2x2 is ONE mechanical
                         // area under a thin pressure frame, not four cells tinted the colour of an
                         // explosion - it destroys nothing.
@@ -103,6 +133,9 @@ namespace ProjectBlock.View
                         {
                             Debug.Log("[block_bonk] Olta marked "
                                 + round.Hand[markHit.SlotIndex] + ".");
+                            cardLayer.ForgetCard(round.Hand[markHit.SlotIndex].Id);
+                            RefreshAll(null); // the card is rebuilt wearing the mark
+                            sfx.Pluck(1.2f); // the hook is set in the card
                             powerBar.PulsePower(powerId);
                             powerBar.Refresh(session, null); // shows the new mark state
                         }
@@ -119,6 +152,12 @@ namespace ProjectBlock.View
                             CancelTargeting();
                             return;
                         }
+                        // "Buldozer": the cell says WHERE, the axis toggled while aiming says which way.
+                        if (power is BuldozerPower)
+                        {
+                            cellTarget = new ActivationTarget(null, cellTarget.Cell, bulldozerAxis,
+                                null, null, cellTarget.OnMirrorWorld);
+                        }
                         RunPowerActivation(power, cellTarget);
                         return;
                     }
@@ -127,6 +166,23 @@ namespace ProjectBlock.View
                         || hit.SlotIndex >= round.Hand.Count + round.BonusHand.Count)
                     {
                         CancelTargeting();
+                        return;
+                    }
+                    // "Cımbız": the first click picks the card and turns its block once; further
+                    // left-clicks on it turn it more (HandleLiveAim), right-click confirms, and a
+                    // click on another card moves the pick there.
+                    if (power is CimbizPower && hit.SlotIndex < round.Hand.Count)
+                    {
+                        if (tweezerSlot == hit.SlotIndex)
+                        {
+                            return;
+                        }
+                        ResetTweezerPreview();
+                        tweezerTurnWanted = -90f;
+                        tweezerSlot = hit.SlotIndex;
+                        tweezerSteps = 1;
+                        sfx.Pluck(1.7f);
+                        UpdateHud();
                         return;
                     }
                     RunPowerActivation(power, ActivationTarget.Hand(hit.SlotIndex));
@@ -216,12 +272,6 @@ namespace ProjectBlock.View
                         deckOverlay.ResetScroll();
                         deckOverlay.ShowPile(TopFirst(draw ? round.Deck.DrawPile
                             : round.Deck.DiscardPile), draw);
-                        return;
-                    }
-                    if (cardLayer.IsDrawPileAt(world))
-                    {
-                        deckOverlay.ResetScroll();
-                        deckOverlay.Show(session.OwnedCards);
                         return;
                     }
                     // "Fraksiyon": clicking the discard pile inspects its revealed half.
@@ -351,8 +401,10 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>Retro (tetris) placement, run every frame while RetroMode is on. Click a hand
-        /// card to drop it from the top; Left/Right move the column, Up or X rotate (any block
+        /// <summary>Retro (tetris) placement, run every frame while RetroMode is on. Pieces come
+        /// AUTOMATICALLY, like tetris: whenever nothing is falling the next one enters at the top,
+        /// taken from the HAND in order from RIGHT to LEFT (the bonus hand is never used), and the
+        /// NEXT box shows the one after it. Left/Right move the column, Up or X rotate (any block
         /// rotates in retro), Down soft-drops, Space hard-drops, and a ghost shows the landing. On
         /// lock the piece settles through the normal PlayFromHand path - gravity only chooses
         /// WHERE it lands, so scoring / line clears / refill are all unchanged.</summary>
@@ -365,18 +417,21 @@ namespace ProjectBlock.View
             {
                 retroFallHand = -1;
                 boardView.ClearPreview();
-                // Nothing falling: click a hand card to drop it into the arena.
-                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                ShowRetroNext(round, -1);
+                // Nothing falling: after a short breath, the next piece enters on its own.
+                if (round.Status != RoundStatus.InProgress)
                 {
-                    Vector2 w = cam.ScreenToWorldPoint(mouse.position.ReadValue());
-                    CardVisual hit = cardLayer.CardAt(w);
-                    if (hit != null && hit.SlotIndex >= 0 && hit.SlotIndex < round.Hand.Count)
-                    {
-                        SpawnRetroPiece(round, hit.SlotIndex);
-                    }
+                    return;
+                }
+                retroSpawnWait += Time.deltaTime;
+                if (retroSpawnWait >= RetroSpawnDelay)
+                {
+                    SpawnNextRetroPiece(round);
                 }
                 return;
             }
+            retroSpawnWait = 0f;
+            ShowRetroNext(round, retroFallHand);
 
             if (kb != null)
             {
@@ -419,6 +474,53 @@ namespace ProjectBlock.View
             var origin = new GridPos(retroFallX, retroFallY);
             boardView.ShowFallingPiece(round.EffectiveShape(card), origin,
                 GravityDrop(round, card, origin));
+        }
+
+        /// <summary>The hand slots tetris mode takes pieces from, in the order it takes them: RIGHT
+        /// to LEFT, skipping frozen cards. Only the hand - the bonus hand is never dealt in.</summary>
+        private static List<int> RetroQueue(RoundEngine round)
+        {
+            var queue = new List<int>();
+            for (int i = round.Hand.Count - 1; i >= 0; i--)
+            {
+                if (!round.IsFrozen(round.Hand[i].Id))
+                {
+                    queue.Add(i);
+                }
+            }
+            return queue;
+        }
+
+        /// <summary>Starts the next piece: the first card in the queue that can enter the arena.
+        /// A card that fits nowhere at the top is passed over for the one after it.</summary>
+        private void SpawnNextRetroPiece(RoundEngine round)
+        {
+            List<int> queue = RetroQueue(round);
+            for (int i = 0; i < queue.Count && retroFallHand < 0; i++)
+            {
+                SpawnRetroPiece(round, queue[i]);
+            }
+        }
+
+        /// <summary>The NEXT box: the card after <paramref name="falling"/> in the queue (or the
+        /// first in the queue while nothing falls), beside the arena's top-right corner.</summary>
+        private void ShowRetroNext(RoundEngine round, int falling)
+        {
+            List<int> queue = RetroQueue(round);
+            int next = -1;
+            for (int i = 0; i < queue.Count; i++)
+            {
+                if (queue[i] != falling)
+                {
+                    next = queue[i];
+                    break;
+                }
+            }
+            GameBoard b = round.Board;
+            Vector2 topRight = boardView.CellToWorld(new GridPos(b.MinX + b.Width - 1, b.MinY + b.Height - 1));
+            Vector2 anchor = topRight + new Vector2(boardView.CubeWorldSize * 1.4f, boardView.CubeWorldSize * 0.5f);
+            BlockCard card = next >= 0 ? round.Hand[next] : null;
+            retroNext.Show(card, card != null ? round.EffectiveShape(card) : null, anchor);
         }
 
         /// <summary>Drops the chosen hand card in at the top: the highest valid row of the center
@@ -552,6 +654,7 @@ namespace ProjectBlock.View
                 return; // safety: the piece is not in a legal spot to settle
             }
             TurnReport report = round.PlayFromHand(handIndex, origin);
+            retroSpawnWait = 0f; // the next piece waits out its breath from the lock
             FinalizePlacement(round, report);
         }
 

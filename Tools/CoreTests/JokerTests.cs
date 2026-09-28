@@ -1439,21 +1439,51 @@ public static class JokerTests
     {
         Section("batak / payout curve and deadline");
         var power = new BatakPower();
-        power.MaxMultiplier = 3.0;
-        power.ZeroAtTurns = 100;
 
         int bold = power.PayoutFor(1, 1, 100);
-        int timid = power.PayoutFor(50, 50, 100);
-        int hopeless = power.PayoutFor(100, 100, 100);
-        Check(bold == 300, "a 1-turn call pays the full multiplier", "got " + bold);
-        Check(hopeless == 0, "a 100-turn call pays nothing", "got " + hopeless);
-        Check(timid > 0 && timid < bold, "the curve falls off in between", "got " + timid);
+        int timid = power.PayoutFor(BatakPower.MaxBetTurns, BatakPower.MaxBetTurns, 100);
+        int hopeless = power.PayoutFor(BatakPower.MaxBetTurns + 1, BatakPower.MaxBetTurns + 1, 100);
+        Check(bold == BatakPower.BonusPercentFor(1), "a 1-turn call pays the table's top bonus",
+            "got " + bold);
+        Check(hopeless == 0, "a bet past the table pays nothing", "got " + hopeless);
+        Check(timid > 0 && timid < bold, "the table falls off in between", "got " + timid);
+        for (int n = 2; n <= BatakPower.MaxBetTurns; n++)
+        {
+            Check(BatakPower.BonusPercentFor(n) < BatakPower.BonusPercentFor(n - 1),
+                "a longer bet always pays less (" + n + " turns)");
+        }
 
         // Confirmed rule: bet 7, clear in 3 -> 3/7 of the 7-turn reward.
         int full7 = power.PayoutFor(7, 7, 100);
         int early3 = power.PayoutFor(7, 3, 100);
         Check(early3 == (int)Math.Floor(full7 * 3.0 / 7.0) || Math.Abs(early3 - full7 * 3 / 7) <= 1,
             "clearing early pays pro rata", early3 + " vs " + (full7 * 3 / 7));
+
+        // A WON bet pays - once, after the turn's score is final, as its own flat contribution.
+        var winSession = NewSession(68, 3, 1000000, 40, 1);
+        RoundEngine winRound = winSession.CurrentRound;
+        var winner = (BatakPower)winSession.Powers.Add(new BatakPower());
+        winSession.Powers.DispatchRoundStarted(winRound);
+        Check(winSession.PlaceBatakBet(winner.InstanceId, 1), "a 1-turn bet placed through the session");
+        ClearBoard(winRound.Board);
+        winRound.Board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 9690));
+        winRound.Board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Normal, 9690));
+        BlockCard last = PutInHand(winSession, winRound, Bar(1));
+        int lastIndex = -1;
+        for (int i = 0; i < winRound.Hand.Count; i++)
+        {
+            if (winRound.Hand[i].Id == last.Id) { lastIndex = i; }
+        }
+        TurnReport won = winRound.PlayFromHand(lastIndex, new GridPos(2, 0));
+        Check(won.CleanSweep, "the row cleared and swept the board");
+        int batakFlat = 0;
+        foreach (ScoreContribution c in won.Score.Contributions)
+        {
+            if (c.Source == "batak") { batakFlat += c.Flat; }
+        }
+        Check(batakFlat > 0, "the bet paid its bonus", "got " + batakFlat);
+        Check(!winner.HasActiveBet, "and the bet is closed");
+        Check(winRound.Loss != LossReason.BetFailed, "a won bet never loses the round");
 
         // A missed deadline loses the round.
         var session = NewSession(67, 8, 1000000, 40, 1);
@@ -2767,8 +2797,9 @@ public static class JokerTests
         RoundEngine round = session.CurrentRound;
 
         Check(power.IsDeadEndRescue, "it is marked as a rescue power");
-        Check(!session.Powers.CanUse(power.InstanceId, ActivationTarget.None),
-            "it cannot be used during normal play");
+        Check(power.AlsoUsableInPlay && session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.LineSwap(LineAxis.Row, 0, 1)),
+            "it can ALSO be used in normal play, with no dead end needed");
 
         // Leave row 0 empty and fill the rest: a 3-bar fits only on the empty row.
         foreach (GridPos cell in AllPlayableCells(round.Board))

@@ -73,7 +73,18 @@ namespace ProjectBlock.View
         // harmless if the Full Screen Pass feature/material is not wired yet (see docs/crt-edge-bend.md).
         private static readonly int CrtBendId = Shader.PropertyToID("_CrtBend");
 
-        private enum ChoiceKind { None, PowerbankTarget, GravityDirection, BossStage }
+        private enum ChoiceKind { None, GravityDirection, BossStage }
+
+        /// <summary>"Buldozer" while aiming: which way the blade will run. Switched in place with
+        /// right-click, the wheel or R; the hover preview shows the band it will take.</summary>
+        private LineAxis bulldozerAxis = LineAxis.Row;
+
+        /// <summary>"Cımbız" while aiming: the card picked (-1 until one is) and how many
+        /// clockwise quarter turns it is being given. The card turns in place as a live preview.
+        /// </summary>
+        private int tweezerSlot = -1;
+
+        private int tweezerSteps;
 
         /// <summary>Which page of the DEBUG boss picker is showing. There are far more bosses
         /// than fit one modal, so the list pages and wraps.</summary>
@@ -960,36 +971,51 @@ namespace ProjectBlock.View
                 }
                 Vector2 bw = mouse != null
                     ? (Vector2)cam.ScreenToWorldPoint(mouse.position.ReadValue()) : Vector2.zero;
-                if (mouse != null)
+                // The wheel and the arrow keys walk the bets; 1-9 pick one outright; Enter bets.
+                if (mouse != null && Mathf.Abs(mouse.scroll.ReadValue().y) > 0.01f)
                 {
-                    float scroll = mouse.scroll.ReadValue().y;
-                    if (Mathf.Abs(scroll) > 0.01f)
+                    batakBet.Nudge(mouse.scroll.ReadValue().y > 0f ? -1 : 1);
+                }
+                if (kb != null)
+                {
+                    if (kb.leftArrowKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame)
                     {
-                        int col = batakBet.DialColumnAt(bw);
-                        if (col >= 0)
+                        batakBet.Nudge(-1);
+                    }
+                    else if (kb.rightArrowKey.wasPressedThisFrame || kb.downArrowKey.wasPressedThisFrame)
+                    {
+                        batakBet.Nudge(1);
+                    }
+                    for (int d = 1; d <= 9; d++)
+                    {
+                        if (kb[(Key)((int)Key.Digit1 + d - 1)].wasPressedThisFrame)
                         {
-                            batakBet.Bump(col, scroll > 0f ? +1 : -1);
-                            return;
+                            batakBet.Select(d);
                         }
                     }
                 }
+                bool confirm = kb != null && batakBet.Value >= 1
+                    && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame);
                 if (mouse != null && mouse.leftButton.wasPressedThisFrame)
                 {
-                    int plus = batakBet.PlusAt(bw);
-                    if (plus >= 0) { batakBet.Bump(plus, +1); return; }
-                    int minus = batakBet.MinusAt(bw);
-                    if (minus >= 0) { batakBet.Bump(minus, -1); return; }
-                    if (batakBet.CancelAt(bw)) { batakBet.Hide(); return; }
-                    if (batakBet.ConfirmAt(bw))
+                    int tile = batakBet.TileAt(bw);
+                    if (tile > 0)
                     {
-                        int bet = batakBet.Value;
-                        batakBet.Hide();
-                        if (session.PlaceBatakBet(batakBetPowerId, bet))
-                        {
-                            Debug.Log("[block_bonk] Batak bet " + bet + " turns.");
-                            powerBar.PulsePower(batakBetPowerId);
-                            RefreshAll(null);
-                        }
+                        batakBet.Select(tile);
+                        return;
+                    }
+                    if (batakBet.CancelAt(bw)) { batakBet.Hide(); return; }
+                    confirm |= batakBet.ConfirmAt(bw);
+                }
+                if (confirm)
+                {
+                    int bet = batakBet.Value;
+                    batakBet.Hide();
+                    if (session.PlaceBatakBet(batakBetPowerId, bet))
+                    {
+                        Debug.Log("[block_bonk] Batak bet " + bet + " turns.");
+                        powerBar.PulsePower(batakBetPowerId);
+                        RefreshAll(null);
                     }
                 }
                 return;
@@ -1007,10 +1033,29 @@ namespace ProjectBlock.View
                     ClearChoice();
                     return;
                 }
+                // The compass also answers the arrow keys (and WASD): the key that points the
+                // way you mean picks it, with no click at all.
+                int keyed = choicePicker.IsCompass ? CompassKeyPressed(kb) : -1;
+                if (keyed >= 0 && choicePicker.IsOptionEnabled(keyed))
+                {
+                    choicePicker.Hide();
+                    if (ResolveChoice(keyed))
+                    {
+                        ClearChoice();
+                    }
+                    return;
+                }
                 if (mouse != null && mouse.leftButton.wasPressedThisFrame)
                 {
                     Vector2 pickWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
                     int idx = choicePicker.OptionAt(pickWorld);
+                    // A click on the compass's panel that hit no live arrow (the switched-off
+                    // current direction, the hub, the gaps) is a miss inside the menu, not a
+                    // cancel - only a click OUTSIDE the panel takes it down.
+                    if (idx < 0 && choicePicker.IsOnPanel(pickWorld))
+                    {
+                        return;
+                    }
                     choicePicker.Hide();
                     // ResolveChoice answers false when it re-opened the picker itself (the debug
                     // boss list pages), in which case the pending choice has to survive.
@@ -1046,6 +1091,11 @@ namespace ProjectBlock.View
                     if (btn == 0)
                     {
                         blockDesigner.Hide();
+                        return;
+                    }
+                    if (btn == 2)
+                    {
+                        blockDesigner.ClearAll(); // CLEAR empties the grid, the brush stays
                         return;
                     }
                     int el = blockDesigner.ElementAt(dw);
@@ -1327,6 +1377,10 @@ namespace ProjectBlock.View
                             // rather than a mode, so it never has to be turned off again, and
                             // the player picks WHICH copy of a shape they part with.
                             TryFeedPetUnderCursor(round, mouse);
+                        }
+                        else if (HandleOwnedPowerPick(mouse))
+                        {
+                            // "Powerbank" aiming: a click on a spent power's card refills it
                         }
                         else if (TryUseJokerFromBar(mouse))
                         {

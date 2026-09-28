@@ -521,11 +521,11 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Appears as a random power. USE it to run that power, or RIGHT-CLICK to skip to a "
-                    + "different random one. Either way it spends its charge and refills next round. "
-                    + "Never becomes a legendary power.",
-                "Rastgele bir güç olarak görünür. KULLANINCA o gücü çalıştırır, SAĞ TIKLAYINCA başka "
-                    + "bir rastgele güce atlar. Her iki durumda da şarjını harcar ve gelecek raunt "
-                    + "dolar. Asla efsanevi bir güce dönüşmez.");
+                    + "different one (that spends the charge). At the end of EVERY turn it becomes a "
+                    + "new random power and refills. Never becomes a legendary power.",
+                "Rastgele bir güç olarak görünür. KULLANINCA o gücü çalıştırır, SAĞ TIKLAYINCA "
+                    + "başka bir güce atlar (bu şarjı harcar). HER turun sonunda yeni bir rastgele "
+                    + "güce dönüşür ve yeniden dolar. Asla efsanevi bir güce dönüşmez.");
         }
 
         public override string Description
@@ -571,6 +571,22 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>
+        /// A new turn, a new hallucination: at the end of EVERY turn it RENEWS - it becomes a
+        /// different random power AND refills its charge, whether or not it was used or skipped
+        /// during the turn. The one-power-per-turn rule still holds; what it gives up is being
+        /// able to hold on to a roll it liked. A boss that forbids refills ("Tükenmişlik") still
+        /// forbids this one - it changes form, but stays empty.
+        /// </summary>
+        public override void AfterTurnScored(TurnContext turn)
+        {
+            Reroll(turn.Rng);
+            if (turn.Round == null || !turn.Round.PowerRechargeBlocked)
+            {
+                Recharge();
+            }
+        }
+
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
         {
             return current != null && current.CanRun(ctx, target);
@@ -610,6 +626,10 @@ namespace ProjectBlock.Core
                 if (id == previous && Pool.Length > 1)
                 {
                     continue; // avoid morphing into the same power twice in a row
+                }
+                if (RarityTable.For(id) == Rarity.Legendary)
+                {
+                    continue; // never a legendary power, even if the pool is re-graded one day
                 }
                 picked = PowerRegistry.Create(id); // null if unknown; the loop tries again
             }
@@ -753,11 +773,36 @@ namespace ProjectBlock.Core
     /// pro rata (bet 7, cleared in 3 -> 3/7 of the 7-turn reward).</summary>
     public sealed class BatakPower : Power
     {
-        /// <summary>Multiplier for the boldest possible call (1 turn).</summary>
-        public double MaxMultiplier = 3.0;
+        /// <summary>
+        /// THE BET TABLE: the bonus a bet of N turns pays, in per cent of the points scored from
+        /// the bet to the sweep, when the sweep lands on the LAST turn of the bet. Index 0 is a
+        /// 1-turn bet. The bolder the call, the bigger the bonus; past the table's end a bet is
+        /// not offered. Sweeping sooner pays pro rata (confirmed rule - see PayoutFor).
+        /// BALANCE PLACEHOLDERS.
+        /// </summary>
+        private static readonly int[] BonusTable =
+        {
+            500, 340, 230, 160, 110, 75, 50, 35, 25, 15, 10, 5
+        };
 
-        /// <summary>Bets this long or longer are worth nothing.</summary>
-        public int ZeroAtTurns = 100;
+        /// <summary>The longest bet on offer.</summary>
+        public static int MaxBetTurns
+        {
+            get { return BonusTable.Length; }
+        }
+
+        /// <summary>The full bonus (per cent) of a bet of <paramref name="turns"/> turns, or 0
+        /// for a length the table does not offer. The one definition - the bet menu lists it and
+        /// PayoutFor pays it.</summary>
+        public static int BonusPercentFor(int turns)
+        {
+            return turns >= 1 && turns <= BonusTable.Length ? BonusTable[turns - 1] : 0;
+        }
+
+        /// <summary>A payout the sweep earned, waiting for the turn's score to be final - it is
+        /// paid in AfterTurnScored, so no multiplier of the turn is applied to it a second time.
+        /// Unscaled points.</summary>
+        private int pendingPayout;
 
         /// <summary>Turns bet on, or 0 when no bet is running.</summary>
         public int BetTurns { get; private set; }
@@ -771,10 +816,16 @@ namespace ProjectBlock.Core
             : base("batak", "Batak")
         {
             SetDescription(
-                "Bet that you will sweep the board within a chosen number of turns. Miss it and "
-                    + "the round ends; make it and the payout multiplies.",
-                "İstersen 'şu kadar turda temizlerim' diye bahse girersin. Tutturamazsan raunt "
-                    + "biter, tutturursan aradaki puanı katlayarak alırsın.");
+                "Only on an EMPTY board: bet that you will sweep it again within 1 to "
+                    + MaxBetTurns + " turns. Make "
+                    + "it and you get a bonus on the points scored since the bet - up to +"
+                    + BonusTable[0] + "% for a 1-turn call; sweeping early pays a share of it. "
+                    + "Miss it and the run is LOST.",
+                "Sadece BOŞ tahtada: tahtayı 1-" + MaxBetTurns + " tur içinde yeniden "
+                    + "temizleyeceğine bahse gir. Tutturursan "
+                    + "bahisten beri kazandığın puana bonus alırsın - 1 turluk bahiste +%"
+                    + BonusTable[0] + "'e kadar; erken temizlersen bir payını alırsın. "
+                    + "Tutturamazsan oyunu KAYBEDERSİN.");
         }
 
         public bool HasActiveBet
@@ -787,17 +838,28 @@ namespace ProjectBlock.Core
             get
             {
                 return HasActiveBet
-                    ? Loc.Pick("bet: " + (BetTurns - TurnsElapsed) + " turns",
-                        "bahis " + (BetTurns - TurnsElapsed) + " tur")
-                    : Loc.Pick("no bet", "bahis yok");
+                    ? Loc.Pick((BetTurns - TurnsElapsed) + " turns left, +" + BonusPercentFor(BetTurns) + "%",
+                        (BetTurns - TurnsElapsed) + " tur kaldı, +%" + BonusPercentFor(BetTurns))
+                    : Loc.Pick("empty board only", "sadece boş tahtada");
             }
         }
 
-        /// <summary>Usable (to open the picker) only when no bet is already running and a round
-        /// is in progress; the spent charge also blocks re-betting until a sweep/new round.</summary>
+        /// <summary>Usable (to open the picker) only when no bet is already running, a round is in
+        /// progress, and the ARENA IS EMPTY (<see cref="ArenaEmpty"/>) - the bet is always "from a
+        /// clean board, back to a clean board". The spent charge also blocks re-betting until a
+        /// sweep/new round.</summary>
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
         {
-            return !HasActiveBet && ctx.Round.Status == RoundStatus.InProgress;
+            return !HasActiveBet && ctx.Round.Status == RoundStatus.InProgress
+                && ArenaEmpty(ctx.Round);
+        }
+
+        /// <summary>No cube anywhere in the arena. Only the board's own cells count - a ghost
+        /// block's cubes hanging OUTSIDE it (GameBoard.OutsideCubes) are not on the play area.
+        /// </summary>
+        public static bool ArenaEmpty(RoundEngine round)
+        {
+            return round != null && round.Board.OccupiedCount == 0;
         }
 
         /// <summary>Never taken through TryUse - the bet picker calls PlaceBet + spends the
@@ -810,6 +872,7 @@ namespace ProjectBlock.Core
         public override void OnRoundStarted(RoundContext ctx)
         {
             ClearBet();
+            pendingPayout = 0;
         }
 
         public override void OnRemoved(SessionContext ctx)
@@ -820,7 +883,8 @@ namespace ProjectBlock.Core
         /// <summary>Places a bet. Legal only while a round runs and no bet is open.</summary>
         public bool PlaceBet(RoundContext ctx, int turns)
         {
-            if (HasActiveBet || turns < 1 || ctx.Round.Status != RoundStatus.InProgress)
+            if (HasActiveBet || turns < 1 || turns > MaxBetTurns
+                || ctx.Round.Status != RoundStatus.InProgress || !ArenaEmpty(ctx.Round))
             {
                 return false;
             }
@@ -831,24 +895,25 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Reward for clearing in <paramref name="usedTurns"/> against a bet of
-        /// <paramref name="betTurns"/>, applied to the score gained in between.</summary>
+        /// <paramref name="betTurns"/>, applied to the score gained in between: the table's bonus
+        /// for that bet, pro rata to the turns used (confirmed rule - bet 7, clear in 3, get 3/7
+        /// of it).</summary>
         public int PayoutFor(int betTurns, int usedTurns, int scoreGained)
         {
-            if (betTurns <= 0 || scoreGained <= 0)
+            int percent = BonusPercentFor(betTurns);
+            if (percent <= 0 || scoreGained <= 0 || usedTurns <= 0)
             {
                 return 0;
             }
-            double boldness = ZeroAtTurns > 1
-                ? 1.0 - (betTurns - 1) / (double)(ZeroAtTurns - 1)
-                : 1.0;
-            if (boldness <= 0.0)
-            {
-                return 0;
-            }
-            double earliness = usedTurns / (double)betTurns;
-            return (int)System.Math.Floor(scoreGained * MaxMultiplier * boldness * earliness);
+            double share = System.Math.Min(1.0, usedTurns / (double)betTurns);
+            return (int)System.Math.Floor(scoreGained * percent / 100.0 * share);
         }
 
+        /// <summary>The bet is WON. The payout is worked out now, while the bet is known, and
+        /// PAID once the turn's score is final (AfterTurnScored): paid here it would be a flat
+        /// bonus inside a breakdown whose multipliers had already counted the points it is a share
+        /// of. It is kept in UNSCALED points, because a flat bonus is scaled when it is added.
+        /// </summary>
         public override void AfterCleanSweep(TurnContext turn)
         {
             if (!HasActiveBet)
@@ -858,15 +923,19 @@ namespace ProjectBlock.Core
             int usedTurns = TurnsElapsed + 1; // this turn closes the window
             int gained = turn.Round.RoundScore + turn.Score.Total - scoreAtBet;
             int payout = PayoutFor(BetTurns, usedTurns, gained);
+            int scale = turn.Score.ScoreScale > 0 ? turn.Score.ScoreScale : 1;
             ClearBet();
-            if (payout > 0)
-            {
-                turn.AddFlatScore(payout, DefId);
-            }
+            pendingPayout += payout / scale;
         }
 
         public override void AfterTurnScored(TurnContext turn)
         {
+            if (pendingPayout > 0)
+            {
+                int payout = pendingPayout;
+                pendingPayout = 0;
+                turn.AddFlatScore(payout, DefId);
+            }
             if (!HasActiveBet)
             {
                 return;
@@ -908,14 +977,22 @@ namespace ProjectBlock.Core
             : base("kentsel_donusum", "Kentsel Dönüşüm")
         {
             SetDescription(
-                "When the board fills up and nothing fits, swap two rows or two columns to "
-                    + "open a gap and play on. Destroys nothing, scores nothing.",
-                "Oyun alanı dolup koyacak yer kalmazsa iki satırın ya da iki sütunun yerini "
-                    + "değiştirip oyuna devam edersin. Hiçbir küpü yok etmez, puan vermez.");
+                "Swap two rows or two columns of the board, whenever you like. And when the board "
+                    + "fills up and nothing fits, it saves the round: the swap opens a gap and you "
+                    + "play on. Destroys nothing, scores nothing.",
+                "Oyun alanındaki iki satırın ya da iki sütunun yerini istediğin zaman değiştir. "
+                    + "Alan dolup koyacak yer kalmazsa da raundu kurtarır: değişim bir boşluk açar "
+                    + "ve oyuna devam edersin. Hiçbir küpü yok etmez, puan vermez.");
         }
 
-        /// <summary>Usable only in the dead-end pause - see the class docs.</summary>
+        /// <summary>Still a rescue: a dead end pauses the round for it.</summary>
         public override bool IsDeadEndRescue
+        {
+            get { return true; }
+        }
+
+        /// <summary>...but no longer ONLY a rescue - it can be used in normal play too.</summary>
+        public override bool AlsoUsableInPlay
         {
             get { return true; }
         }
@@ -923,11 +1000,6 @@ namespace ProjectBlock.Core
         public override ActivationTargeting Targeting
         {
             get { return ActivationTargeting.LineSwap; }
-        }
-
-        public override string StatusText
-        {
-            get { return Loc.Pick("when stuck", "tıkanınca"); }
         }
 
         /// <summary>Without a pick this reports whether a swap COULD help, which is what the

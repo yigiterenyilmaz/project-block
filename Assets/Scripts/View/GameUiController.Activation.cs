@@ -1,6 +1,6 @@
 ﻿// PURPOSE: GameUiController activation - arming and running player-activated jokers and
-// powers, the choice/batak/powerbank/block-designer pickers, targeting, and the
-// power-blast FX.
+// powers, the choice/batak/block-designer pickers, targeting (Powerbank aims at the power
+// bar), and the power-blast FX.
 
 using System.Collections;
 using System.Collections.Generic;
@@ -36,58 +36,331 @@ namespace ProjectBlock.View
         private void OpenBatakPicker(BatakPower batak)
         {
             batakBetPowerId = batak.InstanceId;
-            batakBet.Show(Loc.Pick("Batak: bet how many turns to sweep?",
-                "Batak: kaç turda temizlersin?"));
+            RoundEngine round = session.CurrentRound;
+            batakBet.Show(Loc.Pick("Batak: how many turns to sweep the board?",
+                    "Batak: tahtayı kaç turda temizlersin?"),
+                round != null ? round.Board.OccupiedCount : 0);
         }
 
-        /// <summary>"Powerbank": which spent power to refill. Its own id rides in
-        /// pendingChoiceJokerId, the same slot the gravity picker keeps its power in.</summary>
-        private void OpenPowerbankPicker(PowerbankPower powerbank)
+        /// <summary>True for a power a pointing power ("Powerbank") may be aimed at right now: one
+        /// of your OTHER powers, and a spent one. The bar lights exactly these while aiming, and
+        /// a click on anything else is not a pick.</summary>
+        private bool IsOwnedPowerPick(Power aiming, Power candidate)
         {
-            pendingChoice = ChoiceKind.PowerbankTarget;
-            pendingChoiceJokerId = powerbank.InstanceId;
-            pendingChoiceValues.Clear();
-            var labels = new List<string>();
-            IReadOnlyList<Power> powers = session.Powers.Powers;
-            for (int i = 0; i < powers.Count; i++)
+            return aiming != null && candidate != null && candidate != aiming && !candidate.Charged;
+        }
+
+        /// <summary>
+        /// "Powerbank" is aimed at a CARD IN THE POWER BAR - the thing being refilled is right
+        /// there on screen, so it is clicked rather than named in a list. Runs ahead of the
+        /// drag and retro handlers, so it answers in every play mode. Returns true when it owned
+        /// the click.
+        ///
+        /// A click on a card that cannot take the charge (a charged one) is a MISS, not a cancel:
+        /// the player is pointing at the right strip and simply picked the wrong card. A click on
+        /// the Powerbank itself puts it down again, and a click anywhere else cancels.
+        /// </summary>
+        private bool HandleOwnedPowerPick(Mouse mouse)
+        {
+            if (!pendingTargetPowerId.HasValue || mouse == null
+                || !mouse.leftButton.wasPressedThisFrame)
             {
-                if (!powers[i].Charged && powers[i] != powerbank)
-                {
-                    pendingChoiceValues.Add(powers[i].InstanceId);
-                    labels.Add(powers[i].DisplayName);
-                }
+                return false;
             }
-            if (labels.Count == 0)
+            Power aiming = session.Powers.Find(pendingTargetPowerId.Value);
+            if (aiming == null || aiming.Targeting != ActivationTargeting.OwnedPower)
             {
-                ClearChoice();
-                return; // nothing spent to refill
+                return false;
             }
-            choicePicker.Show(Loc.Pick("Powerbank: recharge which power?",
-                "Powerbank: hangi gücü doldur?"), labels);
+            int index = powerBar.PowerIndexAt(mouse.position.ReadValue());
+            Power picked = index >= 0 && index < session.Powers.Count
+                ? session.Powers.Powers[index] : null;
+            if (IsOwnedPowerPick(aiming, picked))
+            {
+                RunPowerActivation(aiming, ActivationTarget.PowerChoice(picked.InstanceId));
+                return true;
+            }
+            if (picked != null && picked != aiming)
+            {
+                return true; // a charged card: a miss inside the aim, keep aiming
+            }
+            CancelTargeting();
+            return true;
+        }
+
+        /// <summary>The four sides, in the order the direction picker lists them.</summary>
+        private static readonly Vector2Int[] CompassSides =
+        {
+            new Vector2Int(0, 1), new Vector2Int(0, -1), new Vector2Int(-1, 0), new Vector2Int(1, 0)
+        };
+
+        private static string SideName(Vector2Int side)
+        {
+            if (side.y > 0) return Loc.Pick("UP", "YUKARI");
+            if (side.y < 0) return Loc.Pick("DOWN", "AŞAĞI");
+            if (side.x < 0) return Loc.Pick("LEFT", "SOLA");
+            return Loc.Pick("RIGHT", "SAĞA");
         }
 
         /// <summary>"Kütleçekim merkezi": asks which way water should fall. A direction is not a
-        /// place, so it is picked from a small list rather than clicked on the board - the same
-        /// modal Powerbank and Batak use.</summary>
+        /// place on the board, so it is asked in a menu - but a COMPASS of four arrows rather than
+        /// a list of words, each arrow on the side it names. The way water already falls is shown
+        /// in the middle and its own arrow is switched off: picking it would spend the charge on
+        /// nothing.</summary>
         private void OpenDirectionPicker(Power power)
         {
             pendingChoice = ChoiceKind.GravityDirection;
             pendingChoiceJokerId = power.InstanceId;
             pendingChoiceValues.Clear();
-            // The values are packed steps (see UnpackStep), in the same order as the labels.
-            pendingChoiceValues.Add(PackStep(0, 1));
-            pendingChoiceValues.Add(PackStep(0, -1));
-            pendingChoiceValues.Add(PackStep(-1, 0));
-            pendingChoiceValues.Add(PackStep(1, 0));
-            choicePicker.Show(
-                power.DisplayName + Loc.Pick(": water falls which way?", ": su hangi yöne aksın?"),
-                new List<string>
+            RoundEngine round = session.CurrentRound;
+            GridPos flow = round != null ? round.MainBoard.WaterFlow : new GridPos(0, -1);
+            var current = new Vector2Int(flow.X, flow.Y);
+            var labels = new List<string>();
+            for (int i = 0; i < CompassSides.Length; i++)
+            {
+                // The values are packed steps (see UnpackStep), in the same order as the arrows.
+                pendingChoiceValues.Add(PackStep(CompassSides[i].x, CompassSides[i].y));
+                labels.Add(SideName(CompassSides[i]));
+            }
+            choicePicker.ShowCompass(power.DisplayName,
+                Loc.Pick("Which way should water fall?", "Su hangi yöne aksın?"),
+                CompassSides, labels, current,
+                Loc.Pick("Water falls ", "Su şu an ") + SideName(current)
+                    + Loc.Pick(" now", " akıyor"),
+                PadOr(Loc.Pick("click an arrow or press the arrow keys   [Esc] cancel",
+                        "bir oka tıkla ya da yön tuşlarına bas   [Esc] vazgeç"),
+                    Loc.Pick("choose a side with the stick", "yönü çubukla seç")));
+        }
+
+        /// <summary>Puts a card "Cımbız" was turning back as it was and forgets the pick.</summary>
+        private void ResetTweezerPreview()
+        {
+            TweezerCard(tweezerSlot, 0f, 0f);
+            tweezerSlot = -1;
+            tweezerSteps = 0;
+            tweezerCardSpin = 0f;
+            tweezerBlockShown = 0f;
+            tweezerTurnWanted = 0f;
+            tweezerMinis.Clear();
+            tweezerMiniHome.Clear();
+        }
+
+        /// <summary>The preview's state: the card's own spin (a kick that eases back upright)
+        /// and the angle the block is shown at on it.</summary>
+        private float tweezerCardSpin;
+
+        private float tweezerBlockShown;
+
+        /// <summary>The angle the preview is heading for, in the order the turns were clicked.
+        /// </summary>
+        private float tweezerTurnWanted;
+
+        /// <summary>True while the tweezers are setting the card after a confirm.</summary>
+        private bool tweezerSetting;
+
+        private readonly List<Transform> tweezerMinis = new List<Transform>();
+
+        private readonly List<Vector3> tweezerMiniHome = new List<Vector3>();
+
+        private Vector3 tweezerMiniCentre;
+
+        /// <summary>Poses the card being turned: the card body at <paramref name="card"/> degrees,
+        /// and the block's cubes turned about their own middle so they stand at
+        /// <paramref name="block"/> degrees ON SCREEN whatever the card is doing.</summary>
+        private void TweezerCard(int slot, float card, float block)
+        {
+            if (slot < 0 || cardLayer == null)
+            {
+                return;
+            }
+            CardVisual v = cardLayer.VisualOfSlot(slot);
+            if (v == null)
+            {
+                return;
+            }
+            if (tweezerMinis.Count == 0)
+            {
+                // Taken once, upright: the block's own cubes and where they sit on the card.
+                v.transform.localRotation = Quaternion.identity;
+                tweezerMiniCentre = Vector3.zero;
+                foreach (Transform child in v.transform)
                 {
-                    Loc.Pick("UP", "YUKARI"),
-                    Loc.Pick("DOWN (normal)", "AŞAĞI (normal)"),
-                    Loc.Pick("LEFT", "SOLA"),
-                    Loc.Pick("RIGHT", "SAĞA")
-                });
+                    if (child.name == "Mini")
+                    {
+                        tweezerMinis.Add(child);
+                        tweezerMiniHome.Add(child.localPosition);
+                        tweezerMiniCentre += child.localPosition;
+                    }
+                }
+                if (tweezerMinis.Count > 0)
+                {
+                    tweezerMiniCentre /= tweezerMinis.Count;
+                }
+            }
+            v.transform.localRotation = Quaternion.Euler(0f, 0f, card);
+            // The block turns RELATIVE to the card by whatever keeps it at its on-screen angle.
+            Quaternion relative = Quaternion.Euler(0f, 0f, block - card);
+            for (int i = 0; i < tweezerMinis.Count; i++)
+            {
+                if (tweezerMinis[i] == null)
+                {
+                    continue;
+                }
+                Vector3 home = tweezerMiniHome[i];
+                tweezerMinis[i].localPosition = tweezerMiniCentre + relative * (home - tweezerMiniCentre);
+                tweezerMinis[i].localRotation = relative;
+            }
+        }
+
+        /// <summary>
+        /// The two powers that are aimed IN PLACE rather than through a menu. Called every frame
+        /// while one is pending; true when it consumed the frame's input.
+        ///
+        /// "Buldozer": the hover preview is the band the blade will take, and right-click, the
+        /// wheel or R switch it between rows and columns - so what you see is what you click.
+        /// "Cımbız": once a card is picked, LEFT-click on it (or the wheel, or R) turns its block a
+        /// quarter: the card spins with it and eases back upright while the block keeps the new
+        /// angle. RIGHT-click (or Enter) confirms, Esc cancels.
+        /// </summary>
+        private bool HandleLiveAim(Power aiming, Vector2 world, Mouse mouse)
+        {
+            Keyboard kb = Keyboard.current;
+            float wheel = mouse != null ? mouse.scroll.ReadValue().y : 0f;
+            if (aiming is BuldozerPower)
+            {
+                bool flip = (mouse != null && mouse.rightButton.wasPressedThisFrame)
+                    || (kb != null && kb.rKey.wasPressedThisFrame) || Mathf.Abs(wheel) > 0.01f;
+                if (flip)
+                {
+                    bulldozerAxis = bulldozerAxis == LineAxis.Row ? LineAxis.Column : LineAxis.Row;
+                    sfx.Pluck(bulldozerAxis == LineAxis.Row ? 1.3f : 1.5f);
+                    UpdateHud();
+                    return true;
+                }
+                return false;
+            }
+            if (aiming is CimbizPower && tweezerSetting)
+            {
+                return true;
+            }
+            if (aiming is CimbizPower && tweezerSlot >= 0)
+            {
+                if ((mouse != null && mouse.rightButton.wasPressedThisFrame)
+                    || (kb != null && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)))
+                {
+                    ConfirmTweezers(aiming);
+                    return true;
+                }
+                CardVisual picked = cardLayer.VisualOfSlot(tweezerSlot);
+                bool onPicked = mouse != null && mouse.leftButton.wasPressedThisFrame
+                    && cardLayer.CardAt(world) == picked && picked != null;
+                int step = onPicked || (kb != null && kb.rKey.wasPressedThisFrame) ? 1
+                    : wheel > 0.01f ? 1 : wheel < -0.01f ? -1 : 0;
+                if (step != 0)
+                {
+                    tweezerSteps = ((tweezerSteps + step) % 4 + 4) % 4;
+                    sfx.Pluck(1.6f + 0.1f * tweezerSteps);
+                    UpdateHud();
+                }
+                // The PREVIEW: the whole card, block and all, turns to where the block will point.
+                // (Counted as it was clicked, so a full lap keeps turning the same way.)
+                tweezerTurnWanted += step * -90f;
+                tweezerBlockShown = Mathf.Lerp(tweezerBlockShown, tweezerTurnWanted, Mathf.Clamp01(Time.deltaTime * 16f));
+                TweezerCard(tweezerSlot, tweezerBlockShown, tweezerBlockShown);
+                return step != 0;
+            }
+            return false;
+        }
+
+        /// <summary>Runs "Cımbız" with the turn chosen. The previewed card is put straight first:
+        /// the rebuilt card already carries the new shape, and the tweezers play over it.</summary>
+        private void ConfirmTweezers(Power power)
+        {
+            int slot = tweezerSlot;
+            int steps = tweezerSteps;
+            if (steps == 0 || tweezerSetting)
+            {
+                if (!tweezerSetting)
+                {
+                    CancelTargeting();
+                    RefreshAll(null);
+                }
+                return;
+            }
+            StartCoroutine(SetTweezers(power, slot, steps));
+        }
+
+        /// <summary>
+        /// THE LOCK-IN. The card and its block stand turned from the preview; now the tweezers
+        /// grip the block and turn the CARD back upright underneath it, the block holding exactly
+        /// where it is. What is left is an upright card with the block turned - which is the card
+        /// the rules are about to hand back, so when the power runs and the card is rebuilt with
+        /// its new shape, nothing moves.
+        /// </summary>
+        private IEnumerator SetTweezers(Power power, int slot, int steps)
+        {
+            tweezerSetting = true;
+            float held = tweezerTurnWanted;
+            CardVisual v = cardLayer.VisualOfSlot(slot);
+            if (v != null)
+            {
+                powerFx.PlayTweezerGrip(v, CardLayerView.HandFrontOrder + 5, 0.42f);
+            }
+            sfx.Pluck(2.2f);
+            // Settle the preview first, if it was still easing in.
+            float t = 0f;
+            float from = tweezerBlockShown;
+            while (t < 0.08f)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / 0.08f);
+                float a = Mathf.Lerp(from, held, k);
+                TweezerCard(slot, a, a);
+                yield return null;
+            }
+            // The card turns back upright under the block.
+            t = 0f;
+            while (t < 0.3f)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / 0.3f);
+                float e = 1f - (1f - k) * (1f - k) * (1f - k);
+                TweezerCard(slot, Mathf.Lerp(held, 0f, e), held);
+                yield return null;
+            }
+            sfx.Drum(1.8f);
+            tweezerSetting = false;
+            ResetTweezerPreview();
+            RunPowerActivation(power, new ActivationTarget(slot, null, null, null, null, false, null,
+                new GridPos(steps, 0), null));
+        }
+
+        /// <summary>The compass option an arrow key (or WASD) pressed this frame points at, or -1.
+        /// </summary>
+        private int CompassKeyPressed(Keyboard kb)
+        {
+            if (kb == null)
+            {
+                return -1;
+            }
+            Vector2Int side = Vector2Int.zero;
+            if (kb.upArrowKey.wasPressedThisFrame || kb.wKey.wasPressedThisFrame)
+            {
+                side = new Vector2Int(0, 1);
+            }
+            else if (kb.downArrowKey.wasPressedThisFrame || kb.sKey.wasPressedThisFrame)
+            {
+                side = new Vector2Int(0, -1);
+            }
+            else if (kb.leftArrowKey.wasPressedThisFrame || kb.aKey.wasPressedThisFrame)
+            {
+                side = new Vector2Int(-1, 0);
+            }
+            else if (kb.rightArrowKey.wasPressedThisFrame || kb.dKey.wasPressedThisFrame)
+            {
+                side = new Vector2Int(1, 0);
+            }
+            return side == Vector2Int.zero ? -1 : choicePicker.OptionInDirection(side);
         }
 
         // A GridPos will not fit in the picker's int list, so the step travels packed.
@@ -153,18 +426,7 @@ namespace ProjectBlock.View
                 return ResolveBossPick(pendingChoiceValues[index]);
             }
             var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
-            if (pendingChoice == ChoiceKind.PowerbankTarget)
-            {
-                Power powerbank = session.Powers.Find(pendingChoiceJokerId);
-                if (powerbank != null)
-                {
-                    // Through the normal power path: the charge, the one-power-per-turn rule
-                    // and the FX capture behave exactly as they do for every other power.
-                    RunPowerActivation(powerbank,
-                        ActivationTarget.PowerChoice(pendingChoiceValues[index]));
-                }
-            }
-            else if (pendingChoice == ChoiceKind.GravityDirection)
+            if (pendingChoice == ChoiceKind.GravityDirection)
             {
                 Power power = session.Powers.Find(pendingChoiceJokerId);
                 if (power != null)
@@ -250,13 +512,23 @@ namespace ProjectBlock.View
             pendingTargetJokerId = null;
             pendingTargetPowerId = null;
             pendingOltaMark = false;
+            ResetTweezerPreview();
             // The workshop powers' own pick, and whichever modal it had open.
             workshopPowerId = null;
             workshopFirstCard = -1;
             SecondWorkshopCard = -1;
             workshopDonorCell = null;
             workshopPressAnchor = null;
+            geneRefusal = null;
+            nesterRefusal = null;
+            if (playSwapPowerId.HasValue)
+            {
+                playSwapPowerId = null;
+                lineSwapPicker.Hide();
+            }
+            HideCardMarks();
             cubePicker.Hide();
+            nesterEditor.Hide();
             weldPicker.Hide();
             boardView.ClearPreview();
             UpdateHud();
@@ -363,16 +635,18 @@ namespace ProjectBlock.View
                 BeginWorkshopTargeting(power);
                 return;
             }
-            // "Powerbank" asks WHICH spent power to refill - a list, not a place.
-            var bank = power as PowerbankPower;
-            if (bank != null)
+            // "Powerbank" falls through to the ordinary aim below: it waits for a click on a
+            // spent power's card in the bar (HandleOwnedPowerPick). CanBeginUse has already
+            // refused it when nothing is spent, so arming it always has something to point at.
+            // TWO WHOLE LINES ("Kentsel Dönüşüm" used in normal play): the same row/column arrows
+            // the dead-end rescue puts up, answered through the normal power path.
+            if (power.Targeting == ActivationTargeting.LineSwap)
             {
-                if (!session.Powers.CanUse(bank.InstanceId, ActivationTarget.None))
-                {
-                    Debug.Log("[block_bonk] " + power.DisplayName + " has nothing to refill.");
-                    return;
-                }
-                OpenPowerbankPicker(bank);
+                pendingTargetPowerId = power.InstanceId; // lights the bar and the HUD line
+                playSwapPowerId = power.InstanceId;
+                lineSwapPicker.Show(boardView, OnPlaySwapPicked);
+                UpdateHud();
+                powerBar.Refresh(session, pendingTargetPowerId);
                 return;
             }
             // A DIRECTION is not a place on the board, so it is asked for with a picker rather
@@ -433,50 +707,31 @@ namespace ProjectBlock.View
                 return HandlePressClick(power, round, world);
             }
 
-            // A picker is open: the click belongs to it.
-            if (cubePicker.IsMultiPick)
+            // "Gen nakli" is block to block - a board block, then a card OR another board block -
+            // so it has a flow of its own rather than the hand-card tail below.
+            if (power.Targeting == ActivationTargeting.CellAndHandCard)
             {
-                if (cubePicker.ConfirmAt(world))
-                {
-                    ActivationTarget target = ActivationTarget.CardCubes(workshopFirstCard,
-                        cubePicker.PickedCells);
-                    cubePicker.Hide();
-                    RunPowerActivation(power, target);
-                    workshopPowerId = null;
-                    return true;
-                }
-                cubePicker.Toggle(cubePicker.CellAt(world));
+                return HandleGeneClick(power, round, world);
+            }
+
+            // The cut editor reads the pointer itself (painting needs the frames between press and
+            // release) - its answer is polled in PollNesterEditor, so a click here is its own.
+            if (nesterEditor.IsOpen)
+            {
                 return true;
             }
             if (weldPicker.IsOpen)
             {
-                GridPos? offset = weldPicker.OfferAt(world);
-                if (!offset.HasValue)
+                WeldPickerView.ClickResult result = weldPicker.ClickAt(world);
+                if (result == WeldPickerView.ClickResult.Confirm)
                 {
-                    return true; // a miss inside the modal is just a miss
+                    ConfirmWeld(power);
                 }
-                int second = SecondWorkshopCard;
-                ActivationTarget target = ActivationTarget.TwoCards(workshopFirstCard, second,
-                    offset.Value);
-                weldPicker.Hide();
-                RunPowerActivation(power, target);
-                workshopPowerId = null;
-                return true;
-            }
-
-            // "Gen nakli" wants the board cube first.
-            if (power.Targeting == ActivationTargeting.CellAndHandCard
-                && !workshopDonorCell.HasValue)
-            {
-                ActivationTarget cellTarget;
-                if (!TryBoardTargetAt(world, out cellTarget) || !cellTarget.Cell.HasValue)
+                else if (result == WeldPickerView.ClickResult.Cancel)
                 {
                     CancelTargeting();
-                    return true;
                 }
-                workshopDonorCell = cellTarget.Cell;
-                UpdateHud();
-                return true;
+                return true; // a miss inside the editor is just a miss
             }
 
             // Everything else is waiting for a hand card.
@@ -486,21 +741,28 @@ namespace ProjectBlock.View
                 CancelTargeting();
                 return true;
             }
-            if (power.Targeting == ActivationTargeting.CellAndHandCard)
-            {
-                ActivationTarget target = ActivationTarget.CellAndCard(workshopDonorCell.Value,
-                    hit.SlotIndex);
-                RunPowerActivation(power, target);
-                workshopPowerId = null;
-                return true;
-            }
             if (power.Targeting == ActivationTargeting.CardCubes)
             {
+                BlockCard toCut = round.Hand[hit.SlotIndex];
+                BlockShape cutShape = round.EffectiveShape(toCut);
+                if (!NesterPower.CanBeCut(toCut))
+                {
+                    nesterRefusal = toCut.IsWelded
+                        ? Loc.Pick("a welded block cannot be cut", "lehimli blok kesilemez")
+                        : Loc.Pick("this special block cannot be cut", "bu özel blok kesilemez");
+                    UpdateHud();
+                    return true; // keep picking
+                }
+                if (cutShape.Size < 2)
+                {
+                    nesterRefusal = Loc.Pick("a single cube cannot be cut", "tek küp kesilemez");
+                    UpdateHud();
+                    return true;
+                }
+                nesterRefusal = null;
                 workshopFirstCard = hit.SlotIndex;
-                cubePicker.ShowMulti(round.EffectiveShape(round.Hand[hit.SlotIndex]),
-                    Loc.Pick("Neşter: pick the cubes for the FIRST piece   [Esc] cancel",
-                        "Neşter: BİRİNCİ parçaya girecek küpleri seç   [Esc] iptal"),
-                    Loc.Pick("CUT", "KES"));
+                HideCardMarks();
+                nesterEditor.Show(round.Hand[hit.SlotIndex], cutShape, power.DisplayName);
                 return true;
             }
             // "Lehimleme": first card, then second, then where it goes.
@@ -515,11 +777,174 @@ namespace ProjectBlock.View
                 return true; // the same card twice is not two cards
             }
             SecondWorkshopCard = hit.SlotIndex;
-            weldPicker.Show(round.EffectiveShape(round.Hand[workshopFirstCard]),
-                round.EffectiveShape(round.Hand[hit.SlotIndex]),
-                Loc.Pick("Lehimleme: pick where the second block goes   [Esc] cancel",
-                    "Lehimleme: ikinci bloğun nereye geleceğini seç   [Esc] iptal"));
+            HideCardMarks();
+            BlockCard firstCard = round.Hand[workshopFirstCard];
+            BlockCard secondCard = round.Hand[hit.SlotIndex];
+            weldPicker.Show(firstCard, round.EffectiveShape(firstCard), secondCard,
+                round.EffectiveShape(secondCard), power.DisplayName);
             return true;
+        }
+
+        /// <summary>Every frame the cut editor is up: CUT runs the power with the painted piece,
+        /// CANCEL puts the whole pick down.</summary>
+        private void PollNesterEditor(Power power)
+        {
+            NesterEditorView.Result result = nesterEditor.TakeResult();
+            if (result == NesterEditorView.Result.Cancel)
+            {
+                CancelTargeting();
+            }
+            else if (result == NesterEditorView.Result.Confirm)
+            {
+                ActivationTarget target = ActivationTarget.CardCubes(workshopFirstCard,
+                    nesterEditor.PickedCells);
+                nesterEditor.Hide();
+                workshopPowerId = null;
+                bool wasCharged = power.Charged;
+                RunPowerActivation(power, target);
+                if (wasCharged && !power.Charged)
+                {
+                    sfx.Cut(); // the blade went through
+                }
+            }
+        }
+
+        /// <summary>The weld editor's WELD: the placement the player laid, through the normal
+        /// power path.</summary>
+        private void ConfirmWeld(Power power)
+        {
+            if (!weldPicker.PlacedOffset.HasValue)
+            {
+                return;
+            }
+            ActivationTarget target = ActivationTarget.TwoCards(workshopFirstCard,
+                SecondWorkshopCard, weldPicker.PlacedOffset.Value);
+            weldPicker.Hide();
+            workshopPowerId = null;
+            RunPowerActivation(power, target);
+        }
+
+        /// <summary>Keys inside the weld editor: arrows nudge the laid block, Enter welds.</summary>
+        private void HandleWeldKeys(Power power)
+        {
+            Keyboard kb = Keyboard.current;
+            if (kb == null || !weldPicker.IsOpen)
+            {
+                return;
+            }
+            if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)
+            {
+                ConfirmWeld(power);
+                return;
+            }
+            int dx = kb.leftArrowKey.wasPressedThisFrame ? -1 : kb.rightArrowKey.wasPressedThisFrame ? 1 : 0;
+            int dy = kb.downArrowKey.wasPressedThisFrame ? -1 : kb.upArrowKey.wasPressedThisFrame ? 1 : 0;
+            if (dx != 0 || dy != 0)
+            {
+                weldPicker.Nudge(dx, dy);
+            }
+        }
+
+        // ------------------------------------------------------- hand-card pick marks
+        //
+        // While a workshop power is picking cards out of the hand ("Lehimleme", "Neşter"), the card
+        // under the pointer is outlined and breathes, and a card already picked keeps a steady
+        // outline - the same language the board uses for a block being aimed at. Drawn as four
+        // bars over the card rather than on it, following the card's own transform every frame,
+        // so the hand's hover lift carries the outline with it.
+
+        private static readonly Color CardMarkHover = new Color(1f, 0.82f, 0.42f, 0.95f);
+        private static readonly Color CardMarkRefused = new Color(1f, 0.35f, 0.35f, 0.95f);
+
+        /// <summary>Why the last Neşter card pick was refused, shown under the step; null when
+        /// there is nothing to say.</summary>
+        private string nesterRefusal;
+        private static readonly Color CardMarkPicked = new Color(0.45f, 0.85f, 1f, 0.9f);
+        private readonly List<SpriteRenderer> cardMarks = new List<SpriteRenderer>();
+
+        /// <summary>Every frame of a workshop pick: which hand card to outline, if any.</summary>
+        private void SyncCardMarks(Vector2 world)
+        {
+            Power power = workshopPowerId.HasValue ? session.Powers.Find(workshopPowerId.Value) : null;
+            RoundEngine round = session.CurrentRound;
+            bool picking = power != null && round != null && !weldPicker.IsOpen
+                && !nesterEditor.IsOpen
+                && (power.Targeting == ActivationTargeting.TwoHandCards
+                    || power.Targeting == ActivationTargeting.CardCubes);
+            if (!picking)
+            {
+                HideCardMarks();
+                return;
+            }
+            CardVisual hovered = cardLayer.CardAt(world);
+            if (hovered != null && (hovered.SlotIndex < 0 || hovered.SlotIndex >= round.Hand.Count
+                || hovered.SlotIndex == workshopFirstCard))
+            {
+                hovered = null;
+            }
+            CardVisual picked = workshopFirstCard >= 0 ? cardLayer.VisualOfSlot(workshopFirstCard)
+                : null;
+            float breath = 0.65f + 0.35f * Mathf.Sin(Time.time * 5f);
+            int used = 0;
+            used = OutlineCard(picked, CardMarkPicked, used);
+            // Neşter: a card it cannot cut is outlined in the refusal red rather than invited.
+            bool refused = hovered != null && power.Targeting == ActivationTargeting.CardCubes
+                && (!NesterPower.CanBeCut(round.Hand[hovered.SlotIndex])
+                    || round.EffectiveShape(round.Hand[hovered.SlotIndex]).Size < 2);
+            Color hover = refused ? CardMarkRefused : CardMarkHover;
+            hover.a *= breath;
+            used = OutlineCard(hovered, hover, used);
+            for (int i = used; i < cardMarks.Count; i++)
+            {
+                cardMarks[i].enabled = false;
+            }
+        }
+
+        private int OutlineCard(CardVisual card, Color color, int used)
+        {
+            if (card == null)
+            {
+                return used;
+            }
+            Vector3 at = card.transform.position;
+            float scale = card.transform.lossyScale.x;
+            float w = CardVisual.BodyWidth * scale;
+            float h = CardVisual.BodyHeight * scale;
+            float line = 0.06f * scale;
+            float pad = 0.05f * scale;
+            var bars = new[]
+            {
+                new Vector4(0f, h * 0.5f + pad, w + pad * 2f + line, line),
+                new Vector4(0f, -h * 0.5f - pad, w + pad * 2f + line, line),
+                new Vector4(-w * 0.5f - pad, 0f, line, h + pad * 2f + line),
+                new Vector4(w * 0.5f + pad, 0f, line, h + pad * 2f + line)
+            };
+            for (int i = 0; i < bars.Length; i++)
+            {
+                if (used == cardMarks.Count)
+                {
+                    SpriteRenderer made = ViewUtil.MakeRounded(transform, "CardPickMark",
+                        Vector2.zero, Vector2.one, color, CardLayerView.HandFrontOrder + 3);
+                    cardMarks.Add(made);
+                }
+                SpriteRenderer bar = cardMarks[used++];
+                bar.transform.position = new Vector3(at.x + bars[i].x, at.y + bars[i].y, 0f);
+                bar.size = new Vector2(bars[i].z, bars[i].w);
+                bar.color = color;
+                bar.enabled = true;
+            }
+            return used;
+        }
+
+        private void HideCardMarks()
+        {
+            for (int i = 0; i < cardMarks.Count; i++)
+            {
+                if (cardMarks[i] != null)
+                {
+                    cardMarks[i].enabled = false;
+                }
+            }
         }
 
         /// <summary>
@@ -563,6 +988,220 @@ namespace ProjectBlock.View
             return true;
         }
 
+        // ------------------------------------------------------------------ "Gen nakli"
+        //
+        // Two picks, both of WHOLE BLOCKS: the block the element leaves, then the block that
+        // takes it - a card in the hand, or a plain block on the board. Every "which block is
+        // this" and "may it take this" answer is GenNakliPower's own (BlockAt, GeneOfBlock,
+        // CanTakeIntoCard, CanTakeOnBoard), so the block lit under the cursor is exactly the block
+        // the rules will move. A pick the rules would refuse is a MISS with a reason on the HUD,
+        // never a silent cancel: the player is mid-aim and just picked the wrong thing.
+        // The main world only - a gene never crosses into "Öteki dünya"'s mirror.
+
+        /// <summary>Why the last Gen nakli pick was refused, shown under the step; null when
+        /// there is nothing to say. Cleared whenever the aim moves on or ends.</summary>
+        private string geneRefusal;
+
+        private bool HandleGeneClick(Power power, RoundEngine round, Vector2 world)
+        {
+            GridPos cell;
+            if (boardView.TryWorldToCell(world, out cell))
+            {
+                if (!workshopDonorCell.HasValue)
+                {
+                    TryGeneDonor(round, cell);
+                }
+                else
+                {
+                    TryGeneOntoBoard(power, round, cell);
+                }
+                return true;
+            }
+            CardVisual hit = cardLayer.CardAt(world);
+            if (hit != null && workshopDonorCell.HasValue)
+            {
+                TryGeneIntoCard(power, round, hit.SlotIndex);
+                return true;
+            }
+            CancelTargeting();
+            return true;
+        }
+
+        /// <summary>First pick: the block the element leaves.</summary>
+        private void TryGeneDonor(RoundEngine round, GridPos cell)
+        {
+            GameBoard board = round.MainBoard;
+            if (!board.GetCube(cell).HasValue)
+            {
+                geneRefusal = Loc.Pick("that cell is empty - pick a block", "o kare boş - bir blok seç");
+            }
+            else if (!GenNakliPower.GeneOfBlock(board, cell).HasValue)
+            {
+                geneRefusal = Loc.Pick("that block has no element to give",
+                    "o bloğun verecek elementi yok");
+            }
+            else
+            {
+                workshopDonorCell = cell;
+                geneRefusal = null;
+            }
+            UpdateHud();
+        }
+
+        /// <summary>Second pick on the board: another block takes the element - or, clicking the
+        /// chosen block again, the first pick is put back.</summary>
+        private void TryGeneOntoBoard(Power power, RoundEngine round, GridPos cell)
+        {
+            GameBoard board = round.MainBoard;
+            GridPos donor = workshopDonorCell.Value;
+            BlockElement? gene = GenNakliPower.GeneOfBlock(board, donor);
+            if (!gene.HasValue)
+            {
+                CancelTargeting(); // the chosen block is gone from under the aim
+                return;
+            }
+            if (Contains(GenNakliPower.BlockAt(board, donor), cell))
+            {
+                workshopDonorCell = null; // the same block again: un-pick it
+                geneRefusal = null;
+                UpdateHud();
+                return;
+            }
+            if (GenNakliPower.CanTakeOnBoard(round, donor, cell, gene.Value))
+            {
+                FireGene(power, ActivationTarget.CellToCell(donor, cell));
+                return;
+            }
+            Cube? cube = board.GetCube(cell);
+            geneRefusal = !cube.HasValue
+                ? Loc.Pick("that cell is empty - pick a block or a card",
+                    "o kare boş - bir blok ya da kart seç")
+                : gene.Value == BlockElement.Dynamite
+                    ? Loc.Pick("dynamite only goes into a card", "dinamit sadece karta aktarılır")
+                : cube.Value.Kind != CubeKind.Normal
+                    ? Loc.Pick("that block already has an element", "o bloğun zaten elementi var")
+                    : Loc.Pick("that block is broken - it has lost a cube",
+                        "o blok kırık - bir küpü eksik");
+            UpdateHud();
+        }
+
+        /// <summary>Second pick in the hand: the card takes the element, on loan.</summary>
+        private void TryGeneIntoCard(Power power, RoundEngine round, int slot)
+        {
+            if (slot < 0 || slot >= round.Hand.Count)
+            {
+                geneRefusal = Loc.Pick("only a card in your hand can take it",
+                    "sadece elindeki bir kart alabilir");
+            }
+            else if (!GenNakliPower.CanTakeIntoCard(round, slot))
+            {
+                geneRefusal = Loc.Pick("that card already has an element",
+                    "o kartın zaten elementi var");
+            }
+            else
+            {
+                FireGene(power, ActivationTarget.CellAndCard(workshopDonorCell.Value, slot));
+                return;
+            }
+            UpdateHud();
+        }
+
+        private void FireGene(Power power, ActivationTarget target)
+        {
+            workshopPowerId = null;
+            workshopDonorCell = null;
+            geneRefusal = null;
+            boardView.ClearPreview();
+            RunPowerActivation(power, target);
+        }
+
+        /// <summary>
+        /// The Gen nakli aim, drawn every frame: the chosen block held steady in its element's
+        /// colour, and the WHOLE block under the cursor breathing - in the element's colour when
+        /// the rules would take it (for a block that is about to receive, that is the colour it
+        /// is about to become), in the refusal red when they would not.
+        /// </summary>
+        private void ShowGeneHover(Vector2 world)
+        {
+            Power aiming = workshopPowerId.HasValue ? session.Powers.Find(workshopPowerId.Value) : null;
+            RoundEngine round = session.CurrentRound;
+            if (aiming == null || round == null
+                || aiming.Targeting != ActivationTargeting.CellAndHandCard)
+            {
+                return;
+            }
+            GameBoard board = round.MainBoard;
+            IReadOnlyList<GridPos> held = null;
+            Color heldColor = Color.clear;
+            BlockElement? gene = null;
+            if (workshopDonorCell.HasValue)
+            {
+                gene = GenNakliPower.GeneOfBlock(board, workshopDonorCell.Value);
+                if (gene.HasValue)
+                {
+                    held = GenNakliPower.BlockAt(board, workshopDonorCell.Value);
+                    heldColor = GeneTint(gene.Value, 0.5f);
+                }
+            }
+            IReadOnlyList<GridPos> hovered = null;
+            Color hoveredColor = Color.clear;
+            GridPos cell;
+            if (boardView.TryWorldToCell(world, out cell) && board.GetCube(cell).HasValue)
+            {
+                hovered = GenNakliPower.BlockAt(board, cell);
+                if (!gene.HasValue)
+                {
+                    BlockElement? offered = GenNakliPower.GeneOfBlock(board, cell);
+                    hoveredColor = offered.HasValue ? GeneTint(offered.Value, 0.7f)
+                        : BoardView.RefusedPreviewColor;
+                }
+                else if (Contains(held, cell))
+                {
+                    hovered = null; // the chosen block itself: it is already lit
+                }
+                else
+                {
+                    // Red for every block the rules would refuse - one with an element already,
+                    // and one that has lost even a single cube (GenNakliPower.IsIntact).
+                    hoveredColor = GenNakliPower.CanTakeOnBoard(round, workshopDonorCell.Value,
+                            cell, gene.Value)
+                        ? GeneTint(gene.Value, 0.75f)
+                        : BoardView.RefusedPreviewColor;
+                }
+            }
+            if (held == null && hovered == null)
+            {
+                boardView.ClearPreview();
+                return;
+            }
+            boardView.ShowBlockHighlight(hovered, hoveredColor, held, heldColor);
+        }
+
+        /// <summary>An element's colour as a preview tint: lifted a little toward white so the
+        /// dark ones (obsidian) still read over a dark board, at the given strength.</summary>
+        private static Color GeneTint(BlockElement gene, float alpha)
+        {
+            Color c = Color.Lerp(ViewUtil.ElementColor(gene), Color.white, 0.25f);
+            c.a = alpha;
+            return c;
+        }
+
+        private static bool Contains(IReadOnlyList<GridPos> cells, GridPos cell)
+        {
+            if (cells == null)
+            {
+                return false;
+            }
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (cells[i].Equals(cell))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /// <summary>The second hand slot a weld is using. Its own field so the flow above reads
         /// as the three straight lines it is.</summary>
         private int SecondWorkshopCard { get; set; } = -1;
@@ -575,7 +1214,10 @@ namespace ProjectBlock.View
             // and card visuals are cached by id - drop the visual so Sync rebuilds it.
             RoundEngine round = session.CurrentRound;
             int targetCardId = -1;
-            if (target.HandIndex.HasValue && round != null
+            // A power aimed at another POWER carries that power's instance id in HandIndex
+            // (ActivationTarget.PowerChoice) - it names no card.
+            bool aimedAtPower = power.Targeting == ActivationTargeting.OwnedPower;
+            if (!aimedAtPower && target.HandIndex.HasValue && round != null
                 && target.HandIndex.Value >= 0 && target.HandIndex.Value < round.Hand.Count)
             {
                 targetCardId = round.Hand[target.HandIndex.Value].Id;
@@ -589,6 +1231,58 @@ namespace ProjectBlock.View
             {
                 round.BeginExternalCapture();
             }
+            // What the activation effects need from BEFORE the power runs: İkinci Şans wipes the
+            // board, so its cubes' faces are taken now; Soğuk Füzyon adds bonus cards, so the ones
+            // already there are remembered to tell the new ones apart.
+            List<PowerFxView.CubeFace> slateFaces = power.DefId == "ikinci_sans"
+                ? CaptureCubeFaces(round) : null;
+            bool copiesOut = power.DefId == "asirma" || power.DefId == "yedekleme";
+            var rod = power as OltaPower;
+            HashSet<int> bonusBefore = power.DefId == "soguk_fuzyon" || copiesOut || rod != null
+                ? BonusCardIds(round) : null;
+            // "Olta": which pile the marked card is reeled out of, known only BEFORE the pull.
+            bool reelFromDiscard = rod != null && rod.MarkedCardId.HasValue && round != null
+                && PileHolds(round.Deck.DiscardPile, rod.MarkedCardId.Value);
+            bool discardHadCards = round != null && round.Deck.DiscardCount > 0;
+            // The board strikes need the faces of what they are about to destroy.
+            bool strikes = power.DefId == "caprazlama" || power.DefId == "cerceve"
+                || power.DefId == "buldozer" || power.DefId == "eko" || power.DefId == "mayin";
+            List<PowerFxView.CubeFace> strikeFaces = strikes ? CaptureCellFaces(false) : null;
+            // "Eko": a use WITH a memory is the replay (even when the remembered cells stand empty
+            // now and nothing breaks); without one it is the arm. Its cells, before Run forgets them.
+            var echo = power as EkoPower;
+            List<GridPos> echoCells = echo != null && echo.HasMemory ? new List<GridPos>(echo.Memory) : null;
+            // "Klon": where the card being cloned sits.
+            Vector2? cloneFrom = null;
+            if (power.DefId == "klon" && target.HandIndex.HasValue)
+            {
+                CardVisual source = cardLayer.VisualOfSlot(target.HandIndex.Value);
+                if (source != null)
+                {
+                    cloneFrom = source.HomePosition;
+                }
+            }
+            HashSet<int> bonusBeforeClone = power.DefId == "klon" ? BonusCardIds(round) : null;
+            // "Kum Saati" and "Bardağın Boş Tarafı" animate FROM the board as it is shown now.
+            List<PowerFxView.CubeFace> boardBefore = power.DefId == "kum_saati"
+                || power.DefId == "bardagin_bos_tarafi" ? CaptureCellFaces(true) : null;
+            // "Hızlı Çekim Şarjörü": how many cards it fires, and how many come back.
+            int drawBefore = round != null ? round.Deck.DrawCount : 0;
+            int discardBefore = round != null ? round.Deck.DiscardCount : 0;
+            // "Hologram": where the card is, before it leaves the hand.
+            Vector2? holoAt = null;
+            if (power.DefId == "hologram" && target.HandIndex.HasValue)
+            {
+                CardVisual holo = cardLayer.VisualOfSlot(target.HandIndex.Value);
+                if (holo != null)
+                {
+                    holoAt = holo.transform.position;
+                }
+            }
+            // The inflations replace the board: the one on screen and its cell size are what the
+            // resize animates FROM.
+            GameBoard shownBefore = boardView != null ? boardView.Board : null;
+            float cellBefore = boardView != null ? boardView.CellWorldSize : 1f;
             if (!session.Powers.TryUse(power.InstanceId, target))
             {
                 Debug.Log("[block_bonk] " + power.DisplayName + " could not be used.");
@@ -617,14 +1311,155 @@ namespace ProjectBlock.View
                 cardLayer.ForgetCard(targetCardId);
             }
             boardView.ClearPreview();
+            // "İKİNCİ ŞANS": a clean slate, not a demolition - the cubes dissolve into gold and the
+            // hand is dealt afresh with the redraw animation. The Renovasyon path's shape: the
+            // hand is NOT resynced first, or the redraw would fly the NEW hand to the discard.
+            if (power.DefId == "ikinci_sans" && round != null && slateFaces != null)
+            {
+                sfx.Shuffle();
+                cardLayer.AnimateRedraw(round);
+                boardView.Refresh();
+                UpdateHud();
+                jokerBar.Refresh(session, null);
+                powerBar.Refresh(session, null);
+                powerFx.PlayCleanSlate(slateFaces, MainBoardCenter, boardView.CubeWorldSize,
+                    MainBoardWorldSize);
+                return;
+            }
             // Powers can rewrite the board (inflations replace it wholesale, Kum saati
             // rewinds it) and the piles - a full resync covers every one of them.
             RefreshAll(null);
+            // THE BOARD STRIKES: each plays its own lead-in, then its cubes go.
+            if (strikes && strikeFaces != null && PlayStrike(power, target, strikeFaces, blastCells, echoCells))
+            {
+                return;
+            }
+            // "CIMBIZ": tweezers twist the card.
+            if (power.DefId == "cimbiz" && target.HandIndex.HasValue)
+            {
+                return; // the tweezers already turned it (SetTweezers), before the rules ran
+            }
+            // "KLON": two copies peel off the chosen card.
+            if (power.DefId == "klon" && cloneFrom.HasValue && bonusBeforeClone != null)
+            {
+                var clones = new List<CardVisual>();
+                for (int i = 0; i < round.BonusHand.Count; i++)
+                {
+                    if (!bonusBeforeClone.Contains(round.BonusHand[i].Card.Id))
+                    {
+                        CardVisual v = cardLayer.VisualOfSlot(round.Hand.Count + i);
+                        if (v != null)
+                        {
+                            clones.Add(v);
+                        }
+                    }
+                }
+                if (clones.Count > 0)
+                {
+                    powerFx.PlayCopyOut(cardLayer.transform, clones, cloneFrom.Value,
+                        new Color(0.5f, 1f, 0.9f), CardLayerView.HandFrontOrder + 5, delegate { sfx.Fusion(); });
+                    return;
+                }
+            }
+            // "BÜYÜTEÇ": a magnifying glass over the draw pile.
+            if (power.DefId == "buyutec")
+            {
+                powerFx.PlayMagnifier(cardLayer.transform.TransformPoint(CardLayerView.DrawPilePos),
+                    CardVisual.BodyWidth * cardLayer.transform.lossyScale.x * UiLayout.Active.PileScale * 1.1f,
+                    CardLayerView.HandFrontOrder + 5);
+                return;
+            }
+            // "TRANSFER": the two top cards trade places.
+            if (power.DefId == "transfer")
+            {
+                float s = cardLayer.transform.lossyScale.x * UiLayout.Active.PileScale;
+                powerFx.PlaySwapPiles(cardLayer.transform.TransformPoint(CardLayerView.DrawPilePos),
+                    cardLayer.transform.TransformPoint(CardLayerView.DiscardPilePos),
+                    new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight) * s, CardLayerView.HandFrontOrder + 5);
+                return;
+            }
+            // "ÖTEKİ DÜNYA": the world beneath opens.
+            if (power.DefId == "oteki_dunya")
+            {
+                powerFx.PlayMirror(MainBoardCenter, MainBoardWorldSize);
+            }
+            // "KUM SAATİ": time runs back over the board.
+            if (power.DefId == "kum_saati" && boardBefore != null)
+            {
+                PlayRewind(boardBefore);
+                return;
+            }
+            // "BARDAĞIN BOŞ TARAFI": every cell turns over; the lines it made go off after.
+            if (power.DefId == "bardagin_bos_tarafi" && boardBefore != null)
+            {
+                PlayInvert(boardBefore, round);
+                return;
+            }
+            // "HIZLI ÇEKİM ŞARJÖRÜ": the draw pile is fired into the discard and reloaded.
+            if (power.DefId == "hizli_cekim_sarjoru")
+            {
+                powerFx.PlayMagazine(cardLayer.transform, CardLayerView.DrawPilePos,
+                    CardLayerView.DiscardPilePos, drawBefore, drawBefore + discardBefore,
+                    UiLayout.Active.PileScale, CardLayerView.HandFrontOrder + 5);
+                return;
+            }
+            // "HOLOGRAM": the card turns to light and streams into the discard.
+            if (power.DefId == "hologram" && holoAt.HasValue)
+            {
+                powerFx.PlayHologram(holoAt.Value,
+                    cardLayer.transform.TransformPoint(CardLayerView.DiscardPilePos),
+                    cardLayer.transform.lossyScale.x, CardLayerView.HandFrontOrder + 5);
+                return;
+            }
+            // THE INFLATIONS: the arena unfolds its new bands rather than snapping to a new size.
+            if (power is InflationPower && boardView.Board != shownBefore)
+            {
+                powerFx.PlayBoardResize(boardView, shownBefore, cellBefore, null);
+            }
+            // "TILSIM": the charm is summoned while TalismanView harvests the ghosts.
+            var talisman = power as TilsimPower;
+            if (talisman != null && talisman.LastActivation != null)
+            {
+                PlayTalismanCharm(talisman.LastActivation);
+            }
+            // "Powerbank": the power it refilled FILLS, rather than simply being drawn charged.
+            // AFTER RefreshAll, always - the fill uncovers a card the bar has already painted
+            // charged (see PowerBarView.RefuelPower).
+            if (aimedAtPower && target.HandIndex.HasValue)
+            {
+                powerBar.RefuelPower(target.HandIndex.Value, 0f, false);
+            }
             if (session.Phase == GamePhase.Market)
             {
                 // "Totem" ends overtime and advances straight to the market mid-use; mirror the
-                // normal advance flow (RefreshAll + Show) so the market actually appears.
+                // normal advance flow (RefreshAll + Show) so the market actually appears - AFTER
+                // the totem has risen, blessed the arena and sunk away again.
+                if (power.DefId == "totem")
+                {
+                    powerFx.PlayTotem(MainBoardCenter, MainBoardWorldSize,
+                        delegate { marketView.Show(session); });
+                    return;
+                }
                 marketView.Show(session);
+            }
+            // "SOĞUK FÜZYON": the two new bonus cards fly out of their piles and meet.
+            // "OLTA": the card is reeled up out of its pile on a line.
+            if (bonusBefore != null && rod != null)
+            {
+                if (PlayReel(round, bonusBefore, reelFromDiscard))
+                {
+                    return;
+                }
+                bonusBefore = null;
+            }
+            if (bonusBefore != null && !copiesOut && PlayColdFusion(round, bonusBefore, discardHadCards))
+            {
+                return;
+            }
+            // "AŞIRMA" / "YEDEKLEME": one card lifted off its pile splits into the two copies.
+            if (bonusBefore != null && copiesOut && PlayCopyOut(round, bonusBefore, power.DefId == "asirma"))
+            {
+                return;
             }
             // "Kütleçekim merkezi": the flow it caused is the whole point of the power, so it is
             // animated rather than teleported. RefreshAll has already drawn the water where it
@@ -644,6 +1479,354 @@ namespace ProjectBlock.View
                 return;
             }
             PlayPowerBlast(blastCells);
+        }
+
+        /// <summary>Every cube on the main board with the face it is wearing right now - what the
+        /// clean slate dissolves once the rules have already emptied the board.</summary>
+        private List<PowerFxView.CubeFace> CaptureCubeFaces(RoundEngine round)
+        {
+            var faces = new List<PowerFxView.CubeFace>();
+            GameBoard board = boardView != null ? boardView.Board : null;
+            if (board == null)
+            {
+                return faces;
+            }
+            for (int x = board.MinX; x < board.MinX + board.Width; x++)
+            {
+                for (int y = board.MinY; y < board.MinY + board.Height; y++)
+                {
+                    var pos = new GridPos(x, y);
+                    Sprite tile;
+                    Color colour;
+                    if (board.GetCube(pos).HasValue && boardView.TryCubeLook(pos, 0f, out tile, out colour))
+                    {
+                        faces.Add(new PowerFxView.CubeFace
+                        {
+                            World = boardView.CellToWorld(pos),
+                            Tile = tile,
+                            Colour = colour
+                        });
+                    }
+                }
+            }
+            return faces;
+        }
+
+        private static HashSet<int> BonusCardIds(RoundEngine round)
+        {
+            var ids = new HashSet<int>();
+            if (round != null)
+            {
+                for (int i = 0; i < round.BonusHand.Count; i++)
+                {
+                    ids.Add(round.BonusHand[i].Card.Id);
+                }
+            }
+            return ids;
+        }
+
+        /// <summary>The bonus cards Soğuk Füzyon just made, flown in from the piles they were
+        /// copied from: the discard's copy first (the power adds it first), then the draw pile's.
+        /// False when nothing new is on screen to animate.</summary>
+        private bool PlayColdFusion(RoundEngine round, HashSet<int> before, bool discardHadCards)
+        {
+            var cards = new List<CardVisual>();
+            var piles = new List<Vector2>();
+            for (int i = 0; i < round.BonusHand.Count; i++)
+            {
+                if (before.Contains(round.BonusHand[i].Card.Id))
+                {
+                    continue;
+                }
+                CardVisual visual = cardLayer.VisualOfSlot(round.Hand.Count + i);
+                if (visual == null)
+                {
+                    continue;
+                }
+                bool fromDiscard = cards.Count == 0 && discardHadCards;
+                cards.Add(visual);
+                piles.Add(fromDiscard ? CardLayerView.DiscardPilePos : CardLayerView.DrawPilePos);
+            }
+            if (cards.Count == 0)
+            {
+                return false;
+            }
+            powerFx.PlayColdFusion(cardLayer.transform, cards, piles, CardLayerView.HandFrontOrder + 5,
+                delegate { sfx.Fusion(); });
+            return true;
+        }
+
+        /// <summary>The bonus cards Aşırma / Yedekleme just made, lifted off the pile they were
+        /// copied from (the draw pile for Aşırma, the discard for Yedekleme) and split in two.
+        /// False when nothing new is on screen to animate.</summary>
+        private bool PlayCopyOut(RoundEngine round, HashSet<int> before, bool fromDraw)
+        {
+            var cards = new List<CardVisual>();
+            for (int i = 0; i < round.BonusHand.Count; i++)
+            {
+                if (before.Contains(round.BonusHand[i].Card.Id))
+                {
+                    continue;
+                }
+                CardVisual visual = cardLayer.VisualOfSlot(round.Hand.Count + i);
+                if (visual != null)
+                {
+                    cards.Add(visual);
+                }
+            }
+            if (cards.Count == 0)
+            {
+                return false;
+            }
+            powerFx.PlayCopyOut(cardLayer.transform, cards,
+                fromDraw ? CardLayerView.DrawPilePos : CardLayerView.DiscardPilePos,
+                fromDraw ? PowerFxView.StealColour : PowerFxView.BackupColour,
+                CardLayerView.HandFrontOrder + 5, delegate { sfx.Fusion(); });
+            return true;
+        }
+
+        private static bool PileHolds(IReadOnlyList<BlockCard> pile, int cardId)
+        {
+            for (int i = 0; i < pile.Count; i++)
+            {
+                if (pile[i].Id == cardId)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>The card Olta just fished, reeled out of its pile. False when nothing new
+        /// reached the bonus hand (the card was already in hand, or on the board).</summary>
+        private bool PlayReel(RoundEngine round, HashSet<int> before, bool fromDiscard)
+        {
+            for (int i = 0; i < round.BonusHand.Count; i++)
+            {
+                if (before.Contains(round.BonusHand[i].Card.Id))
+                {
+                    continue;
+                }
+                CardVisual visual = cardLayer.VisualOfSlot(round.Hand.Count + i);
+                if (visual == null)
+                {
+                    continue;
+                }
+                powerFx.PlayReel(cardLayer.transform, visual,
+                    fromDiscard ? CardLayerView.DiscardPilePos : CardLayerView.DrawPilePos,
+                    fromDiscard, CardLayerView.HandFrontOrder + 5);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Every play cell of the board as it is SHOWN, with its face - or, when
+        /// <paramref name="withEmpty"/>, empty cells too (Tile null).</summary>
+        private List<PowerFxView.CubeFace> CaptureCellFaces(bool withEmpty)
+        {
+            var faces = new List<PowerFxView.CubeFace>();
+            GameBoard board = boardView != null ? boardView.Board : null;
+            if (board == null)
+            {
+                return faces;
+            }
+            for (int x = board.MinX; x < board.MinX + board.Width; x++)
+            {
+                for (int y = board.MinY; y < board.MinY + board.Height; y++)
+                {
+                    var pos = new GridPos(x, y);
+                    if (!board.IsInside(pos))
+                    {
+                        continue;
+                    }
+                    Sprite tile = null;
+                    Color colour = Color.white;
+                    bool cube = board.GetCube(pos).HasValue && boardView.TryCubeLook(pos, 0f, out tile, out colour);
+                    if (!cube)
+                    {
+                        tile = null;
+                        colour = Color.white;
+                    }
+                    if (cube || withEmpty)
+                    {
+                        faces.Add(new PowerFxView.CubeFace { Cell = pos, Tile = tile, Colour = colour });
+                    }
+                }
+            }
+            return faces;
+        }
+
+        /// <summary>The board powers' own lead-ins. The cubes each one destroyed stand as copies
+        /// until its strike lands, and then burst there - with the faces they wore, taken before
+        /// the power ran. False when the power did nothing this lead-in covers.</summary>
+        private bool PlayStrike(Power power, ActivationTarget target, List<PowerFxView.CubeFace> before,
+            IReadOnlyList<GridPos> destroyed, List<GridPos> echoCells)
+        {
+            var faceAt = new Dictionary<GridPos, PowerFxView.CubeFace>();
+            foreach (PowerFxView.CubeFace f in before)
+            {
+                faceAt[f.Cell] = f;
+            }
+            var doomed = new List<PowerFxView.CubeFace>();
+            var cells = new List<GridPos>();
+            var looks = new List<ClusterBurstView.Look>();
+            if (destroyed != null)
+            {
+                foreach (GridPos c in destroyed)
+                {
+                    PowerFxView.CubeFace f;
+                    if (faceAt.TryGetValue(c, out f) && !cells.Contains(c))
+                    {
+                        doomed.Add(f);
+                        cells.Add(c);
+                        looks.Add(new ClusterBurstView.Look { Tile = f.Tile, Colour = f.Colour });
+                    }
+                }
+            }
+            PowerFxView.Strike kind;
+            bool rows = false;
+            switch (power.DefId)
+            {
+                case "caprazlama":
+                    kind = PowerFxView.Strike.Cross;
+                    break;
+                case "cerceve":
+                    kind = PowerFxView.Strike.Frame;
+                    break;
+                case "buldozer":
+                    kind = PowerFxView.Strike.Bulldozer;
+                    var ys = new HashSet<int>();
+                    var xs = new HashSet<int>();
+                    foreach (GridPos c in cells)
+                    {
+                        ys.Add(c.Y);
+                        xs.Add(c.X);
+                    }
+                    rows = ys.Count < xs.Count || (ys.Count == xs.Count && ys.Count <= 2);
+                    break;
+                case "eko":
+                    kind = echoCells != null ? PowerFxView.Strike.EchoReplay : PowerFxView.Strike.EchoArm;
+                    break;
+                default:
+                    kind = doomed.Count > 0 ? PowerFxView.Strike.MineBlast : PowerFxView.Strike.MineArm;
+                    break;
+            }
+            if (doomed.Count == 0 && kind != PowerFxView.Strike.EchoArm && kind != PowerFxView.Strike.EchoReplay
+                && kind != PowerFxView.Strike.MineArm)
+            {
+                return false;
+            }
+            powerFx.PlayStrike(boardView, kind, doomed, target.Cell, rows, echoCells, MainBoardCenter, MainBoardWorldSize,
+                delegate
+                {
+                    if (cells.Count > 0)
+                    {
+                        FlashCells(cells, BlastColor, delegate { sfx.Explode(); }, looks);
+                    }
+                    // "Mayın" is a MINE: it goes off with a real blast, not only a burst.
+                    if (kind == PowerFxView.Strike.MineBlast && target.Cell.HasValue)
+                    {
+                        FlashDynamite(boardView.transform.TransformPoint(boardView.CellToWorld(target.Cell.Value)));
+                    }
+                });
+            return true;
+        }
+
+        /// <summary>"Kum Saati": what left the board goes back up, what came back reassembles.
+        /// Both are worked out by comparing the board as it was SHOWN with the rewound one.</summary>
+        private void PlayRewind(List<PowerFxView.CubeFace> before)
+        {
+            List<PowerFxView.CubeFace> after = CaptureCellFaces(true);
+            var afterAt = new Dictionary<GridPos, PowerFxView.CubeFace>();
+            foreach (PowerFxView.CubeFace f in after)
+            {
+                afterAt[f.Cell] = f;
+            }
+            var beforeAt = new Dictionary<GridPos, PowerFxView.CubeFace>();
+            var leaving = new List<PowerFxView.CubeFace>();
+            foreach (PowerFxView.CubeFace f in before)
+            {
+                beforeAt[f.Cell] = f;
+                PowerFxView.CubeFace now;
+                if (f.Tile != null && (!afterAt.TryGetValue(f.Cell, out now) || now.Tile != f.Tile))
+                {
+                    leaving.Add(f);
+                }
+            }
+            var returning = new List<PowerFxView.CubeFace>();
+            foreach (PowerFxView.CubeFace f in after)
+            {
+                PowerFxView.CubeFace was;
+                if (f.Tile != null && (!beforeAt.TryGetValue(f.Cell, out was) || was.Tile != f.Tile))
+                {
+                    returning.Add(f);
+                }
+            }
+            powerFx.PlayRewind(boardView, leaving, returning, MainBoardCenter, MainBoardWorldSize);
+        }
+
+        /// <summary>"Bardağın Boş Tarafı": every cell turns over; the cubes conjured into a line
+        /// that then went off are shown landing as plain cubes, and burst once all have turned.
+        /// </summary>
+        private void PlayInvert(List<PowerFxView.CubeFace> before, RoundEngine round)
+        {
+            var afterAt = new Dictionary<GridPos, PowerFxView.CubeFace>();
+            foreach (PowerFxView.CubeFace f in CaptureCellFaces(true))
+            {
+                afterAt[f.Cell] = f;
+            }
+            var wasFull = new HashSet<GridPos>();
+            foreach (PowerFxView.CubeFace f in before)
+            {
+                if (f.Tile != null)
+                {
+                    wasFull.Add(f.Cell);
+                }
+            }
+            // A cell that was empty and is empty again was filled and then went off in a line.
+            var lineCells = new List<GridPos>();
+            var after = new List<PowerFxView.CubeFace>();
+            Sprite plain = ViewUtil.CubeTile(CubeKind.Normal);
+            foreach (PowerFxView.CubeFace f in before)
+            {
+                PowerFxView.CubeFace now;
+                afterAt.TryGetValue(f.Cell, out now);
+                now.Cell = f.Cell;
+                if (!wasFull.Contains(f.Cell) && now.Tile == null)
+                {
+                    lineCells.Add(f.Cell);
+                    now.Tile = plain;
+                    now.Colour = Color.white;
+                }
+                after.Add(now);
+            }
+            powerFx.PlayInvert(boardView, before, after, MainBoardCenter, MainBoardWorldSize,
+                delegate
+                {
+                    if (lineCells.Count > 0)
+                    {
+                        FlashCells(lineCells, BlastColor, delegate { sfx.Explode(); });
+                    }
+                    else
+                    {
+                        sfx.Chime(1.1f);
+                    }
+                });
+        }
+
+        /// <summary>"Tılsım"'s charm, handed the ghosts' world positions and own colours from the
+        /// power's report (the ghosts themselves are already gone).</summary>
+        private void PlayTalismanCharm(TalismanActivationVisuals report)
+        {
+            var at = new List<Vector2>();
+            var colours = new List<Color>();
+            for (int i = 0; i < report.Ghosts.Count; i++)
+            {
+                at.Add(boardView.transform.TransformPoint(boardView.CellToWorld(report.Ghosts[i].Cell)));
+                colours.Add(ViewUtil.CubeMaterialColor(report.Ghosts[i].Cube));
+            }
+            powerFx.PlayTalismanCharm(MainBoardCenter, MainBoardWorldSize, at, colours, report.TotalScore);
+            sfx.Fusion();
         }
 
         /// <summary>"Robot süpürge": a short beat after the player places a block, the sweeper
@@ -919,7 +2102,7 @@ namespace ProjectBlock.View
             {
                 lineSwapPicker.Show(boardView, OnRescueLinesPicked);
             }
-            else if (!paused && lineSwapPicker.IsOpen)
+            else if (!paused && lineSwapPicker.IsOpen && !playSwapPowerId.HasValue)
             {
                 lineSwapPicker.Hide();
             }
@@ -956,6 +2139,11 @@ namespace ProjectBlock.View
         /// and takes the loss, which is the only other way out of the pause.</summary>
         private void HandleRescuePick(Mouse mouse, Keyboard kb)
         {
+            if (playSwapPowerId.HasValue && kb != null && kb.escapeKey.wasPressedThisFrame)
+            {
+                CancelTargeting(); // a swap chosen in normal play is simply put down
+                return;
+            }
             if (kb != null && kb.escapeKey.wasPressedThisFrame)
             {
                 lineSwapPicker.Hide();
@@ -967,7 +2155,66 @@ namespace ProjectBlock.View
             {
                 Vector2 world = cam.ScreenToWorldPoint(mouse.position.ReadValue());
                 lineSwapPicker.HandleClick(world);
+                UpdateHud(); // the step text follows the first pick
             }
+        }
+
+        /// <summary>"Kentsel Dönüşüm" in normal play: the power waiting for its two lines, or
+        /// null. Kept apart from the rescue so the picker it opened is not taken down by
+        /// SyncRescueState, which closes the arrows whenever the round is not paused.</summary>
+        private int? playSwapPowerId;
+
+        /// <summary>The two lines of a normal-play swap: through the normal power path.</summary>
+        private void OnPlaySwapPicked(LineAxis axis, int first, int second)
+        {
+            Power power = playSwapPowerId.HasValue ? session.Powers.Find(playSwapPowerId.Value) : null;
+            playSwapPowerId = null;
+            if (power == null)
+            {
+                RefreshAll(null);
+                return;
+            }
+            ActivationTarget target = AimedAtChosenWorld(ActivationTarget.LineSwap(axis, first, second));
+            LineSwapAnimView.Capture capture = BeginSwapAnimation(target);
+            bool wasCharged = power.Charged;
+            RunPowerActivation(power, target);
+            FinishSwapAnimation(capture, wasCharged && !power.Charged); // spent = it swapped
+            sfx.Shuffle();
+        }
+
+        /// <summary>
+        /// Before a line swap runs: takes the two lines' faces off the board and HOLDS their cells
+        /// blank, so the repaint that follows the swap shows nothing there until the travelling
+        /// copies land. Null when the swap is aimed at the mirror world, which this board view does
+        /// not draw - that swap simply repaints, as it always did.
+        /// </summary>
+        private LineSwapAnimView.Capture BeginSwapAnimation(ActivationTarget target)
+        {
+            if (target.OnMirrorWorld || !target.Axis.HasValue || !target.LineA.HasValue
+                || !target.LineB.HasValue)
+            {
+                return null;
+            }
+            LineSwapAnimView.Capture capture = LineSwapAnimView.Take(boardView, target.Axis.Value,
+                target.LineA.Value, target.LineB.Value);
+            boardView.HoldCells(capture.Cells);
+            return capture;
+        }
+
+        /// <summary>After a line swap: plays it if it went through, or just gives the cells
+        /// back if it did not.</summary>
+        private void FinishSwapAnimation(LineSwapAnimView.Capture capture, bool swapped)
+        {
+            if (capture == null)
+            {
+                return;
+            }
+            if (!swapped)
+            {
+                boardView.ReleaseCells(capture.Cells);
+                return;
+            }
+            lineSwapAnim.Play(boardView, capture, delegate { boardView.ReleaseCells(capture.Cells); });
         }
 
         /// <summary>The player picked two lines: hand them to the rescue power.</summary>
@@ -982,10 +2229,14 @@ namespace ProjectBlock.View
                 }
                 ActivationTarget target = AimedAtChosenWorld(
                     ActivationTarget.LineSwap(axis, first, second));
-                if (session.Powers.TryUse(powers[i].InstanceId, target))
+                LineSwapAnimView.Capture capture = BeginSwapAnimation(target);
+                bool swapped = session.Powers.TryUse(powers[i].InstanceId, target);
+                FinishSwapAnimation(capture, swapped);
+                if (swapped)
                 {
+                    // No camera shake: the lines travelling IS the feedback now, and a shake
+                    // under moving cubes only blurs them.
                     sfx.Shuffle();
-                    ShakeCamera(0.16f, 0.3f);
                     break;
                 }
             }

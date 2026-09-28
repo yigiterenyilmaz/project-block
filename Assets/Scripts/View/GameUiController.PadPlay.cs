@@ -716,7 +716,16 @@ namespace ProjectBlock.View
             }
             // Activation may have asked for a target; the targeting handler takes it from here
             // and starts aiming at the middle of the arena.
-            if (pendingTargetJokerId.HasValue || pendingTargetPowerId.HasValue)
+            Power armed = pendingTargetPowerId.HasValue
+                ? session.Powers.Find(pendingTargetPowerId.Value) : null;
+            if (armed != null && armed.Targeting == ActivationTargeting.OwnedPower)
+            {
+                // "Powerbank" is aimed at this same strip, so the pick starts on the first card
+                // it can take rather than out on the board.
+                padFocus = PadFocus.Powers;
+                padBarIndex = PadNextOwnedPowerPick(armed, -1, 1);
+            }
+            else if (pendingTargetJokerId.HasValue || pendingTargetPowerId.HasValue)
             {
                 padFocus = PadFocus.Board;
                 padCell = PadBoardCentre();
@@ -726,6 +735,91 @@ namespace ProjectBlock.View
                 padFocus = PadFocus.Hand;
             }
             return true;
+        }
+
+        /// <summary>
+        /// "Gen nakli" on the pad. The first pick is always on the board; once the giving block is
+        /// chosen, X swaps between the board (another block takes it) and the hand (a card takes
+        /// it). A goes through the very pick the mouse click makes, so a refusal says why on the
+        /// HUD instead of cancelling, and the board highlight follows the snapped pointer.
+        /// </summary>
+        private bool HandlePadGene(RoundEngine round, Gamepad pad, Power power)
+        {
+            if (!workshopDonorCell.HasValue)
+            {
+                padFocus = PadFocus.Board;
+            }
+            else if (pad.buttonWest.wasPressedThisFrame)
+            {
+                padFocus = padFocus == PadFocus.Hand ? PadFocus.Board : PadFocus.Hand;
+                return true;
+            }
+            Vector2Int step = PadStep(pad);
+            if (padFocus != PadFocus.Hand)
+            {
+                padFocus = PadFocus.Board;
+                if (step.x != 0 || step.y != 0)
+                {
+                    GameBoard board = round.Board;
+                    padCell = new GridPos(
+                        Mathf.Clamp(padCell.X + step.x, board.MinX, board.MinX + board.Width - 1),
+                        Mathf.Clamp(padCell.Y + step.y, board.MinY, board.MinY + board.Height - 1));
+                    return true;
+                }
+                if (!pad.buttonSouth.wasPressedThisFrame)
+                {
+                    return false; // the drag path draws the block highlight from our pointer
+                }
+                if (!workshopDonorCell.HasValue)
+                {
+                    TryGeneDonor(round, padCell);
+                }
+                else
+                {
+                    TryGeneOntoBoard(power, round, padCell);
+                }
+                if (!workshopPowerId.HasValue)
+                {
+                    padFocus = PadFocus.Hand;
+                }
+                return true;
+            }
+            int slots = round.Hand.Count;
+            if (slots <= 0)
+            {
+                padFocus = PadFocus.Board;
+                return true;
+            }
+            padHandSlot = Mathf.Clamp(padHandSlot, 0, slots - 1);
+            if (step.x != 0)
+            {
+                padHandSlot = (padHandSlot + step.x + slots) % slots;
+                return true;
+            }
+            if (!pad.buttonSouth.wasPressedThisFrame)
+            {
+                return false;
+            }
+            TryGeneIntoCard(power, round, padHandSlot);
+            return true;
+        }
+
+        /// <summary>The next card along the power strip that <paramref name="aiming"/> can be
+        /// pointed at, walking <paramref name="dir"/> from <paramref name="from"/> and wrapping.
+        /// Stays put when nothing else qualifies.</summary>
+        private int PadNextOwnedPowerPick(Power aiming, int from, int dir)
+        {
+            IReadOnlyList<Power> powers = session.Powers.Powers;
+            int count = powers.Count;
+            for (int step = 1; step <= count; step++)
+            {
+                int i = (((from + dir * step) % count) + count) % count;
+                if (IsOwnedPowerPick(aiming, powers[i]))
+                {
+                    return i;
+                }
+            }
+            return Mathf.Clamp(from, 0, Mathf.Max(0, count - 1));
         }
 
         private GridPos PadBoardCentre()
@@ -764,6 +858,39 @@ namespace ProjectBlock.View
                 CancelTargeting();
                 padFocus = PadFocus.Hand;
                 return true;
+            }
+            // "Powerbank": step along the POWER strip, only ever stopping on a card it can take,
+            // and A refills that one - the pad's version of clicking the card.
+            if (targeting == ActivationTargeting.OwnedPower && power != null)
+            {
+                padFocus = PadFocus.Powers;
+                Vector2Int barStep = PadStep(pad);
+                // The strip is a column on a desktop and a row on a phone; either axis walks it.
+                int delta = barStep.x != 0 ? barStep.x : -barStep.y;
+                if (delta != 0)
+                {
+                    padBarIndex = PadNextOwnedPowerPick(power, padBarIndex, delta);
+                    return true;
+                }
+                if (!pad.buttonSouth.wasPressedThisFrame)
+                {
+                    return false;
+                }
+                Power picked = padBarIndex >= 0 && padBarIndex < session.Powers.Count
+                    ? session.Powers.Powers[padBarIndex] : null;
+                if (IsOwnedPowerPick(power, picked))
+                {
+                    padFocus = PadFocus.Hand;
+                    RunPowerActivation(power, ActivationTarget.PowerChoice(picked.InstanceId));
+                }
+                return true;
+            }
+            // "Gen nakli" picks a board block and then a card OR another board block, so it has
+            // its own stepping - the same three picks the mouse makes (see HandleGeneClick).
+            if (targeting == ActivationTargeting.CellAndHandCard && power != null
+                && workshopPowerId.HasValue)
+            {
+                return HandlePadGene(round, pad, power);
             }
             bool boardTarget = targeting == ActivationTargeting.BoardCell
                 || targeting == ActivationTargeting.BoardArea;

@@ -270,6 +270,10 @@ namespace ProjectBlock.View
             {
                 return false;
             }
+            if (!choicePicker.IsOptionEnabled(padPanelIndex))
+            {
+                return true; // the compass's switched-off current direction: shown, not offered
+            }
             int chosen = padPanelIndex;
             choicePicker.Hide();
             PadPanelReset();
@@ -297,6 +301,12 @@ namespace ProjectBlock.View
             {
                 return true;
             }
+            if (playSwapPowerId.HasValue && pad.buttonEast.wasPressedThisFrame)
+            {
+                CancelTargeting(); // a normal-play swap: B puts it down
+                PadPanelReset();
+                return true;
+            }
             if (!pad.buttonSouth.wasPressedThisFrame)
             {
                 return false;
@@ -307,7 +317,7 @@ namespace ProjectBlock.View
                 // The picker's own two-step (pick an axis, then where it lands) is untouched:
                 // this hands it the arrow's centre exactly as a click would.
                 lineSwapPicker.HandleClick(at.Value);
-                padPanelIndex = 0;
+                UpdateHud();
             }
             return true;
         }

@@ -84,14 +84,17 @@ namespace ProjectBlock.Core
     public sealed class CaprazlamaPower : Power
     {
         /// <summary>How far each arm of the plus reaches from the centre.</summary>
-        public int ArmLength = 2;
+        /// <summary>How far each arm reaches. Longer than any board, so the cross is the WHOLE
+        /// row and the WHOLE column through the centre (cells off the board are simply skipped).
+        /// </summary>
+        public int ArmLength = 32;
 
         public CaprazlamaPower()
             : base("caprazlama", "Çaprazlama")
         {
             SetDescription(
-                "Blows up the blocks in a plus-shaped area around a chosen centre.",
-                "Seçtiğin merkezden + şeklinde bir alandaki blokları patlatır.");
+                "Blows up every block in the row AND the column through a chosen cell.",
+                "Seçtiğin karenin bulunduğu satırdaki VE sütundaki tüm blokları patlatır.");
         }
 
         public override ActivationTargeting Targeting
@@ -324,7 +327,19 @@ namespace ProjectBlock.Core
                 memory.Add(destroyed[i].Pos);
             }
             listening = false;
+            LastRecorded = new object();
         }
+
+        /// <summary>The cells the echo remembers, for the View.</summary>
+        public IReadOnlyList<GridPos> Memory
+        {
+            get { return memory; }
+        }
+
+        /// <summary>A NEW object each time an explosion is recorded, so the View plays the "heard
+        /// it" beat once (matched by identity). Reporting only, [NotSaved].</summary>
+        [field: NotSaved]
+        public object LastRecorded { get; private set; }
     }
 
     /// <summary>"Mayın" - pops one chosen cube. Dropped on an EMPTY cell it instead leaves a
@@ -374,7 +389,7 @@ namespace ProjectBlock.Core
 
     /// <summary>
     /// "Buldozer" - flattens a two-wide band: either two neighbouring rows or two
-    /// neighbouring columns, picked at random. The player aims nothing; the machine decides.
+    /// neighbouring columns. The player picks a cell and then which way (see Run).
     ///
     /// It CRUSHES EVERYTHING in the band, obsidian and gold included - a bulldozer does not
     /// care what a cube is made of, and it is the only way besides "elmas kazma" to shift
@@ -401,18 +416,51 @@ namespace ProjectBlock.Core
             : base("buldozer", "Buldozer")
         {
             SetDescription(
-                "Flattens two neighbouring rows or columns, chosen at random. Crushes even "
+                "Flattens two neighbouring rows or two columns - you pick where and which way. Crushes even "
                     + "obsidian and gold. Pays no points and never counts as a clean sweep.",
-                "Rastgele seçilen ardışık 2 satırı ya da 2 sütunu siler. Obsidyeni ve altını "
+                "Seçtiğin yerdeki ardışık 2 satırı ya da 2 sütunu siler. Obsidyeni ve altını "
                     + "bile ezer. Puan vermez, temizlik sayılmaz.");
+        }
+
+        /// <summary>Aimed: the player picks a cell and then ROWS or COLUMNS; the band is that
+        /// line and the next one (moved back one when the pick is the last line).</summary>
+        public override ActivationTargeting Targeting
+        {
+            get { return ActivationTargeting.BoardCell; }
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
         {
             GameBoard board = ctx.Round.Board;
-            // Needs room for a band on at least one axis, and something to flatten.
             return board.OccupiedCount > 0
                 && (board.Height >= BandWidth || board.Width >= BandWidth);
+        }
+
+        /// <summary>Both possible bands through the cell, while the axis is not chosen yet.
+        /// </summary>
+        public override IReadOnlyList<GridPos> PreviewCells(ActivationTarget target)
+        {
+            if (!target.Cell.HasValue)
+            {
+                return System.Array.Empty<GridPos>();
+            }
+            GridPos c = target.Cell.Value;
+            var cells = new List<GridPos>();
+            for (int i = -16; i <= 16; i++)
+            {
+                for (int d = 0; d < BandWidth; d++)
+                {
+                    if (!target.Axis.HasValue || target.Axis.Value == LineAxis.Row)
+                    {
+                        cells.Add(new GridPos(c.X + i, c.Y + d));
+                    }
+                    if (!target.Axis.HasValue || target.Axis.Value == LineAxis.Column)
+                    {
+                        cells.Add(new GridPos(c.X + d, c.Y + i));
+                    }
+                }
+            }
+            return cells;
         }
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
@@ -420,17 +468,17 @@ namespace ProjectBlock.Core
             GameBoard board = ctx.Round.Board;
             bool rowsFit = board.Height >= BandWidth;
             bool colsFit = board.Width >= BandWidth;
-            if (!rowsFit && !colsFit)
+            bool useRows = target.Axis.HasValue ? target.Axis.Value == LineAxis.Row : rowsFit;
+            if ((useRows && !rowsFit) || (!useRows && !colsFit) || !target.Cell.HasValue)
             {
                 return false;
             }
-            // Random axis - unless only one of them has room for the band.
-            bool useRows = rowsFit && (!colsFit || ctx.Rng.NextInt(0, 2) == 0);
-
+            GridPos pick = target.Cell.Value;
             lastFlattened.Clear();
             if (useRows)
             {
-                int first = board.MinY + ctx.Rng.NextInt(0, board.Height - BandWidth + 1);
+                int first = System.Math.Min(System.Math.Max(pick.Y, board.MinY),
+                    board.MinY + board.Height - BandWidth);
                 for (int y = first; y < first + BandWidth; y++)
                 {
                     for (int x = board.MinX; x < board.MinX + board.Width; x++)
@@ -441,7 +489,8 @@ namespace ProjectBlock.Core
             }
             else
             {
-                int first = board.MinX + ctx.Rng.NextInt(0, board.Width - BandWidth + 1);
+                int first = System.Math.Min(System.Math.Max(pick.X, board.MinX),
+                    board.MinX + board.Width - BandWidth);
                 for (int x = first; x < first + BandWidth; x++)
                 {
                     for (int y = board.MinY; y < board.MinY + board.Height; y++)

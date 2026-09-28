@@ -354,6 +354,16 @@ namespace ProjectBlock.View
                 string confirm = workshopPressAnchor.HasValue
                     ? Loc.Pick("where the cube goes", "küp nereye gitsin")
                     : Loc.Pick("confirm", "onayla");
+                // "Gen nakli", once the giving block is chosen: X swaps between the board and the
+                // hand as the place the element goes (HandlePadGene).
+                if (workshopPowerId.HasValue && workshopDonorCell.HasValue)
+                {
+                    return PadJoin(PadTok("A", PadColorA, confirm),
+                        PadTok("X", PadColorX, padFocus == PadFocus.Hand
+                            ? Loc.Pick("to the board", "tahtaya")
+                            : Loc.Pick("to a card", "karta")),
+                        PadTok("B", PadColorB, Loc.Pick("cancel", "iptal")));
+                }
                 return PadJoin(PadTok("A", PadColorA, confirm),
                     PadTok("B", PadColorB, Loc.Pick("cancel", "iptal")));
             }
@@ -390,7 +400,7 @@ namespace ProjectBlock.View
         {
             return deckSelect.IsOpen || deckOverlay.IsOpen || batakBet.IsOpen
                 || choicePicker.IsOpen || blockDesigner.IsOpen || grantPicker.IsOpen
-                || lineSwapPicker.IsOpen || cubePicker.IsOpen || weldPicker.IsOpen
+                || lineSwapPicker.IsOpen || cubePicker.IsOpen || nesterEditor.IsOpen || weldPicker.IsOpen
                 || parazitStep != ParazitStep.None;
         }
 
