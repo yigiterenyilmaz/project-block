@@ -19,6 +19,13 @@ namespace ProjectBlock.Core
     /// BOTH HALVES MUST HOLD TOGETHER. A cut that would leave a piece in two loose bits is refused,
     /// which is what stops the power from being a way to mint scattered nonsense.
     ///
+    /// ELEMENTED BLOCKS CUT, AND EACH HALF KEEPS WHAT IT HAD: a card-wide element goes to both
+    /// halves, a "Hedefli" target stays with the half its cube went into, and a per-cube designed
+    /// block keeps every cube's own element. What does NOT cut (<see cref="CanBeCut"/>) is a
+    /// welded block - it was made to be one piece - and the special cards whose whole identity
+    /// would be broken or doubled by it: a "Kara delik" void, a negative block, an antimatter key
+    /// and defective smuggled goods (cutting would launder the defect away).
+    ///
     /// ROUND-SCOPED (confirmed design): the two pieces arrive as bonus cards and expire with the
     /// round, so the deck you own is untouched - the whole card comes back next round.
     /// </summary>
@@ -29,12 +36,15 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Cut a block in your hand in two - you choose which cubes go into the first piece. "
-                    + "Both halves have to hold together. They arrive as bonus cards and last the "
-                    + "round; the whole block is back in your deck next round.",
+                    + "Both halves have to hold together, and each keeps its element. Welded and "
+                    + "special blocks (void, negative, antimatter) cannot be cut. The halves arrive "
+                    + "as bonus cards and last the round; the whole block is back in your deck next "
+                    + "round.",
                 "Elindeki bir bloğu ikiye kes - ilk parçaya hangi küplerin gireceğini sen "
-                    + "seçersin. İki parça da kendi içinde bitişik olmak zorunda. Bonus kart "
-                    + "olarak gelirler ve raunt boyunca kalırlar; blok bir sonraki raunt "
-                    + "destende yine bütün.");
+                    + "seçersin. İki parça da kendi içinde bitişik olmak zorunda ve elementini "
+                    + "korur. Lehimli ve özel bloklar (kara delik, negatif, antimadde) kesilemez. "
+                    + "Parçalar bonus kart olarak gelir ve raunt boyunca kalır; blok bir sonraki "
+                    + "raunt destende yine bütün.");
         }
 
         public override ActivationTargeting Targeting
@@ -56,17 +66,87 @@ namespace ProjectBlock.Core
             }
             RoundEngine round = ctx.Round;
             BlockCard whole = round.Hand[target.HandIndex.Value];
-            IReadOnlyList<BlockElement> elements = whole.Elements;
+            BlockShape shape = round.EffectiveShape(whole);
+            var cells = new List<GridPos>(shape.Cells);
+
+            // A "Hedefli" target is ONE cube, so it goes with the half that cube went into.
+            GridPos? targetCube = null;
+            int targetIndex = whole.Has(BlockElement.Targeted) ? whole.TargetIndexIn(shape) : -1;
+            if (targetIndex >= 0 && targetIndex < cells.Count)
+            {
+                targetCube = cells[targetIndex];
+            }
+            // A per-cube layout lines up with the printed shape only - a turned or reshaped
+            // designed block falls back to its card-wide set.
+            bool perCube = whole.HasPerCubeElements
+                && shape.CanonicalKey == whole.Shape.CanonicalKey;
 
             // The cut card leaves the round entirely - not to the discard, or it would come back
             // this round alongside its own halves.
             round.TakeCardOutOfRound(target.HandIndex.Value);
             foreach (List<GridPos> half in halves)
             {
-                BlockCard piece = ctx.Session.CreateCard(BlockShape.FromCells(half), elements);
-                round.AddBonusCard(piece, BonusPlayOutcome.ExpireFromRound);
+                round.AddBonusCard(CutPiece(ctx, whole, cells, half, targetCube, perCube),
+                    BonusPlayOutcome.ExpireFromRound);
             }
             return true;
+        }
+
+        /// <summary>One half as a card of its own, carrying exactly what its cubes carried.</summary>
+        private static BlockCard CutPiece(RoundContext ctx, BlockCard whole, List<GridPos> cells,
+            List<GridPos> half, GridPos? targetCube, bool perCube)
+        {
+            BlockShape pieceShape = BlockShape.FromCells(half);
+            int minX = int.MaxValue;
+            int minY = int.MaxValue;
+            foreach (GridPos c in half)
+            {
+                minX = System.Math.Min(minX, c.X);
+                minY = System.Math.Min(minY, c.Y);
+            }
+            bool holdsTarget = targetCube.HasValue && Holds(half, targetCube.Value);
+            BlockCard piece;
+            if (perCube)
+            {
+                var layout = new List<BlockElement?>();
+                foreach (GridPos c in pieceShape.Cells)
+                {
+                    int from = cells.IndexOf(new GridPos(c.X + minX, c.Y + minY));
+                    layout.Add(from >= 0 ? whole.CellElement(from) : null);
+                }
+                piece = ctx.Session.CreateDesignedCard(pieceShape, layout);
+            }
+            else
+            {
+                var elements = new List<BlockElement>();
+                foreach (BlockElement element in whole.Elements)
+                {
+                    if (element != BlockElement.Targeted || holdsTarget)
+                    {
+                        elements.Add(element);
+                    }
+                }
+                piece = ctx.Session.CreateCard(pieceShape, elements);
+            }
+            if (holdsTarget)
+            {
+                var moved = new GridPos(targetCube.Value.X - minX, targetCube.Value.Y - minY);
+                piece.TargetCellIndex = new List<GridPos>(pieceShape.Cells).IndexOf(moved);
+            }
+            return piece;
+        }
+
+        /// <summary>
+        /// Can this card be cut at all? Everything elemented can, except a WELDED block (it was
+        /// made to be one piece) and the special cards a cut would break or double: a void, a
+        /// negative block, an antimatter key and a defective smuggled card. Public so the hand
+        /// lights an uncuttable card red and says why.
+        /// </summary>
+        public static bool CanBeCut(BlockCard card)
+        {
+            return card != null && !card.IsWelded && !card.Has(BlockElement.Void)
+                && !card.Has(BlockElement.Negative) && !card.AntimatterOf.HasValue
+                && !card.FallsThrough;
         }
 
         /// <summary>The two halves a target describes, or null when the cut is not legal: no card,
@@ -79,6 +159,10 @@ namespace ProjectBlock.Core
                 || target.HandIndex.Value < 0 || target.HandIndex.Value >= round.Hand.Count)
             {
                 return null;
+            }
+            if (!CanBeCut(round.Hand[target.HandIndex.Value]))
+            {
+                return null; // welded, or one of the special cards a cut would break
             }
             BlockShape shape = round.EffectiveShape(round.Hand[target.HandIndex.Value]);
             if (shape.Size < 2)
@@ -112,6 +196,37 @@ namespace ProjectBlock.Core
                 return null;
             }
             return new[] { first, second };
+        }
+
+        /// <summary>Would picking these cubes of <paramref name="shape"/> as the first piece be a
+        /// legal cut - both pieces non-empty and each one holding together? Public so the cut
+        /// editor lights its CUT button with the rules' own answer.</summary>
+        public static bool CanCut(BlockShape shape, IReadOnlyList<GridPos> picked)
+        {
+            if (shape == null || picked == null || shape.Size < 2)
+            {
+                return false;
+            }
+            var all = new List<GridPos>(shape.Cells);
+            var first = new List<GridPos>();
+            foreach (GridPos cell in picked)
+            {
+                if (!Holds(all, cell) || Holds(first, cell))
+                {
+                    return false;
+                }
+                first.Add(cell);
+            }
+            var second = new List<GridPos>();
+            foreach (GridPos cell in all)
+            {
+                if (!Holds(first, cell))
+                {
+                    second.Add(cell);
+                }
+            }
+            return first.Count > 0 && second.Count > 0 && IsConnected(first)
+                && IsConnected(second);
         }
 
         private static bool Holds(List<GridPos> cells, GridPos cell)

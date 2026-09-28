@@ -974,13 +974,21 @@ namespace ProjectBlock.Core
             return new BlockCard(nextCardId++, shape, elements);
         }
 
+        /// <summary>A new card with ONE ELEMENT PER CUBE, aligned to <paramref name="shape"/>'s
+        /// cells - a piece cut out of a designed block ("Neşter") keeps each cube's own element.
+        /// Not added to the owned deck.</summary>
+        public BlockCard CreateDesignedCard(BlockShape shape, IReadOnlyList<BlockElement?> perCube)
+        {
+            return BlockCard.Designed(nextCardId++, shape, perCube);
+        }
+
         /// <summary>"Karakter oluşturma": bakes a player-designed block into the owned deck and
         /// spends the driving power. Each drawn cube may carry its OWN element (or none), so the
         /// block can mix types. <paramref name="drawnCells"/> are the raw cells the player drew and
         /// <paramref name="cellElements"/> is the element chosen for each (index-parallel, a null
         /// entry = a plain cube). The rules are enforced HERE so the View stays rules-free: the
         /// power must be charged, a round must be running, and this turn's single power slot still
-        /// free. The new card joins the shuffle from the next round, exactly like a bought block.
+        /// free. The new card joins the owned deck AND goes on top of this round's draw pile.
         /// Returns false and changes nothing if any of that fails.</summary>
         public bool CreateDesignedBlock(int powerInstanceId, IReadOnlyList<GridPos> drawnCells,
             IReadOnlyList<BlockElement?> cellElements)
@@ -1017,7 +1025,12 @@ namespace ProjectBlock.Core
                 BlockElement? e;
                 perCube[i] = byNormalized.TryGetValue(shape.Cells[i], out e) ? e : null;
             }
-            ownedCards.Add(BlockCard.Designed(nextCardId++, shape, perCube)); // tagged "custom"
+            BlockCard designed = BlockCard.Designed(nextCardId++, shape, perCube); // tagged "custom"
+            ownedCards.Add(designed);
+            // ...and it is playable THIS round: it goes on top of the draw pile, so it is the
+            // next card drawn. The round's deck is built from the owned cards, so it is the same
+            // card object in both, and next round it simply shuffles in with the rest.
+            round.Deck.PutOnTopOfDraw(designed);
             NoteDeckChanged();
             power.Spend();
             round.NotePowerUsed();
