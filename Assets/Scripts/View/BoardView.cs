@@ -2619,6 +2619,208 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
+        /// A WHOLE BLOCK picked out while a power is aimed ("Gen nakli"), drawn as an OUTLINE round
+        /// the block's own silhouette - never a fill over its cubes, which would hide the very
+        /// material the player is choosing between. Only the block's OUTER edges are drawn (an
+        /// edge two of its cells share is not), so an L comes out L-shaped.
+        ///
+        /// Two sets, because that aim has two halves: <paramref name="held"/> is a block already
+        /// chosen, drawn steady so it reads as locked in, and <paramref name="hovered"/> is the
+        /// block under the cursor, which breathes like every other live preview. Only the HUE of
+        /// each colour is used - the outline sets its own strength.
+        ///
+        /// Blind ("Alacakaranlık") outlines only the one hovered cell in the neutral tint: a
+        /// whole block's silhouette would draw the board the round is hiding.
+        /// </summary>
+        public void ShowBlockHighlight(IReadOnlyList<GridPos> hovered, Color hoveredColor,
+            IReadOnlyList<GridPos> held, Color heldColor)
+        {
+            ClearPreview();
+            if (board == null)
+            {
+                return;
+            }
+            if (dark)
+            {
+                if (hovered != null && hovered.Count > 0)
+                {
+                    OutlineCells(new[] { hovered[0] }, BlindPreviewColor, true);
+                }
+                return;
+            }
+            if (held != null)
+            {
+                OutlineCells(held, heldColor, false);
+            }
+            if (hovered != null)
+            {
+                OutlineCells(hovered, hoveredColor, true);
+            }
+        }
+
+        /// <summary>One bar of a block outline, pooled: the renderer, its painted colour (what
+        /// the breath is laid over) and whether it breathes.</summary>
+        private sealed class OutlineBar
+        {
+            public SpriteRenderer Renderer;
+            public Color Base;
+            public bool Breathes;
+        }
+
+        private readonly List<OutlineBar> blockOutline = new List<OutlineBar>();
+
+        /// <summary>How many of the pooled bars the current outline is using.</summary>
+        private int blockOutlineUsed;
+
+        /// <summary>Over the cubes (1) and the cell previews (2), under nothing that matters.
+        /// </summary>
+        private const int BlockOutlineOrder = 5;
+
+        /// <summary>The outline's weight as a share of a cell, and the soft band behind it.</summary>
+        private const float BlockOutlineLine = 0.07f;
+
+        private const float BlockOutlineHaloScale = 2.8f;
+
+        private static readonly GridPos[] OutlineSides =
+        {
+            new GridPos(1, 0), new GridPos(-1, 0), new GridPos(0, 1), new GridPos(0, -1)
+        };
+
+        /// <summary>
+        /// Draws the silhouette of a set of cells. Every cell side whose neighbour is NOT in the
+        /// set is an outer edge; edges on the same grid line that touch end to end are MERGED
+        /// into one straight run, and each run is ONE bar - a thin line with a faint wider band
+        /// behind it. One bar per cell side reads as a string of beads (their rounded ends
+        /// overlap into brighter knots at every cell boundary); one bar per run reads as a line.
+        /// Each run overhangs its ends by its own thickness so the corners close.
+        /// </summary>
+        private void OutlineCells(IReadOnlyList<GridPos> cells, Color hue, bool breathes)
+        {
+            var set = new HashSet<GridPos>();
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (board.IsInside(cells[i]))
+                {
+                    set.Add(cells[i]);
+                }
+            }
+            // Outer edges by the grid line they lie on: a horizontal line at boundary y holds
+            // the x of every unit edge along it, a vertical line at boundary x the y's.
+            var horizontal = new Dictionary<int, List<int>>();
+            var vertical = new Dictionary<int, List<int>>();
+            foreach (GridPos cell in set)
+            {
+                for (int d = 0; d < OutlineSides.Length; d++)
+                {
+                    GridPos side = OutlineSides[d];
+                    if (set.Contains(new GridPos(cell.X + side.X, cell.Y + side.Y)))
+                    {
+                        continue; // an edge inside the block is not part of its outline
+                    }
+                    if (side.Y != 0)
+                    {
+                        AddEdge(horizontal, cell.Y + (side.Y > 0 ? 1 : 0), cell.X);
+                    }
+                    else
+                    {
+                        AddEdge(vertical, cell.X + (side.X > 0 ? 1 : 0), cell.Y);
+                    }
+                }
+            }
+            float line = Mathf.Max(cellSize * BlockOutlineLine, 0.02f);
+            float halo = line * BlockOutlineHaloScale;
+            Color lineColor = new Color(hue.r, hue.g, hue.b, breathes ? 0.95f : 0.8f);
+            Color haloColor = new Color(hue.r, hue.g, hue.b, 0.22f);
+            DrawRuns(horizontal, true, line, halo, lineColor, haloColor, breathes);
+            DrawRuns(vertical, false, line, halo, lineColor, haloColor, breathes);
+        }
+
+        private static void AddEdge(Dictionary<int, List<int>> lines, int boundary, int along)
+        {
+            List<int> edges;
+            if (!lines.TryGetValue(boundary, out edges))
+            {
+                edges = new List<int>();
+                lines[boundary] = edges;
+            }
+            edges.Add(along);
+        }
+
+        /// <summary>Walks each grid line's unit edges in order and draws every unbroken run of
+        /// them as one bar.</summary>
+        private void DrawRuns(Dictionary<int, List<int>> lines, bool horizontal, float line,
+            float halo, Color lineColor, Color haloColor, bool breathes)
+        {
+            foreach (KeyValuePair<int, List<int>> entry in lines)
+            {
+                List<int> edges = entry.Value;
+                edges.Sort();
+                int runStart = edges[0];
+                for (int i = 1; i <= edges.Count; i++)
+                {
+                    if (i < edges.Count && edges[i] == edges[i - 1] + 1)
+                    {
+                        continue;
+                    }
+                    int runEnd = edges[i - 1] + 1; // exclusive, in grid units
+                    DrawRun(entry.Key, runStart, runEnd, horizontal, line, halo, lineColor,
+                        haloColor, breathes);
+                    if (i < edges.Count)
+                    {
+                        runStart = edges[i];
+                    }
+                }
+            }
+        }
+
+        private void DrawRun(int boundary, int from, int to, bool horizontal, float line,
+            float halo, Color lineColor, Color haloColor, bool breathes)
+        {
+            float length = (to - from) * cellSize;
+            float mid = (from + to) * 0.5f;
+            // Grid units to world: CellToWorld is linear, so a boundary is a cell centre less half
+            // a cell - asked of the view rather than recomputed, so the two can never disagree.
+            Vector2 origin = CellToWorld(new GridPos(board.MinX, board.MinY))
+                - new Vector2((board.MinX + 0.5f) * cellSize, (board.MinY + 0.5f) * cellSize);
+            Vector2 at = horizontal
+                ? origin + new Vector2(mid * cellSize, boundary * cellSize)
+                : origin + new Vector2(boundary * cellSize, mid * cellSize);
+            RentOutlineBar(at, horizontal ? new Vector2(length + halo, halo)
+                    : new Vector2(halo, length + halo),
+                haloColor, breathes, BlockOutlineOrder);
+            RentOutlineBar(at, horizontal ? new Vector2(length + line, line)
+                    : new Vector2(line, length + line),
+                lineColor, breathes, BlockOutlineOrder + 1);
+        }
+
+        private void RentOutlineBar(Vector2 at, Vector2 size, Color color, bool breathes, int order)
+        {
+            if (blockOutlineUsed == blockOutline.Count)
+            {
+                blockOutline.Add(new OutlineBar());
+            }
+            OutlineBar bar = blockOutline[blockOutlineUsed++];
+            if (bar.Renderer == null)
+            {
+                bar.Renderer = ViewUtil.MakeRounded(transform, "BlockOutline", at, size, color,
+                    order);
+            }
+            bar.Renderer.transform.localPosition = new Vector3(at.x, at.y, 0f);
+            bar.Renderer.size = size;
+            bar.Renderer.sortingOrder = order;
+            bar.Renderer.enabled = true;
+            bar.Base = color;
+            bar.Breathes = breathes;
+            bar.Renderer.color = breathes ? Breathed(color, PreviewBreath()) : color;
+        }
+
+        /// <summary>The refusal red every preview uses, for a caller that paints its own.</summary>
+        public static Color RefusedPreviewColor
+        {
+            get { return InvalidPreviewColor; }
+        }
+
+        /// <summary>
         /// "HIDROLIK PRES" AIMED. The four cells are ONE MECHANICAL AREA, so they are not tinted
         /// one at a time and never with the explosion colour - nothing here explodes. What is drawn
         /// is a single very thin slate pressure frame around the whole 2x2, four small INWARD-facing
@@ -2853,6 +3055,14 @@ namespace ProjectBlock.View
                     }
                 }
             }
+            for (int i = 0; i < blockOutlineUsed; i++)
+            {
+                OutlineBar bar = blockOutline[i];
+                if (bar.Breathes && bar.Renderer != null)
+                {
+                    bar.Renderer.color = Breathed(bar.Base, wave);
+                }
+            }
             for (int i = 0; i < outsidePreviewSprites.Count; i++)
             {
                 if (outsidePreviewSprites[i] != null && outsidePreviewBreathes[i])
@@ -2893,6 +3103,15 @@ namespace ProjectBlock.View
                 }
             }
             pressPreview.Clear();
+            // The block outline is POOLED rather than destroyed: an aim redraws it every frame.
+            for (int i = 0; i < blockOutlineUsed; i++)
+            {
+                if (blockOutline[i].Renderer != null)
+                {
+                    blockOutline[i].Renderer.enabled = false;
+                }
+            }
+            blockOutlineUsed = 0;
         }
 
         /// <summary>Replays the water fall frames, then restores the true board state and
