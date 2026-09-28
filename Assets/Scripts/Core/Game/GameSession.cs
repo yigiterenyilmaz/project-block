@@ -310,7 +310,11 @@ namespace ProjectBlock.Core
             Config = config;
             resolvedSeed = config.RngSeed ?? Environment.TickCount;
             rng = new SeededRandom(resolvedSeed);
-            scorer = new DefaultScoreCalculator(config.Scoring);
+            scorer = new DefaultScoreCalculator(config.Scoring)
+            {
+                // Half flat, half percentage: the scorer reads the live round's bar.
+                Threshold = () => CurrentRound != null ? CurrentRound.ScoreThreshold : 0
+            };
             Market = new Market();
             Jokers = new JokerInventory(this, rng);
             Powers = new PowerInventory(this, rng);

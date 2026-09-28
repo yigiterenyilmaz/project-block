@@ -83,6 +83,25 @@ namespace ProjectBlock.Core
         /// screen) still paid too well against a 60-point first threshold.</summary>
         public int CleanSweepBonus = 50;
 
+        // ---- HALF FLAT, HALF PERCENTAGE (designer's call, 2026-09-23). Every value above is
+        // what it pays on ROUND 3's bar (ReferenceThreshold); a share of it then grows
+        // with the current round's threshold, so a late line is worth as much of its own bar as
+        // an early one. value = base * ((1 - share) + share * threshold / ReferenceThreshold).
+
+        /// <summary>The bar the base values were balanced against: round 3's threshold (135).</summary>
+        public int ReferenceThreshold = 135;
+
+        /// <summary>How much of the line values (per line, per cube, extra lines, obsidian in a
+        /// line) scales with the threshold. The rest stays flat.</summary>
+        public double LinePercentShare = 0.25;
+
+        /// <summary>How much of the clean sweep bonus scales with the threshold.</summary>
+        public double SweepPercentShare = 0.5;
+
+        /// <summary>One knob over BOTH shares, relative to their own size (a percentage of the
+        /// percentage): 0.9 takes a tenth off each, so lines scale 22.5% and sweeps 45%.</summary>
+        public double PercentShareScale = 0.9;
+
         /// <summary>Per-turn bonus per gold cube sitting on the board.</summary>
         public int GoldPointsPerCubePerTurn = 1;
 

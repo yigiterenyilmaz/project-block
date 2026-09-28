@@ -18,6 +18,23 @@ namespace ProjectBlock.Core
             return cubesPlaced * config.PointsPerCubePlaced;
         }
 
+        /// <summary>The CURRENT round's (logical) threshold, asked live. Set by the session; with
+        /// no round it is 0 and every value is simply its base.</summary>
+        public System.Func<int> Threshold;
+
+        /// <summary>base * ((1 - share) + share * threshold / reference): the flat part plus the
+        /// part that grows with the bar. Exactly the base value on the reference bar.</summary>
+        private double Blend(double share)
+        {
+            share *= config.PercentShareScale;
+            int threshold = Threshold != null ? Threshold() : 0;
+            if (threshold <= 0 || config.ReferenceThreshold <= 0 || share <= 0.0)
+            {
+                return 1.0;
+            }
+            return (1.0 - share) + share * threshold / (double)config.ReferenceThreshold;
+        }
+
         public int ScoreLineExplosion(int lineCount, int cubesExploded)
         {
             int score = lineCount * config.PointsPerLine
@@ -26,17 +43,18 @@ namespace ProjectBlock.Core
             {
                 score += (lineCount - 1) * config.MultiLineBonusPerExtraLine;
             }
-            return score;
+            return (int)System.Math.Round(score * Blend(config.LinePercentShare));
         }
 
         public int ScoreObsidianInLines(int obsidianCubesInLines)
         {
-            return obsidianCubesInLines * config.PointsPerObsidianInLine;
+            return (int)System.Math.Round(obsidianCubesInLines * config.PointsPerObsidianInLine
+                * Blend(config.LinePercentShare));
         }
 
         public int ScoreCleanSweep()
         {
-            return config.CleanSweepBonus;
+            return (int)System.Math.Round(config.CleanSweepBonus * Blend(config.SweepPercentShare));
         }
 
         /// <summary>
