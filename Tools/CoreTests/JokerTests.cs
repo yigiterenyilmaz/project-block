@@ -2486,18 +2486,16 @@ public static class JokerTests
         Check(tilsim.ConvertedCellCount > 0, "their ground was claimed",
             "cells " + tilsim.ConvertedCellCount);
 
-        // The claimed ground reaches the next board through RoundConfig.
+        // The claimed ground lands on the board IN PLAY, as bonus ground, this round.
+        GameBoard live = session.CurrentRound.Board;
+        Check(live.IsInside(new GridPos(6, 2)) && live.IsOptional(new GridPos(6, 2)),
+            "the ghost's cell is bonus ground on the live board");
+        Check(!live.IsInside(new GridPos(6, 0)), "and nothing the bounds grew over is");
+        // And it does not travel into the next round's config.
         var config = new RoundConfig(2, 6, 6, 100, null, ShuffleErosion.FromCenter, true);
-        RoundConfig grown = tilsim.FilterRoundConfig(
+        RoundConfig next = tilsim.FilterRoundConfig(
             new SessionContext(session, session.Rng), config);
-        Check(grown.ExtraPlayableCells.Count == tilsim.ConvertedCellCount,
-            "the next round gets the extra cells",
-            "cells " + grown.ExtraPlayableCells.Count);
-        // A filter REBUILDS the config, so every field it does not care about has to come
-        // across untouched - that is what RoundConfig.WithBoard is for.
-        Check(grown.IsBossRound, "the boss flag survives tilsim's round-config filter");
-        Check(grown.Erosion == ShuffleErosion.FromCenter,
-            "and so does the erosion style", "erosion " + grown.Erosion);
+        Check(next.ExtraPlayableCells.Count == 0, "the next round does not inherit it");
     }
 
     private static void Inflation_GrowsThenSqueezesBack()
@@ -4858,28 +4856,23 @@ public static class JokerTests
             new[] { new GridPos(7, 2), new GridPos(7, 4), new GridPos(8, 2), new GridPos(8, 4) });
         CheckRealPathClaim("real path: a far cell, and the columns it skipped stay shut",
             new[] { new GridPos(9, 4) });
+        CheckRealPathClaim("real path: left and below the board too",
+            new[] { new GridPos(-1, 3), new GridPos(4, -2) });
     }
 
     private static void CheckRealPathClaim(string label, GridPos[] claimed)
     {
         const int Size = 7;
-        // A round config the way the progression makes one, then the shape the power gives it.
-        var config = new RoundConfig(1, Size, Size, 100, null, ShuffleErosion.None, false, null);
-        var extra = new List<GridPos>(claimed);
-        var bonus = new List<GridPos>(claimed);
-        RoundConfig next = config.WithBoard(config.BoardWidth, config.BoardHeight, extra, bonus);
-        // And the board the way RoundEngine makes one.
-        var board = new GameBoard(next.BoardWidth, next.BoardHeight, next.ExtraPlayableCells,
-            next.OptionalPlayableCells);
-
+        // The live board the way the power grows it mid-round.
+        GameBoard board = GameBoard.CreateWithBonusGround(new GameBoard(Size, Size), claimed);
         var wanted = new HashSet<GridPos>(claimed);
         int extraCells = 0, missing = 0, notBonus = 0;
-        for (int x = 0; x < board.Width; x++)
+        for (int x = board.MinX; x < board.MinX + board.Width; x++)
         {
-            for (int y = 0; y < board.Height; y++)
+            for (int y = board.MinY; y < board.MinY + board.Height; y++)
             {
                 var at = new GridPos(x, y);
-                bool baseCell = x < Size && y < Size;
+                bool baseCell = x >= 0 && y >= 0 && x < Size && y < Size;
                 bool inside = board.IsInside(at);
                 if (wanted.Contains(at))
                 {
@@ -4902,9 +4895,6 @@ public static class JokerTests
         Check(extraCells == 0, label + " - and no column came with it",
             "wrongly playable " + extraCells);
         Check(notBonus == 0, label + " - each is bonus ground", "not optional " + notBonus);
-        Check(next.BoardWidth == Size && next.BoardHeight == Size,
-            label + " - the ARENA itself did not grow",
-            "arena " + next.BoardWidth + "x" + next.BoardHeight);
     }
 
     /// <summary>Builds the board the way RoundEngine does and asserts that EXACTLY the given cells
@@ -4968,9 +4958,8 @@ public static class JokerTests
     private static void Tilsim_OnlyTheGhostsTheRulesCanReclaimFromCount()
     {
         Section("tılsım / only reclaimable ghosts leave ground");
-        Check(!TilsimPower.CanReclaim(new GridPos(-1, 3)), "a ghost off the LEFT edge reclaims nothing");
-        Check(!TilsimPower.CanReclaim(new GridPos(7, -1)), "nor one BELOW the board");
-        Check(TilsimPower.CanReclaim(new GridPos(7, 3)), "one off the right edge does");
+        Check(TilsimPower.CanReclaim(new GridPos(-1, 3)), "a ghost off the LEFT edge reclaims too");
+        Check(TilsimPower.CanReclaim(new GridPos(7, 3)), "and one off the right edge");
 
         var session = NewSession(5177, 7, 1000000, 40, 1);
         RoundEngine round = session.CurrentRound;
@@ -4978,6 +4967,7 @@ public static class JokerTests
         // can become ground.
         var bar = BlockShape.FromCells(new[] { new GridPos(0, 0), new GridPos(1, 0) });
         BlockCard ghost = session.CreateCard(bar, new[] { BlockElement.Ghost });
+        int widthBefore = round.Board.Width;
         var anchor = new GridPos(round.Board.Width - 1, 3);
         while (round.Board.GetCube(anchor).HasValue)
         {
@@ -4995,19 +4985,17 @@ public static class JokerTests
         TalismanActivationVisuals report = power.LastActivation;
         Check(report != null && report.Ghosts.Count == 1, "the report carries the ghost",
             "ghosts " + (report == null ? -1 : report.Ghosts.Count));
-        Check(report.Reclaimed.Count == 1 && report.Reclaimed[0].X == round.Board.Width,
+        Check(report.Reclaimed.Count == 1 && report.Reclaimed[0].X == widthBefore,
             "and exactly the one cell it can reclaim from",
             "reclaimed " + report.Reclaimed.Count);
-        Check(report.TotalScore == report.Ghosts.Count * power.PointsPerGhostCube,
+        Check(report.TotalScore == report.Ghosts.Count * power.PointsPerGhostCube(round),
             "every ghost is paid for, reclaimable or not", "score " + report.TotalScore);
         Check(round.Board.OutsideCubes.Count == 0, "and the traces are gone");
 
-        // Now the config the next round is built from: exactly that one cell, twice over.
-        RoundConfig config = power.FilterRoundConfig(new SessionContext(session, session.Rng), round.Config);
-        Check(config.ExtraPlayableCells.Count == 1, "the next board gets one extra cell",
-            "extra " + config.ExtraPlayableCells.Count);
-        Check(config.OptionalPlayableCells.Count == 1, "and it is bonus ground",
-            "optional " + config.OptionalPlayableCells.Count);
+        // The live board has exactly that one cell, as bonus ground.
+        var cell = new GridPos(widthBefore, 3);
+        Check(round.Board.IsInside(cell) && round.Board.IsOptional(cell),
+            "the live board gets that one cell as bonus ground");
         Check(power.LastGround != null && power.LastGround.Cells.Count == 1,
             "and the View is told the same one cell",
             "reported " + (power.LastGround == null ? -1 : power.LastGround.Cells.Count));

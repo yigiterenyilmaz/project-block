@@ -4,6 +4,7 @@
 //
 // All numbers are BALANCE PLACEHOLDERS.
 
+using System;
 using System.Collections.Generic;
 
 namespace ProjectBlock.Core
@@ -284,33 +285,39 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>
-    /// "Tılsım" - blows up the ghost cubes hanging off the edge of the board and turns the
-    /// space they occupied into real play area for the rest of the RUN... except the design
-    /// says it resets when the round ends, so the cells are granted for the current round
-    /// only and handed back at round end.
+    /// "Tılsım" - blows up the ghost cubes hanging off the edge of the board (15 points each)
+    /// and turns the space they occupied into BONUS play area on the board IN PLAY, for the
+    /// rest of this round. It used to deliver the ground only on the NEXT round's board, which
+    /// on the round it was used looked like nothing had happened at all.
     ///
-    /// It leans on the same seam "Kentsel Dönüşüm" uses: extra playable cells travel to the
-    /// next board through RoundConfig. Because the board of the CURRENT round already exists,
-    /// the conversion takes effect from the next round - the ghosts are cleared immediately,
-    /// the ground they leave behind opens next round.
+    /// The board grows in any direction to reach the cells (GameBoard.CreateWithBonusGround -
+    /// coordinates never move, the origin does, exactly as an inflation), but only those cells
+    /// become playable. A new round builds a fresh arena, so the gift simply ends with its round.
     /// </summary>
     public sealed class TilsimPower : Power
     {
-        /// <summary>Points per ghost cube blown up.</summary>
-        public int PointsPerGhostCube = 15;
+        /// <summary>Each ghost cube blown up pays this percent of the round's threshold.</summary>
+        public int GhostSharePercent = 2;
+
+        /// <summary>A line or sweep that takes cubes off the BONUS ground: this percent of the
+        /// clear's base value per such cube, added flat.</summary>
+        public int BonusGroundPercentPerCube = 20;
+
+        /// <summary>What one ghost pays in this round: a share of the bar, never less than 1.
+        /// </summary>
+        public int PointsPerGhostCube(RoundEngine round)
+        {
+            return Math.Max(1, round.ScoreThreshold * GhostSharePercent / 100);
+        }
 
         /// <summary>
-        /// WHETHER GROUND CAN BE RECLAIMED FROM A GHOST AT THIS CELL. The board never grows left
-        /// or down, so a trace at a negative coordinate is harvested and paid for and leaves
-        /// nothing behind.
-        ///
-        /// This is the ONE place that is decided. It is public because the presentation needs the
-        /// answer too - the report carries it out to the View, and the animation lab asks it
-        /// directly rather than re-deriving it, which it was doing until this existed.
+        /// WHETHER GROUND CAN BE RECLAIMED FROM A GHOST AT THIS CELL. Since the ground is granted
+        /// on the live board, which can grow on any side, every ghost can. Kept as the ONE place
+        /// that is decided, because the report and the animation lab both ask it.
         /// </summary>
         public static bool CanReclaim(GridPos cell)
         {
-            return cell.X >= 0 && cell.Y >= 0;
+            return true;
         }
 
         private readonly List<GridPos> convertedCells = new List<GridPos>();
@@ -322,9 +329,8 @@ namespace ProjectBlock.Core
         [field: NotSaved]
         public TalismanActivationVisuals LastActivation { get; private set; }
 
-        /// <summary>THE GROUND AS THE NEXT BOARD ACTUALLY GOT IT. Written when that board's config
-        /// is built and deliberately NOT cleared by OnRoundStarted - the working list is reset
-        /// there, and the View still has an unwrapping to play on the round that just began.
+        /// <summary>THE GROUND AS THE BOARD ACTUALLY GOT IT. Written the moment it is granted and
+        /// dropped when the round ends, which is what the View reads as the gift being recalled.
         /// </summary>
         [field: NotSaved]
         public TalismanGroundVisuals LastGround { get; private set; }
@@ -333,12 +339,14 @@ namespace ProjectBlock.Core
             : base("tilsim", "Tılsım")
         {
             SetDescription(
-                "Blows up ghost blocks and turns the space they covered outside the map into "
-                    + "BONUS play area: you may build on it, but a row or column never waits "
-                    + "for it to be filled. Resets when the round ends.",
-                "Hayalet blokları patlatır ve harita dışında kapladıkları yeri BONUS oyun "
-                    + "alanına katar: üzerine blok koyabilirsin ama bir satır ya da sütun onun "
-                    + "dolmasını beklemez. Raunt bitince sıfırlanır.");
+                "Blows up ghost blocks (each cube pays 2% of the threshold) and turns the space "
+                    + "they covered outside the map into BONUS play area for the rest of the "
+                    + "round. A row, column or sweep that clears cubes standing on it scores "
+                    + "+20% per such cube.",
+                "Hayalet blokları patlatır (her küp eşiğin %2'si kadar puan) ve harita dışında "
+                    + "kapladıkları yeri raunt sonuna kadar BONUS oyun alanına katar. Bu alandaki "
+                    + "küpleri de patlatan her satır, sütun ya da temizlik küp başına +%20 puan "
+                    + "kazandırır.");
         }
 
         /// <summary>Cells this power is currently granting to the board.</summary>
@@ -357,12 +365,12 @@ namespace ProjectBlock.Core
             }
         }
 
-        /// <summary>Confirmed: the conversion lasts for the round only.</summary>
+        /// <summary>The gift lasts one round: the fresh arena does not carry it, and the empty
+        /// ground report is what tells the View to take it back.</summary>
         public override void OnRoundStarted(RoundContext ctx)
         {
-            // The gift lasts one round, so the source list goes. LastGround does NOT: the board
-            // this round was built with those cells and the View has an unwrapping to play on it.
             convertedCells.Clear();
+            LastGround = null;
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -377,14 +385,12 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            if (LastActivation == null)
-            {
-                LastActivation = new TalismanActivationVisuals();
-            }
-            LastActivation.Clear();
-            LastActivation.Serial++;
-            LastActivation.ScorePerGhost = PointsPerGhostCube;
-            LastActivation.TotalScore = ghosts * PointsPerGhostCube;
+            // A NEW report per use: views match reports by identity (see CLAUDE.md).
+            LastActivation = new TalismanActivationVisuals();
+            LastActivation.Serial = (LastGround != null ? LastGround.Serial : 0) + 1;
+            int perGhost = PointsPerGhostCube(ctx.Round);
+            LastActivation.ScorePerGhost = perGhost;
+            LastActivation.TotalScore = ghosts * perGhost;
             // SNAPSHOT FIRST. The ghosts are about to stop existing, and the View's harvest starts
             // from each one's own face - so it is taken here rather than reconstructed after.
             foreach (KeyValuePair<GridPos, Cube> ghost in ctx.Round.Board.OutsideCubes)
@@ -396,49 +402,97 @@ namespace ProjectBlock.Core
                     Reclaimable = CanReclaim(ghost.Key)
                 });
             }
-            List<GridPos> converted = ctx.Round.Board.TakeOutsideCellsForConversion();
-            foreach (GridPos cell in converted)
+            List<GridPos> taken = ctx.Round.Board.TakeOutsideCellsForConversion();
+            var wanted = new List<GridPos>();
+            foreach (GridPos cell in taken)
             {
-                // Only cells the board can actually grow into: it never grows left or down. This
-                // is the ONE place that condition is written, and the report above carries its
-                // answer out so the View never re-derives it.
-                if (CanReclaim(cell) && !convertedCells.Contains(cell))
+                if (CanReclaim(cell))
                 {
-                    convertedCells.Add(cell);
-                    LastActivation.Reclaimed.Add(cell);
+                    wanted.Add(cell);
                 }
             }
-            ctx.Round.AddScoreOutsideTurn(ghosts * PointsPerGhostCube);
+            List<GridPos> granted = ctx.Round.GrantBonusGround(wanted);
+            foreach (GridPos cell in granted)
+            {
+                if (!convertedCells.Contains(cell))
+                {
+                    convertedCells.Add(cell);
+                }
+                LastActivation.Reclaimed.Add(cell);
+            }
+            // The View unwraps the WHOLE gift standing on the board, earlier uses included.
+            var ground = new TalismanGroundVisuals();
+            ground.Serial = LastActivation.Serial;
+            ground.Cells.AddRange(convertedCells);
+            LastGround = ground;
+            ctx.Round.AddScoreOutsideTurn(ghosts * perGhost);
             return true;
         }
 
-        /// <summary>Hands the converted ground to the board being built.</summary>
-        public override RoundConfig FilterRoundConfig(SessionContext ctx, RoundConfig config)
+        /// <summary>Lines and sweeps that clear cubes off the bonus ground pay +20% of the clear's
+        /// BASE value per such cube, added flat (it does not compound with joker multipliers).
+        /// </summary>
+        public override void AfterTurnScored(TurnContext turn)
         {
-            if (convertedCells.Count == 0)
+            TurnReport report = turn.Report;
+            if (convertedCells.Count == 0 || report == null)
             {
-                return config;
+                return;
             }
-            var cells = new List<GridPos>(config.ExtraPlayableCells);
-            cells.AddRange(convertedCells);
-            // The same cells go in as OPTIONAL: ground this power reclaimed is a gift, so a
-            // line must never wait for it to be filled (see GameBoard's header).
-            var bonus = new List<GridPos>(config.OptionalPlayableCells);
-            bonus.AddRange(convertedCells);
-            // AND THE VIEW IS TOLD WHAT THIS BOARD ACTUALLY GOT - here, at the moment it is
-            // decided, rather than left to be inferred later from a board the power no longer has
-            // a list for.
-            if (LastGround == null)
+            bool lines = (report.ExplodedRows != null && report.ExplodedRows.Count > 0)
+                || (report.ExplodedColumns != null && report.ExplodedColumns.Count > 0);
+            if (!lines && !report.CleanSweep)
             {
-                LastGround = new TalismanGroundVisuals();
+                return;
             }
-            LastGround.Clear();
-            LastGround.Serial++;
-            LastGround.Cells.AddRange(convertedCells);
-            // WithBoard, not a hand-written rebuild: the erosion style and the boss flag come
-            // along by themselves (see RoundConfig's header - both have been dropped before).
-            return config.WithBoard(config.BoardWidth, config.BoardHeight, cells, bonus);
+            // ONLY the bonus-ground cubes of the rows and columns that broke (a cube where a
+            // broken row and column cross counts once), plus, on a sweep, the ones it took.
+            // Anything else destroyed on that ground this turn (a fire chain, a power) pays nothing.
+            // ExplodedRows / ExplodedColumns are indices into the board's STORE, not coordinates:
+            // once the ground grew left or down the origin is negative, so they are offset back.
+            GameBoard board = turn.Round.Board;
+            int onBonus = 0;
+            foreach (DestroyedCube gone in report.DestroyedCubes)
+            {
+                if (!convertedCells.Contains(gone.Pos))
+                {
+                    continue;
+                }
+                bool inLine = (report.ExplodedRows != null && Contains(report.ExplodedRows, gone.Pos.Y - board.MinY))
+                    || (report.ExplodedColumns != null && Contains(report.ExplodedColumns, gone.Pos.X - board.MinX));
+                if (inLine || report.CleanSweep)
+                {
+                    onBonus++;
+                }
+            }
+            // ADDITIVE, off the BASE value of the clear: the lines' and the sweep's own points,
+            // before any joker touched them, in logical units (AddLateTurnScore scales once).
+            // Taking it off the finished total compounded it with every multiplier and applied
+            // the score scale twice.
+            int baseClear = turn.Score.BaseLines + turn.Score.BaseSweep;
+            if (onBonus == 0 || baseClear <= 0)
+            {
+                return;
+            }
+            LastBonusGroundPayout = baseClear * BonusGroundPercentPerCube * onBonus / 100;
+            turn.Round.AddLateTurnScore(LastBonusGroundPayout, "Tılsım");
         }
+
+        private static bool Contains(IReadOnlyList<int> lines, int index)
+        {
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (lines[i] == index)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>What the last bonus-ground clear paid, for the View. [NotSaved].</summary>
+        [field: NotSaved]
+        public int LastBonusGroundPayout { get; private set; }
     }
 
     /// <summary>"Halüsinasyon" - a power with no fixed identity: it appears as a random power
