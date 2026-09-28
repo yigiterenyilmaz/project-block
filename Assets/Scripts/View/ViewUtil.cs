@@ -107,6 +107,23 @@ namespace ProjectBlock.View
             return Mathf.Clamp01(RoundedRadius + 0.5f - distance);
         }
 
+        /// <summary>
+        /// THE MENU BACKGROUND of an in-round modal (the weld and cut editors, the compass): one
+        /// rounded plate under EVERYTHING the modal shows - title, hint, content, status line and
+        /// buttons - with a thin lit rim, so no line of text floats on the dimmed screen. Drawn at
+        /// orders 39 (rim) and 40 (plate): above the modal's dim, which must sit at 38, and below
+        /// everything else the modal draws.
+        /// </summary>
+        public static void MakeMenuPlate(Transform parent, Vector2 centre, Vector2 size)
+        {
+            MakeRounded(parent, "MenuRim", centre, size + new Vector2(0.08f, 0.08f),
+                new Color(0.34f, 0.56f, 0.74f, 0.45f), 39);
+            MakeRounded(parent, "Menu", centre, size, new Color(0.13f, 0.15f, 0.20f, 0.98f), 40);
+        }
+
+        /// <summary>The order a modal's dim sits at when it has a MakeMenuPlate over it.</summary>
+        public const int MenuDimOrder = 38;
+
         /// <summary>MakeRect's rectangle with a card's ROUNDED corners. Same arguments, same
         /// meaning - it is MakePlate over the generated rounded sprite, so the corner keeps its
         /// radius however the rest is stretched.</summary>

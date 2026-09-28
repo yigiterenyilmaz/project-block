@@ -439,6 +439,7 @@ namespace ProjectBlock.View
             batakBet.Hide();
             blockDesigner.Hide();
             cubePicker.Hide();
+            nesterEditor.Hide();
             lineSwapPicker.Hide();
             HideTooltip();
             // Any half-armed flow dies with the run presentation.

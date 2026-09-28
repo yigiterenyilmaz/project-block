@@ -61,6 +61,14 @@ namespace ProjectBlock.View
         // hand card falls from the top; arrows steer, up/X rotate, down soft-drops, space hard-
         // drops. retroFallX/Y is the piece's origin in ABSOLUTE board coords.
         private int retroFallHand = -1;
+
+        /// <summary>Tetris mode's NEXT box.</summary>
+        private RetroNextView retroNext;
+
+        /// <summary>A breath between one piece locking and the next one arriving, so the lock's
+        /// line clears and refill can be seen before the arena is busy again.</summary>
+        private float retroSpawnWait;
+        private const float RetroSpawnDelay = 0.3f;
         private int retroFallX;
         private int retroFallY;
         private float retroFallTimer;
@@ -293,10 +301,8 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// Hides the two piles while a STACKED market is open. That layout covers the whole
-        /// screen and the piles' labels sort above its panel, so left alone they print straight
-        /// through it; the market's own DECK button is the way in while it is up. The desktop
-        /// panel stops short of them, so there the draw pile stays up and clickable.
+        /// Hides the two piles for the whole MARKET phase: their labels sort above its panel and
+        /// print straight through it, and the market's own DECK button is the way in.
         /// </summary>
         private void SyncPilesForMarket()
         {
@@ -304,13 +310,14 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            bool hide = session != null
-                && session.Phase == GamePhase.Market
-                && UiLayout.Active.MarketStacked;
+            // The market has its own DECK button, and the piles (their counts, the discard's
+            // face-up top) only ever printed through its panel - so they go for the whole phase.
+            bool market = session != null && session.Phase == GamePhase.Market;
             // Asked every frame rather than cached against a remembered answer: the piles are
             // REBUILT whenever the layout changes, and a rebuilt pile comes back visible - so a
             // cache would go on believing it had already hidden them.
-            cardLayer.SetPilesVisible(!hide);
+            cardLayer.SetPilesVisible(true);
+            cardLayer.SetPilesBehind(market);
         }
 
         /// <summary>Re-fits the interface if the screen's shape changed. Called every frame.</summary>
@@ -680,6 +687,7 @@ namespace ProjectBlock.View
             // Before anything is drawn or read: the window may have been resized, the device may
             // have been turned. Two integer reads on a normal frame (see UiLayout.Refresh).
             WatchScreenShape();
+            SyncPilesForMarket(); // was never called: the piles printed through the market
             // "Midas" warms the score line while its gold is landing on it (see .Midas): one
             // owner for that transform, and it is this one.
             TickScoreResponse();

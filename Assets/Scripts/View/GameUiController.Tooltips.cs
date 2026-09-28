@@ -56,9 +56,8 @@ namespace ProjectBlock.View
             // The draw pile is clickable in both phases - the deck list in a round, the sell
             // screen in the market - so it lights up whenever the pointer is on it and nothing
             // is covering it.
-            cardLayer.SetDrawPileHovered(!deckOverlay.IsOpen && !grantPicker.IsOpen
-                && !(session.Phase == GamePhase.Market && UiLayout.Active.MarketStacked)
-                && cardLayer.IsDrawPileAt(world));
+            // The draw pile is no longer a button (the deck has its own), so it never lights up.
+            cardLayer.SetDrawPileHovered(false);
 
             // The market's hover outline is decided ONCE, here, before any of the modal
             // branches below return: a picker or the deck overlay standing over the shelf must

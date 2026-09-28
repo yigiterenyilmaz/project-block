@@ -339,6 +339,38 @@ namespace ProjectBlock.View
             return icon != null;
         }
 
+        /// <summary>CardVisual.MarkLookup: the mark a power has put on a card, if any.</summary>
+        private string LookUpCardMark(int cardId)
+        {
+            if (session == null)
+            {
+                return null;
+            }
+            IReadOnlyList<Power> powers = session.Powers.Powers;
+            for (int i = 0; i < powers.Count; i++)
+            {
+                var bukulme = powers[i] as BukulmePower;
+                if (bukulme != null && bukulme.MarkedCardId == cardId)
+                {
+                    return Loc.Pick("MARKED", "İŞARETLİ");
+                }
+                var olta = powers[i] as OltaPower;
+                if (olta != null && olta.MarkedCardId == cardId)
+                {
+                    return Loc.Pick("HOOKED", "OLTADA");
+                }
+            }
+            return null;
+        }
+
+        /// <summary>CardVisual.BorrowedGeneLookup: the element a card carries on loan from
+        /// "Gen nakli", asked of the round that holds the loan.</summary>
+        private BlockElement? LookUpBorrowedGene(int cardId)
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            return round != null ? round.BorrowedElementOf(cardId) : null;
+        }
+
         /// <summary>Last Joker.LooseProcs seen per joker instance.</summary>
         private readonly Dictionary<int, int> looseProcsSeen = new Dictionary<int, int>();
 
@@ -624,9 +656,7 @@ namespace ProjectBlock.View
             // desktop panel stops short of it; the stacked one hides it). Both open the owned
             // cards as a SELL screen. The pile only answers while it is visible - a hidden pile
             // that opened the sell screen would be an invisible button.
-            if (marketView.TryDeckAt(world)
-                || (!UiLayout.Active.MarketStacked && marketView.OfferAt(world) < 0
-                    && cardLayer.IsDrawPileAt(world)))
+            if (marketView.TryDeckAt(world))
             {
                 sellCardsMode = true;
                 deckOverlay.ResetScroll();

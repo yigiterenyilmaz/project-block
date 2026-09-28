@@ -168,6 +168,10 @@ namespace ProjectBlock.View
                 // each cube wears is ViewUtil.CardCubeTile's call: the same rule a defective block's
                 // cubes are drawn with as they fall, so the two can never disagree.
                 bool cellsAligned = displayShape == null;
+                // A borrowed gene dresses the card as the element it will lay - which is the
+                // only way the player can tell, since the card's own printing never changes.
+                BlockElement? borrowed = BorrowedGeneLookup != null
+                    ? BorrowedGeneLookup(card.Id) : null;
                 float mini = MiniCubeSize(shape);
                 IReadOnlyList<GridPos> miniCells = shape.Cells;
                 for (int i = 0; i < miniCells.Count; i++)
@@ -176,6 +180,12 @@ namespace ProjectBlock.View
                     Color miniTint;
                     Sprite miniTile = ViewUtil.CardCubeTile(card, shape, i, cellsAligned,
                         out miniTint);
+                    if (borrowed.HasValue)
+                    {
+                        miniTile = ViewUtil.CubeTile(borrowed.Value);
+                        miniTint = ViewUtil.CubeTileColor(miniTile,
+                            ViewUtil.ElementColor(borrowed.Value));
+                    }
                     SpriteRenderer miniCube = ViewUtil.MakeCell(transform, "Mini",
                         MiniCubeLocal(shape, cell), mini * MiniFlatFill, miniTint, order + 2);
                     // A painted tile brings its own frame and fills more of its cell than the
@@ -187,7 +197,7 @@ namespace ProjectBlock.View
                 // The top band names the card's TYPE: its element(s), and/or "custom" for a
                 // player-designed block ("Karakter oluşturma"). Plain market/deck blocks get none.
                 if (card.Elements.Count > 0 || card.IsCustom || card.IsSmuggled
-                    || card.AntimatterOf.HasValue)
+                    || card.AntimatterOf.HasValue || borrowed.HasValue || card.IsWelded)
                 {
                     var elementLabels = new List<string>();
                     foreach (BlockElement element in card.Elements)
@@ -199,7 +209,13 @@ namespace ProjectBlock.View
                     // Smuggled goods are tagged above everything else, and a DEFECTIVE one says
                     // so outright: an ordinary-looking card that will not stay on the board has to
                     // be readable in the hand, or the player wastes the turn without knowing why.
-                    string bandText = card.AntimatterOf.HasValue
+                    // A welded block ("Lehimleme") names itself, with its element(s) after it.
+                    string bandText = card.IsWelded
+                        ? Loc.Pick("WELDED", "LEHİMLİ")
+                            + (elementLabels.Count > 0 ? " " + string.Join("+", elementLabels) : "")
+                        : borrowed.HasValue
+                        ? ViewUtil.ElementLabel(borrowed.Value) + Loc.Pick(" (borrowed)", " (ödünç)")
+                        : card.AntimatterOf.HasValue
                         ? Loc.Pick("ANTI " + ViewUtil.KindLabel(card.AntimatterOf.Value),
                             "ANTİ " + ViewUtil.KindLabel(card.AntimatterOf.Value))
                         : card.FallsThrough
@@ -218,7 +234,11 @@ namespace ProjectBlock.View
                         new Vector2(BodyWidth - BandInset * 2f, 0.22f),
                         new Color(0.1f, 0.11f, 0.14f, 0.92f),
                         order + 3), order + 3);
-                    Color labelColor = card.AntimatterOf.HasValue
+                    Color labelColor = card.IsWelded
+                        ? new Color(1f, 0.72f, 0.35f) // weld amber
+                        : borrowed.HasValue
+                        ? Color.Lerp(ViewUtil.ElementColor(borrowed.Value), Color.white, 0.4f)
+                        : card.AntimatterOf.HasValue
                         ? ViewUtil.CubeDisplayColor(new Cube(card.AntimatterOf.Value, -1))
                         : card.FallsThrough
                         ? new Color(1f, 0.42f, 0.38f) // defective: a red warning
@@ -235,6 +255,22 @@ namespace ProjectBlock.View
             else
             {
                 BuildBack(transform, card, order, Track);
+            }
+            if (faceUp && card != null && MarkLookup != null)
+            {
+                string mark = MarkLookup(card.Id);
+                if (!string.IsNullOrEmpty(mark))
+                {
+                    // A violet ribbon along the bottom edge: the one colour no element uses, so a
+                    // marked card never reads as an elemented one.
+                    var bandCenter = new Vector2(0f, -BodyHeight * 0.5f + 0.16f);
+                    Track(ViewUtil.MakeRect(transform, "MarkBand", bandCenter,
+                        new Vector2(BodyWidth - BandInset * 2f, 0.24f),
+                        new Color(0.46f, 0.24f, 0.72f, 0.96f), order + 3), order + 3);
+                    TrackText(ViewUtil.MakeText3D(transform, "MarkLabel", bandCenter, mark, 90,
+                        0.016f, new Color(0.95f, 0.88f, 1f), order + 4,
+                        TextAnchor.MiddleCenter), order + 4);
+                }
             }
         }
 
@@ -360,6 +396,16 @@ namespace ProjectBlock.View
         public delegate bool RiderQuery(int cardId, out int cellIndex, out Sprite icon);
 
         public static RiderQuery RiderLookup;
+
+        /// <summary>A MARK a power has put on a card ("Bükülme", "Olta"): the label to print
+        /// along the card's bottom edge, or null for an unmarked card. Set once by the controller.
+        /// </summary>
+        public static System.Func<int, string> MarkLookup;
+
+        /// <summary>"Gen nakli": the element a card is carrying ON LOAN, or null. The loan lives
+        /// on the round, not the card, so the card cannot say it itself; set once by the
+        /// controller. Null means no card borrows anything.</summary>
+        public static System.Func<int, BlockElement?> BorrowedGeneLookup;
 
         /// <summary>The shape the face was drawn with, so a mark can find one of its cubes.</summary>
         private BlockShape builtShape;

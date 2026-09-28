@@ -229,8 +229,8 @@ namespace ProjectBlock.View
                 : shapeMode
                 ? Loc.Pick("PICK A SHAPE", "ŞEKİL SEÇ")
                 : sellMode
-                    ? Loc.Pick("SELL CARDS  -  hover for details, click to sell",
-                        "KART SAT  -  detay için üzerine gel, satmak için tıkla")
+                    ? Loc.Pick("SELL CARDS  -  " + sorted.Count + " cards  -  hover for details, click to sell",
+                        "KART SAT  -  " + sorted.Count + " kart  -  detay için üzerine gel, satmak için tıkla")
                     : Loc.Pick("YOUR DECK  -  " + sorted.Count + " cards",
                         "DESTEN  -  " + sorted.Count + " kart");
             string hint = scrolls

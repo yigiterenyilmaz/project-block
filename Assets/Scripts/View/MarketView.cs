@@ -850,7 +850,7 @@ namespace ProjectBlock.View
                 deckCentre.y - deckSize.y * 0.5f, deckWidth, deckSize.y);
             ViewUtil.MakeRect(transform, "DemoDeck", deckCentre, deckSize, DemoDeckColor, 35);
             ViewUtil.MakeText3D(transform, "DemoDeckLabel", deckCentre + new Vector2(0f, 0.12f),
-                Loc.Pick("DECK", "DESTE"), 60, 0.040f, PanelCreamColor, 38,
+                Loc.Pick("DECK (" + session.OwnedCards.Count + ")", "DESTE (" + session.OwnedCards.Count + ")"), 60, 0.040f, PanelCreamColor, 38,
                 TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "DemoDeckSub", deckCentre - new Vector2(0f, 0.17f),
                 Loc.Pick("sell cards", "kart sat"), 90, 0.024f, PanelCreamColor, 38,
@@ -1618,7 +1618,7 @@ namespace ProjectBlock.View
                 deckSize.x, deckSize.y);
             ViewUtil.MakeRect(transform, "DemoDeck", deckCentre, deckSize, DemoDeckColor, 35);
             ViewUtil.MakeText3D(transform, "DemoDeckLabel", deckCentre + new Vector2(0f, 0.11f),
-                Loc.Pick("DECK", "DESTE"), 60, 0.040f, PanelCreamColor, 38, TextAnchor.MiddleCenter);
+                Loc.Pick("DECK (" + session.OwnedCards.Count + ")", "DESTE (" + session.OwnedCards.Count + ")"), 60, 0.040f, PanelCreamColor, 38, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "DemoDeckSub", deckCentre - new Vector2(0f, 0.17f),
                 Loc.Pick("inspect & sell cards", "kartlara bak ve sat"), 90, 0.021f, SectionHeaderColor, 38,
                 TextAnchor.MiddleCenter);
@@ -1791,7 +1791,7 @@ namespace ProjectBlock.View
                 deckSize.x, deckSize.y);
             ViewUtil.MakeRect(transform, "DemoDeck", deckCentre, deckSize, DemoDeckColor, 35);
             ViewUtil.MakeText3D(transform, "DemoDeckLabel", deckCentre + new Vector2(0f, 0.11f),
-                Loc.Pick("DECK", "DESTE"), 60, 0.040f, PanelCreamColor, 38, TextAnchor.MiddleCenter);
+                Loc.Pick("DECK (" + session.OwnedCards.Count + ")", "DESTE (" + session.OwnedCards.Count + ")"), 60, 0.040f, PanelCreamColor, 38, TextAnchor.MiddleCenter);
             ViewUtil.MakeText3D(transform, "DemoDeckSub", deckCentre - new Vector2(0f, 0.16f),
                 Loc.Pick("sell cards", "kart sat"), 90, 0.021f, SectionHeaderColor, 38,
                 TextAnchor.MiddleCenter);
