@@ -35,7 +35,18 @@ namespace ProjectBlock.View
             // Noticed BEFORE the refresh, because the refresh is what starts the replacement
             // mine's reveal and it has to know to wait for the blast. Drawn further down.
             TriggerMineDetonation(round);
+            // AN INFLATION RAN OUT this turn: the bands it added are crushed back inward. What
+            // stood in them is taken from the board as it is still SHOWN, before the repaint.
+            GameBoard shownBefore = boardView.Board;
+            float cellBefore = boardView.CellWorldSize;
+            List<PowerFxView.CubeFace> doomed = TakeDeflateFaces(round, shownBefore);
             RefreshAll(report);
+            PlayPlacedOnMines(round);
+            PlayEchoRecorded();
+            if (doomed != null && boardView.Board != shownBefore)
+            {
+                powerFx.PlayBoardResize(boardView, shownBefore, cellBefore, doomed);
+            }
             // A moving board's turn end is drawn on THIS frame, the one the board was repainted in
             // - never behind the water below, or its cubes would be seen at their new cells before
             // they had set off.
@@ -250,6 +261,14 @@ namespace ProjectBlock.View
                 jokerBar.ProcJoker(report.ProcedJokers[i]);
                 PlayArenaProc(report.ProcedJokers[i]);
             }
+            // "LEHIMLEME": a welded block paid its size bonus on this turn.
+            if (report.WeldBonusPercent > 0)
+            {
+                FloatingTextFx.Spawn(transform, MainBoardCenter + new Vector2(0f, 1.1f),
+                    Loc.Pick("WELDED +" + report.WeldBonusPercent + "%",
+                        "LEHİMLİ +%" + report.WeldBonusPercent),
+                    new Color(1f, 0.72f, 0.35f), 60, 0.06f);
+            }
             // WATER THAT FELL INTO PLACE paid its bonus: say so over the arena, once.
             if (report.WaterFallLines > 0)
             {
@@ -258,6 +277,22 @@ namespace ProjectBlock.View
                         "SU DÜŞTÜ +%" + session.Config.Scoring.WaterFallBonusPercent),
                     new Color(0.53f, 0.87f, 0.87f), 60, 0.06f);
             }
+        }
+
+        /// <summary>The row/column picker's step, in words: which two things to pick, and once
+        /// the first is chosen, that the second must be on the same axis.</summary>
+        private string LineSwapStep()
+        {
+            if (!lineSwapPicker.HasFirstPick)
+            {
+                return Loc.Pick("pick a row or a column, then the one to swap it with",
+                    "bir satır ya da sütun seç, sonra yer değiştireceği diğerini");
+            }
+            return lineSwapPicker.FirstPickAxis == LineAxis.Row
+                ? Loc.Pick("now pick the ROW to swap it with (the same tab again un-picks)",
+                    "şimdi yer değiştireceği SATIRI seç (aynı sekme seçimi geri alır)")
+                : Loc.Pick("now pick the COLUMN to swap it with (the same tab again un-picks)",
+                    "şimdi yer değiştireceği SÜTUNU seç (aynı sekme seçimi geri alır)");
         }
 
         /// <summary>
@@ -1152,6 +1187,101 @@ namespace ProjectBlock.View
             new List<ParasiteHostView.Host>();
 
         private readonly List<GridPos> parasiteSevered = new List<GridPos>();
+
+        /// <summary>"Mayın": a block landed on armed mines - each goes off with a real blast.
+        /// </summary>
+        private void PlayPlacedOnMines(RoundEngine round)
+        {
+            if (round == null || boardView == null || round.Board != boardView.Board)
+            {
+                return;
+            }
+            IReadOnlyList<GridPos> mines = round.Board.LastMinesTriggered;
+            for (int i = 0; i < mines.Count; i++)
+            {
+                FlashDynamite(boardView.transform.TransformPoint(boardView.CellToWorld(mines[i])));
+                sfx.Explode();
+            }
+            if (mines.Count > 0)
+            {
+                FloatingTextFx.Spawn(transform, boardView.transform.TransformPoint(boardView.CellToWorld(mines[0]))
+                    + new Vector3(0f, 1f, 0f), Loc.Pick("BOOM!", "BUM!"), new Color(1f, 0.45f, 0.25f), 72, 0.085f);
+            }
+        }
+
+        /// <summary>The last echo recording played, matched by identity.</summary>
+        private object lastEchoSeen;
+
+        /// <summary>"Eko" just heard an explosion and memorised it.</summary>
+        private void PlayEchoRecorded()
+        {
+            if (session == null || session.Powers == null || boardView == null)
+            {
+                return;
+            }
+            IReadOnlyList<Power> owned = session.Powers.Powers;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                var eko = owned[i] as EkoPower;
+                if (eko == null || eko.LastRecorded == null || ReferenceEquals(eko.LastRecorded, lastEchoSeen))
+                {
+                    continue;
+                }
+                lastEchoSeen = eko.LastRecorded;
+                var cells = new List<Vector2>();
+                foreach (GridPos c in eko.Memory)
+                {
+                    cells.Add(boardView.transform.TransformPoint(boardView.CellToWorld(c)));
+                }
+                powerFx.PlayEchoRecord(cells, boardView.CellWorldSize, MainBoardCenter);
+            }
+        }
+
+        /// <summary>The last deflation played, matched by identity (InflationPower.LastDeflate).
+        /// </summary>
+        private object lastDeflateSeen;
+
+        /// <summary>When an inflation deflated this turn, the cubes the view still shows in the
+        /// bands the new board no longer has; null when nothing deflated.</summary>
+        private List<PowerFxView.CubeFace> TakeDeflateFaces(RoundEngine round, GameBoard shown)
+        {
+            if (session == null || session.Powers == null || round == null || shown == null)
+            {
+                return null;
+            }
+            bool deflated = false;
+            IReadOnlyList<Power> owned = session.Powers.Powers;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                var inflation = owned[i] as InflationPower;
+                if (inflation != null && inflation.LastDeflate != null
+                    && !ReferenceEquals(inflation.LastDeflate, lastDeflateSeen))
+                {
+                    lastDeflateSeen = inflation.LastDeflate;
+                    deflated = true;
+                }
+            }
+            if (!deflated || round.Board == shown)
+            {
+                return null;
+            }
+            var faces = new List<PowerFxView.CubeFace>();
+            for (int x = shown.MinX; x < shown.MinX + shown.Width; x++)
+            {
+                for (int y = shown.MinY; y < shown.MinY + shown.Height; y++)
+                {
+                    var pos = new GridPos(x, y);
+                    Sprite tile;
+                    Color colour;
+                    if (!round.Board.IsInside(pos) && shown.IsInside(pos)
+                        && boardView.TryCubeLook(pos, 0f, out tile, out colour))
+                    {
+                        faces.Add(new PowerFxView.CubeFace { Cell = pos, Tile = tile, Colour = colour });
+                    }
+                }
+            }
+            return faces;
+        }
 
         /// <summary>The parasite in play, or null. One per run by the rules.</summary>
         private ParazitJoker FindParasite()
@@ -2279,6 +2409,10 @@ namespace ProjectBlock.View
             if (!on)
             {
                 retroFallHand = -1; // no piece falls once retro is off (the board shrank back)
+                if (retroNext != null)
+                {
+                    retroNext.Hide();
+                }
             }
             if (crt != null)
             {
@@ -2711,10 +2845,16 @@ namespace ProjectBlock.View
                 if (shop != null && shop.Targeting == ActivationTargeting.CellAndHandCard)
                 {
                     step = workshopDonorCell.HasValue
-                        ? Loc.Pick("now pick the card that takes the element",
-                            "şimdi elementi alacak kartı seç")
-                        : Loc.Pick("pick the cube whose element you want",
-                            "elementini alacağın küpü seç");
+                        ? Loc.Pick("now pick a card in your hand, or a plain block on the board, to "
+                                + "take the element (the same block again to re-pick)",
+                            "şimdi elementi alacak kartı ya da tahtadaki elementsiz bloğu seç "
+                                + "(yeniden seçmek için aynı bloğa tıkla)")
+                        : Loc.Pick("pick the block whose element you want",
+                            "elementini alacağın bloğu seç");
+                    if (!string.IsNullOrEmpty(geneRefusal))
+                    {
+                        step += "\n" + geneRefusal;
+                    }
                 }
                 else if (shop != null && shop.Targeting == ActivationTargeting.BoardArea)
                 {
@@ -2726,7 +2866,12 @@ namespace ProjectBlock.View
                 }
                 else if (shop != null && shop.Targeting == ActivationTargeting.TwoHandCards)
                 {
-                    step = workshopFirstCard < 0
+                    step = weldPicker.IsOpen
+                        ? Loc.Pick("lay the second block against the first, then WELD (arrows move it, "
+                                + "Enter welds)",
+                            "ikinci bloğu birincinin yanına yerleştir ve LEHİMLE'ye bas (oklar taşır, "
+                                + "Enter lehimler)")
+                        : workshopFirstCard < 0
                         ? Loc.Pick("pick the FIRST block to weld",
                             "lehimlenecek BİRİNCİ bloğu seç")
                         : Loc.Pick("now pick the SECOND block",
@@ -2734,8 +2879,14 @@ namespace ProjectBlock.View
                 }
                 else
                 {
-                    step = Loc.Pick("pick the block to cut",
-                        "kesilecek bloğu seç");
+                    step = nesterEditor.IsOpen
+                        ? Loc.Pick("paint the first piece, then CUT (Enter cuts)",
+                            "birinci parçayı boya ve KES'e bas (Enter keser)")
+                        : Loc.Pick("pick the block to cut", "kesilecek bloğu seç");
+                    if (!nesterEditor.IsOpen && !string.IsNullOrEmpty(nesterRefusal))
+                    {
+                        step += "\n" + nesterRefusal;
+                    }
                 }
                 messageText.text = (shop != null ? shop.DisplayName : "Power") + ": " + step
                     + Loc.Pick("\n[Esc] cancel", "\n[Esc] vazgeç");
@@ -2747,6 +2898,26 @@ namespace ProjectBlock.View
                 string what = pendingOltaMark
                     ? Loc.Pick("pick the hand card to mark (free, once per round)",
                         "işaretlenecek kartı elinden seç (bedava, raunt başına bir)")
+                    : targeting != null && targeting.Targeting == ActivationTargeting.LineSwap
+                        ? LineSwapStep()
+                    : targeting != null && targeting.Targeting == ActivationTargeting.OwnedPower
+                        ? Loc.Pick("click a spent power to recharge it",
+                            "doldurmak istediğin boş güce tıkla")
+                    : targeting is BuldozerPower
+                        ? (bulldozerAxis == LineAxis.Row
+                            ? Loc.Pick("ROWS - pick where   [right-click / wheel / R] switch to columns",
+                                "SATIRLAR - yerini seç   [sağ tık / tekerlek / R] sütunlara geç")
+                            : Loc.Pick("COLUMNS - pick where   [right-click / wheel / R] switch to rows",
+                                "SÜTUNLAR - yerini seç   [sağ tık / tekerlek / R] satırlara geç"))
+                    : targeting is CimbizPower && tweezerSlot >= 0
+                        ? (tweezerSteps == 0 ? Loc.Pick("no turn", "dönüş yok")
+                            : tweezerSteps == 2 ? "180°"
+                            : tweezerSteps == 1 ? Loc.Pick("90° clockwise", "90° saat yönünde")
+                            : Loc.Pick("90° anticlockwise", "90° saat yönünün tersine"))
+                            + Loc.Pick("   [left-click the card / wheel / R] turn   [right-click / Enter] confirm",
+                                "   [karta sol tık / tekerlek / R] çevir   [sağ tık / Enter] onayla")
+                    : targeting is CimbizPower
+                        ? Loc.Pick("pick the block to turn", "çevireceğin bloğu seç")
                     : targeting != null && targeting.Targeting == ActivationTargeting.BoardCell
                         ? Loc.Pick("pick a cell on the board", "oyun alanından bir hücre seç")
                         : Loc.Pick("pick a block from your hand", "elinden bir blok seç");
@@ -2758,10 +2929,8 @@ namespace ProjectBlock.View
             // The dead-end pause: the board is full and only the rescue power can save it.
             if (round.Status == RoundStatus.AwaitingRescue)
             {
-                messageText.text = Loc.Pick(
-                    "No room left! Pick two rows or two columns to swap.\n[Esc] give up",
-                    "Yer kalmadı! Yerini değiştirmek için iki satır ya da iki sütun seç."
-                        + "\n[Esc] pes et");
+                messageText.text = Loc.Pick("No room left! ", "Yer kalmadı! ") + LineSwapStep()
+                    + Loc.Pick("\n[Esc] give up", "\n[Esc] pes et");
                 return;
             }
 

@@ -40,6 +40,11 @@ namespace ProjectBlock.Core
         /// <summary>Turns left before the board snaps back, or 0 when not inflated.</summary>
         public int TurnsLeft { get; private set; }
 
+        /// <summary>A NEW object each time the board deflates, for the View to play the squeeze
+        /// once (matched by identity). Reporting only, [NotSaved].</summary>
+        [field: NotSaved]
+        public object LastDeflate { get; private set; }
+
         public bool IsInflated
         {
             get { return TurnsLeft > 0; }
@@ -84,6 +89,7 @@ namespace ProjectBlock.Core
             // Deflate: the engine pushes the doomed bands inward and then lets the normal
             // line rules run on the tighter board.
             turn.Round.ShrinkBoardPushingInward(Horizontal, Horizontal, Vertical, Vertical);
+            LastDeflate = new object();
         }
 
         /// <summary>A new round builds a fresh board at the normal size, so the inflation is

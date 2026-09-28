@@ -891,6 +891,41 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>
+        /// THE MARKET: the piles stay on screen but go BEHIND its panel - each pile becomes one
+        /// sorting group at the very bottom, so nothing of it (stack, face-up top, labels) can
+        /// print through - and the draw pile's count is taken off. Asked every frame, and a
+        /// rebuilt pile picks it up again on the next one.
+        /// </summary>
+        public void SetPilesBehind(bool behind)
+        {
+            PushBack(drawPileRoot, behind);
+            PushBack(discardPileRoot, behind);
+            if (drawCountLabel != null && drawCountLabel.gameObject.activeSelf == behind)
+            {
+                drawCountLabel.gameObject.SetActive(!behind);
+            }
+        }
+
+        private static void PushBack(Transform root, bool behind)
+        {
+            if (root == null)
+            {
+                return;
+            }
+            var group = root.GetComponent<UnityEngine.Rendering.SortingGroup>();
+            if (group == null)
+            {
+                if (!behind)
+                {
+                    return;
+                }
+                group = root.gameObject.AddComponent<UnityEngine.Rendering.SortingGroup>();
+            }
+            group.sortingOrder = -5;
+            group.enabled = behind;
+        }
+
         /// <summary>Remembered so a REBUILD comes back in the state it was left in - a relayout
         /// destroys and recreates the piles, and they would otherwise reappear over the market
         /// that had just hidden them.</summary>

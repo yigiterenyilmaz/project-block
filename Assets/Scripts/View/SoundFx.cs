@@ -51,6 +51,13 @@ namespace ProjectBlock.View
         private AudioClip flameClip;
         private AudioClip fuseClip;
         private AudioClip humClip;
+        private AudioClip cutClip;
+        private AudioClip drumClip;
+        private AudioClip rumbleClip;
+        private AudioClip pluckClip;
+        private AudioClip whooshClip;
+        private AudioClip squishClip;
+        private AudioClip stretchClip;
 
         // ---- retro ("CRT") audio: a looping mains hum, toggled by SetRetro. The bit-crush that
         // grits this hum (and every other sound) lives on the AudioListener, see BitCrushFilter.
@@ -70,6 +77,13 @@ namespace ProjectBlock.View
             flameClip = BuildFlame();
             fuseClip = BuildFuse();
             humClip = BuildHum();
+            cutClip = BuildCut();
+            drumClip = BuildDrum();
+            rumbleClip = BuildRumble();
+            pluckClip = BuildPluck();
+            whooshClip = BuildWhoosh();
+            squishClip = BuildSquish();
+            stretchClip = BuildStretch();
             stingClips = new[]
             {
                 BuildStingSiren(), BuildStingBoom(), BuildStingGong(), BuildStingClank(),
@@ -124,6 +138,62 @@ namespace ProjectBlock.View
         public void Shuffle()
         {
             PlayWithPitch(shuffleClip, 0.95f, 1.05f);
+        }
+
+        /// <summary>A high, thin, cold chime - two cards fusing ("Soğuk Füzyon") or a copy being
+        /// minted ("Aşırma", "Yedekleme"). Nothing is shuffled, so it must never be the shuffle.
+        /// </summary>
+        public void Fusion()
+        {
+            PlayWithPitch(sweepClip, 1.55f, 1.65f, 0.5f);
+        }
+
+        /// <summary>"Neşter": a blade drawn through a block - a bright rising slice.</summary>
+        public void Cut()
+        {
+            PlayWithPitch(cutClip, 0.95f, 1.08f, 0.85f);
+        }
+
+        /// <summary>A carved-wood drum hit (the totem landing, its eyes waking).</summary>
+        public void Drum(float pitch)
+        {
+            PlayWithPitch(drumClip, pitch, pitch * 1.03f, 0.9f);
+        }
+
+        /// <summary>Earth giving way: something rising out of (or sinking into) the arena.</summary>
+        public void Rumble()
+        {
+            PlayWithPitch(rumbleClip, 0.92f, 1.05f, 0.8f);
+        }
+
+        /// <summary>A leaf snapped off its stem - pitched per leaf.</summary>
+        public void Pluck(float pitch)
+        {
+            PlayWithPitch(pluckClip, pitch, pitch * 1.02f, 0.8f);
+        }
+
+        /// <summary>A soft airy sweep: something flying or swinging by.</summary>
+        public void Whoosh()
+        {
+            PlayWithPitch(whooshClip, 0.9f, 1.1f, 0.7f);
+        }
+
+        /// <summary>A heavy squash - the arena crushing its bands inward.</summary>
+        public void Squish()
+        {
+            PlayWithPitch(squishClip, 0.9f, 1.02f, 0.9f);
+        }
+
+        /// <summary>The arena stretching open - a rising elastic groan.</summary>
+        public void Stretch()
+        {
+            PlayWithPitch(stretchClip, 0.95f, 1.05f, 0.8f);
+        }
+
+        /// <summary>The sweep's chime at any pitch - blessings and payouts.</summary>
+        public void Chime(float pitch)
+        {
+            PlayWithPitch(sweepClip, pitch, pitch, 0.6f);
         }
 
         public void Buy()
@@ -360,6 +430,74 @@ namespace ProjectBlock.View
             AddTone(buffer, (int)(SampleRate * 0.08f), 0.5f, 659f, 659f, 0.26f, 1.6f);
             AddTone(buffer, (int)(SampleRate * 0.16f), 0.44f, 784f, 784f, 0.3f, 1.5f);
             return Finish("sweep", buffer);
+        }
+
+        private static AudioClip BuildCut()
+        {
+            float[] buffer = Buffer(0.28f);
+            var rng = new System.Random(91);
+            AddNoise(buffer, 0, 0.16f, 0.3f, 2.2f, rng);
+            AddTone(buffer, 0, 0.22f, 2400f, 5200f, 0.14f, 1.8f);   // the edge singing
+            AddTone(buffer, (int)(SampleRate * 0.02f), 0.12f, 900f, 300f, 0.12f, 3f); // the give
+            return Finish("cut", buffer);
+        }
+
+        private static AudioClip BuildDrum()
+        {
+            float[] buffer = Buffer(0.45f);
+            AddTone(buffer, 0, 0.4f, 150f, 70f, 0.7f, 2.4f);
+            AddTone(buffer, 0, 0.12f, 420f, 300f, 0.2f, 3f);
+            AddNoise(buffer, 0, 0.05f, 0.25f, 3f, new System.Random(12));
+            return Finish("drum", buffer);
+        }
+
+        private static AudioClip BuildRumble()
+        {
+            float[] buffer = Buffer(0.8f);
+            var rng = new System.Random(33);
+            AddNoise(buffer, 0, 0.75f, 0.22f, 1.2f, rng);
+            AddTone(buffer, 0, 0.75f, 55f, 40f, 0.5f, 1.2f);
+            AddTone(buffer, 0, 0.6f, 82f, 60f, 0.25f, 1.5f);
+            return Finish("rumble", buffer);
+        }
+
+        private static AudioClip BuildPluck()
+        {
+            float[] buffer = Buffer(0.18f);
+            AddNoise(buffer, 0, 0.03f, 0.35f, 3f, new System.Random(5));
+            AddTone(buffer, 0, 0.16f, 900f, 1500f, 0.3f, 3f);
+            return Finish("pluck", buffer);
+        }
+
+        private static AudioClip BuildWhoosh()
+        {
+            float[] buffer = Buffer(0.45f);
+            var rng = new System.Random(8);
+            // A swell and fall of soft noise: several short grains rising then falling in level.
+            for (int g = 0; g < 9; g++)
+            {
+                float level = Mathf.Sin((g + 0.5f) / 9f * Mathf.PI) * 0.16f;
+                AddNoise(buffer, (int)(SampleRate * 0.04f * g), 0.09f, level, 1.2f, rng);
+            }
+            return Finish("whoosh", buffer);
+        }
+
+        private static AudioClip BuildSquish()
+        {
+            float[] buffer = Buffer(0.4f);
+            AddTone(buffer, 0, 0.35f, 220f, 60f, 0.55f, 2f);
+            AddNoise(buffer, 0, 0.2f, 0.3f, 2.5f, new System.Random(21));
+            AddTone(buffer, (int)(SampleRate * 0.12f), 0.2f, 120f, 90f, 0.3f, 2.5f);
+            return Finish("squish", buffer);
+        }
+
+        private static AudioClip BuildStretch()
+        {
+            float[] buffer = Buffer(0.55f);
+            AddTone(buffer, 0, 0.5f, 90f, 260f, 0.4f, 1.3f);
+            AddTone(buffer, 0, 0.5f, 180f, 520f, 0.15f, 1.5f);
+            AddNoise(buffer, 0, 0.4f, 0.08f, 1.5f, new System.Random(44));
+            return Finish("stretch", buffer);
         }
 
         private static AudioClip BuildShuffle()

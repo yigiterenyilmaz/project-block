@@ -1036,6 +1036,12 @@ dropped that way once each.
   shapes, `docs/parazit-zar.png` for the film over four materials with each of its parts switched
   off in turn, and `docs/parazit-kivrim.png` for the gathers drawn the WRONG way — as geometry —
   which is what settled the argument.
+- `Assets/Scripts/View/PowerFxView.cs` — activation animations for powers without a view of
+  their own: Totem (carved pole out of a rune circle), İkinci Şans (a four-leaf clover whose
+  plucked leaves each take their quadrant of cubes), Soğuk Füzyon, Aşırma / Yedekleme (one card
+  lifted off its pile splits into the copies), Tılsım's charm, and the inflations' arena
+  GROW / SHRINK (`BoardView.SetInflate` is a fourth term on the arena transform, `SetCellSquash`
+  squashes single cells; the deflate is keyed on `InflationPower.LastDeflate` by identity).
 - `Assets/Scripts/View/Menus/` — the menu layer (title, pause, settings, how to play, run
   summary). Unlike the rest of View this is NOT disposable: it is the real UI shell, built
   on the HUD canvas. Every screen is `MenuScreenView` with different content — do not

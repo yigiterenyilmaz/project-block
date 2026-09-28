@@ -863,6 +863,63 @@ namespace ProjectBlock.View
             ApplyArenaTransform();
         }
 
+        /// <summary>
+        /// The inflation powers' resize (PowerFxView): a FOURTH term, a scale about the board's
+        /// centre that holds the old cell size for a moment after a rebuild and eases back to 1.
+        /// </summary>
+        public void SetInflate(float scale)
+        {
+            inflateScale = Mathf.Max(0.05f, scale);
+            ApplyArenaTransform();
+        }
+
+        /// <summary>Squashes one cell's renderer by <paramref name="factor"/> (x, y) of its own
+        /// scale - the resize's unfolding bands and the rim taking the blow. The base is taken the
+        /// first time a cell is squashed, so writing every frame never compounds.</summary>
+        public void SetCellSquash(GridPos cell, Vector2 factor)
+        {
+            if (board == null || cellRenderers == null || !board.IsInside(cell))
+            {
+                return;
+            }
+            SpriteRenderer r = cellRenderers[cell.X - board.MinX, cell.Y - board.MinY];
+            if (r == null)
+            {
+                return;
+            }
+            Vector3 baseScale;
+            if (!squashBase.TryGetValue(cell, out baseScale))
+            {
+                baseScale = r.transform.localScale;
+                squashBase[cell] = baseScale;
+            }
+            r.transform.localScale = new Vector3(baseScale.x * factor.x, baseScale.y * factor.y, baseScale.z);
+        }
+
+        /// <summary>Puts every squashed cell back at the scale it had.</summary>
+        public void ClearCellSquash()
+        {
+            if (board != null && cellRenderers != null)
+            {
+                foreach (KeyValuePair<GridPos, Vector3> entry in squashBase)
+                {
+                    if (board.IsInside(entry.Key))
+                    {
+                        SpriteRenderer r = cellRenderers[entry.Key.X - board.MinX, entry.Key.Y - board.MinY];
+                        if (r != null)
+                        {
+                            r.transform.localScale = entry.Value;
+                        }
+                    }
+                }
+            }
+            squashBase.Clear();
+        }
+
+        private readonly Dictionary<GridPos, Vector3> squashBase = new Dictionary<GridPos, Vector3>();
+
+        private float inflateScale = 1f;
+
         private float pressureScale = 1f;
         private Vector2 pressureKnock;
         private Vector2 tremorOffset;
@@ -873,7 +930,7 @@ namespace ProjectBlock.View
         /// With no turn this is exactly the squeeze SetPressure always wrote.</summary>
         private void ApplyArenaTransform()
         {
-            float s = pressureScale;
+            float s = pressureScale * inflateScale;
             Quaternion turn = Quaternion.Euler(0f, 0f, tremorDegrees);
             Vector3 centre = new Vector3(pressureCentre.x, pressureCentre.y, 0f);
             Vector3 turnedCentre = turn * (centre * s);
@@ -1293,6 +1350,7 @@ namespace ProjectBlock.View
             waterHiddenCells.Clear(); // the drop sprites go with the children below
             borrowedCells.Clear(); // the renderers below are rebuilt enabled anyway
             heldCells.Clear(); // a new board: nothing is on its way to any of its cells
+            squashBase.Clear(); // its renderers go with the children below
             // EXCEPT the overtime glow, which outlives a rebuild. It is not part of the board's
             // contents: it is a light over them, its texture costs real time to generate, and
             // sweeping it up with everything else meant the overtime effect was torn down and

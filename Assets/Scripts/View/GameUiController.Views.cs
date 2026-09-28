@@ -186,6 +186,19 @@ namespace ProjectBlock.View
             lineSwapGo.transform.SetParent(transform, false);
             lineSwapPicker = lineSwapGo.AddComponent<LineSwapPickerView>();
 
+            var lineSwapAnimGo = new GameObject("LineSwapAnim");
+            lineSwapAnimGo.transform.SetParent(transform, false);
+            lineSwapAnim = lineSwapAnimGo.AddComponent<LineSwapAnimView>();
+
+            var powerFxGo = new GameObject("PowerFx");
+            powerFxGo.transform.SetParent(transform, false);
+            powerFx = powerFxGo.AddComponent<PowerFxView>();
+            powerFx.Sfx = sfx;
+
+            var retroNextGo = new GameObject("RetroNext");
+            retroNextGo.transform.SetParent(transform, false);
+            retroNext = retroNextGo.AddComponent<RetroNextView>();
+
             var jokerGo = new GameObject("JokerBarView");
             jokerGo.transform.SetParent(transform, false);
             jokerBar = jokerGo.AddComponent<JokerBarView>();
@@ -228,6 +241,8 @@ namespace ProjectBlock.View
             parasiteGo.transform.SetParent(transform, false);
             parasitePanel = parasiteGo.AddComponent<ParasiteAttachView>();
             CardVisual.RiderLookup = LookUpRider;
+            CardVisual.BorrowedGeneLookup = LookUpBorrowedGene;
+            CardVisual.MarkLookup = LookUpCardMark;
 
             var mineGo = new GameObject("MineShuffle");
             mineGo.transform.SetParent(transform, false);
@@ -236,6 +251,10 @@ namespace ProjectBlock.View
             var weldGo = new GameObject("WeldPicker");
             weldGo.transform.SetParent(transform, false);
             weldPicker = weldGo.AddComponent<WeldPickerView>();
+
+            var nesterGo = new GameObject("NesterEditor");
+            nesterGo.transform.SetParent(transform, false);
+            nesterEditor = nesterGo.AddComponent<NesterEditorView>();
 
             var animLabGo = new GameObject("AnimationLab");
             animLabGo.transform.SetParent(transform, false);

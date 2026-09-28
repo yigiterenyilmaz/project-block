@@ -139,6 +139,12 @@ namespace ProjectBlock.View
         private PressureVesselView pressureVessel;
         private LineSwapPickerView lineSwapPicker;
 
+        /// <summary>"Kentsel Dönüşüm": the two lines trading places, drawn.</summary>
+        private LineSwapAnimView lineSwapAnim;
+
+        /// <summary>Totem, İkinci Şans and Soğuk Füzyon activation effects.</summary>
+        private PowerFxView powerFx;
+
         private int comboStreak;
         private readonly List<InfectedCell> infectionBuffer = new List<InfectedCell>();
         private Text infoText;
@@ -769,7 +775,9 @@ namespace ProjectBlock.View
                 OpenBlockGallery();
                 return;
             }
-            if (session == null || waterAnimating || supurgeAnimating)
+            if (session == null || waterAnimating || supurgeAnimating
+                || (lineSwapAnim != null && lineSwapAnim.Playing)
+                || (powerFx != null && powerFx.Playing))
             {
                 return; // input is locked while a board animation plays
             }
