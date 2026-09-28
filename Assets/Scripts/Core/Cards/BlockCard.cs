@@ -72,6 +72,12 @@ namespace ProjectBlock.Core
         /// Purely an identity marker so the UI can tag it; it changes no rule by itself.</summary>
         public bool IsSmuggled { get; internal set; }
 
+        /// <summary>True for a block welded out of two others ("Lehimleme"). Tags the card
+        /// "welded" in the hand, and the explosion or sweep that destroys its LAST cube on the
+        /// board is paid a bonus that grows with its size (<see cref="LehimlemePower.BonusPercentFor"/>,
+        /// applied in the turn resolver).</summary>
+        public bool IsWelded { get; internal set; }
+
         /// <summary>
         /// True for a DEFECTIVE smuggled card: an ordinary-looking block that will not stay on the
         /// board. You place it legally, and it falls straight through the arena and out of the

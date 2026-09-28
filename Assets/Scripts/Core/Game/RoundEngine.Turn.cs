@@ -93,7 +93,7 @@ namespace ProjectBlock.Core
             if (!mainWorldSitsOut && !fallsThrough && !antimatter && !negative)
             {
                 report.PlacedCells = Board.Place(card, EffectiveShape(card), origin,
-                    Has(card, BlockElement.Ghost));
+                    Has(card, BlockElement.Ghost), BorrowedCubeKind(card));
                 // "Hedefli": the block's one shot is live from the moment it lands until the
                 // first of its cubes breaks (see RoundEngine.Targeted).
                 ArmTargetedBlock(card);
@@ -126,6 +126,11 @@ namespace ProjectBlock.Core
             if (!mainWorldSitsOut)
             {
                 cardPlacedSize[card.Id] = report.PlacedCells.Count;
+                // "Lehimleme": a welded block on the board is waiting to be finished off.
+                if (card.IsWelded && report.PlacedCells.Count > 0)
+                {
+                    weldedOnBoard[card.Id] = card.Shape.Size;
+                }
             }
 
             // 2. explode full lines + score (fire chains resolve inside the board).
@@ -298,12 +303,19 @@ namespace ProjectBlock.Core
                 comboCount = 0;
                 comboBlankTurns = 0;
             }
+
             report.ComboCount = comboCount;
 
             // 3. clean sweep (single central event - see the file header). This is the player's
             // OWN placement clear, so it always counts (pays bonus + recharges) - unlike the
             // joker/power-triggered sweeps, which route through TryResolveCleanSweep.
             ResolvePlacementSweep();
+
+            // 3.5 "LEHIMLEME": the explosion or sweep that takes the LAST cube of a welded block
+            //     pays a percentage that grows with the block's size. After the sweep, so a sweep
+            //     that finishes it counts; through the multiplier stage like the combo, so it
+            //     composes with every joker multiplier rather than overwriting one.
+            PayFinishedWelds(card);
 
             // 4. element upkeep: gold pays while it sits on the board
             int goldCubes = Board.CountCubesOfKind(CubeKind.Gold);

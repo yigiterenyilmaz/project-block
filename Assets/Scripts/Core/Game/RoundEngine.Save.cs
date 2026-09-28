@@ -63,6 +63,7 @@ namespace ProjectBlock.Core
             WriteDynamite(w, key + ".dynamite");
             WriteIntMap(w, key + ".rotations", rotations);
             WriteIntMap(w, key + ".placedSize", cardPlacedSize);
+            WriteIntMap(w, key + ".welded", weldedOnBoard);
             WriteIntMap(w, key + ".frozen", frozenCards);
 
             w.Write(key + ".fox.count", foxShapes.Count);
@@ -146,6 +147,7 @@ namespace ProjectBlock.Core
             round.ReadDynamite(r, key + ".dynamite");
             ReadIntMap(r, key + ".rotations", round.rotations);
             ReadIntMap(r, key + ".placedSize", round.cardPlacedSize);
+            ReadIntMap(r, key + ".welded", round.weldedOnBoard);
             ReadIntMap(r, key + ".frozen", round.frozenCards);
 
             int foxCount = r.ReadInt(key + ".fox.count");

@@ -484,6 +484,11 @@ namespace ProjectBlock.Core
         /// actually doing when the flat number it used to show no longer exists.</summary>
         public double ComboMultiplier { get; internal set; } = 1.0;
 
+        /// <summary>"Lehimleme": the percentage this turn's clear was paid for finishing off a
+        /// welded block (summed if it finished several), or 0. Reporting only - the popup prints
+        /// it.</summary>
+        public int WeldBonusPercent { get; internal set; }
+
         /// <summary>Every cube removed this turn, from any source (lines, fire chains,
         /// dynamite, joker effects), with the value it held. Grows as the turn resolves.</summary>
         public IReadOnlyList<DestroyedCube> DestroyedCubes { get; internal set; }

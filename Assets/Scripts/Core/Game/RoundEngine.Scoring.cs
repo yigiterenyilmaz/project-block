@@ -43,26 +43,106 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
-        /// "Gen nakli": moves an element off a cube and onto a card, and remembers how to undo it.
-        /// The cube goes plain; the card carries the element until it reaches the discard, at
-        /// which point BOTH go back to what they were (see ReturnBorrowedGenes).
+        /// "Gen nakli": moves an element off a whole BLOCK and onto a card, and remembers how to
+        /// undo it. Every cube of the block goes plain; the card carries the element until it
+        /// reaches the discard, at which point BOTH go back to what they were
+        /// (see ReturnBorrowedGene).
         /// </summary>
-        internal bool TransplantElement(GridPos cell, BlockCard card, BlockElement gene)
+        internal bool TransplantElement(IReadOnlyList<GridPos> donor, BlockCard card,
+            BlockElement gene)
         {
-            Cube? cube = Board.GetCube(cell);
-            if (card == null || !cube.HasValue || borrowedGenes.ContainsKey(card.Id))
+            if (card == null || donor == null || donor.Count == 0
+                || borrowedGenes.ContainsKey(card.Id))
             {
                 return false;
             }
-            borrowedGenes[card.Id] = new BorrowedGene(cell, cube.Value.Kind, gene);
-            Board.SetCubeAt(cell, new Cube(CubeKind.Normal, cube.Value.SourceCardId));
+            Cube? first = Board.GetCube(donor[0]);
+            if (!first.HasValue)
+            {
+                return false;
+            }
+            borrowedGenes[card.Id] = new BorrowedGene(new List<GridPos>(donor), first.Value.Kind,
+                first.Value.SourceCardId, gene);
+            RekindBlock(donor, CubeKind.Normal);
             cardElements[card.Id] = gene;
             return true;
         }
 
+        /// <summary>
+        /// "Gen nakli" onto the BOARD: every cube of the giving block goes plain and every cube of
+        /// the taking block becomes the element. A move, not a loan - nothing on the board is ever
+        /// discarded, so there is no moment for it to be given back on.
+        /// </summary>
+        internal bool TransplantElementToBlock(IReadOnlyList<GridPos> donor,
+            IReadOnlyList<GridPos> recipient, BlockElement gene)
+        {
+            if (donor == null || donor.Count == 0 || recipient == null || recipient.Count == 0)
+            {
+                return false;
+            }
+            RekindBlock(donor, CubeKind.Normal);
+            RekindBlock(recipient, CubeRules.KindForElement(gene));
+            return true;
+        }
+
+        /// <summary>Welded blocks standing on the board, by card id, with their size - what the
+        /// clear that finishes one is paid on (<see cref="PayFinishedWelds"/>).</summary>
+        private readonly Dictionary<int, int> weldedOnBoard = new Dictionary<int, int>();
+
+        /// <summary>
+        /// Pays every welded block whose LAST cube this turn's explosion or sweep took. A block
+        /// counts as finished here only if it had cubes this turn - it stood at the turn's start,
+        /// or it is the block just placed - so a weld something else wiped out between turns is
+        /// simply dropped, unpaid.
+        /// </summary>
+        private void PayFinishedWelds(BlockCard placed)
+        {
+            if (weldedOnBoard.Count == 0)
+            {
+                return;
+            }
+            foreach (int cardId in new List<int>(weldedOnBoard.Keys))
+            {
+                if (Board.CountCubesOf(cardId) > 0)
+                {
+                    continue;
+                }
+                int size = weldedOnBoard[cardId];
+                weldedOnBoard.Remove(cardId);
+                int atTurnStart;
+                bool stoodThisTurn = (placed != null && placed.Id == cardId)
+                    || (cardCubesAtTurnStart.TryGetValue(cardId, out atTurnStart) && atTurnStart > 0);
+                if (!stoodThisTurn)
+                {
+                    continue;
+                }
+                int percent = LehimlemePower.BonusPercentFor(size);
+                currentReport.WeldBonusPercent += percent;
+                currentTurn.Score.AddMultiplier(1.0 + percent / 100.0, "base.weld");
+            }
+        }
+
+        /// <summary>Gives every cube on these cells a new kind, keeping which card it came from
+        /// and whether it is protected ("Parazit") - a gene changes what a cube is made of, not
+        /// whose it is. A kind change is not a destruction, so the snapshot the destruction log
+        /// diffs against is brought up to date rather than left to report one.</summary>
+        private void RekindBlock(IReadOnlyList<GridPos> cells, CubeKind kind)
+        {
+            for (int i = 0; i < cells.Count; i++)
+            {
+                Cube? cube = Board.GetCube(cells[i]);
+                if (cube.HasValue)
+                {
+                    Board.SetCubeAt(cells[i],
+                        new Cube(kind, cube.Value.SourceCardId, cube.Value.Protected));
+                }
+            }
+            ResyncSnapshot();
+        }
+
         /// <summary>The element a card is carrying on loan, or null. Read by CardHasElement, so
         /// every rule that asks what a block is made of sees the borrowed gene too.</summary>
-        internal BlockElement? BorrowedElementOf(int cardId)
+        public BlockElement? BorrowedElementOf(int cardId)
         {
             BlockElement gene;
             return cardElements.TryGetValue(cardId, out gene) ? gene : (BlockElement?)null;
@@ -79,11 +159,20 @@ namespace ProjectBlock.Core
             }
             borrowedGenes.Remove(cardId);
             cardElements.Remove(cardId);
-            Cube? cube = Board.GetCube(loan.Cell);
-            if (cube.HasValue && cube.Value.Kind == CubeKind.Normal)
+            // Every cube of the block that is still standing, still plain and still that card's
+            // gets its element back. A cube a line took is simply gone; a cube something else
+            // has since rewritten is left as it is.
+            var back = new List<GridPos>();
+            for (int i = 0; i < loan.Cells.Count; i++)
             {
-                Board.SetCubeAt(loan.Cell, new Cube(loan.Kind, cube.Value.SourceCardId));
+                Cube? cube = Board.GetCube(loan.Cells[i]);
+                if (cube.HasValue && cube.Value.Kind == CubeKind.Normal
+                    && cube.Value.SourceCardId == loan.SourceCardId)
+                {
+                    back.Add(loan.Cells[i]);
+                }
             }
+            RekindBlock(back, loan.Kind);
         }
 
         /// <summary>"Hidrolik pres" letting go. Reports the cells it changed as LIFTED - nothing

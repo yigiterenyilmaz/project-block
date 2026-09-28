@@ -186,6 +186,9 @@ public static class JokerTests
         Lehimleme_RefusesAJoinThatDoesNotTouch();
         GenNakli_MovesAnElementAndGivesItBack();
         GenNakli_RefusesAPlainCubeOrABusyCard();
+        GenNakli_MovesAWholeBlockOntoABoardBlock();
+        GenNakli_ABlockIsWhatIsJoinedAndAlike();
+        GenNakli_ABrokenBlockCannotTakeAGene();
         Pres_SqueezesFourCellsIntoOne();
         Pres_ShovesCubesOffTheEdgeWhenItOpens();
         Pres_WillNotBudgeObsidianAndDetonatesWhenStuck();

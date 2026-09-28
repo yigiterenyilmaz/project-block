@@ -158,25 +158,48 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>
-    /// "Lehimleme" - weld two cards in your hand into one. You place the second against the first
-    /// yourself, so which monster you end up with is your decision; both originals are gone.
+    /// "Lehimleme" - weld two cards in your hand into one. You lay the second against the first
+    /// yourself in a small block editor, so which monster you end up with is your decision; both
+    /// originals are gone.
     ///
-    /// The join must TOUCH and must not OVERLAP - a weld is a weld. ROUND-SCOPED: the welded card
-    /// is a bonus card and expires with the round, so the two blocks are back in your deck next
-    /// round.
+    /// The join must TOUCH along at least one cube side and must not OVERLAP - a weld is a weld.
+    /// The welded block is marked (BlockCard.IsWelded), and the explosion or sweep that destroys
+    /// its LAST cube on the board is paid a percentage bonus that grows with its size
+    /// (<see cref="BonusPercentFor"/>) - the reward for building something big and then clearing
+    /// all of it.
+    ///
+    /// ROUND-SCOPED: the welded card is a bonus card and expires with the round, so the two blocks
+    /// are back in your deck next round.
     /// </summary>
     public sealed class LehimlemePower : Power
     {
+        /// <summary>What each cube of a welded block adds to the clear that finishes it, in per
+        /// cent. BALANCE PLACEHOLDER.</summary>
+        public const int BonusPercentPerCube = 5;
+
         public LehimlemePower()
             : base("lehimleme", "Lehimleme")
         {
+            SetEnglishName("Welding");
             SetDescription(
-                "Weld two cards in your hand into one - you decide where the second sits against "
-                    + "the first. It lasts the round; both blocks are back in your deck next "
+                "Weld two blocks in your hand into one: lay the second against the first so at "
+                    + "least one side touches, then confirm. The explosion or sweep that destroys "
+                    + "the last cube of the welded block scores +" + BonusPercentPerCube
+                    + "% per cube. It lasts the round; both blocks are back in your deck next "
                     + "round.",
-                "Elindeki iki kartı tek karta lehimle - ikincisinin birinciye nereden "
-                    + "yapışacağına sen karar verirsin. Sadece o raunt için; iki blok da bir "
-                    + "sonraki raunt destende yine ayrı.");
+                "Elindeki iki bloğu tek blokta lehimle: ikincisini en az bir kenarı değecek "
+                    + "şekilde birincinin yanına yerleştir ve onayla. Lehimli bloğun son küpünü "
+                    + "yok eden patlama ya da temizlik küp başına +%" + BonusPercentPerCube
+                    + " puan kazanır. Sadece o raunt için; iki blok da bir sonraki raunt destende "
+                    + "yine ayrı.");
+        }
+
+        /// <summary>The bonus the clear that finishes a welded block of <paramref name="cubes"/>
+        /// cubes is paid, in per cent. The one definition - the turn resolver pays it and the UI
+        /// prints it, so the two can never disagree.</summary>
+        public static int BonusPercentFor(int cubes)
+        {
+            return cubes > 0 ? cubes * BonusPercentPerCube : 0;
         }
 
         public override ActivationTargeting Targeting
@@ -209,6 +232,7 @@ namespace ProjectBlock.Core
             round.TakeCardOutOfRound(first > second ? first : second);
             round.TakeCardOutOfRound(first > second ? second : first);
             BlockCard card = ctx.Session.CreateCard(BlockShape.FromCells(welded), elements);
+            card.IsWelded = true;
             round.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
             return true;
         }
@@ -222,6 +246,15 @@ namespace ProjectBlock.Core
                     into.Add(element);
                 }
             }
+        }
+
+        /// <summary>Would the second shape, moved by <paramref name="offset"/>, weld onto the
+        /// first - touching along at least one side and overlapping nowhere? Public so the weld
+        /// editor lights a placement with the rules' own answer.</summary>
+        public static bool CanWeld(BlockShape first, BlockShape second, GridPos offset)
+        {
+            return first != null && second != null
+                && WeldCells(new List<GridPos>(first.Cells), second, offset) != null;
         }
 
         /// <summary>The welded cell set, or null when the join is illegal: two different cards are
@@ -240,14 +273,19 @@ namespace ProjectBlock.Core
             {
                 return null;
             }
+            return WeldCells(new List<GridPos>(round.EffectiveShape(round.Hand[a]).Cells),
+                round.EffectiveShape(round.Hand[b]), target.Offset.Value);
+        }
+
+        private static List<GridPos> WeldCells(List<GridPos> firstCells, BlockShape second,
+            GridPos offset)
+        {
             // The first card's cells, kept SEPARATE: adjacency has to be judged against those
             // alone. Measuring against a list the second card is being added to would let it
             // count as touching ITSELF, and any join at all would pass.
-            var firstCells = new List<GridPos>(round.EffectiveShape(round.Hand[a]).Cells);
             var welded = new List<GridPos>(firstCells);
-            GridPos offset = target.Offset.Value;
             bool touches = false;
-            foreach (GridPos cell in round.EffectiveShape(round.Hand[b]).Cells)
+            foreach (GridPos cell in second.Cells)
             {
                 var moved = new GridPos(cell.X + offset.X, cell.Y + offset.Y);
                 if (Holds(firstCells, moved))
