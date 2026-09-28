@@ -365,6 +365,95 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
+        /// A copy of <paramref name="source"/> with <paramref name="bonusCells"/> added as BONUS
+        /// ground (playable AND optional), MID-ROUND - "Tılsım". The bounding box grows in any
+        /// direction to reach them (the origin moves, coordinates never do, exactly as an
+        /// inflation), but ONLY those cells become playable: everything else the box grows over
+        /// is a hole. Reclaiming (9,3) hands the player one cell, not a column of them. Cells that
+        /// are already play area are left alone. Returns the source itself when nothing is new.
+        /// </summary>
+        public static GameBoard CreateWithBonusGround(GameBoard source, IEnumerable<GridPos> bonusCells)
+        {
+            var wanted = new HashSet<GridPos>();
+            int minX = source.MinX;
+            int minY = source.MinY;
+            int maxX = source.MinX + source.Width - 1;
+            int maxY = source.MinY + source.Height - 1;
+            foreach (GridPos cell in bonusCells)
+            {
+                if (source.IsInside(cell) || !wanted.Add(cell))
+                {
+                    continue;
+                }
+                minX = Math.Min(minX, cell.X);
+                minY = Math.Min(minY, cell.Y);
+                maxX = Math.Max(maxX, cell.X);
+                maxY = Math.Max(maxY, cell.Y);
+            }
+            if (wanted.Count == 0)
+            {
+                return source;
+            }
+            int width = maxX - minX + 1;
+            int height = maxY - minY + 1;
+            var mask = new bool[width, height];
+            var optionalMask = new bool[width, height];
+            var deadMask = new bool[width, height];
+            int count = 0;
+            int deadCount = 0;
+            for (int ix = 0; ix < width; ix++)
+            {
+                for (int iy = 0; iy < height; iy++)
+                {
+                    var at = new GridPos(minX + ix, minY + iy);
+                    int sx = at.X - source.MinX;
+                    int sy = at.Y - source.MinY;
+                    bool inSource = sx >= 0 && sx < source.Width && sy >= 0 && sy < source.Height;
+                    bool bonus = wanted.Contains(at);
+                    mask[ix, iy] = bonus || (inSource && source.playable[sx, sy]);
+                    optionalMask[ix, iy] = bonus || (inSource && source.optional[sx, sy]);
+                    deadMask[ix, iy] = !bonus && inSource && source.dead[sx, sy];
+                    if (mask[ix, iy])
+                    {
+                        count++;
+                    }
+                    if (deadMask[ix, iy])
+                    {
+                        deadCount++;
+                    }
+                }
+            }
+            var board = new GameBoard(minX, minY, width, height, mask, optionalMask, deadMask,
+                count, deadCount);
+            board.IgnoreElements = source.IgnoreElements;
+            board.WaterFlow = source.WaterFlow;
+            for (int sx = 0; sx < source.Width; sx++)
+            {
+                for (int sy = 0; sy < source.Height; sy++)
+                {
+                    Cube? cube = source.cells[sx, sy];
+                    if (!cube.HasValue)
+                    {
+                        continue;
+                    }
+                    var at = new GridPos(source.MinX + sx, source.MinY + sy);
+                    board.cells[at.X - minX, at.Y - minY] = cube.Value;
+                    board.OccupiedCount++;
+                }
+            }
+            foreach (KeyValuePair<GridPos, Cube> ghost in source.outsideCubes)
+            {
+                if (!board.IsInside(ghost.Key))
+                {
+                    board.outsideCubes[ghost.Key] = ghost.Value;
+                }
+            }
+            board.sealedCells.AddRange(source.sealedCells);
+            board.CopyBlightFrom(source);
+            return board;
+        }
+
+        /// <summary>
         /// An exact copy of a board: same size, same origin, same holes, same eaten cells, same
         /// cubes, same ghost traces. "Öteki dünya" clones the arena the moment it is cast, so the
         /// mirror world starts as whatever the player had built - which is why WHEN you cast it

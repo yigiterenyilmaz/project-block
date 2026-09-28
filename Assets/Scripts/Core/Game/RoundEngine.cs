@@ -566,6 +566,37 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>"Tılsım": the cells become BONUS ground on the board in play right now (see
+        /// GameBoard.CreateWithBonusGround). Written back to the world it was read from, like
+        /// ReshapeBoard. Returns the cells that were actually new.</summary>
+        internal List<GridPos> GrantBonusGround(IReadOnlyList<GridPos> cells)
+        {
+            var granted = new List<GridPos>();
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (!Board.IsInside(cells[i]) && !granted.Contains(cells[i]))
+                {
+                    granted.Add(cells[i]);
+                }
+            }
+            if (granted.Count == 0)
+            {
+                return granted;
+            }
+            GameBoard grown = GameBoard.CreateWithBonusGround(Board, granted);
+            if (targetingMirrorWorld && MirrorBoard != null)
+            {
+                ReplaceMirrorBoard(grown);
+            }
+            else
+            {
+                mainBoard = grown;
+            }
+            ResyncSnapshot();
+            CaptureTurnStartCardCounts();
+            return granted;
+        }
+
         /// <summary>
         /// Shrinks the board, first pushing any cube standing in a doomed band inward to the
         /// nearest free cell on its row/column ("blokları geri ittirir"). A cube with nowhere
