@@ -41,6 +41,11 @@ namespace ProjectBlock.Core
         /// <summary>Needs one of the four SIDES ("Kütleçekim merkezi" choosing which way water
         /// falls). Target carries the one-cell step in Offset; the UI asks with a small picker
         /// rather than a click on the board, because a direction is not a place.</summary>
-        Direction = 8
+        Direction = 8,
+
+        /// <summary>Needs another of the player's own POWERS ("Powerbank" choosing which spent
+        /// power to refill). Target carries the power's instance id (ActivationTarget.PowerChoice);
+        /// the UI asks for a click on that power's card in the power bar.</summary>
+        OwnedPower = 9
     }
 }

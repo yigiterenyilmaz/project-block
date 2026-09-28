@@ -54,10 +54,23 @@ namespace ProjectBlock.View
             }
         }
 
+        // THE STATES THAT MUST NOT LOOK ALIKE. READY keeps its original teal look. BLOCKED -
+        // charged, but not usable right now - is a warm amber-brown with its icon still in full
+        // colour (it IS charged) and a line saying WHY. SPENT is drained: darker grey, dimmed icon
+        // and title, "empty". Blocked and spent used to be two near-identical darks.
         private static readonly Color PanelColor = new Color(0.13f, 0.15f, 0.19f, 0.92f);
         private static readonly Color ReadyColor = new Color(0.12f, 0.30f, 0.34f, 0.95f);
-        private static readonly Color SpentColor = new Color(0.16f, 0.16f, 0.17f, 0.85f);
+        private static readonly Color BlockedColor = new Color(0.24f, 0.18f, 0.10f, 0.95f);
+        private static readonly Color SpentColor = new Color(0.10f, 0.10f, 0.11f, 0.8f);
+        private static readonly Color BlockedInk = new Color(0.98f, 0.76f, 0.42f);
+        private static readonly Color SpentInk = new Color(0.45f, 0.47f, 0.50f);
         private static readonly Color TargetingColor = new Color(0.42f, 0.32f, 0.12f, 0.97f);
+
+        /// <summary>A spent power that the power being aimed ("Powerbank") can be pointed at:
+        /// the same amber family as the aiming card, dimmer, so the strip reads as "these".
+        /// </summary>
+        private static readonly Color PickableColor = new Color(0.30f, 0.23f, 0.10f, 0.95f);
+        private static readonly Color PickableTextColor = new Color(1f, 0.82f, 0.42f);
         private static readonly Color NameColor = new Color(0.72f, 0.96f, 0.98f);
         private static readonly Color BodyColor = new Color(0.80f, 0.84f, 0.90f);
         private static readonly Color SpentTextColor = new Color(0.55f, 0.58f, 0.62f);
@@ -615,23 +628,79 @@ namespace ProjectBlock.View
             // must not look ready.
             bool silenced = session.CurrentRound != null
                 && session.CurrentRound.IsSilencedByBoss(power);
+            // While a power that points at ANOTHER power is being aimed ("Powerbank"), the cards
+            // it can take are lit and say so - the pick is made on this strip, not in a list.
+            Power aiming = targetingInstanceId.HasValue
+                ? session.Powers.Find(targetingInstanceId.Value) : null;
+            bool pickable = aiming != null && aiming != power && !power.Charged
+                && aiming.Targeting == ActivationTargeting.OwnedPower;
             panel.SetBody(silenced ? SilencedColor
                 : targeting ? TargetingColor
+                : pickable ? PickableColor
                 : !power.Charged ? SpentColor
-                : ready ? ReadyColor : PanelColor);
+                : ready ? ReadyColor : BlockedColor);
             // Spent still greys the whole card out; rarity only tints the charged state and the
             // frame, which stays lit so the tier is readable on a spent power too.
             Rarity rarity = RarityPalette.Of(power);
             Color accent = RarityPalette.Accent(rarity);
             panel.Frame.color = accent;
-            panel.Title.color = panel.Ink(!power.Charged ? SpentTextColor
+            // Usable RIGHT NOW, as opposed to merely charged. A dead-end rescue waiting on its
+            // pause counts as ready while the round is paused for it.
+            bool rescueReady = power.IsDeadEndRescue && power.Charged && !silenced
+                && session.CurrentRound != null
+                && session.CurrentRound.Status == RoundStatus.AwaitingRescue;
+            bool usable = (ready || rescueReady) && !silenced;
+            bool blocked = power.Charged && !usable && !silenced;
+            panel.Title.color = panel.Ink(!power.Charged ? SpentInk
                 : rarity == Rarity.Common ? NameColor : accent);
-            panel.Status.color = panel.Ink(power.Charged ? BodyColor : SpentTextColor);
+            panel.Status.color = panel.Ink(blocked ? BlockedInk
+                : power.Charged ? BodyColor : SpentInk);
 
             panel.Hotkey.text = string.Empty;
             panel.Title.text = power.DisplayName;
+            // Only a spent (or silenced) power dims its icon - a blocked one is still charged.
             panel.SetIcon(ViewUtil.PowerIcon(power.DefId), silenced || !power.Charged);
-            panel.SetStatus(StatusLine(power, session, silenced));
+            panel.SetStatus(blocked ? BlockedLine(power, session)
+                : StatusLine(power, session, silenced));
+            if (pickable)
+            {
+                panel.Status.color = panel.Ink(PickableTextColor);
+                panel.SetStatus(Loc.Pick("click to recharge", "doldurmak için tıkla"));
+            }
+            if (panel.Glow != null)
+            {
+                // The slow invitation breath the joker bar uses for "waiting on you": amber on a
+                // card a pointing power can pick, teal on a power that can be used right now -
+                // and none at all on one that cannot, which is the whole difference made visible.
+                // Only a card a pointing power ("Powerbank") can pick breathes - a ready power
+                // keeps its plain look.
+                panel.Glow.SetAttention(pickable, CardGlowFx.AttentionColour);
+            }
+        }
+
+        /// <summary>
+        /// A charged power that cannot be used right now, and WHY - the thing the player most
+        /// needs to know about it. The turn's single power slot already taken is the common case;
+        /// otherwise the power's own status says what it is waiting for (Batak: "empty board
+        /// only"), and failing that a plain "not now".
+        /// </summary>
+        private static string BlockedLine(Power power, GameSession session)
+        {
+            RoundEngine round = session.CurrentRound;
+            if (round == null || session.Phase != GamePhase.Round)
+            {
+                return Loc.Pick("charged", "dolu");
+            }
+            if (round.PowersUsedThisTurn > 0)
+            {
+                return Loc.Pick("power used this turn", "bu tur güç kullanıldı");
+            }
+            if (power.IsDeadEndRescue && !power.AlsoUsableInPlay)
+            {
+                return Loc.Pick("when stuck", "tıkanınca");
+            }
+            string status = power.StatusText;
+            return string.IsNullOrEmpty(status) ? Loc.Pick("not now", "şu an olmaz") : status;
         }
 
         /// <summary>The one line a vertical card has room for: a boss outranks the charge state,
@@ -667,7 +736,7 @@ namespace ProjectBlock.View
             }
             else
             {
-                line.Append(Loc.Pick("empty", "boş"));
+                line.Append(Loc.Pick("EMPTY", "BOŞ"));
             }
             return line.ToString();
         }

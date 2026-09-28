@@ -23,6 +23,13 @@ namespace ProjectBlock.Core
                     + "sonraki turdan itibaren kullanılabilir.");
         }
 
+        /// <summary>Points at one of your spent powers - clicked on its card in the power bar.
+        /// </summary>
+        public override ActivationTargeting Targeting
+        {
+            get { return ActivationTargeting.OwnedPower; }
+        }
+
         /// <summary>The power a target names, for the picker: its instance id rides in
         /// HandIndex (<see cref="ActivationTarget.PowerChoice"/>).</summary>
         private static Power Chosen(RoundContext ctx, ActivationTarget target, Power self)
