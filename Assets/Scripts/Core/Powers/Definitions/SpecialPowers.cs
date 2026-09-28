@@ -653,10 +653,12 @@ namespace ProjectBlock.Core
             : base("karakter_olusturma", "Karakter Oluşturma")
         {
             SetDescription(
-                "Design a custom block - any shape, any element - and bake it into your deck. "
-                    + "It shuffles in from the next round.",
-                "İstediğin şekil ve elementte özel bir blok tasarla ve destene ekle. Sonraki "
-                    + "raunttan itibaren desteye karışır.");
+                "Design your own block - any shape up to 5 cubes, each cube with its own element "
+                    + "(or none). It joins your deck for good and goes on top of the draw pile, so "
+                    + "it is the next card you draw.",
+                "Kendi bloğunu tasarla - 5 küpe kadar istediğin şekil, her küp kendi elementiyle "
+                    + "(ya da elementsiz). Destene kalıcı olarak girer ve çekme destesinin üstüne "
+                    + "konur, yani çekeceğin bir sonraki kart odur.");
         }
 
         /// <summary>Usable whenever the standard rules allow (the UI opens the designer then);

@@ -81,6 +81,13 @@ namespace ProjectBlock.Core
             discardPile.Add(card);
         }
 
+        /// <summary>Puts a card on TOP of the draw pile - the next card drawn ("Karakter
+        /// oluşturma" handing over the block it just made).</summary>
+        public void PutOnTopOfDraw(BlockCard card)
+        {
+            drawPile.Add(card);
+        }
+
         /// <summary>Buries a card at a random depth in the draw pile instead of discarding it
         /// ("Baba Ocağı"). The card can come back up at any time, which is the point.</summary>
         public void InsertRandomIntoDraw(BlockCard card)
