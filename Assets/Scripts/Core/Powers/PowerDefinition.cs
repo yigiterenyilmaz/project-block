@@ -10,7 +10,11 @@ namespace ProjectBlock.Core
     public sealed class PowerDefinition
     {
         public string DefId { get; }
-        public string DisplayName { get; }
+        /// <summary>Read LIVE off the sample, so a power with an English name follows Loc.</summary>
+        public string DisplayName
+        {
+            get { return sample.DisplayName; }
+        }
 
         /// <summary>Read LIVE off a sample instance, so it follows the Loc language.</summary>
         public string Description
@@ -38,7 +42,6 @@ namespace ProjectBlock.Core
         public PowerDefinition(Power sample, Func<Power> factory)
         {
             DefId = sample.DefId;
-            DisplayName = sample.DisplayName;
             this.sample = sample;
             this.factory = factory;
         }

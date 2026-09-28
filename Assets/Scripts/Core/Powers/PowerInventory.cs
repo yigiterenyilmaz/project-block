@@ -146,6 +146,17 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
+            if (power.IsDeadEndRescue && !power.AlsoUsableInPlay)
+            {
+                return false; // a rescue-only power waits for the dead end
+            }
+            // A power that points at another OWNED power ("Powerbank") can answer a bare check
+            // truthfully - "is there anything spent to refill?" - so it is asked rather than
+            // assumed, or a Powerbank with nothing to refill would light up as ready.
+            if (power.Targeting == ActivationTargeting.OwnedPower)
+            {
+                return power.CanRun(RoundCtx(round), ActivationTarget.None);
+            }
             return power.Targeting != ActivationTargeting.None
                 || power.CanRun(RoundCtx(round), ActivationTarget.None);
         }
@@ -164,19 +175,21 @@ namespace ProjectBlock.Core
             {
                 return false; // a boss round has this power switched off ("Anarşi", "Oburluk")
             }
-            // A rescue power ONLY works in the dead-end pause; every other power only works
-            // during normal play. The "one power per turn" budget does not apply to a rescue:
-            // the player may already have spent their power this turn before getting stuck.
-            if (power.IsDeadEndRescue)
+            // A rescue power works in the dead-end pause, and the "one power per turn" budget does
+            // not apply there: the player may already have spent their power this turn before
+            // getting stuck. Every other use is normal play under the normal budget - which a
+            // rescue power only gets when it is ALSO usable in play ("Kentsel Dönüşüm").
+            bool rescuing = power.IsDeadEndRescue && round.Status == RoundStatus.AwaitingRescue;
+            if (!rescuing)
             {
-                if (round.Status != RoundStatus.AwaitingRescue)
+                if (power.IsDeadEndRescue && !power.AlsoUsableInPlay)
                 {
                     return false;
                 }
-            }
-            else if (round.Status != RoundStatus.InProgress || round.PowersUsedThisTurn > 0)
-            {
-                return false;
+                if (round.Status != RoundStatus.InProgress || round.PowersUsedThisTurn > 0)
+                {
+                    return false;
+                }
             }
             // Asked against the world it would actually run on, or a power that reads the board
             // to decide would answer about the wrong one ("Öteki dünya").
@@ -223,6 +236,7 @@ namespace ProjectBlock.Core
             }
             Power power = Find(instanceId);
             RoundEngine round = session.CurrentRound;
+            bool rescuing = power.IsDeadEndRescue && round.Status == RoundStatus.AwaitingRescue;
             power.KeepChargeAfterUse = false;
             // "Öteki dünya": the power runs against the world the player pointed it at. Only the
             // Run itself is aimed - the charge, the recharge and the boss's bill that follow all
@@ -246,7 +260,7 @@ namespace ProjectBlock.Core
             {
                 power.Spend();
             }
-            if (power.IsDeadEndRescue)
+            if (rescuing)
             {
                 // The rescue opened a gap; hand the round back to normal play, which
                 // re-checks for a legal move and may end up right back here.

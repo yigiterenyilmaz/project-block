@@ -24,15 +24,30 @@ namespace ProjectBlock.Core
         protected Power(string defId, string displayName)
         {
             DefId = defId;
-            DisplayName = displayName;
+            turkishName = displayName;
             Charged = true;
         }
 
         /// <summary>Stable content id ("kum_saati"). The save/replay key - never rename.</summary>
         public string DefId { get; }
 
-        /// <summary>Human-readable name for the UI (Turkish).</summary>
-        public string DisplayName { get; }
+        /// <summary>Human-readable name for the UI. Turkish unless the power has been given an
+        /// English name too (SetEnglishName), in which case it follows the ACTIVE language, read
+        /// live like Description.</summary>
+        public string DisplayName
+        {
+            get { return englishName != null ? Loc.Pick(englishName, turkishName) : turkishName; }
+        }
+
+        private readonly string turkishName;
+        private string englishName;
+
+        /// <summary>Gives the power an English name beside its Turkish one. The DefId - the save
+        /// key - never changes, so renaming a power this way is safe.</summary>
+        protected void SetEnglishName(string english)
+        {
+            englishName = english;
+        }
 
         /// <summary>One-line rules text for the UI in the ACTIVE language (see Loc).
         /// Subclasses set both languages via SetDescription; reading is always live, so a
@@ -130,6 +145,14 @@ namespace ProjectBlock.Core
         /// AwaitingRescue when the player holds one of these; normal powers cannot be used
         /// there, and these cannot be used anywhere else.</summary>
         public virtual bool IsDeadEndRescue
+        {
+            get { return false; }
+        }
+
+        /// <summary>True for a rescue power that may ALSO be used in normal play, like any other
+        /// power - one per turn, no dead end needed ("Kentsel Dönüşüm"). It still pauses the round
+        /// at a dead end as a rescue; this only lifts the "only when stuck" requirement.</summary>
+        public virtual bool AlsoUsableInPlay
         {
             get { return false; }
         }
