@@ -444,13 +444,26 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>
-    /// "Gen nakli" - take the element out of a cube on the board and put it into a card in your
-    /// hand. The cube goes plain, the card goes elemental.
+    /// "Gen nakli" - take the element out of a BLOCK on the board and put it into another block:
+    /// a card in your hand, or a plain block already on the board.
     ///
-    /// AND IT IS A LOAN, not a gift (confirmed design): when the card reaches the discard both go
-    /// back to what they were - the card is plain again in your deck, and the cube on the board
-    /// gets its element back if it is still standing. Play the card while you hold the gene, or
+    /// WHOLE BLOCKS, NEVER CUBES (designer's call). The element leaves every cube of the block
+    /// you point at and lands on every cube of the block that takes it - a block is never left
+    /// half one thing and half another. A "block" on the board is what one placement put down and
+    /// is still standing together: the cubes of the same card, of the same kind, joined edge to
+    /// edge (<see cref="BlockAt"/>). A line that cut a block in two leaves two blocks.
+    ///
+    /// INTO A CARD IT IS A LOAN (confirmed design): when the card reaches the discard both go back
+    /// to what they were - the card is plain again in your deck, and the block it came from gets
+    /// its element back wherever it is still standing. Play the card while you hold the gene, or
     /// give it back.
+    ///
+    /// ONTO THE BOARD IT IS A MOVE: nothing is ever discarded there, so there is nothing for a
+    /// loan to end on. The receiving block must be plain, must not be the giving one, and must be
+    /// WHOLE - a block that has lost even one cube cannot take a gene (<see cref="IsIntact"/>).
+    /// Dynamite
+    /// only goes into a card - its rule is kept per PLACEMENT (RoundEngine.dynamiteBlocks), and a
+    /// block that was never placed as dynamite would be dynamite in colour only.
     /// </summary>
     public sealed class GenNakliPower : Power
     {
@@ -458,12 +471,14 @@ namespace ProjectBlock.Core
             : base("gen_nakli", "Gen Nakli")
         {
             SetDescription(
-                "Move the element out of a cube on the board and into a card in your hand - the "
-                    + "cube goes plain, the card goes elemental. It is a LOAN: when the card hits "
-                    + "the discard both go back to what they were.",
-                "Tahtadaki bir küpün elementini elindeki bir karta aktar - küp elementsiz kalır, "
-                    + "kart elementli olur. Bu bir ÖDÜNÇ: kart ıskartaya çıkınca ikisi de eski "
-                    + "hâline döner.");
+                "Move the element out of a block on the board and into another block - a card in "
+                    + "your hand, or a plain block on the board. The whole block goes plain, the "
+                    + "whole target takes the element. Into a card it is a LOAN: when the card "
+                    + "hits the discard both go back to what they were.",
+                "Tahtadaki bir bloğun elementini başka bir bloğa aktar - elindeki bir karta ya da "
+                    + "tahtadaki elementsiz bir bloğa. Bütün blok elementsiz kalır, hedefin "
+                    + "tamamı elementi alır. Karta aktarırsan bu bir ÖDÜNÇ: kart ıskartaya çıkınca "
+                    + "ikisi de eski hâline döner.");
         }
 
         public override ActivationTargeting Targeting
@@ -473,42 +488,157 @@ namespace ProjectBlock.Core
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
         {
-            return ElementUnder(ctx, target).HasValue;
+            RoundEngine round = ctx != null ? ctx.Round : null;
+            if (round == null || !target.Cell.HasValue)
+            {
+                return false;
+            }
+            BlockElement? gene = GeneOfBlock(round.Board, target.Cell.Value);
+            if (!gene.HasValue)
+            {
+                return false; // a plain block has no gene to give
+            }
+            if (target.HandIndex.HasValue)
+            {
+                return CanTakeIntoCard(round, target.HandIndex.Value);
+            }
+            return target.Offset.HasValue
+                && CanTakeOnBoard(round, target.Cell.Value, target.Offset.Value, gene.Value);
         }
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
         {
-            BlockElement? gene = ElementUnder(ctx, target);
-            if (!gene.HasValue)
+            if (!CanRun(ctx, target))
             {
                 return false;
             }
             RoundEngine round = ctx.Round;
-            BlockCard card = round.Hand[target.HandIndex.Value];
-            return round.TransplantElement(target.Cell.Value, card, gene.Value);
+            GridPos from = target.Cell.Value;
+            BlockElement gene = GeneOfBlock(round.Board, from).Value;
+            IReadOnlyList<GridPos> donor = BlockAt(round.Board, from);
+            if (target.HandIndex.HasValue)
+            {
+                return round.TransplantElement(donor, round.Hand[target.HandIndex.Value], gene);
+            }
+            return round.TransplantElementToBlock(donor, BlockAt(round.Board, target.Offset.Value),
+                gene);
         }
 
-        /// <summary>The element the targeted cube carries, or null when there is nothing to move:
-        /// no cube, a plain one, or a card that already carries an element of its own.</summary>
-        private static BlockElement? ElementUnder(RoundContext ctx, ActivationTarget target)
+        /// <summary>
+        /// The whole block standing on <paramref name="cell"/>: every cube joined to it edge to
+        /// edge that came from the same card and is of the same kind. Empty when the cell is empty.
+        /// Public because the UI highlights exactly this while you aim, so the block you are shown
+        /// is the block the rules will move.
+        /// </summary>
+        public static IReadOnlyList<GridPos> BlockAt(GameBoard board, GridPos cell)
         {
-            RoundEngine round = ctx != null ? ctx.Round : null;
-            if (round == null || !target.Cell.HasValue || !target.HandIndex.HasValue
-                || target.HandIndex.Value < 0 || target.HandIndex.Value >= round.Hand.Count)
+            var cells = new List<GridPos>();
+            Cube? start = board != null ? board.GetCube(cell) : null;
+            if (!start.HasValue)
             {
-                return null;
+                return cells;
             }
-            Cube? cube = round.Board.GetCube(target.Cell.Value);
+            var seen = new HashSet<GridPos> { cell };
+            var open = new Queue<GridPos>();
+            open.Enqueue(cell);
+            while (open.Count > 0)
+            {
+                GridPos at = open.Dequeue();
+                cells.Add(at);
+                for (int d = 0; d < 4; d++)
+                {
+                    var next = new GridPos(at.X + (d == 0 ? 1 : d == 1 ? -1 : 0),
+                        at.Y + (d == 2 ? 1 : d == 3 ? -1 : 0));
+                    if (seen.Contains(next))
+                    {
+                        continue;
+                    }
+                    Cube? cube = board.GetCube(next);
+                    if (cube.HasValue && cube.Value.Kind == start.Value.Kind
+                        && cube.Value.SourceCardId == start.Value.SourceCardId)
+                    {
+                        seen.Add(next);
+                        open.Enqueue(next);
+                    }
+                }
+            }
+            return cells;
+        }
+
+        /// <summary>
+        /// Is the block on <paramref name="cell"/> still WHOLE - every cube its card put down
+        /// still standing, together, as it landed? Counted against what the round saw that card
+        /// place (RoundEngine.PlacedSizeOf), with a ghost block's cubes hanging off the board
+        /// counted too, since they were part of the same placement. A block the round never saw
+        /// placed has nothing to be measured against and counts as whole.
+        /// </summary>
+        public static bool IsIntact(RoundEngine round, GridPos cell)
+        {
+            GameBoard board = round != null ? round.Board : null;
+            Cube? cube = board != null ? board.GetCube(cell) : null;
             if (!cube.HasValue)
             {
-                return null;
+                return false;
             }
-            BlockElement? gene = ElementOf(cube.Value.Kind);
-            if (!gene.HasValue)
+            int? placed = round.PlacedSizeOf(cube.Value.SourceCardId);
+            if (!placed.HasValue)
             {
-                return null; // a plain cube has no gene to give
+                return true;
             }
-            return round.Hand[target.HandIndex.Value].Elements.Count > 0 ? null : gene;
+            int standing = BlockAt(board, cell).Count;
+            foreach (KeyValuePair<GridPos, Cube> outside in board.OutsideCubes)
+            {
+                if (outside.Value.SourceCardId == cube.Value.SourceCardId
+                    && outside.Value.Kind == cube.Value.Kind)
+                {
+                    standing++;
+                }
+            }
+            return standing >= placed.Value;
+        }
+
+        /// <summary>The element the block on <paramref name="cell"/> could give, or null.</summary>
+        public static BlockElement? GeneOfBlock(GameBoard board, GridPos cell)
+        {
+            Cube? cube = board != null ? board.GetCube(cell) : null;
+            return cube.HasValue ? ElementOf(cube.Value.Kind) : null;
+        }
+
+        /// <summary>Can this hand card take a gene? Only a plain card that is not already
+        /// carrying a loan.</summary>
+        public static bool CanTakeIntoCard(RoundEngine round, int handIndex)
+        {
+            return round != null && handIndex >= 0 && handIndex < round.Hand.Count
+                && round.Hand[handIndex].Elements.Count == 0
+                && !round.BorrowedElementOf(round.Hand[handIndex].Id).HasValue;
+        }
+
+        /// <summary>Can the block on <paramref name="to"/> take the gene of the block on
+        /// <paramref name="from"/>? It has to be a different block, every cube of it plain, WHOLE,
+        /// and the gene one that lives on the cube rather than on the placement (not dynamite).
+        /// </summary>
+        public static bool CanTakeOnBoard(RoundEngine round, GridPos from, GridPos to,
+            BlockElement gene)
+        {
+            GameBoard board = round != null ? round.Board : null;
+            if (gene == BlockElement.Dynamite || board == null || !IsIntact(round, to))
+            {
+                return false;
+            }
+            Cube? cube = board.GetCube(to);
+            if (!cube.HasValue || cube.Value.Kind != CubeKind.Normal)
+            {
+                return false;
+            }
+            IReadOnlyList<GridPos> donor = BlockAt(board, from);
+            for (int i = 0; i < donor.Count; i++)
+            {
+                if (donor[i].Equals(to))
+                {
+                    return false; // the same block cannot give to itself
+                }
+            }
+            return true;
         }
 
         /// <summary>The element a cube kind came from, or null for a kind no card can carry.</summary>

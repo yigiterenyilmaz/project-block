@@ -224,7 +224,18 @@ namespace ProjectBlock.Core
             {
                 return CubeKind.Normal;
             }
-            return CubeRules.KindForCard(card);
+            return BorrowedCubeKind(card) ?? CubeRules.KindForCard(card);
+        }
+
+        /// <summary>The cube kind a borrowed gene ("Gen nakli") makes this card lay, or null when
+        /// it carries none - or when a boss has every element switched off, which switches the
+        /// borrowed one off with them. Handed to GameBoard.Place, which only reads the card's
+        /// printed elements and so would lay the block plain.</summary>
+        private CubeKind? BorrowedCubeKind(BlockCard card)
+        {
+            BlockElement? gene = card != null && !ElementsIgnored
+                ? BorrowedElementOf(card.Id) : null;
+            return gene.HasValue ? CubeRules.KindForElement(gene.Value) : (CubeKind?)null;
         }
 
         /// <summary>True if this round's boss has silenced that joker ("Anarşi", "Oburluk"):
@@ -450,17 +461,21 @@ namespace ProjectBlock.Core
         private readonly Dictionary<int, BorrowedGene> borrowedGenes =
             new Dictionary<int, BorrowedGene>();
 
-        /// <summary>One loaned element: the cube it came off and what that cube was.</summary>
+        /// <summary>One loaned element: the block it came off (every cell of it), what that
+        /// block was made of, and whose cubes they were.</summary>
         private readonly struct BorrowedGene
         {
-            public readonly GridPos Cell;
+            public readonly IReadOnlyList<GridPos> Cells;
             public readonly CubeKind Kind;
+            public readonly int SourceCardId;
             public readonly BlockElement Element;
 
-            public BorrowedGene(GridPos cell, CubeKind kind, BlockElement element)
+            public BorrowedGene(IReadOnlyList<GridPos> cells, CubeKind kind, int sourceCardId,
+                BlockElement element)
             {
-                Cell = cell;
+                Cells = cells;
                 Kind = kind;
+                SourceCardId = sourceCardId;
                 Element = element;
             }
         }
@@ -469,6 +484,15 @@ namespace ProjectBlock.Core
         /// <summary>Cubes each card put on the board, so "the whole block went at once"
         /// can be told apart from "its last surviving cube went" ("Kazı çalışması").</summary>
         private readonly Dictionary<int, int> cardPlacedSize = new Dictionary<int, int>();
+
+        /// <summary>How many cubes this card's last placement put down (on the board and hanging
+        /// off it), or null when the round never saw it placed - a cube something else put there.
+        /// </summary>
+        public int? PlacedSizeOf(int cardId)
+        {
+            int placed;
+            return cardPlacedSize.TryGetValue(cardId, out placed) ? placed : (int?)null;
+        }
 
         /// <summary>Consecutive line-clearing turns this round (the "kombo" streak). Each turn
         /// that explodes >=1 line increments it and MULTIPLIES that turn's score by the rung

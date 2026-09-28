@@ -6681,8 +6681,13 @@ public static class JokerTests
         session.Powers.DispatchRoundStarted(round);
         ClearBoard(round.Board);
 
+        // A three-cube fire BLOCK. The element leaves all of it, and all of it gets it back.
         var donor = new GridPos(2, 2);
+        var donorB = new GridPos(3, 2);
+        var donorC = new GridPos(3, 3);
         round.Board.SetCubeAt(donor, new Cube(CubeKind.Fire, 9405));
+        round.Board.SetCubeAt(donorB, new Cube(CubeKind.Fire, 9405));
+        round.Board.SetCubeAt(donorC, new Cube(CubeKind.Fire, 9405));
         BlockCard plain = PutInHand(session, round, Bar(1));
         Check(!round.CardHasElement(plain, BlockElement.Fire), "the card starts plain");
 
@@ -6690,9 +6695,10 @@ public static class JokerTests
                 ActivationTarget.CellAndCard(donor, 0)), "the transplant went through");
         Check(round.CardHasElement(plain, BlockElement.Fire),
             "the card carries fire now - and every rule that asks sees it");
-        Check(round.Board.GetCube(donor).Value.Kind == CubeKind.Normal,
-            "while the cube it came from went plain",
-            "" + round.Board.GetCube(donor).Value.Kind);
+        Check(round.Board.GetCube(donor).Value.Kind == CubeKind.Normal
+                && round.Board.GetCube(donorB).Value.Kind == CubeKind.Normal
+                && round.Board.GetCube(donorC).Value.Kind == CubeKind.Normal,
+            "while EVERY cube of the block it came from went plain - not just the one clicked");
         Check(plain.Elements.Count == 0,
             "the CARD itself was never changed - the gene is round-scoped bookkeeping");
 
@@ -6703,12 +6709,127 @@ public static class JokerTests
             if (round.Hand[i].Id == plain.Id) { index = i; }
         }
         Check(index >= 0, "the card is still in hand");
+        Check(round.EffectiveCubeKind(plain) == CubeKind.Fire,
+            "the round says the card will lay fire", "" + round.EffectiveCubeKind(plain));
         round.PlayFromHand(index, new GridPos(0, 0));
+        // The whole point of holding the gene: the block it is played as IS fire. This was the
+        // bug - placement read only the card's printed elements and laid it plain.
+        Check(round.Board.GetCube(new GridPos(0, 0)).HasValue
+                && round.Board.GetCube(new GridPos(0, 0)).Value.Kind == CubeKind.Fire,
+            "the block it was played as landed as FIRE",
+            round.Board.GetCube(new GridPos(0, 0)).HasValue
+                ? "" + round.Board.GetCube(new GridPos(0, 0)).Value.Kind : "empty");
         Check(!round.CardHasElement(plain, BlockElement.Fire),
             "once discarded the card is plain again");
-        Check(round.Board.GetCube(donor).Value.Kind == CubeKind.Fire,
-            "and the cube on the board has its element back",
-            "" + round.Board.GetCube(donor).Value.Kind);
+        Check(round.Board.GetCube(donor).Value.Kind == CubeKind.Fire
+                && round.Board.GetCube(donorB).Value.Kind == CubeKind.Fire
+                && round.Board.GetCube(donorC).Value.Kind == CubeKind.Fire,
+            "and the whole block on the board has its element back");
+    }
+
+    private static void GenNakli_MovesAWholeBlockOntoABoardBlock()
+    {
+        Section("gen nakli / onto the board: the whole block gives, the whole block takes");
+        var session = NewSession(9410, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (GenNakliPower)session.Powers.Add(new GenNakliPower());
+        session.Powers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+
+        // A two-cube gold block and a three-cube plain block, a gap between them.
+        var goldA = new GridPos(0, 0);
+        var goldB = new GridPos(1, 0);
+        round.Board.SetCubeAt(goldA, new Cube(CubeKind.Gold, 9411));
+        round.Board.SetCubeAt(goldB, new Cube(CubeKind.Gold, 9411));
+        var plainA = new GridPos(3, 3);
+        var plainB = new GridPos(4, 3);
+        var plainC = new GridPos(4, 4);
+        round.Board.SetCubeAt(plainA, new Cube(CubeKind.Normal, 9412));
+        round.Board.SetCubeAt(plainB, new Cube(CubeKind.Normal, 9412, true)); // a Parazit host
+        round.Board.SetCubeAt(plainC, new Cube(CubeKind.Normal, 9412));
+
+        Check(!session.Powers.CanUse(power.InstanceId, ActivationTarget.CellToCell(goldA, goldB)),
+            "a block cannot give to itself");
+        Check(!session.Powers.CanUse(power.InstanceId, ActivationTarget.CellToCell(plainA, goldA)),
+            "a plain block has nothing to give");
+        Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.CellToCell(goldB, plainC)),
+            "gold moves onto the plain block - aimed at ANY cube of either");
+        Check(round.Board.GetCube(goldA).Value.Kind == CubeKind.Normal
+                && round.Board.GetCube(goldB).Value.Kind == CubeKind.Normal,
+            "every cube of the giving block went plain");
+        Check(round.Board.GetCube(plainA).Value.Kind == CubeKind.Gold
+                && round.Board.GetCube(plainB).Value.Kind == CubeKind.Gold
+                && round.Board.GetCube(plainC).Value.Kind == CubeKind.Gold,
+            "every cube of the taking block is gold - none left behind");
+        Check(round.Board.GetCube(plainB).Value.Protected
+                && round.Board.GetCube(plainB).Value.SourceCardId == 9412,
+            "and a cube keeps whose it is and its protection - only its material changed");
+
+        // Dynamite's rule lives on the PLACEMENT, so it only ever goes into a card.
+        var session2 = NewSession(9413, 5, 1000000, 40, 1);
+        RoundEngine round2 = session2.CurrentRound;
+        var power2 = (GenNakliPower)session2.Powers.Add(new GenNakliPower());
+        session2.Powers.DispatchRoundStarted(round2);
+        ClearBoard(round2.Board);
+        round2.Board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Dynamite, 9414));
+        round2.Board.SetCubeAt(new GridPos(4, 4), new Cube(CubeKind.Normal, 9415));
+        Check(!session2.Powers.CanUse(power2.InstanceId,
+                ActivationTarget.CellToCell(new GridPos(0, 0), new GridPos(4, 4))),
+            "dynamite does not go onto a board block");
+        PutInHand(session2, round2, Bar(1));
+        Check(session2.Powers.CanUse(power2.InstanceId,
+                ActivationTarget.CellAndCard(new GridPos(0, 0), 0)),
+            "but it does go into a card");
+    }
+
+    private static void GenNakli_ABrokenBlockCannotTakeAGene()
+    {
+        Section("gen nakli / a block that has lost a cube cannot take a gene");
+        var session = NewSession(9420, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (GenNakliPower)session.Powers.Add(new GenNakliPower());
+        session.Powers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+        // A three-cube bar played for real, so the round knows how big it landed.
+        BlockCard bar = PutInHand(session, round, Bar(3));
+        int index = -1;
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.Hand[i].Id == bar.Id) { index = i; }
+        }
+        round.PlayFromHand(index, new GridPos(0, 2));
+        var fire = new GridPos(4, 4);
+        round.Board.SetCubeAt(fire, new Cube(CubeKind.Fire, 9421));
+
+        Check(round.PlacedSizeOf(bar.Id) == 3, "the round saw the bar land as three cubes");
+        Check(GenNakliPower.IsIntact(round, new GridPos(1, 2)), "whole, it is intact");
+        Check(session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.CellToCell(fire, new GridPos(1, 2))),
+            "and a whole block can take the gene");
+
+        round.Board.DestroyCube(new GridPos(2, 2));
+        Check(!GenNakliPower.IsIntact(round, new GridPos(1, 2)), "one cube gone: broken");
+        Check(!session.Powers.CanUse(power.InstanceId,
+                ActivationTarget.CellToCell(fire, new GridPos(1, 2))),
+            "and a broken block cannot take a gene");
+    }
+
+    private static void GenNakli_ABlockIsWhatIsJoinedAndAlike()
+    {
+        Section("gen nakli / a block is the same card's cubes, same kind, joined edge to edge");
+        var board = new GameBoard(7, 7);
+        board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Fire, 1));
+        board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Fire, 1));
+        board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Fire, 2));  // another card
+        board.SetCubeAt(new GridPos(1, 1), new Cube(CubeKind.Water, 1)); // another kind
+        board.SetCubeAt(new GridPos(4, 0), new Cube(CubeKind.Fire, 1));  // same card, cut off
+        board.SetCubeAt(new GridPos(1, 2), new Cube(CubeKind.Fire, 1));  // diagonal only
+        var block = new List<GridPos>(GenNakliPower.BlockAt(board, new GridPos(1, 0)));
+        Check(block.Count == 2 && block.Contains(new GridPos(0, 0))
+                && block.Contains(new GridPos(1, 0)),
+            "only the two joined fire cubes of card 1", "" + block.Count);
+        Check(GenNakliPower.BlockAt(board, new GridPos(3, 3)).Count == 0,
+            "an empty cell is no block");
     }
 
     private static void GenNakli_RefusesAPlainCubeOrABusyCard()

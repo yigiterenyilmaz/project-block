@@ -274,7 +274,7 @@ namespace ProjectBlock.Core
             else
             {
                 placed = MirrorBoard.Place(card, EffectiveShape(card), stagedMirrorOrigin,
-                    Has(card, BlockElement.Ghost));
+                    Has(card, BlockElement.Ghost), BorrowedCubeKind(card));
             }
             RemoveFromMirrorHand(card);
             DisposeCard(card); // shared piles: a mirror card goes back to the same discard

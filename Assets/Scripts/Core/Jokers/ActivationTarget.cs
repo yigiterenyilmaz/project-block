@@ -78,6 +78,14 @@ namespace ProjectBlock.Core
                 null);
         }
 
+        /// <summary>"Gen nakli" aimed at the BOARD: the block the element leaves (named by any of
+        /// its cells) and the block that takes it (likewise). The second is an ABSOLUTE board cell
+        /// riding in Offset - the one GridPos slot a two-cell pick has left.</summary>
+        public static ActivationTarget CellToCell(GridPos from, GridPos to)
+        {
+            return new ActivationTarget(null, from, null, null, null, false, null, to, null);
+        }
+
         /// <summary>"Gen nakli": a cube on the board and the card that takes its element.</summary>
         public static ActivationTarget CellAndCard(GridPos cell, int handIndex)
         {

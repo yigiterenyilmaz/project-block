@@ -87,6 +87,15 @@ namespace ProjectBlock.Core
             return insideCount >= 1;
         }
 
+        private readonly List<GridPos> lastMinesTriggered = new List<GridPos>();
+
+        /// <summary>The "Mayın" mines the LAST placement landed on and set off, for the View's
+        /// explosion. Reporting only, rewritten by every placement.</summary>
+        public IReadOnlyList<GridPos> LastMinesTriggered
+        {
+            get { return lastMinesTriggered; }
+        }
+
         /// <summary>Places the card's cubes. Caller must have validated with CanPlace.
         /// Transparent cubes underneath are replaced.</summary>
         public IReadOnlyList<GridPos> Place(BlockCard card, GridPos origin)
@@ -106,14 +115,26 @@ namespace ProjectBlock.Core
         public IReadOnlyList<GridPos> Place(BlockCard card, BlockShape shape, GridPos origin,
             bool allowOutside)
         {
+            return Place(card, shape, origin, allowOutside, null);
+        }
+
+        /// <summary>The same, with the cube kind the card lays decided by the ROUND rather than
+        /// read off the card: a card carrying a borrowed gene ("Gen nakli") has no element of its
+        /// own printed on it, and would otherwise put down plain cubes. Null reads the card, as
+        /// every other placement always has.</summary>
+        public IReadOnlyList<GridPos> Place(BlockCard card, BlockShape shape, GridPos origin,
+            bool allowOutside, CubeKind? cardKindOverride)
+        {
             if (!CanPlace(shape, origin, allowOutside))
             {
                 throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
             }
             var placed = new List<GridPos>(shape.Size);
+            lastMinesTriggered.Clear();
             // "Vanilya" (boss round): the card's element is ignored, so every cube it stamps is
             // an ordinary one - including the per-cube elements of a designed block.
-            CubeKind cardKind = IgnoreElements ? CubeKind.Normal : CubeRules.KindForCard(card);
+            CubeKind cardKind = IgnoreElements ? CubeKind.Normal
+                : cardKindOverride ?? CubeRules.KindForCard(card);
             // A per-cube designed block stamps each cube from its own element. The per-cube array
             // is aligned to card.Shape.Cells, and a designed block is never rotated/reshaped, so
             // the shape being placed matches it cell-for-cell; fall back to the one card-wide kind
@@ -143,6 +164,10 @@ namespace ProjectBlock.Core
                     {
                         // Traps: "Kara delik" swallows the arriving cube, "Mayın" blows it up.
                         // Either way both are gone, so nothing is placed.
+                        if (occupant.Value.Kind == CubeKind.Mine)
+                        {
+                            lastMinesTriggered.Add(pos);
+                        }
                         cells[pos.X - MinX, pos.Y - MinY] = null;
                         OccupiedCount--;
                         continue;
