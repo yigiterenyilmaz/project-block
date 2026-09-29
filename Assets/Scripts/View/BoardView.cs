@@ -303,6 +303,8 @@ namespace ProjectBlock.View
             public SpriteRenderer Sprite;
             public int Landed;             // cells covered as of its last settle
             public float SplashAt = -1f;   // when that settle happened, or -1
+            public bool Solid;             // not water ("Kütleçekim merkezi" drops everything)
+            public Color Face = Color.white;
         }
 
         /// <summary>Every cell a running fall covers, blanked for its duration so the settled
@@ -1386,6 +1388,26 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>
+        /// The cell area where it actually STANDS in the parent's space: WorldRect after the
+        /// arena's own scale (overtime pressure x inflation) about its centre. WorldRect is the
+        /// board's LOCAL rect, so anything parented outside the board (the overtime flames) that
+        /// read it drew a box smaller or larger than the arena on screen - most visibly on the
+        /// retro arena. The transient knocks and the tremor are left out on purpose: a frame's
+        /// jolt must not make a caller rebuild.
+        /// </summary>
+        public Rect ArenaRect
+        {
+            get
+            {
+                Rect r = WorldRect;
+                float scale = pressureScale * inflateScale;
+                Vector2 c = pressureCentre;
+                Vector2 min = c + (r.min - c) * scale;
+                return new Rect(min.x, min.y, r.width * scale, r.height * scale);
+            }
+        }
+
         /// <summary>Destroys and recreates the whole grid for a (new) board.</summary>
         public void Rebuild(GameBoard newBoard, float maxWorldSize, Vector2 center)
         {
@@ -2137,50 +2159,20 @@ namespace ProjectBlock.View
             Refresh();
         }
 
-        private SpriteRenderer riderPlate;
-        private SpriteRenderer riderIcon;
-
         /// <summary>
-        /// "Parazit": the passenger's own ICON, standing on the host cube, over the harness
-        /// ParasiteHostView wraps it in. The harness says "this cube is held"; the icon says WHO
-        /// is riding it, which is what a line through that cube is about to cost. Null cell (or
-        /// icon) takes it off. Asked every repaint by the controller, which alone knows the
-        /// binding - this only draws it.
+        /// "Parazit": the passenger's own ICON on the host cube. It is not drawn here: it is handed
+        /// to ParasiteHostView, which sinks it INTO the nest under a film of the wrap, so the
+        /// membrane holds it rather than a badge sitting on top. Null cell (or icon) takes it off.
+        /// Asked every repaint by the controller, which alone knows the binding.
         /// </summary>
         public void SetParasiteRider(GridPos? cell, Sprite icon)
         {
             bool show = cell.HasValue && icon != null && board != null && board.IsInside(cell.Value);
-            if (!show)
+            if (!show && parasite == null)
             {
-                if (riderPlate != null)
-                {
-                    riderPlate.enabled = false;
-                    riderIcon.enabled = false;
-                }
                 return;
             }
-            if (riderPlate == null)
-            {
-                riderPlate = ViewUtil.MakeRounded(transform, "ParasiteRiderPlate", Vector2.zero,
-                    Vector2.one, new Color(0.07f, 0.05f, 0.09f, 0.82f), 16);
-                var go = new GameObject("ParasiteRiderIcon");
-                go.transform.SetParent(transform, false);
-                riderIcon = go.AddComponent<SpriteRenderer>();
-                riderIcon.sortingOrder = 17;
-            }
-            // In a corner of the cube rather than over its middle: the middle is where the
-            // harness's nest and passenger sit, and the two must not be one blob.
-            Vector2 at = CellToWorld(cell.Value) + new Vector2(cellSize * 0.24f, cellSize * 0.24f);
-            float size = cellSize * 0.44f;
-            riderPlate.transform.localPosition = new Vector3(at.x, at.y, 0f);
-            riderPlate.transform.localScale = new Vector3(size, size, 1f);
-            riderIcon.sprite = icon;
-            float native = Mathf.Max(icon.bounds.size.x, icon.bounds.size.y, 0.0001f);
-            float scale = size * 0.9f / native;
-            riderIcon.transform.localPosition = new Vector3(at.x, at.y, 0f);
-            riderIcon.transform.localScale = new Vector3(scale, scale, 1f);
-            riderPlate.enabled = true;
-            riderIcon.enabled = true;
+            Parasite.SetRider(show ? cell : null, show ? icon : null);
         }
 
         /// <summary>Marks where "Besleme"'s creature lives. Pass null to clear it.</summary>
@@ -3282,8 +3274,24 @@ namespace ProjectBlock.View
                 drop.Sprite = ViewUtil.MakeCell(transform, "WaterDrop",
                     CellToWorld(drop.Cells[0]), cellSize * CubeFill, waterColor, 2);
                 // A drop in flight is the cube that left the cell, so it carries the same tile.
-                ViewUtil.ApplyTile(drop.Sprite, ViewUtil.CubeTile(CubeKind.Water),
-                    cellSize * CubeFill);
+                // The board has already settled, so the cube at the END of the path is the one
+                // that made the trip - and when gravity turned, that may be anything at all.
+                Cube? landed = board != null ? board.GetCube(drop.Cells[drop.Cells.Count - 1]) : null;
+                if (landed.HasValue && landed.Value.Kind != CubeKind.Water)
+                {
+                    Sprite tile;
+                    Color colour;
+                    CubeFace(landed.Value, out tile, out colour);
+                    drop.Solid = true;
+                    drop.Face = colour;
+                    ViewUtil.ApplyTile(drop.Sprite, tile, cellSize * CubeFill);
+                    drop.Sprite.color = colour;
+                }
+                else
+                {
+                    ViewUtil.ApplyTile(drop.Sprite, ViewUtil.CubeTile(CubeKind.Water),
+                        cellSize * CubeFill);
+                }
             }
             HideWaterCells();
             float total = frames.Count * WaterCellSeconds + WaterAccelTailSeconds
@@ -3400,8 +3408,11 @@ namespace ProjectBlock.View
             {
                 drop.Landed = (int)travelled;
                 drop.SplashAt = elapsed;
-                SplashWater(CellToWorld(drop.Cells[drop.Landed]),
-                    StepDirection(drop, drop.Landed - 1));
+                if (!drop.Solid)
+                {
+                    SplashWater(CellToWorld(drop.Cells[drop.Landed]),
+                        StepDirection(drop, drop.Landed - 1));
+                }
             }
 
             int index = Mathf.Clamp((int)travelled, 0, drop.Cells.Count - 1);
@@ -3433,6 +3444,11 @@ namespace ProjectBlock.View
             // The same wave the resting water cubes carry, so a drop in flight still looks
             // like the cube it is about to become again - unless it is on the painted tile,
             // which carries its own water and only wants to be left white.
+            if (drop.Solid)
+            {
+                drop.Sprite.color = drop.Face;
+                return;
+            }
             drop.Sprite.color = ViewUtil.HasOwnTile(CubeKind.Water)
                 ? Color.white
                 : Color.Lerp(waterColor, new Color(0.2f, 0.42f, 0.9f),

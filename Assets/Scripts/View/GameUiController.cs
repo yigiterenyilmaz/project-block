@@ -431,7 +431,7 @@ namespace ProjectBlock.View
             // sites: the same trap is waiting for every future caller, and the market is only one
             // of the phases a round can end into (RunWon and GameOver are the others).
             int level = session != null && session.Phase == GamePhase.Round ? overtimeLevel : 0;
-            flameStreak.SetState(level, boardView.WorldRect);
+            flameStreak.SetState(level, boardView.ArenaRect);
             boardView.SetOvertimeGlow(level);
 
             // The look that is actually ON: pressure pushing in from the arena's edge, the board
@@ -812,7 +812,7 @@ namespace ProjectBlock.View
             }
             // The run ended: this waits for the guard above to stop firing, so the last
             // placement's blast finishes playing before the summary covers the board.
-            if (runOverPending)
+            if (runOverPending && !(debtFx != null && debtFx.Playing))
             {
                 runOverPending = false;
                 OpenRunSummary();
@@ -1286,12 +1286,7 @@ namespace ProjectBlock.View
                     // P is already the power grant picker, and that handler runs first.
                     if (kb != null && kb.oKey.wasPressedThisFrame && session.Debt > 0)
                     {
-                        long paid = session.RepayDebtInFull();
-                        if (paid > 0)
-                        {
-                            sfx.Buy();
-                        }
-                        RefreshAll(null);
+                        RepayDebtWithFx();
                     }
                     else if (kb != null && kb.nKey.wasPressedThisFrame)
                     {
