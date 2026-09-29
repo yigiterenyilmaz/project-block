@@ -81,7 +81,7 @@ namespace ProjectBlock.View
         // harmless if the Full Screen Pass feature/material is not wired yet (see docs/crt-edge-bend.md).
         private static readonly int CrtBendId = Shader.PropertyToID("_CrtBend");
 
-        private enum ChoiceKind { None, GravityDirection, BossStage }
+        private enum ChoiceKind { None, GravityDirection, BossStage, CardElement }
 
         /// <summary>"Buldozer" while aiming: which way the blade will run. Switched in place with
         /// right-click, the wheel or R; the hover preview shows the band it will take.</summary>

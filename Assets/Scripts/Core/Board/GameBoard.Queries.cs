@@ -24,6 +24,11 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
+            if (CubeRules.IsAnchored(cube.Value))
+            {
+                AnchorRefusals.Add(pos, new GridPos(0, 0));
+                return false; // "Kara Delik": nothing takes a hole as its host
+            }
             cells[pos.X - MinX, pos.Y - MinY] = cube.Value.AsProtected();
             return true;
         }
@@ -37,7 +42,13 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            if (!cells[pos.X - MinX, pos.Y - MinY].HasValue)
+            Cube? before = cells[pos.X - MinX, pos.Y - MinY];
+            if (before.HasValue && CubeRules.IsAnchored(before.Value))
+            {
+                AnchorRefusals.Add(pos, new GridPos(0, 0));
+                return; // "Kara Delik": a hole is never written over
+            }
+            if (!before.HasValue)
             {
                 OccupiedCount++;
             }
@@ -74,6 +85,11 @@ namespace ProjectBlock.Core
                 return false;
             }
             Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
+            if (cube.HasValue && CubeRules.IsAnchored(cube.Value) && cube.Value.Kind != kind)
+            {
+                AnchorRefusals.Add(pos, new GridPos(0, 0));
+                return false;
+            }
             if (!cube.HasValue || cube.Value.Kind == kind)
             {
                 return false;
@@ -106,6 +122,10 @@ namespace ProjectBlock.Core
         /// that grew in between keeps its new cells (they simply come back empty).</summary>
         public void RestoreFrom(Dictionary<GridPos, Cube> snapshot)
         {
+            // "Kara Delik": rewinding time does not undo a hole - the ones standing now stay,
+            // and a hole the snapshot remembers but the board has not (it cannot have lost one)
+            // is not conjured either.
+            Dictionary<GridPos, Cube> anchors = LiftAnchors();
             for (int x = 0; x < Width; x++)
             {
                 for (int y = 0; y < Height; y++)
@@ -120,9 +140,14 @@ namespace ProjectBlock.Core
                 {
                     continue; // the cell no longer exists on this board
                 }
+                if (CubeRules.IsAnchored(entry.Value))
+                {
+                    continue;
+                }
                 cells[entry.Key.X - MinX, entry.Key.Y - MinY] = entry.Value;
                 OccupiedCount++;
             }
+            RestoreAnchors(anchors, null, null, null, BoardMotionSource.Escalator);
         }
 
         /// <summary>Turns ghost traces into real play area and hands back the cells that were
@@ -768,6 +793,15 @@ namespace ProjectBlock.Core
             }
             Cube? ca = GetCube(a);
             Cube? cb = GetCube(b);
+            if ((ca.HasValue && CubeRules.IsAnchored(ca.Value))
+                || (cb.HasValue && CubeRules.IsAnchored(cb.Value)))
+            {
+                // "Kara Delik": a hole does not travel with its line, nor is it covered.
+                GridPos hole = ca.HasValue && CubeRules.IsAnchored(ca.Value) ? a : b;
+                GridPos other = hole.Equals(a) ? b : a;
+                AnchorRefusals.Add(hole, new GridPos(Math.Sign(other.X - hole.X), Math.Sign(other.Y - hole.Y)));
+                return;
+            }
             SetCellRaw(a, cb);
             SetCellRaw(b, ca);
         }

@@ -487,9 +487,10 @@ namespace ProjectBlock.View
                         return body;
                     }
                 }
-                for (int i = 0; i < sourceCard.Elements.Count; i++)
+                IReadOnlyList<BlockElement> shown = ShownElements(sourceCard);
+                for (int i = 0; i < shown.Count; i++)
                 {
-                    Sprite fromCard = OwnTile(sourceCard.Elements[i]);
+                    Sprite fromCard = OwnTile(shown[i]);
                     if (fromCard != null)
                     {
                         return fromCard;
@@ -751,12 +752,13 @@ namespace ProjectBlock.View
             // otherwise a plain targeted card would be lime from edge to edge.
             Color color = ColorForCard(card.Id);
             BlockElement? element = null;
-            for (int i = 0; i < card.Elements.Count; i++)
+            IReadOnlyList<BlockElement> shown = ShownElements(card);
+            for (int i = 0; i < shown.Count; i++)
             {
-                if (card.Elements[i] != BlockElement.Targeted)
+                if (shown[i] != BlockElement.Targeted)
                 {
-                    color = ElementColor(card.Elements[i]);
-                    element = card.Elements[i];
+                    color = ElementColor(shown[i]);
+                    element = shown[i];
                     break;
                 }
             }
@@ -990,6 +992,28 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>
+        /// The elements a card is drawn as RIGHT NOW. For almost every card that is simply its
+        /// Elements; an alchemical one ("Simya": two materials, one at a time) is its target mark,
+        /// if it has one, and the element the player made it - never the one it is not being, or
+        /// a fire+water card chosen as water would still be painted fire.
+        /// </summary>
+        public static IReadOnlyList<BlockElement> ShownElements(BlockCard card)
+        {
+            BlockElement? active = card != null ? card.ActiveElement : null;
+            if (!active.HasValue)
+            {
+                return card != null ? card.Elements : (IReadOnlyList<BlockElement>)new BlockElement[0];
+            }
+            var shown = new List<BlockElement>(2);
+            if (card.Has(BlockElement.Targeted))
+            {
+                shown.Add(BlockElement.Targeted);
+            }
+            shown.Add(active.Value);
+            return shown;
+        }
+
         /// <summary>Short display name of an element for card labels.</summary>
         public static string ElementLabel(BlockElement element)
         {
@@ -1049,12 +1073,6 @@ namespace ProjectBlock.View
                             + "the cells end up empty. Obsidian and gold refuse it.",
                         "Mevcut blokların ÜSTÜNE konur ve onları siler. Geriye hiçbir şey "
                             + "bırakmaz, kareler boşalır. Obsidyen ve altın kabul etmez.");
-                case BlockElement.Void:
-                    return Loc.Pick(
-                        "Place it over filled cells too. Each of its cubes swallows the next cube "
-                            + "that lands on it, and both are gone.",
-                        "Dolu hücrelerin üstüne de konabilir. Her küpü üstüne gelen ilk küpü "
-                            + "yutar ve ikisi de yok olur.");
                 case BlockElement.Dynamite:
                     return Loc.Pick("If the whole block explodes the turn it lands, the board is cleared.",
                         "Blok tek seferde tümüyle patlarsa tüm alan temizlenir.");
@@ -1072,6 +1090,14 @@ namespace ProjectBlock.View
                         "İşaretli tek küpü onun hedefidir. Önce HEDEFİ patlatırsan blok bonus "
                             + "verir ve tümüyle patlar; önce başka bir küpü giderse bloğun "
                             + "etkisi kalmaz - orada öylece durur.");
+                case BlockElement.Void:
+                    return Loc.Pick(
+                        "Goes on any cell, even a filled one, and nothing can ever remove it. Each "
+                            + "turn it eats the blocks next to it and pulls in the ring beyond; a "
+                            + "block laid on it falls in.",
+                        "Dolu hücre dahil her yere konur ve hiçbir şey onu kaldıramaz. Her tur "
+                            + "yanındaki blokları yutar, bir ötesindekileri kendine çeker; üstüne "
+                            + "konan blok içine düşer.");
                 default:
                     return string.Empty;
             }

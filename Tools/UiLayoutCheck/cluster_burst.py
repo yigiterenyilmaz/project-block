@@ -125,7 +125,8 @@ check('FlashCells darbeyi yalnizca ayar > 0 ise verir', 'ImpulseFor(' in flash a
 check('guc patlamasi / supurge sarsmiyor', 'Shake' not in method(act, 'private void PlayPowerBlast(')
       and 'Shake' not in method(act, 'private IEnumerator SupurgeBlastRoutine('), 'sabit sarsinti kalmis')
 check('yalnizca grup patlamasi olan tur sarsmiyor',
-      'if (report.CubesExploded > 0 || report.DynamiteTriggered || report.CleanSweep)' in method(fb, 'private void HandleBlastFeedback('),
+      'if (report.CubesExploded > 0 || report.DynamiteTriggered || ordinarySweep)' in method(fb, 'private void HandleBlastFeedback(')
+      and 'bool ordinarySweep = report.CleanSweep && !sweepIsHoleCollapse;' in method(fb, 'private void HandleBlastFeedback('),
       'Hedefli/gec patlama turu sarsiyor')
 check('hit-stop en fazla 2 kare', style['HitStopFrames'] <= 2, 'hit-stop uzun')
 

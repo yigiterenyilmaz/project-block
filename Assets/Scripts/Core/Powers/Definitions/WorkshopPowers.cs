@@ -86,8 +86,10 @@ namespace ProjectBlock.Core
             round.TakeCardOutOfRound(target.HandIndex.Value);
             foreach (List<GridPos> half in halves)
             {
-                round.AddBonusCard(CutPiece(ctx, whole, cells, half, targetCube, perCube),
-                    BonusPlayOutcome.ExpireFromRound);
+                BlockCard piece = CutPiece(ctx, whole, cells, half, targetCube, perCube);
+                // "Simya": a half keeps the element the whole was set to.
+                piece.KeepChoiceOf(whole);
+                round.AddBonusCard(piece, BonusPlayOutcome.ExpireFromRound);
             }
             return true;
         }

@@ -56,6 +56,15 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
+            // "Kara Delik": a black hole is anchored - nothing retypes it.
+            foreach (GridPos cell in donor)
+            {
+                Cube? cube = Board.GetCube(cell);
+                if (cube.HasValue && CubeRules.IsAnchored(cube.Value))
+                {
+                    return false;
+                }
+            }
             Cube? first = Board.GetCube(donor[0]);
             if (!first.HasValue)
             {

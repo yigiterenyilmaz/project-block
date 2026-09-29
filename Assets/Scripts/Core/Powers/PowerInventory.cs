@@ -260,6 +260,9 @@ namespace ProjectBlock.Core
             {
                 power.Spend();
             }
+            // What the power destroyed has come to rest - before the rescue's dead-end re-check,
+            // so anything a joker does about it (a "Hazine" penalty on the hand) is seen by it.
+            session.Jokers.DispatchDestructionSettled(round);
             if (rescuing)
             {
                 // The rescue opened a gap; hand the round back to normal play, which

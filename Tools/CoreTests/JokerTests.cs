@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Text;
 using ProjectBlock.Core;
 
-public static class JokerTests
+public static partial class JokerTests
 {
     private static int passed;
     private static int failed;
@@ -66,9 +66,17 @@ public static class JokerTests
         Buzluk_FreezesAtWallsAndDoesNotBlockSweep();
         Buzluk_AHoleIsAWallToo();
         Simya_GivesOfferedElementalBlocksASecondElement();
+        Simya_ADoubledCardIsOneElementThePlayerPicks();
+        Simya_TheChoiceSurvivesCopiesAndASave();
         KapaliEkonomi_PaysWhenNothingWasBought();
         Ihale_LocksUntilTheAuctionedJokerLeaves();
         KaraDelik_VoidBlockSwallowsWhatLandsOnIt();
+        KaraDelik_AVoidCardSwallowsAFilledCell();
+        KaraDelik_EatsRingOnePullsRingTwoAndNothingFurther();
+        KaraDelik_NothingMovesOrRemovesAHole();
+        KaraDelik_TheViewReadsTheSameRings();
+        KaraDelik_FeedingTheArenaCollapsesItIntoASweep();
+        KaraDelik_GravitySlipsAndSwallowsTheSmallerPile();
         Enfeksiyon_SpreadsThenDetonates();
         BabaOcagi_BuriesPlayedCardsInTheDrawPile();
         BabaOcagi_ADecksWorthOfPlaysCostsThreeCards();
@@ -102,8 +110,11 @@ public static class JokerTests
         MarketDiscount_CutsPricesForOneVisit();
         Hazine_BuriesTwoMarksAndPaysOutOnce();
         Hazine_DynamiteAppliesAPenalty();
-        Hazine_HittingBothCancelsOut();
         Hazine_ReportsWhatTheFindReallyDid();
+        Hazine_APowerBetweenTurnsBlowsAMarkOpen();
+        Hazine_LateDestructionInTheTurnCountsAndBothCancel();
+        Hazine_AFindOnTheCrossingTurnIsStillShown();
+        Hazine_TheExplosionBonusIsHalfWhatTheLineBanked();
         MeydanOkuma_MarksThenPaysOnClear();
         MeydanOkuma_HalvesAndGivesUpAfterThreeMisses();
         MeydanOkuma_SeaReadsHandDrawPileAndBoard();
@@ -1830,6 +1841,90 @@ public static class JokerTests
         Check(doubled.Id == fire.Id, "the offer keeps its card id");
     }
 
+    /// <summary>
+    /// A two-element card is ONE of its elements, the player's pick - never both, never a fixed
+    /// priority. Driven through real placements: the cube kind it lays follows the choice, and the
+    /// card-level rules (dynamite here) apply only when that is what it is being.
+    /// </summary>
+    private static void Simya_ADoubledCardIsOneElementThePlayerPicks()
+    {
+        Section("simya / a doubled card is one element, chosen");
+        var session = NewSession(131, 6, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+
+        BlockCard card = session.CreateCard(Bar(1), new[] { BlockElement.Water, BlockElement.Fire });
+        Check(card.IsAlchemical && card.ElementChoices.Count == 2, "two elements make it alchemical");
+        Check(card.ActiveElement == BlockElement.Water, "it starts as its FIRST element (the one Simya kept)",
+            "" + card.ActiveElement);
+        Check(card.Has(BlockElement.Water) && !card.Has(BlockElement.Fire),
+            "and it is only that - fire no longer wins by priority");
+        Check(CubeRules.KindForCard(card) == CubeKind.Water, "so it lays water");
+
+        round.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
+        round.PlayFromBonus(round.BonusHand.Count - 1, new GridPos(0, 0));
+        Check(round.Board.GetCube(new GridPos(0, 0)).HasValue
+                && round.Board.GetCube(new GridPos(0, 0)).Value.Kind == CubeKind.Water,
+            "placed as water");
+
+        BlockCard second = session.CreateCard(Bar(1), new[] { BlockElement.Water, BlockElement.Fire });
+        round.AddBonusCard(second, BonusPlayOutcome.ExpireFromRound);
+        Check(session.ChooseCardElement(second.Id, BlockElement.Fire), "the player can make it fire");
+        Check(second.Has(BlockElement.Fire) && !second.Has(BlockElement.Water), "and then it is only fire");
+        round.PlayFromBonus(round.BonusHand.Count - 1, new GridPos(3, 5));
+        Check(round.Board.GetCube(new GridPos(3, 5)).HasValue
+                && round.Board.GetCube(new GridPos(3, 5)).Value.Kind == CubeKind.Fire,
+            "placed as fire");
+
+        BlockCard bomb = session.CreateCard(Bar(1), new[] { BlockElement.Fire, BlockElement.Dynamite });
+        Check(!bomb.Has(BlockElement.Dynamite) && !round.CardHasElement(bomb, BlockElement.Dynamite),
+            "a fire+dynamite card being fire is NOT also dynamite");
+        Check(session.ChooseCardElement(bomb.Id, BlockElement.Dynamite) == false,
+            "a card that is not in the hand, bonus hand or deck cannot be chosen for");
+        round.AddBonusCard(bomb, BonusPlayOutcome.ExpireFromRound);
+        Check(session.ChooseCardElement(bomb.Id, BlockElement.Dynamite), "once held, it can be");
+        Check(bomb.Has(BlockElement.Dynamite) && !bomb.Has(BlockElement.Fire)
+                && CubeRules.KindForCard(bomb) == CubeKind.Dynamite,
+            "and as dynamite it is dynamite through and through");
+        Check(!session.ChooseCardElement(bomb.Id, BlockElement.Gold), "an element it does not carry is refused");
+
+        BlockCard single = session.CreateCard(Bar(1), new[] { BlockElement.Fire });
+        round.AddBonusCard(single, BonusPlayOutcome.ExpireFromRound);
+        Check(!single.IsAlchemical && !session.ChooseCardElement(single.Id, BlockElement.Fire),
+            "a one-element card has nothing to choose");
+
+        BlockCard marked = session.CreateCard(Bar(1), new[] { BlockElement.Targeted, BlockElement.Fire });
+        Check(!marked.IsAlchemical && marked.Has(BlockElement.Targeted) && marked.Has(BlockElement.Fire),
+            "a target mark is not a material: target + fire is simply both");
+        BlockCard markedPair = session.CreateCard(Bar(1),
+            new[] { BlockElement.Targeted, BlockElement.Fire, BlockElement.Water });
+        Check(markedPair.IsAlchemical && markedPair.Has(BlockElement.Targeted)
+                && markedPair.Has(BlockElement.Fire) && !markedPair.Has(BlockElement.Water),
+            "and with two materials, the mark stays while the material is chosen");
+    }
+
+    private static void Simya_TheChoiceSurvivesCopiesAndASave()
+    {
+        Section("simya / the choice is kept");
+        var session = NewSession(137, 6, 1000000, 40, 1);
+        BlockCard card = session.CreateCard(Bar(2), new[] { BlockElement.Fire, BlockElement.Water });
+        session.CurrentRound.AddBonusCard(card, BonusPlayOutcome.ExpireFromRound);
+        Check(session.ChooseCardElement(card.Id, BlockElement.Water), "chosen in the bonus hand");
+
+        BlockCard copy = session.CreateCard(card.Shape, card.Elements);
+        copy.KeepChoiceOf(card);
+        Check(copy.ActiveElement == BlockElement.Water, "a copy keeps being what the source was");
+
+        GameSession back = SaveGame.Load(SaveGame.Save(session), new GameConfig());
+        BlockCard reloaded = null;
+        foreach (BonusSlot slot in back.CurrentRound.BonusHand)
+        {
+            if (slot.Card.Id == card.Id) { reloaded = slot.Card; }
+        }
+        Check(reloaded != null && reloaded.ActiveElement == BlockElement.Water
+                && reloaded.Has(BlockElement.Water) && !reloaded.Has(BlockElement.Fire),
+            "a save keeps the choice", reloaded == null ? "missing" : "" + reloaded.ActiveElement);
+    }
+
     private static void KapaliEkonomi_PaysWhenNothingWasBought()
     {
         Section("kapali_ekonomi / every skipped market adds a score percentage");
@@ -1912,9 +2007,13 @@ public static class JokerTests
 
         BlockCard victim = session.CreateCard(Bar(1), null);
         round.Board.Place(victim, new GridPos(2, 2));
-        Check(!round.Board.GetCube(new GridPos(2, 2)).HasValue,
-            "both the arriving cube and the void are gone");
-        Check(round.Board.OccupiedCount == 0, "occupancy stayed consistent",
+        Check(round.Board.GetCube(new GridPos(2, 2)).HasValue
+                && round.Board.GetCube(new GridPos(2, 2)).Value.Kind == CubeKind.Void,
+            "the arriving cube fell in and the hole stays");
+        Check(round.Board.LastPlacementSwallows.Count == 1
+                && round.Board.LastPlacementSwallows[0].Cube.SourceCardId == victim.Id,
+            "and the board says what it swallowed");
+        Check(round.Board.OccupiedCount == 1, "occupancy stayed consistent",
             "occupied " + round.Board.OccupiedCount);
     }
 
@@ -3195,64 +3294,6 @@ public static class JokerTests
             "outcome " + joker.LastOutcome);
     }
 
-    private static void Hazine_HittingBothCancelsOut()
-    {
-        Section("hazine / hitting both cancels out");
-        var session = NewSession(523, 6, 1000000, 40, 1);
-        var joker = (HazineJoker)session.Jokers.Add(new HazineJoker());
-        session.Jokers.DispatchRoundStarted(session.CurrentRound);
-        RoundEngine round = session.CurrentRound;
-
-        GridPos treasure = joker.TreasureCell.Value;
-        GridPos dynamite = joker.DynamiteCell.Value;
-        int handBefore = round.Hand.Count;
-        bool anyFrozenBefore = false;
-        for (int i = 0; i < round.Hand.Count; i++)
-        {
-            anyFrozenBefore |= round.IsFrozen(round.Hand[i].Id);
-        }
-
-        // ONE turn whose destruction log covers BOTH marks. Driving that through a real
-        // placement would need the two random cells to be adjacent, so the turn is built
-        // directly - the rule under test is what the joker does with such a log.
-        var score = new ScoreBreakdown();
-        TurnContext turn = FakeTurnWithRound(session, score);
-        turn.Report.DestroyedCubes = new List<DestroyedCube>
-        {
-            new DestroyedCube(treasure, new Cube(CubeKind.Normal, 900)),
-            new DestroyedCube(dynamite, new Cube(CubeKind.Normal, 901))
-        };
-        joker.AfterTurnScored(turn);
-
-        Check(!joker.TreasureCell.HasValue && !joker.DynamiteCell.HasValue,
-            "both marks are gone");
-        Check(!string.IsNullOrEmpty(joker.LastOutcome),
-            "the cancellation was reported", "outcome " + joker.LastOutcome);
-        Check(score.FlatBonus == 0 && score.LateFlat == 0, "no reward was paid",
-            "flat " + score.FlatBonus + " late " + score.LateFlat);
-        Check(round.Hand.Count == handBefore, "and no penalty wrecked the hand",
-            round.Hand.Count + " vs " + handBefore);
-        bool anyFrozenAfter = false;
-        for (int i = 0; i < round.Hand.Count; i++)
-        {
-            anyFrozenAfter |= round.IsFrozen(round.Hand[i].Id);
-        }
-        Check(anyFrozenAfter == anyFrozenBefore, "nothing was frozen either");
-
-        HazineVisuals find = joker.LastFind;
-        Check(find != null && find.Result == HazineResult.BothCancelled
-                && find.Effect == HazineEffect.None && find.ScoreDelta == 0,
-            "the report says they cancelled and nothing was applied",
-            find == null ? "null" : find.Result + " " + find.Effect);
-        Check(find != null && find.Discoveries.Count == 2
-                && find.Find(true) != null && find.Find(true).Cell.Equals(treasure)
-                && find.Find(false) != null && find.Find(false).Cell.Equals(dynamite),
-            "with both marks where they really were");
-        Check(find != null && find.Find(true).Cube.SourceCardId == 900
-                && find.Find(false).Cube.SourceCardId == 901,
-            "and the cube each one was under, from the destruction log");
-    }
-
     /// <summary>
     /// THE REPORT IS THE RULES' OWN ACCOUNT. Over many seeds: a find names only the mark that was
     /// blown open (the other one's location is never handed to the View), the effect it names is
@@ -3370,9 +3411,9 @@ public static class JokerTests
             }
             HazineVisuals first = find;
 
-            // ---- the round's second arming (overtime) starts with a clean slate
+            // ---- the round's second arming (overtime) keeps the find for the View
             session.Jokers.DispatchOvertimeStarted(round);
-            Check(joker.LastFind == null, "re-arming forgets the last find");
+            Check(ReferenceEquals(joker.LastFind, first), "re-arming keeps the last find (matched by identity)");
 
             // ---- dynamite, on a fresh session
             var s2 = NewSession(3300 + seed, 6, 1000000, 40, 1);

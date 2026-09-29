@@ -612,6 +612,39 @@ dropped that way once each.
   colours, near, far, edge, corner, and a full board with stone in it that stays), eight beats on
   their own, a proxy test, 0.5x/0.25x, and three debug overlays (targets red / could fall yellow /
   stone grey, the wave each cube falls in, crack bounds).
+- **"Taşkın" drowns cubes; it does not tint them** (`FloodView`, `FloodShapes`, `Resources/Shaders/FloodFilm`,
+  `GameUiController.Flood.cs`). It shares "Yangın"'s report (`SpreadVisuals`: the sources, the targets,
+  what each target WAS and which sources reached it) and FireSpreadView plays only fire, so for a long
+  time the water joker had no picture at all - Core had already written everything it needed. **The
+  order is the read, and the first pass lost it**: it started the target 180 ms in with a few pixels of
+  swell, and a cube simply turned to water; the second scaled the water cube up, and a block getting
+  bigger is not water either, and the third - a dome heaving out of the top and a lobe growing with it -
+  read as irregular. Now each source that really spills FIRST swells AS A LIQUID, EVENLY ON EVERY SIDE
+  AND BOILING (~0.3 s, `Resources/Shaders/FloodSwell`: an SDF pillow of its own water on a quad 2.2
+  cells wide - the cube's rounded box grown the same on all four sides with its corners rounding off,
+  bubbles swelling out of its surface all the way round and sinking back, bubbles boiling up through
+  it, froth even round its rim, its hard frame melting into the body; at amount 0 it is exactly the
+  cube, so it comes and goes over the board's cube unseen), THEN - a separate beat (`_Spill`) - a short
+  lobe opens toward each REAL target and spills a LIQUID TONGUE over the border - wide at its root, a drop at
+  its tip, never a beam - and the target does not begin to turn until that tongue lands (~0.52 s),
+  after which the source sinks back. **One target is one
+  transformation**: the held cell (`BoardView.HoldCells`, as for Yangın) shows the OLD face on the
+  FloodFilm shader, with a film per side it was reached from (L / R / B / T progress, one mask, max-
+  combined so films from two sides meet in the middle), a wavy front with a pale line that dies where
+  water already lies, and under the film the cube refracts a pixel, loses its colour FIRST and its
+  contrast SECOND before the water's colour lies over it (a straight blue tint is the failure), then
+  runs a few pixels as it dissolves. Under that proxy the cell's REAL water - the water tile on its own
+  warp material - rises while the old face goes, so releasing the cells hands over to the same picture;
+  a broken ripple and a few droplets settle it, and the source's swell draws back. **The old face comes
+  from the report, never the board** - the board is already painted as water when this runs. Only the
+  report's sources spill; a cube that just became water only settles (one ring). The joker is used from
+  the bar and does not settle its water (the next placement does), so a flood never overlaps a water
+  fall. Idle swirl speed is NOT changed per cell: the warp shader runs off `_Time`, so a per-renderer
+  speed jump would visibly skip the swirl's phase. No score, no flash, no shake. The lab runs the real
+  `SpreadOn` on boards of its own: every direction, one water into four, two / three / four sides into
+  one, ten beat-isolation entries, sparse / dense / high-count, a special-cube test (Core converts
+  obsidian and gold too; the view follows), a one-ring test, a water-falls-then-Taşkın ordering scene,
+  0.5x / 0.25x and eleven debug views; `Tools/UiLayoutCheck/taskin.py` holds the lot. See `flood_mock.png`.
 - **"Tutuştur" is a combustion wave, not twenty explosions** (`IgnitionBurnView`, `IgnitionShapes`,
   `Resources/Shaders/IgnitionBurn`, `GameUiController.Ignition.cs`). The joker takes every fire on the
   board through `DestroyCubes` when a fire goes up, which reaches no explosion list - the far fires
@@ -712,6 +745,19 @@ dropped that way once each.
   cells the report names beside how many the view draws at), each drawing alone and everything but
   the drawing, 0.25x runs with a frame-index + ms readout, a cell outline of what the report names,
   and eleven switches; `Tools/UiLayoutCheck/hazine.py` holds the lot.
+  **A MARK IS BLOWN OPEN BY ANY DESTRUCTION OF ITS CUBE, WHENEVER IT HAPPENS.** The joker used to
+  read the turn's log from its own `AfterTurnScored`, and three things slipped past it: a power used
+  between turns (the cube was gone, the mark stayed buried), anything destroying after that hook in
+  the same turn (a joker further right, the boss, "Deprem"'s rescue) and inventory order deciding
+  which counted. The engine now keeps `RoundEngine.DestructionFeed` (every main-world cube lost this
+  round, reporting only, not saved) and raises `Joker.OnDestructionSettled` after the end-of-turn
+  effects (boss included, step 8.1), after a dead-end rescue and after every power or joker used
+  between turns; Hazine reads the feed from its own cursor there, and a penalty that changed the
+  hand between turns re-asks the dead-end question (`RecheckDeadEndBetweenTurns`). Overtime re-arms
+  the marks but does NOT forget the last find (it opens on the crossing turn, a step after that
+  turn's find was paid), and the explosion bonus is half of what the line BANKED, overtime tax
+  included. The View reveals a between-turn find right after the activation. Pinned in
+  `Tools/CoreTests/HazineRuleTests.cs`.
 - **"Harcama bonusu" is the empty pile PAYING YOU BACK** (`RebateView`, `RebateShapes`,
   `GameUiController.Rebate.cs`). The mechanic is not "you scored some points" — it is "you spent
   the resource and the spending refunded you" — so the payout may not simply appear beside the
@@ -1217,6 +1263,68 @@ BATCH, so a line that takes the target along with two plain cubes is a hit. It i
 joker, power, boss, between-turn or in-turn) feeds it without knowing the rule exists. The index
 is into the EFFECTIVE shape, so a rotation or a reshape moves the mark with the cube the player
 was shown.
+
+**A TWO-ELEMENT CARD IS ONE ELEMENT AT A TIME, AND THE PLAYER PICKS WHICH** ("Simya", a weld;
+designer's call, 2026-09-16). It used to be both and neither - the cube took whichever element won
+a fixed priority while dynamite, ghost and mechanical, asked of the card, applied on top.
+`BlockCard.IsAlchemical` / `ElementChoices` / `ActiveElement`: `Elements` still lists everything
+(price, save, copies) but `Has()` answers only for the active choice, and every rule asks `Has()`.
+"Hedefli" is a mark, never a choice, and always applies. The choice is saved (`.active`, format 19),
+survives copies and cuts (`KeepChoiceOf`), and is changed only through
+`GameSession.ChooseCardElement`. The View (`GameUiController.Alchemy.cs`) opens a small panel
+(`ChoicePickerView.ShowCompact`) by RIGHT-CLICK, by a still PRESS-AND-HOLD on the card (the phone's
+way in, since a finger is the left button) or the pad's west button; a gear's turn, the fox and
+retro rotation are rows of that panel. The card is rebuilt wearing the chosen element
+(`ViewUtil.ShownElements`), with no animation. `Tools/UiLayoutCheck/simya.py` holds it.
+
+**"KARA DELIK" IS A REAL BLACK HOLE** (designer's call, 2026-09-16; `KaraDelikJoker.cs`). Every
+clean sweep puts a 1x1 void card in the discard. Laid on ANY cell - over a cube too, which is
+swallowed through the engine (`RoundEngine.SwallowUnderVoidCard`, forced: gold and obsidian go) - it
+becomes a hole that NEVER leaves: `CubeRules.IsAnchored` is asked by every board write (forced
+destroy, forget, the escalator, the centrifuge and retro's row collapse - which lift the holes, move
+everything else and put them back, a cube carried into one falling in - the press, a line swap,
+`SetCubeAt`, `SetCubeKind`, the parasite, erosion, `RestoreFrom`, the snake). The card is spent (the
+hole IS the card), a block landing on a hole loses that cube into it
+(`GameBoard.LastPlacementSwallows` -> `TurnReport.VoidSwallows`), it fills its cell for lines and
+never blocks a sweep. Every turn, in `AfterLineExplosion`, ring 1 (Chebyshev) is EATEN and ring 2 is
+PULLED one step in (`GameBoard.MoveCube`, then `NoteBoardRearranged` - a pull is not a death); ring 3
+feels nothing. A parasite host, the snake, a mine and a press capsule are never taken
+(`CubeRules.CanBeSwallowed`). Each swallowed cube pays `PointsPerCube` and is counted; when the
+round's count reaches the arena's play cells the board COLLAPSES (every other takeable cube
+destroyed, each paying) and `ForceCleanSweep` goes off however full it was, then the count restarts.
+The price, rolled in `AfterTurnScored`: at `DeckSwallowChancePercent` the gravity swallows the
+SMALLER non-empty pile (a tie takes the discard, `RoundDeck.SwallowPile`) for the rest of the round,
+at most twice a round. `LastTurn` / `LastDeckSwallow` are the View's reports; save format 20.
+Pinned in `Tools/CoreTests/KaraDelikTests.cs`.
+
+**THE HOLE IS DRAWN AS A PHYSICAL ANOMALY, NOT A BLACK CIRCLE** (`BlackHoleView`, `BlackHoleShapes`,
+`GameUiController.BlackHole.cs`, `Resources/Shaders/BlackHole` + `BlackHoleMatter`). Three layers or
+it does not read: an EVENT HORIZON with no detail in it and a hair of bent light that is brightest on
+the approaching side only (an even bright ring read as a button), an ACCRETION DISK of two bands at
+two speeds whose matter drifts INWARD (a rigidly turning noise reads as a spinning texture), dark and
+cold with one local warm highlight, and a DISTORTION FIELD written through the board's own renderers
+for every cube in ring 1 or 2 (`KaraDelikJoker.InfluenceAt` - the view never picks a radius; ring 3 is
+untouched): stretched toward the hole, squeezed across it, dragged, near edge bent, near side darker,
+the tile's own warp copied in so water keeps swirling, ice left alone. Picture only - no cell, hitbox
+or input moves. With the shaders there, the board leaves a hole cell as an empty slot and the view
+draws it; without them the void tile stays and nothing here runs. The MASS layer is a broken, grainy
+second density band outside the disk that fills with `SwallowedThisRound / GoalFor` - the first mock
+made it an even grey ring, which is a HUD gauge. The repaint after a turn raises proxies and holds the
+pull destinations (`Prepare`); the gravity plays from `PlayExplosionFeedback` after the turn's lines
+(`Begin`): grip (disk quickens, targets lean in), the real pulls (accelerating, a pixel of overshoot),
+the swallows (lock, a 0.35-0.7 turn spiral, spaghettification to 1.4 x 0.25 kept readable until the
+last quarter, drained and darkened last, and whatever crossed the horizon clipped PER RENDERER - never
+a fade, never an outward burst, a mass pulse instead), per-cube `+X` for up to three and one rolling
+total past that, then the COLLAPSE: saturation, a breath of silence with every remaining cube tugged
+in, a thin dark-to-amber break running out in distance buckets, each cube compressing and bursting in
+its OWN colour. That sweep suppresses the ordinary cleanse wave and its shake (`sweepIsHoleCollapse`).
+The DEVOUR opens a faint bent corridor to the chosen pile only, leans and thins the stack, peels 3-6
+proxy cards into the horizon (a transient horizon at the board edge when no hole stands), and leaves a
+sunken lens residue that shows only while that pile is BOTH voided this round and empty - an empty
+pile is an ordinary slot. `GameBoard.AnchorRefusals` (reporting only, cleared each turn) drives the
+"it will not budge" beat. The lab has 23 scenes running `KaraDelikJoker.RunGravity` / `RunCollapse`,
+the real `Place` and `ShiftRowsUp` on its own board, plus layer switches and four debug views;
+`Tools/UiLayoutCheck/karadelik.py` holds the lot. Mocks: `hole_*.png` in the session scratchpad.
 
 **"Meydan Okuma" dares a line picked off a MEASURED sea of chances** (`LineChanceSea`, in
 `Core/Jokers/LineChance.cs`). It used to mark any row or column at random, which made the bonus a

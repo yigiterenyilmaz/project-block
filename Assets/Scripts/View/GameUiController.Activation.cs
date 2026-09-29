@@ -425,6 +425,12 @@ namespace ProjectBlock.View
             {
                 return ResolveBossPick(pendingChoiceValues[index]);
             }
+            if (pendingChoice == ChoiceKind.CardElement)
+            {
+                ResolveAlchemyChoice(pendingChoiceValues[index]);
+                RefreshAll(null);
+                return true;
+            }
             var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
             if (pendingChoice == ChoiceKind.GravityDirection)
             {
@@ -565,6 +571,7 @@ namespace ProjectBlock.View
                 boardView.Refresh();
                 UpdateHud();
                 jokerBar.Refresh(session, null);
+                SyncHazine(round, null);
                 return;
             }
             if (replacedCardId >= 0 && round.Status != RoundStatus.Lost)
@@ -573,9 +580,12 @@ namespace ProjectBlock.View
                 boardView.Refresh();
                 UpdateHud();
                 jokerBar.Refresh(session, null);
+                SyncHazine(round, null);
                 return;
             }
             RefreshAll(null);
+            // "Hazine": a mark the activation blew open is revealed now, not at the next turn.
+            SyncHazine(round, null);
         }
 
         /// <summary>Uses a power, or arms targeting mode if it must be pointed at something.
@@ -1479,6 +1489,11 @@ namespace ProjectBlock.View
                 return;
             }
             PlayPowerBlast(blastCells);
+            // "Hazine": a mark the power blew open is revealed as the blast breaks it.
+            if (session.Phase == GamePhase.Round)
+            {
+                SyncHazine(round, null);
+            }
         }
 
         /// <summary>Every cube on the main board with the face it is wearing right now - what the

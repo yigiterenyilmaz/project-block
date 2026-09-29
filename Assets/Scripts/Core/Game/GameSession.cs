@@ -1,4 +1,4 @@
-// PURPOSE: The whole run: owned card collection, joker/power inventories, round
+﻿// PURPOSE: The whole run: owned card collection, joker/power inventories, round
 // sequence, market phase, and the two score meanings (per-round RoundScore vs the
 // run-wide TotalScore that doubles as market currency). Survives every round; each
 // RoundEngine does not. See StartRound / OnRoundStatusChanged for the joker wiring.
@@ -371,7 +371,7 @@ namespace ProjectBlock.Core
             {
                 throw new InvalidOperationException("Bonus cards can only be added during a round.");
             }
-            // A VOID block is dealt the way "Kara delik" makes one: a random shape of the deck.
+            // A VOID block is dealt the way "Kara delik" makes one (a single black hole).
             BlockShape shape = element == BlockElement.Void
                 ? KaraDelikJoker.VoidShape(this, rng)
                 : Config.Deck.ShapeGenerator.NextShape(rng);
@@ -980,6 +980,40 @@ namespace ProjectBlock.Core
         public BlockCard CreateDesignedCard(BlockShape shape, IReadOnlyList<BlockElement?> perCube)
         {
             return BlockCard.Designed(nextCardId++, shape, perCube);
+        }
+
+        /// <summary>
+        /// "Simya": makes a two-element card ONE of its elements - the player's choice, free and at
+        /// any time, from the hand, the bonus hand or the deck. What it changes is only what the
+        /// card IS from now on (every rule asks BlockCard.Has); cubes it has already laid keep the
+        /// kind they landed as. False when no such card is found, the card is not alchemical, or
+        /// it cannot be <paramref name="element"/>.
+        /// </summary>
+        public bool ChooseCardElement(int cardId, BlockElement element)
+        {
+            BlockCard card = FindCard(cardId);
+            return card != null && card.IsAlchemical && card.Choose(element);
+        }
+
+        private BlockCard FindCard(int cardId)
+        {
+            RoundEngine round = CurrentRound;
+            if (round != null)
+            {
+                for (int i = 0; i < round.Hand.Count; i++)
+                {
+                    if (round.Hand[i].Id == cardId) { return round.Hand[i]; }
+                }
+                for (int i = 0; i < round.BonusHand.Count; i++)
+                {
+                    if (round.BonusHand[i].Card.Id == cardId) { return round.BonusHand[i].Card; }
+                }
+            }
+            for (int i = 0; i < OwnedCards.Count; i++)
+            {
+                if (OwnedCards[i].Id == cardId) { return OwnedCards[i]; }
+            }
+            return null;
         }
 
         /// <summary>"Karakter oluşturma": bakes a player-designed block into the owned deck and

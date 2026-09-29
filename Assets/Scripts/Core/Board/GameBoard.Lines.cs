@@ -129,6 +129,8 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
+            // "Kara Delik": holes do not ride the collapse; whatever comes down onto one falls in.
+            Dictionary<GridPos, Cube> anchors = LiftAnchors(null, new GridPos(0, -1));
             var cleared = new HashSet<int>(clearedRows);
             // Rows to keep, bottom to top: every row that was not cleared, plus any cleared row
             // that still holds a cube (an indestructible survivor stays put and becomes floor).
@@ -142,6 +144,7 @@ namespace ProjectBlock.Core
             }
             if (keep.Count == Height)
             {
+                RestoreAnchors(anchors, null, null, null, BoardMotionSource.Escalator);
                 return false; // no cleared row was actually emptied - nothing collapses
             }
             // Compact the kept rows to the bottom in order. keep is ascending and write grows
@@ -170,6 +173,8 @@ namespace ProjectBlock.Core
                     cells[x, y] = null;
                 }
             }
+            RestoreAnchors(anchors, null, null, null, BoardMotionSource.Escalator);
+            RecountOccupied();
             return moved;
         }
 
@@ -399,7 +404,8 @@ namespace ProjectBlock.Core
                 for (int y = 0; y < Height; y++)
                 {
                     Cube? cube = cells[x, y];
-                    if (cube.HasValue && cube.Value.SourceCardId == cardId)
+                    if (cube.HasValue && cube.Value.SourceCardId == cardId
+                        && !CubeRules.IsAnchored(cube.Value))
                     {
                         cells[x, y] = null;
                         OccupiedCount--;
@@ -454,6 +460,8 @@ namespace ProjectBlock.Core
         {
             var lost = new List<GridPos>();
             var up = new GridPos(0, 1);
+            // "Kara Delik": holes stay where they are; a cube riding into one falls in.
+            Dictionary<GridPos, Cube> anchors = LiftAnchors(null, up);
             for (int x = 0; x < Width; x++)
             {
                 // The top row rides off the end.
@@ -507,6 +515,7 @@ namespace ProjectBlock.Core
                 }
             }
             OccupiedCount = occupied;
+            RestoreAnchors(anchors, lost, motions, moves, BoardMotionSource.Escalator);
             return lost;
         }
 
@@ -547,6 +556,12 @@ namespace ProjectBlock.Core
             // board's lands on one. Compared doubled to keep it integer arithmetic.
             int centreX2 = Width - 1;
             int centreY2 = Height - 1;
+            // "Kara Delik": holes are not flung, and a cube flung into one falls in.
+            Dictionary<GridPos, Cube> anchors = LiftAnchors(
+                delegate(int ax, int ay)
+                {
+                    return new GridPos(Math.Sign(ax * 2 - centreX2), Math.Sign(ay * 2 - centreY2));
+                }, new GridPos(0, 0));
 
             // Every occupied cell, furthest-from-centre first. Chebyshev distance doubled, which
             // is the number of steps this fling actually takes.
@@ -626,7 +641,106 @@ namespace ProjectBlock.Core
                 }
             }
             OccupiedCount = occupied;
+            RestoreAnchors(anchors, lost, motions, moves, BoardMotionSource.Centrifuge);
             return lost;
+        }
+
+        /// <summary>Takes every anchored cube ("Kara Delik") off the board before a whole-board
+        /// move, keyed by its ABSOLUTE cell. The move then runs as if the holes were empty cells.</summary>
+        private Dictionary<GridPos, Cube> LiftAnchors()
+        {
+            return LiftAnchors(null, new GridPos(0, 0));
+        }
+
+        /// <param name="stepAt">The way the move would have carried the hole at (array x, y), or
+        /// null to use <paramref name="step"/> for every hole. Each hole held is reported.</param>
+        private Dictionary<GridPos, Cube> LiftAnchors(Func<int, int, GridPos> stepAt, GridPos step)
+        {
+            Dictionary<GridPos, Cube> anchors = null;
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    Cube? cube = cells[x, y];
+                    if (cube.HasValue && CubeRules.IsAnchored(cube.Value))
+                    {
+                        if (anchors == null)
+                        {
+                            anchors = new Dictionary<GridPos, Cube>();
+                        }
+                        anchors[new GridPos(x + MinX, y + MinY)] = cube.Value;
+                        AnchorRefusals.Add(new GridPos(x + MinX, y + MinY),
+                            stepAt != null ? stepAt(x, y) : step);
+                        cells[x, y] = null;
+                        OccupiedCount--;
+                    }
+                }
+            }
+            return anchors;
+        }
+
+        /// <summary>Puts the holes back where they were. A cube the move carried INTO a hole's
+        /// cell falls in: it is reported as lost (blocked, on the step it took) and its move is
+        /// withdrawn.</summary>
+        private void RestoreAnchors(Dictionary<GridPos, Cube> anchors, List<GridPos> lost,
+            List<LiftMotion> motions, List<CellMove> moves, BoardMotionSource source)
+        {
+            if (anchors == null)
+            {
+                return;
+            }
+            foreach (KeyValuePair<GridPos, Cube> anchor in anchors)
+            {
+                int x = anchor.Key.X - MinX;
+                int y = anchor.Key.Y - MinY;
+                Cube? arrived = cells[x, y];
+                if (arrived.HasValue)
+                {
+                    OccupiedCount--;
+                    if (lost != null)
+                    {
+                        GridPos from = anchor.Key;
+                        GridPos step = new GridPos(0, 0);
+                        if (moves != null)
+                        {
+                            for (int i = moves.Count - 1; i >= 0; i--)
+                            {
+                                if (moves[i].To.Equals(anchor.Key))
+                                {
+                                    from = moves[i].From;
+                                    step = new GridPos(anchor.Key.X - from.X, anchor.Key.Y - from.Y);
+                                    moves.RemoveAt(i);
+                                    break;
+                                }
+                            }
+                        }
+                        lost.Add(from);
+                        if (motions != null)
+                        {
+                            motions.Add(new LiftMotion(from, step, LiftReason.Blocked, arrived.Value,
+                                false, source));
+                        }
+                    }
+                }
+                cells[x, y] = anchor.Value;
+                OccupiedCount++;
+            }
+        }
+
+        private void RecountOccupied()
+        {
+            int occupied = 0;
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    if (cells[x, y].HasValue)
+                    {
+                        occupied++;
+                    }
+                }
+            }
+            OccupiedCount = occupied;
         }
 
         /// <summary>Dynamite: destroys every destructible cube on the board.</summary>
@@ -692,6 +806,11 @@ namespace ProjectBlock.Core
                 return false;
             }
             Cube? cube = cells[pos.X - MinX, pos.Y - MinY];
+            if (cube.HasValue && CubeRules.IsAnchored(cube.Value))
+            {
+                AnchorRefusals.Add(pos, forcedStep);
+                return false; // "Kara Delik": not even a forced pickup moves a hole
+            }
             if (!cube.HasValue || cube.Value.Protected)
             {
                 // The forced pickup a relocation starts with, refused: the board is carrying
@@ -720,6 +839,10 @@ namespace ProjectBlock.Core
         /// clears it at the top of each turn.
         /// </summary>
         public readonly HostRefusalLog HostRefusals = new HostRefusalLog();
+
+        /// <summary>"Kara Delik": every attempt on a hole the board refused. Reporting only, for the
+        /// View's "it will not budge" beat; the engine clears it at the top of each turn.</summary>
+        public readonly AnchorRefusalLog AnchorRefusals = new AnchorRefusalLog();
 
         /// <summary>The step a forced relocation is taking while it runs, so a refusal can say
         /// which side the force came from. Set by the callers that HAVE a direction; zero

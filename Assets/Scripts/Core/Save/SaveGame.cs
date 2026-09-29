@@ -66,7 +66,10 @@ namespace ProjectBlock.Core
         // instead of a flat per-step bonus, so the scoring block - which is positional - now
         // writes the ladder's length and its rungs where the step and the cap used to be. A 19
         // goes out of step on every field after it.
-        public const int FormatVersion = 22;
+        // 23 (2026-09-29): merged with the "Simya" / "Kara Delik" branch - every card saves its
+        // chosen element (".active") and the black hole joker saves what it swallowed. Neither side's
+        // 19-22 writes both, so all of them are refused.
+        public const int FormatVersion = 23;
 
         private const string VersionKey = "version";
 
