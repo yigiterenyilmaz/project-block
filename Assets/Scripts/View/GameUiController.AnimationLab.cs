@@ -2191,6 +2191,9 @@ namespace ProjectBlock.View
                         RedrawAnimationLab();
                     }
                 });
+            // The hosted joker's imprint has a section of its own: 31 scenes, the side-by-side
+            // acceptance test and 14 switches (GameUiController.ParasiteImprintLab).
+            AddParasiteImprintAnims();
             AddAnimSub("bosses", "mapus", "mapus", "mapus");
             // "MAPUS" - the prison it builds in one empty cell, on a board of the lab's own with
             // the REAL rules run on it: the boss picks its own target through MapusBoss.Retarget,
@@ -7429,6 +7432,7 @@ namespace ProjectBlock.View
                 StopCoroutine(animHost);
                 animHost = null;
             }
+            StopAnimImprintRoutine();
             boardView.StopParasite();
         }
 
@@ -7489,6 +7493,10 @@ namespace ProjectBlock.View
                 }
             };
             var live = new List<ParasiteHostView.Host> { host };
+            // A real host always carries its joker's icon, embedded in the film. The passengers
+            // with no art (tamagotchi, antimadde) show the colour seed instead, which is exactly
+            // the game's fallback.
+            boardView.Parasite.SetRiderAt(cell, ViewUtil.JokerIcon(host.Passenger.DefId), false);
             boardView.Parasite.Sync(boardView, live);
             animLastLabel = AnimHostLabel(scene, host);
             if (AnimLabOpen)

@@ -356,9 +356,26 @@ namespace ProjectBlock.View
             /// <summary>The lab's comparison: the OLD look, the plain icon on the cube's corner.
             /// Never set by the game.</summary>
             public bool Sticker;
+            /// <summary>Put there by the lab (SetRiderAt), so the game's own SetRider never
+            /// takes it down under a scene that is playing.</summary>
+            public bool Lab;
         }
 
+        private readonly List<GridPos> riderScratch = new List<GridPos>();
+
         private readonly Dictionary<GridPos, RiderInfo> riders = new Dictionary<GridPos, RiderInfo>();
+
+        /// <summary>The marks on the attach timeline, for playing one phase of it alone (the lab).
+        /// </summary>
+        public enum AttachPhase
+        {
+            Start,
+            Dimple,
+            Land,
+            Grab,
+            Seal,
+            End
+        }
 
         private struct AttachRequest
         {
@@ -367,6 +384,9 @@ namespace ProjectBlock.View
             public float SourceSize;
             public float StartAt;
             public float StopAt;
+            public bool ByPhase;
+            public AttachPhase From;
+            public AttachPhase To;
         }
 
         private readonly Dictionary<GridPos, AttachRequest> pendingAttach =
@@ -379,19 +399,28 @@ namespace ProjectBlock.View
         /// </summary>
         public void SetRider(GridPos? cell, Sprite icon)
         {
-            if (cell.HasValue && icon != null)
+            riderScratch.Clear();
+            foreach (KeyValuePair<GridPos, RiderInfo> entry in riders)
             {
-                RiderInfo current;
-                if (riders.Count == 1 && riders.TryGetValue(cell.Value, out current)
-                    && current.Icon == icon && !current.Sticker)
+                if (!entry.Value.Lab && (!cell.HasValue || !entry.Key.Equals(cell.Value)))
                 {
-                    return;
+                    riderScratch.Add(entry.Key);
                 }
             }
-            riders.Clear();
-            if (cell.HasValue && icon != null)
+            for (int i = 0; i < riderScratch.Count; i++)
             {
-                riders[cell.Value] = new RiderInfo { Icon = icon };
+                riders.Remove(riderScratch[i]);
+            }
+            if (cell.HasValue)
+            {
+                if (icon != null)
+                {
+                    riders[cell.Value] = new RiderInfo { Icon = icon };
+                }
+                else
+                {
+                    riders.Remove(cell.Value);
+                }
             }
         }
 
@@ -404,7 +433,7 @@ namespace ProjectBlock.View
                 riders.Remove(cell);
                 return;
             }
-            riders[cell] = new RiderInfo { Icon = icon, Sticker = sticker };
+            riders[cell] = new RiderInfo { Icon = icon, Sticker = sticker, Lab = true };
         }
 
         /// <summary>
@@ -430,6 +459,31 @@ namespace ProjectBlock.View
                 StartAt = Mathf.Max(0f, startAt),
                 StopAt = stopAt
             };
+            Request(cell, request);
+        }
+
+        /// <summary>
+        /// One PHASE of the assimilation alone, for the lab: it starts at <paramref name="from"/>
+        /// and holds still at <paramref name="to"/> (End plays it out). Phases rather than
+        /// seconds, because each host's fiber stagger is its own and a mark in seconds would land
+        /// in a different place on every host.
+        /// </summary>
+        public void PlayAttachPhase(GridPos cell, Vector2? source, float sourceSize,
+            AttachPhase from, AttachPhase to)
+        {
+            Request(cell, new AttachRequest
+            {
+                HasSource = source.HasValue,
+                Source = source.HasValue ? source.Value : Vector2.zero,
+                SourceSize = sourceSize,
+                ByPhase = true,
+                From = from,
+                To = to
+            });
+        }
+
+        private void Request(GridPos cell, AttachRequest request)
+        {
             HostPiece h;
             if (hosts.TryGetValue(cell, out h) && h.Icon != null && !h.Icon.Sticker)
             {
@@ -437,6 +491,25 @@ namespace ProjectBlock.View
                 return;
             }
             pendingAttach[cell] = request;
+        }
+
+        private static float PhaseTime(Imprint im, AttachPhase phase)
+        {
+            switch (phase)
+            {
+                case AttachPhase.Start:
+                    return 0f;
+                case AttachPhase.Dimple:
+                    return Mathf.Max(0f, im.Land - ImprintStyle.DimpleLead - 0.01f);
+                case AttachPhase.Land:
+                    return im.Land;
+                case AttachPhase.Grab:
+                    return im.Fibers.Count > 0 ? im.Fibers[0].GrowStart : im.Land;
+                case AttachPhase.Seal:
+                    return im.SealStart;
+                default:
+                    return float.MaxValue;
+            }
         }
 
         /// <summary>How long the whole assimilation takes on this host, or 0 with none.</summary>
@@ -731,8 +804,10 @@ namespace ProjectBlock.View
             im.HasSource = request.HasSource;
             im.Source = request.Source;
             im.SourceSize = request.SourceSize;
-            im.AttachClock = Mathf.Min(request.StartAt, im.Total);
-            im.StopAt = request.StopAt;
+            float start = request.ByPhase ? PhaseTime(im, request.From) : request.StartAt;
+            float stop = request.ByPhase ? PhaseTime(im, request.To) : request.StopAt;
+            im.AttachClock = Mathf.Min(start, im.Total);
+            im.StopAt = stop;
             im.Held = im.AttachClock >= im.StopAt;
         }
 
@@ -784,10 +859,15 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            im.Orphaned = riders.ContainsKey(h.Cell) ? 0f : im.Orphaned + dt;
+            RiderInfo rider;
+            bool named = riders.TryGetValue(h.Cell, out rider);
+            im.Orphaned = named ? 0f : im.Orphaned + dt;
             if (im.AttachClock >= 0f && !im.Held)
             {
-                im.AttachClock += dt * Mathf.Max(0f, ImprintLayers.AttachRate);
+                // The lab's slow motion reaches the lab's own riders and nothing else - the
+                // market's bind must never be caught playing at a quarter speed.
+                float rate = named && rider.Lab ? Mathf.Max(0f, ImprintLayers.AttachRate) : 1f;
+                im.AttachClock += dt * rate;
                 if (im.AttachClock >= im.StopAt)
                 {
                     im.AttachClock = im.StopAt;

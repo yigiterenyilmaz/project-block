@@ -430,6 +430,13 @@ namespace ProjectBlock.View
             public static void AllOn()
             {
                 ImprintLayers.AllOn();
+                HostLayersOn();
+            }
+
+            /// <summary>The wrap's own layers back on, leaving the imprint's switches alone.
+            /// </summary>
+            public static void HostLayersOn()
+            {
                 ShowMembrane = true;
                 ShowFolds = true;
                 ShowWindows = true;
