@@ -45,11 +45,12 @@ namespace ProjectBlock.Core
                 "Played cards are buried at a random depth of the draw pile instead of "
                     + "being discarded, so the deck never runs out. The pile's top card is "
                     + "always visible. Every time you have played as many cards as your deck "
-                    + "holds, 3 random cards leave your deck for the rest of the run.",
+                    + "holds, 3 random cards sit out the rest of the round - they are back "
+                    + "next round.",
                 "Kartlar ıskartaya değil, çekme destesinin rastgele bir yerine "
                     + "girer, deste hiç bitmez. Destenin en üstteki kartı hep görünür. "
-                    + "Destendeki kart sayısı kadar kart oynadığında destenden rastgele 3 kart "
-                    + "oyunun kalanı için çıkar.");
+                    + "Destendeki kart sayısı kadar kart oynadığında rastgele 3 kart bu rauntun "
+                    + "kalanında oyun dışı kalır - sonraki rauntta geri gelir.");
             IsLegendary = true;
         }
 
@@ -77,7 +78,10 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            int lost = DeckRent.Collect(turn, ref playedSinceRent, CardsLostPerCycle);
+            // (2026-09-29, designer's call) The rent is paid for THIS ROUND ONLY: the cards
+            // come out of the round's piles, never out of the run deck, and the next round is
+            // dealt from the whole deck again.
+            int lost = DeckRent.CollectForRound(turn, ref playedSinceRent, CardsLostPerCycle);
             cardsLost += lost;
             if (lost > 0)
             {
@@ -101,6 +105,8 @@ namespace ProjectBlock.Core
         public override void OnRoundStarted(RoundContext ctx)
         {
             Apply(ctx.Rules);
+            // What was set aside last round is back in the deck.
+            cardsLost = 0;
         }
 
         private static void Apply(RoundRules rules)
@@ -443,6 +449,54 @@ namespace ProjectBlock.Core
             }
             played = 0;
             return turn.Session.TaxOwnedCards(cardsPerCycle, turn.Rng);
+        }
+
+        /// <summary>The same count, but the rent is only for the ROUND: random cards out of the
+        /// round's draw and discard piles (never the hand), the run deck untouched. Never takes
+        /// the round's piles below a hand's worth of cards.</summary>
+        public static int CollectForRound(TurnContext turn, ref int played, int cardsPerCycle)
+        {
+            if (turn.Report.Card == null || turn.Round == null)
+            {
+                return 0;
+            }
+            played++;
+            int deckSize = turn.Session.OwnedCards.Count;
+            if (deckSize <= 0 || played < deckSize)
+            {
+                return 0;
+            }
+            played = 0;
+            RoundDeck deck = turn.Round.Deck;
+            int floor = turn.Session.Config.Rules.HandSize;
+            int taken = 0;
+            for (int i = 0; i < cardsPerCycle; i++)
+            {
+                // The DISCARD pays first, and the draw pile is never taken below a hand's worth:
+                // running the draw pile dry is a LOSS past the threshold, and a rent that is
+                // meant to last one round must never be the thing that ends it.
+                BlockCard card;
+                if (deck.DiscardCount > 0)
+                {
+                    card = deck.DiscardPile[turn.Rng.NextInt(0, deck.DiscardCount)];
+                }
+                else if (deck.DrawCount > floor)
+                {
+                    card = deck.DrawPile[turn.Rng.NextInt(0, deck.DrawCount)];
+                }
+                else
+                {
+                    break;
+                }
+                BlockCard pulled = deck.TakeCard(card.Id);
+                if (pulled == null)
+                {
+                    break;
+                }
+                deck.RemoveFromRound(pulled);
+                taken++;
+            }
+            return taken;
         }
     }
 }

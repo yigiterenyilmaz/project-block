@@ -1,4 +1,4 @@
-// PURPOSE: GameBoard destruction - water settling, retro/Tetris row-collapse, full
+﻿// PURPOSE: GameBoard destruction - water settling, retro/Tetris row-collapse, full
 // row/column resolution and explosion (fire chains), and single-cube destruction.
 
 using System;
@@ -110,6 +110,86 @@ namespace ProjectBlock.Core
                 anyChange = true;
             }
             return anyChange;
+        }
+
+        /// <summary>
+        /// "Kütleçekim merkezi" turning the arena's gravity: EVERY cube that can move drops toward
+        /// <paramref name="direction"/> until it rests, one cell per pass - water's own rule,
+        /// applied to all of it, gold and obsidian included. Cubes fall ONE BY ONE rather than as
+        /// rigid blocks, exactly as water does. What stays put: a black hole (anchored), a
+        /// protected "Parazit" host, the boss's snake, a "Mayın" trap and a press capsule - the
+        /// same things that refuse every other force that moves the board. A sealed cell cannot be
+        /// fallen into. Each pass's moves are appended to <paramref name="fallFrames"/> (the
+        /// water's own reporting channel, so the View animates it with the same fall). Returns
+        /// true if anything moved.
+        /// </summary>
+        public bool DropAllCubes(GridPos direction, List<IReadOnlyList<WaterMove>> fallFrames)
+        {
+            bool anyChange = false;
+            bool moved = true;
+            int dx = direction.X;
+            int dy = direction.Y;
+            int guard = Width + Height + 2;
+            int xFrom = dx > 0 ? Width - 1 : 0;
+            int xEnd = dx > 0 ? -1 : Width;
+            int xStep = dx > 0 ? -1 : 1;
+            int yFrom = dy > 0 ? Height - 1 : 0;
+            int yEnd = dy > 0 ? -1 : Height;
+            int yStep = dy > 0 ? -1 : 1;
+            while (moved && guard-- > 0)
+            {
+                moved = false;
+                List<WaterMove> frame = null;
+                for (int y = yFrom; y != yEnd; y += yStep)
+                {
+                    for (int x = xFrom; x != xEnd; x += xStep)
+                    {
+                        Cube? cube = cells[x, y];
+                        if (!cube.HasValue || !FallsWithGravity(cube.Value))
+                        {
+                            continue;
+                        }
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx < 0 || nx >= Width || ny < 0 || ny >= Height)
+                        {
+                            continue;
+                        }
+                        var to = new GridPos(nx + MinX, ny + MinY);
+                        if (!IsInside(to) || IsSealed(to) || cells[nx, ny].HasValue)
+                        {
+                            continue;
+                        }
+                        cells[nx, ny] = cube;
+                        cells[x, y] = null;
+                        moved = true;
+                        anyChange = true;
+                        if (fallFrames != null)
+                        {
+                            if (frame == null)
+                            {
+                                frame = new List<WaterMove>();
+                            }
+                            frame.Add(new WaterMove(new GridPos(x + MinX, y + MinY), to));
+                        }
+                    }
+                }
+                if (frame != null && fallFrames != null)
+                {
+                    fallFrames.Add(frame);
+                }
+            }
+            return anyChange;
+        }
+
+        /// <summary>Whether a cube drops when the arena's gravity turns (DropAllCubes).</summary>
+        private static bool FallsWithGravity(Cube cube)
+        {
+            return !CubeRules.IsAnchored(cube)
+                && !cube.Protected
+                && cube.Kind != CubeKind.Snake
+                && cube.Kind != CubeKind.Mine
+                && cube.Kind != CubeKind.Compressed;
         }
 
         /// <summary>

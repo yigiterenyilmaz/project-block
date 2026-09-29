@@ -248,6 +248,11 @@ namespace ProjectBlock.Core
         [NotSaved]
         public PowderVisuals LastCharge;
 
+        /// <summary>What the powder PAID this turn - the cells that went up charged, and which were
+        /// full - for the View's payout blast. A NEW object per payout, matched by identity.</summary>
+        [NotSaved]
+        public PowderPayoutVisuals LastPayout;
+
         public BarutTedarikcisiJoker()
             : base("barut_tedarikcisi", "Barut Tedarikçisi")
         {
@@ -320,6 +325,7 @@ namespace ProjectBlock.Core
             // a boss that lowered it pays a share of what is really being asked.
             int perUnit = UnitValue(turn.Round != null ? turn.Round.ScoreThreshold : 0);
             int bonus = 0;
+            var payout = new PowderPayoutVisuals();
             for (int i = 0; i < destroyed.Count; i++)
             {
                 if (destroyed[i].Cube.Kind != CubeKind.Dynamite)
@@ -330,12 +336,15 @@ namespace ProjectBlock.Core
                 if (chargesByCard.TryGetValue(destroyed[i].Cube.SourceCardId, out charges))
                 {
                     bonus += PowderUnits(charges) * perUnit;
+                    payout.Add(destroyed[i].Pos, charges, MaxCharges);
                 }
             }
             if (bonus <= 0)
             {
                 return;
             }
+            payout.Points = (long)bonus * ScoreScale;
+            LastPayout = payout;
             paidThisRound += bonus;
             turn.AddFlatScore(bonus, DefId);
             // ONE proc per detonation, however many cubes went up in it: what the player is

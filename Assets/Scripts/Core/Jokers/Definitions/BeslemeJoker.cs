@@ -1,4 +1,4 @@
-// PURPOSE: "Besleme" - the joker that gives you a PET on the board. It marks a patch of the
+﻿// PURPOSE: "Besleme" - the joker that gives you a PET on the board. It marks a patch of the
 // arena, and from then on that patch is a thing you keep alive: explode cubes inside it and it
 // feeds and grows, neglect it and it starves, shrinks and finally dies.
 //
@@ -189,6 +189,16 @@ namespace ProjectBlock.Core
                     return;
                 }
                 dead = false; // rested: a new creature is laid below, from nothing
+            }
+            if (marked && ctx.Round != null)
+            {
+                // A LIVING creature crosses the round break whole: its size and its food carry on
+                // (2026-09-29, designer's call), it stands on the new arena from the first turn,
+                // and the hunger it built up last round does not follow it in - a new round must
+                // not open by shrinking what the player spent the last one growing.
+                hungryTurns = 0;
+                RebuildRegion(ctx.Round.Board);
+                return;
             }
             if (marked || ctx.Round == null)
             {

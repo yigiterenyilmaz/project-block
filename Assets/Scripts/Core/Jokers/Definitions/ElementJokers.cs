@@ -353,17 +353,55 @@ namespace ProjectBlock.Core
         /// <summary>Cubes this joker has turned over the whole run.</summary>
         private int cubesConverted;
 
+        /// <summary>
+        /// Turns between two spreads (2026-09-29, designer's call). The spread is no longer
+        /// used from the bar: it goes off BY ITSELF every second turn, and the turn in between is
+        /// the build-up the View draws on the source cubes.
+        /// </summary>
+        public int TurnsPerSpread = 2;
+
+        private int turnsSinceSpread;
+
+        /// <summary>Turns until the next spread - 1 means it goes off at the end of the NEXT
+        /// turn, which is when the View draws the build-up at its strongest.</summary>
+        public int TurnsUntilSpread
+        {
+            get { return TurnsPerSpread - turnsSinceSpread; }
+        }
+
         public override void OnRoundStarted(RoundContext ctx)
         {
             base.OnRoundStarted(ctx);
             LastSpread = null;
+            turnsSinceSpread = 0;
         }
 
         /// <summary>ONCE PER TURN, not per round: the charge comes back as every turn ends. It
         /// is still one charge, so it cannot be spent twice before a block is placed.</summary>
         public override void AfterTurnScored(TurnContext turn)
         {
-            GrantCharge();
+            turnsSinceSpread++;
+            if (turnsSinceSpread < TurnsPerSpread || turn.Round == null)
+            {
+                return;
+            }
+            GameBoard board = turn.Round.Board;
+            if (board.CellsOfKind(SpreadKind).Count == 0)
+            {
+                // Nothing to spread from: it stays primed and goes off the first turn it can.
+                return;
+            }
+            turnsSinceSpread = 0;
+            SpreadVisuals report = SpreadOn(board, SpreadKind, ++spreadSerial);
+            if (SpreadKind == CubeKind.Water && report.Any)
+            {
+                // Water that has nothing under it FALLS - the new water too.
+                board.SettleWaterAndReact(report.FallFrames);
+                turn.Round.NoteBoardRearranged();
+            }
+            LastSpread = report;
+            cubesConverted += report.Targets.Count;
+            NoteProc(0, turn);
         }
 
         /// <summary>Statistics: every use is a proc, and the card says how many cubes it has
@@ -377,18 +415,19 @@ namespace ProjectBlock.Core
         {
             get
             {
-                string ready = ChargesLeft > 0 ? Loc.Pick("ready", "hazır") : Loc.Pick("used", "kullanıldı");
+                string ready = TurnsUntilSpread <= 1
+                    ? Loc.Pick("next turn", "sonraki tur")
+                    : Loc.Pick("in " + TurnsUntilSpread + " turns", TurnsUntilSpread + " tur sonra");
                 return cubesConverted > 0
                     ? ready + Loc.Pick("  ·  " + cubesConverted + " turned", "  ·  " + cubesConverted + " küp döndü")
                     : ready;
             }
         }
 
+        /// <summary>No longer used from the bar - it spreads by itself (see TurnsPerSpread).</summary>
         public override bool CanActivate(RoundContext ctx)
         {
-            return ChargesLeft > 0
-                && ctx.Round.Status == RoundStatus.InProgress
-                && ctx.Round.Board.CellsOfKind(SpreadKind).Count > 0;
+            return false;
         }
 
         public override bool Activate(RoundContext ctx, ActivationTarget target)
@@ -464,8 +503,8 @@ namespace ProjectBlock.Core
             : base("yangin", "Yangın", CubeKind.Fire)
         {
             SetDescription(
-                "Once per turn: the blocks around fire blocks turn to fire too.",
-                "Tur başına 1 kez: ateş bloklarının etrafındaki bloklar da ateş olur.");
+                "Every second turn, the blocks around fire blocks catch fire too.",
+                "Her iki turda bir, ateş bloklarının etrafındaki bloklar da tutuşur.");
         }
     }
 
@@ -476,8 +515,10 @@ namespace ProjectBlock.Core
             : base("taskin", "Taşkın", CubeKind.Water)
         {
             SetDescription(
-                "Once per turn: the blocks around water blocks turn to water too.",
-                "Tur başına 1 kez: su bloklarının etrafındaki bloklar da su olur.");
+                "Every second turn, the blocks around water blocks turn to water too - and "
+                    + "water with nothing under it falls.",
+                "Her iki turda bir, su bloklarının etrafındaki bloklar da su olur - altı boş "
+                    + "olan su aşağı düşer.");
         }
     }
 

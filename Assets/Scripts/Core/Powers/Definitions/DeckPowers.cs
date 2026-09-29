@@ -338,6 +338,11 @@ namespace ProjectBlock.Core
             get { return markedCardId; }
         }
 
+        /// <summary>The last copy it spawned, for the View - a NEW object per copy, matched by
+        /// identity: the card id of the copy and of the marked card it came off.</summary>
+        [NotSaved]
+        public BukulmeCopyVisuals LastCopy;
+
         public BukulmePower()
             : base("bukulme", "Bükülme")
         {
@@ -383,7 +388,7 @@ namespace ProjectBlock.Core
             BlockCard card = ctx.Round.Hand[target.HandIndex.Value];
             markedCardId = card.Id;
             markedInHand = true;
-            AddCopy(ctx.Session, ctx.Round, card);
+            LastCopy = AddCopy(ctx.Session, ctx.Round, card);
             return true;
         }
 
@@ -398,7 +403,7 @@ namespace ProjectBlock.Core
             // A fresh entry into the hand (it was out last turn) spawns another copy.
             if (present && !markedInHand)
             {
-                AddCopy(turn.Session, turn.Round, inHand);
+                LastCopy = AddCopy(turn.Session, turn.Round, inHand);
             }
             markedInHand = present;
         }
@@ -415,11 +420,26 @@ namespace ProjectBlock.Core
             return null;
         }
 
-        private static void AddCopy(GameSession session, RoundEngine round, BlockCard source)
+        private static BukulmeCopyVisuals AddCopy(GameSession session, RoundEngine round, BlockCard source)
         {
             BlockCard copy = session.CreateCard(source.Shape, source.Elements);
             copy.KeepChoiceOf(source);
             round.AddBonusCard(copy, BonusPlayOutcome.ExpireFromRound);
+            return new BukulmeCopyVisuals(source.Id, copy.Id);
+        }
+    }
+
+    /// <summary>"Bükülme" copying its marked card: which card, and the copy's id. Reporting
+    /// only; a new object per copy.</summary>
+    public sealed class BukulmeCopyVisuals
+    {
+        public readonly int SourceCardId;
+        public readonly int CopyCardId;
+
+        public BukulmeCopyVisuals(int source, int copy)
+        {
+            SourceCardId = source;
+            CopyCardId = copy;
         }
     }
 

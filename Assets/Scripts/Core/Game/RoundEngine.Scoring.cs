@@ -938,8 +938,20 @@ namespace ProjectBlock.Core
         /// </summary>
         internal void SetWaterFlow(GridPos direction)
         {
+            SetWaterFlow(direction, false);
+        }
+
+        /// <summary>The same, and when <paramref name="dropEverything"/> the WHOLE board falls
+        /// that way first ("Kütleçekim merkezi" at the moment it is used) - then water settles
+        /// as it always has, and the lines anything completed go off.</summary>
+        internal void SetWaterFlow(GridPos direction, bool dropEverything)
+        {
             Board.SetWaterFlow(direction);
             externalWaterFrames.Clear();
+            if (dropEverything)
+            {
+                Board.DropAllCubes(direction, externalWaterFrames);
+            }
             Board.SettleWaterAndReact(externalWaterFrames);
             // Water MOVED; nothing died. Re-baseline or the diff reads a flow as a killing.
             ResyncSnapshot();

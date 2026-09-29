@@ -1,4 +1,4 @@
-// PURPOSE: What a SPREAD joker did - "Yangın" turning a ring of cubes to fire, "Taşkın" to
+﻿// PURPOSE: What a SPREAD joker did - "Yangın" turning a ring of cubes to fire, "Taşkın" to
 // water - written down for the VIEW. Reporting only: the conversion itself is unchanged.
 //
 // IT EXISTS BECAUSE THE ANIMATION HAS TO TELL THE RULE, and the rule is not "some cubes became
@@ -56,6 +56,10 @@ namespace ProjectBlock.Core
         public readonly List<GridPos> Sources = new List<GridPos>();
 
         public readonly List<SpreadIgnition> Targets = new List<SpreadIgnition>();
+
+        /// <summary>"Taşkın": the water the spread made (and anything else it knocked loose)
+        /// falling to rest afterwards, in the water fall's own frames. Empty for fire.</summary>
+        public readonly List<IReadOnlyList<WaterMove>> FallFrames = new List<IReadOnlyList<WaterMove>>();
 
         public bool Any
         {

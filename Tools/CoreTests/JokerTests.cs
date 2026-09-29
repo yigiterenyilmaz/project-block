@@ -25,6 +25,7 @@ public static partial class JokerTests
         Streak_Siyam_SameShapeOnly();
         Streak_ResetsEachRound();
         KutlecekimMerkezi_TurnsGravityAndTheWaterFollows();
+        KutlecekimMerkezi_EverythingFallsWhenItIsUsed();
         KutlecekimMerkezi_TheDirectionIsRoundScoped();
         KutlecekimMerkezi_RefusesAnythingButTheFourSides();
         Targeted_TargetFirstPaysAndTakesTheWholeBlock();
@@ -803,6 +804,29 @@ public static partial class JokerTests
         round.Board.SettleWaterAndReact();
         Check(round.Board.GetCube(new GridPos(0, 4)).HasValue,
             "later water flows the same way without spending anything");
+    }
+
+    private static void KutlecekimMerkezi_EverythingFallsWhenItIsUsed()
+    {
+        Section("kütleçekim merkezi / every block falls the moment it is used");
+        var session = NewSession(9805, 5, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var power = (KutlecekimMerkeziPower)session.Powers.Add(new KutlecekimMerkeziPower());
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(3, 1), new Cube(CubeKind.Normal, 9806));
+        round.Board.SetCubeAt(new GridPos(3, 3), new Cube(CubeKind.Obsidian, 9807));
+        round.Board.SetCubeAt(new GridPos(1, 4), new Cube(CubeKind.Void, 9808));
+        Check(session.Powers.TryUse(power.InstanceId, ActivationTarget.Direction(new GridPos(1, 0))),
+            "the power runs pointed right");
+        Check(round.Board.GetCube(new GridPos(4, 1)).HasValue && !round.Board.GetCube(new GridPos(3, 1)).HasValue,
+            "a plain cube fell against the right wall");
+        Check(round.Board.GetCube(new GridPos(4, 3)).HasValue
+                && round.Board.GetCube(new GridPos(4, 3)).Value.Kind == CubeKind.Obsidian,
+            "obsidian fell too");
+        Check(round.Board.GetCube(new GridPos(1, 4)).HasValue
+                && round.Board.GetCube(new GridPos(1, 4)).Value.Kind == CubeKind.Void,
+            "a black hole does not move");
+        Check(round.ExternalWaterFrames.Count > 0, "the fall is reported for the View");
     }
 
     private static void KutlecekimMerkezi_TheDirectionIsRoundScoped()
@@ -1678,9 +1702,14 @@ public static partial class JokerTests
             new GridPos(0, 2), new GridPos(1, 2), new GridPos(2, 2), new GridPos(3, 2));
         PaintBoard(round, session, CubeKind.Fire, new GridPos(1, 2));
 
+        // It goes off BY ITSELF every second turn: the first turn only builds up.
         var ctx = new RoundContext(session, session.Rng, round);
-        Check(joker.CanActivate(ctx), "usable while fire is on the board");
-        Check(joker.Activate(ctx, ActivationTarget.None), "spread ran");
+        Check(!joker.CanActivate(ctx), "it is not used from the bar any more");
+        joker.AfterTurnScored(FakeTurnWithRound(session, new ScoreBreakdown()));
+        Check(round.Board.GetCube(new GridPos(0, 2)).Value.Kind == CubeKind.Normal
+                && joker.TurnsUntilSpread == 1,
+            "the first turn only builds up");
+        joker.AfterTurnScored(FakeTurnWithRound(session, new ScoreBreakdown()));
 
         Check(round.Board.GetCube(new GridPos(0, 2)).Value.Kind == CubeKind.Fire,
             "the neighbour caught fire");
@@ -1695,7 +1724,7 @@ public static partial class JokerTests
             "the empty cell above the fire stayed empty");
         Check(!round.Board.GetCube(new GridPos(1, 1)).HasValue,
             "the empty cell below it stayed empty");
-        Check(!joker.CanActivate(ctx), "the single charge is spent");
+        Check(joker.TurnsUntilSpread == 2, "and it starts building up again");
 
         // AND IT SAID SO. The report is what the View draws, so what it carries is part of the
         // rule being right: the sources, only the cubes that were lit, which side each caught
@@ -2072,23 +2101,21 @@ public static partial class JokerTests
 
     private static void BabaOcagi_ADecksWorthOfPlaysCostsThreeCards()
     {
-        Section("baba_ocagi / every deck's worth of plays takes 3 cards off the deck for good");
+        Section("baba_ocagi / every deck's worth of plays sets 3 cards aside for the round");
         var session = NewSession(212, 8, 1000000, 12, 1);
         session.Jokers.Add(new BabaOcagiJoker());
         int deck = session.OwnedCards.Count;
+        RoundEngine round = session.CurrentRound;
+        int inRound = round.Deck.DrawCount + round.Deck.DiscardCount + round.Hand.Count;
 
         PlayTurns(session, deck - 1);
-        Check(session.OwnedCards.Count == deck, "one play short of the deck's size, nothing is taken",
-            session.OwnedCards.Count + " vs " + deck);
+        int before = round.Deck.DrawCount + round.Deck.DiscardCount + round.Hand.Count;
         PlayTurns(session, 1);
-        Check(session.OwnedCards.Count == deck - 3, "the play that completes the count takes three",
+        int after = round.Deck.DrawCount + round.Deck.DiscardCount + round.Hand.Count;
+        Check(after == before - 3, "the play that completes the count sets three aside this round",
+            before + " -> " + after + " (round began with " + inRound + ")");
+        Check(session.OwnedCards.Count == deck, "and the run deck keeps every card",
             session.OwnedCards.Count + " vs " + deck);
-
-        // The next cycle is measured against the SMALLER deck.
-        int smaller = session.OwnedCards.Count;
-        PlayTurns(session, smaller);
-        Check(session.OwnedCards.Count == smaller - 3, "and the next one is the smaller deck's worth",
-            session.OwnedCards.Count + " vs " + smaller);
     }
 
     private static void Konfuzyon_SplitsAndSwapsThePilesEachTurn()

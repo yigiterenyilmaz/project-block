@@ -137,6 +137,15 @@ namespace ProjectBlock.Core
         private int baseHandSize = -1;
         private int cardsCarriedTotal;
 
+        /// <summary>For the View: the card ids it just SAVED at a round's end (they turn to dust)
+        /// and the ids it just DELIVERED at a round's start (they re-form). A new list per event,
+        /// matched by identity; presentation only.</summary>
+        [NotSaved]
+        public System.Collections.Generic.List<int> LastSaved;
+
+        [NotSaved]
+        public System.Collections.Generic.List<int> LastDelivered;
+
         public HafizaJoker()
             : base("hafiza", "Hafıza")
         {
@@ -182,9 +191,14 @@ namespace ProjectBlock.Core
         public override void OnRoundStarted(RoundContext ctx)
         {
             baseHandSize = ctx.Rules.HandSize;
+            if (carried.Count > 0)
+            {
+                LastDelivered = new System.Collections.Generic.List<int>();
+            }
             for (int i = 0; i < carried.Count; i++)
             {
                 ctx.Round.AddBonusCard(carried[i], BonusPlayOutcome.ExpireFromRound);
+                LastDelivered.Add(carried[i].Id);
             }
             carried.Clear();
         }
@@ -209,6 +223,14 @@ namespace ProjectBlock.Core
             // Counted AFTER the trim, so the total is what really crossed the boundary and not
             // what was picked up before the excess was thrown away.
             cardsCarriedTotal += carried.Count;
+            if (carried.Count > 0)
+            {
+                LastSaved = new System.Collections.Generic.List<int>();
+                for (int i = 0; i < carried.Count; i++)
+                {
+                    LastSaved.Add(carried[i].Id);
+                }
+            }
         }
 
         private static bool IsOwned(GameSession session, int cardId)

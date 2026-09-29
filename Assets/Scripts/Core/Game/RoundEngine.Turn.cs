@@ -101,6 +101,26 @@ namespace ProjectBlock.Core
                     Has(card, BlockElement.Ghost), BorrowedCubeKind(card));
                 // "Kara Delik": what landed on a hole fell in.
                 report.AddVoidSwallows(Board.LastPlacementSwallows);
+                // "Mayın" (2026-09-29, designer's call): a mine takes the WHOLE block that
+                // stepped on it, not just the cube that touched it.
+                if (Board.LastMinesTriggered.Count > 0)
+                {
+                    var blast = new List<GridPos>(Board.LastMinesTriggered);
+                    var doomed = new List<GridPos>();
+                    foreach (GridPos cell in report.PlacedCells)
+                    {
+                        Cube? cube = Board.IsInside(cell) ? Board.GetCube(cell) : null;
+                        if (cube.HasValue && cube.Value.SourceCardId == card.Id)
+                        {
+                            doomed.Add(cell);
+                        }
+                    }
+                    if (doomed.Count > 0)
+                    {
+                        blast.AddRange(DestroyCubes(doomed, true));
+                    }
+                    report.MineBlastCells = blast;
+                }
                 // "Hedefli": the block's one shot is live from the moment it lands until the
                 // first of its cubes breaks (see RoundEngine.Targeted).
                 ArmTargetedBlock(card);

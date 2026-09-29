@@ -79,3 +79,51 @@ namespace ProjectBlock.Core
         }
     }
 }
+
+namespace ProjectBlock.Core
+{
+    /// <summary>
+    /// "Barut tedarikçisi" paying out: every charged dynamite cube that went up this turn, how
+    /// full its block was and whether it was AT THE CAP (which is what earns the bonus blast), and
+    /// the points actually banked. REPORTING ONLY, a NEW object per payout, matched by identity.
+    /// </summary>
+    public sealed class PowderPayoutVisuals
+    {
+        public readonly List<GridPos> Cells = new List<GridPos>();
+
+        public readonly List<float> Fullness = new List<float>();
+
+        public readonly List<bool> Full = new List<bool>();
+
+        /// <summary>The flat score the powder paid this turn, at the run's score scale.</summary>
+        public long Points;
+
+        public int Count
+        {
+            get { return Cells.Count; }
+        }
+
+        /// <summary>PUBLIC so the animation lab can build one.</summary>
+        public void Add(GridPos cell, int charges, int cap)
+        {
+            Cells.Add(cell);
+            Fullness.Add(cap > 0 ? charges / (float)cap : 1f);
+            Full.Add(charges >= cap);
+        }
+
+        public bool AnyFull
+        {
+            get
+            {
+                for (int i = 0; i < Full.Count; i++)
+                {
+                    if (Full[i])
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+    }
+}

@@ -375,6 +375,10 @@ namespace ProjectBlock.Core
         /// every ordinary turn.</summary>
         public IReadOnlyList<GridPos> FellThroughCells { get; internal set; }
 
+        /// <summary>"Mayın": the cells of the WHOLE block that landed on an armed mine this turn
+        /// and went up with it (the mine cells included). Empty on every ordinary turn.</summary>
+        public IReadOnlyList<GridPos> MineBlastCells { get; internal set; } = new List<GridPos>();
+
         /// <summary>The mirror world's half of the same thing ("Öteki dünya").</summary>
         public IReadOnlyList<GridPos> MirrorFellThroughCells { get; internal set; }
 

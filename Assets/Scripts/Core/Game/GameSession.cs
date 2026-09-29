@@ -472,6 +472,10 @@ namespace ProjectBlock.Core
         /// something, so a joker that pays for leaving the market empty-handed is not fooled by
         /// walking out with stolen stock.
         /// </summary>
+        /// <summary>Whether the last smuggle's goods were junk - for the View's defect reveal.
+        /// Presentation only, not saved.</summary>
+        public bool LastSmuggleDefective { get; private set; }
+
         public bool TrySmuggleOffer(int offerIndex)
         {
             if (Phase != GamePhase.Market)
@@ -494,6 +498,7 @@ namespace ProjectBlock.Core
             // One roll for the whole transaction, before anything is handed over, so every kind of
             // goods reads the same coin flip.
             bool defective = rng.NextInt(0, 100) < Jokers.SmuggleDefectChancePercent;
+            LastSmuggleDefective = defective;
             if (offer.Kind == MarketOfferKind.Joker)
             {
                 if (!CanAcquireJoker(offer.Joker))

@@ -37,12 +37,12 @@ namespace ProjectBlock.Core
             : base("kutlecekim_merkezi", "Kütleçekim Merkezi")
         {
             SetDescription(
-                "Choose a side: water falls THAT way for the rest of the round instead of down. "
-                    + "The water already on the board flows there at once, and any line it "
-                    + "completes explodes. Nothing else moves.",
-                "Bir yön seç: su o raunt boyunca aşağı yerine O YÖNE akar. Alandaki su hemen o "
-                    + "yöne akar ve tamamladığı satır ya da sütun patlar. Başka hiçbir şey "
-                    + "yerinden oynamaz.");
+                "Choose a side: every block on the board falls that way at once, and water "
+                    + "keeps falling that way for the rest of the round instead of down. Any line "
+                    + "the fall completes explodes.",
+                "Bir yön seç: alandaki bütün bloklar hemen o yöne düşer ve su raunt boyunca "
+                    + "aşağı yerine o yöne akar. Düşüşün tamamladığı satır ya da sütun "
+                    + "patlar.");
         }
 
         public override ActivationTargeting Targeting
@@ -75,7 +75,9 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            ctx.Round.SetWaterFlow(target.Offset.Value);
+            // (2026-09-29, designer's call) The moment it is used, EVERYTHING falls that way -
+            // not only the water. After that only water keeps following the new gravity.
+            ctx.Round.SetWaterFlow(target.Offset.Value, true);
             return true;
         }
     }
@@ -144,9 +146,32 @@ namespace ProjectBlock.Core
                 "Oyun alanının en dış katmanındaki blokları temizler.");
         }
 
+        /// <summary>Usable only while there is something ON THE RIM - the same question Run asks.
+        /// It used to ask "is anything on the board at all", so the bar showed it ready on a board
+        /// with an empty rim and the click did nothing.</summary>
+        /// <summary>What the last usability check found, so the bar can say WHY it is not
+        /// ready. Display only, rebuilt every time the bar asks.</summary>
+        [NotSaved]
+        private bool rimEmpty;
+
+        public override string StatusText
+        {
+            get { return rimEmpty ? Loc.Pick("rim is empty", "kenar boş") : string.Empty; }
+        }
+
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
         {
-            return ctx.Round.Board.OccupiedCount > 0;
+            GameBoard board = ctx.Round.Board;
+            foreach (GridPos cell in board.GetOccupiedCells())
+            {
+                if (board.IsOnEdge(cell))
+                {
+                    rimEmpty = false;
+                    return true;
+                }
+            }
+            rimEmpty = true;
+            return false;
         }
 
         public override bool Run(RoundContext ctx, ActivationTarget target)
@@ -351,9 +376,10 @@ namespace ProjectBlock.Core
             : base("mayin", "Mayın")
         {
             SetDescription(
-                "Pops a chosen cube. Dropped on an empty cell it arms a mine that "
-                    + "detonates the cube that lands on it.",
-                "Seçtiğin küpü patlatır. Boş kareye koyarsan üstüne küp geldiğinde patlar.");
+                "Blows up the block of a chosen cube. Dropped on an empty cell it arms a mine "
+                    + "that blows up the whole block that lands on it.",
+                "Seçtiğin küpün bloğunu patlatır. Boş kareye koyarsan üstüne gelen bloğun "
+                    + "tamamını patlatır.");
         }
 
         public override ActivationTargeting Targeting
@@ -370,9 +396,12 @@ namespace ProjectBlock.Core
         {
             GridPos cell = target.Cell.Value;
             GameBoard board = ctx.Round.Board;
-            if (board.GetCube(cell).HasValue)
+            Cube? hit = board.GetCube(cell);
+            if (hit.HasValue)
             {
-                ctx.Round.DestroyCubes(new[] { cell }, true);
+                // The WHOLE block goes (2026-09-29, designer's call): every cube of the same card
+                // connected to the one picked.
+                ctx.Round.DestroyCubes(BlockAt(board, cell, hit.Value.SourceCardId), true);
                 ctx.Round.TryResolveCleanSweep();
                 return true;
             }
@@ -385,6 +414,34 @@ namespace ProjectBlock.Core
         /// <summary>Source card id for armed mines - negative, so nothing mistakes a mine for
         /// part of a real block.</summary>
         public const int MineCardId = -2;
+
+        /// <summary>The block a cube belongs to: every 4-connected cube from the same card.</summary>
+        public static List<GridPos> BlockAt(GameBoard board, GridPos start, int cardId)
+        {
+            var found = new List<GridPos>();
+            var seen = new HashSet<GridPos>();
+            var open = new Stack<GridPos>();
+            open.Push(start);
+            while (open.Count > 0)
+            {
+                GridPos p = open.Pop();
+                if (!seen.Add(p) || !board.IsInside(p))
+                {
+                    continue;
+                }
+                Cube? cube = board.GetCube(p);
+                if (!cube.HasValue || cube.Value.SourceCardId != cardId)
+                {
+                    continue;
+                }
+                found.Add(p);
+                open.Push(new GridPos(p.X + 1, p.Y));
+                open.Push(new GridPos(p.X - 1, p.Y));
+                open.Push(new GridPos(p.X, p.Y + 1));
+                open.Push(new GridPos(p.X, p.Y - 1));
+            }
+            return found;
+        }
     }
 
     /// <summary>

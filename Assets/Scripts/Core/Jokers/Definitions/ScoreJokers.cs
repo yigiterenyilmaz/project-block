@@ -492,9 +492,9 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Placing a block scores points - every cube you place pays 0.1% of the round's "
-                    + "target score.",
+                    + "target score, and never less than 1 point.",
                 "Blok koymak puan kazandırır - koyduğun her küp, rauntun hedef puanının "
-                    + "%0.1'ini kazandırır.");
+                    + "%0.1'ini kazandırır, en az 1 puan.");
         }
 
         public override string StatusText
@@ -520,7 +520,7 @@ namespace ProjectBlock.Core
         {
             if (round != null)
             {
-                shownPerCube = round.ScoreThreshold * ThresholdSharePerCube * scale;
+                shownPerCube = System.Math.Max(1.0, round.ScoreThreshold * ThresholdSharePerCube) * scale;
             }
         }
 
@@ -545,9 +545,14 @@ namespace ProjectBlock.Core
                 owed += cubes * turn.Round.ScoreThreshold * ThresholdSharePerCube;
                 int bonus = (int)System.Math.Floor(owed);
                 owed -= bonus;
-                if (bonus <= 0)
+                // EVERY PLACEMENT PAYS (2026-09-29, designer's call). On an early bar the share is
+                // a fraction of a point a cube, so it used to pay once every five or six blocks
+                // and read as a joker that did nothing. A cube is now worth at least one point;
+                // the share takes over once the bar is high enough to beat that.
+                if (bonus < cubes)
                 {
-                    return;
+                    bonus = cubes;
+                    owed = 0;
                 }
                 turn.Score.AddFlat(bonus, DefId);
                 // ONE FIRING PER PLACEMENT, not one per cube: the block is what the player played
