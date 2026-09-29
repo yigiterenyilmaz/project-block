@@ -57,6 +57,7 @@ public static partial class JokerTests
         CleanSweep_FiresOnceAndOnlyOnRealSweep();
         RobotSupurge_EatsCubesAndGrowsOnSweep();
         KayitDefteri_ReplacesTheSweepWithItsCounter();
+        KayitDefteri_KeepsCountingInOvertimeFromZero();
         KaziCalismasi_ReturnsAFullyExplodedBlock();
         SeriTetik_BoostsHandAndChurnsUntilThreshold();
         Batak_PayoutCurveAndDeadline();
@@ -1419,6 +1420,43 @@ public static partial class JokerTests
 
         session.Jokers.Remove(joker);
         Check(!round.SuppressNaturalSweep, "removing it restores the normal sweep rule");
+    }
+
+    private static void KayitDefteri_KeepsCountingInOvertimeFromZero()
+    {
+        Section("kayit defteri / overtime restarts the ledger");
+        // 3x3 board, 3-cube bars; one placed cube crosses the threshold on turn 1.
+        var session = NewSession(47, 3, 1, 40, 3);
+        session.Config.Scoring.PointsPerCubePlaced = 1;
+        var joker = (KayitDefteriJoker)session.Jokers.Add(new KayitDefteriJoker());
+        session.Jokers.DispatchRoundStarted(session.CurrentRound);
+        RoundEngine round = session.CurrentRound;
+
+        int counterAtCrossing = -1;
+        int overtimeSweeps = 0;
+        round.TurnResolved += r =>
+        {
+            if (r.ThresholdJustPassed)
+            {
+                counterAtCrossing = joker.Counter;
+            }
+            else if (round.ThresholdPassed && r.CleanSweep)
+            {
+                overtimeSweeps++;
+            }
+        };
+        PlayTurns(session, 1);
+        Check(round.ThresholdPassed, "now in overtime");
+        Check(counterAtCrossing == 0, "the ledger was wiped when overtime began",
+            "counter " + counterAtCrossing);
+        if (round.Status == RoundStatus.AwaitingAdvanceDecision)
+        {
+            round.DecideAdvance(false);
+        }
+
+        PlayTurns(session, 8);
+        Check(joker.Counter > 0 || overtimeSweeps > 0, "it keeps counting in overtime",
+            "counter " + joker.Counter + ", sweeps " + overtimeSweeps);
     }
 
     private static void KaziCalismasi_ReturnsAFullyExplodedBlock()
