@@ -101,8 +101,8 @@ namespace ProjectBlock.Core
 
     /// <summary>"Kayıt defteri" - counts destroyed cubes and calls a sweep when the count
     /// reaches the board's cell count. While it is held, emptying the board is NOT a sweep
-    /// any more; the ledger is the only source. Off in overtime (the counter would freeze
-    /// the discard recycle and make the round unwinnable).</summary>
+    /// any more; the ledger is the only source. It keeps counting in overtime, but the
+    /// ledger is wiped the moment overtime begins, so overtime starts from zero.</summary>
     public sealed class KayitDefteriJoker : Joker
     {
         /// <summary>Cubes counted toward the next forced sweep.</summary>
@@ -116,15 +116,11 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Counts exploded cubes; reaching the board's size triggers a clean sweep. "
-                    + "While it is held, emptying the board does not count as one.",
+                    + "While it is held, emptying the board does not count as one. "
+                    + "The count resets when overtime begins.",
                 "Patlatılan küpleri sayar; sayı alan büyüklüğüne ulaşınca temizlik "
-                    + "tetikler. Bu joker dururken alanı boşaltmak temizlik sayılmaz.");
-        }
-
-        /// <summary>Overtime would otherwise leave no way to recycle the discard.</summary>
-        public override bool DisabledInOvertime
-        {
-            get { return true; }
+                    + "tetikler. Bu joker dururken alanı boşaltmak temizlik sayılmaz. "
+                    + "Uzatmaya girilince sayaç sıfırlanır.");
         }
 
         public override string StatusText
@@ -139,6 +135,13 @@ namespace ProjectBlock.Core
             // holes in its bounding box that are not play area.
             Target = ctx.Round.Board.PlayableCellCount;
             ctx.Round.SuppressNaturalSweep = true;
+        }
+
+        /// <summary>Overtime opens a fresh ledger. Cubes the crossing turn already counted
+        /// stay counted (seenThisTurn is kept), so they are not carried into overtime.</summary>
+        public override void OnOvertimeStarted(RoundContext ctx)
+        {
+            Counter = 0;
         }
 
         public override void OnRemoved(SessionContext ctx)

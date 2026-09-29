@@ -219,8 +219,9 @@ Yeni kayıp nedeni: `LossReason.BetFailed` (Batak).
 - **Patlama muhasebesi:** satır patlaması puan verir + sayaca işler + temizlik tetikler;
   Robot süpürge puan vermez ama sayar ve temizlik tetikler; **Buldozer hiçbirini yapmaz**
   (bedava temizlik olmasın diye).
-- **Kayıt defteri** dururken doğal temizlik kapalı, tek kaynak sayaç. Uzatmada joker
-  tamamen pasif (yoksa ıskarta hiç dönmez ve raunt garantili kaybedilir).
+- **Kayıt defteri** dururken doğal temizlik kapalı, tek kaynak sayaç. Uzatmada da saymaya
+  devam eder, ama uzatmaya girildiği anda sayaç sıfırlanır ve uzatma sıfırdan başlar
+  (tasarımcı kararı, 2026-09-29; eskiden uzatmada tamamen pasifti).
 - **Kentsel Dönüşüm** ilk sürümde tahtayı düzensizleştirmiyor: her tamamlanan rauntta
   +1 satır **ve** +1 sütun, en fazla +3. Düzensiz tahta `GameBoard`'a hücre maskesi ister.
 - **Yangın/Taşkın** tek halka yayılıyor, zincirlemiyor (yoksa tek kullanımda tüm tahta döner).
