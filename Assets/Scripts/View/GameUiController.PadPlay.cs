@@ -311,11 +311,7 @@ namespace ProjectBlock.View
             {
                 // "Kredi kartı": settling up is a market action and never automatic, so like
                 // the [O] key it needs a press of its own.
-                if (session.RepayDebtInFull() > 0)
-                {
-                    sfx.Buy();
-                }
-                RefreshAll(null);
+                RepayDebtWithFx();
                 return true;
             }
             if (offers.Count == 0)

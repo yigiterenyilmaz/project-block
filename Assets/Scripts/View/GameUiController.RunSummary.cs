@@ -1,4 +1,4 @@
-// PURPOSE: GameUiController's end-of-run screen - what the player gets instead of the
+﻿// PURPOSE: GameUiController's end-of-run screen - what the player gets instead of the
 // one-line "GAME OVER" the HUD used to print.
 //
 // It reads ONLY public Core state (score, rounds, inventories, bosses met), so ending a run
@@ -34,7 +34,9 @@ namespace ProjectBlock.View
             if (phase == GamePhase.RunWon || phase == GamePhase.GameOver)
             {
                 runOverPending = true;
+                PlayForeclosureIfDue();
             }
+            PlayHafizaSave();
         }
 
         private void OpenRunSummary()

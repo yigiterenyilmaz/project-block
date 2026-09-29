@@ -818,11 +818,45 @@ namespace ProjectBlock.View
                 return;
             }
             MarketOffer offer = session.Market.Offers[offerIndex];
+            Vector2? offerAt = marketView.OfferWorldCenter(offerIndex);
+            long debtBefore = session.Debt;
             if (smuggling ? session.TrySmuggleOffer(offerIndex) : session.TryBuyOffer(offerIndex))
             {
                 Debug.Log("[block_bonk] " + (smuggling ? "Smuggled " : "Bought ") + offer
                     + " for " + (smuggling ? 0 : offer.Price));
-                sfx.Buy();
+                if (smuggling)
+                {
+                    // "Kaçakçı": slipped out the back, and - when the coin came down wrong - the
+                    // junk shown for what it is where it lands.
+                    Vector2 to = offer.Kind == MarketOfferKind.Joker
+                        ? (Vector2)cam.ViewportToWorldPoint(new Vector3(0.9f, 0.92f, -cam.transform.position.z))
+                        : offer.Kind == MarketOfferKind.Power
+                            ? CardLayerView.DiscardPilePos + new Vector2(0f, 2.4f)
+                            : CardLayerView.DrawPilePos;
+                    EnsureSmuggleFx();
+                    sfx.Whoosh();
+                    smuggleFx.Play(offerAt ?? Vector2.zero, to, session.LastSmuggleDefective);
+                    marketView.Show(session);
+                    UpdateHud();
+                    jokerBar.Refresh(session, null);
+                    if (offer.Kind == MarketOfferKind.Power)
+                    {
+                        powerBar.Refresh(session, null);
+                    }
+                    return;
+                }
+                // "Kredi kartı": bought on credit sounds (and says) like it.
+                if (session.Debt > debtBefore)
+                {
+                    sfx.DebtBuy();
+                    FloatingTextFx.Spawn(transform, (offerAt ?? Vector2.zero) + new Vector2(0f, 0.7f),
+                        Loc.Pick("DEBT +", "BORÇ +") + (session.Debt - debtBefore),
+                        new Color(0.95f, 0.35f, 0.3f), 50, 0.07f);
+                }
+                else
+                {
+                    sfx.Buy();
+                }
                 if (offer.Kind == MarketOfferKind.Joker)
                 {
                     // fly the tile up toward the joker bar (top-right of the view)
@@ -856,6 +890,62 @@ namespace ProjectBlock.View
             {
                 Debug.Log("[block_bonk] Cannot buy offer " + offerIndex + " (sold or too expensive).");
             }
+        }
+
+        private SmuggleFxView smuggleFx;
+        private DebtFxView debtFx;
+
+        private void EnsureDebtFx()
+        {
+            if (debtFx != null)
+            {
+                return;
+            }
+            var go = new GameObject("DebtFx");
+            go.transform.SetParent(transform, false);
+            debtFx = go.AddComponent<DebtFxView>();
+        }
+
+        /// <summary>"Kredi kartı": settling up, with the coins going from the score into PAID.
+        /// The [O] key and the pad's R3 both come here.</summary>
+        private void RepayDebtWithFx()
+        {
+            long paid = session.RepayDebtInFull();
+            if (paid > 0)
+            {
+                EnsureDebtFx();
+                sfx.DebtPaid();
+                debtFx.PlayRepay(ScoreWorldAnchor(), new Vector2(0f, 2.6f), paid);
+            }
+            RefreshAll(null);
+        }
+
+        /// <summary>The run was lost to an open debt: its own ending, before the summary.</summary>
+        private void PlayForeclosureIfDue()
+        {
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (session == null || session.Phase != GamePhase.GameOver || round == null
+                || round.Loss != LossReason.DebtNotRepaid)
+            {
+                return;
+            }
+            EnsureDebtFx();
+            sfx.Foreclose();
+            float halfH = cam.orthographicSize;
+            debtFx.PlayForeclosure(Vector2.zero, ScoreWorldAnchor(), halfH * cam.aspect, halfH);
+        }
+
+        private void EnsureSmuggleFx()
+        {
+            if (smuggleFx != null)
+            {
+                return;
+            }
+            var go = new GameObject("SmuggleFx");
+            go.transform.SetParent(transform, false);
+            smuggleFx = go.AddComponent<SmuggleFxView>();
+            smuggleFx.OnDefect = delegate { sfx.Reject(); sfx.Cut(); };
+            smuggleFx.OnLand = delegate { sfx.Pickup(); };
         }
 
         /// <summary>Debug joker controls, standing in for the market: J grants the next
