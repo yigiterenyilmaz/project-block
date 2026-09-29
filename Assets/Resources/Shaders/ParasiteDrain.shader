@@ -26,6 +26,9 @@
 //             still itself.
 //   RELIEF    _Relief is the escape attempt. Where the cube pushes the film thin, its colour comes
 //             BACK for a moment - the one beat in the idle where the block looks alive again.
+//   ICON ZONE _IconZone is where the bound joker's icon is held, a few pixels wider than the icon.
+//             The block is drained harder there - a PIGMENT DRAIN ZONE, never a dark halo - so the
+//             icon reads relative to what is round it on a pale block and a black one alike.
 //   DEATH     _Drain takes saturation and brightness out and pulls what is left a little toward the
 //             parasite's own dead mauve. It never goes to greyscale and it never goes to black: a
 //             blue host stays a blue host, just a poisoned one.
@@ -52,6 +55,7 @@ Shader "ProjectBlock/ParasiteDrain"
         _WindowB ("A second hole", Vector) = (0.5, 0.5, 0, 0.1)
         _Relief ("Where the cube is pushing back through: uv centre, strength, radius", Vector) = (0.5, 0.5, 0, 0.3)
         _Stain ("A region left extra drained after a struggle: uv centre, strength, radius", Vector) = (0.5, 0.5, 0, 0.3)
+        _IconZone ("Where the joker icon is held - drained harder: uv centre, strength, radius", Vector) = (0.5, 0.5, 0, 0.2)
     }
 
     SubShader
@@ -112,6 +116,7 @@ Shader "ProjectBlock/ParasiteDrain"
                 float4 _WindowB;
                 float4 _Relief;
                 float4 _Stain;
+                float4 _IconZone;
             CBUFFER_END
 
             Varyings Vert(Attributes input)
@@ -216,6 +221,8 @@ Shader "ProjectBlock/ParasiteDrain"
                 strength *= 1.0 - saturate(RegionAt(_Relief, input.uv)) * 0.85;
                 // And a region it has already struggled in is left a little more drained.
                 strength = saturate(strength + RegionAt(_Stain, input.uv) * 0.35 * covered);
+                // The pigment drain zone round the held icon.
+                strength = saturate(strength + RegionAt(_IconZone, input.uv) * 0.45 * covered);
                 // THE HOLES KEEP THEIR COLOUR. Nothing is on the block there, so nothing is being
                 // taken out of it there - which is what makes the negative space read as the cube
                 // showing THROUGH rather than as a lighter patch of film.

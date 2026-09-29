@@ -40,7 +40,15 @@
 //               player's line shearing the wrap. It is a tear, never a straight laser cut: the
 //               contour itself is what fails, so the edge is as ragged as the silhouette is.
 //   SHEEN       a broad soft highlight biased to the game's own upper-left light. Satin, never wet.
+//   DIMPLE      _Dimple (xy centre in UV, z strength, w radius) is the film RECOGNISING something
+//               landing on it: the region collapses INWARD a little (the opposite of the bulge) and
+//               goes darker and heavier around its rim. It is the first beat of a joker being taken
+//               into the membrane ("Parazit" attach), and it happens before the icon arrives.
+//   ICON ZONE   _IconZone (xy centre in UV, z strength, w radius) is where the bound joker's icon is
+//               held. The film is darker and a little heavier there - the membrane UNDER the icon,
+//               and half of the pigment drain that lets the icon read on any block, light or dark.
 //
+
 // Tagged Universal2D, as the 2D renderer requires. Without it ParasiteHostView draws the membrane
 // as a flat plum patch, which still says something is wrapped around the cube.
 Shader "ProjectBlock/ParasiteMembrane"
@@ -68,6 +76,8 @@ Shader "ProjectBlock/ParasiteMembrane"
         _WindowB ("A second hole: uv centre, strength, radius", Vector) = (0.5, 0.5, 0, 0.1)
         _Rim ("Separation rim on the contour - for a dark host", Float) = 0
         _RimColour ("That rim's colour", Color) = (0.62, 0.54, 0.66, 1)
+        _Dimple ("Landing dimple: uv centre, strength, radius", Vector) = (0.5, 0.5, 0, 0.2)
+        _IconZone ("Where the joker icon is held: uv centre, strength, radius", Vector) = (0.5, 0.5, 0, 0.2)
     }
 
     SubShader
@@ -129,6 +139,8 @@ Shader "ProjectBlock/ParasiteMembrane"
                 float4 _WindowB;
                 float _Rim;
                 float4 _RimColour;
+                float4 _Dimple;
+                float4 _IconZone;
             CBUFFER_END
 
             // How far the bulge reaches this point, 0..1.
@@ -218,6 +230,11 @@ Shader "ProjectBlock/ParasiteMembrane"
                 float lift = BulgeAt(input.uv);
                 float2 away = input.uv - _Bulge.xy;
                 pos.xy += away * lift * 0.16;
+                // THE DIMPLE is the bulge turned round: the film is pulled IN toward where
+                // something is landing on it.
+                float dimple = RegionAt(_Dimple, input.uv);
+                pos.xy -= (input.uv - _Dimple.xy) * dimple * 0.22;
+                lift -= dimple * 0.5;
                 // And the whole film draws IN as the wrap tightens.
                 pos.xy *= 1.0 - saturate(_Tension) * 0.035;
                 output.positionCS = TransformWorldToHClip(TransformObjectToWorld(pos));
@@ -316,7 +333,19 @@ Shader "ProjectBlock/ParasiteMembrane"
                 // The bulge catches a little more of it - it is the part standing proud.
                 body *= 1.0 + 0.25 * saturate(input.lift);
 
+                // THE DIMPLE: pressed in, so it is darker in its middle and the film heaps a little
+                // round its rim - the tissue drawing together round what is landing.
+                float dimple = RegionAt(_Dimple, input.uv);
+                float dimpleRim = saturate(saturate(dimple * 3.0) - dimple);
+                body *= 1.0 - 0.3 * dimple;
+                body = lerp(body, _Rose.rgb, dimpleRim * 0.12);
+                // THE ICON'S BED: the film is darker and heavier where it holds the joker, which is
+                // what lets the icon read against the membrane on a pale block and a black one alike.
+                float bed = RegionAt(_IconZone, input.uv);
+                body = lerp(body, _Deep.rgb, bed * 0.45);
+
                 float alpha = inside * _Opacity * thickness;
+                alpha *= 1.0 + dimple * 0.3 + dimpleRim * 0.25 + bed * 0.25;
                 // A gather is more of the same film, so it is more opaque - never a different
                 // colour laid over it.
                 alpha *= 1.0 + swell * 0.35 * saturate(_FoldRelief);
