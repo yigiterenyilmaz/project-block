@@ -32,10 +32,15 @@
 //                 what is actually holding the cube down. Never a perfect X and never four of
 //                 anything in the corners.
 //   NEST CORE     one small lobed body, slightly OFF centre, where the strands gather.
-//   ESSENCE       inside it, the bound joker's OWN accent colour in a small seed. Losing the cube
-//                 means losing that joker, so a player who cannot see which one has not been told
-//                 what the line clear will cost. The colour comes from the passenger's def id,
-//                 never from the host cube's material, which says nothing about who is riding.
+//   IMPRINT       the bound joker's REAL ICON, embedded IN the membrane (ParasiteHostView.Imprint.cs,
+//                 ParasiteEmbeddedIcon.shader): recognisable, colour partly drained, a thin film over
+//                 it and a bite or two out of its edges, held by a handful of organic fibers - never
+//                 a badge, a plate or a pod. Losing the cube means losing that joker, so a player
+//                 who cannot see which one has not been told what the line clear will cost. When a
+//                 host has an imprint the nest draws in and steps aside for it.
+//   ESSENCE       the fallback identity when the joker has no icon art: its OWN accent colour in a
+//                 small seed inside the nest, from the passenger's def id - never from the host
+//                 cube's material, which says nothing about who is riding.
 //
 // TWO EARLIER PASSES ARE BURIED HERE, and both were the same mistake at different scales: a colour
 // applied to the cube (a 55% magenta wash - "this one is pink"), and then a set of parts bolted to
@@ -77,7 +82,7 @@ using UnityEngine;
 namespace ProjectBlock.View
 {
     /// <summary>The parasite's clasp on a host cube: its anchors, tethers, node and passenger.</summary>
-    public sealed class ParasiteHostView : MonoBehaviour
+    public sealed partial class ParasiteHostView : MonoBehaviour
     {
         // =================================================================== TUNING
         /// <summary>Everything that decides how a host cube READS. Sizes as a share of a CUBE,
@@ -250,15 +255,6 @@ namespace ProjectBlock.View
             public static float CoreRimBoost = 0.25f;
 
             public static float CoreOffset = 0.05f;
-            /// <summary>With a joker ICON riding, the nest grows into a pod that holds it.</summary>
-            public static float RiderNestGrow = 1.75f;
-            /// <summary>The icon as a share of that pod - under 1, so the pod's rim shows all
-            /// round it and the icon is IN something.</summary>
-            public static float RiderIconShare = 0.78f;
-            /// <summary>How far the held icon is pulled toward the flesh (0 = untouched).</summary>
-            public static float RiderHeldTint = 0.18f;
-            /// <summary>The film of the wrap drawn back over the icon.</summary>
-            public static float RiderFilmAlpha = 0.28f;
 
             public static float CoreShadowStrength = 0.3f;
 
@@ -433,6 +429,7 @@ namespace ProjectBlock.View
 
             public static void AllOn()
             {
+                ImprintLayers.AllOn();
                 ShowMembrane = true;
                 ShowFolds = true;
                 ShowWindows = true;
@@ -473,6 +470,11 @@ namespace ProjectBlock.View
             /// tint on the cube would be a global recolour, and the whole point is that the film
             /// takes the life out of it only where it lies thick.</summary>
             public ClusterBurstView.Look Look;
+            /// <summary>Draw the cube's face itself, fully, under everything - for a host that has
+            /// no board cube under it: the market's attach preview, and the lab's colour tests,
+            /// which need a block of a colour no card happens to be. The board never sets it.
+            /// </summary>
+            public bool DrawBase;
         }
 
         /// <summary>An attempt the rules refused, ready for the View: the cell, what tried, and the
@@ -531,6 +533,9 @@ namespace ProjectBlock.View
         // Sorting: the board's own cube is under all of this. The film lies ON its face, the
         // binding strands ride inside the film, the core sits over them and the passenger is inside
         // the core.
+        /// <summary>A host drawn with no board cube under it draws the cube itself, first.</summary>
+        private const int BaseOrder = 3;
+
         /// <summary>The drained copy of the cube's face sits directly over the board's own cube
         /// and UNDER the film, so the block is seen going pale beneath the wrap.</summary>
         private const int DrainOrder = 4;
@@ -555,13 +560,27 @@ namespace ProjectBlock.View
 
         private const int EssenceInnerOrder = 13;
 
-        /// <summary>The bound joker's own ICON, held IN the nest: the icon, then a film of the
-        /// wrap drawn back over it, so the membrane holds it rather than a badge sitting on top.</summary>
-        private const int RiderOrder = 14;
+        /// <summary>THE IMPRINT'S LAYERING. Everything under it - the drain, the film and its
+        /// icon bed, the veins and strands, the nest - is the tissue it is embedded in. Then the
+        /// fibers that wrap round BEHIND it, the icon itself (with the film's front veil and the
+        /// edges it has eaten drawn inside its own shader), the fibers that cross in FRONT of it,
+        /// and the approach trail. The wet sheen is inside the icon's shader too.</summary>
+        private const int FiberBackOrder = 14;
 
-        private const int RiderFilmOrder = 15;
+        private const int IconOrder = 15;
 
-        private const int FleckOrder = 16;
+        private const int FiberFrontOrder = 16;
+
+        private const int MoteOrder = 17;
+
+        private const int FleckOrder = 18;
+
+        /// <summary>The lab's overlays (bounds, attach points, the raw icon for comparison).</summary>
+        private const int DebugOrder = 19;
+
+        /// <summary>Added to every order above, so the same host can be drawn inside a panel that
+        /// sits far above the board (the market's attach preview). Zero on the board.</summary>
+        public int OrderBase { get; set; }
 
         private static Material drainMaterial;
 
@@ -637,6 +656,8 @@ namespace ProjectBlock.View
         private static readonly int FoldReliefId = Shader.PropertyToID("_FoldRelief");
         private static readonly int WindowAId = Shader.PropertyToID("_WindowA");
         private static readonly int WindowBId = Shader.PropertyToID("_WindowB");
+        private static readonly int IconZoneId = Shader.PropertyToID("_IconZone");
+        private static readonly int DimpleId = Shader.PropertyToID("_Dimple");
 
         // =================================================================== a standing host
 
@@ -708,8 +729,12 @@ namespace ProjectBlock.View
             public SpriteRenderer EssenceOuter;
             public SpriteRenderer Essence;
             public SpriteRenderer EssenceInner;
-            public SpriteRenderer Rider;
-            public SpriteRenderer RiderFilm;
+            /// <summary>The joker's icon embedded in the film, and its fibers - null until a
+            /// rider is known for this cell, and whenever its icon art is missing.</summary>
+            public Imprint Icon;
+            /// <summary>The cube's own face when the host draws it (Host.DrawBase).</summary>
+            public SpriteRenderer Base;
+            public bool DrawBase;
             public readonly List<SpriteRenderer> Flecks = new List<SpriteRenderer>();
             public readonly List<Vector2> FleckDirs = new List<Vector2>();
             /// <summary>Seconds since the block landed, or above SeatTotal once seated.</summary>
@@ -768,7 +793,8 @@ namespace ProjectBlock.View
                 {
                     HostPiece h = entry.Value;
                     if (h.RuptureClock >= 0f || h.ClampClock >= 0f
-                        || h.SeatClock < Style.SeatTotal)
+                        || h.SeatClock < Style.SeatTotal
+                        || (h.Icon != null && h.Icon.Attaching))
                     {
                         return true;
                     }
@@ -791,9 +817,24 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            cellSize = view.CellWorldSize;
-            cubeSize = view.CubeWorldSize;
-            toWorld = view.CellToWorld;
+            SyncOn(view.CellToWorld, view.CellWorldSize, view.CubeWorldSize, live);
+        }
+
+        /// <summary>
+        /// The same with no board: where each cell's centre is in this view's own space, and how big
+        /// a cell and a cube are there. What the market's attach panel uses to put a real host - the
+        /// same membrane, drain and imprint the board draws - over the block it is previewing.
+        /// </summary>
+        public void SyncOn(System.Func<GridPos, Vector2> cellToLocal, float cell, float cube,
+            IReadOnlyList<Host> live)
+        {
+            if (cellToLocal == null)
+            {
+                return;
+            }
+            cellSize = cell;
+            cubeSize = cube;
+            toWorld = cellToLocal;
             retired.Clear();
             foreach (KeyValuePair<GridPos, HostPiece> entry in hosts)
             {
@@ -824,6 +865,7 @@ namespace ProjectBlock.View
                     hosts[live[i].Cell] = h;
                 }
                 h.Passenger = live[i].Passenger;
+                h.DrawBase = live[i].DrawBase;
             }
             PaintAll();
         }
@@ -925,6 +967,7 @@ namespace ProjectBlock.View
                 Drop(retired[i]);
             }
             hosts.Clear();
+            riders.Clear();
         }
 
         // =================================================================== building
@@ -946,7 +989,7 @@ namespace ProjectBlock.View
                     h.MembraneFilter.sharedMesh = ParasiteMembraneMesh.Quad;
                     h.Membrane = go.AddComponent<MeshRenderer>();
                     h.Membrane.sharedMaterial = film;
-                    h.Membrane.sortingOrder = MembraneOrder;
+                    h.Membrane.sortingOrder = MembraneOrder + OrderBase;
                     h.Membrane.shadowCastingMode =
                         UnityEngine.Rendering.ShadowCastingMode.Off;
                     h.Membrane.receiveShadows = false;
@@ -958,6 +1001,13 @@ namespace ProjectBlock.View
             h.Look = host.Look;
             h.Contrast = ParasiteContrastProfile.For(host.Look.Paint.a > 0f
                 ? host.Look.Paint : host.Look.Colour);
+            if (host.DrawBase)
+            {
+                // No board cube under this one: the cube is drawn here, on its own material, so a
+                // water or fire tile keeps moving exactly as it does on the board.
+                h.Base = Rent(host.Look.Tile != null ? host.Look.Tile : ViewUtil.WhiteSprite,
+                    BaseOrder, ViewUtil.TileMaterial(host.Look.Tile));
+            }
             if (host.Look.Tile != null)
             {
                 Material drain = DrainMaterial();
@@ -1096,6 +1146,16 @@ namespace ProjectBlock.View
         {
             float a = Random01(cell, 400 + index) * 6.28f + index * 3.1f;
             float r = 0.22f + Random01(cell, 420 + index) * 0.11f;
+            // NEVER UNDER THE IMPRINT. A hole is where the film is not, and the icon lives IN the
+            // film - a window opening under it would show the icon standing on bare cube, which is
+            // the sticker this replaced. So a hole on the icon's side goes to the other side.
+            Vector2 spot = ImprintSpot(cell);
+            if (spot.sqrMagnitude > 1e-6f
+                && Vector2.Dot(new Vector2(Mathf.Cos(a), Mathf.Sin(a)), spot.normalized) > -0.2f)
+            {
+                a += Mathf.PI;
+                r += 0.04f;
+            }
             float radius = Mathf.Lerp(Style.WindowRadiusMin, Style.WindowRadiusMax,
                 Random01(cell, 440 + index));
             // NEVER A MATCHED PAIR: one is a tear the film has pulled open, the other a nick. Two
@@ -1149,10 +1209,9 @@ namespace ProjectBlock.View
             Return(h.EssenceOuter);
             Return(h.Essence);
             Return(h.EssenceInner);
-            Return(h.Rider);
-            Return(h.RiderFilm);
-            h.Rider = null;
-            h.RiderFilm = null;
+            DropImprint(h);
+            Return(h.Base);
+            h.Base = null;
             for (int i = 0; i < h.Flecks.Count; i++)
             {
                 Return(h.Flecks[i]);
@@ -1181,6 +1240,7 @@ namespace ProjectBlock.View
             {
                 HostPiece h = entry.Value;
                 h.SeatClock += dt;
+                TickImprint(h, dt);
                 if (h.RuptureClock >= 0f)
                 {
                     h.RuptureClock += dt;
@@ -1385,8 +1445,13 @@ namespace ProjectBlock.View
             }
             Vector2 centre = at + load;
 
-            PaintDrain(h, centre, cube, push, rupture);
-            PaintMembrane(h, centre, cube, seat, push, grip, circulate, clamp, rupture);
+            // THE IMPRINT FIRST: where the icon is this frame, and what it is doing to the film
+            // round it (the landing dimple, the darker bed it lies in), which the drain and the
+            // membrane below have to agree with.
+            ImprintFrame imprint = PrepareImprint(h, at, load, cube, push, grip, clamp, rupture);
+            PaintBase(h, centre, cube);
+            PaintDrain(h, centre, cube, push, rupture, imprint);
+            PaintMembrane(h, centre, cube, seat, push, grip, circulate, clamp, rupture, imprint);
             PaintPatches(h, centre, cube, grip, rupture);
             for (int i = 0; i < h.Veins.Count; i++)
             {
@@ -1396,8 +1461,21 @@ namespace ProjectBlock.View
             {
                 PaintRib(h, i, centre, cube, push, grip, circulate, rupture);
             }
-            PaintCore(h, centre, cube, seat, push, grip, circulate, clamp, rupture);
+            PaintCore(h, centre, cube, seat, push, grip, circulate, clamp, rupture, imprint);
+            PaintImprint(h, imprint, centre, cube, push, grip, clamp, rupture);
             PaintFlecks(h, at, cube, rupture);
+        }
+
+        /// <summary>The cube's own face, for a host with no board cube under it.</summary>
+        private void PaintBase(HostPiece h, Vector2 at, float cube)
+        {
+            if (h.Base == null)
+            {
+                return;
+            }
+            h.Base.transform.localPosition = new Vector3(at.x, at.y, 0f);
+            Fit(h.Base, cube, cube);
+            h.Base.color = h.Look.Colour.a > 0f ? h.Look.Colour : Color.white;
         }
 
         /// <summary>One of the film's holes as the shaders want it: centre, strength, radius. The
@@ -1416,7 +1494,8 @@ namespace ProjectBlock.View
         /// film out its colour comes back for a moment; where it has just struggled and lost, a
         /// little more of it is gone.
         /// </summary>
-        private void PaintDrain(HostPiece h, Vector2 at, float cube, float push, float rupture)
+        private void PaintDrain(HostPiece h, Vector2 at, float cube, float push, float rupture,
+            ImprintFrame imprint)
         {
             if (h.Drain == null)
             {
@@ -1476,6 +1555,9 @@ namespace ProjectBlock.View
             block.SetVector(FoldAId, FoldVec(h.FoldA, 0f, spread));
             block.SetVector(FoldBId, FoldVec(h.FoldB, 0f, spread));
             block.SetVector(FoldCId, FoldVec(h.FoldC, 0f, spread));
+            // THE PIGMENT DRAIN ZONE round the held icon - in the tile's own UV, which spans the
+            // cube.
+            block.SetVector(IconZoneId, imprint.ZoneIn(at, cube, ImprintLayers.ShowPigmentDrain));
             h.Drain.SetPropertyBlock(block);
         }
 
@@ -1544,6 +1626,7 @@ namespace ProjectBlock.View
             Vector2 normal = new Vector2(-d.y, d.x).normalized;
             float tension = Mathf.Max(grip * 0.6f, push * 0.5f);
             Vector2 control = mid + normal * (vein.Bow * cube * (1f - tension * 0.6f));
+            control += DimplePull(h, mid, cube);
             float fail = rupture >= 0f
                 ? Span(rupture, Style.RuptureFirstRib + index * 0.02f,
                     Style.RuptureFirstRib + index * 0.02f + Style.RuptureRibBreak)
@@ -1582,7 +1665,7 @@ namespace ProjectBlock.View
         /// edge, and - at the end - the tear the line opens along its own band.
         /// </summary>
         private void PaintMembrane(HostPiece h, Vector2 at, float cube, float seat, float push,
-            float grip, float circulate, float clamp, float rupture)
+            float grip, float circulate, float clamp, float rupture, ImprintFrame imprint)
         {
             if (h.Membrane == null)
             {
@@ -1663,6 +1746,10 @@ namespace ProjectBlock.View
                 : 0f;
             block.SetVector(TearId, new Vector4(h.TearDir.x, h.TearDir.y, tear,
                 Style.RuptureShearWidth));
+            // THE IMPRINT'S BED and its LANDING DIMPLE - in the mesh's UV, which spans the film's
+            // oversize rather than the cube.
+            block.SetVector(IconZoneId, imprint.ZoneIn(at, size, ImprintLayers.ShowMembraneBackMask));
+            block.SetVector(DimpleId, imprint.DimpleIn(at, size));
             h.Membrane.SetPropertyBlock(block);
         }
 
@@ -1699,6 +1786,8 @@ namespace ProjectBlock.View
             Vector2 control = mid + normal * (rib.Bow * cube * (1f - tension * 0.7f));
             // The bulge also pushes the strands over it outward a little.
             control += (mid - bulgeWorld).normalized * (push * near * cube * 0.05f);
+            // And while something lands on the film the strands near it lean IN toward it.
+            control += DimplePull(h, mid, cube);
 
             if (rib.BreakAt < 0 && rupture >= 0f
                 && rupture > Style.RuptureFirstRib + index * Style.RuptureRibStagger)
@@ -1777,9 +1866,16 @@ namespace ProjectBlock.View
 
         /// <summary>The nest core, and the passenger inside it.</summary>
         private void PaintCore(HostPiece h, Vector2 centre, float cube, float seat, float push,
-            float grip, float circulate, float clamp, float rupture)
+            float grip, float circulate, float clamp, float rupture, ImprintFrame imprint)
         {
             Vector2 offset = CoreOffsetOf(h) * cube;
+            // WITH AN IMPRINT THE NEST STEPS ASIDE. It used to swell into a pod round the icon, and
+            // a pod round an icon is a medallion. Now the icon lies in the film itself and the nest
+            // draws in, off to the far side of it, where the strands still gather.
+            if (imprint.Active)
+            {
+                offset = ImprintNestOffset(h.Cell) * cube;
+            }
             // IT PULLS THE OTHER WAY. When the cube pushes out on one side the core is dragged
             // against it - which is what makes the parasite read as holding on rather than riding.
             Vector2 bulgeDir = (h.BulgeAt - new Vector2(0.5f, 0.5f)) * 2f;
@@ -1805,8 +1901,9 @@ namespace ProjectBlock.View
                 ? Ease(Span(rupture, Style.RuptureFirstRib + Style.RuptureRibStagger,
                     Style.RuptureFirstRib + Style.RuptureRibStagger + Style.RuptureCoreReveal))
                 : 0f;
-            Sprite rider = RiderFor(h);
-            float nestSize = rider != null ? Style.CoreSize * Style.RiderNestGrow : Style.CoreSize;
+            float nestSize = imprint.Active
+                ? Style.CoreSize * ImprintStyle.NestScaleWithIcon
+                : Style.CoreSize;
             float w = nestSize * cube * grow * squeeze * (1f + open * 0.2f);
             float hh = nestSize * cube * grow / Mathf.Max(squeeze, 0.01f)
                 * (1f - open * 0.26f);
@@ -1835,9 +1932,16 @@ namespace ProjectBlock.View
                 h.CoreShadow.color = new Color(0f, 0f, 0f,
                     Style.CoreShadowStrength * wake * (1f - open * 0.7f));
             }
-            PaintRider(h, rider, at, w, hh, cube, clamp, grip, push, rupture);
             if (h.Essence == null && h.EssenceOuter == null && h.EssenceInner == null)
             {
+                return;
+            }
+            if (imprint.Active)
+            {
+                // The icon IS the identity now; a coloured seed beside it would be a second one.
+                PaintEssenceShell(h.EssenceOuter, at, 0f, 1f, Clear);
+                PaintEssenceShell(h.Essence, at, 0f, 1f, Clear);
+                PaintEssenceShell(h.EssenceInner, at, 0f, 1f, Clear);
                 return;
             }
             // ---- THE PASSENGER ----
@@ -1891,93 +1995,8 @@ namespace ProjectBlock.View
                 Mathf.Lerp(tint.b, 1f, Style.EssenceInnerLighten), tint.a);
             PaintEssenceShell(h.EssenceOuter, seatAt, size * Style.EssenceOuterScale, squash, husk);
             PaintEssenceShell(h.Essence, seatAt, size, squash, tint);
-            if (rider != null)
-            {
-                // The pale seed would sit on the icon's face; the husk stays as its glow.
-                heart.a = 0f;
-            }
             PaintEssenceShell(h.EssenceInner, seatAt, size * Style.EssenceInnerScale, squash,
                 heart);
-        }
-
-        private GridPos? riderCell;
-        private Sprite riderSprite;
-
-        /// <summary>The bound joker's ICON and the cell of the host that carries it. Null takes it
-        /// off. Asked every repaint (through BoardView.SetParasiteRider); only draws.</summary>
-        public void SetRider(GridPos? cell, Sprite icon)
-        {
-            riderCell = icon != null ? cell : null;
-            riderSprite = icon;
-        }
-
-        private Sprite RiderFor(HostPiece h)
-        {
-            return riderSprite != null && riderCell.HasValue && riderCell.Value.Equals(h.Cell)
-                ? riderSprite
-                : null;
-        }
-
-        /// <summary>
-        /// THE ICON IS HELD, NOT PINNED ON. It sits sunk in the nest (which grows into a pod round
-        /// it), is pulled a little toward the flesh, and a thin film of the wrap is drawn back OVER
-        /// it, a little larger than the icon, so the membrane's lip runs across the icon's edge.
-        /// It rides every motion the nest makes (the counter-pull, the clamp squeeze); at the
-        /// rupture the film peels off first and the icon is bare for a beat before it goes with
-        /// the passenger.
-        /// </summary>
-        private void PaintRider(HostPiece h, Sprite icon, Vector2 at, float nestW, float nestH,
-            float cube, float clamp, float grip, float push, float rupture)
-        {
-            if (icon == null)
-            {
-                Return(h.Rider);
-                Return(h.RiderFilm);
-                h.Rider = null;
-                h.RiderFilm = null;
-                return;
-            }
-            if (h.Rider == null)
-            {
-                h.Rider = Rent(icon, RiderOrder, null);
-            }
-            if (h.RiderFilm == null)
-            {
-                h.RiderFilm = Rent(ParasiteShapes.Heart, RiderFilmOrder, null);
-            }
-            h.Rider.sprite = icon;
-
-            float peel = 0f;
-            float gone = 0f;
-            if (rupture >= 0f)
-            {
-                float revealAt = Style.RuptureFirstRib + Style.RuptureRibStagger;
-                peel = Ease(Span(rupture, Style.RuptureFirstRib, revealAt + Style.RuptureCoreReveal));
-                float collapseAt = revealAt + Style.RuptureCoreReveal + Style.RuptureEssenceHold;
-                gone = Ease(Span(rupture, collapseAt, collapseAt + Style.RuptureEssenceCollapse));
-            }
-            float show = Ease(Span(h.SeatClock, Style.SeatCoreWake * 0.6f,
-                Style.SeatCoreWake + Style.SeatMembraneSpread));
-
-            // Squeezed with the nest by a clamp, swelling a hair when the cube pushes.
-            float squeeze = 1f - 0.05f * Mathf.Max(clamp, grip * 0.6f);
-            float iconSize = Mathf.Min(nestW, nestH) * Style.RiderIconShare
-                * (1f + 0.04f * push) * (1f - 0.7f * gone);
-            float native = Mathf.Max(icon.bounds.size.x, icon.bounds.size.y, 0.0001f);
-            float k = iconSize / native;
-            h.Rider.transform.localPosition = new Vector3(at.x, at.y + cube * 0.006f, 0f);
-            h.Rider.transform.localScale = new Vector3(k * squeeze, k / Mathf.Max(squeeze, 0.01f), 1f);
-            float held = Style.RiderHeldTint * (1f - peel);
-            Color c = Color.Lerp(Color.white, new Color(0.86f, 0.62f, 0.8f), held);
-            c.a = show * (1f - gone);
-            h.Rider.color = c;
-
-            float filmA = Style.RiderFilmAlpha * show * (1f - peel) * (1f + 0.3f * clamp);
-            h.RiderFilm.transform.localPosition = new Vector3(at.x, at.y, 0f);
-            Fit(h.RiderFilm, nestW * 0.94f, nestH * 0.94f);
-            Color film = Color.Lerp(BodyViolet, WarmRose, 0.35f);
-            film.a = Mathf.Clamp01(filmA);
-            h.RiderFilm.color = film;
         }
 
         /// <summary>One shell of the passenger's seed.</summary>
@@ -2019,8 +2038,13 @@ namespace ProjectBlock.View
                 f.transform.localPosition = new Vector3(p.x, p.y, 0f);
                 float s = cube * 0.045f * (1f - t);
                 Fit(f, s, s);
+                // With an imprint the last motes are the ICON's own colour going dark - the joker
+                // coming apart with the parasite's material, not a generic seed.
+                Color own = h.Icon != null && h.Icon.Profile != null
+                    ? h.Icon.Profile.Average
+                    : PassengerColour(h.Passenger);
                 Color c = isCore
-                    ? Color.Lerp(PassengerColour(h.Passenger), DeepPlum, 0.4f)
+                    ? Color.Lerp(own, DeepPlum, 0.4f)
                     : BodyViolet;
                 c.a = 0.8f * (1f - t) * (t > 0f ? 1f : 0f);
                 f.color = c;
@@ -2142,7 +2166,7 @@ namespace ProjectBlock.View
             r.SetPropertyBlock(null);
             r.maskInteraction = SpriteMaskInteraction.None;
             r.sprite = sprite;
-            r.sortingOrder = order;
+            r.sortingOrder = order + OrderBase;
             r.color = Clear;
             r.transform.localRotation = Quaternion.identity;
             r.transform.localScale = Vector3.one;
