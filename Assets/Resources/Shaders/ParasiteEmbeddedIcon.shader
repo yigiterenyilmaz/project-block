@@ -189,7 +189,9 @@ Shader "ProjectBlock/ParasiteEmbeddedIcon"
                 {
                     float2 uv = ToUV(n) + dx * RotatedGrid[i].x + dy * RotatedGrid[i].y;
                     float2 m = ToN(uv);
-                    half4 t = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv);
+                    // LOD 0: the icons carry no mipmaps, and an explicit level keeps every
+                    // sample legal after the early-out below.
+                    half4 t = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0);
                     float inside = step(abs(m.x), 1.0) * step(abs(m.y), 1.0);
                     sum += t * inside;
                 }
@@ -200,7 +202,7 @@ Shader "ProjectBlock/ParasiteEmbeddedIcon"
             float AlphaAt(float2 n)
             {
                 float inside = step(abs(n.x), 1.0) * step(abs(n.y), 1.0);
-                return SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ToUV(n)).a * inside;
+                return SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, ToUV(n), 0).a * inside;
             }
 
             // Where n sits inside the silhouette's own bounds: -1..1 across what is actually drawn.
