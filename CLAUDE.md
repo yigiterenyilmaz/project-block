@@ -1082,6 +1082,36 @@ dropped that way once each.
   shapes, `docs/parazit-zar.png` for the film over four materials with each of its parts switched
   off in turn, and `docs/parazit-kivrim.png` for the gathers drawn the WRONG way — as geometry —
   which is what settled the argument.
+- **THE HOSTED JOKER IS AN IMPRINT IN THE MEMBRANE, NEVER A LOGO ON THE CUBE**
+  (`ParasiteHostView.Imprint.cs`, `ParasiteIconProfile`, `Resources/Shaders/ParasiteEmbeddedIcon`).
+  The passenger's icon used to be stuck on the host — a pod the nest grew round it on the board, a
+  dark disc on the mini cube in the hand, a well in the attach panel — and every one of them read as
+  a badge. Now the joker's REAL icon (never a generic symbol, never redrawn) is pressed INTO the
+  film: fitted by its real silhouette to about a third of the cube and set a little off centre (the
+  nest draws in and steps to the far side), colour partly drained and pulled toward the membrane's
+  hue so Midas is still gold and Yangın still warm but both have been TAKEN, a thin veil of film over
+  it, one of four deterministic bites out of its edges, its inner edge sunk two pixels, and a darker
+  bed under it in the film plus a harder drain in the block round it (the membrane's and the drain's
+  `_IconZone` — a pigment drain zone, never a halo). Four to seven organic fibers grip DIFFERENT
+  EDGES of its outline, one behind it and the rest in front; a thin membrane-lit rim appears only on
+  a dark host, and a contrast check nudges the icon's brightness when it is nearly the film's own
+  colour (`kara_delik`). It has NO motion of its own: it goes most of the way with the cube's push
+  (the fibers on the far side tighten), a rare contraction wave crosses it, a refused power gives it
+  a micro tug, and the line kills it WITH the host — it tears into two to four pieces, drains to plum
+  and is gone while its fibers snap; it never flies out. **The icons are imported non-readable and
+  without mipmaps**, so `ParasiteIconProfile` reads each one ONCE through a small GPU blit (visible
+  bounds, centroid, average colour, complexity, an alpha grid the fibers find edges on), and the
+  shader works in the sprite rect's own n-space with a 4-tap supersample — a raw tap at 25px is mud.
+  **Binding plays an ASSIMILATION on the block** in the market's attach panel (the board is not on
+  screen there): a real `ParasiteHostView` goes over the chosen cube (`SyncOn`, `OrderBase`,
+  `Host.DrawBase`), and the icon leaves its own joker row on one shallow arc — approach, the film
+  dimpling (`_Dimple`), sink, fibers grabbing on a stagger with a pixel of tug each, a seal pulse and
+  one wet sheen — about 0.65s, after which the panel closes. A host placed on the board comes in
+  already imprinted and only settles with the film; the attach never replays. The imprint outlives a
+  missing rider while its host ruptures (Core unbinds the passenger the turn the line lands). The
+  lab section "parazit - konaktaki joker izi" has 31 scenes, the side-by-side acceptance (old sticker
+  vs imprint), a replay that keeps the switches, and 14 switches (`ImprintLayers`); its 0.5x/0.25x
+  attach slows only the lab's own riders, never the market's bind.
 - `Assets/Scripts/View/PowerFxView.cs` — activation animations for powers without a view of
   their own: Totem (carved pole out of a rune circle), İkinci Şans (a four-leaf clover whose
   plucked leaves each take their quadrant of cubes), Soğuk Füzyon, Aşırma / Yedekleme (one card
