@@ -193,6 +193,9 @@ namespace ProjectBlock.View
                     ViewUtil.ApplyTile(miniCube, miniTile,
                         mini * (ViewUtil.ArtLoaded ? MiniTileFill : MiniFlatFill));
                     Track(miniCube, order + 2);
+                    // What this cube is MADE of, for a parasite film laid over it: a painted
+                    // tile's tint is white, and a palette taken from white is the wrong one.
+                    miniPaints.Add(IsWhite(miniTint) ? CardPaint(card, borrowed) : miniTint);
                 }
                 // The top band names the card's TYPE: its element(s), and/or "custom" for a
                 // player-designed block ("Karakter oluşturma"). Plain market/deck blocks get none.
@@ -416,15 +419,25 @@ namespace ProjectBlock.View
         /// <summary>The shape the face was drawn with, so a mark can find one of its cubes.</summary>
         private BlockShape builtShape;
 
-        private SpriteRenderer riderPlate;
+        /// <summary>The material colour of each mini cube, in the order of builtShape.Cells.
+        /// </summary>
+        private readonly List<Color> miniPaints = new List<Color>();
+
+        private SpriteRenderer riderFilm;
         private SpriteRenderer riderIcon;
         private int riderIndex = -1;
 
         /// <summary>
-        /// "Parazit": the joker riding one cube of this block, drawn ON that cube - a dark disc
-        /// with the passenger's own icon - so a player holding the block can see what throwing it
-        /// away, or losing that cube, would cost. <paramref name="cellIndex"/> is into the shape
-        /// the card was drawn with; -1 (or no icon) takes the mark off.
+        /// "Parazit": the joker riding one cube of this block, so a player holding it can see what
+        /// throwing it away, or losing that cube, would cost. <paramref name="cellIndex"/> is into
+        /// the shape the card was drawn with; -1 (or no icon) takes it off.
+        ///
+        /// THE SAME LANGUAGE AS THE BOARD, NOT A BADGE. This used to be a dark disc with the icon on
+        /// it - exactly the "logo stuck on the cube" the board's host no longer draws. Now the cube
+        /// wears a film of the parasite's membrane (the baked lobed patch, over the whole cube, in
+        /// the palette its own material asks for) and the joker's real icon is embedded in it by
+        /// ParasiteHostView.PaintEmbeddedStill: drained, veiled, a bite out of its edge, fitted by
+        /// its real silhouette. No plate anywhere.
         ///
         /// Built on first use and then only moved or toggled, like SetFrozen: the pieces are
         /// tracked so the drag fade and the sorting boost reach them, and a tracked renderer
@@ -436,9 +449,9 @@ namespace ProjectBlock.View
                 && cellIndex >= 0 && cellIndex < builtShape.Cells.Count;
             if (!show)
             {
-                if (riderPlate != null)
+                if (riderFilm != null)
                 {
-                    riderPlate.enabled = false;
+                    riderFilm.enabled = false;
                     riderIcon.enabled = false;
                 }
                 riderIndex = -1;
@@ -446,12 +459,20 @@ namespace ProjectBlock.View
             }
             float mini = MiniCubeSize(builtShape);
             Vector2 at = MiniCubeLocal(builtShape, builtShape.Cells[cellIndex]);
-            if (riderPlate == null)
+            ParasiteContrast palette = ParasiteContrastProfile.For(cellIndex < miniPaints.Count
+                ? miniPaints[cellIndex]
+                : Color.white);
+            Color film = palette.Skin;
+            film.a = RiderFilmAlpha;
+            if (riderFilm == null)
             {
-                riderPlate = ViewUtil.MakeRounded(transform, "RiderPlate", at,
-                    new Vector2(mini * 0.86f, mini * 0.86f), new Color(0.07f, 0.05f, 0.09f, 0.9f),
-                    baseOrder + 3);
-                Track(riderPlate, baseOrder + 3);
+                var filmGo = new GameObject("RiderFilm");
+                filmGo.transform.SetParent(transform, false);
+                riderFilm = filmGo.AddComponent<SpriteRenderer>();
+                riderFilm.sprite = ParasiteShapes.Membrane;
+                riderFilm.sortingOrder = baseOrder + 3;
+                riderFilm.color = film;
+                Track(riderFilm, baseOrder + 3);
                 var go = new GameObject("RiderIcon");
                 go.transform.SetParent(transform, false);
                 riderIcon = go.AddComponent<SpriteRenderer>();
@@ -459,14 +480,68 @@ namespace ProjectBlock.View
                 Track(riderIcon, baseOrder + 4);
             }
             riderIndex = cellIndex;
-            riderPlate.transform.localPosition = new Vector3(at.x, at.y, 0f);
-            riderIcon.sprite = icon;
-            float native = Mathf.Max(icon.bounds.size.x, icon.bounds.size.y, 0.0001f);
-            float scale = mini * 0.78f / native;
-            riderIcon.transform.localPosition = new Vector3(at.x, at.y, 0f);
-            riderIcon.transform.localScale = new Vector3(scale, scale, 1f);
-            riderPlate.enabled = true;
+            // The film covers the CUBE, not a disc round the icon: it is the membrane the cube is
+            // wrapped in, turned per card so no two hands wear the same patch.
+            riderFilm.transform.localPosition = new Vector3(at.x, at.y, 0f);
+            riderFilm.transform.localRotation = Quaternion.Euler(0f, 0f, (CardId * 47) % 360);
+            Vector2 unit = riderFilm.sprite.bounds.size;
+            float filmSize = mini * (ViewUtil.ArtLoaded ? MiniTileFill : MiniFlatFill) * 1.04f;
+            riderFilm.transform.localScale = new Vector3(filmSize / Mathf.Max(unit.x, 1e-4f),
+                filmSize / Mathf.Max(unit.y, 1e-4f), 1f);
+            SetTrackedColor(riderFilm, film);
+            ParasiteHostView.PaintEmbeddedStill(riderIcon, icon, at,
+                mini * (ViewUtil.ArtLoaded ? MiniTileFill : MiniFlatFill), CardId * 31 + cellIndex,
+                palette);
+            SetTrackedColor(riderIcon, riderIcon.color);
+            riderFilm.enabled = true;
             riderIcon.enabled = true;
+        }
+
+        /// <summary>How opaque the rider's film is over its mini cube - the baked membrane shape
+        /// already carries its own lobed alpha on top of this.</summary>
+        private const float RiderFilmAlpha = 0.8f;
+
+        /// <summary>Changes a tracked renderer's colour AND the colour the drag fade restores.
+        /// </summary>
+        private void SetTrackedColor(SpriteRenderer renderer, Color color)
+        {
+            renderer.color = color;
+            int i = renderers.IndexOf(renderer);
+            if (i >= 0)
+            {
+                baseColors[i] = color;
+            }
+        }
+
+        /// <summary>What one of a card's cubes is MADE of, from the tint it is drawn with - the
+        /// colour a parasite film over it takes its palette from. Shared with the attach panel so
+        /// the two never pick different palettes for the same cube.</summary>
+        public static Color CubePaint(BlockCard card, Color tint)
+        {
+            return IsWhite(tint) && card != null ? CardPaint(card, null) : tint;
+        }
+
+        private static bool IsWhite(Color c)
+        {
+            return c.r > 0.97f && c.g > 0.97f && c.b > 0.97f;
+        }
+
+        /// <summary>The colour a card's cubes are made of when their tile paints itself.</summary>
+        private static Color CardPaint(BlockCard card, BlockElement? borrowed)
+        {
+            if (borrowed.HasValue)
+            {
+                return ViewUtil.ElementColor(borrowed.Value);
+            }
+            IReadOnlyList<BlockElement> shown = ViewUtil.ShownElements(card);
+            for (int i = 0; i < shown.Count; i++)
+            {
+                if (shown[i] != BlockElement.Targeted)
+                {
+                    return ViewUtil.ElementColor(shown[i]);
+                }
+            }
+            return ViewUtil.ColorForCard(card.Id);
         }
 
         /// <summary>Fades the whole card (1 = opaque). Used while dragging so the board

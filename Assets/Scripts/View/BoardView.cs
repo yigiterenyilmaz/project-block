@@ -2161,9 +2161,10 @@ namespace ProjectBlock.View
 
         /// <summary>
         /// "Parazit": the passenger's own ICON on the host cube. It is not drawn here: it is handed
-        /// to ParasiteHostView, which sinks it INTO the nest under a film of the wrap, so the
-        /// membrane holds it rather than a badge sitting on top. Null cell (or icon) takes it off.
-        /// Asked every repaint by the controller, which alone knows the binding.
+        /// to ParasiteHostView, which EMBEDS it in the membrane (ParasiteHostView.Imprint) - drained,
+        /// veiled, bitten at the edges and held by fibers - rather than a badge sitting on top.
+        /// Null cell (or icon) takes it off. Asked every repaint by the controller, which alone
+        /// knows the binding.
         /// </summary>
         public void SetParasiteRider(GridPos? cell, Sprite icon)
         {

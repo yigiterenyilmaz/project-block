@@ -276,6 +276,16 @@ namespace ProjectBlock.View
         /// <summary>One frame of the attach panel. It owns the pointer while it is open.</summary>
         private void HandleParazitFlow(Mouse mouse)
         {
+            // THE BIND IS PLAYING: the joker is already bound (the session said yes) and the panel
+            // is showing it being taken into the block. It closes itself once that has been seen.
+            if (parasitePanel.Binding)
+            {
+                if (parasitePanel.BindFinished)
+                {
+                    CancelParazit();
+                }
+                return;
+            }
             if (mouse == null || !parasitePanel.IsOpen)
             {
                 return;
@@ -299,6 +309,12 @@ namespace ProjectBlock.View
             if (ok)
             {
                 sfx.Buy();
+                // The assimilation plays on the block before the panel goes; with nothing to
+                // play it on (no icon art) the panel simply closes as it always did.
+                if (parasitePanel.PlayBind())
+                {
+                    return;
+                }
             }
             CancelParazit();
         }
@@ -404,6 +420,10 @@ namespace ProjectBlock.View
         /// has been played (BoardView.SetParasiteRider). The joker is the only source; neither
         /// view works out a binding for itself.
         /// </summary>
+        /// <summary>Joker ids already reported as missing their icon art, so the log says it once.
+        /// </summary>
+        private readonly HashSet<string> parasiteMissingIcons = new HashSet<string>();
+
         private void RefreshParasiteRiders(RoundEngine round)
         {
             cardLayer.Riders.Clear();
@@ -412,6 +432,14 @@ namespace ProjectBlock.View
                 ? session.Jokers.Find(parasite.PassengerIdentity(session).InstanceId)
                 : null;
             Sprite icon = bound != null ? ViewUtil.JokerIcon(bound.DefId) : null;
+            if (bound != null && icon == null && Debug.isDebugBuild
+                && parasiteMissingIcons.Add(bound.DefId))
+            {
+                // NO QUESTION MARK, NO GENERIC SYMBOL: the membrane still works and the host shows
+                // the joker's colour seed instead. Development is simply told the art is missing.
+                Debug.LogWarning("[block_bonk] Parazit: joker '" + bound.DefId
+                    + "' has no icon art - its imprint is hidden, the membrane stays");
+            }
             if (bound == null || icon == null)
             {
                 boardView.SetParasiteRider(null, null);

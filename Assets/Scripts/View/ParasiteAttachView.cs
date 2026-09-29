@@ -6,10 +6,17 @@
 // Three columns, read left to right: WHO rides (the jokers that can), WHICH block (the deck, as
 // real cards), WHICH cube (the chosen block drawn large in its own tiles). Every choice stays on
 // screen and can be changed in any order; hovering anything lights it, the chosen one of each
-// column breathes, and once a joker and a block are both picked the joker's own icon is shown
-// ON the cube under the pointer - and then on the chosen one - exactly as the hand and the board
-// will draw it afterwards (CardVisual.SetRider / BoardView.SetParasiteRider). CONFIRM only wakes
-// up when all three are set.
+// column breathes, and once a joker and a block are both picked the joker's own icon hovers over
+// the cube under the pointer, and the chosen cube wears it EMBEDDED in the parasite's film - the
+// same still the hand draws (CardVisual.SetRider), never a plate or a well. CONFIRM only wakes up
+// when all three are set.
+//
+// BINDING IS THE ASSIMILATION, PLAYED ON THE BLOCK. The board is not on screen in the market, so
+// this is the one place the player sees a joker being taken: on BIND a real ParasiteHostView is put
+// over the chosen cube (the same membrane, drain and imprint the board draws, through SyncOn) and
+// the joker's icon leaves its own row in the first column - which lets go of it - on one shallow arc
+// into the film, which dimples, swallows it, grips it with fibers and seals. The panel closes when
+// that has finished. A placed host on the board never plays this again.
 //
 // It decides nothing: the controller hands it the candidates and asks the session to bind.
 
@@ -115,11 +122,47 @@ namespace ProjectBlock.View
         private SpriteRenderer confirmPlate;
         private SpriteRenderer cancelPlate;
 
+        private readonly List<SpriteRenderer> jokerIcons = new List<SpriteRenderer>();
+        private readonly List<Vector2> jokerIconAt = new List<Vector2>();
+        private readonly List<Sprite> cubeTiles = new List<Sprite>();
+        private readonly List<Color> cubeTints = new List<Color>();
+
         private SpriteRenderer jokerPulse;
         private SpriteRenderer cardPulse;
         private SpriteRenderer cubePulse;
         private SpriteRenderer ghostIcon;
+        private SpriteRenderer chosenFilm;
+        private SpriteRenderer chosenIcon;
         private TextMesh summary;
+
+        /// <summary>The icon's size in its joker row - where the assimilation sets off from.</summary>
+        private const float RowIconSize = 0.56f;
+
+        /// <summary>How long the finished imprint is held on screen before the panel closes.
+        /// </summary>
+        private const float BindHold = 0.35f;
+
+        /// <summary>Sorting offset for the bind's host, so its drain lands just over the preview
+        /// cube (ItemOrder) and its imprint under the panel's text.</summary>
+        private const int BindOrderBase = ItemOrder - 3;
+
+        private ParasiteHostView bindHost;
+        private int bindJoker = -1;
+        private float bindStart;
+        private float bindEnd;
+
+        /// <summary>True while BIND is playing the assimilation; the panel takes no input then.
+        /// </summary>
+        public bool Binding
+        {
+            get { return bindHost != null; }
+        }
+
+        /// <summary>True once the assimilation has played and been held - time to close.</summary>
+        public bool BindFinished
+        {
+            get { return bindHost != null && Time.unscaledTime >= bindEnd; }
+        }
 
         private int hoverJoker = -1;
         private int hoverCard = -1;
@@ -174,6 +217,8 @@ namespace ProjectBlock.View
             }
             root = null;
             content = null;
+            bindHost = null; // it lived under root
+            bindJoker = -1;
             ClearLists();
         }
 
@@ -186,10 +231,16 @@ namespace ProjectBlock.View
             cardVisuals.Clear();
             cubeRects.Clear();
             cubeHalos.Clear();
+            jokerIcons.Clear();
+            jokerIconAt.Clear();
+            cubeTiles.Clear();
+            cubeTints.Clear();
             jokerPulse = null;
             cardPulse = null;
             cubePulse = null;
             ghostIcon = null;
+            chosenFilm = null;
+            chosenIcon = null;
             summary = null;
         }
 
@@ -199,7 +250,7 @@ namespace ProjectBlock.View
         /// asked for; selection changes are handled here and need nothing from the caller.</summary>
         public Action Handle(Vector2 world, bool clicked, float scroll)
         {
-            if (!IsOpen || root == null)
+            if (!IsOpen || root == null || Binding)
             {
                 return Action.None;
             }
@@ -365,12 +416,17 @@ namespace ProjectBlock.View
                     RowColor, PlateOrder));
                 Sprite icon = ViewUtil.JokerIcon(joker.DefId);
                 var iconAt = center + new Vector2(-JokerRowW * 0.5f + 0.42f, 0f);
+                SpriteRenderer rowIcon = null;
                 if (icon != null)
                 {
                     ViewUtil.MakeRounded(content, "IconWell_" + i, iconAt, new Vector2(0.62f, 0.62f),
                         new Color(0.06f, 0.05f, 0.08f), ItemOrder);
-                    PlaceIcon(content, "Icon_" + i, icon, iconAt, 0.56f, ItemOrder + 1);
+                    rowIcon = PlaceIcon(content, "Icon_" + i, icon, iconAt, RowIconSize,
+                        ItemOrder + 1);
                 }
+                // Where BIND sends the icon from: the row it was picked in.
+                jokerIcons.Add(rowIcon);
+                jokerIconAt.Add(iconAt);
                 ViewUtil.MakeText3D(content, "Name_" + i, iconAt + new Vector2(0.44f, 0f),
                     joker.DisplayName, 70, 0.024f, chosen ? Gold : TextColor, TextOrder,
                     TextAnchor.MiddleLeft);
@@ -455,16 +511,35 @@ namespace ProjectBlock.View
                 SpriteRenderer cube = ViewUtil.MakeCell(content, "Cube_" + i, center,
                     cell * 0.9f, tint, ItemOrder);
                 ViewUtil.ApplyTile(cube, tile, cell * 0.94f);
+                cubeTiles.Add(tile);
+                cubeTints.Add(tint);
                 if (i == SelectedCell)
                 {
                     cubePulse = halo;
                     halo.enabled = true;
                     if (icon != null)
                     {
-                        ViewUtil.MakeRounded(content, "RiderWell", center,
-                            new Vector2(cell * 0.62f, cell * 0.62f), new Color(0.07f, 0.05f, 0.09f, 0.9f),
-                            ItemOrder + 1);
-                        PlaceIcon(content, "Rider", icon, center, cell * 0.56f, ItemOrder + 2);
+                        // THE CHOICE, PREVIEWED THE WAY IT WILL BE DRAWN: the cube in the
+                        // parasite's film with the joker embedded in it - the hand's own still,
+                        // no plate.
+                        ParasiteContrast palette = ParasiteContrastProfile.For(
+                            CardVisual.CubePaint(card, tint));
+                        chosenFilm = ViewUtil.MakeCell(content, "RiderFilm", center, 1f,
+                            Color.white, ItemOrder + 1);
+                        chosenFilm.sprite = ParasiteShapes.Membrane;
+                        Vector2 unit = chosenFilm.sprite.bounds.size;
+                        float film = cell * 0.97f;
+                        chosenFilm.transform.localScale = new Vector3(
+                            film / Mathf.Max(unit.x, 1e-4f), film / Mathf.Max(unit.y, 1e-4f), 1f);
+                        Color skin = palette.Skin;
+                        skin.a = 0.8f;
+                        chosenFilm.color = skin;
+                        var go = new GameObject("Rider");
+                        go.transform.SetParent(content, false);
+                        chosenIcon = go.AddComponent<SpriteRenderer>();
+                        chosenIcon.sortingOrder = ItemOrder + 2;
+                        ParasiteHostView.PaintEmbeddedStill(chosenIcon, icon, center, cell * 0.94f,
+                            card.Id * 31 + i, palette);
                     }
                 }
             }
@@ -526,6 +601,98 @@ namespace ProjectBlock.View
             return renderer;
         }
 
+        // ------------------------------------------------------------------ binding
+
+        /// <summary>
+        /// THE ASSIMILATION, after the session has bound the joker. A real host is put over the
+        /// chosen cube and the joker's icon travels into it from its own row; the panel stops
+        /// answering and <see cref="BindFinished"/> turns true once it has played and been held.
+        /// Returns false (and plays nothing) when there is nothing to play it on, so the caller can
+        /// simply close.
+        /// </summary>
+        public bool PlayBind()
+        {
+            Joker joker = SelectedJoker;
+            BlockCard card = SelectedCard;
+            if (!IsOpen || root == null || joker == null || card == null || SelectedCell < 0
+                || SelectedCell >= cubeRects.Count || SelectedCell >= cubeTiles.Count)
+            {
+                return false;
+            }
+            Sprite icon = ViewUtil.JokerIcon(joker.DefId);
+            if (icon == null)
+            {
+                return false;
+            }
+            // The preview gives way to the real thing.
+            if (chosenFilm != null)
+            {
+                chosenFilm.enabled = false;
+            }
+            if (chosenIcon != null)
+            {
+                chosenIcon.enabled = false;
+            }
+            if (ghostIcon != null)
+            {
+                ghostIcon.enabled = false;
+            }
+            for (int i = 0; i < cardVisuals.Count; i++)
+            {
+                if (cardVisuals[i] != null && cardVisuals[i].CardId == card.Id)
+                {
+                    cardVisuals[i].SetRider(-1, null);
+                }
+            }
+
+            Rect cubeRect = cubeRects[SelectedCell];
+            float cell = cubeRect.width;
+            Vector2 centre = cubeRect.center;
+            var go = new GameObject("BindHost");
+            go.transform.SetParent(root, false);
+            bindHost = go.AddComponent<ParasiteHostView>();
+            bindHost.OrderBase = BindOrderBase;
+            Color tint = cubeTints[SelectedCell];
+            var host = new ParasiteHostView.Host
+            {
+                Cell = new GridPos(0, 0),
+                Passenger = new BoundJokerIdentity
+                {
+                    Bound = true,
+                    InstanceId = joker.InstanceId,
+                    DefId = joker.DefId,
+                    DisplayName = joker.DisplayName
+                },
+                Look = new ClusterBurstView.Look
+                {
+                    Tile = cubeTiles[SelectedCell],
+                    Colour = tint,
+                    Paint = CardVisual.CubePaint(card, tint)
+                }
+            };
+            var cellZero = new GridPos(0, 0);
+            bindHost.SetRider(cellZero, icon);
+            bindHost.SyncOn(delegate (GridPos p) { return centre; }, cell, cell * 0.94f,
+                new List<ParasiteHostView.Host> { host });
+            bindJoker = -1;
+            for (int i = 0; i < jokers.Count; i++)
+            {
+                if (jokers[i].InstanceId == joker.InstanceId)
+                {
+                    bindJoker = i;
+                }
+            }
+            Vector2? source = bindJoker >= 0 && bindJoker < jokerIconAt.Count
+                ? jokerIconAt[bindJoker]
+                : (Vector2?)null;
+            bindHost.PlayAttach(cellZero, source, RowIconSize);
+            float length = Mathf.Max(bindHost.AttachDuration(cellZero),
+                ParasiteHostView.Style.SeatTotal);
+            bindStart = Time.unscaledTime;
+            bindEnd = bindStart + length + BindHold;
+            return true;
+        }
+
         // ------------------------------------------------------------------ motion
 
         private void Update()
@@ -535,6 +702,25 @@ namespace ProjectBlock.View
                 return;
             }
             float t = Time.unscaledTime;
+            if (Binding)
+            {
+                // THE SOURCE LETS GO: the icon fades out of its row in ~80ms as its essence
+                // leaves it.
+                if (bindJoker >= 0 && bindJoker < jokerIcons.Count && jokerIcons[bindJoker] != null)
+                {
+                    float gone = Mathf.Clamp01((t - bindStart) / 0.08f);
+                    jokerIcons[bindJoker].color = new Color(1f, 1f, 1f, 1f - gone);
+                }
+                for (int i = 0; i < cubeHalos.Count; i++)
+                {
+                    if (cubeHalos[i] != cubePulse)
+                    {
+                        cubeHalos[i].enabled = false;
+                    }
+                }
+                Tint(cubePulse, Gold, 0.35f * (1f - Mathf.Clamp01((t - bindStart) / 0.2f)));
+                return;
+            }
             // The chosen item of each column BREATHES; a hovered one simply lights.
             float breath = 0.55f + 0.45f * Mathf.Sin(t * 4.2f);
             Tint(jokerPulse, Accent, breath);
