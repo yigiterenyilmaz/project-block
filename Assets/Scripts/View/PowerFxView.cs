@@ -1,4 +1,4 @@
-// PURPOSE: Activation animations for powers that had none of their own - each its own sentence:
+﻿// PURPOSE: Activation animations for powers that had none of their own - each its own sentence:
 //
 //   TOTEM ("Totem")         - a carved, lit pole of three faces bursts up out of a rune circle on
 //                             the arena floor, throwing dust, settles with a squash, wakes its eyes
@@ -1180,41 +1180,49 @@ namespace ProjectBlock.View
 
             if (kind == Strike.Cross && focus.HasValue)
             {
+                // (Polished 2026-09-29.) A proper targeting LOCK and a proper BEAM: two counter-
+                // turning rings close onto the cell with four brackets, the core pulses, and the
+                // cross fires as a hot white core inside a wide warm glow on each arm - tapered,
+                // running to the board's own edge - then breaks with a flash at the middle, a
+                // burst where each arm ends and sparks thrown along the arms.
                 Color red = new Color(1f, 0.42f, 0.3f);
+                Color hot = new Color(1f, 0.96f, 0.86f);
                 Vector2 at = world(focus.Value);
+                SpriteRenderer halo = MakeShape(transform, "ReticleHalo", ViewUtil.GlowSprite, at, cell * 2f, red, BoardOrder + 5);
                 SpriteRenderer ring = MakeShape(transform, "Reticle", Ring, at, cell * 2.4f, red, BoardOrder + 6);
+                SpriteRenderer ring2 = MakeShape(transform, "Reticle2", Ring, at, cell * 3f, red, BoardOrder + 6);
                 SpriteRenderer dot = MakeShape(transform, "ReticleDot", Diamond, at, cell * 0.3f, red, BoardOrder + 7);
                 var ticks = new SpriteRenderer[4];
                 for (int i = 0; i < 4; i++)
                 {
-                    ticks[i] = ViewUtil.MakeRounded(transform, "Tick", Vector2.zero, new Vector2(cell * 0.5f, cell * 0.08f), red, BoardOrder + 7);
+                    ticks[i] = ViewUtil.MakeRounded(transform, "Tick", Vector2.zero, new Vector2(cell * 0.42f, cell * 0.09f), red, BoardOrder + 7);
                 }
-                temp.Add(ring); temp.Add(dot); temp.AddRange(ticks);
+                temp.Add(halo); temp.Add(ring); temp.Add(ring2); temp.Add(dot); temp.AddRange(ticks);
                 Play(x => x.Stretch());
-                // Lock on: the reticle shrinks onto the cell and turns square to the grid.
-                yield return Animate(0.26f, k =>
+                yield return Animate(0.3f, k =>
                 {
                     float e = EaseOutBack(k, 1.5f);
-                    ring.transform.localScale = Vector3.one * cell * Mathf.Lerp(3.2f, 1.3f, e);
-                    ring.transform.rotation = Quaternion.Euler(0f, 0f, (1f - e) * 90f);
+                    ring.transform.localScale = Vector3.one * cell * Mathf.Lerp(3.4f, 1.3f, e);
+                    ring.transform.rotation = Quaternion.Euler(0f, 0f, (1f - e) * 120f);
+                    ring2.transform.localScale = Vector3.one * cell * Mathf.Lerp(4.2f, 1.7f, e);
+                    ring2.transform.rotation = Quaternion.Euler(0f, 0f, -(1f - e) * 160f);
                     ring.color = Fade(red, k);
+                    ring2.color = Fade(red, 0.45f * k);
+                    halo.color = Fade(red, 0.25f * k);
+                    float pulse = 1f + 0.25f * Mathf.Sin(k * Mathf.PI * 4f);
+                    dot.transform.localScale = Vector3.one * cell * 0.3f * pulse;
+                    dot.color = Fade(Color.Lerp(red, hot, k), k);
                     for (int i = 0; i < 4; i++)
                     {
                         Vector2 dir = Quaternion.Euler(0f, 0f, i * 90f + (1f - e) * 90f) * Vector3.right;
-                        ticks[i].transform.position = at + dir * cell * Mathf.Lerp(1.6f, 0.75f, e);
-                        ticks[i].transform.rotation = Quaternion.Euler(0f, 0f, i * 90f + (1f - e) * 90f);
+                        ticks[i].transform.position = at + dir * cell * Mathf.Lerp(1.7f, 0.72f, e);
+                        ticks[i].transform.rotation = Quaternion.Euler(0f, 0f, i * 90f + 90f + (1f - e) * 90f);
                         ticks[i].color = Fade(red, k);
                     }
                 });
+                // The lock CLICKS: a snap of light on the core.
                 Play(x => x.Pluck(2f));
-                // The beams: four arms run out cell by cell.
-                var beams = new SpriteRenderer[4];
-                for (int i = 0; i < 4; i++)
-                {
-                    beams[i] = ViewUtil.MakeRounded(transform, "Beam", Vector2.zero, new Vector2(0.1f, cell * 0.34f), Warm, BoardOrder + 6);
-                    temp.Add(beams[i]);
-                }
-                // Each arm runs to the board's own edge: the cross is a whole row and column.
+                StartCoroutine(Burst(at, cell * 1.6f, hot, BoardOrder + 8, 0.16f));
                 GameBoard crossBoard = view.Board;
                 GridPos fc = focus.Value;
                 float[] reach =
@@ -1224,23 +1232,72 @@ namespace ProjectBlock.View
                     fc.X - crossBoard.MinX + 0.5f,                          // left
                     fc.Y - crossBoard.MinY + 0.5f                           // down
                 };
+                var glows = new SpriteRenderer[4];
+                var cores = new SpriteRenderer[4];
+                for (int i = 0; i < 4; i++)
+                {
+                    glows[i] = MakeShape(transform, "BeamGlow", Ray, at, 1f, Warm, BoardOrder + 6);
+                    cores[i] = MakeShape(transform, "BeamCore", Ray, at, 1f, hot, BoardOrder + 7);
+                    temp.Add(glows[i]);
+                    temp.Add(cores[i]);
+                }
                 Play(x => x.Whoosh());
-                yield return Animate(0.26f, k =>
+                Action<float, float> placeBeams = (float run, float width) =>
                 {
                     for (int i = 0; i < 4; i++)
                     {
-                        float len = cell * Mathf.Max(0.3f, reach[i] * EaseOut(k));
-                        Vector2 dir = Quaternion.Euler(0f, 0f, i * 90f) * Vector3.right;
-                        beams[i].transform.position = at + dir * len * 0.5f;
-                        beams[i].transform.rotation = Quaternion.Euler(0f, 0f, i * 90f);
-                        beams[i].size = new Vector2(len, cell * 0.34f * (1f - 0.4f * k));
-                        beams[i].color = Fade(Warm, 0.85f);
+                        float len = cell * Mathf.Max(0.3f, reach[i] * run) * 1.08f;
+                        float angle = i * 90f - 90f; // the ray points up its own +y
+                        float shimmer = 1f + 0.12f * Mathf.Sin(Time.time * 40f + i);
+                        glows[i].transform.position = at;
+                        glows[i].transform.rotation = Quaternion.Euler(0f, 0f, angle);
+                        glows[i].transform.localScale = new Vector3(cell * 0.95f * width * shimmer, len, 1f);
+                        cores[i].transform.position = at;
+                        cores[i].transform.rotation = Quaternion.Euler(0f, 0f, angle);
+                        cores[i].transform.localScale = new Vector3(cell * 0.28f * width, len, 1f);
+                        glows[i].color = Fade(Warm, 0.75f);
+                        cores[i].color = Fade(hot, 1f);
                     }
-                });
+                };
+                yield return Animate(0.22f, k => placeBeams(EaseOut(k), 1f));
                 strike();
-                yield return Animate(0.18f, k =>
+                // The break: flash in the middle, a burst at the end of every arm, sparks.
+                Play(x => x.Drum(1.5f));
+                StartCoroutine(Burst(at, cell * 3.2f, hot, BoardOrder + 8, 0.28f));
+                for (int i = 0; i < 4; i++)
                 {
-                    foreach (SpriteRenderer r in temp) r.color = Fade(r.color, 1f - k);
+                    Vector2 dir = Quaternion.Euler(0f, 0f, i * 90f) * Vector3.right;
+                    StartCoroutine(Burst(at + dir * cell * reach[i], cell * 1.8f, Warm, BoardOrder + 7, 0.3f));
+                }
+                var sparks = new List<SpriteRenderer>();
+                var sparkV = new List<Vector2>();
+                for (int i = 0; i < 16; i++)
+                {
+                    Vector2 dir = Quaternion.Euler(0f, 0f, (i % 4) * 90f + ((i * 37) % 30 - 15)) * Vector3.right;
+                    SpriteRenderer sp = MakeShape(transform, "CrossSpark", ViewUtil.GlowSprite, at, cell * 0.16f, hot, BoardOrder + 8);
+                    sparks.Add(sp);
+                    sparkV.Add(dir * cell * (5f + (i % 3) * 2.5f));
+                    temp.Add(sp);
+                }
+                yield return Animate(0.3f, k =>
+                {
+                    placeBeams(1f, 1f + 0.8f * k);
+                    for (int i = 0; i < 4; i++)
+                    {
+                        glows[i].color = Fade(Warm, 0.75f * (1f - k));
+                        cores[i].color = Fade(hot, 1f - k * k);
+                    }
+                    for (int i = 0; i < sparks.Count; i++)
+                    {
+                        sparkV[i] *= 0.9f;
+                        sparks[i].transform.position += (Vector3)(sparkV[i] * Time.deltaTime);
+                        sparks[i].color = Fade(Color.Lerp(hot, red, k), 1f - k);
+                    }
+                    ring.color = Fade(red, 1f - k);
+                    ring2.color = Fade(red, 0.45f * (1f - k));
+                    halo.color = Fade(red, 0.25f * (1f - k));
+                    dot.color = Fade(hot, 1f - k);
+                    foreach (SpriteRenderer t in ticks) t.color = Fade(red, 1f - k);
                 });
             }
             else if (kind == Strike.Frame)
@@ -1859,186 +1916,334 @@ namespace ProjectBlock.View
             StartCoroutine(Rewind(view, leaving, returning, centre, boardSize));
         }
 
-        private IEnumerator Rewind(BoardView view, IList<CubeFace> leaving, IList<CubeFace> returning,
-            Vector2 centre, float boardSize)
-        {
-            running++;
-            float cell = view.CellWorldSize;
-            float u = boardSize / 9f;
-            var held = new List<GridPos>();
-            foreach (CubeFace f in returning)
-            {
-                held.Add(f.Cell);
-            }
-            view.HoldCells(held);
-            Color blue = new Color(0.62f, 0.8f, 1f);
-            Color sand = new Color(0.96f, 0.8f, 0.46f);
-
-            // ---- the hourglass: two bulbs, a waist, a frame top and bottom ----
-            var glass = new GameObject("Hourglass").transform;
-            glass.SetParent(transform, false);
-            glass.position = centre + new Vector2(0f, boardSize * 0.08f);
-            var parts = new List<Part>();
-            parts.Add(new Part(MakeRound(glass, "Top", new Vector2(0f, u * 1.35f), new Vector2(u * 1.9f, u * 0.28f), WoodDark, 3), WoodDark));
-            parts.Add(new Part(MakeRound(glass, "Bottom", new Vector2(0f, -u * 1.35f), new Vector2(u * 1.9f, u * 0.28f), WoodDark, 3), WoodDark));
-            for (int side = -1; side <= 1; side += 2)
-            {
-                parts.Add(new Part(MakeRound(glass, "Post", new Vector2(side * u * 0.85f, 0f), new Vector2(u * 0.13f, u * 2.6f), WoodMid, 2), WoodMid));
-            }
-            Color glassTint = new Color(0.8f, 0.92f, 1f, 0.35f);
-            SpriteRenderer bulbTop = MakeShape(glass, "BulbTop", Tri, Vector2.zero, 1f, glassTint, BoardOrder + 3);
-            bulbTop.transform.localPosition = new Vector2(0f, u * 0.6f);
-            bulbTop.transform.localScale = new Vector3(u * 1.4f, -u * 1.15f, 1f);
-            SpriteRenderer bulbBottom = MakeShape(glass, "BulbBottom", Tri, Vector2.zero, 1f, glassTint, BoardOrder + 3);
-            bulbBottom.transform.localPosition = new Vector2(0f, -u * 0.6f);
-            bulbBottom.transform.localScale = new Vector3(u * 1.4f, u * 1.15f, 1f);
-            parts.Add(new Part(bulbTop, glassTint));
-            parts.Add(new Part(bulbBottom, glassTint));
-            // The sand: a heap in the bottom bulb that drains while the glass is upside down.
-            SpriteRenderer heap = MakeShape(glass, "Sand", Tri, Vector2.zero, 1f, sand, BoardOrder + 4);
-            heap.transform.localPosition = new Vector2(0f, -u * 1.15f);
-            SpriteRenderer stream = MakeRound(glass, "Stream", Vector2.zero, new Vector2(u * 0.06f, u * 1.1f), sand, 3);
-            parts.Add(new Part(heap, sand));
-            SetGroupAlpha(parts, 0f);
-            stream.color = Clear(sand);
-            SpriteRenderer halo = MakeShape(transform, "RewindHalo", ViewUtil.GlowSprite, glass.position, u * 5f, blue, BoardOrder + 1);
-            halo.color = Clear(blue);
-            SpriteRenderer sweep = MakeShape(transform, "RewindRing", Ring, centre, boardSize * 1.1f, blue, BoardOrder + 1);
-            sweep.color = Clear(blue);
-
-            // ---- the cubes ----
-            var leave = new List<SpriteRenderer>();
-            foreach (CubeFace f in leaving)
-            {
-                SpriteRenderer c = ViewUtil.MakeCell(view.transform, "Rewound", view.CellToWorld(f.Cell), cell, f.Colour, 5);
-                ViewUtil.ApplyTile(c, f.Tile, cell);
-                c.color = f.Colour;
-                leave.Add(c);
-            }
-            var shards = new List<SpriteRenderer[]>();
-            var shardFrom = new List<Vector2[]>();
-            foreach (CubeFace f in returning)
-            {
-                var set = new SpriteRenderer[4];
-                var from = new Vector2[4];
-                Vector2 at = view.CellToWorld(f.Cell);
-                for (int q = 0; q < 4; q++)
-                {
-                    set[q] = ViewUtil.MakeCell(view.transform, "Returning", at, cell, f.Colour, 5);
-                    ViewUtil.ApplyTile(set[q], f.Tile, cell);
-                    float a = (q * 90f + 45f + (f.Cell.X * 31 + f.Cell.Y * 17) % 40) * Mathf.Deg2Rad;
-                    from[q] = at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * cell * 1.6f;
-                }
-                shards.Add(set);
-                shardFrom.Add(from);
-            }
-
-            const float Appear = 0.2f, Flip0 = 0.18f, Flip1 = 0.5f, Run0 = 0.35f, End = 1.25f;
-            Play(x => x.Whoosh());
-            bool flipped = false;
-            float nextTick = Run0;
-            int tick = 0;
-            float t = 0f;
-            while (t < End)
-            {
-                float dt = Time.deltaTime;
-                t += dt;
-                // The glass appears, turns over, and its sand runs while time goes back.
-                float show = Mathf.Clamp01(t / Appear) * (1f - Mathf.Clamp01((t - End + 0.25f) / 0.25f));
-                SetGroupAlpha(parts, show);
-                glass.localScale = Vector3.one * Mathf.Lerp(0.6f, 1f, EaseOutBack(Mathf.Clamp01(t / Appear), 1.6f));
-                float flip = EaseOutBack(Mathf.Clamp01((t - Flip0) / (Flip1 - Flip0)), 1.1f);
-                glass.localRotation = Quaternion.Euler(0f, 0f, 180f * flip);
-                if (!flipped && t >= Flip1 - 0.05f)
-                {
-                    flipped = true;
-                    Play(x => x.Drum(1.3f));
-                }
-                float drain = Mathf.Clamp01((t - Flip1) / (End - Flip1 - 0.2f));
-                heap.transform.localScale = new Vector3(u * 1.1f * (1f - drain * 0.8f), u * 0.7f * (1f - drain * 0.8f), 1f);
-                stream.color = Fade(sand, show * (drain > 0f && drain < 1f ? 0.9f : 0f));
-                halo.color = Fade(blue, 0.3f * show);
-                // An anticlockwise sweep over the board: the clock going back.
-                float rk = Mathf.Clamp01((t - Run0) / (End - Run0));
-                sweep.transform.localScale = Vector3.one * boardSize * Mathf.Lerp(1.2f, 0.3f, rk);
-                sweep.transform.rotation = Quaternion.Euler(0f, 0f, rk * 360f);
-                sweep.color = Fade(blue, 0.35f * Mathf.Sin(rk * Mathf.PI));
-                // Tick-tock, backwards and speeding up.
-                if (t >= nextTick && t < End - 0.2f)
-                {
-                    float pitch = tick % 2 == 0 ? 2.1f : 1.8f;
-                    Play(x => x.Pluck(pitch));
-                    tick++;
-                    nextTick += Mathf.Max(0.06f, 0.14f - tick * 0.012f);
-                }
-                // PLACED CUBES go back up: last in first out, lifting, shrinking, turning blue.
-                for (int i = 0; i < leave.Count; i++)
-                {
-                    if (leave[i] == null)
-                    {
-                        continue;
-                    }
-                    float start = Run0 + 0.4f * (leave.Count - 1 - i) / Mathf.Max(1, leave.Count);
-                    float k = Mathf.Clamp01((t - start) / 0.35f);
-                    Vector2 home = view.CellToWorld(leaving[i].Cell);
-                    leave[i].transform.localPosition = home + new Vector2(0f, cell * 1.4f * k * k);
-                    leave[i].transform.localScale = Vector3.one * cell * Mathf.Lerp(1f, 0.6f, k);
-                    leave[i].color = Fade(Color.Lerp(leaving[i].Colour, blue, k), 1f - k * k);
-                    if (k >= 1f)
-                    {
-                        Destroy(leave[i].gameObject);
-                        leave[i] = null;
-                    }
-                }
-                // DESTROYED CUBES come back together: four pieces converge and snap.
-                for (int i = 0; i < shards.Count; i++)
-                {
-                    if (shards[i] == null)
-                    {
-                        continue;
-                    }
-                    float start = Run0 + 0.1f + 0.4f * i / Mathf.Max(1, shards.Count);
-                    float k = Mathf.Clamp01((t - start) / 0.4f);
-                    Vector2 home = view.CellToWorld(returning[i].Cell);
-                    for (int q = 0; q < 4; q++)
-                    {
-                        float e = k * k * (3f - 2f * k);
-                        shards[i][q].transform.localPosition = Vector2.Lerp(shardFrom[i][q], home, e);
-                        shards[i][q].transform.localScale = Vector3.one * cell * Mathf.Lerp(0.3f, 1f, e);
-                        shards[i][q].transform.localRotation = Quaternion.Euler(0f, 0f, (1f - e) * (q % 2 == 0 ? 160f : -160f));
-                        shards[i][q].color = Fade(Color.Lerp(blue, returning[i].Colour, e), k <= 0f ? 0f : Mathf.Min(1f, k * 3f) * (q == 0 ? 1f : 1f - e));
-                    }
-                    if (k >= 1f)
-                    {
-                        for (int q = 0; q < 4; q++)
-                        {
-                            Destroy(shards[i][q].gameObject);
-                        }
-                        shards[i] = null;
-                        view.ReleaseCells(new[] { returning[i].Cell });
-                    }
-                }
-                yield return null;
-            }
-            foreach (SpriteRenderer r in leave)
-            {
-                if (r != null) Destroy(r.gameObject);
-            }
-            foreach (SpriteRenderer[] set in shards)
-            {
-                if (set != null) foreach (SpriteRenderer r in set) Destroy(r.gameObject);
-            }
-            if (view != null)
-            {
-                view.ReleaseCells(held);
-            }
-            Play(x => x.Chime(0.9f));
-            Destroy(glass.gameObject);
-            Destroy(halo.gameObject);
-            Destroy(sweep.gameObject);
-            running--;
-        }
-
+        private IEnumerator Rewind(BoardView view, IList<CubeFace> leaving, IList<CubeFace> returning,
+            Vector2 centre, float boardSize)
+        {
+            running++;
+            float cell = view.CellWorldSize;
+            float u = boardSize / 9f;
+            var held = new List<GridPos>();
+            foreach (CubeFace f in returning)
+            {
+                held.Add(f.Cell);
+            }
+            view.HoldCells(held);
+            Color blue = new Color(0.62f, 0.8f, 1f);
+            Color sand = new Color(0.96f, 0.8f, 0.46f);
+            Color sandDeep = new Color(0.82f, 0.6f, 0.3f);
+
+            // ---- THE HOURGLASS ----
+            // The FRAME and the GLASS turn over; the SAND never does. Sand is drawn in world space
+            // against gravity, which is why it used to break: parented to the glass, the "bottom"
+            // heap went upside down with the flip and drained UPWARD at the top, and the stream sat
+            // at the waist doing nothing. Now: before the flip the sand turns WITH the glass (it is
+            // held in its bulb), and from the moment it lands, the top bulb empties at the neck, a
+            // real stream of falling grains runs down, and a mound builds in the bottom bulb.
+            Vector2 glassAt = centre + new Vector2(0f, boardSize * 0.08f);
+            var glass = new GameObject("Hourglass").transform;
+            glass.SetParent(transform, false);
+            glass.position = glassAt;
+            var frame = new List<Part>();
+            float capW = u * 2.0f, capH = u * 0.26f, bulbH = u * 1.15f, bulbW = u * 1.45f;
+            float capY = bulbH + capH * 0.5f;
+            for (int side = -1; side <= 1; side += 2)
+            {
+                frame.Add(new Part(MakeRound(glass, "Cap", new Vector2(0f, side * capY), new Vector2(capW, capH), WoodDark, 3), WoodDark));
+                frame.Add(new Part(MakeRound(glass, "CapLip", new Vector2(0f, side * (capY - capH * 0.42f)), new Vector2(capW * 0.92f, capH * 0.22f), WoodHigh, 4), WoodHigh));
+                frame.Add(new Part(MakeRound(glass, "Post", new Vector2(side * u * 0.88f, 0f), new Vector2(u * 0.13f, bulbH * 2f), WoodMid, 2), WoodMid));
+                frame.Add(new Part(MakeRound(glass, "PostShine", new Vector2(side * u * 0.88f - u * 0.03f, 0f), new Vector2(u * 0.035f, bulbH * 1.9f), WoodLight, 3), WoodLight));
+            }
+            Color glassTint = new Color(0.8f, 0.92f, 1f, 0.22f);
+            Color glassEdge = new Color(0.85f, 0.95f, 1f, 0.55f);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                // A slightly larger pale triangle behind the body is the glass's EDGE.
+                SpriteRenderer edge = MakeShape(glass, "BulbEdge", Tri, Vector2.zero, 1f, glassEdge, BoardOrder + 2);
+                edge.transform.localPosition = new Vector2(0f, side * bulbH * 0.5f);
+                edge.transform.localScale = new Vector3(bulbW * 1.08f, -side * bulbH * 1.04f, 1f);
+                SpriteRenderer body = MakeShape(glass, "Bulb", Tri, Vector2.zero, 1f, glassTint, BoardOrder + 3);
+                body.transform.localPosition = new Vector2(0f, side * bulbH * 0.5f);
+                body.transform.localScale = new Vector3(bulbW, -side * bulbH, 1f);
+                frame.Add(new Part(edge, glassEdge));
+                frame.Add(new Part(body, glassTint));
+                // A streak of reflection down one slope.
+                Color shine = new Color(1f, 1f, 1f, 0.5f);
+                SpriteRenderer streak = MakeRound(glass, "Shine", new Vector2(-bulbW * 0.2f, side * bulbH * 0.55f), new Vector2(u * 0.05f, bulbH * 0.55f), shine, 6);
+                streak.transform.localRotation = Quaternion.Euler(0f, 0f, side * -28f);
+                frame.Add(new Part(streak, shine));
+            }
+            // Sand held in the bottom bulb, turning WITH the glass until the flip lands.
+            float fullH = bulbH * 0.62f;
+            SpriteRenderer carried = MakeShape(glass, "SandHeld", Tri, Vector2.zero, 1f, sand, BoardOrder + 4);
+            carried.transform.localPosition = new Vector2(0f, -bulbH + fullH * 0.5f);
+            carried.transform.localScale = new Vector3(bulbW * 0.78f, fullH, 1f);
+            // World-space sand for after the flip: the top pile (apex at the neck, draining down
+            // into it), the bottom mound (building), the stream and its grains.
+            var sandRoot = new GameObject("Sand").transform;
+            sandRoot.SetParent(transform, false);
+            SpriteRenderer top = MakeShape(sandRoot, "SandTop", Tri, glassAt, 1f, sand, BoardOrder + 4);
+            SpriteRenderer mound = MakeShape(sandRoot, "SandMound", Tri, glassAt, 1f, sand, BoardOrder + 4);
+            SpriteRenderer stream = MakeShape(sandRoot, "Stream", ViewUtil.WhiteSprite, glassAt, 1f, sand, BoardOrder + 5);
+            top.color = Clear(sand);
+            mound.color = Clear(sand);
+            stream.color = Clear(sand);
+            var grains = new List<SpriteRenderer>();
+            var grainY = new List<float>();
+            var grainV = new List<float>();
+            var grainX = new List<float>();
+            float grainSpawn = 0f;
+            int grainSeed = 1;
+
+            SpriteRenderer halo = MakeShape(transform, "RewindHalo", ViewUtil.GlowSprite, glassAt, u * 5f, blue, BoardOrder + 1);
+            halo.color = Clear(blue);
+            SpriteRenderer sweep = MakeShape(transform, "RewindRing", Ring, centre, boardSize * 1.1f, blue, BoardOrder + 1);
+            sweep.color = Clear(blue);
+            // A clock hand over the board, running BACK.
+            var handPivot = new GameObject("RewindHand").transform;
+            handPivot.SetParent(transform, false);
+            handPivot.position = centre;
+            SpriteRenderer hand = MakeRound(handPivot, "Hand", new Vector2(0f, boardSize * 0.2f), new Vector2(u * 0.09f, boardSize * 0.4f), blue, -1);
+            hand.color = Clear(blue);
+            SpriteRenderer wash = MakeShape(transform, "RewindWash", ViewUtil.GlowSprite, centre, boardSize * 1.15f, blue, BoardOrder - 1);
+            wash.color = Clear(blue);
+
+            // ---- the cubes ----
+            var leave = new List<SpriteRenderer>();
+            var ghosts = new List<SpriteRenderer>();
+            foreach (CubeFace f in leaving)
+            {
+                SpriteRenderer g = ViewUtil.MakeCell(view.transform, "RewoundGhost", view.CellToWorld(f.Cell), cell, f.Colour, 4);
+                ViewUtil.ApplyTile(g, f.Tile, cell);
+                g.color = Clear(f.Colour);
+                ghosts.Add(g);
+                SpriteRenderer c = ViewUtil.MakeCell(view.transform, "Rewound", view.CellToWorld(f.Cell), cell, f.Colour, 5);
+                ViewUtil.ApplyTile(c, f.Tile, cell);
+                c.color = f.Colour;
+                leave.Add(c);
+            }
+            var shards = new List<SpriteRenderer[]>();
+            var shardFrom = new List<Vector2[]>();
+            var snaps = new List<SpriteRenderer>();
+            foreach (CubeFace f in returning)
+            {
+                var set = new SpriteRenderer[4];
+                var from = new Vector2[4];
+                Vector2 at = view.CellToWorld(f.Cell);
+                for (int q = 0; q < 4; q++)
+                {
+                    set[q] = ViewUtil.MakeCell(view.transform, "Returning", at, cell, f.Colour, 5);
+                    ViewUtil.ApplyTile(set[q], f.Tile, cell);
+                    set[q].color = Clear(f.Colour);
+                    float a = (q * 90f + 45f + (f.Cell.X * 31 + f.Cell.Y * 17) % 40) * Mathf.Deg2Rad;
+                    from[q] = at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * cell * 1.6f;
+                }
+                shards.Add(set);
+                shardFrom.Add(from);
+                SpriteRenderer snap = MakeShape(view.transform, "Snap", ViewUtil.GlowSprite, at, cell * 1.3f, blue, BoardOrder);
+                snap.color = Clear(blue);
+                snaps.Add(snap);
+            }
+
+            const float Appear = 0.22f, Flip0 = 0.2f, Flip1 = 0.55f, Run0 = 0.5f, DrainEnd = 1.35f, End = 1.6f;
+            Play(x => x.Whoosh());
+            bool flipped = false;
+            float nextTick = Run0;
+            int tick = 0;
+            float t = 0f;
+            float gravity = u * 22f;
+            while (t < End)
+            {
+                float dt = Time.deltaTime;
+                t += dt;
+                float show = Mathf.Clamp01(t / Appear) * (1f - Mathf.Clamp01((t - End + 0.25f) / 0.25f));
+                SetGroupAlpha(frame, show);
+                float pop = EaseOutBack(Mathf.Clamp01(t / Appear), 1.6f);
+                glass.localScale = Vector3.one * Mathf.Lerp(0.6f, 1f, pop);
+                // The turn: a small wind-up the wrong way, then over with a settle.
+                float fk = Mathf.Clamp01((t - Flip0) / (Flip1 - Flip0));
+                float windup = t < Flip0 ? -8f * Mathf.Clamp01((t - Flip0 + 0.1f) / 0.1f) : 0f;
+                float angle = 180f * EaseOutBack(fk, 1.2f) + windup;
+                glass.localRotation = Quaternion.Euler(0f, 0f, angle);
+                // A little lift while it turns, so it reads as picked up and set down.
+                glass.position = glassAt + new Vector2(0f, u * 0.25f * Mathf.Sin(fk * Mathf.PI));
+                if (!flipped && fk >= 0.92f)
+                {
+                    flipped = true;
+                    Play(x => x.Drum(1.3f));
+                }
+                carried.color = Fade(sand, flipped ? 0f : show);
+
+                // ---- SAND, in world space ----
+                float scaleNow = glass.localScale.x;
+                Vector2 neck = (Vector2)glass.position;
+                float drain = flipped ? Mathf.Clamp01((t - Flip1) / (DrainEnd - Flip1)) : 0f;
+                float sandShow = flipped ? show : 0f;
+                // A cone's height goes as the cube root of its volume - the top pile falls
+                // quickly at first and lingers at the neck; the mound climbs the same way.
+                float topH = fullH * scaleNow * Mathf.Pow(1f - drain, 1f / 3f) * (drain >= 1f ? 0f : 1f);
+                float moundH = fullH * scaleNow * 0.85f * Mathf.Pow(drain, 1f / 3f);
+                top.transform.position = neck + new Vector2(0f, topH * 0.5f);
+                top.transform.localScale = new Vector3(bulbW * scaleNow * (topH / Mathf.Max(bulbH * scaleNow, 1e-4f)) * 0.98f, -topH, 1f);
+                top.color = Fade(Color.Lerp(sand, sandDeep, 0.2f), sandShow);
+                float floorY = neck.y - bulbH * scaleNow;
+                mound.transform.position = new Vector2(neck.x, floorY + moundH * 0.5f);
+                mound.transform.localScale = new Vector3(bulbW * scaleNow * 0.85f * Mathf.Lerp(0.45f, 1f, drain), moundH, 1f);
+                mound.color = Fade(sand, sandShow);
+                bool pouring = flipped && drain > 0f && drain < 1f;
+                float streamTop = neck.y;
+                float streamBottom = floorY + moundH;
+                float jitter = 0.7f + 0.3f * Mathf.PerlinNoise(t * 30f, 0.5f);
+                stream.transform.position = new Vector2(neck.x, (streamTop + streamBottom) * 0.5f);
+                SetWorldSize(stream, u * 0.045f * jitter, Mathf.Max(0f, streamTop - streamBottom));
+                stream.color = Fade(sand, pouring ? sandShow * 0.85f : 0f);
+                // Grains: spat out of the neck, falling under gravity onto the mound.
+                if (pouring)
+                {
+                    grainSpawn -= dt;
+                    while (grainSpawn <= 0f)
+                    {
+                        grainSpawn += 0.018f;
+                        grainSeed = grainSeed * 1103515245 + 12345;
+                        float r01 = ((grainSeed >> 8) & 0xFFFF) / 65535f;
+                        SpriteRenderer g = MakeShape(sandRoot, "Grain", ViewUtil.WhiteSprite, neck, u * 0.05f, sand, BoardOrder + 5);
+                        grains.Add(g);
+                        grainY.Add(neck.y);
+                        grainV.Add(u * (0.5f + r01));
+                        grainX.Add((r01 - 0.5f) * u * 0.07f);
+                    }
+                }
+                for (int i = grains.Count - 1; i >= 0; i--)
+                {
+                    grainV[i] += gravity * dt;
+                    grainY[i] -= grainV[i] * dt;
+                    if (grainY[i] <= streamBottom)
+                    {
+                        Destroy(grains[i].gameObject);
+                        grains.RemoveAt(i);
+                        grainY.RemoveAt(i);
+                        grainV.RemoveAt(i);
+                        grainX.RemoveAt(i);
+                        continue;
+                    }
+                    grains[i].transform.position = new Vector2(neck.x + grainX[i], grainY[i]);
+                    grains[i].color = Fade(i % 3 == 0 ? sandDeep : sand, sandShow);
+                }
+
+                halo.color = Fade(blue, 0.3f * show);
+                // Time running BACK over the board: the ring closes, the hand turns anticlockwise
+                // and the whole arena is washed cold for the length of it.
+                float rk = Mathf.Clamp01((t - Run0) / (End - Run0));
+                sweep.transform.localScale = Vector3.one * boardSize * Mathf.Lerp(1.2f, 0.3f, rk);
+                sweep.transform.rotation = Quaternion.Euler(0f, 0f, rk * 360f);
+                sweep.color = Fade(blue, 0.35f * Mathf.Sin(rk * Mathf.PI));
+                handPivot.rotation = Quaternion.Euler(0f, 0f, 720f * rk * rk);
+                hand.color = Fade(blue, 0.28f * Mathf.Sin(rk * Mathf.PI));
+                wash.color = Fade(blue, 0.12f * Mathf.Sin(rk * Mathf.PI));
+                if (t >= nextTick && t < End - 0.2f)
+                {
+                    float pitch = tick % 2 == 0 ? 2.1f : 1.8f;
+                    Play(x => x.Pluck(pitch));
+                    tick++;
+                    nextTick += Mathf.Max(0.06f, 0.14f - tick * 0.012f);
+                }
+                // PLACED CUBES go back up: last in first out, lifting, shrinking, turning blue,
+                // with an afterimage lagging behind them.
+                for (int i = 0; i < leave.Count; i++)
+                {
+                    if (leave[i] == null)
+                    {
+                        continue;
+                    }
+                    float start = Run0 + 0.45f * (leave.Count - 1 - i) / Mathf.Max(1, leave.Count);
+                    float k = Mathf.Clamp01((t - start) / 0.38f);
+                    Vector2 home = view.CellToWorld(leaving[i].Cell);
+                    float e = k * k;
+                    leave[i].transform.localPosition = home + new Vector2(0f, cell * 1.4f * e);
+                    leave[i].transform.localScale = Vector3.one * cell * Mathf.Lerp(1f, 0.6f, k);
+                    leave[i].color = Fade(Color.Lerp(leaving[i].Colour, blue, k), 1f - e);
+                    float gk = Mathf.Clamp01(k - 0.15f);
+                    ghosts[i].transform.localPosition = home + new Vector2(0f, cell * 1.4f * gk * gk);
+                    ghosts[i].transform.localScale = Vector3.one * cell * Mathf.Lerp(1f, 0.6f, gk);
+                    ghosts[i].color = Fade(blue, k > 0f ? 0.35f * (1f - gk) : 0f);
+                    if (k >= 1f)
+                    {
+                        Destroy(leave[i].gameObject);
+                        Destroy(ghosts[i].gameObject);
+                        leave[i] = null;
+                    }
+                }
+                // DESTROYED CUBES come back together: four pieces converge and snap, and the cell
+                // gives one cold pulse as it closes.
+                for (int i = 0; i < shards.Count; i++)
+                {
+                    float start = Run0 + 0.1f + 0.45f * i / Mathf.Max(1, shards.Count);
+                    float k = Mathf.Clamp01((t - start) / 0.4f);
+                    if (shards[i] != null)
+                    {
+                        Vector2 home = view.CellToWorld(returning[i].Cell);
+                        float e = k * k * (3f - 2f * k);
+                        for (int q = 0; q < 4; q++)
+                        {
+                            shards[i][q].transform.localPosition = Vector2.Lerp(shardFrom[i][q], home, e);
+                            shards[i][q].transform.localScale = Vector3.one * cell * Mathf.Lerp(0.3f, 1f, e);
+                            shards[i][q].transform.localRotation = Quaternion.Euler(0f, 0f, (1f - e) * (q % 2 == 0 ? 160f : -160f));
+                            shards[i][q].color = Fade(Color.Lerp(blue, returning[i].Colour, e), k <= 0f ? 0f : Mathf.Min(1f, k * 3f) * (q == 0 ? 1f : 1f - e));
+                        }
+                        if (k >= 1f)
+                        {
+                            for (int q = 0; q < 4; q++)
+                            {
+                                Destroy(shards[i][q].gameObject);
+                            }
+                            shards[i] = null;
+                            view.ReleaseCells(new[] { returning[i].Cell });
+                        }
+                    }
+                    float sk = Mathf.Clamp01((t - start - 0.4f) / 0.22f);
+                    snaps[i].color = Fade(blue, sk > 0f && sk < 1f ? 0.55f * (1f - sk) : 0f);
+                    snaps[i].transform.localScale = Vector3.one * cell * Mathf.Lerp(1f, 1.5f, sk)
+                        / Mathf.Max(snaps[i].sprite.bounds.size.x, 1e-4f);
+                }
+                yield return null;
+            }
+            foreach (SpriteRenderer r in leave)
+            {
+                if (r != null) Destroy(r.gameObject);
+            }
+            foreach (SpriteRenderer r in ghosts)
+            {
+                if (r != null) Destroy(r.gameObject);
+            }
+            foreach (SpriteRenderer[] set in shards)
+            {
+                if (set != null) foreach (SpriteRenderer r in set) Destroy(r.gameObject);
+            }
+            foreach (SpriteRenderer r in snaps)
+            {
+                if (r != null) Destroy(r.gameObject);
+            }
+            if (view != null)
+            {
+                view.ReleaseCells(held);
+            }
+            Play(x => x.Chime(0.9f));
+            Destroy(glass.gameObject);
+            Destroy(sandRoot.gameObject);
+            Destroy(halo.gameObject);
+            Destroy(sweep.gameObject);
+            Destroy(handPivot.gameObject);
+            Destroy(wash.gameObject);
+            running--;
+        }
+
+        /// <summary>Scales a renderer so it covers <paramref name="w"/> x <paramref name="h"/>
+        /// world units, whatever its sprite's own size.</summary>
+        private static void SetWorldSize(SpriteRenderer r, float w, float h)
+        {
+            Vector2 unit = r.sprite != null ? (Vector2)r.sprite.bounds.size : Vector2.one;
+            r.transform.localScale = new Vector3(w / Mathf.Max(unit.x, 1e-4f), h / Mathf.Max(unit.y, 1e-4f), 1f);
+        }
+
         // ================================================================ INVERT
 
         /// <summary>"Bardağın Boş Tarafı": a glass tips over above the board and every cell turns
