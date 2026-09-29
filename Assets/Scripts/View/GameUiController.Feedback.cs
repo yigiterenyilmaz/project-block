@@ -23,7 +23,7 @@ namespace ProjectBlock.View
             {
                 LogTurn(report);
             }
-            sfx.Place();
+            sfx.Place(report.PlacedCells != null ? report.PlacedCells.Count : 3);
             if (report.PlayedCardExpired)
             {
                 sfx.Vanish();
@@ -191,7 +191,9 @@ namespace ProjectBlock.View
             {
                 // The late lists cover a board-reshape clear (inflation deflate) and a "Hedefli"
                 // payout - neither of which the placement's own CubesExploded count ever saw.
-                sfx.Explode();
+                int lines = (report.ExplodedRows != null ? report.ExplodedRows.Count : 0)
+                    + (report.ExplodedColumns != null ? report.ExplodedColumns.Count : 0);
+                sfx.Explode(Mathf.Max(1, lines), report.ComboCount);
             }
             // "Alacakaranlık": the two lights of a blind round. Setting a block DOWN lights what
             // it touches, faintly and one cell out - enough to confirm what your hand just did,
@@ -498,6 +500,7 @@ namespace ProjectBlock.View
         /// </summary>
         private void RejectPlacement(RoundEngine round, Vector2 world)
         {
+            sfx.Reject();
             // Already in the scaled economy, so it is printed as it comes: every score on the
             // HUD is scaled, and a popup that showed the logical number would read as a tenth of
             // what the meter just lost.

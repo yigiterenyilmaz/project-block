@@ -1,5 +1,7 @@
 // PURPOSE: Basic procedural sound effects - every clip is synthesized at startup, so
-// no audio assets are needed. Placeholder audio: swap for real clips later by
+// no audio assets are needed. The clips built in THIS file are the LEGACY set; the tactile
+// rebuild of the baseline cues lives in SoundFx.Polished.cs, `Polished` picks which one plays,
+// and the sound lab (F9, GameUiController.SoundLab.cs) compares the sets. Placeholder audio: swap for real clips later by
 // assigning AudioClips instead of the generated ones. Requires an AudioListener in
 // the scene (the Main Camera has one).
 
@@ -8,7 +10,7 @@ using UnityEngine;
 namespace ProjectBlock.View
 {
     /// <summary>Synthesizes and plays the game's placeholder sound effects.</summary>
-    public sealed class SoundFx : MonoBehaviour
+    public sealed partial class SoundFx : MonoBehaviour
     {
         private const int SampleRate = 44100;
 
@@ -91,6 +93,8 @@ namespace ProjectBlock.View
             };
             humSource.clip = humClip;
             ApplyHumVolume();
+            BuildPolished();
+            BuildRecommended();
         }
 
         /// <summary>Turns the retro CRT hum loop on/off. The accompanying bit-crush is a separate
@@ -116,12 +120,39 @@ namespace ProjectBlock.View
 
         public void Place()
         {
+            Place(3);
+        }
+
+        /// <summary>A block set down. The polished set pitches it by the block's size.</summary>
+        public void Place(int cubes)
+        {
+            if (activeSet != 0) { PolishedPlace(cubes); return; }
             PlayWithPitch(placeClip, 0.9f, 1.1f);
         }
 
         public void Explode()
         {
+            Explode(1, 0);
+        }
+
+        /// <summary>Lines going off. The polished set escalates with the line count and climbs in
+        /// pitch with the combo streak.</summary>
+        public void Explode(int lines, int combo)
+        {
+            if (activeSet != 0) { PolishedExplode(lines, combo); return; }
             PlayWithPitch(explodeClip, 0.95f, 1.08f);
+        }
+
+        /// <summary>A card lifted out of the hand. Polished set only - the original had none.</summary>
+        public void Pickup()
+        {
+            if (activeSet != 0) { PolishedPickup(); }
+        }
+
+        /// <summary>The board refusing a drop. Polished set only - the original had none.</summary>
+        public void Reject()
+        {
+            if (activeSet != 0) { PolishedReject(); }
         }
 
         public void CleanSweep()
@@ -132,11 +163,13 @@ namespace ProjectBlock.View
         /// <summary>The sweep "bling" - pitchMultiplier rises with the round's sweep count.</summary>
         public void CleanSweep(float pitchMultiplier)
         {
+            if (activeSet != 0) { PolishedSweep(pitchMultiplier); return; }
             PlayWithPitch(sweepClip, pitchMultiplier, pitchMultiplier);
         }
 
         public void Shuffle()
         {
+            if (activeSet != 0) { PolishedShuffle(); return; }
             PlayWithPitch(shuffleClip, 0.95f, 1.05f);
         }
 
@@ -145,65 +178,76 @@ namespace ProjectBlock.View
         /// </summary>
         public void Fusion()
         {
+            if (activeSet != 0) { PolishedBell(Random.Range(1.3f, 1.36f), 0.5f); return; }
             PlayWithPitch(sweepClip, 1.55f, 1.65f, 0.5f);
         }
 
         /// <summary>"Neşter": a blade drawn through a block - a bright rising slice.</summary>
         public void Cut()
         {
+            if (TryRec(RecCue.Cut, Random.Range(0.95f, 1.08f), 0.85f)) { return; }
             PlayWithPitch(cutClip, 0.95f, 1.08f, 0.85f);
         }
 
         /// <summary>A carved-wood drum hit (the totem landing, its eyes waking).</summary>
         public void Drum(float pitch)
         {
+            if (TryRec(RecCue.Drum, pitch * Random.Range(1f, 1.03f), 0.9f)) { return; }
             PlayWithPitch(drumClip, pitch, pitch * 1.03f, 0.9f);
         }
 
         /// <summary>Earth giving way: something rising out of (or sinking into) the arena.</summary>
         public void Rumble()
         {
+            if (TryRec(RecCue.Rumble, Random.Range(0.92f, 1.05f), 0.8f)) { return; }
             PlayWithPitch(rumbleClip, 0.92f, 1.05f, 0.8f);
         }
 
         /// <summary>A leaf snapped off its stem - pitched per leaf.</summary>
         public void Pluck(float pitch)
         {
+            if (TryRec(RecCue.Pluck, pitch * Random.Range(1f, 1.02f), 0.8f)) { return; }
             PlayWithPitch(pluckClip, pitch, pitch * 1.02f, 0.8f);
         }
 
         /// <summary>A soft airy sweep: something flying or swinging by.</summary>
         public void Whoosh()
         {
+            if (TryRec(RecCue.Whoosh, Random.Range(0.9f, 1.1f), 0.7f)) { return; }
             PlayWithPitch(whooshClip, 0.9f, 1.1f, 0.7f);
         }
 
         /// <summary>A heavy squash - the arena crushing its bands inward.</summary>
         public void Squish()
         {
+            if (TryRec(RecCue.Squish, Random.Range(0.9f, 1.02f), 0.9f)) { return; }
             PlayWithPitch(squishClip, 0.9f, 1.02f, 0.9f);
         }
 
         /// <summary>The arena stretching open - a rising elastic groan.</summary>
         public void Stretch()
         {
+            if (TryRec(RecCue.Stretch, Random.Range(0.95f, 1.05f), 0.8f)) { return; }
             PlayWithPitch(stretchClip, 0.95f, 1.05f, 0.8f);
         }
 
         /// <summary>The sweep's chime at any pitch - blessings and payouts.</summary>
         public void Chime(float pitch)
         {
+            if (activeSet != 0) { PolishedBell(pitch, 0.6f); return; }
             PlayWithPitch(sweepClip, pitch, pitch, 0.6f);
         }
 
         public void Buy()
         {
+            if (activeSet != 0) { PolishedBuy(); return; }
             PlayWithPitch(buyClip, 1f, 1f);
         }
 
         /// <summary>A light high "poof" when a played bonus card expires into nothing.</summary>
         public void Vanish()
         {
+            if (activeSet != 0) { PolishedVanish(); return; }
             PlayWithPitch(buyClip, 1.5f, 1.7f, 0.7f);
         }
 
@@ -211,6 +255,7 @@ namespace ProjectBlock.View
         /// boosted so it reads under the sweep chime without booming.</summary>
         public void Flame()
         {
+            if (TryMixFlame()) { return; }
             PlayWithPitch(flameClip, 0.9f, 1.1f, 1.1f);
         }
 
@@ -223,6 +268,7 @@ namespace ProjectBlock.View
         public void Fuse(float fullness)
         {
             float pitch = Mathf.Lerp(0.92f, 1.45f, Mathf.Clamp01(fullness));
+            if (TryMixFuse(pitch)) { return; }
             PlayWithPitch(fuseClip, pitch, pitch + 0.04f, 0.42f);
         }
 
@@ -235,6 +281,7 @@ namespace ProjectBlock.View
         public void PlayBossSting(BossSting kind)
         {
             int i = (int)kind;
+            if (TryRec((RecCue)((int)RecCue.StingSiren + i), 1f, 1f)) { return; }
             if (stingClips != null && i >= 0 && i < stingClips.Length)
             {
                 PlayWithPitch(stingClips[i], 1f, 1f);

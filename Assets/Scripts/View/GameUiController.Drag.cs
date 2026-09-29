@@ -318,6 +318,7 @@ namespace ProjectBlock.View
                             }
                         }
                         draggedCard = hit;
+                        sfx.Pickup();
                         // An ABSOLUTE order, not a boost: the fan climbs a whole order per card
                         // now, so "clear of the row" is a place rather than an amount.
                         draggedCard.SetFlattenedOrder(CardLayerView.HandFrontOrder);
