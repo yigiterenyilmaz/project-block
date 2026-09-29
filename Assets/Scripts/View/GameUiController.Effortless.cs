@@ -1,4 +1,4 @@
-// PURPOSE: "Eforsuz galibiyet" being paid - the one place ConfettiRainView is reached from.
+﻿// PURPOSE: "Eforsuz galibiyet" being paid - the one place ConfettiRainView is reached from.
 //
 // IT FIRES ON THE PHASE CHANGE, not on a turn. The joker pays in OnMarketEntered, because a round
 // is only truly finished once you are standing in the shop; there is no TurnReport at that moment
@@ -71,7 +71,7 @@ namespace ProjectBlock.View
             // every time it is replayed - nothing here uses UnityEngine.Random.
             confetti.Play(joker.LastPaidWasOvertime,
                 joker.LastPaid * 31 + session.RoundNumber);
-            sfx.Buy();
+            sfx.Congrats(joker.LastPaidWasOvertime);
             jokerBar.ProcJoker(joker.InstanceId);
             long shown = (long)joker.LastPaid * session.Config.Scoring.ScoreScale;
             FloatingTextFx.Spawn(transform, new Vector2(0f, 1.6f),

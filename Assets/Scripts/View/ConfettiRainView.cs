@@ -3,7 +3,9 @@
 // could not be a board effect even if we wanted it to be: this lands in the MARKET, where the
 // arena is not on screen at all.
 //
-// IT IS A RAIN, NOT A BURST. A burst from a point is an explosion, and this joker's feat is not an
+// (2026-09-29, designer's call) IT IS NOW FIRED, NOT RAINED: cannons along the bottom and up both
+// sides throw it flying in, the air brakes it and it flutters down. The older note follows.
+// IT WAS A RAIN, NOT A BURST. A burst from a point is an explosion, and this joker's feat is not an
 // impact - it is a round finished a particular way, and the reward arrives as you leave. So the
 // pieces fall from above the camera, drift, tumble and pass out of the bottom, and there is no
 // centre to it anywhere.
@@ -43,11 +45,11 @@ namespace ProjectBlock.View
             new Color(0.85f, 0.70f, 1f)
         };
 
-        private const int BasePieces = 55;
+        private const int BasePieces = 90;
 
         /// <summary>How many more pieces a power-free OVERTIME is worth. Not a different effect -
         /// the same one, with more in it.</summary>
-        private const int OvertimePieces = 65;
+        private const int OvertimePieces = 150;
 
         private const float FallSecondsMin = 1.5f;
 
@@ -70,6 +72,7 @@ namespace ProjectBlock.View
             public float SwayAmount;
             public float Width;
             public float Height;
+            public float Gravity;
         }
 
         private readonly List<Piece> live = new List<Piece>();
@@ -83,8 +86,10 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// Rains confetti over the whole camera. <paramref name="heavy"/> is the overtime payout:
-        /// more pieces, falling longer, spread wider.
+        /// FIRES confetti over the whole camera from CANNONS along the bottom and up both sides -
+        /// the pieces go flying up and inward, lose their speed to the air, then flutter back
+        /// down. <paramref name="heavy"/> is the overtime payout: well over twice the pieces, the
+        /// cannons fire a second volley, and they throw harder.
         /// </summary>
         public void Play(bool heavy, int seed)
         {
@@ -101,39 +106,66 @@ namespace ProjectBlock.View
             float halfWidth = halfHeight * cam.aspect;
             Vector3 middle = cam.transform.position;
             int count = heavy ? BasePieces + OvertimePieces : BasePieces;
-            for (int i = 0; i < count; i++)
+            int volleys = heavy ? 2 : 1;
+            for (int v = 0; v < volleys; v++)
             {
-                Piece piece = Take();
-                float size = Mathf.Lerp(SizeMin, SizeMax, (float)rng.NextDouble()) * halfHeight;
-                // A confetto is a STRIP, not a square: a square tumbling reads as a brick, and the
-                // width changing as it spins is most of what makes paper look like paper.
-                piece.Width = size;
-                piece.Height = size * Mathf.Lerp(1.6f, 2.8f, (float)rng.NextDouble());
-                Color colour = Palette[rng.Next(Palette.Length)];
-                piece.Renderer.color = colour;
-                piece.Renderer.transform.localScale = new Vector3(piece.Width, piece.Height, 1f);
-                // Spread a little PAST both edges: pieces that all start inside the frame leave a
-                // visible clean margin down each side.
-                float spread = heavy ? 1.25f : 1.1f;
-                float x = middle.x + ((float)rng.NextDouble() * 2f - 1f) * halfWidth * spread;
-                // Staggered above the top edge, so they arrive over about half a second rather
-                // than as one curtain.
-                float y = middle.y + halfHeight * (1.05f + (float)rng.NextDouble() * 0.9f);
-                piece.Renderer.transform.position = new Vector3(x, y, 0f);
-                piece.Renderer.transform.localRotation =
-                    Quaternion.Euler(0f, 0f, (float)rng.NextDouble() * 360f);
-                float fall = Mathf.Lerp(FallSecondsMin, FallSecondsMax, (float)rng.NextDouble());
-                piece.Velocity = new Vector2(
-                    ((float)rng.NextDouble() * 2f - 1f) * halfWidth * 0.10f,
-                    -halfHeight * 2.4f / fall);
-                piece.Spin = ((float)rng.NextDouble() * 2f - 1f) * 320f;
-                piece.Life = fall * (heavy ? 1.15f : 1f);
-                piece.Age = 0f;
-                piece.SwayPhase = (float)rng.NextDouble() * 6.283f;
-                piece.SwayAmount = halfWidth * Mathf.Lerp(0.02f, 0.07f, (float)rng.NextDouble());
-                piece.Renderer.enabled = true;
-                live.Add(piece);
+                for (int i = 0; i < count / volleys; i++)
+                {
+                    Piece piece = Take();
+                    float size = Mathf.Lerp(SizeMin, SizeMax, R(rng)) * halfHeight;
+                    // A STRIP, not a square: a square tumbling reads as a brick.
+                    piece.Width = size;
+                    piece.Height = size * Mathf.Lerp(1.6f, 2.8f, R(rng));
+                    Color colour = Palette[rng.Next(Palette.Length)];
+                    colour.a = 0f;
+                    piece.Renderer.color = colour;
+                    piece.Renderer.transform.localScale = new Vector3(piece.Width, piece.Height, 1f);
+                    // WHERE it is fired from: the two sides, or the bottom - the widest edge, so
+                    // it gets the most.
+                    float roll = R(rng);
+                    int source = roll < 0.18f ? 0 : roll < 0.36f ? 1 : 2;
+                    float power = (heavy ? 1.15f : 1f) * Mathf.Lerp(0.75f, 1.2f, R(rng));
+                    Vector2 from;
+                    Vector2 dir;
+                    if (source == 2)
+                    {
+                        float x = (R(rng) * 2f - 1f) * halfWidth * 0.95f;
+                        from = new Vector2(x, -halfHeight * 1.05f);
+                        // Up, leaning in toward the middle.
+                        float lean = -x / halfWidth * 0.35f + (R(rng) * 2f - 1f) * 0.25f;
+                        dir = new Vector2(lean, 1f).normalized;
+                    }
+                    else
+                    {
+                        float side = source == 0 ? -1f : 1f;
+                        float y = Mathf.Lerp(-0.9f, 0.3f, R(rng)) * halfHeight;
+                        from = new Vector2(side * halfWidth * 1.05f, y);
+                        dir = new Vector2(-side, Mathf.Lerp(0.5f, 1.3f, R(rng))).normalized;
+                    }
+                    piece.Renderer.transform.position = new Vector3(middle.x + from.x, middle.y + from.y, 0f);
+                    piece.Renderer.transform.localRotation = Quaternion.Euler(0f, 0f, R(rng) * 360f);
+                    float speed = halfHeight * Mathf.Lerp(2.6f, 4.2f, R(rng)) * power;
+                    if (source != 2)
+                    {
+                        speed *= 0.85f;
+                    }
+                    piece.Velocity = dir * speed;
+                    piece.Spin = (R(rng) * 2f - 1f) * 540f;
+                    piece.Life = Mathf.Lerp(FallSecondsMin, FallSecondsMax, R(rng)) * (heavy ? 1.2f : 1f) + 0.6f;
+                    // A negative age is a wait: the volleys and the cannons stagger.
+                    piece.Age = -(v * 0.45f + R(rng) * 0.18f);
+                    piece.SwayPhase = R(rng) * 6.283f;
+                    piece.SwayAmount = halfWidth * Mathf.Lerp(0.02f, 0.07f, R(rng));
+                    piece.Gravity = halfHeight * 3.2f;
+                    piece.Renderer.enabled = true;
+                    live.Add(piece);
+                }
             }
+        }
+
+        private static float R(System.Random rng)
+        {
+            return (float)rng.NextDouble();
         }
 
         private void Update()
@@ -148,26 +180,34 @@ namespace ProjectBlock.View
                     Retire(i);
                     continue;
                 }
+                if (piece.Age < 0f)
+                {
+                    continue;
+                }
                 float t = piece.Age / piece.Life;
                 Transform tr = piece.Renderer.transform;
-                // SWAY is written into the POSITION each frame from the piece's own phase, not
-                // accumulated onto it - an offset added to itself every frame walks away.
-                float sway = Mathf.Sin(piece.SwayPhase + piece.Age * 3.1f) * piece.SwayAmount;
+                // FLIGHT: thrown hard, braked by the air, pulled down, and once it has lost its
+                // throw it falls at paper's terminal speed with a sway.
+                piece.Velocity *= Mathf.Exp(-1.6f * dt);
+                piece.Velocity.y -= piece.Gravity * dt;
+                float terminal = -piece.Gravity * 0.32f;
+                if (piece.Velocity.y < terminal)
+                {
+                    piece.Velocity.y = Mathf.Lerp(piece.Velocity.y, terminal, 1f - Mathf.Exp(-6f * dt));
+                }
+                float slow = Mathf.Clamp01(1f - piece.Velocity.magnitude / (piece.Gravity * 0.8f));
+                float sway = Mathf.Sin(piece.SwayPhase + piece.Age * 3.1f) * piece.SwayAmount * slow * 3f;
                 tr.position = new Vector3(
-                    tr.position.x + (piece.Velocity.x * dt) + sway * dt,
+                    tr.position.x + piece.Velocity.x * dt + sway * dt,
                     tr.position.y + piece.Velocity.y * dt,
                     0f);
                 tr.localRotation = Quaternion.Euler(0f, 0f,
                     tr.localRotation.eulerAngles.z + piece.Spin * dt);
-                // A confetto TURNS EDGE-ON as it tumbles: the x scale follows its own spin, which
-                // is what stops a falling rectangle reading as a falling sticker.
                 float edge = Mathf.Abs(Mathf.Cos((piece.SwayPhase + piece.Age * 5.2f)));
                 tr.localScale = new Vector3(piece.Width * Mathf.Lerp(0.25f, 1f, edge),
                     piece.Height, 1f);
-                // Fades only at the very end, so the rain does not look like it is evaporating
-                // halfway down the screen.
                 Color c = piece.Renderer.color;
-                c.a = t > 0.82f ? 1f - (t - 0.82f) / 0.18f : 1f;
+                c.a = t > 0.85f ? 1f - (t - 0.85f) / 0.15f : 1f;
                 piece.Renderer.color = c;
             }
         }
