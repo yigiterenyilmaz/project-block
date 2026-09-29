@@ -1,5 +1,6 @@
 ﻿// PURPOSE: The ANIMATION LAB panel (F3) - a scrollable catalogue of every animation in the
-// game plus the condition knobs that modulate them. Presentation only: it draws rows and
+// game plus the condition knobs that modulate them. The SOUND LAB (F9) is a second instance of
+// the same panel with its own title, help line and remembered place (PrefsKey). Presentation only: it draws rows and
 // reports what was clicked, exactly like the other pickers under View/. The catalogue itself
 // and every animation it fires live in GameUiController.AnimationLab.cs.
 //
@@ -49,6 +50,26 @@ namespace ProjectBlock.View
             /// sub-group or a top-level category's own entries, 2 for a sub-group's entries. It
             /// is the INDENT, and the indent is the only thing saying what belongs to what.</summary>
             public int Depth;
+
+            /// <summary>Optional clickable version buttons laid side by side at the row's right
+            /// (the sound lab). Null on an ordinary row.</summary>
+            public string[] Buttons;
+
+            /// <summary>The button drawn as CHOSEN (green), or -1.</summary>
+            public int Marked;
+
+            /// <summary>The button drawn as last played (amber), or -1.</summary>
+            public int Lit;
+
+            public static Row WithButtons(string en, string tr, int depth, string[] buttons,
+                int marked, int lit)
+            {
+                Row row = Item(en, tr, depth);
+                row.Buttons = buttons;
+                row.Marked = marked;
+                row.Lit = lit;
+                return row;
+            }
 
             public static Row Header(string en, string tr, bool expanded, int count, int depth)
             {
@@ -106,9 +127,25 @@ namespace ProjectBlock.View
         public const int VisibleRows = 12;
 
         /// <summary>Where the panel has been dragged to, in world units, remembered across
-        /// sessions. Zero is the resting place the constants below describe.</summary>
-        private const string OffsetKeyX = "animlab.offset.x";
-        private const string OffsetKeyY = "animlab.offset.y";
+        /// sessions under this key prefix. Zero is the resting place the constants below
+        /// describe. The same panel serves more than one lab (the sound lab, F9, is the other),
+        /// so each instance names its own title, help line and remembered place.</summary>
+        public string PrefsKey = "animlab";
+
+        public string TitleEn = "ANIMATION LAB (F3)";
+        public string TitleTr = "ANİMASYON LABI (F3)";
+        public string HelpEn = "click to open  -  TYPE TO SEARCH  -  space replays  -  DRAG THIS BAR";
+        public string HelpTr = "tıkla aç  -  ARAMAK İÇİN YAZ  -  boşluk tekrarlar  -  ÇUBUĞU SÜRÜKLE";
+
+        private string OffsetKeyX
+        {
+            get { return PrefsKey + ".offset.x"; }
+        }
+
+        private string OffsetKeyY
+        {
+            get { return PrefsKey + ".offset.y"; }
+        }
 
         /// <summary>How tall the drag handle is, measured down from the panel's top edge - the
         /// title and the help line. Anywhere else on the panel is a click, not a grab.</summary>
@@ -175,6 +212,46 @@ namespace ProjectBlock.View
         private readonly List<float> knobY = new List<float>();
 
         public bool IsOpen { get; private set; }
+
+        /// <summary>How many catalogue lines the last draw showed: VisibleRows with the knobs
+        /// under the list, more when there are none (the list takes their space).</summary>
+        public int RowsShown { get; private set; } = VisibleRows;
+
+        private const int RowsWithoutKnobs = 20;
+
+        private struct ButtonHit
+        {
+            public int Row;
+            public int Button;
+            public Vector2 Center;
+            public Vector2 Size;
+        }
+
+        private readonly List<ButtonHit> drawnButtons = new List<ButtonHit>();
+
+        private static readonly Color ButtonColor = new Color(0.15f, 0.19f, 0.27f);
+        private static readonly Color ButtonMarkedColor = new Color(0.20f, 0.46f, 0.30f);
+        private static readonly Color ButtonLitColor = new Color(0.55f, 0.42f, 0.14f);
+        private static readonly Color ButtonTextColor = new Color(0.90f, 0.93f, 0.97f);
+
+        /// <summary>The version button under a world point: its row's catalogue index and its
+        /// own index, or false.</summary>
+        public bool ButtonAt(Vector2 world, out int row, out int button)
+        {
+            Vector2 p = ToPanel(world);
+            foreach (ButtonHit h in drawnButtons)
+            {
+                if (Mathf.Abs(p.x - h.Center.x) <= h.Size.x * 0.5f && Mathf.Abs(p.y - h.Center.y) <= h.Size.y * 0.5f)
+                {
+                    row = h.Row;
+                    button = h.Button;
+                    return true;
+                }
+            }
+            row = -1;
+            button = -1;
+            return false;
+        }
 
         private Vector2 offset;
         private bool offsetRead;
@@ -305,7 +382,7 @@ namespace ProjectBlock.View
                 new Vector2(PanelWidth, height), PanelColor, PanelOrder + 1);
 
             ViewUtil.MakeText3D(transform, "Title", new Vector2(PanelCenterX, TitleY),
-                Loc.Pick("ANIMATION LAB (F3)", "ANİMASYON LABI (F3)"),
+                Loc.Pick(TitleEn, TitleTr),
                 90, 0.022f, TitleColor, TextOrder, TextAnchor.MiddleCenter);
             // THE SEARCH LINE TAKES THE HELP LINE'S PLACE while a query is live. It is the same
             // row because they are the same job - saying what the panel is doing right now - and
@@ -320,18 +397,20 @@ namespace ProjectBlock.View
             else
             {
                 ViewUtil.MakeText3D(transform, "Help", new Vector2(PanelCenterX, HelpY),
-                    Loc.Pick("click to open  -  TYPE TO SEARCH  -  space replays  -  DRAG THIS BAR",
-                        "tıkla aç  -  ARAMAK İÇİN YAZ  -  boşluk tekrarlar  -  ÇUBUĞU SÜRÜKLE"),
+                    Loc.Pick(HelpEn, HelpTr),
                     90, 0.0125f, FaintColor, TextOrder, TextAnchor.MiddleCenter);
             }
 
+            RowsShown = knobs.Count == 0 ? RowsWithoutKnobs : VisibleRows;
             DrawRows(rows, selected, scroll);
             DrawScrollbar(rows.Count, scroll);
 
-            ViewUtil.MakeRect(transform, "Divider", new Vector2(PanelCenterX, DividerY),
-                new Vector2(PanelWidth - 0.3f, 0.03f), FrameColor, ContentOrder);
-
-            DrawKnobs(knobs);
+            if (knobs.Count > 0)
+            {
+                ViewUtil.MakeRect(transform, "Divider", new Vector2(PanelCenterX, DividerY),
+                    new Vector2(PanelWidth - 0.3f, 0.03f), FrameColor, ContentOrder);
+                DrawKnobs(knobs);
+            }
 
             ViewUtil.MakeText3D(transform, "Status", new Vector2(PanelCenterX, StatusY),
                 ViewUtil.WrapText(status ?? string.Empty, 42, 2),
@@ -340,7 +419,7 @@ namespace ProjectBlock.View
 
         private void DrawRows(IReadOnlyList<Row> rows, int selected, int scroll)
         {
-            for (int i = 0; i < VisibleRows; i++)
+            for (int i = 0; i < RowsShown; i++)
             {
                 int index = scroll + i;
                 float y = FirstRowY - i * RowPitch;
@@ -391,9 +470,48 @@ namespace ProjectBlock.View
                         new Vector2(PanelWidth - 0.16f - indent, RowHeight),
                         SelectedRowColor, ContentOrder);
                 }
+                if (row.Buttons != null)
+                {
+                    DrawRowButtons(row, index, y);
+                    ViewUtil.MakeText3D(transform, "Row_" + index,
+                        new Vector2(PanelLeft + 0.3f + indent, y), row.Label,
+                        90, 0.0122f, ItemColor, TextOrder, TextAnchor.MiddleLeft);
+                    continue;
+                }
                 ViewUtil.MakeText3D(transform, "Row_" + index,
                     new Vector2(PanelLeft + 0.3f + indent, y), row.Label,
                     90, 0.0145f, ItemColor, TextOrder, TextAnchor.MiddleLeft);
+            }
+        }
+
+        /// <summary>The row's versions as buttons side by side on its right half - the chosen one
+        /// green, the last played amber - so every version is one click away and visible at once.
+        /// </summary>
+        private void DrawRowButtons(Row row, int index, float y)
+        {
+            const float right = PanelRight - 0.24f;
+            const float left = PanelLeft + 2.45f;
+            const float gap = 0.04f;
+            int n = row.Buttons.Length;
+            float w = Mathf.Min(0.62f, (right - left - gap * (n - 1)) / n);
+            float h = RowHeight - 0.05f;
+            for (int b = 0; b < n; b++)
+            {
+                float cx = right - (n - 1 - b) * (w + gap) - w * 0.5f;
+                Color fill = b == row.Marked ? ButtonMarkedColor : (b == row.Lit ? ButtonLitColor : ButtonColor);
+                ViewUtil.MakeRect(transform, "Btn_" + index + "_" + b, new Vector2(cx, y),
+                    new Vector2(w, h), fill, ContentOrder + 1);
+                if (b == row.Lit && b == row.Marked)
+                {
+                    // Chosen AND just played: an amber rule under the green.
+                    ViewUtil.MakeRect(transform, "BtnLit_" + index + "_" + b, new Vector2(cx, y - h * 0.5f + 0.02f),
+                        new Vector2(w, 0.04f), ButtonLitColor, ContentOrder + 2);
+                }
+                string label = row.Buttons[b];
+                float size = label.Length > 5 ? 0.0085f : 0.0105f;
+                ViewUtil.MakeText3D(transform, "BtnText_" + index + "_" + b, new Vector2(cx, y), label,
+                    90, size, ButtonTextColor, TextOrder, TextAnchor.MiddleCenter);
+                drawnButtons.Add(new ButtonHit { Row = index, Button = b, Center = new Vector2(cx, y), Size = new Vector2(w, h) });
             }
         }
 
@@ -401,20 +519,20 @@ namespace ProjectBlock.View
         /// there to say where you are, not to be dragged.</summary>
         private void DrawScrollbar(int rowCount, int scroll)
         {
-            if (rowCount <= VisibleRows)
+            if (rowCount <= RowsShown)
             {
                 return;
             }
             float trackTop = FirstRowY + RowPitch * 0.5f;
-            float trackBottom = FirstRowY - (VisibleRows - 0.5f) * RowPitch;
+            float trackBottom = FirstRowY - (RowsShown - 0.5f) * RowPitch;
             float trackHeight = trackTop - trackBottom;
             float x = PanelRight - 0.12f;
             ViewUtil.MakeRect(transform, "ScrollTrack",
                 new Vector2(x, (trackTop + trackBottom) * 0.5f),
                 new Vector2(0.07f, trackHeight), ScrollTrackColor, ContentOrder);
-            float visibleFraction = VisibleRows / (float)rowCount;
+            float visibleFraction = RowsShown / (float)rowCount;
             float thumbHeight = Mathf.Max(0.25f, trackHeight * visibleFraction);
-            int maxScroll = Mathf.Max(1, rowCount - VisibleRows);
+            int maxScroll = Mathf.Max(1, rowCount - RowsShown);
             float t = Mathf.Clamp01(scroll / (float)maxScroll);
             float thumbY = Mathf.Lerp(trackTop - thumbHeight * 0.5f,
                 trackBottom + thumbHeight * 0.5f, t);
@@ -497,6 +615,7 @@ namespace ProjectBlock.View
             drawnRowIndices.Clear();
             drawnRowY.Clear();
             knobY.Clear();
+            drawnButtons.Clear();
             for (int i = transform.childCount - 1; i >= 0; i--)
             {
                 Destroy(transform.GetChild(i).gameObject);

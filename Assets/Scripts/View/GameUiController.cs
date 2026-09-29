@@ -760,6 +760,18 @@ namespace ProjectBlock.View
                 OpenAnimationLab();
                 return;
             }
+            // The SOUND LAB (F9) - every sound effect, grouped, on the same panel as the
+            // animation lab, and like it owns the frame while open (see .SoundLab).
+            if (SoundLabOpen)
+            {
+                HandleSoundLabInput(kb, mouse);
+                return;
+            }
+            if (kb != null && kb.f9Key.wasPressedThisFrame && session != null)
+            {
+                OpenSoundLab();
+                return;
+            }
             // The BOSS LOOK LAB (F7) - boss intro / ambience prototypes, previewed over the board.
             if (BossLookOpen)
             {
