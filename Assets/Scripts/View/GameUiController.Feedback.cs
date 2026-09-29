@@ -41,8 +41,9 @@ namespace ProjectBlock.View
             float cellBefore = boardView.CellWorldSize;
             List<PowerFxView.CubeFace> doomed = TakeDeflateFaces(round, shownBefore);
             RefreshAll(report);
-            PlayPlacedOnMines(round);
+            PlayPlacedOnMines(round, report);
             PlayEchoRecorded();
+            PlayBukulmeCopy(round);
             if (doomed != null && boardView.Board != shownBefore)
             {
                 powerFx.PlayBoardResize(boardView, shownBefore, cellBefore, doomed);
@@ -176,6 +177,10 @@ namespace ProjectBlock.View
             PlayQuarry(report);
             // "Tutuştur": every other fire burns out, climbing from the source's explosion peak.
             PlayIgnition();
+            // "Barut tedarikçisi": the powder pays out as its cubes break; a full block blasts.
+            PlayPowderPayout(round, report);
+            // "Antimadde": the annihilation gets its own blast - and its own boom.
+            PlayAntimatter(report);
             // EVERY JOKER THAT FIRED THIS TURN lights up, from the one channel Core reports them
             // on. Here rather than at the repaint because a proc is an EVENT and belongs with the
             // turn's other events - a flash on the repaint frame lands before the line it was
@@ -191,7 +196,8 @@ namespace ProjectBlock.View
                 sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
                 sfx.Flame();
             }
-            else if (report.CubesExploded > 0 || LateExplodedCount(report) > 0)
+            else if ((report.CubesExploded > 0 || LateExplodedCount(report) > 0)
+                && !IsAnnihilation(report))
             {
                 // The late lists cover a board-reshape clear (inflation deflate) and a "Hedefli"
                 // payout - neither of which the placement's own CubesExploded count ever saw.
@@ -256,6 +262,8 @@ namespace ProjectBlock.View
         /// The ids are matched against the bar as they come, so a joker sold mid-turn simply
         /// finds no panel and lights nothing - there is no bookkeeping to go stale.
         /// </summary>
+        private PiggyBankFx piggyBank;
+
         private void PlayJokerProcs(TurnReport report)
         {
             if (report == null || jokerBar == null)
@@ -266,6 +274,19 @@ namespace ProjectBlock.View
             {
                 jokerBar.ProcJoker(report.ProcedJokers[i]);
                 PlayArenaProc(report.ProcedJokers[i]);
+                // "Tutumluluk": money into the coin bank, beside the score.
+                var thrift = session.Jokers.Find(report.ProcedJokers[i]) as TutumlulukJoker;
+                if (thrift != null)
+                {
+                    if (piggyBank == null)
+                    {
+                        var go = new GameObject("PiggyBank");
+                        go.transform.SetParent(transform, false);
+                        piggyBank = go.AddComponent<PiggyBankFx>();
+                    }
+                    piggyBank.Play(ScoreWorldAnchor() + new Vector2(-1.6f, -0.2f), thrift.StatusText);
+                    sfx.Chime(1.6f);
+                }
             }
             // "LEHIMLEME": a welded block paid its size bonus on this turn.
             if (report.WeldBonusPercent > 0)
@@ -322,8 +343,70 @@ namespace ProjectBlock.View
             Joker fired = session.Jokers.Find(instanceId);
             if (fired is SimetriJoker)
             {
-                FlashBoard(SymmetryProcColor);
+                PlaySymmetryProc();
             }
+        }
+
+        /// <summary>
+        /// "Simetri" paying (2026-09-29, designer's call): the cubes that MAKE the symmetry shine
+        /// first, one mirror set at a time - a cube and its reflections light together, from the
+        /// outside in - and only then does the whole arena light. A set is every cube at the same
+        /// distance off both middles, which is exactly what a mirror or a half turn pairs up, so
+        /// the order needs no idea of which symmetry paid.
+        /// </summary>
+        private void PlaySymmetryProc()
+        {
+            GameBoard board = boardView != null ? boardView.Board : null;
+            if (board == null)
+            {
+                return;
+            }
+            float cx = board.MinX + (board.Width - 1) * 0.5f;
+            float cy = board.MinY + (board.Height - 1) * 0.5f;
+            var groups = new SortedDictionary<float, List<GridPos>>();
+            foreach (GridPos cell in board.GetOccupiedCells())
+            {
+                float ax = Mathf.Abs(cell.X - cx);
+                float ay = Mathf.Abs(cell.Y - cy);
+                // Outer sets first: the key sorts DESCENDING by distance, tie-broken by the pair.
+                float key = -(ax * ax + ay * ay) * 1000f - ax * 10f - ay;
+                List<GridPos> set;
+                if (!groups.TryGetValue(key, out set))
+                {
+                    set = new List<GridPos>();
+                    groups[key] = set;
+                }
+                set.Add(cell);
+            }
+            if (groups.Count == 0)
+            {
+                FlashBoard(SymmetryProcColor);
+                return;
+            }
+            // One set after another, squeezed so a full board never takes more than ~0.9s.
+            float step = Mathf.Min(0.09f, 0.9f / groups.Count);
+            var cells = new List<Vector2>();
+            var times = new List<float>();
+            int index = 0;
+            foreach (KeyValuePair<float, List<GridPos>> g in groups)
+            {
+                foreach (GridPos cell in g.Value)
+                {
+                    cells.Add(boardView.CellToWorld(cell));
+                    times.Add(index * step);
+                }
+                index++;
+            }
+            CellFlashFx.Play(transform, cells, times, boardView.CellWorldSize,
+                CellFlashFx.Pinch.Uniform, CellFlashFx.Palette.Hot(SymmetryProcColor));
+            StartCoroutine(FlashBoardAfter(index * step + 0.18f));
+        }
+
+        private System.Collections.IEnumerator FlashBoardAfter(float seconds)
+        {
+            yield return new WaitForSeconds(seconds);
+            FlashBoard(SymmetryProcColor);
+            sfx.Chime(1.25f);
         }
 
         /// <summary>"Simetri"'s own colour - a cool mirror-blue, so its ripple is never confused
@@ -1201,17 +1284,21 @@ namespace ProjectBlock.View
 
         /// <summary>"Mayın": a block landed on armed mines - each goes off with a real blast.
         /// </summary>
-        private void PlayPlacedOnMines(RoundEngine round)
+        private void PlayPlacedOnMines(RoundEngine round, TurnReport report)
         {
             if (round == null || boardView == null || round.Board != boardView.Board)
             {
                 return;
             }
             IReadOnlyList<GridPos> mines = round.Board.LastMinesTriggered;
-            for (int i = 0; i < mines.Count; i++)
+            // A tight, hot break over the whole block the mine took - the material burst, not the
+            // TNT sprite sheet, whose smoke column was far too much for one small trap.
+            if (mines.Count > 0)
             {
-                FlashDynamite(boardView.transform.TransformPoint(boardView.CellToWorld(mines[i])));
-                sfx.Explode();
+                var cells = report != null && report.MineBlastCells.Count > 0
+                    ? new List<GridPos>(report.MineBlastCells) : new List<GridPos>(mines);
+                FlashCells(cells, new Color(1f, 0.52f, 0.22f));
+                sfx.Explode(2, 0);
             }
             if (mines.Count > 0)
             {
@@ -2347,6 +2434,94 @@ namespace ProjectBlock.View
             return bonusIndex < round.BonusHand.Count ? round.BonusHand[bonusIndex].Card : null;
         }
 
+        private MemoryDustView memoryDust;
+        private List<int> lastHafizaSaved;
+        private List<int> lastHafizaDelivered;
+
+        private HafizaJoker FindHafiza()
+        {
+            if (session == null || session.Jokers == null)
+            {
+                return null;
+            }
+            foreach (Joker j in session.Jokers.Jokers)
+            {
+                var h = j as HafizaJoker;
+                if (h != null)
+                {
+                    return h;
+                }
+            }
+            return null;
+        }
+
+        private void EnsureMemoryDust()
+        {
+            if (memoryDust == null)
+            {
+                var go = new GameObject("MemoryDust");
+                go.transform.SetParent(transform, false);
+                memoryDust = go.AddComponent<MemoryDustView>();
+            }
+        }
+
+        /// <summary>"Hafıza" saving cards at a round's end: each carried card turns to dust. Asked
+        /// on every phase change - the round's bonus hand is still on screen at that moment.</summary>
+        private void PlayHafizaSave()
+        {
+            HafizaJoker hafiza = FindHafiza();
+            RoundEngine round = session != null ? session.CurrentRound : null;
+            if (hafiza == null || hafiza.LastSaved == null || ReferenceEquals(hafiza.LastSaved, lastHafizaSaved)
+                || round == null || cardLayer == null)
+            {
+                return;
+            }
+            lastHafizaSaved = hafiza.LastSaved;
+            EnsureMemoryDust();
+            for (int i = 0; i < round.BonusHand.Count; i++)
+            {
+                if (!hafiza.LastSaved.Contains(round.BonusHand[i].Card.Id))
+                {
+                    continue;
+                }
+                CardVisual visual = cardLayer.VisualOfSlot(round.Hand.Count + i);
+                if (visual == null)
+                {
+                    continue;
+                }
+                Vector2 size = new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight) * visual.transform.lossyScale.x;
+                memoryDust.Dissolve(visual.transform.position, size, CardLayerView.HandFrontOrder + 6);
+                visual.SetAlpha(0f);
+                sfx.Vanish();
+            }
+        }
+
+        /// <summary>"Hafıza" delivering them next round: each re-forms out of the dust.</summary>
+        private void PlayHafizaRecall(RoundEngine round)
+        {
+            HafizaJoker hafiza = FindHafiza();
+            if (hafiza == null || hafiza.LastDelivered == null
+                || ReferenceEquals(hafiza.LastDelivered, lastHafizaDelivered) || round == null
+                || cardLayer == null || session.Phase != GamePhase.Round)
+            {
+                return;
+            }
+            lastHafizaDelivered = hafiza.LastDelivered;
+            EnsureMemoryDust();
+            for (int i = 0; i < round.BonusHand.Count; i++)
+            {
+                if (!hafiza.LastDelivered.Contains(round.BonusHand[i].Card.Id))
+                {
+                    continue;
+                }
+                CardVisual visual = cardLayer.VisualOfSlot(round.Hand.Count + i);
+                if (visual != null)
+                {
+                    memoryDust.Reform(visual, 0.45f + 0.12f * i, CardLayerView.HandFrontOrder + 6);
+                }
+            }
+        }
+
         private void RefreshAll(TurnReport report)
         {
             RoundEngine round = session.CurrentRound;
@@ -2396,6 +2571,8 @@ namespace ProjectBlock.View
             RefreshInfections(report);
             RefreshParasiteRiders(round);
             cardLayer.Sync(round, report);
+            // "Hafıza": a card it kept re-forms out of the dust, once it is laid out.
+            PlayHafizaRecall(round);
             // AFTER the hand is laid out, never before: the payout is drawn on the held cards and
             // they are not where the player will see them until this call has run.
             SyncMidas(round);

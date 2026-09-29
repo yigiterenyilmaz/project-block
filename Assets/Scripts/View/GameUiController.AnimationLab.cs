@@ -848,7 +848,12 @@ namespace ProjectBlock.View
                 cells.Add(new GridPos(1 + (i % 5), 1 + (i / 5)));
             }
             FlashCells(cells, ViewUtil.ElementColor(BlockElement.Fire));
-            sfx.Explode();
+            var faces = new List<Color>();
+            foreach (GridPos c in cells)
+            {
+                faces.Add(ViewUtil.ElementColor(BlockElement.Fire));
+            }
+            PlayAntimatterCells(cells, faces);
             animLastLabel = Loc.Pick(cubes + " annihilated", cubes + " yok edildi");
         }
 
@@ -873,6 +878,27 @@ namespace ProjectBlock.View
 
         /// <summary>Four blocks at four ripenesses at once - the scene that says whether the
         /// ember actually reads as a SCALE rather than as "lit or not".</summary>
+        /// <summary>The payout, on a row the lab flashes itself so the pops land on a real break.</summary>
+        private void AnimPowderPayout(int charges, int cubes)
+        {
+            EnsurePowder();
+            var payout = new PowderPayoutVisuals();
+            var delays = new List<float>();
+            var cells = new List<GridPos>();
+            for (int i = 0; i < cubes; i++)
+            {
+                var cell = new GridPos(2 + i, 3);
+                payout.Add(cell, charges, 5);
+                cells.Add(cell);
+                delays.Add(0.08f + i * 0.03f);
+            }
+            payout.Points = charges * (charges + 1) / 2 * 12 * cubes;
+            powder.Show(null);
+            FlashCells(cells, BlastColor);
+            powder.PlayPayout(payout, delays);
+            animLastLabel = Loc.Pick("powder payout " + charges + "/5", "barut ödemesi " + charges + "/5");
+        }
+
         private void AnimPowderSpread()
         {
             EnsurePowder();
@@ -903,7 +929,7 @@ namespace ProjectBlock.View
         {
             EnsureConfetti();
             confetti.Play(heavy, heavy ? 7 : 3);
-            sfx.Buy();
+            sfx.Congrats(heavy);
             animLastLabel = heavy
                 ? Loc.Pick("overtime rain", "uzatma yağmuru")
                 : Loc.Pick("ordinary rain", "normal yağmur");
@@ -1602,9 +1628,9 @@ namespace ProjectBlock.View
 
             AddAnimSub("general", "ambience", "ambience", "atmosfer");
             AddAnim("overtime flame (overtime knob)", "uzatma alevi (uzatma ayarı)",
-                delegate { flameStreak.SetState(animOvertime, boardView.WorldRect); });
+                delegate { flameStreak.SetState(animOvertime, boardView.ArenaRect); });
             AddAnim("overtime flame off", "uzatma alevi kapalı",
-                delegate { flameStreak.SetState(0, boardView.WorldRect); });
+                delegate { flameStreak.SetState(0, boardView.ArenaRect); });
             AddAnim("sweep bling (sweep-count pitch)", "temizlik sesi (sayıya göre tiz)",
                 delegate { sfx.CleanSweep(1f + 0.12f * Mathf.Min(animSweeps - 1, 8)); });
             AddAnim("explosion sound", "patlama sesi", delegate { sfx.Explode(); });
@@ -4004,6 +4030,12 @@ namespace ProjectBlock.View
             AddAnim("barut: four blocks at different ripeness",
                 "barut: dört blok farklı olgunlukta",
                 delegate { AnimPowderSpread(); });
+            AddAnim("barut: a FULL block goes up (bonus blast)",
+                "barut: DOLU blok patlıyor (bonus patlama)",
+                delegate { AnimPowderPayout(5, 4); });
+            AddAnim("barut: a half-charged block goes up (pop only)",
+                "barut: yarı dolu blok patlıyor (sadece pop)",
+                delegate { AnimPowderPayout(2, 3); });
             AddAnim("barut: the fuse pitch, empty to full",
                 "barut: fitil sesi, boştan doluya",
                 delegate { AnimPowderPitchSweep(); });
@@ -4026,8 +4058,8 @@ namespace ProjectBlock.View
             AddAnim("eforsuz: a power-free round pays (confetti)",
                 "eforsuz: güçsüz raunt öder (konfeti)",
                 delegate { AnimConfetti(false); });
-            AddAnim("eforsuz: a power-free OVERTIME - twice the rain",
-                "eforsuz: güçsüz UZATMA - iki katı yağmur",
+            AddAnim("eforsuz: a power-free OVERTIME - bigger cannons",
+                "eforsuz: güçsüz UZATMA - daha büyük toplar",
                 delegate { AnimConfetti(true); });
             AddAnim("eforsuz: the two side by side", "eforsuz: ikisi yan yana",
                 delegate { StartCoroutine(AnimConfettiCompare()); });
@@ -4071,7 +4103,7 @@ namespace ProjectBlock.View
             AddAnimSub("jokers", "simetri", "simetri", "simetri");
             AddAnim("simetri: the arena lights for a symmetric board",
                 "simetri: simetrik tahtada alan ışıldar",
-                delegate { FlashBoard(new Color(0.62f, 0.74f, 1f)); });
+                delegate { PlaySymmetryProc(); });
 
             AddAnimSub("jokers", "besleme", "besleme", "besleme");
             AddAnim("besleme: a FEED procs (nest + card + points)",

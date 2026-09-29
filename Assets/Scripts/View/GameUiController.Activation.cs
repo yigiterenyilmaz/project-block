@@ -1467,6 +1467,11 @@ namespace ProjectBlock.View
                 return;
             }
             // "AŞIRMA" / "YEDEKLEME": one card lifted off its pile splits into the two copies.
+            if (power.DefId == "bukulme")
+            {
+                PlayBukulmeCopy(round);
+                return;
+            }
             if (bonusBefore != null && copiesOut && PlayCopyOut(round, bonusBefore, power.DefId == "asirma"))
             {
                 return;
@@ -1599,6 +1604,66 @@ namespace ProjectBlock.View
                 CardLayerView.HandFrontOrder + 5, delegate { sfx.Fusion(); });
             return true;
         }
+
+        private BukulmeCopyVisuals lastBukulmeCopy;
+
+        /// <summary>
+        /// "Bükülme": a copy of the marked card split off it - on activation and every time the
+        /// marked card comes back into the hand. The copy flies out of the MARKED CARD itself in
+        /// warp violet (the same copy-out Aşırma and Yedekleme use off their piles), so the player
+        /// sees which card is doing the multiplying. Called after every repaint; matched by
+        /// identity, so a repaint never replays it.
+        /// </summary>
+        private void PlayBukulmeCopy(RoundEngine round)
+        {
+            if (session == null || round == null || cardLayer == null)
+            {
+                return;
+            }
+            IReadOnlyList<Power> powers = session.Powers.Powers;
+            for (int p = 0; p < powers.Count; p++)
+            {
+                var bukulme = powers[p] as BukulmePower;
+                BukulmeCopyVisuals copy = bukulme != null ? bukulme.LastCopy : null;
+                if (copy == null || ReferenceEquals(copy, lastBukulmeCopy))
+                {
+                    continue;
+                }
+                lastBukulmeCopy = copy;
+                Vector2 from = CardLayerView.DrawPilePos;
+                for (int i = 0; i < round.Hand.Count; i++)
+                {
+                    if (round.Hand[i].Id == copy.SourceCardId)
+                    {
+                        CardVisual source = cardLayer.VisualOfSlot(i);
+                        if (source != null)
+                        {
+                            from = cardLayer.transform.InverseTransformPoint(source.transform.position);
+                        }
+                        break;
+                    }
+                }
+                var cards = new List<CardVisual>();
+                for (int i = 0; i < round.BonusHand.Count; i++)
+                {
+                    if (round.BonusHand[i].Card.Id == copy.CopyCardId)
+                    {
+                        CardVisual visual = cardLayer.VisualOfSlot(round.Hand.Count + i);
+                        if (visual != null)
+                        {
+                            cards.Add(visual);
+                        }
+                    }
+                }
+                if (cards.Count > 0)
+                {
+                    powerFx.PlayCopyOut(cardLayer.transform, cards, from, BukulmeWarpColour,
+                        CardLayerView.HandFrontOrder + 5, delegate { sfx.Fusion(); });
+                }
+            }
+        }
+
+        private static readonly Color BukulmeWarpColour = new Color(0.74f, 0.52f, 1f);
 
         private static bool PileHolds(IReadOnlyList<BlockCard> pile, int cardId)
         {
@@ -1821,6 +1886,15 @@ namespace ProjectBlock.View
                     if (lineCells.Count > 0)
                     {
                         FlashCells(lineCells, BlastColor, delegate { sfx.Explode(); });
+                        // The lines the inversion made emptied the arena: that IS a clean sweep
+                        // and it looks like one - the usual wave, popup and confetti. What it
+                        // PAYS is still the rules' business (nothing without "Genel temizlik").
+                        if (round != null && round.Board != null && round.Board.OccupiedCount == 0)
+                        {
+                            sfx.CleanSweep(1f);
+                            SpawnSweepPopup();
+                            EmitSweepConfetti();
+                        }
                     }
                     else
                     {
