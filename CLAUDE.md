@@ -1397,6 +1397,39 @@ Runic, Eclipse, Cosmic, Inferno, Cage, Creature, Decree. A boss missing from the
 in real boss stages" plays the chosen pair whenever a boss round appears (watched per frame,
 not called from the round flow). Once one is picked, delete the losers rather than tuning them.
 
+**F9 opens the SOUND LAB** (`GameUiController.SoundLab.cs`, on a second `AnimationLabView` - the F3
+panel, with its own title and remembered place via `PrefsKey`), built for comparing FAST: every
+row is one sound with its VERSIONS as buttons side by side (the four sets OLD / NEW / V3 / MIX,
+or ORIG + variants A/B/C, or candidates) - click one to play it, right-click it to make it the one
+the game uses (the global `SoundFx.Set`, default MIX, or per cue for the recommended ones); green
+is the game's, amber the last played. `AnimationLabView.Row.WithButtons` / `ButtonAt` carry them,
+and the knobs sit in a SETTINGS group that stays closed until needed (no knobs = more rows). Groups: placing, lines, sweep, cards & market, fire,
+RECOMMENDED power effects and boss stings (`SoundFx.Recommended.cs` - three MIX-palette variants
+each of the cues that were placeholder audio in every set, chosen per cue and persisted,
+`RecChoice`, the original until one is picked; the stings keep their lengths because the intros
+are timed to them; a second round D/E in `SoundFx.Recommended2.cs`), MISSING & WEAK SOUNDS
+(`SoundFx.Prototypes.cs` - A/B/C prototypes, built lazily and NOT wired in until picked, in four
+sub-groups: the nine joker views whose `Sounded` beats nothing listens to yet, round flow and
+feedback, cards/deck/market, and the stand-ins `Buy`/`Shuffle` answer for), and an archive of
+line-clear candidates. V3 (`SoundFx.V3.cs`) answers the
+first listen of NEW: explosions weighted in the mids with a high-pass under every hit (NEW's were
+too bass heavy), and no inharmonic "ting" anywhere - soft marimba notes instead of bells. MIX
+(`SoundFx.Mix.cs`, the default) is what the listening settled on: NEW's placing, a line clear of its own
+in one of three lab-picked CRUNCH candidates (CRUNCH / CRISP / CHUNKY) or three different approaches (ZIP - an outward "shwip" with the
+beam, POP - popping candy, CHIP - a chiptune arpeggio) and five variants of ZIP, which won (TWIN, SPARK, GLISS, EDGE,
+SOFT), `SoundFx.MixLineStyle`,
+persisted; crunch beat a snap chain and tuned taps -
+NEW's was too aggressive even at half the thump, and a take made of low upward-gliding resonant
+"bloops" read as a fart), a sweep with ONE hit built as a phrase (a noise swell, a crunch over the
+thump, a swelling pluck run, a strummed chord, dry sparkle), NEW's thump back under both as its own layer at a lab
+level (`MixThumpLevel` - it was right, only too dominant), a subtle distant explosion bed behind
+clears and the sweep's hit (`MixBlastLevel`), V3's shuffle, the rest of cards/market rebuilt on two less stock instruments (a resonant glide and a
+muted Karplus-Strong pluck), and the only reworked flame and fuse (broadband and DRY - built on resonant filters it sounded
+wet). The legacy clips in `SoundFx.cs` are
+kept untouched as the reference; the tactile rebuild (layered transient / exponential pitch-drop
+body / material modes / saturation / baked room, round-robin variants, and a POOL of sources so a
+new cue's pitch never re-pitches one still ringing) lives in `SoundFx.Polished.cs`.
+
 **F3 opens the ANIMATION LAB** — a catalogue of every animation in the game, each playable on
 demand, with knobs for the conditions that modulate them (combo streak, sweep count, overtime
 level, board darkness, and a 0.1x-2x time scale for watching one frame by frame). It lives in
