@@ -1,4 +1,4 @@
-// PURPOSE: "Kara Delik" - SINGULARITY / EVENT HORIZON. The black hole as a living physical anomaly on the
+﻿// PURPOSE: "Kara Delik" - SINGULARITY / EVENT HORIZON. The black hole as a living physical anomaly on the
 // board, and everything it does: bending the cubes around it, pulling, swallowing, filling up, the
 // critical collapse, the rogue gravity that devours a card pile, and refusing to be moved.
 //
@@ -1598,9 +1598,16 @@ namespace ProjectBlock.View
             float r = Mathf.Lerp(p.Radius0 + Style.SwallowLockPx * px * 0f, 0f, fall);
             float theta = p.Theta0 + p.Turns * Mathf.PI * 2f * Mathf.Pow(u, 1.6f);
             Vector2 pos = centre + new Vector2(Mathf.Cos(theta), Mathf.Sin(theta)) * r;
-            Vector2 toward = centre - pos;
-            Vector2 dir = toward.sqrMagnitude > 0.000001f ? toward.normalized : dir0;
-            p.R.transform.localRotation = Quaternion.Euler(0f, 0f, p.Spin * Smooth(u));
+            // THE STRETCH AXIS COMES FROM THE SPIRAL'S OWN ANGLE, never from (centre - pos): that
+            // vector shrinks to nothing as the cube reaches the middle, its direction flips from
+            // frame to frame, and the stretched needle whipped round the hole. Inward along the
+            // orbit, leaning a little into the travel so the tail trails behind.
+            Vector2 inward = -new Vector2(Mathf.Cos(theta), Mathf.Sin(theta));
+            Vector2 travel = new Vector2(-inward.y, inward.x) * (p.Turns >= 0f ? 1f : -1f);
+            Vector2 dir = (inward + travel * 0.35f * Smooth(u)).normalized;
+            // It turns WITH its orbit (a body being carried round), not on an arbitrary spin.
+            p.R.transform.localRotation = Quaternion.Euler(0f, 0f,
+                (theta - p.Theta0) * Mathf.Rad2Deg * 0.55f);
 
             // SPAGHETTIFICATION: the form is kept until the last quarter
             float radial = 1f, tangent = 1f;
@@ -1615,8 +1622,18 @@ namespace ProjectBlock.View
             float darken = u < 0.7f ? Mathf.Lerp(0.1f, 0.25f, u / 0.7f) : Mathf.Lerp(0.4f, 0.92f, late);
             float desat = late * 0.85f;
             float streak = Span(u, 0.82f, 1f) * (1f - Span(u, 0.97f, 1f));
+            // THE MASS GOES IN, IT DOES NOT PARK. Without this the stretched cube arrived at the
+            // centre at full length - a needle sticking out past the horizon on both sides and
+            // turning there until the score tick. It is drawn down to a sliver over the last
+            // stretch so what crosses the horizon is the last of it, and fades as it does.
+            float shrink = Mathf.Lerp(1f, 0.12f, Smooth(Span(u, 0.55f, 1f)));
+            radial *= Mathf.Lerp(1f, 0.8f, late) * shrink + (1f - shrink) * 0.15f;
+            tangent *= shrink;
             PaintCubeProxy(p, pos, radial, tangent, 0.03f + 0.05f * u, darken, desat, Layers.ShowOcclusion,
                 streak, horizon, dir);
+            Color faded = p.Colour;
+            faded.a *= 1f - Smooth(Span(u, 0.88f, 1f));
+            p.R.color = faded;
             if (!p.Absorbed && r <= horizon * 0.85f)
             {
                 Absorb(p);

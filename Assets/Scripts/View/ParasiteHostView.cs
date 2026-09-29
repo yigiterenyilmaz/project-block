@@ -1,4 +1,4 @@
-// PURPOSE: "Parazit"'s HOST CUBE - SYMBIOTIC CLASP. The cube a joker is riding, drawn as a separate
+﻿// PURPOSE: "Parazit"'s HOST CUBE - SYMBIOTIC CLASP. The cube a joker is riding, drawn as a separate
 // organism gripping it rather than as a colour applied to it. Owned by BoardView like the rot, the
 // snake and the press, because a host stands for as long as its block does and the board is
 // repainted many times in that.
@@ -250,6 +250,15 @@ namespace ProjectBlock.View
             public static float CoreRimBoost = 0.25f;
 
             public static float CoreOffset = 0.05f;
+            /// <summary>With a joker ICON riding, the nest grows into a pod that holds it.</summary>
+            public static float RiderNestGrow = 1.75f;
+            /// <summary>The icon as a share of that pod - under 1, so the pod's rim shows all
+            /// round it and the icon is IN something.</summary>
+            public static float RiderIconShare = 0.78f;
+            /// <summary>How far the held icon is pulled toward the flesh (0 = untouched).</summary>
+            public static float RiderHeldTint = 0.18f;
+            /// <summary>The film of the wrap drawn back over the icon.</summary>
+            public static float RiderFilmAlpha = 0.28f;
 
             public static float CoreShadowStrength = 0.3f;
 
@@ -546,7 +555,13 @@ namespace ProjectBlock.View
 
         private const int EssenceInnerOrder = 13;
 
-        private const int FleckOrder = 14;
+        /// <summary>The bound joker's own ICON, held IN the nest: the icon, then a film of the
+        /// wrap drawn back over it, so the membrane holds it rather than a badge sitting on top.</summary>
+        private const int RiderOrder = 14;
+
+        private const int RiderFilmOrder = 15;
+
+        private const int FleckOrder = 16;
 
         private static Material drainMaterial;
 
@@ -693,6 +708,8 @@ namespace ProjectBlock.View
             public SpriteRenderer EssenceOuter;
             public SpriteRenderer Essence;
             public SpriteRenderer EssenceInner;
+            public SpriteRenderer Rider;
+            public SpriteRenderer RiderFilm;
             public readonly List<SpriteRenderer> Flecks = new List<SpriteRenderer>();
             public readonly List<Vector2> FleckDirs = new List<Vector2>();
             /// <summary>Seconds since the block landed, or above SeatTotal once seated.</summary>
@@ -1132,6 +1149,10 @@ namespace ProjectBlock.View
             Return(h.EssenceOuter);
             Return(h.Essence);
             Return(h.EssenceInner);
+            Return(h.Rider);
+            Return(h.RiderFilm);
+            h.Rider = null;
+            h.RiderFilm = null;
             for (int i = 0; i < h.Flecks.Count; i++)
             {
                 Return(h.Flecks[i]);
@@ -1784,8 +1805,10 @@ namespace ProjectBlock.View
                 ? Ease(Span(rupture, Style.RuptureFirstRib + Style.RuptureRibStagger,
                     Style.RuptureFirstRib + Style.RuptureRibStagger + Style.RuptureCoreReveal))
                 : 0f;
-            float w = Style.CoreSize * cube * grow * squeeze * (1f + open * 0.2f);
-            float hh = Style.CoreSize * cube * grow / Mathf.Max(squeeze, 0.01f)
+            Sprite rider = RiderFor(h);
+            float nestSize = rider != null ? Style.CoreSize * Style.RiderNestGrow : Style.CoreSize;
+            float w = nestSize * cube * grow * squeeze * (1f + open * 0.2f);
+            float hh = nestSize * cube * grow / Mathf.Max(squeeze, 0.01f)
                 * (1f - open * 0.26f);
             if (h.Core != null)
             {
@@ -1812,6 +1835,7 @@ namespace ProjectBlock.View
                 h.CoreShadow.color = new Color(0f, 0f, 0f,
                     Style.CoreShadowStrength * wake * (1f - open * 0.7f));
             }
+            PaintRider(h, rider, at, w, hh, cube, clamp, grip, push, rupture);
             if (h.Essence == null && h.EssenceOuter == null && h.EssenceInner == null)
             {
                 return;
@@ -1867,8 +1891,93 @@ namespace ProjectBlock.View
                 Mathf.Lerp(tint.b, 1f, Style.EssenceInnerLighten), tint.a);
             PaintEssenceShell(h.EssenceOuter, seatAt, size * Style.EssenceOuterScale, squash, husk);
             PaintEssenceShell(h.Essence, seatAt, size, squash, tint);
+            if (rider != null)
+            {
+                // The pale seed would sit on the icon's face; the husk stays as its glow.
+                heart.a = 0f;
+            }
             PaintEssenceShell(h.EssenceInner, seatAt, size * Style.EssenceInnerScale, squash,
                 heart);
+        }
+
+        private GridPos? riderCell;
+        private Sprite riderSprite;
+
+        /// <summary>The bound joker's ICON and the cell of the host that carries it. Null takes it
+        /// off. Asked every repaint (through BoardView.SetParasiteRider); only draws.</summary>
+        public void SetRider(GridPos? cell, Sprite icon)
+        {
+            riderCell = icon != null ? cell : null;
+            riderSprite = icon;
+        }
+
+        private Sprite RiderFor(HostPiece h)
+        {
+            return riderSprite != null && riderCell.HasValue && riderCell.Value.Equals(h.Cell)
+                ? riderSprite
+                : null;
+        }
+
+        /// <summary>
+        /// THE ICON IS HELD, NOT PINNED ON. It sits sunk in the nest (which grows into a pod round
+        /// it), is pulled a little toward the flesh, and a thin film of the wrap is drawn back OVER
+        /// it, a little larger than the icon, so the membrane's lip runs across the icon's edge.
+        /// It rides every motion the nest makes (the counter-pull, the clamp squeeze); at the
+        /// rupture the film peels off first and the icon is bare for a beat before it goes with
+        /// the passenger.
+        /// </summary>
+        private void PaintRider(HostPiece h, Sprite icon, Vector2 at, float nestW, float nestH,
+            float cube, float clamp, float grip, float push, float rupture)
+        {
+            if (icon == null)
+            {
+                Return(h.Rider);
+                Return(h.RiderFilm);
+                h.Rider = null;
+                h.RiderFilm = null;
+                return;
+            }
+            if (h.Rider == null)
+            {
+                h.Rider = Rent(icon, RiderOrder, null);
+            }
+            if (h.RiderFilm == null)
+            {
+                h.RiderFilm = Rent(ParasiteShapes.Heart, RiderFilmOrder, null);
+            }
+            h.Rider.sprite = icon;
+
+            float peel = 0f;
+            float gone = 0f;
+            if (rupture >= 0f)
+            {
+                float revealAt = Style.RuptureFirstRib + Style.RuptureRibStagger;
+                peel = Ease(Span(rupture, Style.RuptureFirstRib, revealAt + Style.RuptureCoreReveal));
+                float collapseAt = revealAt + Style.RuptureCoreReveal + Style.RuptureEssenceHold;
+                gone = Ease(Span(rupture, collapseAt, collapseAt + Style.RuptureEssenceCollapse));
+            }
+            float show = Ease(Span(h.SeatClock, Style.SeatCoreWake * 0.6f,
+                Style.SeatCoreWake + Style.SeatMembraneSpread));
+
+            // Squeezed with the nest by a clamp, swelling a hair when the cube pushes.
+            float squeeze = 1f - 0.05f * Mathf.Max(clamp, grip * 0.6f);
+            float iconSize = Mathf.Min(nestW, nestH) * Style.RiderIconShare
+                * (1f + 0.04f * push) * (1f - 0.7f * gone);
+            float native = Mathf.Max(icon.bounds.size.x, icon.bounds.size.y, 0.0001f);
+            float k = iconSize / native;
+            h.Rider.transform.localPosition = new Vector3(at.x, at.y + cube * 0.006f, 0f);
+            h.Rider.transform.localScale = new Vector3(k * squeeze, k / Mathf.Max(squeeze, 0.01f), 1f);
+            float held = Style.RiderHeldTint * (1f - peel);
+            Color c = Color.Lerp(Color.white, new Color(0.86f, 0.62f, 0.8f), held);
+            c.a = show * (1f - gone);
+            h.Rider.color = c;
+
+            float filmA = Style.RiderFilmAlpha * show * (1f - peel) * (1f + 0.3f * clamp);
+            h.RiderFilm.transform.localPosition = new Vector3(at.x, at.y, 0f);
+            Fit(h.RiderFilm, nestW * 0.94f, nestH * 0.94f);
+            Color film = Color.Lerp(BodyViolet, WarmRose, 0.35f);
+            film.a = Mathf.Clamp01(filmA);
+            h.RiderFilm.color = film;
         }
 
         /// <summary>One shell of the passenger's seed.</summary>

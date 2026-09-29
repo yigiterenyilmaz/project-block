@@ -1,4 +1,4 @@
-// PURPOSE: "Besleme"'s patch - the bit of board its creature lives in and feeds from. This class
+﻿// PURPOSE: "Besleme"'s patch - the bit of board its creature lives in and feeds from. This class
 // owns the SHAPE and the EVENTS; the surface itself lives in ProjectBlock/CreatureNest.shader.
 //
 // THE SPLIT IS THE POINT. What this effect has to be - a clean contour at any zoom AND a dense
@@ -38,7 +38,7 @@ using UnityEngine;
 namespace ProjectBlock.View
 {
     /// <summary>The living nest "Besleme"'s creature feeds in.</summary>
-    public sealed class CreatureNestView : MonoBehaviour
+    public sealed partial class CreatureNestView : MonoBehaviour
     {
         // =================================================================== TUNING
         public static class Style
@@ -295,12 +295,14 @@ namespace ProjectBlock.View
             PushStyle();
             RebuildSpecks();
             built = true;
+            BuildMaw(toWorld);
         }
 
         public void Clear()
         {
             cells.Clear();
             built = false;
+            ClearMaw();
             if (nest != null)
             {
                 nest.enabled = false;
@@ -322,6 +324,7 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            ChompMaw();
             int slot = -1;
             float oldest = float.MaxValue;
             for (int i = 0; i < MaxFeeds; i++)
@@ -818,6 +821,7 @@ namespace ProjectBlock.View
             float dt = Time.deltaTime;
             clock += dt;
             StepSpecks(dt);
+            TickMaw();
 
             // The only per-frame work: a clock and up to six feed points. Everything the player
             // actually sees on the surface is evaluated on the GPU from these.
