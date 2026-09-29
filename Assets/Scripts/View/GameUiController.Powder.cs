@@ -63,8 +63,9 @@ namespace ProjectBlock.View
             }
             PowderVisuals report = joker.LastCharge;
             EnsurePowder();
-            powder.Show(report);
-            if (report != null && !ReferenceEquals(report, lastPowderPlayed))
+            bool fresh = report != null && !ReferenceEquals(report, lastPowderPlayed);
+            powder.Show(report, fresh);
+            if (fresh)
             {
                 lastPowderPlayed = report;
                 // A turn in which nothing actually took a charge is silent: every standing block
@@ -100,6 +101,34 @@ namespace ProjectBlock.View
             sfx.Fuse(ripest);
         }
 
+        /// <summary>The last payout drawn, matched by identity like the charge report.</summary>
+        private PowderPayoutVisuals lastPowderPayout;
+
+        /// <summary>
+        /// The powder going up, from PlayExplosionFeedback - the moment the turn's cubes break,
+        /// not the repaint before it. Each cell waits for ITS cube to break on screen (the same
+        /// line-front / cluster timing Hazine reveals on), and a FULL block's bonus blast booms.
+        /// </summary>
+        private void PlayPowderPayout(RoundEngine round, TurnReport report)
+        {
+            BarutTedarikcisiJoker joker = FindPowderJoker();
+            PowderPayoutVisuals payout = joker != null ? joker.LastPayout : null;
+            if (payout == null || ReferenceEquals(payout, lastPowderPayout) || boardView == null)
+            {
+                return;
+            }
+            lastPowderPayout = payout;
+            EnsurePowder();
+            GameBoard board = round != null ? round.Board : null;
+            var delays = new List<float>();
+            for (int i = 0; i < payout.Count; i++)
+            {
+                delays.Add(HazineBreakDelay(board, report != null ? report.ExplodedRows : null,
+                    report != null ? report.ExplodedColumns : null, payout.Cells[i]));
+            }
+            powder.PlayPayout(payout, delays);
+        }
+
         private void EnsurePowder()
         {
             if (powder != null)
@@ -113,6 +142,14 @@ namespace ProjectBlock.View
             go.transform.SetParent(boardView.transform, false);
             powder = go.AddComponent<PowderChargeView>();
             powder.Build(boardView);
+            powder.BlastPeaked = delegate
+            {
+                if (sfx != null)
+                {
+                    sfx.Explode(2, 0);
+                    sfx.Fuse(1f);
+                }
+            };
         }
     }
 }
