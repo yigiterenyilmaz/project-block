@@ -1276,9 +1276,11 @@ dropped that way once each.
   `HalveRoundScore`, both caps, the final-round replay) leaves the purse alone - the METER is the
   one record of what the round earned. When the round ends Advanced, `SettleHeldRoundScore` splits
   the meter the way `BankRoundScore` does and deflates by `UninflatedOwnBar / OwnBar`: the own
-  share (a bar inflated 1000 -> 3000 pays 1000; nothing while in debt), a credit minimum's band
-  1:1 (it is a real debt payment, not inflated money), and overtime at the same rate (600 -> 200),
-  all rounded down and granted through `GrantCurrency`. A lost round forfeits what it held.
+  share (a bar inflated 1000 -> 3000 pays 1000; nothing while in debt), the credit minimum's band
+  (a fixed 300 on the meter pays the debt its REAL 100 - the band never inflates, the points
+  earned in it do; so the minimum is then only partly paid in money, which no rule reads), and
+  overtime (600 -> 200) - ONE rate for all three, since the bar stops rising once the own bar is
+  reached, all rounded down and granted through `GrantCurrency`. A lost round forfeits what it held.
   `LastInflationSettlement` (reporting, not saved) is what the market's message line reads.
   Save format 25 (the boss saves what it ADDED, not the turns it counted).
 - **A TURN IS NEVER WORTH LESS THAN NOTHING.** Negative score is real ("Terslik" inverting every
