@@ -391,6 +391,29 @@ public static class SaveTests
             "and the final-round replay count");
         CheckEqual(session.CanSmuggle, back.CanSmuggle,
             "and whether the free market item is still there");
+
+        // "Kredi kartı" as a LOAN: a bank campaign on an offer, and a stage that started in debt
+        // with its minimum payment on the bar. None of it can be rebuilt on load - the installment
+        // was fixed from the debt the stage STARTED with, which the stage has since paid down.
+        session.DebugSkipToMarket();
+        Check(session.Phase == GamePhase.Market, "reached a market to save in");
+        session.Market.Offers[0].CampaignPercent = 10;
+        GameSession backMarket = SaveGame.Load(SaveGame.Save(session), NewConfig(777));
+        CheckEqual(10, backMarket.Market.Offers[0].CampaignPercent,
+            "a bank campaign stays on its offer");
+        session.BorrowForTest(5000);
+        session.LeaveMarket();
+        Check(session.CurrentRound.CreditInstallment > 0, "the stage owes a minimum payment");
+        GameSession backLoan = SaveGame.Load(SaveGame.Save(session), NewConfig(777));
+        CheckEqual(session.Debt, backLoan.Debt, "the loan came back");
+        CheckEqual(session.CreditStagesCarried, backLoan.CreditStagesCarried,
+            "and how far into its term it is");
+        CheckEqual(session.DebtAtStageStart, backLoan.DebtAtStageStart,
+            "and what the stage started owing");
+        CheckEqual(session.CurrentRound.CreditInstallment, backLoan.CurrentRound.CreditInstallment,
+            "and the stage's minimum payment");
+        CheckEqual(session.CurrentRound.PassBar, backLoan.CurrentRound.PassBar,
+            "so the bar is where it was");
     }
 
     private static void CardTableSharesInstances()

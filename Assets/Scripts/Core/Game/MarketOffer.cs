@@ -37,7 +37,32 @@ namespace ProjectBlock.Core
         /// </summary>
         public int Price
         {
-            get { return BasePrice + (market != null ? market.PriceSurcharge : 0); }
+            get
+            {
+                int price = BasePrice + (market != null ? market.PriceSurcharge : 0);
+                if (CampaignActive)
+                {
+                    price -= price * CampaignPercent / 100;
+                }
+                return price;
+            }
+        }
+
+        /// <summary>"Kredi kartı": a bank CAMPAIGN on this one offer - this much off, bought on the
+        /// card. 0 when there is none. Handed out as the reward for paying a debt off on time
+        /// (GameSession.Credit.cs), and saved with the offer.</summary>
+        public int CampaignPercent { get; internal set; }
+
+        /// <summary>True while the campaign is actually honoured: there is one, and the card it
+        /// is a campaign OF is still held (Market.CreditHeld). Sell the card and the price goes
+        /// back up - the discount was for paying with it.</summary>
+        public bool CampaignActive
+        {
+            get
+            {
+                return CampaignPercent > 0 && market != null && market.CreditHeld != null
+                    && market.CreditHeld();
+            }
         }
 
         public bool Sold { get; internal set; }

@@ -254,7 +254,7 @@ namespace ProjectBlock.View
                     "                  round, and when the market is offered it takes it",
                     "   LT (hold)      the smuggle modifier in the market     RT: faster cursor",
                     "   LB / RB        scroll - your collection, the market shelf, these pages",
-                    "   L3 / R3        hide or show the prompt strip / pay the debt (market)",
+                    "   L3             hide or show the prompt strip",
                     "",
                     "   Jokers and powers live on their bars: point at one and press A."
                 },
@@ -441,7 +441,7 @@ namespace ProjectBlock.View
                     "                  market teklif edildiğinde markete geçer",
                     "   LT (basılı)    markette kaçakçılık tuşu      RT: imleci hızlandırır",
                     "   LB / RB        kaydırma - kartların, market rafı, bu sayfalar",
-                    "   L3 / R3        ipucu şeridini gizle-göster / borcu öde (markette)",
+                    "   L3             ipucu şeridini gizle-göster",
                     "",
                     "   Jokerler ve güçler kendi barlarında: üstüne gel ve A'ya bas."
                 },

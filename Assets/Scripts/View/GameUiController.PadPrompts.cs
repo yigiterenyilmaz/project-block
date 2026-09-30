@@ -336,10 +336,6 @@ namespace ProjectBlock.View
                 parts.Add(PadTok("LT+A", PadColorNeutral,
                     Loc.Pick("take it free", "bedava al")));
             }
-            if (session.Debt > 0)
-            {
-                parts.Add(PadTok("R3", PadColorNeutral, Loc.Pick("pay the debt", "borcu öde")));
-            }
             return PadJoin(parts.ToArray());
         }
 

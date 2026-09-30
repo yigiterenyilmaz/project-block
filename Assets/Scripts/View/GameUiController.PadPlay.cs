@@ -307,13 +307,6 @@ namespace ProjectBlock.View
                 PadPanelReset();
                 return true;
             }
-            if (session.Debt > 0 && pad.rightStickButton.wasPressedThisFrame)
-            {
-                // "Kredi kartı": settling up is a market action and never automatic, so like
-                // the [O] key it needs a press of its own.
-                RepayDebtWithFx();
-                return true;
-            }
             if (offers.Count == 0)
             {
                 return false;

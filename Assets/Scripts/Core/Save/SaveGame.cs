@@ -69,7 +69,10 @@ namespace ProjectBlock.Core
         // 23 (2026-09-29): merged with the "Simya" / "Kara Delik" branch - every card saves its
         // chosen element (".active") and the black hole joker saves what it swallowed. Neither side's
         // 19-22 writes both, so all of them are refused.
-        public const int FormatVersion = 23;
+        // 24 (2026-09-30): "Kredi kartı" became a loan - the session saves the term it is into and
+        // the stage's books (credit.*), every market offer its bank campaign, and the round its
+        // minimum payment (creditInstallment). A 23 is short all three.
+        public const int FormatVersion = 24;
 
         private const string VersionKey = "version";
 

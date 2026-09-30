@@ -102,10 +102,34 @@ namespace ProjectBlock.Core
             }
         }
 
-        /// <summary>ScoreThreshold lifted into the same scaled units as RoundScore.</summary>
+        /// <summary>ScoreThreshold lifted into the same scaled units as RoundScore, plus the
+        /// credit installment this stage owes. Everything that asks "has the bar been met" - the
+        /// crossing, the ceiling, a boss beaten on its own terms - asks THIS, so the installment
+        /// is part of the bar in every sense and there is no second definition to drift.</summary>
         private int ScaledThreshold
         {
-            get { return ScoreThreshold * scorer.ScoreScale; }
+            get { return ScoreThreshold * scorer.ScoreScale + CreditInstallment; }
+        }
+
+        /// <summary>
+        /// "Kredi kartı": the minimum payment ("asgari") on the run's debt that this stage has to
+        /// earn ON TOP of its own threshold, in the scaled economy. Set once by the session before
+        /// the first turn and fixed for the stage. It raises the bar, not ScoreThreshold: the
+        /// jokers that scale off the threshold ("Meydan Okuma", "Barut tedarikçisi") must not
+        /// grow because the player is in debt.
+        /// </summary>
+        public int CreditInstallment { get; private set; }
+
+        internal void SetCreditInstallment(int scaled)
+        {
+            CreditInstallment = Math.Max(0, scaled);
+        }
+
+        /// <summary>The bar this stage really has to reach, in the same scaled units as
+        /// RoundScore: the threshold plus any credit installment. For the HUD.</summary>
+        public int PassBar
+        {
+            get { return ScaledThreshold; }
         }
 
         /// <summary>Where RoundScore stood when the turn in progress began. The floor a turn may

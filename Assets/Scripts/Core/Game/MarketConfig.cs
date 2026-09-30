@@ -48,6 +48,37 @@ namespace ProjectBlock.Core
         public double RarePriceMultiplier = 1.5;
         public double LegendaryPriceMultiplier = 2.0;
 
+        // ---- "Kredi kartı": the terms of the loan (designer's call 2026-09-30; see
+        //      GameSession.Credit.cs). Balance placeholders like everything else here. ----
+
+        /// <summary>The minimum payment ("asgari") a stage that starts in debt owes on top of its
+        /// own bar, as a share of the debt it started with.</summary>
+        public int CreditMinimumPaymentPercent = 25;
+
+        /// <summary>Interest charged on what is still owed at the end of every stage, in tenths of
+        /// a percent (125 = 12.5%).</summary>
+        public int CreditInterestPermille = 125;
+
+        /// <summary>The term ("vade"): how many stages a debt may be carried before the bailiff
+        /// comes. Counted from the first stage played in debt; borrowing more does not reset it.</summary>
+        public int CreditTermStages = 3;
+
+        /// <summary>What a seized joker, power or elemental block is credited at ("haciz"), as a
+        /// share of what it would cost on the shelf.</summary>
+        public int CreditSeizurePercent = 50;
+
+        /// <summary>What a seized PLAIN block is credited at - "very cheap", once everything of
+        /// value is gone - as a share of its shelf price.</summary>
+        public int CreditPlainSeizurePercent = 10;
+
+        /// <summary>The bank's thank-you for a debt paid off in the first stage it was carried,
+        /// before any interest: points, as a share of the debt that stage started with.</summary>
+        public int CreditOnTimeBonusPercent = 5;
+
+        /// <summary>...or a campaign instead: one offer in the next market is this much cheaper
+        /// bought on the card.</summary>
+        public int CreditCampaignDiscountPercent = 10;
+
         /// <summary>Relative shop-appearance weights per rarity: commoner items are far likelier
         /// to be offered, legendaries seldom. Balance placeholders.</summary>
         public int CommonWeight = 100;

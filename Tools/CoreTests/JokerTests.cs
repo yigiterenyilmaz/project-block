@@ -169,9 +169,11 @@ public static partial class JokerTests
         Market_TheSurchargeSurvivesASaveWithoutDoubling();
         KrediKarti_BuysPastYourScoreAndRecordsTheDebt();
         KrediKarti_RefusesCreditWithoutTheJoker();
-        KrediKarti_InterestCompoundsEveryRound();
-        KrediKarti_RepayIsManualAndMarketOnly();
-        KrediKarti_BossRoundWithOpenDebtEndsTheRun();
+        KrediKarti_EarningsPayTheDebtFirst();
+        KrediKarti_TheMinimumPaymentRaisesTheBarAndInterestFollows();
+        KrediKarti_TheBailiffTakesTheMostValuableFirstAtHalfPrice();
+        KrediKarti_AnUnpaidTermEndsInForeclosureNotTheRun();
+        KrediKarti_PayingOnTimeEarnsTheBanksThanks();
         KrediKarti_ADebtFreeBossRoundIsFine();
         KrediKarti_CannotBeSoldWhileInDebt();
         OtekiDunya_ClonesTheBoardAndRaisesTheBar();
@@ -5592,102 +5594,246 @@ public static partial class JokerTests
         Check(session.Debt == 0, "no debt appears out of nowhere", "debt " + session.Debt);
     }
 
-    private static void KrediKarti_InterestCompoundsEveryRound()
+    private static void KrediKarti_EarningsPayTheDebtFirst()
     {
-        Section("kredi kartı / the debt compounds 10% every round");
-        var session = NewSession(6103, 6, 30, 40, 3);
-        var card = (KrediKartiJoker)session.Jokers.Add(new KrediKartiJoker());
-        Check(AdvanceToMarket(session, 400), "reached the market");
-        ForceDebt(session, 12);
-        Check(session.Debt > 0, "there is a debt to charge interest on", "debt " + session.Debt);
-
-        long owed = session.Debt;
-        session.LeaveMarket();
-        Check(AdvanceToMarket(session, 400) || session.Phase == GamePhase.GameOver,
-            "played another round");
-        long expected = owed + (owed * card.InterestPercent + 99) / 100;
-        Check(session.Debt == expected, "one round of interest, rounded up",
-            owed + " -> " + session.Debt + " (expected " + expected + ")");
-        Check(session.Debt > owed, "so it really did grow");
-    }
-
-    private static void KrediKarti_RepayIsManualAndMarketOnly()
-    {
-        Section("kredi kartı / repaying is manual, and only in the market");
+        Section("kredi kartı / the purse goes negative, and money in pays the debt first");
         var session = NewSession(6104, 6, 30, 40, 3);
         session.Jokers.Add(new KrediKartiJoker());
         Check(AdvanceToMarket(session, 400), "reached the market");
-        ForceDebt(session, 12);
-        Check(session.Debt > 0, "there is a debt", "debt " + session.Debt);
+        SpendEverythingAffordable(session);
+        session.BorrowForTest(5000);
+        Check(session.TotalScore == 0 && session.Debt == 5000,
+            "the purse went first and the rest is owed",
+            "purse " + session.TotalScore + " debt " + session.Debt);
+        Check(session.Balance == -5000, "so the purse reads -5000", "balance " + session.Balance);
 
-        // Earnings alone must NOT settle it - that is the whole decision the joker offers.
-        long owed = session.Debt;
-        session.LeaveMarket();
-        AdvanceToMarket(session, 400);
-        Check(session.Debt >= owed, "a round of earnings did not pay it off by itself",
-            owed + " -> " + session.Debt);
-        Check(session.TotalScore > 0, "the earnings went to the player instead",
-            "score " + session.TotalScore);
-
-        // Now pay, by hand.
-        long score = session.TotalScore;
-        long debt = session.Debt;
-        long paid = session.RepayDebt(debt);
-        Check(paid > 0, "paying moved money", "paid " + paid);
-        Check(session.Debt == debt - paid, "the debt fell by exactly that",
-            debt + " -> " + session.Debt);
-        Check(session.TotalScore == score - paid, "and the score fell by exactly that",
-            score + " -> " + session.TotalScore);
-        Check(session.RepayDebt(1000000) <= session.TotalScore + debt,
-            "you can never pay more than you have or owe");
+        session.AddCurrency(1200);
+        Check(session.Debt == 3800 && session.TotalScore == 0,
+            "money coming in paid the debt, not the purse",
+            "purse " + session.TotalScore + " debt " + session.Debt);
+        session.AddCurrency(4000);
+        Check(session.Debt == 0 && session.TotalScore == 200,
+            "and only what was left over reached the purse",
+            "purse " + session.TotalScore + " debt " + session.Debt);
+        Check(session.CreditTermLeft == 0, "a paid-off loan has no term left to run");
     }
 
-    private static void KrediKarti_BossRoundWithOpenDebtEndsTheRun()
+    private static void KrediKarti_TheMinimumPaymentRaisesTheBarAndInterestFollows()
     {
-        Section("kredi kartı / a boss round that ends in debt ends the run");
-        var session = NewSession(6105, 6, 30, 40, 3);
+        Section("kredi kartı / a stage in debt owes 25% on top of its bar, then 12.5% interest");
+        var session = NewSession(6103, 6, 30, 40, 3);
+        session.Config.Scoring.PointsPerCubePlaced = 500; // every stage is passed on its first turn
         session.Jokers.Add(new KrediKartiJoker());
-        // FixedProgression flags no boss rounds, so drive the deadline through the real curve.
-        var config = new GameConfig();
-        config.RngSeed = 6105;
-        config.Deck = new DeckDefinition("test", 40, new SizedShapeGenerator(1));
-        var real = new GameSession(config);
-        real.Config.Scoring.PointsPerCubePlaced = 500; // clear every threshold comfortably
-        real.Jokers.Add(new KrediKartiJoker());
+        Check(AdvanceToMarket(session, 400), "reached the market");
+        SpendEverythingAffordable(session);
+        session.BorrowForTest(8000);
+        long owed = session.Debt;
+        session.LeaveMarket();
 
-        int guard = 0;
-        bool sawDebt = false;
-        while (real.Phase != GamePhase.GameOver && real.Phase != GamePhase.RunWon && guard++ < 400)
+        RoundEngine round = session.CurrentRound;
+        int scale = session.Config.Scoring.ScoreScale;
+        long installment = (owed * session.Config.Market.CreditMinimumPaymentPercent + 99) / 100;
+        Check(round.CreditInstallment == installment, "the minimum payment is 25% of the debt",
+            round.CreditInstallment + " vs " + installment);
+        Check(round.ScoreThreshold == 30, "the threshold the jokers read is untouched",
+            "threshold " + round.ScoreThreshold);
+        Check(round.PassBar == 30 * scale + installment, "but the bar is threshold + minimum",
+            round.PassBar + " vs " + (30 * scale + installment));
+
+        int bar = round.PassBar;
+        Check(AdvanceToMarket(session, 400), "the stage was passed");
+        CreditStatement statement = session.LastCreditStatement;
+        Check(statement != null, "the stage wrote a statement");
+        if (statement == null)
         {
-            if (real.Phase == GamePhase.Market)
-            {
-                // Borrow hard on the first market and never pay a lira back.
-                if (!sawDebt)
-                {
-                    ForceDebt(real, 40);
-                    sawDebt = real.Debt > 0;
-                }
-                real.LeaveMarket();
-                continue;
-            }
-            if (real.CurrentRound.Status == RoundStatus.AwaitingAdvanceDecision)
-            {
-                real.CurrentRound.DecideAdvance(true);
-                continue;
-            }
-            if (PlayTurns(real, 1) == 0) { break; }
+            return;
         }
-        Check(sawDebt, "the run really did take on debt", "debt " + real.Debt);
-        Check(real.Phase == GamePhase.GameOver, "and the run is over",
-            "phase " + real.Phase + " round " + real.RoundNumber);
-        Check(real.CurrentRound.Loss == LossReason.DebtNotRepaid,
-            "for the debt, not for the board",
-            "loss " + real.CurrentRound.Loss);
-        Check(real.CurrentRound.Config.IsBossRound,
-            "and it happened on a boss round", "round " + real.RoundNumber);
-        Check(real.CurrentRound.Status == RoundStatus.Advanced,
-            "the round itself was survived - the books were the problem",
-            "status " + real.CurrentRound.Status);
+        Check(statement.Repaid == bar, "all the stage banked - exactly its bar - went to the debt",
+            statement.Repaid + " vs " + bar);
+        long left = owed - statement.Repaid;
+        long interest = (left * session.Config.Market.CreditInterestPermille + 999) / 1000;
+        Check(statement.Interest == interest, "12.5% on what was left, rounded up",
+            statement.Interest + " vs " + interest);
+        Check(session.Debt == left + interest, "and it went onto the debt",
+            session.Debt + " vs " + (left + interest));
+        Check(session.TotalScore == 0, "the purse stays empty while anything is owed",
+            "purse " + session.TotalScore);
+        Check(session.CreditTermLeft == session.Config.Market.CreditTermStages - 1,
+            "one stage of the term is gone", "left " + session.CreditTermLeft);
+        Check(statement.Reward == BankRewardKind.None, "and a debt that drew interest earns no thanks");
+    }
+
+    private static void KrediKarti_TheBailiffTakesTheMostValuableFirstAtHalfPrice()
+    {
+        Section("kredi kartı / foreclosure: most valuable first at half price, then plain blocks");
+        var session = NewSession(6108, 6, 30, 40, 3);
+        session.Config.Scoring.PointsPerCubePlaced = 500;
+        session.Jokers.Add(new KrediKartiJoker());
+        Check(AdvanceToMarket(session, 400), "reached the market");
+        SpendEverythingAffordable(session);
+        session.Powers.Add(new BuyutecPower());
+        MarketConfig market = session.Config.Market;
+
+        // A debt of ONE point: the bailiff takes the single most valuable thing, and hands back
+        // what it fetched over the debt.
+        long mostValuable = 0;
+        int scale = session.Config.Scoring.ScoreScale;
+        foreach (Joker j in session.Jokers.Jokers)
+        {
+            mostValuable = Math.Max(mostValuable, market.JokerBuyPrice(RarityTable.For(j.DefId)) * (long)scale);
+        }
+        foreach (Power p in session.Powers.Powers)
+        {
+            mostValuable = Math.Max(mostValuable, market.PowerBuyPrice(RarityTable.For(p.DefId)) * (long)scale);
+        }
+        foreach (BlockCard c in session.OwnedCards)
+        {
+            if (c.Elements.Count > 0)
+            {
+                mostValuable = Math.Max(mostValuable, market.BuyPrice(c) * (long)scale);
+            }
+        }
+        session.BorrowForTest(1);
+        var one = new CreditStatement();
+        session.Foreclose(one);
+        Check(one.Seized.Count == 1, "a small debt costs one thing", "seized " + one.Seized.Count);
+        if (one.Seized.Count == 1)
+        {
+            Check(one.Seized[0].Value == mostValuable, "the most valuable thing held",
+                one.Seized[0].Value + " vs " + mostValuable);
+            Check(one.Seized[0].Credited == one.Seized[0].Value * market.CreditSeizurePercent / 100,
+                "credited at half its shelf price", one.Seized[0].Credited + " of " + one.Seized[0].Value);
+            Check(session.Debt == 0 && session.TotalScore == one.Seized[0].Credited - 1,
+                "and what it fetched over the debt came back", "purse " + session.TotalScore);
+        }
+
+        // A debt nothing can cover: everything of value, in order, then plain blocks - down to a
+        // deck that can still deal a hand and no further.
+        session.BorrowForTest(1000000000L);
+        var all = new CreditStatement();
+        session.Foreclose(all);
+        bool ordered = true;
+        bool plainLast = true;
+        bool plainCheap = true;
+        bool seenPlain = false;
+        long last = long.MaxValue;
+        foreach (SeizedItem item in all.Seized)
+        {
+            if (item.Kind == SeizedKind.PlainBlock)
+            {
+                seenPlain = true;
+                plainCheap &= item.Credited == Math.Max(1L, item.Value * market.CreditPlainSeizurePercent / 100);
+                continue;
+            }
+            plainLast &= !seenPlain;
+            ordered &= item.Value <= last;
+            last = item.Value;
+        }
+        Check(ordered, "the valuables went most valuable first");
+        Check(plainLast, "and every one of them before any plain block");
+        Check(plainCheap, "plain blocks went for a tenth of their price");
+        Check(session.Jokers.Count == 0 && session.Powers.Count == 0,
+            "no joker or power survives a debt that size",
+            "jokers " + session.Jokers.Count + " powers " + session.Powers.Count);
+        Check(session.OwnedCards.Count == session.Config.Rules.HandSize,
+            "the deck stops at the hand size", "cards " + session.OwnedCards.Count);
+        Check(session.Debt > 0, "the rest is still owed - writing it off is the term's call, not this");
+    }
+
+    private static void KrediKarti_AnUnpaidTermEndsInForeclosureNotTheRun()
+    {
+        Section("kredi kartı / an unpaid term brings the bailiff, and the run goes on");
+        var session = NewSession(6105, 6, 30, 40, 3);
+        session.Config.Scoring.PointsPerCubePlaced = 500; // every stage is passed on its first turn
+        session.Jokers.Add(new KrediKartiJoker());
+        Check(AdvanceToMarket(session, 400), "reached the market");
+        SpendEverythingAffordable(session);
+        // More than three stages of minimum payments can clear.
+        session.BorrowForTest(5000);
+
+        int stages = 0;
+        CreditStatement statement = null;
+        bool termCounted = true;
+        while (stages < 10)
+        {
+            session.LeaveMarket();
+            if (!AdvanceToMarket(session, 400))
+            {
+                break;
+            }
+            stages++;
+            statement = session.LastCreditStatement;
+            if (statement != null && statement.Foreclosed)
+            {
+                break;
+            }
+            termCounted &= session.CreditTermLeft == session.Config.Market.CreditTermStages - stages;
+        }
+        Check(termCounted, "the term counted down one stage at a time");
+        Check(statement != null && statement.Foreclosed, "the bailiff came",
+            "stages " + stages);
+        Check(stages == session.Config.Market.CreditTermStages, "exactly when the term ran out",
+            "stage " + stages);
+        Check(session.Phase == GamePhase.Market, "and the run goes on - to the market",
+            "phase " + session.Phase);
+        Check(session.Debt == 0, "with nothing owed any more: covered or written off",
+            "debt " + session.Debt);
+        Check(statement != null && statement.Seized.Count > 0, "things were taken",
+            statement != null ? "seized " + statement.Seized.Count : "no statement");
+        Check(session.CreditTermLeft == 0, "and the term is closed");
+    }
+
+    private static void KrediKarti_PayingOnTimeEarnsTheBanksThanks()
+    {
+        Section("kredi kartı / a debt cleared in its first stage earns points or a campaign");
+        bool sawPoints = false;
+        bool sawCampaign = false;
+        for (int seed = 6200; seed < 6260 && !(sawPoints && sawCampaign); seed++)
+        {
+            var session = NewSession(seed, 6, 30, 40, 3);
+            session.Config.Scoring.PointsPerCubePlaced = 500;
+            Joker card = session.Jokers.Add(new KrediKartiJoker());
+            if (!AdvanceToMarket(session, 400))
+            {
+                continue;
+            }
+            SpendEverythingAffordable(session);
+            session.BorrowForTest(100); // small: the next stage's bar alone clears it
+            session.LeaveMarket();
+            if (!AdvanceToMarket(session, 400))
+            {
+                continue;
+            }
+            CreditStatement statement = session.LastCreditStatement;
+            if (statement == null || session.Debt != 0)
+            {
+                continue;
+            }
+            if (statement.Reward == BankRewardKind.Points && !sawPoints)
+            {
+                sawPoints = true;
+                long expected = (100 * session.Config.Market.CreditOnTimeBonusPercent + 99) / 100;
+                Check(statement.RewardPoints == expected, "the points are 5% of the loan",
+                    statement.RewardPoints + " vs " + expected);
+            }
+            else if (statement.Reward == BankRewardKind.Campaign && !sawCampaign)
+            {
+                sawCampaign = true;
+                MarketOffer offer = statement.CampaignOffer;
+                Check(offer != null && offer.CampaignPercent == 10 && offer.CampaignActive,
+                    "the campaign is on an offer in this market");
+                if (offer != null)
+                {
+                    int discounted = offer.Price;
+                    Check(session.Jokers.Sell(card) > 0, "the card sells once nothing is owed");
+                    Check(!offer.CampaignActive && offer.Price > discounted,
+                        "and without it the campaign price is gone",
+                        discounted + " -> " + offer.Price);
+                }
+            }
+        }
+        Check(sawPoints, "the bank paid points");
+        Check(sawCampaign, "the bank ran a campaign");
     }
 
     private static void KrediKarti_ADebtFreeBossRoundIsFine()
@@ -5743,18 +5889,11 @@ public static partial class JokerTests
         Check(session.TotalScore == score, "no money changed hands", "score " + session.TotalScore);
         Check(session.Debt > 0, "the debt is untouched - there is no way out through the market");
 
-        // Pay it off and the lock lifts.
-        session.RepayDebtInFull();
-        if (session.Debt == 0)
-        {
-            Check(session.Jokers.CanSell(card), "once clear, it can be sold again");
-            Check(session.Jokers.Sell(card) > 0, "and the sale really goes through");
-        }
-        else
-        {
-            Check(!session.Jokers.CanSell(card),
-                "still short of the full amount, so still locked", "debt " + session.Debt);
-        }
+        // Earn it back and the lock lifts - money coming in pays the debt first.
+        session.AddCurrency(session.Debt);
+        Check(session.Debt == 0, "earning the debt back cleared it", "debt " + session.Debt);
+        Check(session.Jokers.CanSell(card), "once clear, it can be sold again");
+        Check(session.Jokers.Sell(card) > 0, "and the sale really goes through");
     }
 
     /// <summary>Plays one dual-world turn: books the mirror's half, then plays the main world.

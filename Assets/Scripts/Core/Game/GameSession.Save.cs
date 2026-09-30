@@ -30,6 +30,7 @@ namespace ProjectBlock.Core
                 Threshold = () => CurrentRound != null ? CurrentRound.ScoreThreshold : 0
             };
             Market = new Market();
+            Market.CreditHeld = delegate { return CreditAvailable; };
             Jokers = new JokerInventory(this, rng);
             Powers = new PowerInventory(this, rng);
         }
@@ -59,6 +60,11 @@ namespace ProjectBlock.Core
             // "Kredi kartı" and "Kaçakçı" are RUN state: an unsaved debt would be forgiven by
             // reloading, and an unsaved smuggle would hand out a second free item per visit.
             w.Write("debt", Debt);
+            // The loan's books: how far into its term it is, and what this stage started owing and
+            // has paid off - the bank's thanks and the claw-back both read them mid-stage.
+            w.Write("credit.carried", CreditStagesCarried);
+            w.Write("credit.stageStartDebt", DebtAtStageStart);
+            w.Write("credit.repaid", DebtRepaidThisStage);
             w.Write("takenByEffects", CurrencyTakenByEffects);
             w.Write("grantedByEffects", CurrencyGrantedByEffects);
             w.Write("smuggled", smuggledThisMarket);
@@ -116,6 +122,9 @@ namespace ProjectBlock.Core
             session.PendingMarketDiscount = r.ReadDouble("discount");
             session.rerollCount = r.ReadInt("rerolls");
             session.Debt = r.ReadLong("debt");
+            session.CreditStagesCarried = r.ReadInt("credit.carried");
+            session.DebtAtStageStart = r.ReadLong("credit.stageStartDebt");
+            session.DebtRepaidThisStage = r.ReadLong("credit.repaid");
             session.CurrencyTakenByEffects = r.ReadLong("takenByEffects");
             session.CurrencyGrantedByEffects = r.ReadLong("grantedByEffects");
             session.smuggledThisMarket = r.ReadBool("smuggled");
@@ -190,6 +199,7 @@ namespace ProjectBlock.Core
                 // save written before the surcharge existed the two numbers were always equal.
                 w.Write(key + "." + i + ".price", offer.BasePrice);
                 w.Write(key + "." + i + ".sold", offer.Sold);
+                w.Write(key + "." + i + ".campaign", offer.CampaignPercent);
                 w.Write(key + "." + i + ".card", offer.Card != null ? offer.Card.Id : 0);
                 w.Write(key + "." + i + ".joker", offer.Joker != null ? offer.Joker.DefId : null);
                 w.Write(key + "." + i + ".power", offer.Power != null ? offer.Power.DefId : null);
@@ -205,6 +215,7 @@ namespace ProjectBlock.Core
                 var kind = (MarketOfferKind)r.ReadInt(key + "." + i + ".kind");
                 int price = r.ReadInt(key + "." + i + ".price");
                 bool sold = r.ReadBool(key + "." + i + ".sold");
+                int campaign = r.ReadInt(key + "." + i + ".campaign");
                 int cardId = r.ReadInt(key + "." + i + ".card");
                 string jokerId = r.ReadString(key + "." + i + ".joker");
                 string powerId = r.ReadString(key + "." + i + ".power");
@@ -227,6 +238,7 @@ namespace ProjectBlock.Core
                     offer = new MarketOffer(card, price);
                 }
                 offer.Sold = sold;
+                offer.CampaignPercent = campaign;
                 offers.Add(offer);
             }
             Market.SetOffers(offers);

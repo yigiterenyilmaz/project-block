@@ -166,25 +166,6 @@ namespace ProjectBlock.Core
             }
         }
 
-        /// <summary>Interest the debt accrues per round, in percent - the highest any held credit
-        /// joker charges. 0 when none is held.</summary>
-        public int MarketCreditInterestPercent
-        {
-            get
-            {
-                int highest = 0;
-                for (int i = 0; i < jokers.Count; i++)
-                {
-                    if (jokers[i].GrantsMarketCredit
-                        && jokers[i].MarketCreditInterestPercent > highest)
-                    {
-                        highest = jokers[i].MarketCreditInterestPercent;
-                    }
-                }
-                return highest;
-            }
-        }
-
         /// <summary>True while any held joker lets the player smuggle goods out of the market
         /// ("Kaçakçı"). A BROKEN smuggler smuggles nothing - IsGated covers dispatch, and this
         /// covers the market, where there is no round to gate against.</summary>

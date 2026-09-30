@@ -31,6 +31,10 @@ namespace ProjectBlock.Core
         /// </summary>
         public int PriceSurcharge { get; internal set; }
 
+        /// <summary>Whether the player holds a credit card right now - what a bank campaign on an
+        /// offer (MarketOffer.CampaignPercent) is conditional on. Asked live, set by the session.</summary>
+        internal System.Func<bool> CreditHeld;
+
         internal void SetOffers(IEnumerable<MarketOffer> newOffers)
         {
             offers.Clear();

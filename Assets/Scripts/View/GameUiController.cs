@@ -1281,14 +1281,9 @@ namespace ProjectBlock.View
                     {
                         break;
                     }
-                    // "Kredi kartı": settling the debt is a market action and never automatic,
-                    // so it needs its own key. O ("öde") pays down as much as the score covers -
-                    // P is already the power grant picker, and that handler runs first.
-                    if (kb != null && kb.oKey.wasPressedThisFrame && session.Debt > 0)
-                    {
-                        RepayDebtWithFx();
-                    }
-                    else if (kb != null && kb.nKey.wasPressedThisFrame)
+                    // ("Kredi kartı" used to have an [O] key to settle the debt here. It is a loan
+                    // now: every point earned pays it first, so there is nothing to press.)
+                    if (kb != null && kb.nKey.wasPressedThisFrame)
                     {
                         session.LeaveMarket();
                         marketView.Hide();

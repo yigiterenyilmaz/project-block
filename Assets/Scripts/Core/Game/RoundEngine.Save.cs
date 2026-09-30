@@ -48,6 +48,9 @@ namespace ProjectBlock.Core
             w.Write(key + ".suppressSweep", SuppressNaturalSweep);
             w.Write(key + ".drawEmptyReported", drawPileReportedEmpty);
             w.Write(key + ".cleanSampleLocked", cleanSampleLocked);
+            // "Kredi kartı": fixed at the stage's start from the debt it started with, which by a
+            // mid-stage save has already been paid down - it cannot be recomputed on load.
+            w.Write(key + ".creditInstallment", CreditInstallment);
 
             // "Hedefli": which targeted blocks still have their shot. Round-scoped state that
             // nothing else can rebuild - a reload would otherwise re-arm a block that had
@@ -137,6 +140,7 @@ namespace ProjectBlock.Core
             round.SuppressNaturalSweep = r.ReadBool(key + ".suppressSweep");
             round.drawPileReportedEmpty = r.ReadBool(key + ".drawEmptyReported");
             round.cleanSampleLocked = r.ReadBool(key + ".cleanSampleLocked");
+            round.CreditInstallment = r.ReadInt(key + ".creditInstallment");
 
             int armedCount = r.ReadInt(key + ".armedTargets.count");
             for (int i = 0; i < armedCount; i++)

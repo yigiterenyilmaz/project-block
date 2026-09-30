@@ -27,9 +27,10 @@ namespace ProjectBlock.Core
         /// the next piece from above (even if lower rows still have gaps) - like Tetris.</summary>
         RetroTopOut = 4,
 
-        /// <summary>"Kredi kartı": a boss round ended with the market debt still open. The ONLY
-        /// reason that ends a run without the round itself being lost - the board was fine, the
-        /// books were not.</summary>
+        /// <summary>"Kredi kartı": the FINAL stage ended owing more than the bailiff could take.
+        /// Anywhere else an unpaid term ends in foreclosure, not a loss (GameSession.Credit.cs).
+        /// The ONLY reason that ends a run without the round itself being lost - the board was
+        /// fine, the books were not.</summary>
         DebtNotRepaid = 5,
 
         /// <summary>"Çıkmaz": the board was emptied. On that round a clean sweep is the one

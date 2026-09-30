@@ -89,13 +89,6 @@ namespace ProjectBlock.Core
             get { return false; }
         }
 
-        /// <summary>Interest charged on the debt at the end of every round, in percent. Only
-        /// meaningful on a joker that grants credit. Balance placeholder.</summary>
-        public virtual int MarketCreditInterestPercent
-        {
-            get { return 0; }
-        }
-
         /// <summary>True while this joker lets the player walk out of the market with goods they
         /// did not pay for ("Kaçakçı"). Like the credit joker, smuggling is a SESSION rule and this
         /// is only the switch: GameSession does the taking and the rolling, and asks the inventory

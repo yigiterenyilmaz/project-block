@@ -52,98 +52,8 @@ namespace ProjectBlock.Core
         /// <summary>Run-wide score, doubling as market currency (confirmed design).</summary>
         public long TotalScore { get; private set; }
 
-        // ------------------------------------------------------------------- market credit
-        //
-        // "Kredi kartı" lets the player buy past what they own. The shortfall becomes DEBT, the
-        // debt compounds at the end of every round, and a boss round that ends with it still
-        // open ends the RUN - the one loss in the game that has nothing to do with the board.
-        //
-        // Repayment is deliberately MANUAL (RepayDebt, a market action): choosing to carry the
-        // debt one more round is the decision the joker is built around. Practical consequence,
-        // worth knowing: since paying only happens in the market, the real deadline is the
-        // market BEFORE the boss round - what you earn during the boss round cannot save you.
-
-        /// <summary>What the player owes, in the scaled run economy. 0 when debt-free.</summary>
-        public long Debt { get; private set; }
-
-        /// <summary>True while a held joker lets the player buy with points they do not have.</summary>
-        public bool CreditAvailable
-        {
-            get { return Jokers.GrantsMarketCredit; }
-        }
-
-        /// <summary>True if this price is payable at all - out of the run score, or on credit.</summary>
-        public bool CanAfford(long price)
-        {
-            return TotalScore >= price || CreditAvailable;
-        }
-
-        /// <summary>Pays a market price: the player's own points first, the rest borrowed. Only
-        /// ever called after CanAfford said yes.</summary>
-        private void Spend(long price)
-        {
-            if (TotalScore >= price)
-            {
-                TotalScore -= price;
-                return;
-            }
-            // Spend what there is and borrow the difference - a credit card, not a blank cheque
-            // that ignores the balance.
-            Debt += price - TotalScore;
-            TotalScore = 0;
-        }
-
-        /// <summary>
-        /// Pays the debt down from the run score, in the market. Pays as much of
-        /// <paramref name="amount"/> as the player both owes and can afford, and returns what
-        /// actually moved. Nothing happens outside the market, and paying is never automatic:
-        /// earnings pile up in TotalScore until the player chooses to settle.
-        /// </summary>
-        public long RepayDebt(long amount)
-        {
-            if (Phase != GamePhase.Market || amount <= 0 || Debt <= 0)
-            {
-                return 0;
-            }
-            long paid = amount;
-            if (paid > Debt)
-            {
-                paid = Debt;
-            }
-            if (paid > TotalScore)
-            {
-                paid = TotalScore;
-            }
-            if (paid <= 0)
-            {
-                return 0;
-            }
-            TotalScore -= paid;
-            Debt -= paid;
-            return paid;
-        }
-
-        /// <summary>Settles as much of the debt as the run score covers.</summary>
-        public long RepayDebtInFull()
-        {
-            return RepayDebt(Debt);
-        }
-
-        /// <summary>Compounds the debt at the end of a round. Rounded UP, so a small debt still
-        /// grows instead of sitting still forever.</summary>
-        private void AccrueDebtInterest()
-        {
-            if (Debt <= 0)
-            {
-                return;
-            }
-            int percent = Jokers.MarketCreditInterestPercent;
-            if (percent <= 0)
-            {
-                return;
-            }
-            Debt += (Debt * percent + 99) / 100;
-        }
+        // Market credit ("Kredi kartı") - the debt, the minimum payment, interest, the term, the
+        // bailiff and the bank's rewards - lives in GameSession.Credit.cs.
 
         /// <summary>Engine of the current round. Replaced wholesale every round.</summary>
         public RoundEngine CurrentRound { get; private set; }
@@ -316,6 +226,7 @@ namespace ProjectBlock.Core
                 Threshold = () => CurrentRound != null ? CurrentRound.ScoreThreshold : 0
             };
             Market = new Market();
+            Market.CreditHeld = delegate { return CreditAvailable; };
             Jokers = new JokerInventory(this, rng);
             Powers = new PowerInventory(this, rng);
             if (config.Deck.FixedShapes != null)
@@ -746,7 +657,7 @@ namespace ProjectBlock.Core
             NoteDeckChanged();
             // Sell values live in the same currency as the scaled run economy.
             int value = Config.Market.SellValue(card) * Config.Scoring.ScoreScale;
-            TotalScore += value;
+            Receive(value);
             return value;
         }
 
@@ -942,16 +853,21 @@ namespace ProjectBlock.Core
             {
                 return;
             }
-            TotalScore += amount;
+            Receive(amount);
             CurrencyGrantedByEffects += amount;
         }
 
-        /// <summary>Adds run currency (a joker sale today; market refunds later).</summary>
+        /// <summary>Adds run currency (a joker sale today; market refunds later). Through the
+        /// credit books either way: money in pays a debt first, money taken back returns to it.</summary>
         public void AddCurrency(long amount)
         {
-            TotalScore += amount;
-            if (amount < 0)
+            if (amount >= 0)
             {
+                Receive(amount);
+            }
+            else
+            {
+                TakeBack(-amount);
                 // A negative grant is an effect taking money back (the overtime score cap).
                 CurrencyTakenByEffects += -amount;
             }
@@ -1129,6 +1045,9 @@ namespace ProjectBlock.Core
             {
                 CurrentRound.SetBoss(boss);
             }
+            // "Kredi kartı": a stage that starts in debt owes its minimum payment on top of its
+            // bar - put on before the first turn, like the boss.
+            BeginCreditStage();
             // The final round is where "Uzun vadeli yatırımcı" finally pays: its two exclusive
             // powers are handed over now, before the round's first turn. Deliberately ahead of the
             // Lost check below so a degenerate round start cannot swallow them.
@@ -1314,7 +1233,8 @@ namespace ProjectBlock.Core
 
         private void OnTurnResolved(TurnReport report)
         {
-            TotalScore += report.ScoreGained;
+            // Through the credit books: a debt is paid before anything reaches the purse.
+            ApplyEarnings(report.ScoreGained);
         }
 
         private void OnRoundStatusChanged(RoundStatus status)
@@ -1325,12 +1245,12 @@ namespace ProjectBlock.Core
                 // the kumbara jokers - so this runs BEFORE the win check.
                 Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Advanced);
 
-                // "Kredi kartı": the debt compounds every round, and a BOSS round that ends with
-                // it still open ends the run. Deliberately ahead of the win check - surviving the
-                // final round does not settle your books, so round 15 can be survived and still
-                // lost. Without that, the last market would be a free shopping spree.
-                AccrueDebtInterest();
-                if (Debt > 0 && CurrentRound.Config.IsBossRound)
+                // "Kredi kartı": interest on what is still owed, the term, the bailiff and the
+                // bank's thanks (GameSession.Credit.cs). Deliberately ahead of the win check: the
+                // final stage is the last term there is, so round 15's boss can be survived and
+                // the run still lost, if the bailiff cannot cover what is owed. Without that the
+                // last market would be a free shopping spree.
+                if (SettleCreditAtStageEnd())
                 {
                     CurrentRound.NoteRunLoss(LossReason.DebtNotRepaid);
                     SetPhase(GamePhase.GameOver);
@@ -1346,6 +1266,8 @@ namespace ProjectBlock.Core
                 rerollCount = 0; // a fresh reroll price each market visit
                 RefreshMarketPrices(); // ...and a fresh price on the goods with it
                 RestockMarket();
+                // The bank's campaign goes on the shelf just stocked, before the player sees it.
+                ApplyPendingCampaign();
                 purchasedThisMarket = false;
                 smuggledThisMarket = false; // one free item per VISIT, not per run
                 SetPhase(GamePhase.Market);

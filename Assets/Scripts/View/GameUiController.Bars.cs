@@ -123,7 +123,7 @@ namespace ProjectBlock.View
                 {
                     Vector2 at = BarPopupAnchor(panelScreen, true);
                     FloatingTextFx.Spawn(transform, at,
-                        Loc.Pick("PAY THE DEBT FIRST", "ÖNCE BORCU ÖDE"),
+                        Loc.Pick("NOT WHILE YOU OWE", "BORÇ VARKEN SATILMAZ"),
                         new Color(1f, 0.45f, 0.4f), 48, 0.05f);
                 }
                 return true;
@@ -932,20 +932,6 @@ namespace ProjectBlock.View
             var go = new GameObject("DebtFx");
             go.transform.SetParent(transform, false);
             debtFx = go.AddComponent<DebtFxView>();
-        }
-
-        /// <summary>"Kredi kartı": settling up, with the coins going from the score into PAID.
-        /// The [O] key and the pad's R3 both come here.</summary>
-        private void RepayDebtWithFx()
-        {
-            long paid = session.RepayDebtInFull();
-            if (paid > 0)
-            {
-                EnsureDebtFx();
-                sfx.DebtPaid();
-                debtFx.PlayRepay(ScoreWorldAnchor(), new Vector2(0f, 2.6f), paid);
-            }
-            RefreshAll(null);
         }
 
         /// <summary>The run was lost to an open debt: its own ending, before the summary.</summary>
