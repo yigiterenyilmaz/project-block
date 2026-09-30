@@ -1506,13 +1506,31 @@ are the joker's own (`BaseBonus`, `DeadlineFor` on the lab board's real gaps) an
 the line through `FlashLine`. `Tools/UiLayoutCheck/meydan_okuma.py` holds the lot. See
 `challenge_mock*.png` in the session scratchpad.
 
-**Market credit ("Kredi kartı") is a SESSION rule, not joker state.** `GameSession` owns
-`Debt`, `Spend` (own points first, borrow the shortfall) and `RepayDebt` (manual, market-only);
-the joker is only the switch that turns `CreditAvailable` on and names the interest rate. The
-debt compounds at the end of every STAGE and a **boss stage** that ends with it open ends the run
-(`LossReason.DebtNotRepaid`) — checked BEFORE the final-stage win, so the boss of round 15 can be
-survived and still lost. The real deadline is therefore the market before a boss stage. A credit joker cannot be sold while it owes (`JokerInventory.CanSell`), which
-is what stops the debt being walked away from.
+**Market credit ("Kredi kartı") is a LOAN, and a SESSION rule, not joker state** (designer's
+call, 2026-09-30; `GameSession.Credit.cs`). The joker is only the switch that turns
+`CreditAvailable` on; the terms are `MarketConfig.Credit*` balance placeholders. **The purse goes
+negative**: `Spend` takes the purse first and borrows the rest without a limit, and `Balance`
+(`TotalScore - Debt`) is what the HUD and the market print. **Every point earned pays the debt
+first** - a turn, a sale, a grant all come in through `Receive`, so there is no manual repayment
+and never money in the purse while anything is owed; an effect clawing money back (`TakeBack`)
+puts it back on the debt. **A stage that starts in debt owes a minimum payment** (25%) on top of
+its bar: `RoundEngine.CreditInstallment`, added to the private `ScaledThreshold` (so the crossing,
+the ceiling and a boss beaten on its own terms all use it) and shown as `PassBar` - NOT to
+`ScoreThreshold`, which the jokers scale off and must not grow because the player is in debt.
+Past the bar is overtime's, and overtime keeps paying. **Interest** (12.5%) on what is left at
+the end of every stage. **The term** (3 stages, counted from the first stage the loan is carried
+into; borrowing more does not reset it). **Foreclosure** when it runs out: jokers, powers and
+elemental blocks most valuable first at half their shelf price, then plain blocks at a tenth,
+never below the hand size, the excess handed back; what is still owed with nothing left to take
+is written off - except on the FINAL stage, the last term there is, where it loses the run
+(`LossReason.DebtNotRepaid`, checked before the win). **The bank's thanks** for a loan cleared in
+the first stage it was carried into, before any interest: points (5% of the loan) or a CAMPAIGN,
+one offer in the next market 10% off while the card is held (`MarketOffer.CampaignPercent`,
+honoured through `Market.CreditHeld`), drawn from the bank's own seeded rng so the main stream
+never moves. `CreditStatement` (`LastCreditStatement`, a new object per stage, not saved) tells
+the View what a stage settled; `GameUiController.Credit.cs` plays it once by identity. A credit
+joker cannot be sold while it owes (`JokerInventory.CanSell`), which is what stops the debt being
+walked away from - the bailiff takes it like anything else. Save format 24.
 
 **The block shelf has a RUN-LONG cap: half the starting deck.** `GameSession.CardPurchaseLimit`
 is `Config.Deck.Size / 2`, and `TryBuyOffer` / `TrySmuggleOffer` refuse a block past it — in Core,
