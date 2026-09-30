@@ -10,9 +10,13 @@
 // a round. A detonation holds the block's cells blank after it goes (nothing in the lab really
 // destroys them) and, like every lab entry, the scene holds what it ends on until RESET.
 //
-// The side-by-side draws the OLD glow system (the legacy PowderChargeView, on the untouched tile)
-// beside the magazine at stages 1, 3 and 5 - the question it asks is whether the new one reads as
-// powder loaded into a pack rather than as a block getting more orange.
+// The list is the corrective pass's A-V: the six stages standing, the five loads, each light
+// source ALONE (primers, pockets, underglow, seam heat - three packs at stages 1 / 3 / 5, so the
+// growth is the thing being judged - then the pressure pulse and the heat haze on a full pack), the
+// stage 5 idle, the lock, the cook-off slowed down and at speed, and the before/after. The "only"
+// scenes switch the other FEATURES off and put them back when the scene is stopped. The OLD side of
+// the before/after is the previous pass (DynamiteCasing's _OldLook: crisp seam hairlines, the whole
+// cube wobbling, no pockets) drawn by the same view, so the only difference is the language.
 
 using System.Collections;
 using System.Collections.Generic;
@@ -36,33 +40,35 @@ namespace ProjectBlock.View
             Load3,
             Load4,
             Load5,
-            GrainsOnly,
-            IgnitionOnly,
-            StrapHeatOnly,
-            PressureOnly,
-            Idle3,
-            Idle4,
+            PrimersOnly,
+            PocketsOnly,
+            UnderglowOnly,
+            SeamHeatOnly,
+            PressurePulseOnly,
+            HeatDistortionOnly,
             Idle5,
             MaxLock,
-            Detonate1,
-            Detonate3,
-            Detonate5,
-            PreIgnitionSlow,
-            Reward,
+            DetonationPrep5,
+            Explosion5,
+            SideBySide,
+            GrainsBeat,
+            IgnitionBeat,
+            StrapHeatBeat,
             SmallBlock,
             LargeBlock,
             Irregular,
             Stress,
-            LoadHalf,
             LoadQuarter,
-            DetonateHalf,
-            DetonateQuarter,
-            SideBySide
+            Detonate1,
+            Detonate3
         }
 
         private Coroutine animMagazine;
 
         private bool animMagazineUsed;
+
+        /// <summary>The features as they were before an "only" scene switched the rest off.</summary>
+        private bool[] animMagazineFeatures;
 
         private readonly List<GridPos> animMagazineHeld = new List<GridPos>();
 
@@ -70,64 +76,69 @@ namespace ProjectBlock.View
         {
             AddAnimSub("jokers", "barut", "barut tedarikçisi - powder magazine",
                 "barut tedarikçisi - barut şarjörü");
-            AddMag(AnimMagScene.Static0, "1. Stage 0 static (a fresh, cold pack)",
-                "1. Aşama 0 durağan (yeni, soğuk paket)");
-            AddMag(AnimMagScene.Static1, "2. Stage 1 static - PRIMED", "2. Aşama 1 durağan - ASTARLI");
-            AddMag(AnimMagScene.Static2, "3. Stage 2 static - LOADED", "3. Aşama 2 durağan - DOLU");
-            AddMag(AnimMagScene.Static3, "4. Stage 3 static - PRESSURIZED",
-                "4. Aşama 3 durağan - BASINÇLI");
-            AddMag(AnimMagScene.Static4, "5. Stage 4 static - OVERLOADED",
-                "5. Aşama 4 durağan - AŞIRI DOLU");
-            AddMag(AnimMagScene.Static5, "6. Stage 5 static - FULL MAGAZINE",
-                "6. Aşama 5 durağan - ŞARJÖR DOLU");
-            AddMag(AnimMagScene.Load1, "7. 0 -> 1 load", "7. 0 -> 1 yükleme");
-            AddMag(AnimMagScene.Load2, "8. 1 -> 2 load", "8. 1 -> 2 yükleme");
-            AddMag(AnimMagScene.Load3, "9. 2 -> 3 load", "9. 2 -> 3 yükleme");
-            AddMag(AnimMagScene.Load4, "10. 3 -> 4 load", "10. 3 -> 4 yükleme");
-            AddMag(AnimMagScene.Load5, "11. 4 -> 5 load (and the lock)", "11. 4 -> 5 yükleme (ve kilit)");
-            AddMag(AnimMagScene.GrainsOnly, "12. Powder grains only", "12. Yalnız barut taneleri");
-            AddMag(AnimMagScene.IgnitionOnly, "13. Primer ignition only", "13. Yalnız primer ateşlemesi");
-            AddMag(AnimMagScene.StrapHeatOnly, "14. Strap heat only", "14. Yalnız kayış ısısı");
-            AddMag(AnimMagScene.PressureOnly, "15. Casing pressure only", "15. Yalnız gövde basıncı");
-            AddMag(AnimMagScene.Idle3, "16. Stage 3 idle (ember drift)", "16. Aşama 3 bekleme (kor kayması)");
-            AddMag(AnimMagScene.Idle4, "17. Stage 4 idle (pressure tick)", "17. Aşama 4 bekleme (basınç tıkı)");
-            AddMag(AnimMagScene.Idle5, "18. Stage 5 idle (sequence + smoke)",
-                "18. Aşama 5 bekleme (dizi + duman)");
-            AddMag(AnimMagScene.MaxLock, "19. Max-reached lock", "19. Maksimum kilidi");
-            AddMag(AnimMagScene.Detonate1, "20. Stage 1 detonation", "20. Aşama 1 patlama");
-            AddMag(AnimMagScene.Detonate3, "21. Stage 3 detonation", "21. Aşama 3 patlama");
-            AddMag(AnimMagScene.Detonate5, "22. Stage 5 detonation (full magazine)",
-                "22. Aşama 5 patlama (dolu şarjör)");
-            AddMag(AnimMagScene.PreIgnitionSlow, "23. Stage 5 pre-ignition, slow motion",
-                "23. Aşama 5 ön ateşleme, ağır çekim");
-            AddMag(AnimMagScene.Reward, "24. Reward payout (with its real value)",
-                "24. Ödül (gerçek değeriyle)");
-            AddMag(AnimMagScene.SmallBlock, "25. Small dynamite block (ember notches)",
-                "25. Küçük dinamit bloğu (kor çentikleri)");
-            AddMag(AnimMagScene.LargeBlock, "26. Large dynamite block", "26. Büyük dinamit bloğu");
-            AddMag(AnimMagScene.Irregular, "27. Irregular shape", "27. Düzensiz şekil");
-            AddMag(AnimMagScene.Stress, "28. Dense stress test (five packs, loading together)",
-                "28. Yoğun stres testi (beş paket, birlikte yükleniyor)");
-            AddMag(AnimMagScene.LoadHalf, "29. 0.5x charge", "29. 0.5x yükleme");
-            AddMag(AnimMagScene.LoadQuarter, "30. 0.25x charge", "30. 0.25x yükleme");
-            AddMag(AnimMagScene.DetonateHalf, "31. 0.5x detonation", "31. 0.5x patlama");
-            AddMag(AnimMagScene.DetonateQuarter, "32. 0.25x detonation", "32. 0.25x patlama");
+            AddMag(AnimMagScene.Static0, "A. Stage 0 static (a fresh, cold pack)",
+                "A. Aşama 0 durağan (yeni, soğuk paket)");
+            AddMag(AnimMagScene.Static1, "B. Stage 1 static - one hot point",
+                "B. Aşama 1 durağan - tek sıcak nokta");
+            AddMag(AnimMagScene.Static2, "C. Stage 2 static - two pockets",
+                "C. Aşama 2 durağan - iki cep");
+            AddMag(AnimMagScene.Static3, "D. Stage 3 static - three, not yet meeting",
+                "D. Aşama 3 durağan - üç cep, henüz birleşmiyor");
+            AddMag(AnimMagScene.Static4, "E. Stage 4 static - pockets touching",
+                "E. Aşama 4 durağan - cepler değiyor");
+            AddMag(AnimMagScene.Static5, "F. Stage 5 static - one connected fill",
+                "F. Aşama 5 durağan - bağlı tek dolgu");
+            AddMag(AnimMagScene.Load1, "G. 0 -> 1 load", "G. 0 -> 1 yükleme");
+            AddMag(AnimMagScene.Load2, "H. 1 -> 2 load", "H. 1 -> 2 yükleme");
+            AddMag(AnimMagScene.Load3, "I. 2 -> 3 load", "I. 2 -> 3 yükleme");
+            AddMag(AnimMagScene.Load4, "J. 3 -> 4 load", "J. 3 -> 4 yükleme");
+            AddMag(AnimMagScene.Load5, "K. 4 -> 5 load (and the lock)", "K. 4 -> 5 yükleme (ve kilit)");
+            AddMag(AnimMagScene.PrimersOnly, "L. Primer system only (stages 1 / 3 / 5)",
+                "L. Yalnız primer sistemi (aşama 1 / 3 / 5)");
+            AddMag(AnimMagScene.PocketsOnly, "M. Internal amber pockets only (stages 1 / 3 / 5)",
+                "M. Yalnız iç kehribar cepler (aşama 1 / 3 / 5)");
+            AddMag(AnimMagScene.UnderglowOnly, "N. Strap underglow only (stages 1 / 3 / 5)",
+                "N. Yalnız kayış altı ışığı (aşama 1 / 3 / 5)");
+            AddMag(AnimMagScene.SeamHeatOnly, "O. Seam heat only (stages 1 / 3 / 5)",
+                "O. Yalnız dikiş ısısı (aşama 1 / 3 / 5)");
+            AddMag(AnimMagScene.PressurePulseOnly, "P. Pressure pulse only (stage 5, repeated)",
+                "P. Yalnız basınç nabzı (aşama 5, tekrarlı)");
+            AddMag(AnimMagScene.HeatDistortionOnly, "Q. Heat distortion only (stage 5)",
+                "Q. Yalnız ısı kırılması (aşama 5)");
+            AddMag(AnimMagScene.Idle5, "R. Stage 5 idle (natural rhythm)",
+                "R. Aşama 5 bekleme (doğal ritim)");
+            AddMag(AnimMagScene.MaxLock, "S. Max charge lock", "S. Maksimum şarj kilidi");
+            AddMag(AnimMagScene.DetonationPrep5, "T. Stage 5 detonation prep (0.25x)",
+                "T. Aşama 5 patlama hazırlığı (0.25x)");
+            AddMag(AnimMagScene.Explosion5, "U. Stage 5 full explosion", "U. Aşama 5 tam patlama");
             AddMag(AnimMagScene.SideBySide,
-                "ACCEPTANCE: old glow (left) vs powder magazine (right), stages 1 / 3 / 5",
-                "KABUL: eski parıltı (sol) - barut şarjörü (sağ), aşama 1 / 3 / 5");
+                "V. OLD (left) vs NEW (right), stages 1 / 3 / 5",
+                "V. ESKİ (sol) - YENİ (sağ), aşama 1 / 3 / 5");
+            AddMag(AnimMagScene.GrainsBeat, "extra: load beat - powder grains",
+                "ek: yükleme vuruşu - barut taneleri");
+            AddMag(AnimMagScene.IgnitionBeat, "extra: load beat - primer ignition + pocket bloom",
+                "ek: yükleme vuruşu - primer ateşleme + cep açılması");
+            AddMag(AnimMagScene.StrapHeatBeat, "extra: load beat - strap heat",
+                "ek: yükleme vuruşu - kayış ısısı");
+            AddMag(AnimMagScene.SmallBlock, "extra: small block (ember notches)",
+                "ek: küçük blok (kor çentikleri)");
+            AddMag(AnimMagScene.LargeBlock, "extra: large block", "ek: büyük blok");
+            AddMag(AnimMagScene.Irregular, "extra: irregular shape", "ek: düzensiz şekil");
+            AddMag(AnimMagScene.Stress, "extra: five packs loading together",
+                "ek: beş paket birlikte yükleniyor");
+            AddMag(AnimMagScene.LoadQuarter, "extra: 0.25x load", "ek: 0.25x yükleme");
+            AddMag(AnimMagScene.Detonate1, "extra: stage 1 detonation", "ek: aşama 1 patlama");
+            AddMag(AnimMagScene.Detonate3, "extra: stage 3 detonation", "ek: aşama 3 patlama");
 
-            AddMagToggle("group bounds", "grup sınırları",
-                delegate { return PowderMagazineView.Layers.ShowGunpowderGroupBounds; },
-                delegate (bool v) { PowderMagazineView.Layers.ShowGunpowderGroupBounds = v; });
-            AddMagToggle("charge stage (dev label)", "şarj aşaması (geliştirici etiketi)",
-                delegate { return PowderMagazineView.Layers.ShowChargeStage; },
-                delegate (bool v) { PowderMagazineView.Layers.ShowChargeStage = v; });
-            AddMagToggle("primer sockets", "primer yuvaları",
-                delegate { return PowderMagazineView.Layers.ShowPrimerSockets; },
-                delegate (bool v) { PowderMagazineView.Layers.ShowPrimerSockets = v; });
-            AddMagToggle("primer states (dev label)", "primer durumları (geliştirici etiketi)",
-                delegate { return PowderMagazineView.Layers.ShowPrimerStates; },
-                delegate (bool v) { PowderMagazineView.Layers.ShowPrimerStates = v; });
+            AddMagToggle("primer system", "primer sistemi",
+                delegate { return PowderMagazineView.Layers.ShowPrimerSystem; },
+                delegate (bool v) { PowderMagazineView.Layers.ShowPrimerSystem = v; });
+            AddMagToggle("internal pockets", "iç cepler",
+                delegate { return PowderMagazineView.Layers.ShowPockets; },
+                delegate (bool v) { PowderMagazineView.Layers.ShowPockets = v; });
+            AddMagToggle("strap underglow", "kayış altı ışığı",
+                delegate { return PowderMagazineView.Layers.ShowStrapUnderglow; },
+                delegate (bool v) { PowderMagazineView.Layers.ShowStrapUnderglow = v; });
             AddMagToggle("seam heat", "dikiş ısısı",
                 delegate { return PowderMagazineView.Layers.ShowSeamHeat; },
                 delegate (bool v) { PowderMagazineView.Layers.ShowSeamHeat = v; });
@@ -137,15 +148,24 @@ namespace ProjectBlock.View
             AddMagToggle("powder grains", "barut taneleri",
                 delegate { return PowderMagazineView.Layers.ShowPowderGrains; },
                 delegate (bool v) { PowderMagazineView.Layers.ShowPowderGrains = v; });
-            AddMagToggle("soot mask", "kurum maskesi",
+            AddMagToggle("soot + creases", "kurum + kıvrımlar",
                 delegate { return PowderMagazineView.Layers.ShowSootMask; },
                 delegate (bool v) { PowderMagazineView.Layers.ShowSootMask = v; });
-            AddMagToggle("pressure knots", "basınç düğümleri",
-                delegate { return PowderMagazineView.Layers.ShowPressureKnots; },
-                delegate (bool v) { PowderMagazineView.Layers.ShowPressureKnots = v; });
-            AddMagToggle("heat distortion", "ısıl titreşim",
+            AddMagToggle("pressure pulse", "basınç nabzı",
+                delegate { return PowderMagazineView.Layers.ShowPressurePulse; },
+                delegate (bool v) { PowderMagazineView.Layers.ShowPressurePulse = v; });
+            AddMagToggle("heat distortion", "ısı kırılması",
                 delegate { return PowderMagazineView.Layers.ShowHeatDistortion; },
                 delegate (bool v) { PowderMagazineView.Layers.ShowHeatDistortion = v; });
+            AddMagToggle("group bounds", "grup sınırları",
+                delegate { return PowderMagazineView.Layers.ShowGunpowderGroupBounds; },
+                delegate (bool v) { PowderMagazineView.Layers.ShowGunpowderGroupBounds = v; });
+            AddMagToggle("charge stage (dev label)", "şarj aşaması (geliştirici etiketi)",
+                delegate { return PowderMagazineView.Layers.ShowChargeStage; },
+                delegate (bool v) { PowderMagazineView.Layers.ShowChargeStage = v; });
+            AddMagToggle("primer states (dev label)", "primer durumları (geliştirici etiketi)",
+                delegate { return PowderMagazineView.Layers.ShowPrimerStates; },
+                delegate (bool v) { PowderMagazineView.Layers.ShowPrimerStates = v; });
             AddMagToggle("detonation energy flow (louder)", "patlama enerji akışı (belirgin)",
                 delegate { return PowderMagazineView.Layers.ShowDetonationEnergyFlow; },
                 delegate (bool v) { PowderMagazineView.Layers.ShowDetonationEnergyFlow = v; });
@@ -155,6 +175,7 @@ namespace ProjectBlock.View
             AddAnim("barut switch: ALL back on", "barut anahtarı: TÜMÜ geri açık", delegate
             {
                 PowderMagazineView.Layers.AllOn();
+                animMagazineFeatures = null;
                 animLastLabel = Loc.Pick("every magazine switch back on", "tüm şarjör anahtarları açık");
                 if (AnimLabOpen)
                 {
@@ -213,16 +234,17 @@ namespace ProjectBlock.View
                 magazine.Clear();
                 magazine.PlaybackRate = 1f;
             }
-            if (powder != null)
-            {
-                powder.Clear();
-            }
             if (boardView != null && animMagazineHeld.Count > 0)
             {
                 boardView.ReleaseCells(animMagazineHeld);
             }
             animMagazineHeld.Clear();
             PowderMagazineView.Layers.OnlyPhase = PowderMagazineView.LoadPhase.All;
+            if (animMagazineFeatures != null)
+            {
+                PowderMagazineView.Layers.RestoreFeatures(animMagazineFeatures);
+                animMagazineFeatures = null;
+            }
         }
 
         // ------------------------------------------------------------------ blocks
@@ -266,6 +288,16 @@ namespace ProjectBlock.View
                     }
                     break;
             }
+            return new MagBlock { Cells = cells, Charges = charges, CardId = cardId };
+        }
+
+        /// <summary>A three-cube run - the rows of the "only" scenes and the before/after.</summary>
+        private static MagBlock MagRun(int x0, int y, int charges, int cardId)
+        {
+            var cells = new List<GridPos>
+            {
+                new GridPos(x0, y), new GridPos(x0 + 1, y), new GridPos(x0 + 2, y)
+            };
             return new MagBlock { Cells = cells, Charges = charges, CardId = cardId };
         }
 
@@ -345,14 +377,12 @@ namespace ProjectBlock.View
                 case AnimMagScene.Static0: return 0;
                 case AnimMagScene.Static1: case AnimMagScene.Load1: case AnimMagScene.Detonate1: return 1;
                 case AnimMagScene.Static2: case AnimMagScene.Load2: return 2;
-                case AnimMagScene.Static3: case AnimMagScene.Load3: case AnimMagScene.Idle3:
-                case AnimMagScene.Detonate3: case AnimMagScene.SmallBlock: case AnimMagScene.Irregular:
-                case AnimMagScene.GrainsOnly: case AnimMagScene.IgnitionOnly:
-                case AnimMagScene.StrapHeatOnly: case AnimMagScene.PressureOnly:
-                case AnimMagScene.LoadHalf: case AnimMagScene.LoadQuarter:
+                case AnimMagScene.Static3: case AnimMagScene.Load3: case AnimMagScene.Detonate3:
+                case AnimMagScene.GrainsBeat: case AnimMagScene.IgnitionBeat:
+                case AnimMagScene.StrapHeatBeat: case AnimMagScene.SmallBlock:
+                case AnimMagScene.Irregular: case AnimMagScene.LoadQuarter:
                     return 3;
-                case AnimMagScene.Static4: case AnimMagScene.Load4: case AnimMagScene.Idle4:
-                case AnimMagScene.LargeBlock:
+                case AnimMagScene.Static4: case AnimMagScene.Load4: case AnimMagScene.LargeBlock:
                     return 4;
                 default:
                     return 5;
@@ -364,10 +394,10 @@ namespace ProjectBlock.View
             switch (scene)
             {
                 case AnimMagScene.Load1: case AnimMagScene.Load2: case AnimMagScene.Load3:
-                case AnimMagScene.Load4: case AnimMagScene.Load5: case AnimMagScene.GrainsOnly:
-                case AnimMagScene.IgnitionOnly: case AnimMagScene.StrapHeatOnly:
-                case AnimMagScene.PressureOnly: case AnimMagScene.LoadHalf: case AnimMagScene.LoadQuarter:
-                case AnimMagScene.SmallBlock: case AnimMagScene.LargeBlock: case AnimMagScene.Irregular:
+                case AnimMagScene.Load4: case AnimMagScene.Load5: case AnimMagScene.GrainsBeat:
+                case AnimMagScene.IgnitionBeat: case AnimMagScene.StrapHeatBeat:
+                case AnimMagScene.LoadQuarter: case AnimMagScene.SmallBlock:
+                case AnimMagScene.LargeBlock: case AnimMagScene.Irregular:
                     return true;
                 default:
                     return false;
@@ -378,9 +408,8 @@ namespace ProjectBlock.View
         {
             switch (scene)
             {
-                case AnimMagScene.Detonate1: case AnimMagScene.Detonate3: case AnimMagScene.Detonate5:
-                case AnimMagScene.PreIgnitionSlow: case AnimMagScene.Reward:
-                case AnimMagScene.DetonateHalf: case AnimMagScene.DetonateQuarter:
+                case AnimMagScene.DetonationPrep5: case AnimMagScene.Explosion5:
+                case AnimMagScene.Detonate1: case AnimMagScene.Detonate3:
                     return true;
                 default:
                     return false;
@@ -391,9 +420,7 @@ namespace ProjectBlock.View
         {
             switch (scene)
             {
-                case AnimMagScene.LoadHalf: case AnimMagScene.DetonateHalf: return 0.5f;
-                case AnimMagScene.LoadQuarter: case AnimMagScene.DetonateQuarter:
-                case AnimMagScene.PreIgnitionSlow: return 0.25f;
+                case AnimMagScene.LoadQuarter: case AnimMagScene.DetonationPrep5: return 0.25f;
                 default: return 1f;
             }
         }
@@ -402,12 +429,38 @@ namespace ProjectBlock.View
         {
             switch (scene)
             {
-                case AnimMagScene.GrainsOnly: return PowderMagazineView.LoadPhase.Grains;
-                case AnimMagScene.IgnitionOnly: return PowderMagazineView.LoadPhase.Ignition;
-                case AnimMagScene.StrapHeatOnly: return PowderMagazineView.LoadPhase.StrapHeat;
-                case AnimMagScene.PressureOnly: return PowderMagazineView.LoadPhase.Pressure;
+                case AnimMagScene.GrainsBeat: return PowderMagazineView.LoadPhase.Grains;
+                case AnimMagScene.IgnitionBeat: return PowderMagazineView.LoadPhase.Ignition;
+                case AnimMagScene.StrapHeatBeat: return PowderMagazineView.LoadPhase.StrapHeat;
                 default: return PowderMagazineView.LoadPhase.All;
             }
+        }
+
+        /// <summary>The feature an "only" scene keeps, if it is one.</summary>
+        private static bool MagOnly(AnimMagScene scene, out PowderMagazineView.Feature feature)
+        {
+            switch (scene)
+            {
+                case AnimMagScene.PrimersOnly: feature = PowderMagazineView.Feature.Primers; return true;
+                case AnimMagScene.PocketsOnly: feature = PowderMagazineView.Feature.Pockets; return true;
+                case AnimMagScene.UnderglowOnly: feature = PowderMagazineView.Feature.Underglow; return true;
+                case AnimMagScene.SeamHeatOnly: feature = PowderMagazineView.Feature.SeamHeat; return true;
+                case AnimMagScene.PressurePulseOnly:
+                    feature = PowderMagazineView.Feature.PressurePulse;
+                    return true;
+                case AnimMagScene.HeatDistortionOnly:
+                    feature = PowderMagazineView.Feature.HeatDistortion;
+                    return true;
+                default:
+                    feature = PowderMagazineView.Feature.Primers;
+                    return false;
+            }
+        }
+
+        private static bool MagIsTriple(AnimMagScene scene)
+        {
+            return scene == AnimMagScene.PrimersOnly || scene == AnimMagScene.PocketsOnly
+                || scene == AnimMagScene.UnderglowOnly || scene == AnimMagScene.SeamHeatOnly;
         }
 
         // ------------------------------------------------------------------ the routine
@@ -428,9 +481,27 @@ namespace ProjectBlock.View
                 ? session.CurrentRound.Board.Height : 7);
             var centre = new GridPos(w / 2, h / 2);
 
-            if (scene == AnimMagScene.SideBySide)
+            PowderMagazineView.Feature only;
+            if (MagOnly(scene, out only))
             {
-                yield return MagSideBySide(w, h);
+                if (animMagazineFeatures == null)
+                {
+                    animMagazineFeatures = PowderMagazineView.Layers.CaptureFeatures();
+                }
+                PowderMagazineView.Layers.Only(only);
+            }
+            if (scene == AnimMagScene.SideBySide || MagIsTriple(scene))
+            {
+                MagTriple(w, h, scene == AnimMagScene.SideBySide);
+                animLastLabel = scene == AnimMagScene.SideBySide
+                    ? Loc.Pick("OLD - jitter and crisp seams (left) | NEW - controlled accumulation (right): "
+                        + "stages 1, 3, 5",
+                        "ESKİ - titreme ve keskin dikişler (sol) | YENİ - kontrollü birikim (sağ): aşama 1, 3, 5")
+                    : Loc.Pick(only + " only: stages 1, 3, 5", "yalnız " + only + ": aşama 1, 3, 5");
+                if (AnimLabOpen)
+                {
+                    RedrawAnimationLab();
+                }
                 animMagazine = null;
                 yield break;
             }
@@ -483,28 +554,43 @@ namespace ProjectBlock.View
                     "şarjör: aşama " + blocks[0].Charges + " yüklemesi"
                     + (rate < 0.99f ? "  " + rate + "x" : ""));
             }
-            else if (scene == AnimMagScene.Idle3 || scene == AnimMagScene.Idle4
-                || scene == AnimMagScene.Idle5)
+            else if (scene == AnimMagScene.PressurePulseOnly)
             {
+                // The rare pulse, asked for again and again so it can be watched on its own.
                 yield return new WaitForSeconds(0.4f);
-                for (int i = 0; i < 4; i++)
+                for (int i = 0; i < 6; i++)
                 {
                     magazine.ForceIdle();
-                    yield return new WaitForSeconds(1.6f);
+                    animLastLabel = Loc.Pick("pressure pulse " + (i + 1) + " / 6",
+                        "basınç nabzı " + (i + 1) + " / 6");
+                    if (AnimLabOpen)
+                    {
+                        RedrawAnimationLab();
+                    }
+                    yield return new WaitForSeconds(1.3f);
                 }
+            }
+            else if (scene == AnimMagScene.Idle5)
+            {
+                // One event at once so there is something to see, then the pack's own rhythm.
+                yield return new WaitForSeconds(0.4f);
+                magazine.ForceIdle();
+                animLastLabel = Loc.Pick("magazine: stage 5 idle - pulse every 2.5-4s, smoke every 4-7s",
+                    "şarjör: aşama 5 bekleme - nabız 2.5-4 sn, duman 4-7 sn");
+            }
+            else if (scene == AnimMagScene.HeatDistortionOnly)
+            {
+                animLastLabel = Loc.Pick("heat distortion only: inside the pockets, 0.8 px, slow",
+                    "yalnız ısı kırılması: ceplerin içinde, 0.8 px, yavaş");
             }
             else if (scene == AnimMagScene.MaxLock)
             {
                 yield return new WaitForSeconds(0.6f);
                 magazine.ForceLock();
-                animLastLabel = Loc.Pick("magazine: FULL MAGAZINE LOCK", "şarjör: ŞARJÖR KİLİDİ");
+                animLastLabel = Loc.Pick("magazine: MAX CHARGE LOCK", "şarjör: MAKSİMUM ŞARJ KİLİDİ");
             }
             else if (MagIsDetonation(scene))
             {
-                if (scene == AnimMagScene.Reward)
-                {
-                    PowderMagazineView.Layers.ShowRewardValue = true;
-                }
                 yield return new WaitForSeconds(0.8f);
                 MagBlock block = blocks[0];
                 PowderPayoutVisuals payout = MagPayout(block);
@@ -557,9 +643,13 @@ namespace ProjectBlock.View
             return best;
         }
 
-        /// <summary>Old glow (left, on the untouched tile) against the magazine (right), at
-        /// stages 1, 3 and 5 - one row each.</summary>
-        private IEnumerator MagSideBySide(int w, int h)
+        /// <summary>
+        /// Three packs at stages 1, 3 and 5, one row each. With <paramref name="beforeAfter"/> a
+        /// second column on the left draws the same three the PREVIOUS pass's way, so the only
+        /// difference between the two columns is the language; otherwise the three sit in the
+        /// middle, for the "only" scenes.
+        /// </summary>
+        private void MagTriple(int w, int h, bool beforeAfter)
         {
             var oldBlocks = new List<MagBlock>();
             var newBlocks = new List<MagBlock>();
@@ -567,29 +657,27 @@ namespace ProjectBlock.View
             for (int s = 0; s < stages.Length; s++)
             {
                 int y = h - 2 - s * 2;
-                var left = new List<GridPos> { new GridPos(0, y), new GridPos(1, y), new GridPos(2, y) };
-                var right = new List<GridPos>
+                if (beforeAfter)
                 {
-                    new GridPos(w - 3, y), new GridPos(w - 2, y), new GridPos(w - 1, y)
-                };
-                oldBlocks.Add(new MagBlock { Cells = left, Charges = stages[s], CardId = 9201 + s });
-                newBlocks.Add(new MagBlock { Cells = right, Charges = stages[s], CardId = 9301 + s });
+                    oldBlocks.Add(MagRun(0, y, stages[s], 9201 + s));
+                    newBlocks.Add(MagRun(w - 3, y, stages[s], 9301 + s));
+                }
+                else
+                {
+                    newBlocks.Add(MagRun(w / 2 - 1, y, stages[s], 9301 + s));
+                }
             }
             var all = new List<MagBlock>(oldBlocks);
             all.AddRange(newBlocks);
             MagBoard(all);
-            var rawCells = new List<GridPos>();
+            var oldIds = new List<int>();
             for (int i = 0; i < oldBlocks.Count; i++)
             {
-                rawCells.AddRange(oldBlocks[i].Cells);
+                oldIds.Add(oldBlocks[i].CardId);
             }
-            magazine.SetRawCells(rawCells);
-            magazine.Show(MagReport(newBlocks, false), false);
-            EnsurePowder();
-            powder.Show(MagReport(oldBlocks, false), false);
-            animLastLabel = Loc.Pick("old glow (left) - powder magazine (right): stages 1, 3, 5",
-                "eski parıltı (sol) - barut şarjörü (sağ): aşama 1, 3, 5");
-            yield break;
+            magazine.SetOldLook(oldIds);
+            magazine.PlaybackRate = 1f;
+            magazine.Show(MagReport(all, false), false);
         }
     }
 }

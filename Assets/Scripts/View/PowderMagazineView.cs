@@ -1,52 +1,46 @@
 // PURPOSE: "Barut tedarikçisi" - POWDER MAGAZINE / PRESSURIZED CHARGE PACK. A dynamite block that
 // is left standing takes powder every turn, and this is what makes that READ: the block is one
-// explosive pack whose chambers fill one by one, whose strap tightens and whose seams heat up, and
-// which, when it finally goes, cooks off through every chamber it filled before it blows.
+// explosive pack whose chambers fill one by one, whose inside visibly fills with warm powder, whose
+// strap holds more heat under it every turn, and which, when it finally goes, cooks off through every
+// chamber it filled before it blows.
 //
-// WHAT IT REPLACES (PowderChargeView, now kept only for the lab's before/after). That drew a soft
-// orange glow, a fuse spark and at the cap a heat rim over EACH cube - so a block was a grid of red
-// lights getting more orange, stage 4 and stage 5 differed by brightness, the orange fog swallowed
-// the red casing, and nothing about the blast said "five turns of powder went up here".
+// THREE PASSES ARE BURIED HERE, and the second is the one to learn from.
+//   1. An orange glow, a fuse spark and a heat rim over EACH cube (deleted): a grid of red lights
+//      getting more orange, the fog swallowing the red casing, stage 4 and 5 told apart by glare.
+//   2. The first magazine: straps, chambers, seams - and the charge told through STRESS. The seams
+//      got crisp broken hairlines (they read as CRACKS), a heat haze wobbled the whole cube frame and
+//      all (it read as the block TREMBLING), the chambers were six pixels, and the light the first
+//      version had was gone. Stage 1 and stage 5 were the same red block, one of them shaking.
+//   3. This one: the accumulation is told with LIGHT THAT HAS A SOURCE. Every loaded chamber has an
+//      INTERNAL AMBER POCKET in the casing beside it (DynamiteCasing's pocket field), so stage 1 is
+//      one hot point with a small warm pocket, stage 3 three pockets that do not quite meet, stage 5
+//      a connected fill under a still-red casing. Heat leaks out under the strap's lower edge, the
+//      seams soften warm, a chamber glows in a ten-pixel halo with a short vein of heat running down
+//      into the strap. Movement is almost nil: no jitter at stages 0-3, a rare pressure settle at 4,
+//      a rare controlled pulse at 5. RED STAYS DOMINANT AT EVERY STAGE.
 //
-// ONE BLOCK, ONE MAGAZINE. Cells are grouped by the card they came from (Core reports it), and
-// everything below is laid out and driven per block:
+// ONE BLOCK, ONE MAGAZINE. Cells are grouped by the card they came from (Core reports it). A graphite
+// bridge closes the gap between two cubes of a run so the strap reads as one; strap ends round off
+// only where the block ends, never across an empty cell. The block's longest run carries one chamber
+// per possible charge - the cap Core reports, five today - recessed brass sockets, amber when loaded,
+// thin ember notches when the run is too short to hold them. The pockets are laid out per BLOCK and
+// handed to each cube in its own uv, so they cross cube boundaries and stop where the block does.
 //
-//   CASING    the board's own dynamite renderers, through DynamiteCasing.shader and a property
-//             block written every frame: the strap redrawn as graphite, seams heating in broken
-//             hairlines, soot at the junctions, a pressure knot, a sub-pixel haze at the top - and
-//             a percent of swell when the pack takes pressure. The casing stays RED at every stage.
-//   STRAPS    one strap per contiguous horizontal run of the block: where two of its cubes sit side
-//             by side, a graphite BRIDGE closes the gap between them and their strap ends stay open,
-//             so the run reads as one strap; where the block ends, the strap rounds off. A strap is
-//             never drawn across an empty cell.
-//   PRIMERS   one recessed chamber per possible charge (the cap Core reports - five today), set
-//             into the strap of the block's longest run. Dark when empty, amber when loaded, never
-//             a row of UI pips. On a run too short to hold them they become thin ember notches.
+// A CHARGE IS A LOAD CYCLE (~0.42s): dark powder grains in two or three clusters drawn in on curves,
+// the chamber igniting (dark -> ember -> amber, a 1.12 punch), its pocket BLOOMING in the casing
+// (0.7 -> 1.0), heat running a short way along the strap, a percent of pressure, settle. The first
+// time a block reaches its cap it LOCKS: every chamber and pocket brighter for a breath, the strap
+// one pixel tighter, one wisp of soot.
 //
-// A CHARGE IS A LOAD CYCLE (~0.42s), never a brightness step: a few powder grains appear round the
-// block in two or three clusters, are drawn in on curved paths toward the chamber that is about to
-// fill, the chamber ignites (dark -> ember -> amber, a 1.12 punch, one fleck), heat runs a short way
-// along the strap in both directions, the casing takes pressure (a percent of swell, the strap
-// cinched a few percent) and it all settles. The first time a block reaches its cap it LOCKS: every
-// chamber brightens for a breath, the strap tightens, one wisp of soot. No text, no shake.
+// THE COOK-OFF: the repaint that emptied the cells raises a copy of the pack (Prepare, before Show),
+// and when the line reaches its first cube (Begin) the loaded chambers fire in physical order ~30 ms
+// apart while the pockets are drawn IN toward the centre (0.75, brighter), the pack compresses, and
+// it blows - amber core never white, powder, red casing fragments, torn strap slivers, a broken
+// secondary ring at the top stages - then ONE "+TOTAL" with a few powder flecks, and for a full block
+// the chambers' light gathers into a seed that flies to the score.
 //
-// IDLE IS RARE AND STAGE-DEPENDENT (a mobile board must not fidget): a loaded chamber flicks now and
-// then; at stage 2 a seam warms for a moment; at 3 an ember drifts along a seam; at 4 a pressure
-// tick passes from one chamber to its neighbour; at 5 a short sequence runs through all five and,
-// very rarely, a thread of smoke leaves a seam.
-//
-// THE COOK-OFF. When a charged block goes up, the repaint that has already emptied its cells raises
-// a copy of the pack exactly as it stood (Prepare), and when the line reaches it (Begin) every
-// loaded chamber fires in physical order 25-40 ms apart, their heat races along the strap into the
-// block's centre, the pack COMPRESSES inward (0.975) and then blows: a core flash in amber (never
-// white), powder, red casing fragments, a few torn strap pieces, and at the top stages a thin broken
-// ring of secondary combustion a beat later - never bigger than 1.3x the ordinary footprint. Then
-// ONE compact "+TOTAL", and for a full block the five chambers' light gathers into a small powder
-// seed that flies to the score. Never five popups.
-//
-// THE VIEW DECIDES NOTHING. PowderVisuals says which cells charged, their block, the charge, the
-// cap and what a cube is worth now; PowderPayoutVisuals says which went up, with what charge, and
-// what was paid. The view never counts a turn, never caps anything and never estimates a reward.
+// THE VIEW DECIDES NOTHING: PowderVisuals says which cells charged, their card, the charge, the cap
+// and what a cube is worth; PowderPayoutVisuals says what went up, with what charge, and what paid.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -60,50 +54,59 @@ namespace ProjectBlock.View
     {
         // =================================================================== TUNING
         /// <summary>The gunpowder* numbers the design names. Pixels are SCREEN pixels; seconds
-        /// are seconds.</summary>
+        /// are seconds; stage tables run 0..5.</summary>
         public static class Style
         {
             // ---- the primer chambers ----
-            public static float PrimerSizePixels = 6f;
-            public static float PrimerMinPixels = 3.5f;
-            /// <summary>How much of a strap's height a chamber may take.</summary>
-            public static float PrimerStrapShare = 0.64f;
+            public static float PrimerSizePixels = 7f;
+            public static float PrimerMinPixels = 4f;
+            public static float PrimerStrapShare = 0.82f;
             public static float PrimerJitter = 0.06f;
-            public static float PrimerInactiveBrightness = 0.35f;
             public static float PrimerActiveBrightness = 1f;
-            public static float PrimerHaloPixels = 5f;
+            /// <summary>gunpowderPrimerHalo: radius in pixels and opacity.</summary>
+            public static float PrimerHaloPixels = 10f;
+            public static float PrimerHaloAlpha = 0.13f;
+            public static float PrimerVeinAlpha = 0.45f;
 
             // ---- the load cycle ----
             public static float LoadDuration = 0.42f;
             public static int GrainCount = 8;
-            public static float GrainTravel = 0.13f;
+            public static float GrainTravel = 0.12f;
             public static float GrainStagger = 0.05f;
             public static float GrainRadiusMinPixels = 8f;
             public static float GrainRadiusMaxPixels = 18f;
-            public static float IgnitionAt = 0.19f;
-            public static float IgnitionDuration = 0.10f;
+            public static float IgnitionAt = 0.18f;
+            public static float IgnitionDuration = 0.09f;
             public static float IgnitionPunch = 0.12f;
-            public static float StrapHeatAt = 0.24f;
+            /// <summary>The new pocket blooming after its chamber ignites.</summary>
+            public static float PocketBloomDuration = 0.15f;
+            public static float PocketBloomFrom = 0.7f;
+            public static float StrapHeatAt = 0.22f;
             public static float StrapHeatDuration = 0.12f;
             public static float StrapHeatStrength = 0.16f;
-            /// <summary>How far the heat runs, in chamber spacings each way.</summary>
             public static float StrapHeatReach = 1.5f;
             public static float PressureAt = 0.30f;
             public static float PressureDuration = 0.09f;
-            public static float PressureSwell = 0.012f;
+            public static float PressureSwell = 0.008f;
             public static float PressureCinch = 0.03f;
 
-            // ---- the stage look, 0..5 ----
-            public static float[] SeamHeat = { 0f, 0.08f, 0.2f, 0.4f, 0.6f, 0.75f };
-            public static float[] ChannelHeat = { 0f, 0f, 0.05f, 0.1f, 0.14f, 0.18f };
-            public static float[] Soot = { 0f, 0f, 0.25f, 0.5f, 0.8f, 0.95f };
-            public static float[] StrapTension = { 0f, 0.1f, 0.2f, 0.4f, 0.6f, 0.8f };
-            public static float[] Pressure = { 0f, 0f, 0.1f, 0.3f, 0.55f, 0.8f };
-            public static float[] Warmth = { 0f, 0f, 0.03f, 0.06f, 0.09f, 0.12f };
-            public static float[] KnotStrength = { 0f, 0f, 0f, 0.35f, 0.6f, 0.85f };
-            public static float[] HeatDistortionPixels = { 0f, 0f, 0f, 0f, 0.5f, 0.9f };
+            // ---- the stage look (gunpowderInternalFillStageN, gunpowderPocketRadius, ...) ----
+            public static float[] PocketStrength = { 0f, 0.05f, 0.08f, 0.13f, 0.18f, 0.22f };
+            /// <summary>As a share of a cube: small and separate at 3, meeting at 4, one fill at 5.
+            /// </summary>
+            public static float[] PocketRadius = { 0f, 0.24f, 0.27f, 0.31f, 0.37f, 0.45f };
+            public static float[] Fill = { 0f, 0f, 0f, 0.02f, 0.05f, 0.1f };
+            public static float[] Embers = { 0f, 0.025f, 0.03f, 0.04f, 0.05f, 0.06f };
+            public static float[] Underglow = { 0f, 0.05f, 0.08f, 0.11f, 0.15f, 0.18f };
+            public static float[] SeamHeat = { 0f, 0.02f, 0.05f, 0.08f, 0.12f, 0.16f };
+            public static float[] ChannelHeat = { 0f, 0.02f, 0.04f, 0.07f, 0.1f, 0.13f };
+            public static float[] Soot = { 0f, 0f, 0.2f, 0.4f, 0.6f, 0.75f };
+            public static float[] StrapTension = { 0f, 0.1f, 0.2f, 0.35f, 0.5f, 0.65f };
+            public static float[] Warmth = { 0f, 0f, 0.01f, 0.02f, 0.03f, 0.04f };
+            public static float[] Crease = { 0f, 0f, 0f, 0f, 0.5f, 0.8f };
+            public static float[] HeatDistortionPixels = { 0f, 0f, 0f, 0f, 0.4f, 0.8f };
 
-            // ---- idle ----
+            // ---- idle: rare, and nothing trembles ----
             public static float FlickMin = 2.0f;
             public static float FlickMax = 3.5f;
             public static float FlickBoost = 0.10f;
@@ -111,34 +114,47 @@ namespace ProjectBlock.View
             public static float SeamPulseMax = 6f;
             public static float EmberDriftMin = 2.5f;
             public static float EmberDriftMax = 4f;
-            public static float PressureTickMin = 3f;
-            public static float PressureTickMax = 5f;
-            public static float MaxPulseIntervalMin = 2.2f;
-            public static float MaxPulseIntervalMax = 3.4f;
-            public static float MaxPulseDuration = 0.22f;
+            public static float SettleIntervalMin = 3f;
+            public static float SettleIntervalMax = 5f;
+            /// <summary>gunpowderPressurePulseInterval / Strength: stage 5's rare controlled pulse
+            /// (scaleX 1.006, scaleY 0.997), stage 4's settle is half of it.</summary>
+            public static float PressurePulseIntervalMin = 2.5f;
+            public static float PressurePulseIntervalMax = 4f;
+            public static float PressurePulseDuration = 0.15f;
+            public static float PressurePulseStrength = 1f;
+            public static float PressurePulseX = 0.006f;
+            public static float PressurePulseY = 0.003f;
+            public static float SweepSpacing = 0.03f;
             public static float MaxSmokeIntervalMin = 4f;
             public static float MaxSmokeIntervalMax = 7f;
 
             // ---- the max lock ----
-            public static float LockDuration = 0.07f;
+            public static float LockDuration = 0.21f;
             public static float LockSwell = 0.01f;
 
             // ---- the cook-off ----
-            public static float DetonationPrimerDelay = 0.035f;
+            public static float DetonationPrimerDelay = 0.03f;
             public static float DetonationCompressionTime = 0.08f;
             public static float DetonationCompression = 0.025f;
             public static float DetonationOvershoot = 0.015f;
-            /// <summary>How much larger the blast is per stage above one (stage 5 is 1.24x).</summary>
+            /// <summary>The heat drawn IN before the blast: the pockets' scale and brightness.</summary>
+            public static float PocketCompression = 0.75f;
+            public static float PocketCompressionBoost = 0.2f;
             public static float ExplosionSupportIntensity = 0.06f;
             public static float SecondaryRingDelay = 0.08f;
+            public static float TextDelay = 0.1f;
             public static float RewardHold = 0.35f;
             public static float RewardFlight = 0.35f;
             public static float TextHold = 0.9f;
 
+            // ---- the previous pass, for the lab's before/after ----
+            public static float[] OldSeamShare = { 0f, 0.08f, 0.2f, 0.4f, 0.6f, 0.75f };
+            public static float[] OldHazePixels = { 0f, 0f, 0f, 0f, 0.5f, 0.9f };
+
             public static readonly Color PrimerAmber = new Color(1f, 0.64f, 0.26f);
             public static readonly Color PrimerEmber = new Color(0.55f, 0.18f, 0.06f);
             public static readonly Color PrimerHot = new Color(1f, 0.8f, 0.45f);
-            public static readonly Color Brass = new Color(0.44f, 0.34f, 0.2f);
+            public static readonly Color Brass = new Color(0.52f, 0.41f, 0.24f);
             public static readonly Color SocketDark = new Color(0.09f, 0.07f, 0.06f);
             public static readonly Color Graphite = new Color(0.11f, 0.115f, 0.13f);
             public static readonly Color CasingRed = new Color(0.62f, 0.13f, 0.14f);
@@ -151,17 +167,19 @@ namespace ProjectBlock.View
             public static readonly Color ScoreInk = new Color(1f, 0.74f, 0.36f);
         }
 
-        /// <summary>The lab's switches. The first group are FEATURES (on by default); the second
-        /// are OVERLAYS (off by default). A switch that is off is off in the game too, which is
-        /// the price of the lab driving the real view - "all back on" is the reset.</summary>
+        /// <summary>The lab's switches. FEATURES are on by default, OVERLAYS off. A switch that is
+        /// off is off in the game too, which is the price of the lab driving the real view - "all
+        /// back on" is the reset.</summary>
         public static class Layers
         {
-            public static bool ShowPrimerSockets = true;
+            public static bool ShowPrimerSystem = true;
+            public static bool ShowPockets = true;
+            public static bool ShowStrapUnderglow = true;
             public static bool ShowSeamHeat = true;
             public static bool ShowStrapTension = true;
             public static bool ShowPowderGrains = true;
             public static bool ShowSootMask = true;
-            public static bool ShowPressureKnots = true;
+            public static bool ShowPressurePulse = true;
             public static bool ShowHeatDistortion = true;
 
             public static bool ShowGunpowderGroupBounds;
@@ -170,18 +188,19 @@ namespace ProjectBlock.View
             public static bool ShowDetonationEnergyFlow;
             public static bool ShowRewardValue;
 
-            /// <summary>The lab's phase isolation for the load cycle: only one of its beats plays.
-            /// </summary>
+            /// <summary>The lab's phase isolation for the load cycle.</summary>
             public static LoadPhase OnlyPhase = LoadPhase.All;
 
             public static void AllOn()
             {
-                ShowPrimerSockets = true;
+                ShowPrimerSystem = true;
+                ShowPockets = true;
+                ShowStrapUnderglow = true;
                 ShowSeamHeat = true;
                 ShowStrapTension = true;
                 ShowPowderGrains = true;
                 ShowSootMask = true;
-                ShowPressureKnots = true;
+                ShowPressurePulse = true;
                 ShowHeatDistortion = true;
                 ShowGunpowderGroupBounds = false;
                 ShowChargeStage = false;
@@ -190,6 +209,57 @@ namespace ProjectBlock.View
                 ShowRewardValue = false;
                 OnlyPhase = LoadPhase.All;
             }
+
+            /// <summary>The features as they stand, so an "only" scene can put them back.</summary>
+            public static bool[] CaptureFeatures()
+            {
+                return new[]
+                {
+                    ShowPrimerSystem, ShowPockets, ShowStrapUnderglow, ShowSeamHeat, ShowStrapTension,
+                    ShowPowderGrains, ShowSootMask, ShowPressurePulse, ShowHeatDistortion
+                };
+            }
+
+            public static void RestoreFeatures(bool[] f)
+            {
+                if (f == null || f.Length < 9)
+                {
+                    return;
+                }
+                ShowPrimerSystem = f[0];
+                ShowPockets = f[1];
+                ShowStrapUnderglow = f[2];
+                ShowSeamHeat = f[3];
+                ShowStrapTension = f[4];
+                ShowPowderGrains = f[5];
+                ShowSootMask = f[6];
+                ShowPressurePulse = f[7];
+                ShowHeatDistortion = f[8];
+            }
+
+            /// <summary>Every FEATURE off but one - the lab's "only" scenes.</summary>
+            public static void Only(Feature feature)
+            {
+                ShowPrimerSystem = feature == Feature.Primers;
+                ShowPockets = feature == Feature.Pockets;
+                ShowStrapUnderglow = feature == Feature.Underglow;
+                ShowSeamHeat = feature == Feature.SeamHeat;
+                ShowPressurePulse = feature == Feature.PressurePulse;
+                ShowHeatDistortion = feature == Feature.HeatDistortion;
+                ShowStrapTension = feature == Feature.PressurePulse;
+                ShowPowderGrains = false;
+                ShowSootMask = false;
+            }
+        }
+
+        public enum Feature
+        {
+            Primers,
+            Pockets,
+            Underglow,
+            SeamHeat,
+            PressurePulse,
+            HeatDistortion
         }
 
         /// <summary>The load cycle's beats, for the lab's one-beat-at-a-time scenes.</summary>
@@ -225,11 +295,9 @@ namespace ProjectBlock.View
         public System.Func<Vector2> ScoreAnchor;
 
         /// <summary>The playback rate of what is started NEXT. The game always sets 1; the lab
-        /// sets 0.5 / 0.25 for its slow scenes, so a slow lab run can never leak into a round.
-        /// </summary>
+        /// sets 0.5 / 0.25, so a slow lab run can never leak into a round.</summary>
         public float PlaybackRate = 1f;
 
-        /// <summary>The score label's answer, read by GameUiController.TickScoreResponse.</summary>
         public float ScoreClaim { get; private set; }
 
         public float ScoreScale { get; private set; } = 1f;
@@ -259,7 +327,7 @@ namespace ProjectBlock.View
         }
 
         // =================================================================== the tile's geometry
-        // Measured off block_dynamite.png; the same four numbers DynamiteCasing.shader carries.
+        // Measured off block_dynamite.png; the same numbers DynamiteCasing.shader carries.
         private const float BandMid = 0.504f;
         private const float BandHeight = 0.192f;
         private const float StrapWidth = 0.78f;
@@ -269,6 +337,7 @@ namespace ProjectBlock.View
         // Sorting: the board's cubes are on 1.
         private const int ProxyOrder = 3;
         private const int BridgeOrder = 4;
+        private const int VeinOrder = 4;
         private const int SocketOrder = 5;
         private const int CoreOrder = 6;
         private const int HaloOrder = 7;
@@ -282,9 +351,11 @@ namespace ProjectBlock.View
         private sealed class Primer
         {
             public Vector2 At;
+            public int Side;
             public SpriteRenderer Socket;
             public SpriteRenderer Core;
             public SpriteRenderer Halo;
+            public SpriteRenderer Vein;
             public float Flick = -1f;
             public float FlickBoost;
         }
@@ -308,12 +379,9 @@ namespace ProjectBlock.View
             public bool Full;
             public long CubeValue;
             public Rect Bounds;
-            public float Seed;
+            public bool OldLook;
 
-            // layout
             public int RailRow;
-            public int RailX0;
-            public int RailX1;
             public float Spacing;
             public float PrimerSize;
             public bool Notch;
@@ -322,14 +390,12 @@ namespace ProjectBlock.View
             public readonly List<Bridge> Bridges = new List<Bridge>();
             public string LayoutKey;
 
-            // the load cycle and the lock
             public float LoadClock = -1f;
             public int LoadPrimer;
             public bool LockPending;
             public float LockClock = -1f;
             public float Rate = 1f;
 
-            // idle
             public float FlickWait;
             public float StageWait;
             public float StageClock = -1f;
@@ -337,10 +403,8 @@ namespace ProjectBlock.View
             public float SmokeWait;
             public int EventCount;
 
-            // cool-down when it goes without a cook-off
             public float Cool = -1f;
 
-            // overlays
             public readonly List<SpriteRenderer> DebugBars = new List<SpriteRenderer>();
             public TextMesh Label;
         }
@@ -352,10 +416,10 @@ namespace ProjectBlock.View
             public readonly List<GridPos> Cells = new List<GridPos>();
             public readonly HashSet<GridPos> CellSet = new HashSet<GridPos>();
             public readonly List<SpriteRenderer> Proxies = new List<SpriteRenderer>();
-            public float PrimerSize;
-            public bool Notch;
             public readonly List<Primer> Primers = new List<Primer>();
             public readonly List<Bridge> Bridges = new List<Bridge>();
+            public float PrimerSize;
+            public bool Notch;
             public int Charges;
             public int Cap;
             public int Stage;
@@ -371,11 +435,8 @@ namespace ProjectBlock.View
             public bool Prepped;
             public int Fired;
             public float Rate = 1f;
-            public float Seed;
         }
 
-        /// <summary>Anything loose that moves and dies: a grain, a fleck, an ember, a smoke
-        /// thread, a spark, a fragment, a flash, a ring, a heat streak.</summary>
         private sealed class Bit
         {
             public SpriteRenderer R;
@@ -405,6 +466,7 @@ namespace ProjectBlock.View
         private const int KindStill = 2;
         private const int KindRing = 3;
         private const int KindRise = 4;
+        private const int KindDrift = 5;
 
         private sealed class FloatingTotal
         {
@@ -418,10 +480,8 @@ namespace ProjectBlock.View
         private sealed class RewardSeed
         {
             public SpriteRenderer R;
-            public readonly List<Bit> Motes = new List<Bit>();
             public Vector2 Gather;
             public float Age;
-            public float Delay;
             public float Rate = 1f;
         }
 
@@ -433,17 +493,25 @@ namespace ProjectBlock.View
         private readonly HashSet<SpriteRenderer> casingWritten = new HashSet<SpriteRenderer>();
         private readonly HashSet<SpriteRenderer> casingThisFrame = new HashSet<SpriteRenderer>();
         private readonly List<int> scratchIds = new List<int>();
+        private readonly List<Vector4> pockets = new List<Vector4>();
+        private readonly Vector4[] cubePockets = new Vector4[5];
+        private readonly HashSet<int> oldLookCards = new HashSet<int>();
 
         private BoardView board;
         private GameBoard lastBoard;
         private MaterialPropertyBlock block;
         private RewardSeed rewardCore;
         private float scoreClock = -1f;
+        private float scoreDelay;
         private float scoreRate = 1f;
         private float knockAt = -1f;
+        private float clockTime;
         private PowderPayoutVisuals pendingPayout;
         private long pendingPoints;
         private bool pendingFull;
+        private int pendingStage;
+        private readonly List<Vector2> fullPrimerSpots = new List<Vector2>();
+        private readonly List<Vector2> blastCentres = new List<Vector2>();
 
         public void Build(BoardView boardView)
         {
@@ -490,7 +558,6 @@ namespace ProjectBlock.View
                     int key = i < report.CardIds.Count ? report.CardIds[i] : -1;
                     if (key < 0)
                     {
-                        // No card named (an old lab report): one block per charge value.
                         key = -1000 - report.Charges[i];
                     }
                     List<int> list;
@@ -506,7 +573,7 @@ namespace ProjectBlock.View
                     Magazine m;
                     if (!magazines.TryGetValue(g.Key, out m))
                     {
-                        m = new Magazine { CardId = g.Key, Seed = Hash(g.Key, 1) };
+                        m = new Magazine { CardId = g.Key };
                         magazines[g.Key] = m;
                         ScheduleIdle(m);
                     }
@@ -522,6 +589,7 @@ namespace ProjectBlock.View
                     m.Cap = report.Cap > 0 ? report.Cap : Mathf.Max(1, m.Charges);
                     m.Full = report.Full[first];
                     m.CubeValue = first < report.CubeValues.Count ? report.CubeValues[first] : 0;
+                    m.OldLook = oldLookCards.Contains(g.Key);
                     m.Cool = -1f;
                     Layout(m);
                     if (fresh && report.Gained[first])
@@ -531,7 +599,6 @@ namespace ProjectBlock.View
                     scratchIds.Add(g.Key);
                 }
             }
-            // What was not reported: cool it down (a reset in play), unless it is already gone.
             foreach (KeyValuePair<int, Magazine> entry in magazines)
             {
                 if (!scratchIds.Contains(entry.Key) && entry.Value.Cool < 0f)
@@ -556,6 +623,7 @@ namespace ProjectBlock.View
             pendingPayout = payout;
             pendingPoints = payout.Points;
             pendingFull = payout.AnyFull;
+            pendingStage = 0;
             var groups = new Dictionary<int, List<int>>();
             for (int i = 0; i < payout.Count; i++)
             {
@@ -583,10 +651,10 @@ namespace ProjectBlock.View
                         : Mathf.RoundToInt(payout.Fullness[first] * 5f),
                     Cap = payout.Cap > 0 ? payout.Cap : 5,
                     Full = payout.Full[first],
-                    Rate = PlaybackRate,
-                    Seed = Hash(g.Key, 7)
+                    Rate = PlaybackRate
                 };
                 d.Stage = StageIndex(d.Charges, d.Cap);
+                pendingStage = Mathf.Max(pendingStage, d.Stage);
                 for (int k = 0; k < g.Value.Count; k++)
                 {
                     d.Cells.Add(payout.Cells[g.Value[k]]);
@@ -594,7 +662,6 @@ namespace ProjectBlock.View
                 }
                 BuildDetonation(d);
                 detonations.Add(d);
-                // The standing pack becomes this copy on the same frame.
                 Magazine m;
                 if (magazines.TryGetValue(g.Key, out m))
                 {
@@ -625,7 +692,7 @@ namespace ProjectBlock.View
                 float trigger = float.MaxValue;
                 for (int c = 0; c < payout.Count; c++)
                 {
-                    if (d.Cells.Contains(payout.Cells[c]))
+                    if (d.CellSet.Contains(payout.Cells[c]))
                     {
                         trigger = Mathf.Min(trigger,
                             delays != null && c < delays.Count ? delays[c] : 0f);
@@ -635,9 +702,22 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>The lab: every standing pack's next stage event (seam pulse, ember drift,
-        /// pressure tick, max sequence) and a chamber flick come almost at once, instead of in
-        /// their rare natural seconds.</summary>
+        /// <summary>The lab's before/after only: these blocks are drawn the PREVIOUS pass's way.
+        /// The game never calls this.</summary>
+        public void SetOldLook(IEnumerable<int> cardIds)
+        {
+            oldLookCards.Clear();
+            if (cardIds != null)
+            {
+                foreach (int id in cardIds)
+                {
+                    oldLookCards.Add(id);
+                }
+            }
+        }
+
+        /// <summary>The lab: every standing pack's next stage event and a chamber flick come almost
+        /// at once, instead of in their rare natural seconds.</summary>
         public void ForceIdle()
         {
             foreach (Magazine m in magazines.Values)
@@ -662,29 +742,10 @@ namespace ProjectBlock.View
             }
         }
 
-        private readonly HashSet<GridPos> rawCells = new HashSet<GridPos>();
-
-        /// <summary>
-        /// THE LAB'S BEFORE/AFTER ONLY: these cells' dynamite is drawn as the UNTOUCHED art (the
-        /// casing shader's raw pass), so the old orange-glow system can stand beside the new one
-        /// on the same board. The game never calls this.
-        /// </summary>
-        public void SetRawCells(IEnumerable<GridPos> cells)
-        {
-            rawCells.Clear();
-            if (cells != null)
-            {
-                foreach (GridPos c in cells)
-                {
-                    rawCells.Add(c);
-                }
-            }
-        }
-
         /// <summary>Takes everything down - a new round, the lab's reset.</summary>
         public void Clear()
         {
-            rawCells.Clear();
+            oldLookCards.Clear();
             DropAllMagazines();
             for (int i = 0; i < detonations.Count; i++)
             {
@@ -762,18 +823,16 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// Where a block's straps and chambers go: its runs (contiguous cells in a row), a bridge
-        /// over every gap inside a run, and the chamber rail on the LONGEST run - ties to the run
-        /// nearest the block's middle row, so the rail sits where the eye lands on the block.
-        /// Rebuilt only when the block's cells or cap change.
+        /// Where a block's straps and chambers go: a bridge over every gap inside a run, and the
+        /// chamber rail on the LONGEST run - ties to the run nearest the block's middle row. Rebuilt
+        /// only when the block's cells, its cap or the arena's geometry change.
         /// </summary>
         private void Layout(Magazine m)
         {
-            // The board's own geometry is part of the key: an inflation power resizes the arena
-            // under the same cells, and a layout kept from before would float off its block.
             Vector2 origin = board.CellToWorld(new GridPos(0, 0));
             string key = LayoutKeyOf(m.Cells, m.Cap) + "|" + CellSize.ToString("0.0000") + "|"
-                + origin.x.ToString("0.000") + "," + origin.y.ToString("0.000");
+                + origin.x.ToString("0.000") + "," + origin.y.ToString("0.000")
+                + (m.OldLook ? "|old" : "");
             if (key == m.LayoutKey)
             {
                 return;
@@ -786,14 +845,12 @@ namespace ProjectBlock.View
             int row, x0, x1;
             ChooseRail(m.Cells, out row, out x0, out x1);
             m.RailRow = row;
-            m.RailX0 = x0;
-            m.RailX1 = x1;
-            BuildBridges(m.Cells, m.Bridges, strapH);
+            BuildBridges(m.Cells, m.Bridges);
             float spacing;
             float size;
             bool notch;
-            PlacePrimers(m.Primers, row, x0, x1, m.Cap, strapH, m.CardId, out spacing, out size,
-                out notch);
+            PlacePrimers(m.Primers, row, x0, x1, m.Cap, strapH, m.CardId, m.OldLook, out spacing,
+                out size, out notch);
             m.Spacing = spacing;
             m.PrimerSize = size;
             m.Notch = notch;
@@ -884,7 +941,7 @@ namespace ProjectBlock.View
             }
         }
 
-        private void BuildBridges(List<GridPos> cells, List<Bridge> bridges, float strapH)
+        private void BuildBridges(List<GridPos> cells, List<Bridge> bridges)
         {
             var set = new HashSet<GridPos>(cells);
             float gap = CellSize - Cube;
@@ -912,7 +969,7 @@ namespace ProjectBlock.View
         }
 
         private void PlacePrimers(List<Primer> primers, int row, int x0, int x1, int cap,
-            float strapH, int seedKey, out float spacing, out float size, out bool notch)
+            float strapH, int seedKey, bool old, out float spacing, out float size, out bool notch)
         {
             spacing = 0f;
             size = 0f;
@@ -924,19 +981,27 @@ namespace ProjectBlock.View
             float left = board.CellToWorld(new GridPos(x0, row)).x - Cube * 0.5f + Cube * 0.1f;
             float right = board.CellToWorld(new GridPos(x1, row)).x + Cube * 0.5f - Cube * 0.1f;
             spacing = (right - left) / cap;
-            float want = Px(Style.PrimerSizePixels);
-            size = Mathf.Min(want, strapH * Style.PrimerStrapShare, spacing * 0.62f);
-            // SMALL MODE: a chamber that would be smaller than can be read, or crowded, becomes a
-            // thin ember notch cut into the strap.
-            notch = size < Px(Style.PrimerMinPixels) || spacing < size * 1.35f;
+            float want = Px(old ? 6f : Style.PrimerSizePixels);
+            size = Mathf.Min(want, strapH * (old ? 0.64f : Style.PrimerStrapShare), spacing * 0.64f);
+            // SMALL MODE: a chamber too small to read, or crowded, becomes an ember notch.
+            notch = size < Px(Style.PrimerMinPixels) || spacing < size * 1.3f;
             float y = StrapCentreY(row);
             for (int i = 0; i < cap; i++)
             {
                 float jitter = (Hash(seedKey, 40 + i) - 0.5f) * 2f * Style.PrimerJitter * spacing;
-                var p = new Primer { At = new Vector2(left + spacing * (i + 0.5f) + jitter, y) };
+                var p = new Primer
+                {
+                    At = new Vector2(left + spacing * (i + 0.5f) + jitter, y),
+                    // The pockets go into the casing on alternate sides of the strap.
+                    Side = (i + (int)(Hash(seedKey, 60) * 2f)) % 2 == 0 ? 1 : -1
+                };
                 p.Socket = Rent(notch ? NotchSprite : SocketSprite, SocketOrder);
                 p.Core = Rent(notch ? NotchSprite : CoreSprite, CoreOrder);
                 p.Halo = Rent(DotSprite, HaloOrder);
+                if (!old)
+                {
+                    p.Vein = Rent(VeinSprite, VeinOrder);
+                }
                 primers.Add(p);
             }
         }
@@ -948,6 +1013,7 @@ namespace ProjectBlock.View
                 Return(primers[i].Socket);
                 Return(primers[i].Core);
                 Return(primers[i].Halo);
+                Return(primers[i].Vein);
             }
             primers.Clear();
             for (int i = 0; i < bridges.Count; i++)
@@ -1002,7 +1068,7 @@ namespace ProjectBlock.View
             Vector2 centre = m.Bounds.center;
             float halfDiag = Mathf.Max(m.Bounds.width, m.Bounds.height) * 0.5f;
             int clusters = 2 + (int)(Hash(m.CardId, 60 + m.Charges) * 2f);
-            int count = Mathf.Clamp(Style.GrainCount, 6, 12);
+            int count = Mathf.Clamp(Style.GrainCount, 6, 10);
             for (int g = 0; g < count; g++)
             {
                 int cl = g % clusters;
@@ -1020,8 +1086,8 @@ namespace ProjectBlock.View
                 b.To = to;
                 b.Ctrl = mid + perp * ((Hash(m.CardId, 170 + g) - 0.5f) * r * 0.7f);
                 b.Delay = 0.02f + (g / (float)count) * Style.GrainStagger;
-                b.Life = Style.GrainTravel * Mathf.Lerp(0.8f, 1.3f, Hash(m.CardId, 190 + g));
-                b.Size = Px(Mathf.Lerp(1.2f, 2.8f, Hash(m.CardId, 210 + g)));
+                b.Life = Style.GrainTravel * Mathf.Lerp(0.85f, 1.25f, Hash(m.CardId, 190 + g));
+                b.Size = Px(Mathf.Lerp(1.4f, 3f, Hash(m.CardId, 210 + g)));
                 b.EndSize = b.Size * 0.7f;
                 bool hot = g % 4 == 1;
                 b.Colour = hot ? Color.Lerp(Style.GrainDark, Style.PrimerAmber, 0.6f) : Style.GrainDark;
@@ -1030,7 +1096,7 @@ namespace ProjectBlock.View
             }
         }
 
-        // =================================================================== idle scheduling
+        // =================================================================== idle
 
         private void ScheduleIdle(Magazine m)
         {
@@ -1047,14 +1113,17 @@ namespace ProjectBlock.View
             {
                 case 2: return Mathf.Lerp(Style.SeamPulseMin, Style.SeamPulseMax, k);
                 case 3: return Mathf.Lerp(Style.EmberDriftMin, Style.EmberDriftMax, k);
-                case 4: return Mathf.Lerp(Style.PressureTickMin, Style.PressureTickMax, k);
-                default: return Mathf.Lerp(Style.MaxPulseIntervalMin, Style.MaxPulseIntervalMax, k);
+                case 4: return Mathf.Lerp(Style.SettleIntervalMin, Style.SettleIntervalMax, k);
+                default: return Mathf.Lerp(Style.PressurePulseIntervalMin, Style.PressurePulseIntervalMax, k);
             }
         }
 
-        // =================================================================== the clock
+        private static float StageEventLength(int stage)
+        {
+            return stage == 2 ? 0.5f : stage >= 4 ? Style.PressurePulseDuration + 0.16f : 0.3f;
+        }
 
-        private float clockTime;
+        // =================================================================== the clock
 
         private void Update()
         {
@@ -1084,20 +1153,6 @@ namespace ProjectBlock.View
             for (int i = 0; i < detonations.Count; i++)
             {
                 PaintDetonation(detonations[i]);
-            }
-            if (rawCells.Count > 0 && board != null && board.Board != null)
-            {
-                foreach (GridPos c in rawCells)
-                {
-                    SpriteRenderer r = board.CellRendererAt(c);
-                    if (r != null && r.sprite == DynamiteTile && ViewUtil.DynamiteMaterial != null)
-                    {
-                        r.GetPropertyBlock(block);
-                        block.SetFloat(RawId, 1f);
-                        r.SetPropertyBlock(block);
-                        casingThisFrame.Add(r);
-                    }
-                }
             }
             foreach (SpriteRenderer r in casingWritten)
             {
@@ -1169,7 +1224,7 @@ namespace ProjectBlock.View
                 if (m.LockClock >= 0f)
                 {
                     m.LockClock += mdt;
-                    if (m.LockClock > Style.LockDuration * 2.5f)
+                    if (m.LockClock > Style.LockDuration)
                     {
                         m.LockClock = -1f;
                     }
@@ -1222,22 +1277,8 @@ namespace ProjectBlock.View
             }
             if (m.StageClock >= 0f)
             {
-                float before = m.StageClock;
                 m.StageClock += dt;
-                if (stage == 4 && before < 0.08f && m.StageClock >= 0.08f)
-                {
-                    // The pressure tick passes to the neighbour.
-                    int next = m.StageTarget + 1 < Mathf.Min(m.Charges, m.Primers.Count)
-                        ? m.StageTarget + 1
-                        : Mathf.Max(0, m.StageTarget - 1);
-                    if (next < m.Primers.Count)
-                    {
-                        m.Primers[next].Flick = 0f;
-                        m.Primers[next].FlickBoost = 0.08f;
-                    }
-                }
-                float length = stage == 2 ? 0.5f : stage == 5 ? Style.MaxPulseDuration : 0.3f;
-                if (m.StageClock > length)
+                if (m.StageClock > StageEventLength(stage))
                 {
                     m.StageClock = -1f;
                 }
@@ -1252,11 +1293,11 @@ namespace ProjectBlock.View
                     m.StageClock = 0f;
                     int active = Mathf.Max(1, Mathf.Min(m.Charges, m.Primers.Count));
                     m.StageTarget = (int)(Hash(m.CardId, 600 + m.EventCount) * active) % active;
-                    if (stage == 3)
+                    if (stage >= 3)
                     {
                         EmberDrift(m);
                     }
-                    else if (stage == 4 && m.StageTarget < m.Primers.Count)
+                    if (stage == 4 && m.StageTarget < m.Primers.Count)
                     {
                         m.Primers[m.StageTarget].Flick = 0f;
                         m.Primers[m.StageTarget].FlickBoost = 0.15f;
@@ -1278,14 +1319,51 @@ namespace ProjectBlock.View
 
         // =================================================================== painting a pack
 
+        /// <summary>
+        /// The pockets of a pack, in world space: one per loaded chamber, in the casing on its side
+        /// of the strap, at the stage's size and strength. <paramref name="bloomIndex"/> is the
+        /// chamber whose pocket is still blooming (0.7 -> 1.0), <paramref name="toward"/> and
+        /// <paramref name="inward"/> draw them in for the cook-off.
+        /// </summary>
+        private void CollectPockets(List<Primer> primers, int active, int stage, int bloomIndex,
+            float bloom, float boost, Vector2 toward, float inward, float strapH)
+        {
+            // Always collected, even with the pockets switched off: the underglow, the seam heat
+            // and the haze all follow this field. _PocketLight alone decides whether it is LIT.
+            pockets.Clear();
+            float radius = Style.PocketRadius[stage] * Cube;
+            float strength = Style.PocketStrength[stage] * (1f + boost);
+            for (int i = 0; i < primers.Count && i < active; i++)
+            {
+                Primer p = primers[i];
+                Vector2 at = p.At + new Vector2((Hash(i, 80 + stage) - 0.5f) * Cube * 0.12f,
+                    p.Side * (strapH * 0.5f + Cube * 0.17f));
+                float r = radius;
+                float s = strength;
+                if (i == bloomIndex)
+                {
+                    r *= Mathf.Lerp(Style.PocketBloomFrom, 1f, bloom);
+                    s *= bloom;
+                }
+                if (inward > 0f)
+                {
+                    at = Vector2.Lerp(at, toward, inward * (1f - Style.PocketCompression));
+                    r *= Mathf.Lerp(1f, Style.PocketCompression, inward);
+                    s *= 1f + Style.PocketCompressionBoost * inward;
+                }
+                pockets.Add(new Vector4(at.x, at.y, r, s));
+            }
+        }
+
         private void PaintMagazine(Magazine m)
         {
             int stage = StageIndex(m.Charges, m.Cap);
             float cool = m.Cool >= 0f ? Mathf.Clamp01(1f - m.Cool / 0.15f) : 1f;
-            // During a load the chamber being filled is still dark until it ignites.
             int shownActive = Mathf.Min(m.Charges, m.Primers.Count);
             float ignite = 1f;
             bool igniteOn = PhaseOn(LoadPhase.Ignition);
+            int bloomIndex = -1;
+            float bloom = 1f;
             if (m.LoadClock >= 0f)
             {
                 ignite = Mathf.Clamp01((m.LoadClock - Style.IgnitionAt) / Style.IgnitionDuration);
@@ -1293,20 +1371,25 @@ namespace ProjectBlock.View
                 {
                     shownActive = Mathf.Min(shownActive, m.LoadPrimer);
                 }
+                // The new pocket fills after its chamber ignites: "a new powder pocket filled".
+                bloomIndex = m.LoadPrimer;
+                bloom = Mathf.Clamp01((m.LoadClock - Style.IgnitionAt) / Style.PocketBloomDuration);
             }
-            // The load's pressure beat and the lock.
+            // The pack at the stage it SHOWS: during a load the new pocket and chamber arrive with
+            // the ignition, so the stage steps up with them rather than the frame the report lands.
+            int shownStage = m.LoadClock >= 0f && m.LoadClock < Style.IgnitionAt
+                ? StageIndex(Mathf.Max(0, m.Charges - 1), m.Cap)
+                : stage;
             float pressure = 0f;
             if (m.LoadClock >= Style.PressureAt && PhaseOn(LoadPhase.Pressure))
             {
                 float k = Mathf.Clamp01((m.LoadClock - Style.PressureAt) / Style.PressureDuration);
                 pressure = Mathf.Sin(k * Mathf.PI);
             }
-            float lockK = 0f;
-            if (m.LockClock >= 0f)
-            {
-                lockK = Mathf.Sin(Mathf.Clamp01(m.LockClock / (Style.LockDuration * 2.5f)) * Mathf.PI);
-            }
-            // The travelling strap heat, in world x.
+            float lockK = m.LockClock >= 0f
+                ? Mathf.Sin(Mathf.Clamp01(m.LockClock / Style.LockDuration) * Mathf.PI)
+                : 0f;
+            // The strap heat of a load, in world x.
             float heatLo = 0f, heatHi = 0f, heatK = 0f;
             if (m.LoadClock >= Style.StrapHeatAt && m.LoadPrimer < m.Primers.Count
                 && PhaseOn(LoadPhase.StrapHeat))
@@ -1318,18 +1401,37 @@ namespace ProjectBlock.View
                 heatHi = x + reach;
                 heatK = Style.StrapHeatStrength * (1f - k * k);
             }
-            // Stage-5 pulse: which chamber it has reached.
-            float pulseAt = -1f;
-            if (stage >= 5 && m.StageClock >= 0f)
+            // The rare controlled pressure pulse (stage 5) or settle (stage 4) - and at 5 the
+            // chamber sweep that rides it. NEVER a jitter.
+            float pulse = 0f;
+            float sweepAt = -1f;
+            if (stage >= 4 && m.StageClock >= 0f && Layers.ShowPressurePulse && !m.OldLook)
             {
-                pulseAt = m.StageClock / Mathf.Max(Style.MaxPulseDuration, 0.01f)
-                    * Mathf.Max(1, m.Primers.Count);
+                float k = Mathf.Clamp01(m.StageClock / Style.PressurePulseDuration);
+                pulse = Mathf.Sin(k * Mathf.PI) * Style.PressurePulseStrength * (stage >= 5 ? 1f : 0.5f);
+                if (stage >= 5)
+                {
+                    sweepAt = m.StageClock / Mathf.Max(Style.SweepSpacing, 0.001f);
+                }
             }
             float seamPulse = stage == 2 && m.StageClock >= 0f
-                ? Mathf.Sin(Mathf.Clamp01(m.StageClock / 0.5f) * Mathf.PI) * 0.15f
+                ? Mathf.Sin(Mathf.Clamp01(m.StageClock / 0.5f) * Mathf.PI) * 0.04f
                 : 0f;
 
-            HashSet<GridPos> set = m.CellSet;
+            if (!m.OldLook)
+            {
+                CollectPockets(m.Primers, shownActive + (bloomIndex >= 0 && bloomIndex >= shownActive
+                    && igniteOn ? 1 : 0), Mathf.Max(shownStage, 1), bloomIndex, bloom, 0.1f * lockK,
+                    Vector2.zero, 0f, m.StrapHeight);
+            }
+            else
+            {
+                pockets.Clear();
+            }
+            var squash = new Vector2(1f + Style.PressurePulseX * pulse + Style.LockSwell * lockK
+                + Style.PressureSwell * pressure,
+                1f - Style.PressurePulseY * pulse + Style.LockSwell * lockK + Style.PressureSwell * pressure);
+
             for (int i = 0; i < m.Cells.Count; i++)
             {
                 GridPos cell = m.Cells[i];
@@ -1338,37 +1440,24 @@ namespace ProjectBlock.View
                 {
                     continue;
                 }
-                bool left = set.Contains(new GridPos(cell.X - 1, cell.Y));
-                bool right = set.Contains(new GridPos(cell.X + 1, cell.Y));
+                bool left = m.CellSet.Contains(new GridPos(cell.X - 1, cell.Y));
+                bool right = m.CellSet.Contains(new GridPos(cell.X + 1, cell.Y));
                 Vector2 at = board.CellToWorld(cell);
-                float warmth = Style.Warmth[stage];
-                if (pulseAt >= 0f)
-                {
-                    // The cube under the chamber the pulse is passing warms a few per cent.
-                    for (int p = 0; p < m.Primers.Count; p++)
-                    {
-                        if (Mathf.Abs(m.Primers[p].At.x - at.x) < Cube * 0.5f
-                            && Mathf.Abs(pulseAt - (p + 0.5f)) < 0.8f && cell.Y == m.RailRow)
-                        {
-                            warmth += 0.04f;
-                        }
-                    }
-                }
                 Vector4 front = Vector4.zero;
                 if (heatK > 0f && cell.Y == m.RailRow)
                 {
                     float x0 = at.x - Cube * 0.5f;
                     front = new Vector4((heatLo - x0) / Cube, (heatHi - x0) / Cube, heatK, 0f);
                 }
-                float swell = Style.PressureSwell * pressure + Style.LockSwell * lockK;
-                // The load's pressure beat and the lock both cinch the strap a little more.
-                WriteCasing(r, stage, cool, left, right, warmth, seamPulse, front, swell,
-                    0.3f * pressure + 0.3f * lockK, 0f, Hash(cell, 3), KnotFor(m, cell, stage));
+                WriteCasing(r, at, shownStage, cool, left, right, seamPulse, front, squash,
+                    0.3f * pressure + 0.3f * lockK + 0.35f * pulse, 0f, Hash(cell, 3), m.OldLook);
             }
 
-            // ---- bridges ----
-            float tension = Layers.ShowStrapTension ? Style.StrapTension[stage] : 0f;
-            float cinch = 1f - Style.PressureCinch * pressure - 0.02f * lockK - 0.03f * tension;
+            // ---- bridges: the strap across the gaps, cinched a hair by pressure ----
+            float tension = Layers.ShowStrapTension ? Style.StrapTension[shownStage] : 0f;
+            float cinch = 1f - Style.PressureCinch * pressure - 0.02f * lockK - 0.03f * tension
+                - 0.02f * pulse;
+            float oldJitter = m.OldLook && stage >= 5 ? Mathf.Sin(clockTime * 9f) : 0f;
             for (int i = 0; i < m.Bridges.Count; i++)
             {
                 Bridge br = m.Bridges[i];
@@ -1376,15 +1465,13 @@ namespace ProjectBlock.View
                 {
                     continue;
                 }
-                float jitter = pulseAt >= 0f ? Px(1f) * Mathf.Sin(pulseAt * 3.1f + i) * 0.5f : 0f;
-                Place(br.R, br.At + new Vector2(0f, jitter), br.Width, m.StrapHeight * cinch);
+                Place(br.R, br.At + new Vector2(0f, Px(0.7f) * oldJitter), br.Width, m.StrapHeight * cinch);
                 br.R.color = new Color(1f, 1f, 1f, cool);
-                float heat = 0f;
-                if (heatK > 0f && br.At.x >= heatLo && br.At.x <= heatHi)
+                float heat = heatK > 0f && br.At.x >= heatLo && br.At.x <= heatHi ? heatK : 0f;
+                if (!m.OldLook && Layers.ShowStrapUnderglow)
                 {
-                    heat = heatK;
+                    heat += Style.Underglow[shownStage] * 0.6f * StrapFieldAt(br.At.x, br.At.y);
                 }
-                heat += Style.ChannelHeat[stage] * 0.5f;
                 PaintBridgeHeat(br, heat * cool, m.StrapHeight);
             }
 
@@ -1393,41 +1480,41 @@ namespace ProjectBlock.View
             {
                 Primer p = m.Primers[i];
                 bool active = i < shownActive;
-                float boost = p.Flick >= 0f ? p.FlickBoost * Mathf.Sin(Mathf.Clamp01(p.Flick / 0.14f) * Mathf.PI) : 0f;
-                if (pulseAt >= 0f)
+                float boost = p.Flick >= 0f
+                    ? p.FlickBoost * Mathf.Sin(Mathf.Clamp01(p.Flick / 0.14f) * Mathf.PI)
+                    : 0f;
+                if (sweepAt >= 0f)
                 {
-                    boost = Mathf.Max(boost, 0.12f * Mathf.Clamp01(1f - Mathf.Abs(pulseAt - (i + 0.5f))));
+                    // The sweep: P1 +10%, 30 ms, P2 ... - powder flowing inside, not a progress bar.
+                    boost = Mathf.Max(boost, 0.1f * Mathf.Clamp01(1f - Mathf.Abs(sweepAt - i)));
                 }
                 if (lockK > 0f)
                 {
-                    boost = Mathf.Max(boost, 0.25f * lockK);
+                    boost = Mathf.Max(boost, 0.15f * lockK);
                 }
                 float igniting = m.LoadClock >= Style.IgnitionAt && i == m.LoadPrimer && igniteOn
                     ? ignite
                     : -1f;
                 PaintPrimer(p, active || igniting >= 0f, igniting, boost, m.PrimerSize, m.Notch,
-                    m.StrapHeight, cool, m.Rate);
+                    m.StrapHeight, cool, m.OldLook);
             }
 
             PaintMagazineDebug(m, stage);
         }
 
-        private Vector4 KnotFor(Magazine m, GridPos cell, int stage)
+        /// <summary>How much of the pocket field reaches the strap's middle line at a world x -
+        /// what the underglow and the bridge heat follow.</summary>
+        private float StrapFieldAt(float x, float y)
         {
-            if (!Layers.ShowPressureKnots || Style.KnotStrength[stage] <= 0f || m.Cells.Count == 0)
+            float sum = 0f;
+            for (int i = 0; i < pockets.Count; i++)
             {
-                return new Vector4(SeamA, 0.4f, 0f, 0f);
+                Vector4 p = pockets[i];
+                float d = new Vector2(x - p.x, y - p.y).magnitude;
+                float k = Mathf.Clamp01(1f - d / Mathf.Max(p.z, 1e-4f));
+                sum += k * k * (3f - 2f * k) * p.w;
             }
-            // One knot per pack, on a stable cube and seam.
-            int pick = (int)(Hash(m.CardId, 800) * m.Cells.Count) % m.Cells.Count;
-            if (!m.Cells[pick].Equals(cell))
-            {
-                return new Vector4(SeamA, 0.4f, 0f, 0f);
-            }
-            float u = Hash(m.CardId, 801) < 0.5f ? SeamA : SeamB;
-            float v = Hash(m.CardId, 802) < 0.5f ? BandMid - BandHeight * StrapWidth * 0.5f - 0.02f
-                : BandMid + BandHeight * StrapWidth * 0.5f + 0.02f;
-            return new Vector4(u, v, Style.KnotStrength[stage], 0f);
+            return Mathf.Clamp01(sum * 4f);
         }
 
         private static readonly int StrapWidthId = Shader.PropertyToID("_StrapWidth");
@@ -1435,42 +1522,95 @@ namespace ProjectBlock.View
         private static readonly int StrapTensionId = Shader.PropertyToID("_StrapTension");
         private static readonly int ChannelHeatId = Shader.PropertyToID("_ChannelHeat");
         private static readonly int HeatFrontId = Shader.PropertyToID("_HeatFront");
+        private static readonly int PocketLightId = Shader.PropertyToID("_PocketLight");
+        private static readonly int FillId = Shader.PropertyToID("_Fill");
+        private static readonly int EmbersId = Shader.PropertyToID("_Embers");
+        private static readonly int UnderglowId = Shader.PropertyToID("_Underglow");
         private static readonly int SeamHeatId = Shader.PropertyToID("_SeamHeat");
-        private static readonly int PressureId = Shader.PropertyToID("_InternalPressure");
         private static readonly int WarmthId = Shader.PropertyToID("_CasingWarmth");
         private static readonly int SootId = Shader.PropertyToID("_SootAmount");
-        private static readonly int KnotId = Shader.PropertyToID("_Knot");
+        private static readonly int CreaseId = Shader.PropertyToID("_Crease");
         private static readonly int HazeId = Shader.PropertyToID("_LocalHeatDistortion");
-        private static readonly int SwellId = Shader.PropertyToID("_Swell");
+        private static readonly int SquashId = Shader.PropertyToID("_Squash");
         private static readonly int SeedId = Shader.PropertyToID("_Seed");
         private static readonly int FlashId = Shader.PropertyToID("_Flash");
+        private static readonly int OldLookId = Shader.PropertyToID("_OldLook");
         private static readonly int RawId = Shader.PropertyToID("_Raw");
 
-        /// <summary>One cube's casing, through its renderer's property block.</summary>
-        private void WriteCasing(SpriteRenderer r, int stage, float cool, bool left, bool right,
-            float warmth, float seamPulse, Vector4 front, float swell, float extraTension,
-            float flash, float seed, Vector4 knot)
+        private static readonly int[] PocketIds =
+        {
+            Shader.PropertyToID("_PocketA"), Shader.PropertyToID("_PocketB"),
+            Shader.PropertyToID("_PocketC"), Shader.PropertyToID("_PocketD"),
+            Shader.PropertyToID("_PocketE")
+        };
+
+        /// <summary>One cube's casing, through its renderer's property block. The pockets
+        /// collected for the pack are handed over in THIS cube's uv - the nearest five that can
+        /// reach it - so the fill crosses cube boundaries and stops where the block does.</summary>
+        private void WriteCasing(SpriteRenderer r, Vector2 cubeCentre, int stage, float cool, bool left,
+            bool right, float seamBoost, Vector4 front, Vector2 squash, float extraTension, float flash,
+            float seed, bool old)
         {
             if (ViewUtil.DynamiteMaterial == null)
             {
                 return;
+            }
+            float cube = Mathf.Max(Cube, 1e-4f);
+            int n = 0;
+            for (int i = 0; i < pockets.Count && n < cubePockets.Length; i++)
+            {
+                Vector4 p = pockets[i];
+                Vector2 d = new Vector2(p.x - cubeCentre.x, p.y - cubeCentre.y);
+                if (Mathf.Abs(d.x) > p.z + cube * 0.6f || Mathf.Abs(d.y) > p.z + cube * 0.6f)
+                {
+                    continue;
+                }
+                cubePockets[n++] = new Vector4(0.5f + d.x / cube, 0.5f + d.y / cube, p.z / cube,
+                    p.w * cool);
+            }
+            for (int i = n; i < cubePockets.Length; i++)
+            {
+                cubePockets[i] = Vector4.zero;
             }
             r.GetPropertyBlock(block);
             block.SetFloat(StrapWidthId, StrapWidth);
             block.SetVector(StrapEndsId, new Vector4(left ? 1f : 0f, right ? 1f : 0f, 0f, 0f));
             float tension = Layers.ShowStrapTension ? Style.StrapTension[stage] : 0f;
             block.SetFloat(StrapTensionId, Mathf.Clamp01(tension + extraTension) * cool);
-            block.SetFloat(ChannelHeatId, Style.ChannelHeat[stage] * cool);
             block.SetVector(HeatFrontId, front);
-            block.SetFloat(SeamHeatId, Layers.ShowSeamHeat ? (Style.SeamHeat[stage] + seamPulse) * cool : 0f);
-            block.SetFloat(PressureId, Style.Pressure[stage] * cool);
-            block.SetFloat(WarmthId, warmth * cool);
+            for (int i = 0; i < PocketIds.Length; i++)
+            {
+                block.SetVector(PocketIds[i], cubePockets[i]);
+            }
+            block.SetFloat(PocketLightId, Layers.ShowPockets ? 1f : 0f);
+            block.SetFloat(OldLookId, old ? 1f : 0f);
+            if (old)
+            {
+                // THE PREVIOUS PASS, for the lab's before/after: crisp hairlines and a whole-cube
+                // wobble, no pockets, no underglow.
+                block.SetFloat(ChannelHeatId, Style.ChannelHeat[stage] * cool);
+                block.SetFloat(FillId, 0f);
+                block.SetFloat(EmbersId, 0f);
+                block.SetFloat(UnderglowId, 0f);
+                block.SetFloat(SeamHeatId, Style.OldSeamShare[stage] / 5f * cool);
+                block.SetFloat(CreaseId, 0f);
+                float oldHaze = Style.OldHazePixels[stage];
+                block.SetFloat(HazeId, oldHaze > 0f ? Px(oldHaze) / cube : 0f);
+            }
+            else
+            {
+                block.SetFloat(ChannelHeatId, Layers.ShowStrapUnderglow ? Style.ChannelHeat[stage] * cool : 0f);
+                block.SetFloat(FillId, Layers.ShowPockets ? Style.Fill[stage] * cool : 0f);
+                block.SetFloat(EmbersId, Layers.ShowPockets ? Style.Embers[stage] : 0f);
+                block.SetFloat(UnderglowId, Layers.ShowStrapUnderglow ? Style.Underglow[stage] * cool : 0f);
+                block.SetFloat(SeamHeatId, Layers.ShowSeamHeat ? (Style.SeamHeat[stage] + seamBoost) * cool : 0f);
+                block.SetFloat(CreaseId, Layers.ShowSootMask ? Style.Crease[stage] * cool : 0f);
+                float hazePx = Layers.ShowHeatDistortion ? Style.HeatDistortionPixels[stage] : 0f;
+                block.SetFloat(HazeId, hazePx > 0f ? Px(hazePx) / cube * cool : 0f);
+            }
+            block.SetFloat(WarmthId, Style.Warmth[stage] * cool);
             block.SetFloat(SootId, Layers.ShowSootMask ? Style.Soot[stage] : 0f);
-            knot.z *= cool;
-            block.SetVector(KnotId, knot);
-            float hazePx = Layers.ShowHeatDistortion ? Style.HeatDistortionPixels[stage] : 0f;
-            block.SetFloat(HazeId, hazePx > 0f ? Px(hazePx) / Mathf.Max(Cube, 1e-4f) * cool : 0f);
-            block.SetFloat(SwellId, swell);
+            block.SetVector(SquashId, new Vector4(squash.x, squash.y, 0f, 0f));
             block.SetFloat(SeedId, seed * 10f);
             block.SetFloat(FlashId, flash);
             block.SetFloat(RawId, 0f);
@@ -1492,22 +1632,24 @@ namespace ProjectBlock.View
             {
                 br.Heat = Rent(HeatBarSprite, BridgeOrder);
             }
-            Place(br.Heat, br.At + new Vector2(0f, -strapH * 0.25f), br.Width, strapH * 0.3f);
+            Place(br.Heat, br.At + new Vector2(0f, -strapH * 0.36f), br.Width, strapH * 0.28f);
             Color c = Style.PrimerAmber;
-            c.a = Mathf.Clamp01(heat);
+            c.a = Mathf.Clamp01(heat * 1.6f);
             br.Heat.color = c;
         }
 
-        /// <summary>One chamber: a recessed socket, its core and a halo of a few pixels.</summary>
+        /// <summary>One chamber: a recessed brass socket, its amber core, a halo of about ten
+        /// pixels and a short vein of heat running down into the strap.</summary>
         private void PaintPrimer(Primer p, bool active, float igniting, float boost, float size,
-            bool notch, float strapH, float alpha, float rate)
+            bool notch, float strapH, float alpha, bool old)
         {
+            bool shown = Layers.ShowPrimerSystem;
             float w = notch ? size * 0.45f : size * 1.3f;
             float h = notch ? strapH * 0.72f : size * 1.3f;
             if (p.Socket != null)
             {
                 Place(p.Socket, p.At, w, h);
-                Color s = Layers.ShowPrimerSockets ? Color.white : Invisible;
+                Color s = shown ? Color.white : Invisible;
                 s.a *= alpha;
                 p.Socket.color = s;
             }
@@ -1516,7 +1658,6 @@ namespace ProjectBlock.View
             float punch = 1f;
             if (igniting >= 0f)
             {
-                // dark -> deep ember -> amber-hot -> stable warm
                 float k = igniting;
                 core = k < 0.35f ? Color.Lerp(Style.SocketDark, Style.PrimerEmber, k / 0.35f)
                     : k < 0.7f ? Color.Lerp(Style.PrimerEmber, Style.PrimerHot, (k - 0.35f) / 0.35f)
@@ -1529,23 +1670,33 @@ namespace ProjectBlock.View
                 glow = Style.PrimerActiveBrightness;
             }
             glow *= 1f + boost;
+            bool lit = shown && (active || igniting >= 0f);
             if (p.Core != null)
             {
-                Place(p.Core, p.At, (notch ? size * 0.3f : size * 0.78f) * punch,
-                    (notch ? strapH * 0.55f : size * 0.78f) * punch);
-                Color c = active || igniting >= 0f
+                Place(p.Core, p.At, (notch ? size * 0.3f : size * 0.8f) * punch,
+                    (notch ? strapH * 0.55f : size * 0.8f) * punch);
+                p.Core.color = lit
                     ? new Color(Mathf.Clamp01(core.r * glow), Mathf.Clamp01(core.g * glow),
                         Mathf.Clamp01(core.b * glow), alpha)
                     : Invisible;
-                p.Core.color = c;
             }
             if (p.Halo != null)
             {
-                float halo = Px(Style.PrimerHaloPixels) * 2f + size;
+                float halo = old ? Px(5f) * 2f + size : Px(Style.PrimerHaloPixels) * 2f;
                 Place(p.Halo, p.At, halo, halo);
                 Color c = Style.PrimerAmber;
-                c.a = (active || igniting >= 0f) ? 0.28f * Mathf.Clamp01(glow) * alpha : 0f;
+                c.a = lit ? (old ? 0.28f : Style.PrimerHaloAlpha) * Mathf.Clamp01(glow) * alpha : 0f;
                 p.Halo.color = c;
+            }
+            if (p.Vein != null)
+            {
+                // Heat running DOWN out of the chamber into the strap - transfer, not a circuit.
+                float len = strapH * 0.42f + Px(2f);
+                Place(p.Vein, p.At + new Vector2(Px(0.5f) * p.Side, -len * 0.5f - size * 0.25f),
+                    Px(1.4f), len);
+                Color c = Style.PrimerAmber;
+                c.a = lit ? Style.PrimerVeinAlpha * Mathf.Clamp01(glow) * alpha : 0f;
+                p.Vein.color = c;
             }
         }
 
@@ -1566,12 +1717,12 @@ namespace ProjectBlock.View
                 r.color = Color.white;
                 d.Proxies.Add(r);
             }
-            BuildBridges(d.Cells, d.Bridges, d.StrapHeight);
+            BuildBridges(d.Cells, d.Bridges);
             int row, x0, x1;
             ChooseRail(d.Cells, out row, out x0, out x1);
             float spacing, size;
             bool notch;
-            PlacePrimers(d.Primers, row, x0, x1, d.Cap, d.StrapHeight, d.CardId, out spacing,
+            PlacePrimers(d.Primers, row, x0, x1, d.Cap, d.StrapHeight, d.CardId, false, out spacing,
                 out size, out notch);
             d.PrimerSize = size;
             d.Notch = notch;
@@ -1601,14 +1752,12 @@ namespace ProjectBlock.View
                     }
                     continue;
                 }
-                float before = d.Clock;
                 d.Clock += dt * d.Rate;
                 if (!d.Prepped && d.Clock >= d.Trigger)
                 {
                     d.Prepped = true;
                     Emit(Cue.DetonationPrep, d.Cap > 0 ? d.Charges / (float)d.Cap : 1f);
                 }
-                // Each loaded chamber fires in physical order.
                 int n = Mathf.Min(d.Charges, d.Primers.Count);
                 while (d.Fired < n && d.Clock >= d.Trigger + d.Fired * Style.DetonationPrimerDelay)
                 {
@@ -1631,8 +1780,8 @@ namespace ProjectBlock.View
         private void FireChamber(Detonation d, int index)
         {
             Primer p = d.Primers[index];
-            // Its heat races along the strap into the pack's centre - the stored charge
-            // gathering INWARD before anything goes out. The debug switch only makes it louder.
+            // Its heat races along the strap into the pack's centre - the stored charge gathering
+            // INWARD before anything goes out. The debug switch only makes it louder.
             var b = NewBit(KindCurve, HeatBarSprite, BlastOrder - 1, d.Rate);
             b.From = p.At;
             b.To = d.Centre;
@@ -1644,7 +1793,6 @@ namespace ProjectBlock.View
             b.Colour = Style.PrimerAmber;
             b.EndColour = Style.PrimerHot;
             b.Alpha = Layers.ShowDetonationEnergyFlow ? 0.95f : 0.5f;
-            // And a micro spark off it.
             float a = Mathf.PI * (0.25f + 0.5f * Hash(d.CardId, 900 + index));
             var s = NewBit(KindBallistic, DotSprite, BlastOrder, d.Rate);
             s.From = s.To = p.At;
@@ -1665,11 +1813,13 @@ namespace ProjectBlock.View
             float heat = 0f;
             float swell = 0f;
             float tension = 0.5f;
+            float inward = 0f;
             if (t >= 0f && t >= d.Trigger)
             {
                 float k = Mathf.Clamp01((t - d.Trigger) / Mathf.Max(d.BlastAt - d.Trigger, 0.01f));
-                heat = 0.35f * k;
+                heat = 0.3f * k;
                 tension = Mathf.Lerp(0.5f, 1f, k);
+                inward = EaseOut(k);
                 float compressStart = d.BlastAt - Style.DetonationCompressionTime;
                 if (t >= compressStart)
                 {
@@ -1680,7 +1830,10 @@ namespace ProjectBlock.View
                             (c - 0.6f) / 0.4f);
                 }
             }
-            HashSet<GridPos> set = d.CellSet;
+            int n = Mathf.Min(d.Charges, d.Primers.Count);
+            CollectPockets(d.Primers, n, Mathf.Max(d.Stage, 1), -1, 1f, 0f, d.Centre, inward,
+                d.StrapHeight);
+            var squash = new Vector2(1f + swell, 1f + swell);
             for (int i = 0; i < d.Proxies.Count; i++)
             {
                 SpriteRenderer r = d.Proxies[i];
@@ -1689,33 +1842,31 @@ namespace ProjectBlock.View
                     continue;
                 }
                 GridPos cell = d.Cells[i];
-                WriteCasing(r, d.Stage, 1f, set.Contains(new GridPos(cell.X - 1, cell.Y)),
-                    set.Contains(new GridPos(cell.X + 1, cell.Y)), Style.Warmth[d.Stage], 0f,
-                    Vector4.zero, swell, tension, heat, Hash(cell, 3), new Vector4(SeamA, 0.4f, 0f, 0f));
+                WriteCasing(r, board.CellToWorld(cell), d.Stage, 1f,
+                    d.CellSet.Contains(new GridPos(cell.X - 1, cell.Y)),
+                    d.CellSet.Contains(new GridPos(cell.X + 1, cell.Y)), 0f, Vector4.zero, squash,
+                    tension, heat, Hash(cell, 3), false);
             }
             for (int i = 0; i < d.Bridges.Count; i++)
             {
                 Bridge br = d.Bridges[i];
-                // The strap thins as the pressure peaks - then, at the blast, it goes.
                 Place(br.R, br.At, br.Width, d.StrapHeight * (1f - 0.08f * (tension - 0.5f) * 2f));
                 br.R.color = Color.white;
-                PaintBridgeHeat(br, heat * 0.6f, d.StrapHeight);
+                PaintBridgeHeat(br, heat * 0.6f + Style.Underglow[d.Stage] * 0.5f, d.StrapHeight);
             }
-            int n = Mathf.Min(d.Charges, d.Primers.Count);
             for (int i = 0; i < d.Primers.Count; i++)
             {
                 bool active = i < n;
                 float boost = i < d.Fired ? 0.6f : 0f;
                 PaintPrimer(d.Primers[i], active, -1f, boost, d.PrimerSize, d.Notch, d.StrapHeight,
-                    1f, d.Rate);
+                    1f, false);
             }
         }
 
         /// <summary>
-        /// THE BLAST - the ordinary powder burst with layers that grow with what was stored, and
-        /// never more than 1.3x the footprint: a core flash in amber, powder, red casing
-        /// fragments, a few torn strap pieces, and at stage 3 and up a thin ember ring (a broken
-        /// secondary ring a beat later at 4 and 5).
+        /// THE BLAST - the powder burst with layers that grow with what was stored, and never more
+        /// than 1.3x the footprint: a core flash in amber, powder, red casing fragments, a few torn
+        /// strap pieces, an ember ring at stage 3 and a broken secondary flare at 4-5.
         /// </summary>
         private void Blast(Detonation d)
         {
@@ -1726,8 +1877,6 @@ namespace ProjectBlock.View
                     d.Proxies[i].color = Invisible;
                 }
             }
-            // A full magazine's chambers are where the reward's light gathers from - kept before
-            // the chambers themselves are taken down.
             if (d.Full)
             {
                 for (int i = 0; i < d.Primers.Count; i++)
@@ -1751,7 +1900,6 @@ namespace ProjectBlock.View
             core.EndColour = Style.PrimerAmber;
             core.Alpha = Mathf.Lerp(0.55f, 0.85f, (stage - 1f) / 4f);
 
-            // Powder: amber grains thrown out, dense at the top stages.
             int powder = 6 + 3 * (int)stage;
             for (int i = 0; i < powder; i++)
             {
@@ -1770,7 +1918,6 @@ namespace ProjectBlock.View
                 b.EndColour = Style.PrimerEmber;
                 b.Alpha = 1f;
             }
-            // Red casing fragments, spinning, falling.
             int shards = 4 + (int)stage;
             for (int i = 0; i < shards; i++)
             {
@@ -1790,7 +1937,6 @@ namespace ProjectBlock.View
                 b.EndColour = Color.Lerp(Style.CasingRed, Style.GrainDark, 0.6f);
                 b.Alpha = 1f;
             }
-            // Torn strap pieces: two to four dark slivers, a recoil and then away.
             int straps = 2 + (int)(Hash(d.CardId, 1400) * 3f);
             for (int i = 0; i < straps; i++)
             {
@@ -1838,7 +1984,7 @@ namespace ProjectBlock.View
             r.Colour = Style.PrimerAmber;
             r.EndColour = Style.PrimerEmber;
             r.Alpha = alpha;
-            r.Angle = Random01Of(at) * 360f;
+            r.Angle = Hash(Mathf.RoundToInt(at.x * 97f) * 31 + Mathf.RoundToInt(at.y * 89f), 5) * 360f;
         }
 
         private void DropDetonation(Detonation d)
@@ -1853,10 +1999,6 @@ namespace ProjectBlock.View
 
         // =================================================================== the payout
 
-        private readonly List<Vector2> fullPrimerSpots = new List<Vector2>();
-
-        private readonly List<Vector2> blastCentres = new List<Vector2>();
-
         /// <summary>ONE total, however many blocks went up: it waits for the last blast of the
         /// payout and sits over the middle of all of them.</summary>
         private void ScheduleTotal(Detonation d)
@@ -1865,7 +2007,7 @@ namespace ProjectBlock.View
             {
                 if (!detonations[i].Blasted)
                 {
-                    return; // another block still to go
+                    return;
                 }
             }
             if (pendingPayout == null || pendingPoints <= 0)
@@ -1882,7 +2024,7 @@ namespace ProjectBlock.View
             }
             Vector2 where = (blastCentres.Count > 0 ? sum / blastCentres.Count : d.Centre)
                 + new Vector2(0f, Cube * 0.75f);
-            SpawnTotal(where, "+" + pendingPoints, 0.12f, d.Rate);
+            SpawnTotal(where, "+" + pendingPoints, Style.TextDelay, d.Rate, pendingStage >= 5);
             if (pendingFull && fullPrimerSpots.Count > 0)
             {
                 SpawnReward(where, d.Rate);
@@ -1896,7 +2038,7 @@ namespace ProjectBlock.View
             pendingPayout = null;
         }
 
-        private void SpawnTotal(Vector2 at, string text, float delay, float rate)
+        private void SpawnTotal(Vector2 at, string text, float delay, float rate, bool flecks)
         {
             var total = new FloatingTotal { Delay = delay, Rate = rate };
             var root = new GameObject("PowderTotal").transform;
@@ -1904,7 +2046,6 @@ namespace ProjectBlock.View
             root.localPosition = new Vector3(at.x, at.y, 0f);
             total.Root = root;
             float size = 0.034f;
-            // Shadow, amber edge, ivory face - one compact number.
             TextMesh shadow = ViewUtil.MakeText3D(root, "Shadow", new Vector2(Px(1.5f), -Px(1.5f)),
                 text, 96, size, Style.TextShadow, TextOrder, TextAnchor.MiddleCenter);
             TextMesh edge = ViewUtil.MakeText3D(root, "Edge", Vector2.zero, text, 96, size * 1.05f,
@@ -1916,6 +2057,26 @@ namespace ProjectBlock.View
             total.Layers.Add(face);
             root.localScale = Vector3.zero;
             texts.Add(total);
+            if (flecks)
+            {
+                // A full magazine's payoff: a few tiny powder flecks round the number. No coins.
+                for (int i = 0; i < 4; i++)
+                {
+                    float a = (i + 0.3f) / 4f * Mathf.PI * 2f;
+                    var b = NewBit(KindBallistic, DotSprite, TextOrder - 1, rate);
+                    b.From = b.To = at + new Vector2(Mathf.Cos(a), Mathf.Sin(a) * 0.5f) * Cube * 0.45f;
+                    b.Velocity = new Vector2(Mathf.Cos(a), Mathf.Sin(a) + 0.5f) * Px(26f);
+                    b.Drag = 3f;
+                    b.Gravity = Px(18f);
+                    b.Delay = delay + 0.05f;
+                    b.Life = 0.45f;
+                    b.Size = Px(2f);
+                    b.EndSize = Px(0.8f);
+                    b.Colour = Style.PrimerHot;
+                    b.EndColour = Style.PrimerEmber;
+                    b.Alpha = 0.9f;
+                }
+            }
         }
 
         private void TickTexts(float dt)
@@ -1956,7 +2117,10 @@ namespace ProjectBlock.View
                 t.Root.localScale = new Vector3(s, s, 1f);
                 float fadeStart = 0.3f + Style.TextHold;
                 float fade = a > fadeStart ? Mathf.Clamp01((a - fadeStart) / 0.3f) : 0f;
-                t.Root.localPosition += new Vector3(0f, fade > 0f ? Px(20f) * dt * t.Rate : 0f, 0f);
+                if (fade > 0f)
+                {
+                    t.Root.localPosition += new Vector3(0f, Px(20f) * dt * t.Rate, 0f);
+                }
                 for (int k = 0; k < t.Layers.Count; k++)
                 {
                     if (t.Layers[k] != null)
@@ -1979,7 +2143,7 @@ namespace ProjectBlock.View
         private void SpawnReward(Vector2 gather, float rate)
         {
             DropReward();
-            rewardCore = new RewardSeed { Gather = gather, Rate = rate, Delay = 0.12f };
+            rewardCore = new RewardSeed { Gather = gather, Rate = rate };
             for (int i = 0; i < fullPrimerSpots.Count && i < 5; i++)
             {
                 var m = NewBit(KindCurve, DotSprite, TextOrder - 1, rate);
@@ -2025,8 +2189,7 @@ namespace ProjectBlock.View
             }
             if (r.Age < flyAt)
             {
-                float breathe = 1f + 0.08f * Mathf.Sin((r.Age - gathered) * 18f);
-                Place(r.R, r.Gather, Px(7f) * breathe, Px(7f) * breathe);
+                Place(r.R, r.Gather, Px(7f), Px(7f));
                 r.R.color = Style.PrimerHot;
                 return;
             }
@@ -2051,8 +2214,6 @@ namespace ProjectBlock.View
                 rewardCore = null;
             }
         }
-
-        private float scoreDelay;
 
         private void StartScorePunch(float delay, float rate)
         {
@@ -2126,6 +2287,7 @@ namespace ProjectBlock.View
             b.Alpha = 1f;
         }
 
+        /// <summary>One thin thread of warm-charcoal smoke out of a strap/casing seam.</summary>
         private void Smoke(Magazine m, float rate)
         {
             if (m.Cells.Count == 0)
@@ -2140,37 +2302,47 @@ namespace ProjectBlock.View
             var b = NewBit(KindRise, SmokeSprite, BitOrder, rate);
             b.From = b.To = at;
             b.Velocity = new Vector2(Px(3f), Px(22f));
-            b.Life = 0.16f;
+            b.Life = 0.17f;
             b.Size = Px(3f);
-            b.EndSize = Px(6f);
+            b.EndSize = Px(7f);
             b.Aspect = 0.55f;
             b.Colour = Style.Smoke;
             b.EndColour = Style.Smoke;
             b.Alpha = 0.35f;
         }
 
+        /// <summary>One to three tiny embers drifting slowly through the powder - INSIDE a pocket,
+        /// on a short curved path.</summary>
         private void EmberDrift(Magazine m)
         {
-            if (m.Cells.Count == 0)
+            int active = Mathf.Min(m.Charges, m.Primers.Count);
+            if (active <= 0)
             {
                 return;
             }
-            GridPos cell = m.Cells[(int)(Hash(m.CardId, 1600 + m.EventCount) * m.Cells.Count) % m.Cells.Count];
-            Vector2 at = board.CellToWorld(cell);
-            float seam = Hash(m.CardId, 1620 + m.EventCount) < 0.5f ? SeamA : SeamB;
-            at.x += (seam - 0.5f) * Cube;
-            float up = Hash(m.CardId, 1640 + m.EventCount) < 0.5f ? 1f : -1f;
-            at.y += up * (m.StrapHeight * 0.8f + Cube * 0.05f);
-            var b = NewBit(KindCurve, DotSprite, BitOrder, m.Rate);
-            b.From = at;
-            b.To = at + new Vector2(0f, up * Px(Mathf.Lerp(5f, 8f, Hash(m.CardId, 1660 + m.EventCount))));
-            b.Ctrl = (b.From + b.To) * 0.5f;
-            b.Life = 0.5f;
-            b.Size = Px(1.6f);
-            b.EndSize = Px(1f);
-            b.Colour = Style.PrimerAmber;
-            b.EndColour = Style.PrimerEmber;
-            b.Alpha = 0.8f;
+            int stage = StageIndex(m.Charges, m.Cap);
+            int count = stage >= 5 ? 3 : stage >= 4 ? 2 : 1;
+            for (int e = 0; e < count; e++)
+            {
+                Primer p = m.Primers[(int)(Hash(m.CardId, 1600 + m.EventCount * 3 + e) * active) % active];
+                Vector2 pocket = p.At + new Vector2(0f, p.Side * (m.StrapHeight * 0.5f + Cube * 0.17f));
+                Vector2 from = pocket + new Vector2((Hash(m.CardId, 1620 + e) - 0.5f) * Cube * 0.2f,
+                    (Hash(m.CardId, 1640 + e) - 0.5f) * Cube * 0.12f);
+                float len = Px(Mathf.Lerp(5f, 12f, Hash(m.CardId, 1660 + m.EventCount + e)));
+                float a = Hash(m.CardId, 1680 + m.EventCount + e) * Mathf.PI * 2f;
+                Vector2 to = from + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * len;
+                var b = NewBit(KindDrift, DotSprite, BitOrder, m.Rate);
+                b.From = from;
+                b.To = to;
+                b.Ctrl = (from + to) * 0.5f + new Vector2(-(to - from).y, (to - from).x) * 0.4f;
+                b.Delay = e * 0.25f;
+                b.Life = Mathf.Lerp(0.9f, 1.3f, Hash(m.CardId, 1700 + e));
+                b.Size = Px(1.6f);
+                b.EndSize = Px(1.1f);
+                b.Colour = Style.PrimerAmber;
+                b.EndColour = Style.PrimerEmber;
+                b.Alpha = 0.75f;
+            }
         }
 
         // =================================================================== bits
@@ -2216,6 +2388,9 @@ namespace ProjectBlock.View
                             angle = Mathf.Atan2(tan.y, tan.x) * Mathf.Rad2Deg;
                         }
                         break;
+                    case KindDrift:
+                        pos = Bezier(b.From, b.Ctrl, b.To, t * t * (3f - 2f * t));
+                        break;
                     case KindBallistic:
                         b.Velocity *= Mathf.Exp(-b.Drag * bdt);
                         b.Velocity += Vector2.down * b.Gravity * bdt;
@@ -2234,8 +2409,19 @@ namespace ProjectBlock.View
                 }
                 float size = Mathf.Lerp(b.Size, b.EndSize, b.Kind == KindRing ? EaseOut(t) : t);
                 Color c = Color.Lerp(b.Colour, b.EndColour, t);
-                float fade = b.Kind == KindCurve ? Mathf.Clamp01(t * 5f) * (1f - t * t * 0.3f)
-                    : (1f - t) * (1f - t);
+                float fade;
+                if (b.Kind == KindCurve)
+                {
+                    fade = Mathf.Clamp01(t * 5f) * (1f - t * t * 0.3f);
+                }
+                else if (b.Kind == KindDrift)
+                {
+                    fade = Mathf.Sin(t * Mathf.PI);
+                }
+                else
+                {
+                    fade = (1f - t) * (1f - t);
+                }
                 c.a = b.Alpha * fade;
                 b.R.color = c;
                 b.R.transform.localPosition = new Vector3(pos.x, pos.y, 0f);
@@ -2429,17 +2615,13 @@ namespace ProjectBlock.View
             return Hash(cell.X * 7919 + cell.Y * 104729, salt);
         }
 
-        private static float Random01Of(Vector2 at)
-        {
-            return Hash(Mathf.RoundToInt(at.x * 97f) * 31 + Mathf.RoundToInt(at.y * 89f), 5);
-        }
-
         // =================================================================== sprites
 
         private static Sprite dot;
         private static Sprite socket;
         private static Sprite core;
         private static Sprite notch;
+        private static Sprite vein;
         private static Sprite strapBar;
         private static Sprite heatBar;
         private static Sprite smoke;
@@ -2468,8 +2650,8 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>A RECESSED chamber: a muted brass rim, a soot-dark centre, the inside's top
-        /// edge in shadow (it is a hole) and its bottom catching a hair of light.</summary>
+        /// <summary>A RECESSED chamber: a muted gold-brass rim, a soot-dark centre, the inside's
+        /// top edge in shadow (it is a hole) and its bottom catching a hair of light.</summary>
         private static Sprite SocketSprite
         {
             get
@@ -2478,14 +2660,13 @@ namespace ProjectBlock.View
                 {
                     socket = Bake(32, 32, (x, y) =>
                     {
-                        // A rounded square, softened toward a circle.
                         float sq = Mathf.Max(Mathf.Abs(x), Mathf.Abs(y));
                         float d = Mathf.Lerp(Mathf.Sqrt(x * x + y * y), sq, 0.45f);
                         float body = 1f - Mathf.Clamp01((d - 0.86f) / 0.12f);
                         float rim = Mathf.Clamp01((d - 0.6f) / 0.2f);
                         Color inside = Color.Lerp(Style.SocketDark, Style.SocketDark * 1.6f,
                             Mathf.Clamp01(-y * 0.8f + 0.2f));
-                        Color c = Color.Lerp(inside, Style.Brass * 0.85f, rim);
+                        Color c = Color.Lerp(inside, Style.Brass, rim);
                         c *= 1f - 0.35f * Mathf.Clamp01(y) * (1f - rim);
                         c.a = body;
                         return c;
@@ -2495,7 +2676,6 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>The loaded core: hot in its middle, warm to its edge, tinted per state.</summary>
         private static Sprite CoreSprite
         {
             get
@@ -2515,7 +2695,6 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>SMALL MODE: a thin ember notch cut into the strap.</summary>
         private static Sprite NotchSprite
         {
             get
@@ -2535,8 +2714,25 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>The strap across a gap: the same graphite the shader draws - steel-charcoal
-        /// edges, matte black middle, a hairline of light on top.</summary>
+        /// <summary>A short soft vertical line of heat, fading at both ends and at its sides.
+        /// </summary>
+        private static Sprite VeinSprite
+        {
+            get
+            {
+                if (vein == null)
+                {
+                    vein = Bake(8, 32, (x, y) =>
+                    {
+                        float across = 1f - Mathf.Clamp01(Mathf.Abs(x));
+                        float along = 1f - Mathf.Clamp01(Mathf.Abs(y) * 1.1f);
+                        return new Color(1f, 1f, 1f, across * across * along);
+                    });
+                }
+                return vein;
+            }
+        }
+
         private static Sprite StrapBarSprite
         {
             get
@@ -2551,7 +2747,7 @@ namespace ProjectBlock.View
                             new Color(0.23f, 0.24f, 0.27f), edge);
                         if (sy > 0.84f && sy < 0.97f)
                         {
-                            c += new Color(0.12f, 0.12f, 0.13f);
+                            c += new Color(0.14f, 0.14f, 0.15f);
                         }
                         c *= 1f - 0.25f * (1f - Mathf.Clamp01(sy / 0.2f));
                         c.a = 1f;
@@ -2562,7 +2758,6 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>A soft horizontal bar of heat, fading to nothing at its ends.</summary>
         private static Sprite HeatBarSprite
         {
             get
@@ -2614,8 +2809,6 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>The secondary combustion ring: thin and BROKEN into arcs, never a clean
-        /// shockwave.</summary>
         private static Sprite BrokenRingSprite
         {
             get
