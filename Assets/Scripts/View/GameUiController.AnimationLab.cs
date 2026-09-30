@@ -857,74 +857,6 @@ namespace ProjectBlock.View
             animLastLabel = Loc.Pick(cubes + " annihilated", cubes + " yok edildi");
         }
 
-        /// <summary>Puts <paramref name="cubes"/> dynamite cubes on the board at a given charge
-        /// and plays the powder for them. <paramref name="gained"/> false is a block HOLDING:
-        /// the ember stays, and there is no spark and no sizzle.</summary>
-        private void AnimPowder(int charges, bool gained, int cubes)
-        {
-            EnsurePowder();
-            var report = new PowderVisuals();
-            for (int i = 0; i < cubes; i++)
-            {
-                report.Add(new GridPos(2 + i, 3), charges, 5, gained);
-            }
-            powder.Show(report);
-            if (gained)
-            {
-                sfx.Fuse(charges / 5f);
-            }
-            animLastLabel = Loc.Pick("powder " + charges + "/5", "barut " + charges + "/5");
-        }
-
-        /// <summary>Four blocks at four ripenesses at once - the scene that says whether the
-        /// ember actually reads as a SCALE rather than as "lit or not".</summary>
-        /// <summary>The payout, on a row the lab flashes itself so the pops land on a real break.</summary>
-        private void AnimPowderPayout(int charges, int cubes)
-        {
-            EnsurePowder();
-            var payout = new PowderPayoutVisuals();
-            var delays = new List<float>();
-            var cells = new List<GridPos>();
-            for (int i = 0; i < cubes; i++)
-            {
-                var cell = new GridPos(2 + i, 3);
-                payout.Add(cell, charges, 5);
-                cells.Add(cell);
-                delays.Add(0.08f + i * 0.03f);
-            }
-            payout.Points = charges * (charges + 1) / 2 * 12 * cubes;
-            powder.Show(null);
-            FlashCells(cells, BlastColor);
-            powder.PlayPayout(payout, delays);
-            animLastLabel = Loc.Pick("powder payout " + charges + "/5", "barut ödemesi " + charges + "/5");
-        }
-
-        private void AnimPowderSpread()
-        {
-            EnsurePowder();
-            var report = new PowderVisuals();
-            for (int i = 0; i < 4; i++)
-            {
-                report.Add(new GridPos(1 + i * 2, 3), i + 2, 5, true);
-            }
-            powder.Show(report);
-            sfx.Fuse(1f);
-        }
-
-        private void AnimPowderPitchSweep()
-        {
-            StartCoroutine(PowderPitchRoutine());
-        }
-
-        private IEnumerator PowderPitchRoutine()
-        {
-            for (int charge = 1; charge <= 5; charge++)
-            {
-                AnimPowder(charge, true, 1);
-                yield return new WaitForSecondsRealtime(0.45f);
-            }
-        }
-
         private void AnimConfetti(bool heavy)
         {
             EnsureConfetti();
@@ -4012,36 +3944,9 @@ namespace ProjectBlock.View
             // ---- THIS SESSION'S JOKERS. Every one of these drives the real seam the game
             // drives; what the lab fabricates is only the report or the index it needs.
 
-            AddAnimSub("jokers", "barut", "barut tedarikçisi", "barut tedarikçisi");
-            AddAnim("barut: one charge lands (spark + ember)",
-                "barut: tek şarj (kıvılcım + köz)",
-                delegate { AnimPowder(1, true, 1); });
-            AddAnim("barut: charge 2 of 5", "barut: 5 şarjın 2.si",
-                delegate { AnimPowder(2, true, 1); });
-            AddAnim("barut: charge 3 of 5", "barut: 5 şarjın 3.sü",
-                delegate { AnimPowder(3, true, 1); });
-            AddAnim("barut: charge 4 of 5", "barut: 5 şarjın 4.sü",
-                delegate { AnimPowder(4, true, 1); });
-            AddAnim("barut: FULL - grows, beats faster, stays lit",
-                "barut: DOLU - büyür, hızlanır, yanık kalır",
-                delegate { AnimPowder(5, true, 1); });
-            AddAnim("barut: a full block HOLDING (no spark, no sizzle)",
-                "barut: dolu blok BEKLİYOR (kıvılcım/tıslama yok)",
-                delegate { AnimPowder(5, false, 1); });
-            AddAnim("barut: a 4-cube block charging", "barut: 4 küplük blok şarj oluyor",
-                delegate { AnimPowder(3, true, 4); });
-            AddAnim("barut: four blocks at different ripeness",
-                "barut: dört blok farklı olgunlukta",
-                delegate { AnimPowderSpread(); });
-            AddAnim("barut: a FULL block goes up (bonus blast)",
-                "barut: DOLU blok patlıyor (bonus patlama)",
-                delegate { AnimPowderPayout(5, 4); });
-            AddAnim("barut: a half-charged block goes up (pop only)",
-                "barut: yarı dolu blok patlıyor (sadece pop)",
-                delegate { AnimPowderPayout(2, 3); });
-            AddAnim("barut: the fuse pitch, empty to full",
-                "barut: fitil sesi, boştan doluya",
-                delegate { AnimPowderPitchSweep(); });
+            // "Barut tedarikçisi" - the POWDER MAGAZINE: 32 scenes, the old-vs-new comparison and
+            // the switches (GameUiController.PowderMagazineLab).
+            AddPowderMagazineAnims();
 
             AddAnimSub("jokers", "mikrodalga", "mikrodalga", "mikrodalga");
             AddAnim("mikrodalga: an ORDINARY combo (combo knob)",
@@ -7433,6 +7338,7 @@ namespace ProjectBlock.View
                 animHost = null;
             }
             StopAnimImprintRoutine();
+            StopAnimMagazine();
             boardView.StopParasite();
         }
 

@@ -170,6 +170,10 @@ namespace ProjectBlock.View
             public static bool ShowDetonationEnergyFlow;
             public static bool ShowRewardValue;
 
+            /// <summary>The lab's phase isolation for the load cycle: only one of its beats plays.
+            /// </summary>
+            public static LoadPhase OnlyPhase = LoadPhase.All;
+
             public static void AllOn()
             {
                 ShowPrimerSockets = true;
@@ -184,7 +188,23 @@ namespace ProjectBlock.View
                 ShowPrimerStates = false;
                 ShowDetonationEnergyFlow = false;
                 ShowRewardValue = false;
+                OnlyPhase = LoadPhase.All;
             }
+        }
+
+        /// <summary>The load cycle's beats, for the lab's one-beat-at-a-time scenes.</summary>
+        public enum LoadPhase
+        {
+            All,
+            Grains,
+            Ignition,
+            StrapHeat,
+            Pressure
+        }
+
+        private static bool PhaseOn(LoadPhase phase)
+        {
+            return Layers.OnlyPhase == LoadPhase.All || Layers.OnlyPhase == phase;
         }
 
         /// <summary>The moments audio can hang off.</summary>
@@ -615,6 +635,33 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>The lab: every standing pack's next stage event (seam pulse, ember drift,
+        /// pressure tick, max sequence) and a chamber flick come almost at once, instead of in
+        /// their rare natural seconds.</summary>
+        public void ForceIdle()
+        {
+            foreach (Magazine m in magazines.Values)
+            {
+                m.StageWait = 0.15f;
+                m.FlickWait = 0.4f;
+                m.SmokeWait = 0.9f;
+            }
+        }
+
+        /// <summary>The lab: the FULL MAGAZINE LOCK on every standing pack, alone.</summary>
+        public void ForceLock()
+        {
+            foreach (Magazine m in magazines.Values)
+            {
+                m.LoadClock = -1f;
+                m.LockPending = false;
+                m.LockClock = 0f;
+                m.Rate = PlaybackRate;
+                Emit(Cue.Maxed, 1f);
+                Smoke(m, m.Rate);
+            }
+        }
+
         private readonly HashSet<GridPos> rawCells = new HashSet<GridPos>();
 
         /// <summary>
@@ -942,7 +989,7 @@ namespace ProjectBlock.View
             m.LockPending = m.Full;
             m.StageClock = -1f;
             Emit(Cue.ChargeLoad, fullness);
-            if (!Layers.ShowPowderGrains || m.Primers.Count == 0)
+            if (!Layers.ShowPowderGrains || !PhaseOn(LoadPhase.Grains) || m.Primers.Count == 0)
             {
                 return;
             }
@@ -1097,7 +1144,7 @@ namespace ProjectBlock.View
                     if (before < Style.IgnitionAt && m.LoadClock >= Style.IgnitionAt)
                     {
                         Emit(Cue.PrimerIgnite, m.Cap > 0 ? m.Charges / (float)m.Cap : 1f);
-                        if (m.LoadPrimer < m.Primers.Count)
+                        if (m.LoadPrimer < m.Primers.Count && PhaseOn(LoadPhase.Ignition))
                         {
                             Fleck(m.Primers[m.LoadPrimer].At, m.Rate);
                         }
@@ -1234,17 +1281,18 @@ namespace ProjectBlock.View
             // During a load the chamber being filled is still dark until it ignites.
             int shownActive = Mathf.Min(m.Charges, m.Primers.Count);
             float ignite = 1f;
+            bool igniteOn = PhaseOn(LoadPhase.Ignition);
             if (m.LoadClock >= 0f)
             {
                 ignite = Mathf.Clamp01((m.LoadClock - Style.IgnitionAt) / Style.IgnitionDuration);
-                if (m.LoadClock < Style.IgnitionAt)
+                if (m.LoadClock < Style.IgnitionAt || !igniteOn)
                 {
                     shownActive = Mathf.Min(shownActive, m.LoadPrimer);
                 }
             }
             // The load's pressure beat and the lock.
             float pressure = 0f;
-            if (m.LoadClock >= Style.PressureAt)
+            if (m.LoadClock >= Style.PressureAt && PhaseOn(LoadPhase.Pressure))
             {
                 float k = Mathf.Clamp01((m.LoadClock - Style.PressureAt) / Style.PressureDuration);
                 pressure = Mathf.Sin(k * Mathf.PI);
@@ -1256,7 +1304,8 @@ namespace ProjectBlock.View
             }
             // The travelling strap heat, in world x.
             float heatLo = 0f, heatHi = 0f, heatK = 0f;
-            if (m.LoadClock >= Style.StrapHeatAt && m.LoadPrimer < m.Primers.Count)
+            if (m.LoadClock >= Style.StrapHeatAt && m.LoadPrimer < m.Primers.Count
+                && PhaseOn(LoadPhase.StrapHeat))
             {
                 float k = Mathf.Clamp01((m.LoadClock - Style.StrapHeatAt) / Style.StrapHeatDuration);
                 float reach = m.Spacing * Style.StrapHeatReach * EaseOut(k);
@@ -1349,7 +1398,9 @@ namespace ProjectBlock.View
                 {
                     boost = Mathf.Max(boost, 0.25f * lockK);
                 }
-                float igniting = m.LoadClock >= Style.IgnitionAt && i == m.LoadPrimer ? ignite : -1f;
+                float igniting = m.LoadClock >= Style.IgnitionAt && i == m.LoadPrimer && igniteOn
+                    ? ignite
+                    : -1f;
                 PaintPrimer(p, active || igniting >= 0f, igniting, boost, m.PrimerSize, m.Notch,
                     m.StrapHeight, cool, m.Rate);
             }
