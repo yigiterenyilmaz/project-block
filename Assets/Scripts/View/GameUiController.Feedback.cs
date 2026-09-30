@@ -2950,6 +2950,11 @@ namespace ProjectBlock.View
                     + s.Meter + ", paid " + s.TotalPaid,
                 "ENFLASYON: eşik " + s.OwnBarThen + " -> " + s.OwnBarNow + "  ·  raunt " + s.Meter
                     + " puan topladı, cüzdana " + s.TotalPaid);
+            if (s.MinimumEarned > 0)
+            {
+                line += Loc.Pick("  (minimum " + s.MinimumEarned + " -> " + s.MinimumPaid + " off the debt)",
+                    "  (asgari " + s.MinimumEarned + " -> borca " + s.MinimumPaid + ")");
+            }
             if (s.OvertimeEarned > 0)
             {
                 line += Loc.Pick("  (overtime " + s.OvertimeEarned + " -> " + s.OvertimePaid + ")",

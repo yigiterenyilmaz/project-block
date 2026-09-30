@@ -9400,6 +9400,27 @@ public static partial class JokerTests
         Check(s2 != null && s2.OvertimeEarned == 600L * scale && s2.OvertimePaid == 200L * scale,
             "the settlement names the overtime part", s2 == null ? "none" : s2.OvertimeEarned + " -> " + s2.OvertimePaid);
 
+        Section("enflasyon / the minimum pays the debt its REAL worth, like overtime");
+        var session4 = NewBossSession(6108, 5, 1000, "enflasyon");
+        var boss4 = (EnflasyonBoss)session4.CurrentRound.Boss;
+        RoundEngine round4 = session4.CurrentRound;
+        boss4.InflateForTest(2000);                 // 1000 -> 3000
+        round4.SetCreditInstallment(300 * scale);   // a 300 minimum on top: the bar is 3300
+        session4.BorrowForTest(10000L * scale);     // and a real debt for it to pay
+        long debtBefore = session4.Debt;
+        round4.AddScoreOutsideTurn(3300);
+        Check(round4.ThresholdPassed && session4.Debt == debtBefore,
+            "the bar and the minimum reached; nothing paid yet", "" + (debtBefore - session4.Debt));
+        round4.DecideAdvance(true);
+        InflationSettlement s4 = session4.LastInflationSettlement;
+        Check(s4 != null && s4.MinimumEarned == 300L * scale && s4.MinimumPaid == 100L * scale,
+            "the 300 minimum pays 100 at 1000/3000", s4 == null ? "none" : s4.MinimumEarned + " -> " + s4.MinimumPaid);
+        Check(s4 != null && s4.OwnPaid == 0, "and the round's own share goes nowhere while in debt",
+            s4 == null ? "none" : "" + s4.OwnPaid);
+        CreditStatement st4 = session4.LastCreditStatement;
+        Check(st4 != null && st4.Repaid == 100L * scale, "the debt was paid exactly the real 100",
+            st4 == null ? "no statement" : "" + st4.Repaid);
+
         Section("enflasyon / a lost round forfeits what it held");
         var session3 = NewBossSession(6106, 5, 1000, "enflasyon");
         RoundEngine round3 = session3.CurrentRound;

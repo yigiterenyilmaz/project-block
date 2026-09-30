@@ -9,15 +9,19 @@
 //     skip their claw-back), so the METER is the one thing that says what the round earned.
 //   PAID WHEN IT ENDS, AT THE ORIGINAL BAR'S VALUE. On the round's end (RoundStatus.Advanced -
 //     reaching the bar, or a boss beaten on its own terms) the meter is split exactly as
-//     BankRoundScore splits it, and two of its three parts are deflated by
-//     original bar / inflated bar:
+//     BankRoundScore splits it, and ALL THREE parts are deflated by original bar / inflated bar:
 //       - the round's OWN share (up to its own bar): reaching an inflated 3000 on a round that
 //         began at 1000 pays 1000. With a debt open it goes nowhere, as it never does.
-//       - a credit MINIMUM (the band between the own bar and the pass bar) is NOT deflated: it is
-//         a fixed payment on a real debt, not inflated money.
+//       - a credit MINIMUM (the band between the own bar and the pass bar): the band itself is a
+//         FIXED addition on the meter (never inflated, never feeding the rise - EnflasyonBoss),
+//         but the points earned in it are inflated points like any other, so they pay the debt
+//         their REAL worth (designer's call, 2026-09-30): a 300 minimum earned on a bar inflated
+//         1000 -> 3000 pays 100 off the debt. The minimum is then only partly paid in money -
+//         which nothing in the rules reads; the ledger simply tells it.
 //       - OVERTIME (past the pass bar): every point at the same rate, so 600 earned past a bar
-//         inflated 1000 -> 3000 pays 200. The bar stops moving once it is passed, so the rate is
-//         the one the round ended its normal play at.
+//         inflated 1000 -> 3000 pays 200.
+//     One rate for all three: the bar stops rising the moment the OWN bar is reached, so the
+//     inflation "up to then" is the inflation at the end.
 //     Rounded DOWN - inflation never pays a point more than it should.
 //   LOST, FORFEITED. A round that is lost pays nothing; there was never anything in the purse to
 //     take back.
@@ -49,7 +53,9 @@ namespace ProjectBlock.Core
         public long OwnEarned;
         public long OwnPaid;
 
-        /// <summary>The credit minimum's band, paid as it stood (never deflated).</summary>
+        /// <summary>What the credit minimum's band earned on the meter, and what it paid off the
+        /// debt once deflated.</summary>
+        public long MinimumEarned;
         public long MinimumPaid;
 
         /// <summary>What overtime earned past the bar, and what it paid once deflated.</summary>
@@ -94,7 +100,10 @@ namespace ProjectBlock.Core
             long band = Math.Max(0L, Math.Min(meter, ownNow + installment) - ownNow);
             long overtime = Math.Max(0L, meter - ownNow - installment);
 
+            // One rate for all three parts - the inflation up to the moment the own bar was
+            // reached, which is the inflation at the end (the bar stops rising there).
             long ownWorth = Deflate(ownEarned, ownThen, ownNow);
+            long bandWorth = Deflate(band, ownThen, ownNow);
             long overtimeWorth = Deflate(overtime, ownThen, ownNow);
             // The round's own share goes nowhere while a debt is open - the same rule as every
             // other round (BankRoundScore); the minimum and overtime pay the debt first.
@@ -109,11 +118,12 @@ namespace ProjectBlock.Core
                 OwnBarNow = ownNow,
                 OwnEarned = ownEarned,
                 OwnPaid = ownPaid,
-                MinimumPaid = band,
+                MinimumEarned = band,
+                MinimumPaid = bandWorth,
                 OvertimeEarned = overtime,
                 OvertimePaid = overtimeWorth
             };
-            GrantCurrency(ownPaid + band + overtimeWorth);
+            GrantCurrency(ownPaid + bandWorth + overtimeWorth);
             LastInflationSettlement = settlement;
         }
 
