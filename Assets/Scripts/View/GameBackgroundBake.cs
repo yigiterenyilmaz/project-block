@@ -1,88 +1,258 @@
 // PURPOSE: The baked half of the main-game background ("DARK PLAYROOM / LIVING GAME TABLE") - the
-// palette, the noise, and every texture GameBackgroundPresentationController draws. Pure maths,
-// run once per screen shape (and once per board size for the stage textures), never per frame.
+// palette, the LOOK (every number the background is drawn with, as a preset), the noise, and
+// every texture GameBackgroundPresentationController draws. Pure maths, run once per screen shape
+// (and once per board size for the stage textures), never per frame.
 //
-// THE BASE FIELD IS BAKED IN PERCEPTUAL (sRGB) SPACE AND DRAWN OPAQUE. That is the whole reason it
-// is a bake and not a stack of translucent layers: this project renders in LINEAR colour, where a
-// soft colour laid over the petrol at "0.05" lands as something else entirely (BackdropView's note -
-// a turquoise went grey under a white pool, and a dark tone previewed right reached the screen as
-// black). An opaque texture whose texels ARE the colours the screen should show cannot drift. What
-// goes in it, in order: the deep petrol ground; the static colour masses (a teal lift behind the
-// board, a warmer teal low on the left, a plum undertone in the far corner - radii in HALF-HEIGHT
-// units on both axes, so they stay round at any aspect); two broad S-curve streams of lighter and
-// deeper tone (never a pattern - they are only there so the field is not one gradient); texture A
-// (a low-frequency cloud, a quarter of the screen across) and texture B (a mottle about 50 px
-// across) as brightness modulation; and the darkened strip the score line sits on.
+// THE BASE FIELD IS BAKED IN PERCEPTUAL (sRGB) SPACE AND DRAWN OPAQUE. This project renders in
+// LINEAR colour, where a soft tone laid over the petrol at "0.05" lands as something else entirely
+// (BackdropView's note: a turquoise went grey under a white pool, a dark tone previewed right
+// reached the screen as black). An opaque texture whose texels ARE the colours the screen shows
+// cannot drift. Only what MOVES or answers a mood is a sprite, with its alpha converted.
 //
-// Everything that MOVES or is SCALED by a mood is not in it: the two drifting masses, the warm
-// pockets, the aura, the stage, the card grounding, the vignette, the grain and the motes are
-// sprites with textures from here, blended in linear space with alphas chosen for that.
-//
-// NOTHING IS A PHOTOGRAPH: no paper, no concrete, no scratches, no stars. Matte pigment.
-// Tuned against a render of the whole screen (bg_new.png in the session scratchpad), board,
-// blocks, cream cards and gold score line in place, before a line of this was written.
+// THE CORRECTIVE PASS (2026-09-30). The first pass was right about the colour and wrong about the
+// depth: on screen it read as ONE flat teal surface - the left and right negative spaces the same
+// tone, a texture nobody could see, no warmth, no grounding. The colour direction is kept; what is
+// added is STRUCTURE, measured against the ground beside the board (a render of the whole screen,
+// c_c.png in the session scratchpad): the left space ~0.75 of it and colder, the right ~0.8 and
+// navy with a breath of plum, the far corners ~0.65, the card zone ~1.2 and warmer, a soft lift
+// behind the board. The edge depth is ORGANIC - deeper on the left, navy to the upper right, the
+// bottom corners darker - never a round black mask. Texture is now at a strength that reads: a
+// large pigment cloud (~225 px), a mid pigment (~65 px), a static grain - matte, and still never a
+// pattern, a stone, a paper or a metal. The first pass survives as a LOOK (FirstPass) for the
+// lab's A/B and nothing else.
 
 using UnityEngine;
 
 namespace ProjectBlock.View
 {
+    /// <summary>
+    /// Every number the background is drawn with. Strengths are PERCEPTUAL (what a layer at that
+    /// opacity would do in an sRGB compositor); whoever draws a sprite converts them for linear
+    /// blending. A preset, so the lab can put the first pass beside the corrective one.
+    /// </summary>
+    public sealed class GameBackgroundLook
+    {
+        public string Name;
+        /// <summary>The first pass's base field and layer set, for the lab's A/B.</summary>
+        public bool FirstPassField;
+
+        // ---- colour masses (baked unless noted)
+        public float CenterLift;
+        /// <summary>The lift's ellipse, in board half-sizes (1.2-1.5x the board's bounds).</summary>
+        public float CenterLiftRx;
+        public float CenterLiftRy;
+        public float EdgeDepth;
+        public float LowerWarm;
+        public float CornerPocket;
+        /// <summary>Sprites: they drift.</summary>
+        public float LeftMass;
+        public float RightMass;
+        /// <summary>A sprite: it answers PlumStrength.</summary>
+        public float Plum;
+
+        // ---- material
+        /// <summary>The large pigment cloud - its own drifting layer (~225 px).</summary>
+        public float LargeMottle;
+        public float LargeMottleScale;
+        /// <summary>The mid pigment (~65 px), baked.</summary>
+        public float MidMottle;
+        public float MidMottleScale;
+        public float Flows;
+        public float FlowWidth;
+        public float Grain;
+        public float TopFade;
+        public float TopFadeDepth;
+
+        // ---- warmth (sprites)
+        public float WarmBoard;
+        public float CardWarmth;
+        public float DeckWarmth;
+
+        // ---- board staging (sprites)
+        public float Stage;
+        /// <summary>How much wider than the board the stage is, and its feather (world).</summary>
+        public float StagePadding;
+        public float StageFeather;
+        public float StageDrop;
+        public float Aura;
+        /// <summary>How far past the stage the aura reaches (world).</summary>
+        public float AuraPadding;
+        public float Contact;
+
+        // ---- cards (sprites)
+        public float CardGrounding;
+        /// <summary>How much taller than the card row the grounding band is (world).</summary>
+        public float CardGroundingHeight;
+        public float DeckContact;
+
+        // ---- vignette
+        public float Vignette;
+        /// <summary>0 is round; more makes the far left and right deeper than the top and bottom.</summary>
+        public float VignetteAsymmetry;
+
+        // ---- motion
+        public float DriftDuration;
+        /// <summary>Reference pixels (1080 lines).</summary>
+        public float DriftDistance;
+        public float DriftScale;
+        public float DriftOpacity;
+        public float MottleDrift;
+        public float AuraPeriodMin;
+        public float AuraPeriodMax;
+        public float AuraSwing;
+        public int MoteCount;
+        public float MoteLifeMin;
+        public float MoteLifeMax;
+        /// <summary>How far a mote wanders over its life (reference pixels).</summary>
+        public float MoteDistanceMin;
+        public float MoteDistanceMax;
+        public float MoteOpacityMin;
+        public float MoteOpacityMax;
+
+        /// <summary>The corrective pass - what the game draws.</summary>
+        public static GameBackgroundLook Corrective()
+        {
+            return new GameBackgroundLook
+            {
+                Name = "corrective",
+                CenterLift = 0.38f,
+                CenterLiftRx = 1.45f,
+                CenterLiftRy = 1.30f,
+                EdgeDepth = 0.25f,
+                LowerWarm = 0.28f,
+                CornerPocket = 0.35f,
+                LeftMass = 0.40f,
+                RightMass = 0.40f,
+                Plum = 0.10f,
+                LargeMottle = 0.034f,
+                LargeMottleScale = 0.48f,
+                MidMottle = 0.016f,
+                MidMottleScale = 0.12f,
+                Flows = 0.022f,
+                FlowWidth = 0.30f,
+                Grain = 0.010f,
+                TopFade = 0.07f,
+                TopFadeDepth = 1.0f,
+                WarmBoard = 0.028f,
+                CardWarmth = 0.022f,
+                DeckWarmth = 0.03f,
+                Stage = 0.20f,
+                StagePadding = 0.75f,
+                StageFeather = 1.0f,
+                StageDrop = 0.15f,
+                Aura = 0.05f,
+                AuraPadding = 0.35f,
+                Contact = 0.32f,
+                CardGrounding = 0.06f,
+                CardGroundingHeight = 0.46f,
+                DeckContact = 0.22f,
+                Vignette = 0.12f,
+                VignetteAsymmetry = 0.35f,
+                DriftDuration = 18f,
+                DriftDistance = 15f,
+                DriftScale = 0.025f,
+                DriftOpacity = 0.06f,
+                MottleDrift = 3f,
+                AuraPeriodMin = 7f,
+                AuraPeriodMax = 11f,
+                AuraSwing = 0.06f,
+                MoteCount = 8,
+                MoteLifeMin = 5f,
+                MoteLifeMax = 12f,
+                MoteDistanceMin = 10f,
+                MoteDistanceMax = 30f,
+                MoteOpacityMin = 0.03f,
+                MoteOpacityMax = 0.10f
+            };
+        }
+
+        /// <summary>The first pass - the flat teal the corrective pass was written against.</summary>
+        public static GameBackgroundLook FirstPass()
+        {
+            GameBackgroundLook l = Corrective();
+            l.Name = "first pass";
+            l.FirstPassField = true;
+            l.LeftMass = 0.24f;   // it had a deep-teal mass right of the board...
+            l.RightMass = 0.42f;  // ...and a navy one upper right
+            l.Plum = 0f;
+            l.LargeMottle = 0f;   // its texture was baked in, and faint
+            l.Flows = 0f;
+            l.WarmBoard = 0.045f;
+            l.CardWarmth = 0f;
+            l.DeckWarmth = 0.045f; // one haze, behind the draw pile only
+            l.Stage = 0.16f;
+            l.StagePadding = 0.45f;
+            l.StageFeather = 0.85f;
+            l.StageDrop = 0.18f;
+            l.Aura = 0.07f;
+            l.AuraPadding = 2.0f;
+            l.Contact = 0f;
+            l.CardGrounding = 0.075f;
+            l.CardGroundingHeight = 0.56f;
+            l.DeckContact = 0.2f;
+            l.VignetteAsymmetry = 0f;
+            l.DriftDistance = 16f;
+            l.DriftDuration = 16f;
+            l.AuraSwing = 0.08f;
+            l.MoteCount = 10;
+            l.MoteLifeMin = 7f;
+            l.MoteLifeMax = 14f;
+            l.MoteOpacityMin = 0.05f;
+            l.MoteOpacityMax = 0.14f;
+            return l;
+        }
+    }
+
     public static class GameBackgroundBake
     {
         // =================================================================== the palette (sRGB)
         public static class Palette
         {
             public static Color Petrol = new Color(0.080f, 0.198f, 0.216f);
-            public static Color Lift = new Color(0.118f, 0.266f, 0.278f);
-            public static Color Navy = new Color(0.052f, 0.086f, 0.128f);
-            public static Color Plum = new Color(0.098f, 0.074f, 0.112f);
-            public static Color WarmTeal = new Color(0.112f, 0.214f, 0.198f);
-            public static Color FlowLight = new Color(0.100f, 0.228f, 0.240f);
-            public static Color FlowDark = new Color(0.058f, 0.130f, 0.156f);
-            public static Color DeepTeal = new Color(0.050f, 0.120f, 0.140f);
-            public static Color VignetteInk = new Color(0.020f, 0.036f, 0.052f);
-            public static Color Amber = new Color(0.50f, 0.36f, 0.17f);
-            public static Color StageInk = new Color(0.012f, 0.032f, 0.040f);
-            public static Color Aura = new Color(0.150f, 0.285f, 0.296f);
+            public static Color Lift = new Color(0.215f, 0.345f, 0.352f);
+            public static Color LeftNavy = new Color(0.030f, 0.085f, 0.115f);
+            public static Color RightNavy = new Color(0.034f, 0.066f, 0.118f);
+            public static Color Plum = new Color(0.215f, 0.105f, 0.215f);
+            public static Color WarmTeal = new Color(0.150f, 0.220f, 0.180f);
+            public static Color Pocket = new Color(0.020f, 0.045f, 0.060f);
+            public static Color Edge = new Color(0.040f, 0.085f, 0.105f);
+            public static Color Amber = new Color(0.56f, 0.39f, 0.18f);
+            public static Color StageInk = new Color(0.012f, 0.030f, 0.042f);
+            public static Color Aura = new Color(0.20f, 0.33f, 0.34f);
+            public static Color VignetteInk = new Color(0.028f, 0.050f, 0.068f);
+            public static Color MottleLight = new Color(0.30f, 0.45f, 0.46f);
+            public static Color MottleDark = new Color(0.020f, 0.050f, 0.062f);
             public static Color MoteTeal = new Color(0.56f, 0.70f, 0.70f);
+            public static Color MoteAqua = new Color(0.62f, 0.68f, 0.70f);
             public static Color MoteGold = new Color(0.78f, 0.64f, 0.38f);
             /// <summary>What the base is drawn in when its own switch is off, so a layer can be
             /// judged alone against something neutral.</summary>
             public static Color Neutral = new Color(0.15f, 0.16f, 0.17f);
-        }
 
-        // =================================================================== the bake's numbers
-        public static class Style
-        {
-            public static float LiftStrength = 0.8f;
-            /// <summary>Radius of the lift behind the board, in half-heights.</summary>
-            public static float LiftRadius = 1.75f;
-            public static float PlumStrength = 0.45f;
-            public static float PlumRadius = 1.25f;
-            public static float WarmTealStrength = 0.6f;
-            public static float WarmTealRadius = 1.3f;
-            public static float FlowStrength = 0.24f;
-            /// <summary>Texture A: size of a cloud in half-heights, and how far it moves the value.</summary>
-            public static float CloudScale = 0.9f;
-            public static float CloudStrength = 0.06f;
-            /// <summary>Texture B: about 46 px at 1080 lines.</summary>
-            public static float MottleScale = 0.085f;
-            public static float MottleStrength = 0.05f;
-            /// <summary>The strip the score line sits on: how much darker, and how far down.</summary>
-            public static float TopStrip = 0.08f;
-            public static float TopStripDepth = 1.15f;
-            /// <summary>Where the vignette is centred (world y, the camera at 0) - between the
-            /// board and the screen's middle - and how dark it gets at the corners (PERCEPTUAL).</summary>
-            public static float VignetteCentreY = 0.45f;
-            public static float Vignette = 0.12f;
-            /// <summary>Texture C: the static grain, PERCEPTUAL amplitude (0.010 is ~2.5 RGB).</summary>
-            public static float Grain = 0.010f;
+            // the first pass's own tones (the A/B)
+            public static Color FirstLift = new Color(0.118f, 0.266f, 0.278f);
+            public static Color FirstPlum = new Color(0.098f, 0.074f, 0.112f);
+            public static Color FirstWarmTeal = new Color(0.112f, 0.214f, 0.198f);
+            public static Color FirstFlowLight = new Color(0.100f, 0.228f, 0.240f);
+            public static Color FirstFlowDark = new Color(0.058f, 0.130f, 0.156f);
+            public static Color FirstNavy = new Color(0.052f, 0.086f, 0.128f);
+            public static Color FirstDeepTeal = new Color(0.050f, 0.120f, 0.140f);
+            public static Color FirstVignette = new Color(0.020f, 0.036f, 0.052f);
         }
 
         /// <summary>Which parts go into a bake - the lab's switches.</summary>
         public struct Parts
         {
             public bool Base;
-            public bool Masses;
+            /// <summary>The soft lift behind the board (A).</summary>
+            public bool Lift;
+            /// <summary>The organic edge depth and the corner pocket (E).</summary>
+            public bool Edge;
+            /// <summary>The lower card zone's warmer deep teal (D).</summary>
+            public bool Warm;
+            /// <summary>The broad S-curve streams.</summary>
+            public bool Flows;
+            /// <summary>The baked mid pigment.</summary>
             public bool Texture;
         }
 
@@ -91,26 +261,28 @@ namespace ProjectBlock.View
         /// <summary>
         /// Bakes the base field and its grey twin (the same pixels at their own linear luminance,
         /// for the saturation seam) over an area of <paramref name="halfW"/> x
-        /// <paramref name="halfH"/> world units round the camera. <paramref name="screenHalfH"/>
-        /// is the camera's own half-height (the masses are sized by it), and
-        /// <paramref name="board"/> is the board's centre relative to the camera.
+        /// <paramref name="halfH"/> world units round the camera. The screen's own half-extents
+        /// size the masses; <paramref name="board"/> is the board's centre relative to the
+        /// camera and <paramref name="boardHalf"/> its half-size.
         /// </summary>
         public static void BakeBase(Texture2D colour, Texture2D grey, float halfW, float halfH,
-            float screenHalfW, float screenHalfH, Vector2 board, Parts parts)
+            float screenHalfW, float screenHalfH, Vector2 board, float boardHalf, Parts parts,
+            GameBackgroundLook look)
         {
             int tw = colour.width;
             int th = colour.height;
             var px = new Color32[tw * th];
             var gx = new Color32[tw * th];
             float aspect = screenHalfW / Mathf.Max(0.001f, screenHalfH);
-            Vector2 bq = board / screenHalfH;
             for (int j = 0; j < th; j++)
             {
                 float y = ((j + 0.5f) / th * 2f - 1f) * halfH;
                 for (int i = 0; i < tw; i++)
                 {
                     float x = ((i + 0.5f) / tw * 2f - 1f) * halfW;
-                    Color c = FieldAt(x, y, screenHalfH, aspect, bq, parts);
+                    Color c = look.FirstPassField
+                        ? FirstPassFieldAt(x, y, screenHalfH, aspect, board / screenHalfH, parts)
+                        : FieldAt(x, y, screenHalfH, aspect, board, boardHalf, parts, look);
                     px[j * tw + i] = c;
                     Color lin = c.linear;
                     float l = Mathf.LinearToGammaSpace(0.2126f * lin.r + 0.7152f * lin.g + 0.0722f * lin.b);
@@ -123,78 +295,168 @@ namespace ProjectBlock.View
             grey.Apply(false);
         }
 
-        /// <summary>One texel of the base field, in sRGB.</summary>
-        private static Color FieldAt(float x, float y, float screenHalfH, float aspect, Vector2 bq, Parts parts)
+        /// <summary>One texel of the corrective field, in sRGB.</summary>
+        private static Color FieldAt(float x, float y, float screenHalfH, float aspect, Vector2 board,
+            float boardHalf, Parts parts, GameBackgroundLook look)
         {
-            if (!parts.Base)
-            {
-                Color flat = Palette.Neutral;
-                if (parts.Texture)
-                {
-                    flat = Texture(flat, x / screenHalfH, y / screenHalfH);
-                }
-                return flat;
-            }
             float qx = x / screenHalfH;
             float qy = y / screenHalfH;
-            Color c = Palette.Petrol;
-            if (parts.Masses)
+            Color c = parts.Base ? Palette.Petrol : Palette.Neutral;
+            if (parts.Base && parts.Warm)
             {
-                // A: the lift behind the board - a touch rounder than tall
-                c = Color.Lerp(c, Palette.Lift, Style.LiftStrength
-                    * Biweight(Hypot(qx - bq.x, (qy - bq.y) * 1.1f) / Style.LiftRadius));
-                // D: the plum undertone, far top-left, never seen as a colour
-                c = Color.Lerp(c, Palette.Plum, Style.PlumStrength
-                    * Biweight(Hypot(qx + aspect * 1.02f, qy - 1.05f) / Style.PlumRadius));
-                // B: warmer teal low on the left, toward the cards
-                c = Color.Lerp(c, Palette.WarmTeal, Style.WarmTealStrength
-                    * Biweight(Hypot(qx + aspect * 0.78f, qy + 0.72f) / Style.WarmTealRadius));
-                // two broad streams, one lighter, one deeper - S-curves, never a drawn line
+                // D: the lower card zone, warmer deep teal
+                c = Color.Lerp(c, Palette.WarmTeal, look.LowerWarm
+                    * Biweight(Hypot(qx / (aspect * 0.95f), (qy + 0.92f) / 0.55f)));
+            }
+            if (parts.Base && parts.Edge)
+            {
+                // E: a darker pocket in the bottom-left corner
+                c = Color.Lerp(c, Palette.Pocket, look.CornerPocket
+                    * Biweight(Hypot((qx + aspect) / 0.75f, (qy + 1f) / 0.65f)));
+                // EDGE DEPTH, organic: deeper on the left, the bottom and top a little, broken up
+                // by a slow cloud so it never reads as a mask
+                float ex = Mathf.Abs(qx) / aspect * (qx < 0f ? 1.06f : 1f);
+                float edge = SmoothStep(0.55f, 1.05f, ex) * 0.8f + SmoothStep(0.75f, 1.05f, Mathf.Abs(qy)) * 0.5f;
+                c = Color.Lerp(c, Palette.Edge, look.EdgeDepth * Mathf.Clamp01(edge)
+                    * (0.85f + 0.3f * Fbm(qx * 0.7f, qy * 0.7f, 91, 2)));
+            }
+            if (parts.Base && parts.Lift)
+            {
+                // A: the soft teal lift behind the board - an ellipse 1.2-1.5x its bounds
+                Vector2 bq = board / screenHalfH;
+                float bh = boardHalf / screenHalfH;
+                c = Color.Lerp(c, Palette.Lift, look.CenterLift * Biweight(Hypot(
+                    (qx - bq.x) / (bh * look.CenterLiftRx * 1.55f), (qy - bq.y) / (bh * look.CenterLiftRy * 1.55f))));
+            }
+            if (parts.Base && parts.Flows)
+            {
+                // two broad S-curve streams (~160 px wide), one lighter, one deeper
+                float f1 = 0.30f * Mathf.Sin(qx * 1.1f + 0.6f) + 0.14f * Mathf.Sin(qx * 0.43f - 1.1f) - 0.45f;
+                float d1 = (qy - f1) / look.FlowWidth;
+                float f2 = 0.26f * Mathf.Sin(qx * 0.85f - 1.9f) + 0.62f;
+                float d2 = (qy - f2) / (look.FlowWidth * 0.8f);
+                float flow = look.Flows * (Mathf.Exp(-d1 * d1) - 0.8f * Mathf.Exp(-d2 * d2)) * 0.8f;
+                c = new Color(c.r + flow, c.g + flow, c.b + flow, 1f);
+            }
+            if (parts.Texture)
+            {
+                // the mid pigment (~65 px) as an absolute pigment offset - the large cloud is its
+                // own drifting layer
+                float mm = Mathf.Clamp01((Fbm(qx / look.MidMottleScale, qy / look.MidMottleScale, 29, 2) - 0.5f)
+                    * 2.4f + 0.5f) - 0.5f;
+                float t = look.MidMottle * mm;
+                c = new Color(c.r + t * 0.8f, c.g + t, c.b + t, 1f);
+            }
+            // the score line's fade
+            float fade = 1f - look.TopFade * SmoothStep(screenHalfH - look.TopFadeDepth, screenHalfH, y);
+            return new Color(c.r * fade, c.g * fade, c.b * fade, 1f);
+        }
+
+        /// <summary>The FIRST pass's field, unchanged - kept only so the lab can show what the
+        /// corrective pass was written against.</summary>
+        private static Color FirstPassFieldAt(float x, float y, float screenHalfH, float aspect, Vector2 bq, Parts parts)
+        {
+            float qx = x / screenHalfH;
+            float qy = y / screenHalfH;
+            Color c = parts.Base ? Palette.Petrol : Palette.Neutral;
+            if (parts.Base && parts.Lift)
+            {
+                c = Color.Lerp(c, Palette.FirstLift, 0.8f * Biweight(Hypot(qx - bq.x, (qy - bq.y) * 1.1f) / 1.75f));
+                c = Color.Lerp(c, Palette.FirstPlum, 0.45f * Biweight(Hypot(qx + aspect * 1.02f, qy - 1.05f) / 1.25f));
+                c = Color.Lerp(c, Palette.FirstWarmTeal, 0.6f * Biweight(Hypot(qx + aspect * 0.78f, qy + 0.72f) / 1.3f));
                 float f1 = 0.34f * Mathf.Sin(qx * 1.15f + 0.6f) + 0.18f * Mathf.Sin(qx * 0.47f - 1.1f) - 0.35f;
                 float d1 = (qy - f1) / 0.42f;
-                c = Color.Lerp(c, Palette.FlowLight, Style.FlowStrength * Mathf.Exp(-d1 * d1)
+                c = Color.Lerp(c, Palette.FirstFlowLight, 0.24f * Mathf.Exp(-d1 * d1)
                     * (0.6f + 0.4f * Noise(qx * 0.8f, qy * 0.8f, 71)));
                 float f2 = 0.28f * Mathf.Sin(qx * 0.9f - 1.9f) + 0.55f;
                 float d2 = (qy - f2) / 0.36f;
-                c = Color.Lerp(c, Palette.FlowDark, Style.FlowStrength * Mathf.Exp(-d2 * d2)
+                c = Color.Lerp(c, Palette.FirstFlowDark, 0.24f * Mathf.Exp(-d2 * d2)
                     * (0.6f + 0.4f * Noise(qx * 0.8f + 5f, qy * 0.8f, 73)));
             }
             if (parts.Texture)
             {
-                c = Texture(c, qx, qy);
+                float cloud = Fbm(qx / 0.9f, qy / 0.9f, 11, 3) - 0.5f;
+                float mottle = Fbm(qx / 0.085f, qy / 0.085f, 29, 2) - 0.5f;
+                float k = 1f + 0.06f * 2f * cloud + 0.05f * 2f * mottle;
+                c = new Color(c.r * k, c.g * k, c.b * k, 1f);
             }
-            // the strip the score line sits on
-            float strip = 1f - Style.TopStrip * SmoothStep(screenHalfH - Style.TopStripDepth, screenHalfH, y);
+            float strip = 1f - 0.08f * SmoothStep(screenHalfH - 1.15f, screenHalfH, y);
             return new Color(c.r * strip, c.g * strip, c.b * strip, 1f);
-        }
-
-        /// <summary>Texture A (cloud) and B (mottle), as brightness - pigment, not a pattern.</summary>
-        private static Color Texture(Color c, float qx, float qy)
-        {
-            float cloud = Fbm(qx / Style.CloudScale, qy / Style.CloudScale, 11, 3) - 0.5f;
-            float mottle = Fbm(qx / Style.MottleScale, qy / Style.MottleScale, 29, 2) - 0.5f;
-            float k = 1f + Style.CloudStrength * 2f * cloud + Style.MottleStrength * 2f * mottle;
-            return new Color(c.r * k, c.g * k, c.b * k, 1f);
         }
 
         // =================================================================== sprites' textures
 
-        /// <summary>The vignette's alpha over the same area as the base: 0 in the middle, 1 at the
-        /// far corners, already shaped for linear blending (the renderer's alpha is the peak).</summary>
-        public static void BakeVignette(Texture2D tex, float halfW, float halfH, float screenHalfW, float screenHalfH)
+        /// <summary>
+        /// The large pigment cloud, as its own layer so it can drift a few pixels: each texel
+        /// lighter or deeper than the ground by up to <paramref name="strength"/> (perceptual), the
+        /// two signs at DIFFERENT alphas - in linear blending a lighter tone over this dark ground
+        /// moves the screen far more per unit of alpha than a darker one does.
+        /// </summary>
+        public static void BakeMottle(Texture2D tex, float halfW, float halfH, float screenHalfH,
+            float scale, float strength)
         {
             int tw = tex.width;
             int th = tex.height;
             var px = new Color32[tw * th];
-            float peak = LinearAlpha(Style.Vignette);
+            Color under = Palette.Petrol;
+            for (int j = 0; j < th; j++)
+            {
+                float y = ((j + 0.5f) / th * 2f - 1f) * halfH / screenHalfH;
+                for (int i = 0; i < tw; i++)
+                {
+                    float x = ((i + 0.5f) / tw * 2f - 1f) * halfW / screenHalfH;
+                    float m = Mathf.Clamp01((Fbm(x / scale, y / scale, 11, 2) - 0.5f) * 2.4f + 0.5f) - 0.5f;
+                    float o = strength * m;
+                    Color c;
+                    if (o >= 0f)
+                    {
+                        Color target = new Color(under.r + o * 0.8f, under.g + o, under.b + o);
+                        c = WithAlpha(Palette.MottleLight, AlphaFor(under, target, Palette.MottleLight));
+                    }
+                    else
+                    {
+                        Color target = new Color(under.r + o * 0.8f, under.g + o, under.b + o);
+                        c = WithAlpha(Palette.MottleDark, AlphaFor(under, target, Palette.MottleDark));
+                    }
+                    px[j * tw + i] = c;
+                }
+            }
+            tex.SetPixels32(px);
+            tex.Apply(false);
+        }
+
+        /// <summary>The alpha that takes <paramref name="under"/> to <paramref name="target"/> by
+        /// laying <paramref name="over"/> on it in linear space - by luminance.</summary>
+        private static float AlphaFor(Color under, Color target, Color over)
+        {
+            float lu = Luminance(under.linear);
+            float lt = Luminance(target.linear);
+            float lo = Luminance(over.linear);
+            float span = lo - lu;
+            return Mathf.Abs(span) < 1e-5f ? 0f : Mathf.Clamp01((lt - lu) / span);
+        }
+
+        /// <summary>The vignette's alpha over the same area as the base: 0 in the middle, 1 at the
+        /// far edges, deeper left and right than top and bottom by <paramref name="asymmetry"/>,
+        /// already shaped for linear blending (the renderer's alpha is the peak).</summary>
+        public static void BakeVignette(Texture2D tex, float halfW, float halfH, float screenHalfW,
+            float screenHalfH, float strength, float asymmetry, bool firstPass)
+        {
+            int tw = tex.width;
+            int th = tex.height;
+            var px = new Color32[tw * th];
+            float peak = LinearAlpha(strength);
             for (int j = 0; j < th; j++)
             {
                 float y = ((j + 0.5f) / th * 2f - 1f) * halfH;
                 for (int i = 0; i < tw; i++)
                 {
                     float x = ((i + 0.5f) / tw * 2f - 1f) * halfW;
-                    float d = Hypot(x / (screenHalfW * 1.02f), (y - Style.VignetteCentreY) / (screenHalfH * 1.1f));
-                    float a = LinearAlpha(Style.Vignette * SmoothStep(0.45f, 1.3f, d)) / peak;
+                    float d = firstPass
+                        ? Hypot(x / (screenHalfW * 1.02f), (y - 0.45f) / (screenHalfH * 1.1f))
+                        : Hypot(x / screenHalfW, (y - 0.45f) / screenHalfH * (1f - asymmetry));
+                    float a = LinearAlpha(strength * SmoothStep(firstPass ? 0.45f : 0.5f, firstPass ? 1.3f : 1.25f, d))
+                        / Mathf.Max(0.0001f, peak);
                     px[j * tw + i] = new Color(1f, 1f, 1f, Mathf.Clamp01(a));
                 }
             }
@@ -251,7 +513,7 @@ namespace ProjectBlock.View
         /// a renderer scaled to (boxW + 2 * (solid + feather), ...) lands it exactly. The
         /// corners are rounded - it never copies the board's own outline.
         /// </summary>
-        public static Texture2D SoftBox(float boxW, float boxH, float solid, float feather, int res)
+        public static Texture2D SoftBox(float boxW, float boxH, float solid, float feather, float round, int res)
         {
             float reach = solid + feather;
             float spanW = boxW + 2f * reach;
@@ -260,7 +522,6 @@ namespace ProjectBlock.View
             int th = Mathf.Clamp(Mathf.RoundToInt(spanH * res), 16, 256);
             var tex = NewTexture(tw, th, FilterMode.Bilinear, TextureWrapMode.Clamp);
             var px = new Color32[tw * th];
-            float round = Mathf.Min(boxW, boxH) * 0.12f + reach * 0.5f;
             for (int j = 0; j < th; j++)
             {
                 float y = ((j + 0.5f) / th - 0.5f) * spanH;
@@ -350,17 +611,18 @@ namespace ProjectBlock.View
         /// small overlay follows on its own.</summary>
         public static float LiftAlpha(float perceptual, Color over, Color under)
         {
-            float lo = Luminance(over.linear);
-            float lu = Luminance(under.linear);
-            Color target = Color.Lerp(under, over, Mathf.Clamp01(perceptual));
-            float lt = Luminance(target.linear);
-            float span = lo - lu;
-            return Mathf.Abs(span) < 1e-5f ? 0f : Mathf.Clamp01((lt - lu) / span);
+            return AlphaFor(under, Color.Lerp(under, over, Mathf.Clamp01(perceptual)), over);
         }
 
         private static float Luminance(Color lin)
         {
             return 0.2126f * lin.r + 0.7152f * lin.g + 0.0722f * lin.b;
+        }
+
+        private static Color WithAlpha(Color c, float a)
+        {
+            c.a = a;
+            return c;
         }
 
         public static float Hash(int ix, int iy, int seed)
