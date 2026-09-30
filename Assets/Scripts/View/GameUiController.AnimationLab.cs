@@ -3943,6 +3943,7 @@ namespace ProjectBlock.View
             // "Barut tedarikçisi" - the POWDER MAGAZINE: 32 scenes, the old-vs-new comparison and
             // the switches (GameUiController.PowderMagazineLab).
             AddPowderMagazineAnims();
+            AddCreditLabAnims();
 
             AddAnimSub("jokers", "mikrodalga", "mikrodalga", "mikrodalga");
             AddAnim("mikrodalga: an ORDINARY combo (combo knob)",
@@ -7335,6 +7336,7 @@ namespace ProjectBlock.View
             }
             StopAnimImprintRoutine();
             StopAnimMagazine();
+            StopAnimCredit();
             boardView.StopParasite();
         }
 
