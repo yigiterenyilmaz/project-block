@@ -4,12 +4,15 @@
 //
 //   THE PURSE GOES NEGATIVE. Buying past what you have borrows the shortfall, without a limit.
 //     Balance (TotalScore - Debt) is what the player sees, so 2000 borrowed is a purse of -2000.
-//   EVERY POINT EARNED PAYS THE DEBT FIRST (Receive): a turn, a sale, a grant. There is no
-//     manual repayment any more - money is money, and you cannot hold some while owing it.
+//   A ROUND PAYS IN ORDER (BankRoundScore, designer's call 2026-09-30): what the round earns up
+//     to its OWN threshold is the player's and goes to the purse; what it earns above that - the
+//     minimum payment, then overtime - pays the debt first. Money from outside a round (a sale,
+//     an effect's grant) pays the debt first too (Receive). There is no manual repayment.
 //   THE MINIMUM PAYMENT ("asgari"): a stage that STARTS in debt has to earn a share of that debt
 //     (CreditMinimumPaymentPercent, 25%) ON TOP of its own bar before it can be passed
 //     (RoundEngine.CreditInstallment - the bar rises, the threshold the jokers scale off does
-//     not). Anything past it is overtime's to earn, and overtime keeps paying the debt.
+//     not). The threshold first, then the minimum; past both is overtime's to earn, and every
+//     point of overtime goes to the debt.
 //   INTEREST at the end of every stage on what is still owed (CreditInterestPermille, 12.5%).
 //   THE TERM ("vade"): a debt may be carried through CreditTermStages stages (4), counted from
 //     the first one it was carried into; borrowing more on an open loan does not reset it.
@@ -271,17 +274,58 @@ namespace ProjectBlock.Core
             TotalScore -= rest;
         }
 
-        /// <summary>Money moving by a signed amount - a turn's banked score.</summary>
-        private void ApplyEarnings(long amount)
+        /// <summary>
+        /// A ROUND'S EARNINGS, split by where they land on the round's meter (designer's call,
+        /// 2026-09-30): whatever lands under the round's own threshold is the PLAYER'S and goes to
+        /// the purse, debt or no debt - that is what the round is for. What lands above it - the
+        /// minimum payment between the threshold and the bar, and everything overtime earns past
+        /// the bar - goes through Receive, so it pays the debt first. With nothing owed both halves
+        /// reach the purse and this is exactly TotalScore += amount.
+        /// </summary>
+        /// <param name="roundScoreAfter">The round's meter once this amount is on it.</param>
+        internal void BankRoundScore(long amount, long roundScoreAfter)
         {
-            if (amount >= 0)
-            {
-                Receive(amount);
-            }
-            else
+            if (amount < 0)
             {
                 TakeBack(-amount);
+                return;
             }
+            if (amount == 0)
+            {
+                return;
+            }
+            long own = amount;
+            if (CurrentRound != null)
+            {
+                long threshold = (long)CurrentRound.ScoreThreshold * Config.Scoring.ScoreScale;
+                long before = roundScoreAfter - amount;
+                own = Math.Min(roundScoreAfter, threshold) - Math.Max(before, 0L);
+                own = Math.Max(0L, Math.Min(amount, own));
+            }
+            TotalScore += own;
+            Receive(amount - own);
+        }
+
+        /// <summary>
+        /// Round score taken back FROM THE TOP of the meter - the excess over the bar on the turn
+        /// that crosses it between turns, an overtime excess pulled back to the threshold. The top
+        /// is where the debt's share lands, so it goes back onto the debt first and only then
+        /// comes out of the purse. Booked as taken by an effect, like any negative AddCurrency.
+        /// </summary>
+        internal void UnbankRoundScoreFromTop(long amount)
+        {
+            if (amount <= 0)
+            {
+                return;
+            }
+            long back = Math.Min(amount, DebtRepaidThisStage);
+            if (back > 0)
+            {
+                Debt += back;
+                DebtRepaidThisStage -= back;
+            }
+            TotalScore -= amount - back;
+            CurrencyTakenByEffects += amount;
         }
 
         // ------------------------------------------------------------------- the stage

@@ -398,7 +398,9 @@ namespace ProjectBlock.Core
             RoundScore += scaled;
             if (session != null)
             {
-                session.AddCurrency(scaled);
+                // Split by where it lands on the meter: under the threshold it is the player's,
+                // above it it pays the debt first ("Kredi kartı", GameSession.BankRoundScore).
+                session.BankRoundScore(scaled, RoundScore);
             }
             if (!ThresholdPassed && !ThresholdWinBlocked && RoundScore >= ScaledThreshold)
             {
@@ -444,8 +446,9 @@ namespace ProjectBlock.Core
             }
             else if (session != null)
             {
-                // Between turns there is no report to trim, so the currency is given back.
-                session.AddCurrency(-excess);
+                // Between turns there is no report to trim, so the currency is given back - from
+                // the TOP of the meter, where a debt's share landed.
+                session.UnbankRoundScoreFromTop(excess);
             }
         }
 
@@ -508,7 +511,9 @@ namespace ProjectBlock.Core
             if (session != null)
             {
                 // excess is already in scaled units (RoundScore is scaled), so no extra scale.
-                session.AddCurrency(-excess); // remove the overtime-farmed excess from the run
+                // remove the overtime-farmed excess from the run - from the top of the meter,
+                // which is where overtime's payments to a debt came from
+                session.UnbankRoundScoreFromTop(excess);
             }
         }
 
@@ -1031,7 +1036,7 @@ namespace ProjectBlock.Core
                 }
                 else if (session != null)
                 {
-                    session.AddCurrency(owed);
+                    session.BankRoundScore(owed, RoundScore);
                 }
             }
             ThresholdPassed = true;

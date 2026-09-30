@@ -5596,7 +5596,7 @@ public static partial class JokerTests
 
     private static void KrediKarti_EarningsPayTheDebtFirst()
     {
-        Section("kredi kartı / the purse goes negative, and money in pays the debt first");
+        Section("kredi kartı / the purse goes negative, and money from outside a round pays the debt first");
         var session = NewSession(6104, 6, 30, 40, 3);
         session.Jokers.Add(new KrediKartiJoker());
         Check(AdvanceToMarket(session, 400), "reached the market");
@@ -5640,23 +5640,46 @@ public static partial class JokerTests
         Check(round.PassBar == 30 * scale + installment, "but the bar is threshold + minimum",
             round.PassBar + " vs " + (30 * scale + installment));
 
-        int bar = round.PassBar;
-        Check(AdvanceToMarket(session, 400), "the stage was passed");
+        // THE ROUND PAYS IN ORDER: its own threshold first, and that is the player's; the minimum
+        // on top of it goes to the debt; overtime past the bar goes to the debt too.
+        int threshold = 30 * scale;
+        int guard = 0;
+        while (round.Status == RoundStatus.InProgress && guard++ < 400)
+        {
+            if (PlayTurns(session, 1) == 0)
+            {
+                break;
+            }
+        }
+        Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "the stage reached its bar",
+            "status " + round.Status);
+        Check(session.TotalScore == threshold, "what the round's own threshold earned is the player's",
+            session.TotalScore + " vs " + threshold);
+        Check(session.DebtRepaidThisStage == installment, "the minimum on top of it went to the debt",
+            session.DebtRepaidThisStage + " vs " + installment);
+        long beforeOvertime = session.Debt;
+        round.AddScoreOutsideTurn(20); // overtime earnings, as a power's between turns
+        Check(session.Debt == beforeOvertime - 20 * scale, "overtime's points went to the debt",
+            beforeOvertime + " -> " + session.Debt);
+        Check(session.TotalScore == threshold, "and not to the purse", "purse " + session.TotalScore);
+        round.DecideAdvance(true);
+        Check(session.Phase == GamePhase.Market, "the stage was passed", "phase " + session.Phase);
+
         CreditStatement statement = session.LastCreditStatement;
         Check(statement != null, "the stage wrote a statement");
         if (statement == null)
         {
             return;
         }
-        Check(statement.Repaid == bar, "all the stage banked - exactly its bar - went to the debt",
-            statement.Repaid + " vs " + bar);
+        Check(statement.Repaid == installment + 20 * scale, "the statement counts the minimum and overtime",
+            statement.Repaid + " vs " + (installment + 20 * scale));
         long left = owed - statement.Repaid;
         long interest = (left * session.Config.Market.CreditInterestPermille + 999) / 1000;
         Check(statement.Interest == interest, "12.5% on what was left, rounded up",
             statement.Interest + " vs " + interest);
         Check(session.Debt == left + interest, "and it went onto the debt",
             session.Debt + " vs " + (left + interest));
-        Check(session.TotalScore == 0, "the purse stays empty while anything is owed",
+        Check(session.TotalScore == threshold, "the threshold's points are still the player's",
             "purse " + session.TotalScore);
         Check(session.CreditTermLeft == session.Config.Market.CreditTermStages - 1,
             "one stage of the term is gone", "left " + session.CreditTermLeft);
@@ -5798,9 +5821,26 @@ public static partial class JokerTests
                 continue;
             }
             SpendEverythingAffordable(session);
-            session.BorrowForTest(100); // small: the next stage's bar alone clears it
+            session.BorrowForTest(100);
             session.LeaveMarket();
-            if (!AdvanceToMarket(session, 400))
+            RoundEngine round = session.CurrentRound;
+            int guard = 0;
+            while (round.Status == RoundStatus.InProgress && guard++ < 400)
+            {
+                if (PlayTurns(session, 1) == 0)
+                {
+                    break;
+                }
+            }
+            if (round.Status != RoundStatus.AwaitingAdvanceDecision)
+            {
+                continue;
+            }
+            // The bar pays only the minimum; overtime pays off the rest in the same stage.
+            int scale = session.Config.Scoring.ScoreScale;
+            round.AddScoreOutsideTurn((int)(session.Debt / scale) + 1);
+            round.DecideAdvance(true);
+            if (session.Phase != GamePhase.Market)
             {
                 continue;
             }

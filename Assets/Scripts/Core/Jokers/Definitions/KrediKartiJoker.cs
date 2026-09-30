@@ -17,17 +17,19 @@ namespace ProjectBlock.Core
         {
             SetDescription(
                 "Buy anything in the market even with points you do not have - your purse goes "
-                    + "negative. Every point you earn pays the debt first. A stage that starts in "
-                    + "debt must also earn 25% of it on top of its bar. What is left gains 12.5% "
-                    + "interest after every stage. Clear it within 4 stages or the bailiff takes "
-                    + "your jokers, powers and blocks, most valuable first, at half price. Clear "
-                    + "it in the first stage and the bank rewards you. Cannot be sold while you owe.",
+                    + "negative. A stage that starts in debt asks for its threshold, which is yours, "
+                    + "then 25% of the debt on top as the minimum payment; anything you earn in "
+                    + "overtime pays the debt too. What is left gains 12.5% interest after every "
+                    + "stage. Clear it within 4 stages or the bailiff takes your jokers, powers and "
+                    + "blocks, most valuable first, at half price. Clear it in the first stage and "
+                    + "the bank rewards you. Cannot be sold while you owe.",
                 "Puanın yetmese de marketten her şeyi alabilirsin - cüzdanın eksiye düşer. "
-                    + "Kazandığın her puan önce borca gider. Borçla başlayan aşamada eşiğe ek olarak "
-                    + "borcun %25'ini (asgari ödeme) de kazanman gerekir. Kalan borca her aşama "
-                    + "sonunda %12,5 faiz işler. 4 aşama içinde kapatamazsan haciz gelir: en "
-                    + "değerliden başlayarak joker, güç ve bloklarına yarı fiyatına el konur. İlk "
-                    + "aşamada faize girmeden kapatırsan banka ödül verir. Borcun varken satılamaz.");
+                    + "Borçla başlayan aşamada önce normal eşiği kazanırsın, o puan senin; sonra "
+                    + "borcun %25'ini (asgari ödeme) kazanman gerekir. Uzatmada kazandığın puan da "
+                    + "borca gider. Kalan borca her aşama sonunda %12,5 faiz işler. 4 aşama içinde "
+                    + "kapatamazsan haciz gelir: en değerliden başlayarak joker, güç ve bloklarına "
+                    + "yarı fiyatına el konur. İlk aşamada faize girmeden kapatırsan banka ödül "
+                    + "verir. Borcun varken satılamaz.");
         }
 
         public override bool GrantsMarketCredit

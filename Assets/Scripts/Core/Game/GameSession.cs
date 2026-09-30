@@ -1233,8 +1233,9 @@ namespace ProjectBlock.Core
 
         private void OnTurnResolved(TurnReport report)
         {
-            // Through the credit books: a debt is paid before anything reaches the purse.
-            ApplyEarnings(report.ScoreGained);
+            // Through the credit books: what the round's own threshold earns is the player's, what
+            // lands above it (the minimum, overtime) pays the debt first (GameSession.Credit.cs).
+            BankRoundScore(report.ScoreGained, CurrentRound != null ? CurrentRound.RoundScore : 0);
         }
 
         private void OnRoundStatusChanged(RoundStatus status)
