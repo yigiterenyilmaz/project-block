@@ -311,7 +311,7 @@ namespace ProjectBlock.Core
             PayForWhatWentUp(turn);
             if (turn.Round != null)
             {
-                ChargeWhatSurvived(turn.Round.MainBoard);
+                ChargeWhatSurvived(turn.Round.MainBoard, UnitValue(turn.Round.ScoreThreshold));
             }
         }
 
@@ -336,7 +336,8 @@ namespace ProjectBlock.Core
                 if (chargesByCard.TryGetValue(destroyed[i].Cube.SourceCardId, out charges))
                 {
                     bonus += PowderUnits(charges) * perUnit;
-                    payout.Add(destroyed[i].Pos, charges, MaxCharges);
+                    payout.Add(destroyed[i].Pos, charges, MaxCharges,
+                        destroyed[i].Cube.SourceCardId);
                 }
             }
             if (bonus <= 0)
@@ -355,7 +356,7 @@ namespace ProjectBlock.Core
         /// <summary>Rebuilt from the board every turn rather than tracked by hand: a block that is
         /// gone stops charging by simply not being there, and one that arrived this turn starts at
         /// one. Nothing to forget and nothing to leak.</summary>
-        private void ChargeWhatSurvived(GameBoard board)
+        private void ChargeWhatSurvived(GameBoard board, int perUnit)
         {
             // The CELLS are collected as well as the card ids, because the View shows cubes: a
             // block reports one entry per cube it still has standing, all at the same charge.
@@ -387,9 +388,12 @@ namespace ProjectBlock.Core
                 // as the block stands - a capped block is the one holding the most powder and
                 // must not go dark. Whether it GAINED this turn is carried separately, and that
                 // is what the sizzle and the spark key off.
+                // What one of its cubes would pay now - the same sum PayForWhatWentUp makes -
+                // so a debug readout can show the block's real worth without redoing it.
+                long cubeValue = (long)PowderUnits(now) * perUnit * ScoreScale;
                 for (int i = 0; i < entry.Value.Count; i++)
                 {
-                    report.Add(entry.Value[i], now, MaxCharges, now > had);
+                    report.Add(entry.Value[i], now, MaxCharges, now > had, entry.Key, cubeValue);
                 }
             }
             chargesByCard.Clear();

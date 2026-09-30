@@ -248,6 +248,7 @@ public static partial class JokerTests
         Simetri_PaysOneAxisAndTriplesForBoth();
         Barut_ChargesDynamiteThatSurvives();
         Barut_PaysEveryChargeWhenItGoesUp();
+        Barut_ReportsTheBlockItsCapAndItsWorth();
         Antimadde_OnlyFitsAPerfectOverlay();
         Antimadde_AnnihilatesEveryCubeOfThatElement();
         Antimadde_MintsFromANegativeErasureAndRots();
@@ -8708,6 +8709,54 @@ public static partial class JokerTests
             "and both cubes paid every charge they had banked",
             FlatFrom(report.Score, joker.DefId) + " vs " + expected);
         Check(joker.TotalCharges == 0, "nothing is left charged", "" + joker.TotalCharges);
+    }
+
+    private static void Barut_ReportsTheBlockItsCapAndItsWorth()
+    {
+        Section("barut tedarikçisi / the report names each block, the cap and what it is worth");
+        var session = NewSession(7209, 5, 1000000, 40, 1);
+        var joker = (BarutTedarikcisiJoker)session.Jokers.Add(new BarutTedarikcisiJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        ClearBoard(round.Board);
+
+        // Two blocks side by side at the same charge: the report must still tell them apart,
+        // or the View would draw them as one magazine.
+        round.Board.SetCubeAt(new GridPos(0, 4), new Cube(CubeKind.Dynamite, 7500));
+        round.Board.SetCubeAt(new GridPos(1, 4), new Cube(CubeKind.Dynamite, 7500));
+        round.Board.SetCubeAt(new GridPos(2, 4), new Cube(CubeKind.Dynamite, 7501));
+        PlayTurns(session, 2);
+        PowderVisuals charge = joker.LastCharge;
+        Check(charge != null && charge.Count == 3, "every standing dynamite cube is reported",
+            charge == null ? "null" : "" + charge.Count);
+        Check(charge != null && charge.Cap == joker.MaxCharges, "with the joker's own cap",
+            charge == null ? "null" : "" + charge.Cap);
+        bool ids = charge != null;
+        for (int i = 0; charge != null && i < charge.Count; i++)
+        {
+            int expectedId = charge.Cells[i].X < 2 ? 7500 : 7501;
+            ids &= charge.CardIds[i] == expectedId;
+        }
+        Check(ids, "each cell carries its own block's card");
+        long worth = (long)joker.PowderUnits(2) * joker.UnitValue(round.ScoreThreshold)
+            * session.Config.Scoring.ScoreScale;
+        Check(charge != null && charge.CubeValues[0] == worth,
+            "and what one of its cubes would pay now is the joker's own sum",
+            charge == null ? "null" : charge.CubeValues[0] + " vs " + worth);
+
+        // Now take the first block in a line: the payout names its card and its charges.
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Dynamite, 7500));
+        round.Board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Dynamite, 7500));
+        round.Board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Normal, 7502));
+        round.Board.SetCubeAt(new GridPos(3, 0), new Cube(CubeKind.Normal, 7502));
+        PlayAt(round, new GridPos(4, 0));
+        PowderPayoutVisuals payout = joker.LastPayout;
+        Check(payout != null && payout.Count == 2 && payout.CardIds[0] == 7500
+            && payout.Charges[0] == 2 && payout.Cap == joker.MaxCharges,
+            "the payout names the block, the charges it had and the cap",
+            payout == null ? "null" : payout.Count + " cells, card " + payout.CardIds[0]
+                + ", charges " + payout.Charges[0]);
     }
 
     private static void Antimadde_OnlyFitsAPerfectOverlay()

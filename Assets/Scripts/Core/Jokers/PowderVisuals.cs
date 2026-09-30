@@ -8,6 +8,11 @@
 // bookkeeping into the cells standing right now. A block of four cubes reports four cells at the
 // same charge, which is exactly what the sizzle and the fuse marks want: the whole block lights,
 // because the whole block is what is charging.
+//
+// AND THE CARD TOO, per cell: the View draws a block as ONE powder magazine (one strap run, one
+// rail of primer chambers), and two blocks standing side by side at the same charge must not merge
+// into one. The cap and what a cube is worth now ride along for the same reason the fullness
+// does - so the View never hard-codes a five or redoes the joker's sum.
 
 using System.Collections.Generic;
 
@@ -44,6 +49,20 @@ namespace ProjectBlock.Core
         /// </summary>
         public readonly List<bool> Gained = new List<bool>();
 
+        /// <summary>The CARD each cell's cube came from - what groups cells into one block, so the
+        /// View can treat a block as ONE magazine instead of a grid of separate lights. Two
+        /// adjacent blocks at the same charge are still two blocks.</summary>
+        public readonly List<int> CardIds = new List<int>();
+
+        /// <summary>What ONE cube of this cell's block would pay if it went up now, at the run's
+        /// score scale - the joker's own arithmetic, carried so a debug readout never has to
+        /// repeat it.</summary>
+        public readonly List<long> CubeValues = new List<long>();
+
+        /// <summary>The cap the charges are counted against (the joker's MaxCharges) - how many
+        /// primer chambers the View draws. Carried so the View never hard-codes a five.</summary>
+        public int Cap;
+
         public int Count
         {
             get { return Cells.Count; }
@@ -54,11 +73,19 @@ namespace ProjectBlock.Core
         /// cannot construct is an effect it cannot show.</summary>
         public void Add(GridPos cell, int charges, int cap, bool gained)
         {
+            Add(cell, charges, cap, gained, -1, 0);
+        }
+
+        public void Add(GridPos cell, int charges, int cap, bool gained, int cardId, long cubeValue)
+        {
             Cells.Add(cell);
             Charges.Add(charges);
             Fullness.Add(cap > 0 ? charges / (float)cap : 1f);
             Full.Add(charges >= cap);
             Gained.Add(gained);
+            CardIds.Add(cardId);
+            CubeValues.Add(cubeValue);
+            Cap = cap;
         }
 
         /// <summary>True if anything actually took a charge this turn - what the sizzle asks,
@@ -95,6 +122,16 @@ namespace ProjectBlock.Core
 
         public readonly List<bool> Full = new List<bool>();
 
+        /// <summary>How many charges each cube's block had banked when it went up - how many
+        /// primers fire in the cook-off before the blast.</summary>
+        public readonly List<int> Charges = new List<int>();
+
+        /// <summary>The card each cube came from, so one block goes up as ONE magazine.</summary>
+        public readonly List<int> CardIds = new List<int>();
+
+        /// <summary>The cap the charges were counted against.</summary>
+        public int Cap;
+
         /// <summary>The flat score the powder paid this turn, at the run's score scale.</summary>
         public long Points;
 
@@ -106,9 +143,17 @@ namespace ProjectBlock.Core
         /// <summary>PUBLIC so the animation lab can build one.</summary>
         public void Add(GridPos cell, int charges, int cap)
         {
+            Add(cell, charges, cap, -1);
+        }
+
+        public void Add(GridPos cell, int charges, int cap, int cardId)
+        {
             Cells.Add(cell);
             Fullness.Add(cap > 0 ? charges / (float)cap : 1f);
             Full.Add(charges >= cap);
+            Charges.Add(charges);
+            CardIds.Add(cardId);
+            Cap = cap;
         }
 
         public bool AnyFull
