@@ -1510,10 +1510,14 @@ the line through `FlashLine`. `Tools/UiLayoutCheck/meydan_okuma.py` holds the lo
 call, 2026-09-30; `GameSession.Credit.cs`). The joker is only the switch that turns
 `CreditAvailable` on; the terms are `MarketConfig.Credit*` balance placeholders. **The purse goes
 negative**: `Spend` takes the purse first and borrows the rest without a limit, and `Balance`
-(`TotalScore - Debt`) is what the HUD and the market print. **Every point earned pays the debt
-first** - a turn, a sale, a grant all come in through `Receive`, so there is no manual repayment
-and never money in the purse while anything is owed; an effect clawing money back (`TakeBack`)
-puts it back on the debt. **A stage that starts in debt owes a minimum payment** (25%) on top of
+(`TotalScore - Debt`) is what the HUD and the market print. **A round pays IN ORDER**
+(`GameSession.BankRoundScore`, designer's call 2026-09-30): what it earns up to its OWN threshold
+is the player's and goes to the purse; what lands above it - the minimum payment, then every point
+of overtime - pays the debt first. Every way round score reaches the purse goes through it (the
+turn's banked score, a between-turn score, a boss beaten on its own terms), and score clawed back
+from the TOP of the meter (the crossing's excess, an overtime cap) goes back onto the debt first
+(`UnbankRoundScoreFromTop`). Money from outside a round - a sale, an effect's grant - still pays
+the debt first (`Receive`), and there is no manual repayment. **A stage that starts in debt owes a minimum payment** (25%) on top of
 its bar: `RoundEngine.CreditInstallment`, added to the private `ScaledThreshold` (so the crossing,
 the ceiling and a boss beaten on its own terms all use it) and shown as `PassBar` - NOT to
 `ScoreThreshold`, which the jokers scale off and must not grow because the player is in debt.
