@@ -163,20 +163,15 @@ namespace ProjectBlock.Core
             return Place(card, shape, origin, allowOutside, null);
         }
 
-        /// <summary>The same, with the cube kind the card lays decided by the ROUND rather than
-        /// read off the card: a card carrying a borrowed gene ("Gen nakli") has no element of its
-        /// own printed on it, and would otherwise put down plain cubes. Null reads the card, as
-        /// every other placement always has.</summary>
-        public IReadOnlyList<GridPos> Place(BlockCard card, BlockShape shape, GridPos origin,
-            bool allowOutside, CubeKind? cardKindOverride)
+        /// <summary>
+        /// The kind of cube each cell of <paramref name="shape"/> (in shape.Cells order) is
+        /// stamped with when this card lands - THE decision Place makes, pulled out so the
+        /// placement preview can ask it too rather than guess. A gold cube locks every line it
+        /// lands in, so "would this placement explode that row?" cannot be answered without
+        /// knowing which of the arriving cubes are gold.
+        /// </summary>
+        public CubeKind[] StampedKinds(BlockCard card, BlockShape shape, CubeKind? cardKindOverride)
         {
-            if (!CanPlace(shape, origin, allowOutside))
-            {
-                throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
-            }
-            var placed = new List<GridPos>(shape.Size);
-            lastMinesTriggered.Clear();
-            LastPlacementSwallows.Clear();
             // "Vanilya" (boss round): the card's element is ignored, so every cube it stamps is
             // an ordinary one - including the per-cube elements of a designed block.
             CubeKind cardKind = IgnoreElements ? CubeKind.Normal
@@ -195,12 +190,36 @@ namespace ProjectBlock.Core
             int targetIndex = IgnoreElements || !card.Has(BlockElement.Targeted)
                 ? -1
                 : card.TargetIndexIn(shape);
+            var kinds = new CubeKind[shapeCells.Count];
+            for (int ci = 0; ci < shapeCells.Count; ci++)
+            {
+                kinds[ci] = ci == targetIndex
+                    ? CubeKind.Target
+                    : (perCube ? CubeRules.KindForElement(card.CellElement(ci)) : cardKind);
+            }
+            return kinds;
+        }
+
+        /// <summary>The same, with the cube kind the card lays decided by the ROUND rather than
+        /// read off the card: a card carrying a borrowed gene ("Gen nakli") has no element of its
+        /// own printed on it, and would otherwise put down plain cubes. Null reads the card, as
+        /// every other placement always has.</summary>
+        public IReadOnlyList<GridPos> Place(BlockCard card, BlockShape shape, GridPos origin,
+            bool allowOutside, CubeKind? cardKindOverride)
+        {
+            if (!CanPlace(shape, origin, allowOutside))
+            {
+                throw new InvalidOperationException("Illegal placement of " + card + " at " + origin + ".");
+            }
+            var placed = new List<GridPos>(shape.Size);
+            lastMinesTriggered.Clear();
+            LastPlacementSwallows.Clear();
+            IReadOnlyList<GridPos> shapeCells = shape.Cells;
+            CubeKind[] kinds = StampedKinds(card, shape, cardKindOverride);
             for (int ci = 0; ci < shapeCells.Count; ci++)
             {
                 GridPos offset = shapeCells[ci];
-                CubeKind kind = ci == targetIndex
-                    ? CubeKind.Target
-                    : (perCube ? CubeRules.KindForElement(card.CellElement(ci)) : cardKind);
+                CubeKind kind = kinds[ci];
                 GridPos pos = origin + offset;
                 if (IsInside(pos))
                 {

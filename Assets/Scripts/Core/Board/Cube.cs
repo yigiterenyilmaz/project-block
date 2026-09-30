@@ -3,7 +3,8 @@
 // for behavior - never hardcode kind checks in the flow.
 // IMPLEMENTED kinds: Normal, Fire (chain explosion, handled in GameBoard), Obsidian,
 // Gold (both sweep-exempt + indestructible; gold also pays a per-turn bonus, handled
-// in RoundEngine), PiggyBank (accrues value, pays on destruction - RoundEngine).
+// in RoundEngine, and LOCKS its row and column shut while it stands - GameBoard.RowIsGoldLocked),
+// PiggyBank (accrues value, pays on destruction - RoundEngine).
 // Water and Transparent exist in the enum but their behaviors are NOT implemented yet;
 // keep them out of MarketConfig.ElementPool until they are.
 

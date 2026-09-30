@@ -146,6 +146,7 @@ public static partial class JokerTests
         DebugStartBossStage_JumpsStraightToABossStage();
         RunStructure_EveryStageOpensAMarket();
         Lines_ASolidIndestructibleLineIsNotAnExplosion();
+        Gold_LocksItsRowAndColumn();
         Lines_OptionalCellsDoNotHoldALineUp();
         HeldSlots_BonusCardsRotateAndReshape();
         OptionalCells_PreviewAndErosionAgreeWithTheRule();
@@ -12920,18 +12921,20 @@ public static partial class JokerTests
         var session = NewSession(9101, 4, 1000000, 40, 1);
         RoundEngine round = session.CurrentRound;
 
-        // Fill row 0 with gold, which nothing can break.
-        PaintBoard(round, session, CubeKind.Gold,
+        // Fill row 0 with obsidian, which nothing can break. (Obsidian, not gold: gold LOCKS its
+        // line outright - see Gold_LocksItsRowAndColumn - so a gold row would pass this for the
+        // wrong reason, and could never be restored by a breakable cube below.)
+        PaintBoard(round, session, CubeKind.Obsidian,
             new GridPos(0, 0), new GridPos(1, 0), new GridPos(2, 0), new GridPos(3, 0));
-        Check(round.Board.OccupiedCount == 4, "the gold row is standing",
+        Check(round.Board.OccupiedCount == 4, "the obsidian row is standing",
             "occupied " + round.Board.OccupiedCount);
 
         LineExplosionResult result = round.Board.ResolveFullLines();
-        Check(result.LineCount == 0, "a solid gold row is not a line",
+        Check(result.LineCount == 0, "a solid obsidian row is not a line",
             "lines " + result.LineCount);
         Check(result.ExplodedCells.Count == 0, "and nothing exploded",
             "cells " + result.ExplodedCells.Count);
-        Check(round.Board.OccupiedCount == 4, "the gold is untouched",
+        Check(round.Board.OccupiedCount == 4, "the obsidian is untouched",
             "occupied " + round.Board.OccupiedCount);
 
         // One breakable cube in the row is enough to make it a real line again.
@@ -12941,6 +12944,73 @@ public static partial class JokerTests
             "lines " + real.LineCount);
         Check(real.ExplodedCells.Count == 1, "only the breakable cube goes",
             "cells " + real.ExplodedCells.Count);
+    }
+
+    /// <summary>
+    /// GOLD LOCKS ITS LINES (designer's call, 2026-09-30): a row or column with a gold cube in it
+    /// cannot explode while that gold stands - not round the gold, not at all. Pinned across
+    /// every place that answers "can this line go off": the explosion, the gap count the bosses
+    /// and "Meydan Okuma" read, the preview, and a real turn. And the lock lifts with the gold.
+    /// </summary>
+    private static void Gold_LocksItsRowAndColumn()
+    {
+        Section("gold / a gold cube locks its row and its column");
+        var board = new GameBoard(4, 4);
+        PaintCells(board, CubeKind.Gold, new GridPos(1, 0));
+        // The rest of row 0 and the rest of column 1, all ordinary.
+        PaintCells(board, CubeKind.Normal, new GridPos(0, 0), new GridPos(2, 0), new GridPos(3, 0),
+            new GridPos(1, 1), new GridPos(1, 2), new GridPos(1, 3));
+        LineExplosionResult locked = board.ResolveFullLines();
+        Check(locked.LineCount == 0, "a full row and a full column through gold do not go off",
+            "lines " + locked.LineCount);
+        Check(locked.ExplodedCells.Count == 0, "and nothing round the gold was taken",
+            "cells " + locked.ExplodedCells.Count);
+        Check(board.RowGapCount(0) == -1 && board.ColumnGapCount(1) == -1,
+            "the gap counts call both lines unexplodable",
+            "row " + board.RowGapCount(0) + " column " + board.ColumnGapCount(1));
+
+        // A row that merely CROSSES the gold's column is not locked - only the gold's own lines.
+        PaintCells(board, CubeKind.Normal, new GridPos(0, 2), new GridPos(2, 2), new GridPos(3, 2));
+        LineExplosionResult crossing = board.ResolveFullLines();
+        Check(crossing.LineCount == 1 && crossing.Rows.Count == 1 && crossing.Rows[0] == 2,
+            "a row crossing the gold's column still goes off",
+            "lines " + crossing.LineCount);
+        Check(crossing.ExplodedCells.Count == 4, "all four of its cubes",
+            "cells " + crossing.ExplodedCells.Count);
+
+        // Take the gold away and the lock goes with it.
+        Check(board.DestroyCubeForced(new GridPos(1, 0)), "the gold can still be forced out");
+        PaintCells(board, CubeKind.Normal, new GridPos(1, 0));
+        LineExplosionResult unlocked = board.ResolveFullLines();
+        Check(new List<int>(unlocked.Rows).Contains(0), "with the gold gone, the row clears again",
+            "rows " + unlocked.Rows.Count);
+
+        // THE PREVIEW asks the same question with the arriving cubes' kinds: a gold block never
+        // completes a line, an ordinary one completing the same gap does.
+        var preview = new GameBoard(4, 4);
+        PaintCells(preview, CubeKind.Normal, new GridPos(0, 3), new GridPos(1, 3), new GridPos(2, 3));
+        LineExplosionResult asGold = preview.PredictExplosions(Bar(1), new GridPos(3, 3),
+            new[] { CubeKind.Gold });
+        LineExplosionResult asPlain = preview.PredictExplosions(Bar(1), new GridPos(3, 3),
+            new[] { CubeKind.Normal });
+        Check(asGold.LineCount == 0, "a gold cube finishing a row is not shown clearing it",
+            "lines " + asGold.LineCount);
+        Check(asPlain.LineCount == 1, "an ordinary one is", "lines " + asPlain.LineCount);
+
+        // A REAL TURN: a gold block that completes a row locks it instead of clearing it.
+        var session = NewSession(9102, 4, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        PaintBoard(round, session, CubeKind.Normal,
+            new GridPos(0, 0), new GridPos(1, 0), new GridPos(2, 0));
+        BlockCard goldCard = session.CreateCard(Bar(1), new[] { BlockElement.Gold });
+        round.AddBonusCard(goldCard, BonusPlayOutcome.ToDiscard);
+        TurnReport report = round.PlayFromBonus(0, new GridPos(3, 0));
+        Check(report.ExplodedRows.Count == 0 && report.ExplodedColumns.Count == 0,
+            "the gold block completed the row and the row stayed",
+            "rows " + report.ExplodedRows.Count + " columns " + report.ExplodedColumns.Count);
+        Check(round.Board.OccupiedCount == 4, "every cube of it is still standing",
+            "occupied " + round.Board.OccupiedCount);
+        Check(report.GoldBonus > 0, "and the gold is paying its upkeep", "bonus " + report.GoldBonus);
     }
 
     /// <summary>"Tılsım" bonus ground: playable, but a line never waits for it while it is
@@ -13049,11 +13119,18 @@ public static partial class JokerTests
         // PREVIEW must not promise a line that would destroy nothing either.
         // 3x2, not 3x1: on a one-row board the placement would also complete its own column,
         // and the assertion below would be counting two lines for the wrong reason.
+        var stone = new GameBoard(3, 2);
+        PaintCells(stone, CubeKind.Obsidian, new GridPos(0, 0), new GridPos(1, 0));
+        LineExplosionResult stonePredict = stone.PredictExplosions(Bar(1), new GridPos(2, 0));
+        Check(stonePredict.LineCount == 1,
+            "an obsidian row completed by a breakable cube is still a real line",
+            "lines " + stonePredict.LineCount);
+        // ...but a GOLD row is locked, and the preview must say so as the board will.
         var gold = new GameBoard(3, 2);
         PaintCells(gold, CubeKind.Gold, new GridPos(0, 0), new GridPos(1, 0));
         LineExplosionResult goldPredict = gold.PredictExplosions(Bar(1), new GridPos(2, 0));
-        Check(goldPredict.LineCount == 1,
-            "a gold row completed by a breakable cube is still a real line",
+        Check(goldPredict.LineCount == 0,
+            "a gold row completed by a breakable cube is not a line - gold locks it",
             "lines " + goldPredict.LineCount);
 
         // EROSION: eating bonus ground must leave a HOLE, never a line-killing dead cell -

@@ -36,8 +36,9 @@
 // computing odds must not shift every later shuffle in the round, and a replayed save has to
 // reach the same odds from the same board.
 //
-// A LINE THAT CAN NEVER GO OFF IS NOT A HARD LINE. A dead row (erosion, "Kangren"), a line with no
-// required cell, a line with a SEALED cell in it ("Mapus"), or any line at all while a boss is
+// A LINE THAT CAN NEVER GO OFF IS NOT A HARD LINE. A dead row (erosion, "Kangren"), a line a GOLD
+// cube holds shut, a line with no required cell, a line with a SEALED cell in it ("Mapus"), or any
+// line at all while a boss is
 // suppressing explosions ("Bilinmezlik") is marked Possible = false. Daring the player to clear
 // one of those would be a rigged bet, which is a different thing from a hard one.
 
@@ -138,7 +139,7 @@ namespace ProjectBlock.Core
             var line = new LineChance { IsRow = isRow, Index = index, Gaps = gaps };
             if (gaps < 1 || round.LineExplosionsSuppressed || HasSealedGap(board, isRow, index))
             {
-                // Dead, not required, already full at rest (it cannot be), sealed shut, or no line
+                // Dead, gold-locked, not required, already full at rest (it cannot be), sealed shut, or no line
                 // may go off at all this round. Not a hard line - not a line.
                 line.Possible = false;
                 return line;

@@ -227,6 +227,19 @@ namespace ProjectBlock.Core
             return BorrowedCubeKind(card) ?? CubeRules.KindForCard(card);
         }
 
+        /// <summary>What each cell of <paramref name="shape"/> would be stamped with if this card
+        /// landed on the main board now, in shape.Cells order - the very call Place makes. For
+        /// the placement preview: a gold block locks every line it lands in, so the preview has
+        /// to know which of its cubes are gold before it can say what would go off.</summary>
+        public IReadOnlyList<CubeKind> StampedKinds(BlockCard card, BlockShape shape)
+        {
+            if (card == null || shape == null || Board == null)
+            {
+                return null;
+            }
+            return Board.StampedKinds(card, shape, BorrowedCubeKind(card));
+        }
+
         /// <summary>The cube kind a borrowed gene ("Gen nakli") makes this card lay, or null when
         /// it carries none - or when a boss has every element switched off, which switches the
         /// borrowed one off with them. Handed to GameBoard.Place, which only reads the card's

@@ -325,10 +325,35 @@ namespace ProjectBlock.Core
         /// </summary>
         public LineExplosionResult PredictExplosions(BlockShape shape, GridPos origin)
         {
-            var shapeCells = new HashSet<GridPos>();
-            foreach (GridPos offset in shape.Cells)
+            return PredictExplosions(shape, origin, null);
+        }
+
+        /// <summary>
+        /// As above, knowing what the arriving cubes are made of: <paramref name="stampedKinds"/>
+        /// is aligned to shape.Cells (StampedKinds gives it). A GOLD cube arriving locks every
+        /// line it lands in, exactly as it will once it is down, so a gold block is never shown
+        /// completing one; and an arriving cube that cannot break is no longer assumed to. Null
+        /// is the old guess - every arriving cube ordinary.
+        /// </summary>
+        public LineExplosionResult PredictExplosions(BlockShape shape, GridPos origin,
+            IReadOnlyList<CubeKind> stampedKinds)
+        {
+            var shapeCells = new Dictionary<GridPos, CubeKind>();
+            var goldRows = new HashSet<int>();
+            var goldColumns = new HashSet<int>();
+            IReadOnlyList<GridPos> offsets = shape.Cells;
+            for (int i = 0; i < offsets.Count; i++)
             {
-                shapeCells.Add(origin + offset);
+                GridPos pos = origin + offsets[i];
+                CubeKind kind = stampedKinds != null && i < stampedKinds.Count
+                    ? stampedKinds[i]
+                    : CubeKind.Normal;
+                shapeCells[pos] = kind;
+                if (kind == CubeKind.Gold && IsInside(pos))
+                {
+                    goldRows.Add(pos.Y - MinY);
+                    goldColumns.Add(pos.X - MinX);
+                }
             }
             var fullRows = new List<int>();
             for (int y = 0; y < Height; y++)
@@ -336,6 +361,14 @@ namespace ProjectBlock.Core
                 if (RowIsKilled(y))
                 {
                     continue; // same rule as ResolveFullLines: an eaten cell kills the line
+                }
+                if (RowIsInfectionDead(y + MinY))
+                {
+                    continue;
+                }
+                if (RowIsGoldLocked(y) || goldRows.Contains(y))
+                {
+                    continue; // gold - standing or arriving - holds the line shut
                 }
                 bool full = false;
                 bool breaks = false;
@@ -345,7 +378,9 @@ namespace ProjectBlock.Core
                     {
                         continue;
                     }
-                    bool placedHere = shapeCells.Contains(new GridPos(x + MinX, y + MinY));
+                    CubeKind arriving;
+                    bool placedHere = shapeCells.TryGetValue(new GridPos(x + MinX, y + MinY),
+                        out arriving);
                     if (!cells[x, y].HasValue && !placedHere)
                     {
                         if (optional[x, y])
@@ -356,11 +391,11 @@ namespace ProjectBlock.Core
                         break;
                     }
                     full = full || !optional[x, y];
-                    // A cube about to be placed is assumed breakable: the shape arrives without
-                    // its card, so its element is not knowable here. Completing an all-gold line
-                    // WITH gold is the one case this over-predicts.
-                    breaks = breaks || placedHere
-                        || CubeRules.IsDestructible(cells[x, y].Value);
+                    // An arriving cube breaks if its kind does (without the card's kinds every
+                    // arriving cube is taken to be ordinary, which is the old guess).
+                    breaks = breaks
+                        || (placedHere ? CubeRules.IsDestructibleKind(arriving)
+                            : CubeRules.IsDestructible(cells[x, y].Value));
                 }
                 if (full && breaks) fullRows.Add(y);
             }
@@ -371,6 +406,14 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
+                if (ColumnIsInfectionDead(x + MinX))
+                {
+                    continue;
+                }
+                if (ColumnIsGoldLocked(x) || goldColumns.Contains(x))
+                {
+                    continue; // see the row loop
+                }
                 bool full = false;
                 bool breaks = false;
                 for (int y = 0; y < Height; y++)
@@ -379,7 +422,9 @@ namespace ProjectBlock.Core
                     {
                         continue;
                     }
-                    bool placedHere = shapeCells.Contains(new GridPos(x + MinX, y + MinY));
+                    CubeKind arriving;
+                    bool placedHere = shapeCells.TryGetValue(new GridPos(x + MinX, y + MinY),
+                        out arriving);
                     if (!cells[x, y].HasValue && !placedHere)
                     {
                         if (optional[x, y])
@@ -390,8 +435,9 @@ namespace ProjectBlock.Core
                         break;
                     }
                     full = full || !optional[x, y];
-                    breaks = breaks || placedHere
-                        || CubeRules.IsDestructible(cells[x, y].Value);
+                    breaks = breaks
+                        || (placedHere ? CubeRules.IsDestructibleKind(arriving)
+                            : CubeRules.IsDestructible(cells[x, y].Value));
                 }
                 if (full && breaks) fullColumns.Add(x);
             }
@@ -676,9 +722,9 @@ namespace ProjectBlock.Core
 
         /// <summary>
         /// HOW CLOSE A ROW IS TO EXPLODING: how many REQUIRED cells of row
-        /// <paramref name="absoluteY"/> are still empty, or -1 when the row can never explode
-        /// again at all - erosion killed it, "Kangren" took it whole, or it has no required cell
-        /// in it to begin with.
+        /// <paramref name="absoluteY"/> are still empty, or -1 when the row cannot explode as
+        /// the board stands - erosion killed it, "Kangren" took it whole, a gold cube holds it
+        /// shut (RowIsGoldLocked), or it has no required cell in it to begin with.
         ///
         /// It counts exactly what ResolveFullLines waits for and NOTHING else: a hole in the
         /// bounding box was never part of the line, and bonus ground ("Tılsım") never holds one
@@ -692,7 +738,8 @@ namespace ProjectBlock.Core
         public int RowGapCount(int absoluteY)
         {
             int iy = absoluteY - MinY;
-            if (iy < 0 || iy >= Height || RowIsKilled(iy) || RowIsInfectionDead(absoluteY))
+            if (iy < 0 || iy >= Height || RowIsKilled(iy) || RowIsInfectionDead(absoluteY)
+                || RowIsGoldLocked(iy))
             {
                 return -1;
             }
@@ -717,7 +764,8 @@ namespace ProjectBlock.Core
         public int ColumnGapCount(int absoluteX)
         {
             int ix = absoluteX - MinX;
-            if (ix < 0 || ix >= Width || ColumnIsKilled(ix) || ColumnIsInfectionDead(absoluteX))
+            if (ix < 0 || ix >= Width || ColumnIsKilled(ix) || ColumnIsInfectionDead(absoluteX)
+                || ColumnIsGoldLocked(ix))
             {
                 return -1;
             }

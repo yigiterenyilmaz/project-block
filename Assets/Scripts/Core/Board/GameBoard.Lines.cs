@@ -298,6 +298,49 @@ namespace ProjectBlock.Core
             return false;
         }
 
+        /// <summary>
+        /// GOLD LOCKS ITS LINES (designer's call, 2026-09-30). A row with a gold cube anywhere
+        /// in its play area cannot explode while that gold stands: the line is not killed (take
+        /// the gold away - a forced destruction, a black hole, a press failure - and it can fill
+        /// and go off again), it is LOCKED. Before this, a line through gold went off round the
+        /// gold, which made gold a cube that pays every turn and costs nothing. Now it pays every
+        /// turn and holds a row AND a column shut, which is the trade.
+        ///
+        /// Asked by everything that decides whether a line can go off - ResolveFullLines,
+        /// PredictExplosions, RowGapCount / ColumnGapCount (and through them "Mapus" and
+        /// "Meydan Okuma") - so there is one definition of a locked line, not several.
+        /// </summary>
+        internal bool RowIsGoldLocked(int y)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                if (playable[x, y] && IsGoldAt(x, y))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Column counterpart of RowIsGoldLocked.</summary>
+        internal bool ColumnIsGoldLocked(int x)
+        {
+            for (int y = 0; y < Height; y++)
+            {
+                if (playable[x, y] && IsGoldAt(x, y))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private bool IsGoldAt(int x, int y)
+        {
+            Cube? cube = cells[x, y];
+            return cube.HasValue && cube.Value.Kind == CubeKind.Gold;
+        }
+
         private bool RowHasCube(int y)
         {
             for (int x = 0; x < Width; x++)
@@ -342,6 +385,10 @@ namespace ProjectBlock.Core
                 {
                     continue; // "Kangren" took this row whole - it can never explode again
                 }
+                if (RowIsGoldLocked(y))
+                {
+                    continue; // gold holds this row shut while it stands
+                }
                 bool full = false;
                 bool breaks = false;
                 for (int x = 0; x < Width; x++)
@@ -366,7 +413,7 @@ namespace ProjectBlock.Core
                     breaks = breaks || CubeRules.IsDestructible(cells[x, y].Value);
                 }
                 // A line that would destroy NOTHING is not an explosion at all: a row of solid
-                // gold/obsidian is permanently "full", so paying for it (and flashing it) would
+                // obsidian is permanently "full", so paying for it (and flashing it) would
                 // repeat every single turn for the rest of the round. Same reasoning as the
                 // clean-sweep pre-condition, which already counts destruction rather than lines.
                 if (full && breaks) fullRows.Add(y);
@@ -381,6 +428,10 @@ namespace ProjectBlock.Core
                 if (ColumnIsInfectionDead(x + MinX))
                 {
                     continue; // "Kangren" took this column whole
+                }
+                if (ColumnIsGoldLocked(x))
+                {
+                    continue; // gold holds this column shut while it stands
                 }
                 bool full = false;
                 bool breaks = false;
