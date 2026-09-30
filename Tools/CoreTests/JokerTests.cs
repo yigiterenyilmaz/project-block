@@ -259,6 +259,7 @@ public static partial class JokerTests
         Eforsuz_PaysOnAPowerFreeRound();
         Eforsuz_DoublesForAPowerFreeOvertime();
         Enflasyon_RaisesTheBarByAShareOfWhatIsMissing();
+        Enflasyon_NeverInflatesACreditMinimum();
         Enflasyon_TheBarHoldsStillOnceReached();
         Enflasyon_PaysWhatTheOriginalBarWasWorth();
         Enflasyon_CannotInflatePastWhatFits();
@@ -9309,6 +9310,36 @@ public static partial class JokerTests
         Check(round.Config.ScoreThreshold == 2000, "the config still names the base bar");
         Check(round.ScoreThreshold > round.Config.ScoreThreshold,
             "and the LIVE bar is the one that moved - read RoundEngine, never Config");
+    }
+
+    private static void Enflasyon_NeverInflatesACreditMinimum()
+    {
+        Section("enflasyon / a credit minimum is a fixed addition: never inflated, never feeds the rise");
+        var session = NewBossSession(6107, 5, 2000, "enflasyon");
+        RoundEngine round = session.CurrentRound;
+        int scale = session.Config.Scoring.ScoreScale;
+        int minimum = 500 * scale;
+        round.SetCreditInstallment(minimum); // a stage that started in debt owes 500 on top
+        Check(round.PassBar == 2500 * scale, "the bar the player chases is 2000 + the 500 minimum",
+            "" + round.PassBar / scale);
+
+        round.AddScoreOutsideTurn(1000);
+        PlayOneCard(round);
+        long missing = 2000L * scale - round.RoundScore;
+        int expected = 2000 + (int)Math.Max(1L, (long)Math.Ceiling(missing * 5.0 / 100.0 / scale));
+        Check(round.ScoreThreshold == expected, "the rise is 5% of what is missing to the OWN bar ("
+            + expected + ", not counting the minimum)", "" + round.ScoreThreshold);
+        Check(round.CreditInstallment == minimum && round.PassBar == round.OwnBar + minimum,
+            "the minimum itself did not move", "" + round.CreditInstallment / scale);
+
+        // The own bar reached, the minimum not yet: nothing inflates any more.
+        round.AddScoreOutsideTurn((round.OwnBar - round.RoundScore) / scale + 100);
+        Check(!round.ThresholdPassed && round.RoundScore >= round.OwnBar,
+            "the own bar is reached, the minimum is still being earned", round.RoundScore / scale + " of " + round.PassBar / scale);
+        int bar = round.ScoreThreshold;
+        PlayOneCard(round);
+        Check(round.ScoreThreshold == bar && round.CreditInstallment == minimum,
+            "the bar holds still, and the minimum stays a fixed 500", round.ScoreThreshold + " / " + round.CreditInstallment / scale);
     }
 
     private static void Enflasyon_TheBarHoldsStillOnceReached()

@@ -304,9 +304,12 @@ namespace ProjectBlock.Core
     /// bar of 2000 with 1000 scored rises by 50. So it runs hardest from a player who is far
     /// behind, eases as they close in, and stops the moment it is reached: a turn that reaches the
     /// bar leaves nothing missing, and once the bar is passed it never moves again. Rounded UP, so
-    /// it always moves while anything is missing. "Missing" is measured against the bar the player
-    /// is actually chasing (RoundEngine.PassBar, a credit minimum included); what rises is the
-    /// round's own threshold.
+    /// it always moves while anything is missing.
+    ///
+    /// ONLY THE ROUND'S OWN BAR INFLATES (designer's call, 2026-09-30). "Missing" is measured
+    /// against RoundEngine.OwnBar, never PassBar: a "Kredi kartı" minimum payment is a FIXED
+    /// addition on top of the bar - it is not inflated, it never feeds the rise, and once the own
+    /// bar is reached the bar stops moving even while the minimum is still being earned.
     ///
     /// THE MONEY: the round holds it back (DefersRoundPayout) and the session pays it out when the
     /// round ends, DEFLATED - reaching a bar inflated 1000 -> 3000 pays the original 1000, and
@@ -402,12 +405,13 @@ namespace ProjectBlock.Core
             {
                 return; // reached, or passed: the bar holds still from here on
             }
-            long missing = (long)round.PassBar - round.RoundScore;
+            // The OWN bar - a credit minimum sits on top of it, fixed, and is never inflated.
+            long missing = (long)round.OwnBar - round.RoundScore;
             if (missing <= 0)
             {
                 return;
             }
-            // PassBar and RoundScore are scaled; the threshold the rise lands on is logical.
+            // OwnBar and RoundScore are scaled; the threshold the rise lands on is logical.
             int scale = turn.Session != null ? System.Math.Max(1, turn.Session.Config.Scoring.ScoreScale) : 1;
             long rise = (long)System.Math.Ceiling(missing * MissingPercentPerTurn / 100.0 / scale);
             added = (int)System.Math.Min((long)added + System.Math.Max(1L, rise), MaxThreshold);
