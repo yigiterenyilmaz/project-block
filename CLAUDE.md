@@ -1137,8 +1137,10 @@ dropped that way once each.
   strap's bottom edge), the seams warm SOFTLY (`_SeamHeat`, a gaussian leak brightened by the field,
   never a hairline), stages 4-5 get one short pressure crease per cube (a fold with a warm lip,
   never a crack), and the haze (`_LocalHeatDistortion`, 0.4 / 0.8 px) bends the casing ONLY inside
-  the pockets, away from the frame, slowly. A chamber is a 7 px recessed brass socket with a 10 px
-  halo at 0.13 and a short vein of heat running DOWN into the strap. **Motion is almost nil**: no
+  the pockets, away from the frame, slowly. A chamber is an 8 px recessed brass socket with a 12 px
+  halo at 0.17 and a short vein of heat running DOWN into the strap (all of it raised a notch on
+  2026-09-30 - "a touch stronger, brighter and bigger", with the pockets 0.065 -> 0.27 and red
+  still on top). **Motion is almost nil**: no
   jitter at stages 0-3, a chamber flick now and then, a seam pulse at 2, ember drift inside the
   pockets at 3+, a rare half-strength settle at 4, and at 5 a controlled PRESSURE PULSE every
   2.5-4s (`_Squash` 1.006 x 0.997 in the vertex stage, 150 ms) with a chamber sweep riding it
@@ -1296,10 +1298,20 @@ dropped that way once each.
    the board themselves. Note this is stricter than "a line exploded": a full line of
    indestructible cubes destroys nothing, so it no longer re-triggers a sweep every turn
    once obsidian/gold sit on the board. **A line that would destroy nothing is not an
-   explosion at all** — `ResolveFullLines` drops it, so a solid gold/obsidian row stops
+   explosion at all** — `ResolveFullLines` drops it, so a solid obsidian row stops
    paying `PointsPerLine` and stops flashing every turn for the rest of the round. That is
    the same reasoning applied at the source, and it is what keeps score, animation and the
    sweep pre-condition agreeing on what an explosion is.
+   **GOLD LOCKS ITS LINES** (designer's call, 2026-09-30): a row or column with a gold cube
+   anywhere in it cannot explode at all while that gold stands - not round the gold, not at
+   all (it used to go off round it, which made gold pay every turn for nothing). The line is
+   LOCKED, not killed: force the gold out and it can fill and go off again. One definition,
+   `GameBoard.RowIsGoldLocked` / `ColumnIsGoldLocked`, asked by `ResolveFullLines`,
+   `PredictExplosions` and `RowGapCount` / `ColumnGapCount` (so "Mapus" and "Meydan Okuma" see
+   it too). A gold BLOCK therefore never completes a line, and the preview knows it: it asks
+   `RoundEngine.StampedKinds` - the same per-cube decision `GameBoard.Place` makes, pulled out
+   into `GameBoard.StampedKinds` - rather than guessing every arriving cube is ordinary.
+   Pinned in `Gold_LocksItsRowAndColumn`; the baseline did not move.
 3. **Overtime disabling is central.** A joker sets `DisabledInOvertime` and
    `JokerInventory` skips all of its hooks once `ThresholdPassed`. Never write
    `if (overtime)` inside a joker. Overtime itself follows the continue-cost rule
