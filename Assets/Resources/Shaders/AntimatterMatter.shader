@@ -212,8 +212,9 @@ Shader "ProjectBlock/AntimatterMatter"
                     half sinkEdge = saturate((boxR - (1.0 - _Sink)) / 0.4);
                     rgb = lerp(rgb, half3(0.06, 0.02, 0.12), sinkEdge * saturate(_Sink * 1.4));
                     rgb *= 1.0 + _Sink * 0.5 * saturate(1.0 - boxR * 1.6);
-                    // Reality noticing: a breath of violet on the edge band.
-                    rgb = lerp(rgb, half3(0.62, 0.40, 1.0), smoothstep(0.55, 0.95, boxR) * _Edge);
+                    // Reality noticing: a breath of deep violet on the very edge. A wide pale band
+                    // here turns the whole cube lavender, and the matter has to stay ITSELF.
+                    rgb = lerp(rgb, half3(0.30, 0.12, 0.75), smoothstep(0.8, 1.0, boxR) * _Edge);
                     // The contact line: matter and antimatter touching, along the real outline.
                     rgb = lerp(rgb, _RimColor.rgb, edge * saturate(_Rim));
                     return half4(rgb, a * _Alpha);
@@ -223,30 +224,39 @@ Shader "ProjectBlock/AntimatterMatter"
 
                 if (_Mode < 1.5)
                 {
-                    // GHOST: the same silhouette with its own light.
-                    half t = smoothstep(0.15, 1.0, boxR);
-                    half3 g = lerp(half3(0.07, 0.02, 0.16), half3(0.58, 0.32, 1.0), t);
-                    g = lerp(g, half3(0.95, 0.35, 0.85), smoothstep(0.85, 1.0, boxR) * 0.35);
+                    // GHOST: the same silhouette with its own light - DEEP ultraviolet (these are
+                    // linear values: a pale violet here reads as lavender paint over the matter),
+                    // nearly clear in the middle so the real matter stays warm through it, and
+                    // strongest along the outline, where the offset shows it as a twin.
+                    half t = smoothstep(0.35, 1.0, boxR);
+                    half3 g = lerp(half3(0.015, 0.004, 0.045), half3(0.20, 0.06, 0.62), t);
+                    g = lerp(g, half3(0.55, 0.08, 0.45), smoothstep(0.88, 1.0, boxR) * 0.35);
                     g *= 0.75 + 0.5 * lum;
                     // Cyan and magenta ghosts of its outline, where the split leaves it.
-                    g += half3(0.9, 0.2, 0.8) * saturate(cr.a - c.a) * 0.9;
-                    g += half3(0.25, 0.85, 1.0) * saturate(cb.a - c.a) * 0.9;
-                    g += half3(0.62, 0.45, 1.0) * edge * 0.5;
+                    g += half3(0.6, 0.05, 0.5) * saturate(cr.a - c.a) * 0.9;
+                    g += half3(0.05, 0.5, 0.8) * saturate(cb.a - c.a) * 0.9;
+                    g += half3(0.35, 0.2, 0.9) * edge * 0.5;
                     g *= 1.0 + (grain - 0.5) * _Noise;
                     g *= _Bright;
-                    return half4(g, a * lerp(0.42, 1.0, t) * _Alpha);
+                    return half4(g, a * lerp(0.18, 1.0, t) * _Alpha);
                 }
 
-                // ECHO: the negative of what stood there, pulled a little cold.
+                // ECHO: the negative of what stood there, pulled a little cold - and a trace, not
+                // a tile: thin through the middle, its outline diffracted into a cyan and a
+                // magenta edge and lit, its grain visible. A flat inverted square is the failure.
                 half3 neg = 1.0 - rgb;
                 neg = lerp(neg, half3(0.36, 0.30, 0.78), 0.28);
-                neg += half3(0.55, 0.45, 1.0) * edge * 0.6;
                 neg *= 1.0 + (grain - 0.5) * _Noise;
+                half rimT = smoothstep(0.3, 1.0, boxR);
+                neg += half3(0.55, 0.45, 1.0) * edge;
+                neg += half3(0.6, 0.05, 0.5) * saturate(cr.a - c.a) + half3(0.05, 0.55, 0.8) * saturate(cb.a - c.a);
                 neg *= _Bright;
                 // Eaten from the middle outward, along a ragged front.
                 half d = boxR + (Noise(l * 11.0 + 3.1) - 0.5) * 0.22;
                 half keep = smoothstep(_Dissolve - 0.06, _Dissolve + 0.10, d);
-                return half4(neg, a * keep * _Alpha);
+                // The middle is a speckled haze in its own grain, never an even film.
+                half body = lerp(0.2 + 0.6 * grain, 1.0, rimT);
+                return half4(neg, a * keep * body * _Alpha);
             }
             ENDHLSL
         }

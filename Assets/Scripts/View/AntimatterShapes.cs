@@ -8,8 +8,10 @@
 // diameter one place and a band position another is how rings end up a tenth too big.
 //
 // The rings come in three weights because one band scaled to every radius is either a smear on the
-// board-wide shockwave or a hairline round a single cube: RingThin is the arena's pressure edge,
-// RingLocal a cube's own wave, RingSoft the wide distortion and outer rims.
+// board-wide shockwave or a hairline round a single cube: RingThin is the arena's pressure edge and its
+// outer hairline, RingMid the refractive bands behind it, RingLocal a cube's own wave, RingSoft a
+// core's halo. A WIDE soft band at a board's radius is a violet fog over the arena - the one
+// thing this event must never become - so nothing that size uses RingSoft.
 
 using UnityEngine;
 
@@ -24,6 +26,7 @@ namespace ProjectBlock.View
         private static Sprite glow;
         private static Sprite dot;
         private static Sprite ringThin;
+        private static Sprite ringMid;
         private static Sprite ringLocal;
         private static Sprite ringSoft;
         private static Sprite squareRing;
@@ -64,6 +67,13 @@ namespace ProjectBlock.View
         public static Sprite RingThin
         {
             get { return ringThin != null ? ringThin : ringThin = BakeRing(512, 0.018f); }
+        }
+
+        /// <summary>The refractive bands just inside the shockwave's edge, and the lens's shade: thin
+        /// enough at a board's radius that the wave stays a structure and never becomes a haze.</summary>
+        public static Sprite RingMid
+        {
+            get { return ringMid != null ? ringMid : ringMid = BakeRing(512, 0.035f); }
         }
 
         /// <summary>A cube's own local wave - thick enough to read round one cell.</summary>

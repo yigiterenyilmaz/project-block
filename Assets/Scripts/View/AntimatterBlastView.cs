@@ -165,7 +165,7 @@ namespace ProjectBlock.View
 
             public static float AfterimageStart = 0.66f;
             public static float AfterimageDuration = 0.28f;
-            public static float AfterimageAlpha = 0.36f;
+            public static float AfterimageAlpha = 0.42f;
 
             public static float ParticleBurst = 0.09f;
             public static float SpiralDuration = 0.30f;
@@ -975,7 +975,7 @@ namespace ProjectBlock.View
                 case 1: return 0f;
                 case 2: return k == 0 ? 0f : 145f;
                 case 3: return k == 0 ? 0f : k == 1 ? 128f : -112f;
-                default: return k * (360f / count) + (k % 2 == 0 ? 0f : 12f);
+                default: return k == 0 ? 0f : k == 1 ? 83f : k == 2 ? 197f : 262f;
             }
         }
 
@@ -983,7 +983,10 @@ namespace ProjectBlock.View
         {
             var r = new Ray
             {
-                From = c.At,
+                // Off the cell's exact middle by a hashed nudge, so several rays from one cell are a
+                // discharge rather than a symbol drawn round a point.
+                From = c.At + new Vector2(Hash01(req.Seed, c.T.Cell.X, c.T.Cell.Y, 110 + k) - 0.5f,
+                    Hash01(req.Seed, c.T.Cell.X, c.T.Cell.Y, 120 + k) - 0.5f) * cubeSize * 0.3f,
                 Angle = degrees,
                 Length = cells * cell,
                 Width = corePx / 0.14f * pxL,
@@ -1266,14 +1269,14 @@ namespace ProjectBlock.View
             if (Layers.Lens && q != Quality.Low)
             {
                 lensDark = Rent(AntimatterShapes.Dot, plain, LensDarkOrder, arena);
-                lensShade = Rent(AntimatterShapes.RingSoft, plain, LensShadeOrder, arena);
+                lensShade = Rent(AntimatterShapes.RingMid, plain, LensShadeOrder, arena);
                 lensRim = Rent(AntimatterShapes.RingThin, glow, LensRimOrder, arena);
             }
             if (Layers.Shockwave)
             {
-                shockShade = Rent(AntimatterShapes.RingSoft, plain, ShockShadeOrder, arena);
-                shockBand = Rent(AntimatterShapes.RingSoft, glow, ShockBandOrder, arena);
-                shockOuter = Rent(AntimatterShapes.RingSoft, glow, ShockBandOrder, arena);
+                shockShade = Rent(AntimatterShapes.RingMid, plain, ShockShadeOrder, arena);
+                shockBand = Rent(AntimatterShapes.RingMid, glow, ShockBandOrder, arena);
+                shockOuter = Rent(AntimatterShapes.RingThin, glow, ShockBandOrder, arena);
                 shockEdge = Rent(AntimatterShapes.RingThin, glow, ShockEdgeOrder, arena);
             }
             if (Layers.CentralCore)
@@ -1661,7 +1664,7 @@ namespace ProjectBlock.View
             float radius = cubeSize * Mathf.Lerp(Style.CoreStartRadius, Style.CoreStartRadius * 0.6f, k);
             Place(c.CoreDark, c.At, radius * 2f);
             c.CoreDark.color = new Color(VoidDark.r, VoidDark.g, VoidDark.b, 0.9f * appear);
-            Place(c.CoreHalo, c.At, radius * 5.2f);
+            Place(c.CoreHalo, c.At, radius * 3.2f);
             float glow = Mathf.Lerp(0.15f, Style.CoreBrightness, Mathf.Pow(k, 1.5f)) * appear;
             c.CoreHalo.color = new Color(0.86f, 0.45f, 1f, glow);
         }
@@ -1710,7 +1713,7 @@ namespace ProjectBlock.View
             }
             if (c.Wave != null)
             {
-                float w = Ramp(lt, Style.Peak, 0.24f);
+                float w = Ramp(lt, Style.Peak + 0.02f, 0.24f);
                 bool on = w > 0f && w < 1f;
                 c.Wave.enabled = on;
                 if (on)
@@ -1762,7 +1765,7 @@ namespace ProjectBlock.View
             block.SetFloat(PRim, 0f);
             block.SetFloat(PEdge, 0f);
             block.SetFloat(PChroma, simple ? 0f : 1.2f * pxObj);
-            block.SetFloat(PNoise, simple ? 0f : 0.4f);
+            block.SetFloat(PNoise, simple ? 0f : 0.6f);
             block.SetFloat(PSwim, simple ? 0f : 0.6f * pxObj);
             block.SetFloat(PDissolve, Mathf.Lerp(-0.15f, 1.2f, Smooth(Mathf.Clamp01((e - 0.2f) / 0.8f))));
             block.SetFloat(PPx, pxObj);
@@ -1923,9 +1926,10 @@ namespace ProjectBlock.View
                     float radius = Mathf.Lerp(side * 0.04f, side * Style.LensRadius, EaseOut(l));
                     float fade = Mathf.Pow(1f - l, 1.3f);
                     Place(lensDark, centroid, radius * 1.84f);
-                    lensDark.color = new Color(0.04f, 0.01f, 0.08f, 0.5f * fade);
+                    // Dark only while it is small: an expanding dark disc is a violet fog.
+                    lensDark.color = new Color(0.04f, 0.01f, 0.08f, 0.55f * Mathf.Pow(1f - l, 3f));
                     Place(lensShade, centroid, 2f * radius * 0.9f / AntimatterShapes.RingBand);
-                    lensShade.color = new Color(0.02f, 0f, 0.05f, 0.35f * fade);
+                    lensShade.color = new Color(0.02f, 0f, 0.05f, 0.3f * fade);
                     Place(lensRim, centroid, 2f * radius / AntimatterShapes.RingBand);
                     lensRim.color = new Color(0.8f, 0.72f, 1f, 0.5f * (1f - l));
                 }
@@ -1947,12 +1951,12 @@ namespace ProjectBlock.View
                     // pass), and a faint outer rim.
                     Place(shockEdge, centroid, 2f * radius / AntimatterShapes.RingBand);
                     shockEdge.color = new Color(0.86f, 0.78f, 1f, 0.65f * fade);
-                    Place(shockBand, centroid, 2f * radius * 0.93f / AntimatterShapes.RingBand);
-                    shockBand.color = new Color(0.62f, 0.55f, 0.95f, 0.16f * fade);
-                    Place(shockShade, centroid, 2f * radius * 0.84f / AntimatterShapes.RingBand);
-                    shockShade.color = new Color(0.02f, 0f, 0.06f, 0.26f * fade);
-                    Place(shockOuter, centroid, 2f * radius * 1.07f / AntimatterShapes.RingBand);
-                    shockOuter.color = new Color(0.5f, 0.25f, 0.95f, 0.3f * fade);
+                    Place(shockBand, centroid, 2f * radius * 0.95f / AntimatterShapes.RingBand);
+                    shockBand.color = new Color(0.62f, 0.55f, 0.95f, 0.12f * fade);
+                    Place(shockShade, centroid, 2f * radius * 0.9f / AntimatterShapes.RingBand);
+                    shockShade.color = new Color(0.02f, 0f, 0.06f, 0.22f * fade);
+                    Place(shockOuter, centroid, 2f * radius * 1.05f / AntimatterShapes.RingBand);
+                    shockOuter.color = new Color(0.5f, 0.25f, 0.95f, 0.25f * fade);
                 }
             }
             if (centralCore != null)
