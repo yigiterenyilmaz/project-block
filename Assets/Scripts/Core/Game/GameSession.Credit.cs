@@ -81,6 +81,93 @@ namespace ProjectBlock.Core
         /// so the View matches it by identity. Not saved.</summary>
         public CreditStatement LastCreditStatement { get; private set; }
 
+        // ------------------------------------------------------------------- reporting
+        // What the View reads to draw the loan. Queries over the state above, answered with the
+        // SAME arithmetic the rules use (MinimumPaymentFor / InterestFor are what BeginCreditStage
+        // and SettleCreditAtStageEnd call), so the ledger on screen can never disagree with the
+        // books - the View computes none of it.
+
+        /// <summary>The minimum payment a stage starting with this debt owes (rounded up).</summary>
+        public long MinimumPaymentFor(long debt)
+        {
+            return debt > 0 ? (debt * Config.Market.CreditMinimumPaymentPercent + 99) / 100 : 0;
+        }
+
+        /// <summary>The interest this debt would draw at a stage's end (rounded up).</summary>
+        public long InterestFor(long debt)
+        {
+            return debt > 0 ? (debt * Config.Market.CreditInterestPermille + 999) / 1000 : 0;
+        }
+
+        /// <summary>What the NEXT stage will owe as its minimum, as the debt stands now.</summary>
+        public long NextStageMinimumPayment
+        {
+            get { return MinimumPaymentFor(Debt); }
+        }
+
+        /// <summary>The interest the debt would draw if the stage ended now.</summary>
+        public long NextInterest
+        {
+            get { return InterestFor(Debt); }
+        }
+
+        /// <summary>How much of THIS stage's minimum payment has been paid so far.</summary>
+        public long MinimumPaidThisStage
+        {
+            get
+            {
+                return CurrentRound != null
+                    ? Math.Min(DebtRepaidThisStage, CurrentRound.CreditInstallment)
+                    : 0;
+            }
+        }
+
+        /// <summary>True once this stage has paid its minimum.</summary>
+        public bool MinimumSatisfied
+        {
+            get
+            {
+                return CurrentRound != null && CurrentRound.CreditInstallment > 0
+                    && DebtRepaidThisStage >= CurrentRound.CreditInstallment;
+            }
+        }
+
+        /// <summary>The whole term, in stages.</summary>
+        public int CreditTermStages
+        {
+            get { return Config.Market.CreditTermStages; }
+        }
+
+        /// <summary>The interest rate, in tenths of a percent.</summary>
+        public int CreditInterestPermille
+        {
+            get { return Config.Market.CreditInterestPermille; }
+        }
+
+        /// <summary>How close the term is to running out - the one definition of "safe" through
+        /// "final due" the ledger's tension follows. Safe is the first stage a loan is carried
+        /// into; Warning is two stages left; FinalDue is the last.</summary>
+        public CreditDeadline CreditDeadline
+        {
+            get
+            {
+                if (Debt <= 0)
+                {
+                    return CreditDeadline.None;
+                }
+                int left = CreditTermLeft;
+                if (left <= 1)
+                {
+                    return CreditDeadline.FinalDue;
+                }
+                if (left == 2)
+                {
+                    return CreditDeadline.Warning;
+                }
+                return CreditStagesCarried == 0 ? CreditDeadline.Safe : CreditDeadline.Pressure;
+            }
+        }
+
         /// <summary>Pays a market price: the purse first, the rest borrowed. Only ever called
         /// after CanAfford said yes.</summary>
         private void Spend(long price)
@@ -98,6 +185,43 @@ namespace ProjectBlock.Core
             }
             Debt += price - TotalScore;
             TotalScore = 0;
+        }
+
+        /// <summary>
+        /// THE ANIMATION LAB'S SEAM - only ever called on a scratch session the lab builds for
+        /// itself, never on a real run. Puts <paramref name="extraCards"/> into its deck, borrows
+        /// <paramref name="debt"/> on an empty purse, and forecloses AT ONCE exactly as the end of
+        /// a term does - including writing off what nothing could cover, as any stage but the final
+        /// one would. Returns Core's own statement, so the order, every value and every half price
+        /// the lab shows are the rules' answers rather than a drawing of them.
+        /// </summary>
+        public CreditStatement ForecloseForLab(long debt, IEnumerable<BlockCard> extraCards)
+        {
+            if (extraCards != null)
+            {
+                ownedCards.AddRange(extraCards);
+            }
+            TotalScore = 0;
+            Spend(Math.Max(1L, debt));
+            var statement = new CreditStatement
+            {
+                RoundNumber = RoundNumber,
+                BossStage = InBossStage,
+                DebtAtStart = Debt,
+                InterestPermille = Config.Market.CreditInterestPermille,
+                TermStages = Config.Market.CreditTermStages,
+                CarriedBefore = Config.Market.CreditTermStages - 1,
+                DebtBeforeForeclosure = Debt,
+                DeckCountBeforeForeclosure = ownedCards.Count
+            };
+            Foreclose(statement);
+            if (Debt > 0)
+            {
+                statement.WrittenOff = Debt;
+                Debt = 0;
+            }
+            statement.DebtAfter = Debt;
+            return statement;
         }
 
         /// <summary>TEST SEAM: spends the whole purse and borrows <paramref name="amount"/> on top
@@ -173,7 +297,7 @@ namespace ProjectBlock.Core
                 CreditStagesCarried = 0;
                 return;
             }
-            long installment = (Debt * Config.Market.CreditMinimumPaymentPercent + 99) / 100;
+            long installment = MinimumPaymentFor(Debt);
             CurrentRound.SetCreditInstallment((int)Math.Min(installment, int.MaxValue / 4));
         }
 
@@ -195,7 +319,10 @@ namespace ProjectBlock.Core
                 BossStage = InBossStage,
                 DebtAtStart = DebtAtStageStart,
                 Installment = CurrentRound != null ? CurrentRound.CreditInstallment : 0,
-                Repaid = DebtRepaidThisStage
+                Repaid = DebtRepaidThisStage,
+                InterestPermille = Config.Market.CreditInterestPermille,
+                TermStages = Config.Market.CreditTermStages,
+                CarriedBefore = CreditStagesCarried
             };
             bool lost = false;
             if (Debt <= 0)
@@ -210,12 +337,15 @@ namespace ProjectBlock.Core
             }
             else
             {
-                long interest = (Debt * Config.Market.CreditInterestPermille + 999) / 1000;
+                long interest = InterestFor(Debt);
+                statement.DebtBeforeInterest = Debt;
                 Debt += interest;
                 statement.Interest = interest;
                 CreditStagesCarried++;
                 if (CreditStagesCarried >= Config.Market.CreditTermStages || IsFinalRound)
                 {
+                    statement.DebtBeforeForeclosure = Debt;
+                    statement.DeckCountBeforeForeclosure = ownedCards.Count;
                     Foreclose(statement);
                     if (Debt > 0)
                     {
@@ -357,17 +487,26 @@ namespace ProjectBlock.Core
                 name = item.Card.ToString();
             }
             long credited = Math.Max(1L, item.Value * percent / 100);
+            long debtBefore = Debt;
+            Receive(credited);
+            string defId = item.Joker != null ? item.Joker.DefId
+                : item.Power != null ? item.Power.DefId : null;
             statement.Seized.Add(new SeizedItem
             {
                 Kind = item.Kind,
                 Name = name,
-                DefId = item.Joker != null ? item.Joker.DefId
-                    : item.Power != null ? item.Power.DefId : null,
+                DefId = defId,
                 CardId = item.Card != null ? item.Card.Id : 0,
+                Card = item.Card,
+                JokerInstanceId = item.Joker != null ? item.Joker.InstanceId : 0,
+                PowerInstanceId = item.Power != null ? item.Power.InstanceId : 0,
+                Rarity = defId != null ? RarityTable.For(defId) : Rarity.Common,
                 Value = item.Value,
-                Credited = credited
+                Credited = credited,
+                DebtBefore = debtBefore,
+                DebtAfter = Debt,
+                DeckCountAfter = ownedCards.Count
             });
-            Receive(credited);
             return item.Card != null;
         }
 

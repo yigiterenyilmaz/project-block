@@ -40,11 +40,44 @@ namespace ProjectBlock.Core
         /// <summary>The block's card id, or 0 for a joker/power.</summary>
         public int CardId;
 
+        /// <summary>The block itself, so the View can draw the card that went (it is already out
+        /// of the deck). Null for a joker/power.</summary>
+        public BlockCard Card;
+
+        /// <summary>The instance that went, so the View can find where its panel stood. 0 when
+        /// it was not a joker / not a power.</summary>
+        public int JokerInstanceId;
+        public int PowerInstanceId;
+
+        /// <summary>A joker's or power's rarity - a rare one is seized with more weight.</summary>
+        public Rarity Rarity;
+
         /// <summary>What it would cost on the shelf, in the scaled economy.</summary>
         public long Value;
 
         /// <summary>What the bailiff credited it at against the debt.</summary>
         public long Credited;
+
+        /// <summary>The debt just before this seizure and just after it.</summary>
+        public long DebtBefore;
+        public long DebtAfter;
+
+        /// <summary>How many cards the deck had left once this was taken.</summary>
+        public int DeckCountAfter;
+    }
+
+    /// <summary>How close a loan's term is to running out (GameSession.CreditDeadline).</summary>
+    public enum CreditDeadline
+    {
+        None = 0,
+        /// <summary>The first stage the loan is carried into.</summary>
+        Safe = 1,
+        /// <summary>Carried a while; more than two stages still left.</summary>
+        Pressure = 2,
+        /// <summary>Two stages left.</summary>
+        Warning = 3,
+        /// <summary>The last stage: at its end, the bailiff.</summary>
+        FinalDue = 4
     }
 
     /// <summary>One stage's credit, as it was settled at the stage's end.</summary>
@@ -62,8 +95,20 @@ namespace ProjectBlock.Core
         /// <summary>What the stage's earnings paid off.</summary>
         public long Repaid;
 
-        /// <summary>Interest charged on what was left at the end.</summary>
+        /// <summary>Interest charged on what was left at the end, on what it was charged on, and
+        /// at what rate (tenths of a percent).</summary>
         public long Interest;
+        public long DebtBeforeInterest;
+        public int InterestPermille;
+
+        /// <summary>The term, and how many stages of it had been used before this one.</summary>
+        public int TermStages;
+        public int CarriedBefore;
+
+        /// <summary>A foreclosure's starting point: the debt the bailiff came for, and the deck
+        /// it started taking from.</summary>
+        public long DebtBeforeForeclosure;
+        public int DeckCountBeforeForeclosure;
 
         /// <summary>The debt carried into the market.</summary>
         public long DebtAfter;
