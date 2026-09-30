@@ -9420,6 +9420,9 @@ public static partial class JokerTests
         CreditStatement st4 = session4.LastCreditStatement;
         Check(st4 != null && st4.Repaid == 100L * scale, "the debt was paid exactly the real 100",
             st4 == null ? "no statement" : "" + st4.Repaid);
+        Check(s4 != null && s4.DebtRepaid == 100L * scale && s4.DebtRepaidEarned == 300L * scale,
+            "and the settlement names both: 300 earned, 100 off the debt (what the View shows)",
+            s4 == null ? "none" : s4.DebtRepaidEarned + " -> " + s4.DebtRepaid);
 
         Section("enflasyon / a lost round forfeits what it held");
         var session3 = NewBossSession(6106, 5, 1000, "enflasyon");

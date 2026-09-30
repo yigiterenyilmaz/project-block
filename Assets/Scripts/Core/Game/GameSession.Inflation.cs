@@ -62,6 +62,12 @@ namespace ProjectBlock.Core
         public long OvertimeEarned;
         public long OvertimePaid;
 
+        /// <summary>What the settlement actually took off the DEBT (the minimum and overtime pay it
+        /// first; more than is owed goes on to the purse), and the inflated points that paid it -
+        /// what the View shows leaving the round before the inflation is burned off it.</summary>
+        public long DebtRepaid;
+        public long DebtRepaidEarned;
+
         /// <summary>Everything the round paid out.</summary>
         public long TotalPaid
         {
@@ -123,8 +129,26 @@ namespace ProjectBlock.Core
                 OvertimeEarned = overtime,
                 OvertimePaid = overtimeWorth
             };
+            long debtBefore = Debt;
             GrantCurrency(ownPaid + bandWorth + overtimeWorth);
+            // While in debt only the minimum and overtime pay (the own share goes nowhere), so
+            // what the debt lost is theirs; the inflated points behind it follow in proportion
+            // when the debt was smaller than what they were worth.
+            long repaid = Math.Max(0L, debtBefore - Debt);
+            long net = bandWorth + overtimeWorth;
+            long gross = band + overtime;
+            settlement.DebtRepaid = repaid;
+            settlement.DebtRepaidEarned = repaid >= net ? gross
+                : net > 0 ? (gross * repaid + net - 1) / net : 0;
             LastInflationSettlement = settlement;
+        }
+
+        /// <summary>THE LAB'S SEAM, and the one definition of the deflation: what
+        /// <paramref name="amount"/> points earned against a bar inflated from
+        /// <paramref name="barThen"/> to <paramref name="barNow"/> are really worth.</summary>
+        public static long DeflatedWorth(long amount, long barThen, long barNow)
+        {
+            return Deflate(amount, barThen, barNow);
         }
 
         /// <summary>What <paramref name="amount"/> inflated points are worth at the original bar,
