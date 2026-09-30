@@ -151,8 +151,8 @@ namespace ProjectBlock.View
             }
             if (!round.FeedPet(hit.SlotIndex))
             {
-                messageText.text = Loc.Pick("It does not want that shape.",
-                    "O şekli istemiyor.");
+                messageText.text = Loc.Pick("It does not want that card - only the ones it is showing.",
+                    "O kartı istemiyor - sadece gösterdiği kartları ister.");
                 return;
             }
             sfx.Vanish();
@@ -2584,7 +2584,10 @@ namespace ProjectBlock.View
             SyncMidas(round);
             // "Tamagotchi" lays out what it is still owed, next to the hand it has to come from.
             var pet = round.Boss as TamagotchiBoss;
-            cardLayer.ShowPetDemands(pet != null ? pet.Demands : null);
+            // The CARDS it wants, dressed as what they are made of - it usually wants the valuable
+            // ones, and the player has to see that. A rampage it went on is announced here too.
+            cardLayer.ShowPetDemands(pet != null ? pet.DemandedCards(round) : null);
+            PlayPetRampage(pet);
             RefreshFlames(round.ContinueCount);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);

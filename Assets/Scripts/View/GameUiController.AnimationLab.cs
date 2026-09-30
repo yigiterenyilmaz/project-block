@@ -1161,7 +1161,7 @@ namespace ProjectBlock.View
             AddAnim("pet demands in (Tamagotchi)", "evcil istekleri (Tamagotchi)",
                 delegate { cardLayer.ShowPetDemands(AnimDemandShapes()); });
             AddAnim("pet demands out", "evcil istekleri kalksın",
-                delegate { cardLayer.ShowPetDemands(null); });
+                delegate { cardLayer.ShowPetDemands((IReadOnlyList<BlockShape>)null); });
 
             AddAnimSub("general", "board", "board", "oyun alanı");
             AddAnim("water fall", "su akışı", AnimWaterFall);

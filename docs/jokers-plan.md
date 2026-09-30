@@ -129,7 +129,7 @@ Bu turda eklenenler:
   `LogDestruction` üzerinden — yani her yıkım kaynağı (satır, ateş zinciri, joker, güç, patron)
   otomatik besler.
 - **Beş yeni patron** — Şaşırtmaca (kapalı el + kilit), Matruşka (1-2-4-8 bebek merdiveni),
-  Snake (yılan), İstilacı (işaretli sütun), Tamagotchi (dört şekil talebi).
+  Snake (yılan), İstilacı (işaretli sütun), Tamagotchi (iki kart talebi, yediği kalıcı gider; aç kalırsa çıldırır).
 - **Kütleçekim Merkezi (güç)** — suyun düştüğü yönü dört yandan birine çevirir, o raunt boyunca
   (`GameBoard.WaterFlow`, `RoundEngine.SetWaterFlow`). Yön **tahtada** durur, `RoundRules`'ta değil:
   tahta her raunt yeniden kurulduğu için round-scope böyle bedavaya geliyor. Alandaki su hemen

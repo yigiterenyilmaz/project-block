@@ -461,22 +461,37 @@ namespace ProjectBlock.Core
             return pet.TryFeed(this, handIndex);
         }
 
-        /// <summary>Takes a held card OUT OF THE ROUND (it joins no pile) and tops the hand back
-        /// up. The boss's half of FeedPet: the pet decides whether the card is food, and this is
-        /// what eating it does. The card is untouched in GameSession.OwnedCards, so it is back in
-        /// the deck next round.</summary>
+        /// <summary>
+        /// Takes a held card out of the round AND OUT OF THE RUN - the boss's half of FeedPet: the
+        /// pet decides whether the card is food, and this is what eating it does (designer's call,
+        /// 2026-09-30: what the pet eats is gone for good).
+        ///
+        /// THE HAND IS NOT TOPPED UP. The slot stays empty until the next placement's own refill
+        /// fills it along with the played card's, so every meal costs the player an option on the
+        /// board for the rest of the turn. The one exception is a hand that has nothing playable
+        /// left in it: feeding must never be what declares a dead end the player could not see
+        /// coming, so then the hand is refilled first and only then asked.
+        /// </summary>
         internal void FeedCardToBoss(int handIndex)
         {
             if (handIndex < 0 || handIndex >= Hand.Count)
             {
                 return;
             }
-            Deck.RemoveFromRound(Hand.RemoveAt(handIndex));
-            RefillHand();
-            if (Loss != null)
+            BlockCard eaten = Hand.RemoveAt(handIndex);
+            Deck.RemoveFromRound(eaten);
+            if (session != null)
             {
-                SetStatus(RoundStatus.Lost);
-                return;
+                session.RemoveOwnedCardForGood(eaten);
+            }
+            if (Hand.Count == 0 || !HasAnyPlayableMove())
+            {
+                RefillHand();
+                if (Loss != null)
+                {
+                    SetStatus(RoundStatus.Lost);
+                    return;
+                }
             }
             CheckForNoPlayableMove();
         }

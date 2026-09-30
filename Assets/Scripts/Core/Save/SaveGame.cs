@@ -75,7 +75,10 @@ namespace ProjectBlock.Core
         // 25 (2026-09-30): "Enflasyon" raises the bar by a share of what is still missing rather
         // than by a compounding rate, so the boss saves what it has ADDED (and its new rate) where
         // it used to save the turns it had counted. A 24's boss block goes out of step.
-        public const int FormatVersion = 25;
+        // 26 (2026-09-30): "Tamagotchi" asks for CARDS rather than shapes and goes berserk when it
+        // is left hungry, so the boss saves the card ids it is owed, whether a rampage is pending
+        // and its new knobs. A 25's boss block goes out of step.
+        public const int FormatVersion = 26;
 
         private const string VersionKey = "version";
 

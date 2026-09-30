@@ -56,7 +56,15 @@ dropped that way once each.
      Read the round's bar from `RoundEngine.ScoreThreshold`, never `Config.ScoreThreshold`:
      a boss may ask for less and the two must never disagree.
      The deck taxes are the one exception: taking cards out of `OwnedCards` is their effect,
-     not a rule bend.
+     not a rule bend. "Tamagotchi" joins them (designer's call, 2026-09-30): it asks for two
+     specific CARDS (weighted toward the elemental ones), eats what it is fed FOR GOOD
+     (`GameSession.RemoveOwnedCardForGood`, never below the hand size) and leaves the fed slot
+     empty until the next placement refills it. Left hungry when the deck runs dry it no longer
+     loses the round - it goes BERSERK at that turn's end (after the refill, so it knows the hand
+     and the coming cards) and eats one of: board cells chosen by analysis
+     (`RoundEngine.ChooseCellsToStarve`: the bites that squeeze the held and coming cards
+     hardest, never the last way out; they go dead), a joker or power permanently, or cards off
+     the draw pile on an appetite where one elemental card is worth five plain ones.
   2. **Silencing is central**, like the overtime gate: `RoundEngine.IsSilencedByBoss` is checked
      by `JokerInventory.IsGated` and `PowerInventory`, so nothing is added/removed and no
      permanent effect gets undone and redone. Never test for a boss inside a joker or power.

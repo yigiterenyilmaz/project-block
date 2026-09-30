@@ -458,12 +458,27 @@ namespace ProjectBlock.View
         private static readonly Vector2 PetDemandOrigin = new Vector2(-6.0f, -1.5f);
         private const float PetDemandSpacing = 1.0f;
 
-        /// <summary>
-        /// "Tamagotchi": shows the shapes the pet is still owed, as small face-up cards. They are
-        /// drawn from throwaway BlockCards because a demand is a SHAPE and nothing else - what a
-        /// card is made of never matters to the pet, and showing an element would imply it did.
-        /// </summary>
+        /// <summary>"Tamagotchi" by shape alone - plain throwaway cards (the animation lab).</summary>
         public void ShowPetDemands(IReadOnlyList<BlockShape> shapes)
+        {
+            List<BlockCard> cards = null;
+            if (shapes != null)
+            {
+                cards = new List<BlockCard>();
+                for (int i = 0; i < shapes.Count; i++)
+                {
+                    cards.Add(new BlockCard(-1 - i, shapes[i]));
+                }
+            }
+            ShowPetDemands(cards);
+        }
+
+        /// <summary>
+        /// "Tamagotchi": shows the CARDS the pet is still owed. It asks for specific cards and
+        /// usually the valuable ones, so each is drawn from a throwaway copy that keeps the real
+        /// card's shape AND its elements - what the card is made of is the whole cost of feeding it.
+        /// </summary>
+        public void ShowPetDemands(IReadOnlyList<BlockCard> wanted)
         {
             for (int i = petDemandVisuals.Count - 1; i >= 0; i--)
             {
@@ -473,15 +488,15 @@ namespace ProjectBlock.View
                 }
             }
             petDemandVisuals.Clear();
-            if (shapes == null)
+            if (wanted == null)
             {
                 return;
             }
-            for (int i = 0; i < shapes.Count; i++)
+            for (int i = 0; i < wanted.Count; i++)
             {
                 var pos = new Vector2(PetDemandOrigin.x, PetDemandOrigin.y - i * PetDemandSpacing);
                 CardVisual visual = CardVisual.Create(transform, "PetWants_" + i,
-                    new BlockCard(-1 - i, shapes[i]), true, false, pos, FxOrder);
+                    new BlockCard(-1 - i, wanted[i].Shape, wanted[i].Elements), true, false, pos, FxOrder);
                 visual.transform.localScale = new Vector3(0.55f, 0.55f, 1f);
                 petDemandVisuals.Add(visual);
             }

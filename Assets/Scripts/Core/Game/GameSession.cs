@@ -806,6 +806,28 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
+        /// PERMANENTLY takes ONE chosen card out of the run deck - "Tamagotchi" eating it. Out of
+        /// the round in progress as well (whichever pile or hand it is in), so it cannot come back
+        /// this round either. The same floor as the tax bosses: never below the hand size, so the
+        /// next round can still be dealt. Returns false, changing nothing, when the card is not
+        /// owned or the deck is at the floor.
+        /// </summary>
+        internal bool RemoveOwnedCardForGood(BlockCard card)
+        {
+            if (card == null || ownedCards.Count <= Config.Rules.HandSize || !ownedCards.Remove(card))
+            {
+                return false;
+            }
+            if (CurrentRound != null)
+            {
+                CurrentRound.TaxCardOutOfRound(card);
+            }
+            Jokers.DispatchCardLost(Phase == GamePhase.Round ? CurrentRound : null, card);
+            NoteDeckChanged();
+            return true;
+        }
+
+        /// <summary>
         /// Takes a percentage of the run score away ("Cana geleceğine mala" charging the purse
         /// every time the draw pile dries up). Rounded UP so a small purse is not immune, floored
         /// at what there is - the run score never goes negative, and this never touches the debt:
