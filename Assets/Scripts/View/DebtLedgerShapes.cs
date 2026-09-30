@@ -1,14 +1,22 @@
 // PURPOSE: The baked silhouettes of "Kredi kartı"'s BLACK LEDGER - the debt contract panel, its
-// brass trim, the card-chip motif, the legal stamps (HACİZ, SON VADE, KAPANDI, ASGARİ), the seal
-// dot, the angled band end, the foreclosure ribbon, the appraisal corners, the paper fleck and the
-// screen vignette. Generated once, white, and tinted by whoever draws them, so the palette lives
-// in the views' Style and a shape can never smuggle a colour in.
+// brass trim, the card-chip motif, the legal stamps (HACİZ, SON VADE, KAPANDI), the seal dot, the
+// angled band end, the maturity segment, the bar cap, the foreclosure ribbon, the appraisal
+// corners, the paper fleck, the screen vignette - and the two shapes the DEBT PRESSURE puts round
+// the board: the legal BRACKET and the deepened outer shadow. Generated once, white, and tinted
+// by whoever draws them, so the palette lives in the views' Style and a shape can never smuggle
+// a colour in.
 //
 // The panel is a rounded rectangle whose corners are CLIPPED a hair before they are rounded - a
-// document edge rather than a UI card. A stamp's rim is ROUGHENED by a few low-frequency
-// cosines (never noise): stylized ink on stylized paper, not a photograph of either. Every
-// texture is made at the aspect it is drawn at, so a scale written as (width, height) is the
-// shape's own proportion.
+// document edge rather than a UI card. It is baked PER SIZE (PanelBody / PanelTrim, cached): the
+// ledger has a wide form and a stacked one, and one 4:1 texture stretched over both would carry
+// its corner clip and its trim inset anisotropically. A stamp's rim is ROUGHENED by a few
+// low-frequency cosines (never noise): stylized ink on stylized paper, not a photograph of
+// either. Every texture is made at the aspect it is drawn at, so a scale written as
+// (width, height) is the shape's own proportion.
+//
+// THE BRACKET is a contract's corner mark, not a targeting reticle: two short arms that are
+// heaviest where they meet and thin toward a small turned foot at each end, with the inner
+// corner filled by a chamfer. A plain L of one weight is a viewfinder.
 
 using UnityEngine;
 
@@ -16,8 +24,14 @@ namespace ProjectBlock.View
 {
     public static class DebtLedgerShapes
     {
-        private static Sprite panel;
-        private static Sprite trim;
+        private static readonly System.Collections.Generic.Dictionary<int, Sprite> bodies =
+            new System.Collections.Generic.Dictionary<int, Sprite>();
+        private static readonly System.Collections.Generic.Dictionary<int, Sprite> trims =
+            new System.Collections.Generic.Dictionary<int, Sprite>();
+        private static Sprite bracket;
+        private static Sprite segment;
+        private static Sprite cap;
+        private static Sprite boardShadow;
         private static Sprite chip;
         private static Sprite stamp;
         private static Sprite stampSmall;
@@ -30,45 +44,196 @@ namespace ProjectBlock.View
         private static Sprite soft;
         private static Sprite notch;
 
-        /// <summary>The contract panel's body, 4:1, with a raised central face baked into its
-        /// value (a touch brighter through the middle, darker to the rim).</summary>
-        public static Sprite Panel
+        /// <summary>Texels per unit of the panel's own space. A panel is drawn at up to about one
+        /// world unit per local unit, and a world unit is 108 px at 1080p.</summary>
+        private const float PanelResolution = 120f;
+
+        /// <summary>The corner clip, the rounding and the trim's inset, in the panel's own units -
+        /// the same on every size of panel, which is the whole reason it is baked per size.</summary>
+        private const float PanelClip = 0.075f;
+        private const float PanelRound = 0.035f;
+        public const float TrimInset = 0.05f;
+        private const float TrimHalf = 0.011f;
+
+        /// <summary>The contract panel's body at <paramref name="w"/> x <paramref name="h"/> of
+        /// its own units, with a raised central face baked into its value (a touch brighter
+        /// through the middle, darker to the rim).</summary>
+        public static Sprite PanelBody(float w, float h)
+        {
+            int key = PanelKey(w, h);
+            Sprite sprite;
+            if (!bodies.TryGetValue(key, out sprite) || sprite == null)
+            {
+                float halfW = w * 0.5f;
+                float halfH = h * 0.5f;
+                sprite = BakeBox(w, h, (x, y, d) =>
+                {
+                    float a = Mathf.Clamp01(0.5f - d * PanelResolution);
+                    float v = 0.86f + 0.14f * Mathf.Clamp01(1f - Mathf.Abs(y) / halfH * 1.2f)
+                        * Mathf.Clamp01(1f - Mathf.Abs(x) / halfW * 0.9f);
+                    return new Color(v, v, v, a);
+                });
+                bodies[key] = sprite;
+            }
+            return sprite;
+        }
+
+        /// <summary>The thin brass line just inside the panel's edge, for the same size.</summary>
+        public static Sprite PanelTrim(float w, float h)
+        {
+            int key = PanelKey(w, h);
+            Sprite sprite;
+            if (!trims.TryGetValue(key, out sprite) || sprite == null)
+            {
+                sprite = BakeBox(w, h, (x, y, d) =>
+                {
+                    float inner = Mathf.Abs(d + TrimInset);
+                    float a = Mathf.Clamp01((TrimHalf - inner) * PanelResolution + 0.5f);
+                    return new Color(1f, 1f, 1f, a);
+                });
+                trims[key] = sprite;
+            }
+            return sprite;
+        }
+
+        /// <summary>Sizes are cached to a fortieth of a unit: the stacked form's width follows
+        /// the room it is given, and a texture per float would be a texture per frame.</summary>
+        private static int PanelKey(float w, float h)
+        {
+            return Mathf.RoundToInt(w * 40f) * 1000 + Mathf.RoundToInt(h * 40f);
+        }
+
+        /// <summary>Bakes a panel-shaped texture: <paramref name="shade"/> gets the point in the
+        /// panel's own units and its signed distance to the clipped, rounded outline.</summary>
+        private static Sprite BakeBox(float w, float h, System.Func<float, float, float, Color> shade)
+        {
+            int tw = Mathf.Clamp(Mathf.RoundToInt(w * PanelResolution), 16, 1024);
+            int th = Mathf.Clamp(Mathf.RoundToInt(h * PanelResolution), 16, 1024);
+            var tex = new Texture2D(tw, th, TextureFormat.RGBA32, false);
+            var px = new Color[tw * th];
+            float hx = w * 0.5f;
+            float hy = h * 0.5f;
+            for (int j = 0; j < th; j++)
+            {
+                float y = ((j + 0.5f) / th * 2f - 1f) * hy;
+                for (int i = 0; i < tw; i++)
+                {
+                    float x = ((i + 0.5f) / tw * 2f - 1f) * hx;
+                    float qx = Mathf.Abs(x) - (hx - PanelRound);
+                    float qy = Mathf.Abs(y) - (hy - PanelRound);
+                    float box = Mathf.Sqrt(Mathf.Max(qx, 0f) * Mathf.Max(qx, 0f)
+                        + Mathf.Max(qy, 0f) * Mathf.Max(qy, 0f))
+                        + Mathf.Min(Mathf.Max(qx, qy), 0f) - PanelRound;
+                    // The clip: a 45 degree cut across each corner, taken before the rounding.
+                    float cut = (Mathf.Abs(x) + Mathf.Abs(y) - (hx + hy - PanelClip)) * 0.7071f;
+                    px[j * tw + i] = shade(x, y, Mathf.Max(box, cut));
+                }
+            }
+            tex.SetPixels(px);
+            tex.Apply(false);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.hideFlags = HideFlags.HideAndDontSave;
+            // One unit of the panel is one unit of the sprite, so it is placed at (w, h) as is.
+            return Sprite.Create(tex, new Rect(0, 0, tw, th), new Vector2(0.5f, 0.5f), tw / w);
+        }
+
+        /// <summary>THE LEGAL BRACKET, drawn for a TOP-LEFT corner (the view turns it): two arms
+        /// that are heaviest at the corner and thin toward a small foot turned inward at each
+        /// end, the inner corner chamfered. Matte - no highlight is baked in.</summary>
+        public static Sprite Bracket
         {
             get
             {
-                if (panel == null)
+                if (bracket == null)
                 {
-                    panel = Bake(256, 64, (x, y) =>
+                    bracket = Bake(64, 64, (x, y) =>
                     {
-                        // d is in quarter-height units (see ClippedBox): one texel is 1/128.
-                        float d = ClippedBox(x, y, 4f, 0.2f, 0.09f);
-                        float a = Mathf.Clamp01(0.5f - d * 128f);
-                        float v = 0.86f + 0.14f * Mathf.Clamp01(1f - Mathf.Abs(y) * 1.2f)
-                            * Mathf.Clamp01(1f - Mathf.Abs(x) * 0.9f);
-                        return new Color(v, v, v, a);
+                        float u = x * 0.5f + 0.5f;
+                        float v = 1f - (y * 0.5f + 0.5f);
+                        float d = Mathf.Max(BracketArm(u, v), BracketArm(v, u));
+                        // the chamfer that fills the inner corner
+                        d = Mathf.Max(d, Mathf.Min(0.33f - (u + v), Mathf.Min(u, v) + 0.001f));
+                        return new Color(1f, 1f, 1f, Mathf.Clamp01(d * 64f + 0.5f));
                     });
                 }
-                return panel;
+                return bracket;
             }
         }
 
-        /// <summary>The thin brass line just inside the panel's edge.</summary>
-        public static Sprite Trim
+        /// <summary>One arm of the bracket, as a depth inside it (positive is inside).</summary>
+        private static float BracketArm(float along, float across)
+        {
+            const float end = 0.94f;
+            float thick = Mathf.Lerp(0.135f, 0.075f, Mathf.Clamp01(along / end));
+            float body = Mathf.Min(Mathf.Min(thick - across, end - along),
+                Mathf.Min(along, across) + 0.001f);
+            float foot = Mathf.Min(Mathf.Min(along - (end - 0.08f), end - along),
+                Mathf.Min(0.2f - across, across + 0.001f));
+            return Mathf.Max(body, foot);
+        }
+
+        /// <summary>One segment of the maturity track: a small embossed plate, lit from above.
+        /// 4:1.</summary>
+        public static Sprite Segment
         {
             get
             {
-                if (trim == null)
+                if (segment == null)
                 {
-                    trim = Bake(256, 64, (x, y) =>
+                    segment = Bake(64, 16, (x, y) =>
                     {
-                        // One line, a little over a texel wide, 0.06 inside the edge.
-                        float d = ClippedBox(x, y, 4f, 0.2f, 0.09f);
-                        float inner = Mathf.Abs(d + 0.06f);
-                        float a = Mathf.Clamp01((0.009f - inner) * 128f + 0.5f);
-                        return new Color(1f, 1f, 1f, a);
+                        float d = RoundBox(x * 4f, y, 3.9f, 0.86f, 0.3f);
+                        float a = Mathf.Clamp01(0.5f - d * 8f);
+                        float v = 0.74f + 0.26f * Mathf.Clamp01(y * 0.9f + 0.45f);
+                        return new Color(v, v, v, a);
                     });
                 }
-                return trim;
+                return segment;
+            }
+        }
+
+        /// <summary>The small cap on the end of a ledger bar - a machined stop, never an orb.
+        /// 1:3, brighter on its upper half.</summary>
+        public static Sprite Cap
+        {
+            get
+            {
+                if (cap == null)
+                {
+                    cap = Bake(12, 36, (x, y) =>
+                    {
+                        float d = RoundBox(x, y * 3f, 0.8f, 2.8f, 0.5f);
+                        float a = Mathf.Clamp01(0.5f - d * 6f);
+                        float v = 0.8f + 0.2f * Mathf.Clamp01(y + 0.4f);
+                        return new Color(v, v, v, a);
+                    });
+                }
+                return cap;
+            }
+        }
+
+        /// <summary>Half of the texture the solid box of <see cref="BoardShadow"/> takes; the
+        /// rest is the falloff. Whoever draws it scales by this.</summary>
+        public const float BoardShadowBox = 0.7f;
+
+        /// <summary>A soft rounded box: solid inside, falling to nothing over the margin. Drawn
+        /// UNDER the board's plate, so only the falloff ever shows - the board's own outer
+        /// shadow, a little deeper.</summary>
+        public static Sprite BoardShadow
+        {
+            get
+            {
+                if (boardShadow == null)
+                {
+                    boardShadow = Bake(128, 128, (x, y) =>
+                    {
+                        float d = RoundBox(x, y, BoardShadowBox, BoardShadowBox, 0.06f);
+                        float k = Mathf.Clamp01(1f - d / (1f - BoardShadowBox));
+                        return new Color(1f, 1f, 1f, d <= 0f ? 1f : k * k);
+                    });
+                }
+                return boardShadow;
             }
         }
 

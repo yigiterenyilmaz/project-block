@@ -2805,6 +2805,8 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            scoreHudNumber = string.Empty;
+            scoreHudRound = string.Empty;
             if (session == null)
             {
                 totalText.text = string.Empty;
@@ -2817,23 +2819,53 @@ namespace ProjectBlock.View
                 totalText.text = string.Empty;
                 return;
             }
-            var sb = new StringBuilder();
             // The BALANCE, not the purse: in debt ("Kredi kartı") it reads negative, which is
-            // exactly how the player is meant to think of it.
-            sb.Append(Loc.Pick("TOTAL ", "TOPLAM ")).Append(session.Balance);
+            // exactly how the player is meant to think of it - and at a stage's start it is
+            // DRAGGED there by the carried debt rather than printed there (CreditShownBalance).
+            long balance = CreditShownBalance();
             RoundEngine round = session.CurrentRound;
+            long roundScore = round != null ? round.RoundScore : 0;
+            long passBar = round != null ? round.PassBar : 0;
+            if (creditLabHud.HasValue)
+            {
+                // the credit lab's scenes print their own books on the real line
+                balance = creditLabHud.Value.Balance;
+                roundScore = creditLabHud.Value.RoundScore;
+                passBar = creditLabHud.Value.PassBar;
+            }
+            // The parts are kept as well as the line: the debt pressure measures where the
+            // TOTAL's number and the round's target sit on screen (ScoreHeaderRects).
+            scoreHudLead = Loc.Pick("TOTAL ", "TOPLAM ");
+            scoreHudNumber = balance.ToString();
+            var sb = new StringBuilder();
+            sb.Append(scoreHudLead).Append(scoreHudNumber);
             if (round != null)
             {
                 // RoundEngine.PassBar, never Config's threshold: a boss may ask for less
                 // ("Alacakaranlık" cutting the bar to 60%, "Taş ve sopa" by a quarter), a loan's
                 // minimum payment asks for more, and the number the player is chasing must be
                 // the one the rules will check.
-                sb.Append(Loc.Pick("        round ", "        raunt "))
-                    .Append(round.RoundScore).Append(" / ")
-                    .Append(round.PassBar);
+                scoreHudRound = Loc.Pick("round ", "raunt ") + roundScore + " / " + passBar;
+                sb.Append("        ").Append(scoreHudRound);
             }
             totalText.text = sb.ToString();
         }
+
+        /// <summary>The score line's parts, as last printed (see ScoreHeaderRects).</summary>
+        private string scoreHudLead = string.Empty;
+        private string scoreHudNumber = string.Empty;
+        private string scoreHudRound = string.Empty;
+
+        /// <summary>The credit lab's books for the score line, while one of its scenes shows a
+        /// round of its own. Null is the real session.</summary>
+        private struct LabScoreLine
+        {
+            public long Balance;
+            public long RoundScore;
+            public long PassBar;
+        }
+
+        private LabScoreLine? creditLabHud;
 
         /// <summary>The HUD while the market is open. The round dump does NOT belong here: it
         /// describes a round that has already finished (turn counter, board size, the erosion

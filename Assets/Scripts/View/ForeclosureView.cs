@@ -1074,18 +1074,9 @@ namespace ProjectBlock.View
             vignette.color = DebtLedgerView.WithAlpha(Color.black, Mathf.Clamp01(Style.VignetteAlpha * vignetteK + vignettePunch));
         }
 
-        /// <summary>The final-due atmosphere: a whisper of vignette and dim while the last stage
-        /// of a term is being played. 0 turns it off. Only while no foreclosure is running.</summary>
-        public void SetFinalDueAtmosphere(float k)
-        {
-            if (Playing)
-            {
-                return;
-            }
-            // +3-6% vignette, a few percent of dim - "something is closing in", nothing more.
-            dimK = 0.12f * k;
-            vignetteK = 0.1f * k;
-        }
+        // The final-due atmosphere that used to live here (a few percent of dim over the WHOLE
+        // screen, board included) is DebtPressurePresentationController's now: it presses the
+        // edges and the board's surroundings, and never dims a cell.
 
         // =================================================================== debug
 

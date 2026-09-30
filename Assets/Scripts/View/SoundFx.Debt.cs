@@ -6,6 +6,13 @@
 //   DebtPaid    settling up: a short rising three-note pluck over a soft felt thunk - relief.
 //   Foreclose   the run lost to an open debt: a heavy stamp (thump + crunchy transient), then a
 //               slow falling minor figure.
+// The DEBT PRESSURE pass (2026-09-30) adds the small, dry sounds of a contract closing in - none
+// of them musical, none of them a clock:
+//   DebtTick     a stage of the term spent: one dry tick, a hard little resonance and a knock.
+//   DebtThud     SON VADE stamped on the ledger: a small dry thud with paper in it.
+//   DebtClick    the minimum paid: a two-part mechanical click, no chime.
+//   DebtRelease  a payment letting the pressure go: a soft exhale of filtered air.
+//   DebtCreak    the final stage's only bed: a low, distant, dry paper creak, now and then.
 
 using UnityEngine;
 
@@ -16,6 +23,41 @@ namespace ProjectBlock.View
         private AudioClip debtBuyClip;
         private AudioClip debtPaidClip;
         private AudioClip forecloseClip;
+        private AudioClip debtTickClip;
+        private AudioClip debtThudClip;
+        private AudioClip debtClickClip;
+        private AudioClip debtReleaseClip;
+        private AudioClip debtCreakClip;
+
+        public void DebtTick()
+        {
+            if (debtTickClip == null) debtTickClip = BuildDebtTick();
+            PlayWithPitch(debtTickClip, 0.98f, 1.02f, 0.6f);
+        }
+
+        public void DebtThud()
+        {
+            if (debtThudClip == null) debtThudClip = BuildDebtThud();
+            PlayWithPitch(debtThudClip, 1f, 1f, 0.75f);
+        }
+
+        public void DebtClick()
+        {
+            if (debtClickClip == null) debtClickClip = BuildDebtClick();
+            PlayWithPitch(debtClickClip, 1f, 1f, 0.5f);
+        }
+
+        public void DebtRelease()
+        {
+            if (debtReleaseClip == null) debtReleaseClip = BuildDebtRelease();
+            PlayWithPitch(debtReleaseClip, 1f, 1f, 0.35f);
+        }
+
+        public void DebtCreak()
+        {
+            if (debtCreakClip == null) debtCreakClip = BuildDebtCreak();
+            PlayWithPitch(debtCreakClip, 0.9f, 1.05f, 0.22f);
+        }
 
         public void DebtBuy()
         {
@@ -62,6 +104,75 @@ namespace ProjectBlock.View
             HighPass(b, 120f);
             Room(b, 0.22f, 0.8f);
             return PFinish("debtPaid", b, 0.8f);
+        }
+
+        private static AudioClip BuildDebtTick()
+        {
+            var rng = new System.Random(32011);
+            float[] b = Buffer(0.14f);
+            ResonantClick(b, 0f, 2900f, 2650f, 28f, 0.5f, 0.0015f, rng);   // the tick
+            PNoise(b, 0f, 0.006f, 0.35f, 0.0002f, 0.0015f, 3000f, 9000f, rng);
+            PSine(b, 0.001f, 0.04f, 190f, 140f, 0.01f, 0.25f, 0.0005f, 0.012f); // a knock under it
+            HighPass(b, 90f);
+            Room(b, 0.05f, 0.35f);
+            return PFinish("debtTick", b, 0.7f);
+        }
+
+        private static AudioClip BuildDebtThud()
+        {
+            var rng = new System.Random(32012);
+            float[] b = Buffer(0.4f);
+            Thump(b, 0f, 0.9f, 125f, 62f, 0.05f);
+            PNoise(b, 0f, 0.035f, 0.4f, 0.001f, 0.012f, 300f, 2500f, rng);     // the stamp's body
+            PNoise(b, 0.002f, 0.05f, 0.22f, 0.0005f, 0.018f, 1500f, 6000f, rng); // paper under it
+            Saturate(b, 1.2f);
+            HighPass(b, 50f);
+            Room(b, 0.08f, 0.45f);
+            return PFinish("debtThud", b, 0.8f);
+        }
+
+        private static AudioClip BuildDebtClick()
+        {
+            var rng = new System.Random(32013);
+            float[] b = Buffer(0.16f);
+            ResonantClick(b, 0f, 2250f, 2050f, 20f, 0.5f, 0.001f, rng);
+            ResonantClick(b, 0.034f, 1600f, 1500f, 16f, 0.42f, 0.001f, rng);
+            PNoise(b, 0.034f, 0.005f, 0.2f, 0.0002f, 0.0012f, 2500f, 8000f, rng);
+            HighPass(b, 150f);
+            Room(b, 0.05f, 0.3f);
+            return PFinish("debtClick", b, 0.7f);
+        }
+
+        private static AudioClip BuildDebtRelease()
+        {
+            var rng = new System.Random(32014);
+            float[] b = Buffer(0.6f);
+            // an exhale: filtered air whose brightness falls away as it goes
+            PNoiseSweep(b, 0f, 0.5f, 0.35f, 0.06f, 0.18f, 200f, 2400f, 600f, rng);
+            PSine(b, 0f, 0.4f, 220f, 160f, 0.2f, 0.08f, 0.05f, 0.15f);
+            HighPass(b, 80f);
+            Room(b, 0.15f, 0.6f);
+            return PFinish("debtRelease", b, 0.6f);
+        }
+
+        private static AudioClip BuildDebtCreak()
+        {
+            var rng = new System.Random(32015);
+            float[] b = Buffer(0.6f);
+            // a handful of dry grains at irregular spacing - paper under strain, far away
+            float t = 0.01f;
+            for (int i = 0; i < 9; i++)
+            {
+                float lo = 380f + 500f * (float)rng.NextDouble();
+                PNoise(b, t, 0.012f, 0.22f + 0.2f * (float)rng.NextDouble(), 0.0008f, 0.004f,
+                    lo, lo * 2.6f, rng);
+                t += 0.018f + 0.04f * (float)rng.NextDouble();
+            }
+            ResonantClick(b, 0.02f, 310f, 270f, 8f, 0.18f, 0.002f, rng, 0.2f);
+            LowPass(b, 2600f);
+            HighPass(b, 120f);
+            Room(b, 0.25f, 0.7f);
+            return PFinish("debtCreak", b, 0.55f);
         }
 
         private static AudioClip BuildForeclose()

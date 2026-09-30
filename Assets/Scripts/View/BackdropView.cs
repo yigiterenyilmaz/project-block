@@ -64,6 +64,13 @@
 // COST. Four sprites, built once. Resize only writes transforms, and only when the aspect or
 // the orthographic size actually changed. Nothing allocates after startup, nothing runs
 // per-frame.
+//
+// THE DESATURATION SEAM (SetDesaturation, "Kredi kartı"'s debt pressure). A fifth layer between
+// the ground and the pool: the ground's own gradient baked in GREY, each texel the linear
+// LUMINANCE of the colour under it, laid over the ground at the requested share. Blended in
+// linear space that is exactly lerp(colour, its own grey, k) - the ground loses k of its
+// saturation and none of its brightness. No shader and no grab pass; it can only desaturate
+// the backdrop's own ground, which is the point - the board and the blocks are never touched.
 
 using UnityEngine;
 
@@ -147,6 +154,7 @@ namespace ProjectBlock.View
 
         // Sorting: all far below the board background (0), in the order they composite.
         private const int GroundOrder = -220;
+        private const int GreyOrder = -219;
         private const int PoolOrder = -216;
         private const int DitherOrder = -212;
         private const int VignetteOrder = -205;
@@ -164,6 +172,7 @@ namespace ProjectBlock.View
         private Camera cam;
         private Transform root;
         private SpriteRenderer ground;
+        private SpriteRenderer grey;
         private SpriteRenderer pool;
         private SpriteRenderer dither;
         private SpriteRenderer vignette;
@@ -192,6 +201,8 @@ namespace ProjectBlock.View
             }
 
             ground = MakeLayer("Ground", GroundTexture(), GroundOrder);
+            grey = MakeLayer("GroundGrey", GroundGreyTexture(), GreyOrder);
+            grey.color = new Color(1f, 1f, 1f, 0f);
 
             pool = MakeLayer("Pool", PoolTexture(), PoolOrder);
             pool.color = new Color(Style.PoolTint.r, Style.PoolTint.g, Style.PoolTint.b,
@@ -217,6 +228,16 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>Takes <paramref name="share"/> (0..1) of the ground's saturation away, keeping
+        /// its brightness. 0 is the backdrop as designed. See the note at the top.</summary>
+        public void SetDesaturation(float share)
+        {
+            if (grey != null)
+            {
+                grey.color = new Color(1f, 1f, 1f, Mathf.Clamp01(share));
+            }
+        }
+
         private void LateUpdate()
         {
             if (root == null || cam == null || !root.gameObject.activeSelf)
@@ -239,6 +260,7 @@ namespace ProjectBlock.View
             float coverH = halfH * 2f * Cover;
 
             Fit(ground, coverW, coverH);
+            Fit(grey, coverW, coverH);
             Fit(vignette, coverW, coverH);
 
             // The pool is NOT stretched to the screen: it is sized from its own radii, in
@@ -309,6 +331,29 @@ namespace ProjectBlock.View
                 // Eased rather than linear: a straight ramp bands visibly on a dark surface.
                 t = t * t * (3f - 2f * t);
                 px[y] = Color.Lerp(bottom, top, t);
+            }
+            tex.SetPixels(px);
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>The ground's gradient in GREY: every texel the linear luminance of the ground
+        /// texel it lies over, written back as sRGB. Laid over the ground at alpha k, the blend in
+        /// linear space is lerp(colour, luminance, k) - saturation down by k, brightness kept.</summary>
+        private static Texture2D GroundGreyTexture()
+        {
+            const int h = 256;
+            Texture2D tex = NewTexture(1, h, FilterMode.Bilinear, TextureWrapMode.Clamp);
+            Color top = Scale(Style.Ground, 1f + Style.GradientStrength);
+            Color bottom = Scale(Style.Ground, 1f - Style.GradientStrength);
+            var px = new Color[h];
+            for (int y = 0; y < h; y++)
+            {
+                float t = y / (float)(h - 1);
+                t = t * t * (3f - 2f * t);
+                Color c = Color.Lerp(bottom, top, t).linear;
+                float l = Mathf.LinearToGammaSpace(0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b);
+                px[y] = new Color(l, l, l, 1f);
             }
             tex.SetPixels(px);
             tex.Apply();

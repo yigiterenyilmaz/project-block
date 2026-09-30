@@ -162,13 +162,17 @@ namespace ProjectBlock.View
             float ignitionClaim = ignition != null ? ignition.ScoreClaim : 0f;
             // "Barut tedarikçisi"'s powder landing: 1.00 -> 1.085 -> 0.985 -> 1, warm amber.
             float powderClaim = magazine != null ? magazine.ScoreClaim : 0f;
+            // "Kredi kartı"'s carried debt landing: 1.00 -> 0.97 -> 1, through a muted
+            // cream-burgundy - the debt pulling the TOTAL down, never a celebration.
+            float debtClaim = debtPressure != null ? debtPressure.ScoreClaim : 0f;
             float claim = Mathf.Max(Mathf.Max(Mathf.Max(hazineClaim, ignitionClaim),
-                Mathf.Max(challengeClaim, quarryClaim)), powderClaim);
+                Mathf.Max(challengeClaim, quarryClaim)), Mathf.Max(powderClaim, debtClaim));
             if (claim > warm && claim > 0.001f)
             {
                 float hs;
                 Color ink;
-                if (claim == hazineClaim) { hs = hazine.ScoreScale; ink = hazine.ScoreInk; }
+                if (claim == debtClaim) { hs = debtPressure.ScoreScale; ink = debtPressure.ScoreInk; }
+                else if (claim == hazineClaim) { hs = hazine.ScoreScale; ink = hazine.ScoreInk; }
                 else if (claim == challengeClaim) { hs = challenge.ScoreScale; ink = challenge.ScoreInk; }
                 else if (claim == quarryClaim) { hs = quarry.ScoreScale; ink = quarry.ScoreInk; }
                 else if (claim == powderClaim) { hs = magazine.ScoreScale; ink = magazine.ScoreInk; }
