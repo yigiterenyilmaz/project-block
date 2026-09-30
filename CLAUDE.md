@@ -1281,7 +1281,12 @@ dropped that way once each.
   earned in it do; so the minimum is then only partly paid in money, which no rule reads), and
   overtime (600 -> 200) - ONE rate for all three, since the bar stops rising once the own bar is
   reached, all rounded down and granted through `GrantCurrency`. A lost round forfeits what it held.
-  `LastInflationSettlement` (reporting, not saved) is what the market's message line reads.
+  `LastInflationSettlement` (reporting, not saved) is what the market's message line reads, and
+  what the ledger TELLS: when the payout paid a debt (`DebtRepaid`, with the inflated points
+  behind it in `DebtRepaidEarned`), `PresentStatement` plays it as `PlayInflatedPayment` - the chip
+  leaves carrying what was earned ("-300 BORÇ"), stops halfway, an ENFLASYON tag lights, the lost
+  value peels off as a scorched slip and falls, the number counts down to the real worth while
+  the chip shrinks and dulls, and only "-100 BORÇ" goes on to come off the debt (lab W / X).
   Save format 25 (the boss saves what it ADDED, not the turns it counted).
 - **A TURN IS NEVER WORTH LESS THAN NOTHING.** Negative score is real ("Terslik" inverting every
   joker, "Besleme" billing you for a starving creature) but it may only eat what the turn earned.
