@@ -1532,6 +1532,39 @@ the View what a stage settled; `GameUiController.Credit.cs` plays it once by ide
 joker cannot be sold while it owes (`JokerInventory.CanSell`), which is what stops the debt being
 walked away from - the bailiff takes it like anything else. Save format 24.
 
+**The loan is told on screen as a BLACK LEDGER and a HACİZ** (`DebtLedgerView`, `ForeclosureView`,
+`DebtLedgerShapes`, `GameUiController.Credit.cs` / `.CreditLab.cs`). While a loan is open a compact
+contract strip stands beside the board (in the gap before the joker column; under the market panel
+in the market; over the board on a phone - never on the grid): near-black charcoal with a burgundy
+undertone, one brass trim, a stylized card-chip, and four facts in a strict hierarchy - the DEBT
+(hero), the MINIMUM, the TERM, the RATE (smallest). Under them a sunken LEDGER BAND whose brass
+notch marks where this stage's minimum ends (the part of the fill beyond it warms from burgundy to
+amber as it is paid), and a MATURITY TRACK of embossed tabs, one per stage of the term. A small
+"+500" chip rides the end of the score line, because the round's bar grew by the minimum. **The
+direction of the motion is the message**: a payment's digits slide DOWN and a cream chip is
+absorbed as the band retracts (landings inside 150 ms are one chip), interest's slide UP behind
+red ink creeping in from the right and a 1.008 scaleX - never a shake; opening is a contract laid
+down with a burgundy seal, settling drains the band into a warm KAPANDI and sends the bank's bonus
+to the TOTAL as a token. **Tension is Core's** (`GameSession.CreditDeadline`: Safe / Pressure /
+Warning / FinalDue): the last stages creep ink up the rim, breathe a slow trim pulse, put a
+foreclosure seal on the border, beat the debt at 1.025 and dim the screen a few percent. **HACİZ is
+a full event**: the screen dims and vignettes over ~0.2 s, the overlay-canvas bars step back
+(`SetPresentationAlpha`, or they would cover the proxies), a huge turned legal stamp is driven
+down 1.8 -> 0.92 -> 1.04 -> 1, then shrinks into a vertical FORECLOSURE LEDGER with a BANK DRAWER
+at its foot, and every seized thing goes ONE AT A TIME in Core's order - target lock, appraisal
+(the shelf value slashed, the seizure value stamped), a ribbon, a lift, a curve into the drawer
+where it is swallowed BEHIND the lip (a SpriteMask, never a fade), a clack, and its value back up
+to the debt. Three at full weight, then faster; plain blocks go as SCRAP COLLECTION with the deck
+count thinning; if the debt reaches zero the file closes there. **The View decides nothing**: the
+panel's numbers are the session's queries (`MinimumPaymentFor`, `InterestFor`,
+`NextStageMinimumPayment`, `MinimumPaidThisStage`, `CreditTermStages`...), the events are Core's
+own counters moving (`DebtRepaidThisStage`, `Debt`, a new round engine) and the `CreditStatement`
+object by identity, and each `SeizedItem` carries its card, its instance id, its debt before and
+after and the deck count after - the proxies leave from where the panels STOOD (their positions
+are remembered every frame, because Core has taken them by the time this plays). The lab section
+"kredi / borç / haciz" has 47 scenes and 16 switches; its foreclosures are RUN BY CORE on a scratch
+session of its own (`GameSession.ForecloseForLab`), so their order and values are the rules'.
+
 **The block shelf has a RUN-LONG cap: half the starting deck.** `GameSession.CardPurchaseLimit`
 is `Config.Deck.Size / 2`, and `TryBuyOffer` / `TrySmuggleOffer` refuse a block past it — in Core,
 so no UI route can slip by. What it counts is `PurchasedCardCount`, walked over `OwnedCards`
