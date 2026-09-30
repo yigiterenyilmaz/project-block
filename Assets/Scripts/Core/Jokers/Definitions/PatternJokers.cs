@@ -417,6 +417,7 @@ namespace ProjectBlock.Core
     /// THE RULE IS THE ENGINE'S, THE PRICE IS THIS JOKER'S. BlockCard.AntimatterOf makes the card
     /// unplaceable anywhere but a perfect fit (RoundEngine.CanPlaceCard) and the turn resolver does
     /// the annihilating; all this class does is mint the card, let it rot, and pay for the blast.
+    /// What it annihilated and what it paid go to the View as LastAnnihilation (AntimatterVisuals).
     /// </summary>
     public sealed class AntimaddeJoker : Joker
     {
@@ -435,6 +436,11 @@ namespace ProjectBlock.Core
         private int cardId = -1;
         private int turnsHeld;
         private int paidThisRound;
+
+        /// <summary>The last key that landed, for the View: a new object per annihilation, never
+        /// saved. Reporting only - written beside the payment, it changes nothing about it.</summary>
+        [field: NotSaved]
+        public AntimatterVisuals LastAnnihilation { get; private set; }
 
         public AntimaddeJoker()
             : base("antimadde", "Antimadde")
@@ -524,7 +530,12 @@ namespace ProjectBlock.Core
                 return;
             }
             int cubes = report.ExtraExplodedCells.Count;
-            int bonus = cubes * CurrentBonusPerCube;
+            int perCube = CurrentBonusPerCube;
+            int bonus = cubes * perCube;
+            // Written down BEFORE the bookkeeping is reset: the decay stage is what the key had
+            // rotted to when it landed.
+            AntimatterVisuals visuals = DescribeAnnihilation(turn, perCube);
+            LastAnnihilation = visuals;
             cardId = -1;
             turnsHeld = 0;
             if (bonus <= 0)
@@ -532,12 +543,54 @@ namespace ProjectBlock.Core
                 return;
             }
             paidThisRound += bonus;
+            ScoreBreakdown score = turn.Score;
+            int paidBefore = score.FlatBonus + score.LateFlat;
             turn.AddFlatScore(bonus, DefId);
+            // MEASURED, not restated: an inverted round runs this flat backwards, and the view's
+            // "+TOTAL" has to say what the payment really did.
+            visuals.Points = (score.FlatBonus + score.LateFlat - paidBefore) * score.ScoreScale;
             // ONE proc per blast, whatever it took with it: the event is the annihilation, not
             // each cube. This is also the only visible evidence the joker paid at all - the score
             // lands in the turn's total with everything else, so without the flash and the
             // statistics line a player has no way to tell a 1000-point blast from a dud.
             NoteProc(bonus, turn);
+        }
+
+        /// <summary>The View's report of this landing: the cells the joker is billing for (the
+        /// ones the engine emptied), the cube that stood in each, the rot and the per-cube price.
+        /// Reporting only.</summary>
+        private AntimatterVisuals DescribeAnnihilation(TurnContext turn, int perCube)
+        {
+            TurnReport report = turn.Report;
+            int percent = 100 - DecayPercentPerTurn * turnsHeld;
+            var visuals = new AntimatterVisuals
+            {
+                Kind = report.AnnihilatedKind.Value,
+                PointsPerCube = perCube * turn.Score.ScoreScale,
+                TurnsHeld = turnsHeld,
+                RewardPercent = percent < 0 ? 0 : percent
+            };
+            IReadOnlyList<DestroyedCube> log = report.DestroyedCubes;
+            uint seed = 2166136261u;
+            for (int i = 0; i < report.ExtraExplodedCells.Count; i++)
+            {
+                GridPos cell = report.ExtraExplodedCells[i];
+                Cube cube = new Cube(visuals.Kind, -1);
+                for (int d = 0; d < log.Count; d++)
+                {
+                    if (log[d].Pos.Equals(cell) && log[d].Cube.Kind == visuals.Kind)
+                    {
+                        cube = log[d].Cube;
+                        break;
+                    }
+                }
+                visuals.Cells.Add(cell);
+                visuals.Cubes.Add(cube);
+                seed = (seed ^ unchecked((uint)(cell.X * 73856093))) * 16777619u;
+                seed = (seed ^ unchecked((uint)(cell.Y * 19349663))) * 16777619u;
+            }
+            visuals.Seed = seed;
+            return visuals;
         }
 
         /// <summary>One more turn of rot, and the card is taken off the table when it is spent.

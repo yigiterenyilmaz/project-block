@@ -9102,6 +9102,27 @@ public static partial class JokerTests
             "got " + paid + ", wanted " + (4 * perCube));
         Check(paid > 0, "the payout is not zero", "" + paid);
         Check(joker.ProcCount == 1, "one proc recorded", "" + joker.ProcCount);
+
+        // The View's report: the cells billed, the cube in each, and the payment MEASURED at the
+        // score's scale - never a number the view could work out on its own.
+        AntimatterVisuals seen = joker.LastAnnihilation;
+        Check(seen != null && seen.Kind == CubeKind.Fire && seen.Count == 4,
+            "the view is told what went and how many",
+            seen == null ? "null" : seen.Kind + " x" + seen.Count);
+        // Kind only: these cubes were set straight onto the board, past the engine's snapshot, so
+        // the destruction log cannot name the card that put them there - a real placement can.
+        bool cubesMatch = seen != null && seen.Cubes.Count == 4;
+        for (int i = 0; cubesMatch && i < seen.Cubes.Count; i++)
+        {
+            cubesMatch = seen.Cubes[i].Kind == CubeKind.Fire;
+        }
+        Check(cubesMatch, "with a cube of that kind for every cell");
+        int scale = report.Score.ScoreScale;
+        Check(seen != null && seen.Points == paid * scale && seen.PointsPerCube == perCube * scale,
+            "and the payment as it was really made, at the score's scale",
+            seen == null ? "null" : seen.Points + " / " + seen.PointsPerCube);
+        Check(seen != null && seen.TurnsHeld == 0 && seen.RewardPercent == 100,
+            "a fresh key reports no rot", seen == null ? "null" : seen.TurnsHeld + " / " + seen.RewardPercent);
     }
 
     private static void Eforsuz_PaysOnAPowerFreeRound()
