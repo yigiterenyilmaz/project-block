@@ -1548,7 +1548,10 @@ namespace ProjectBlock.View
             block.SetFloat(PTwist, c.F.Twist * (0.25f * charge + 0.75f * implode));
             block.SetFloat(PDesat, 0.08f * noticed - 0.6f * intensify);
             block.SetFloat(PBright, 1f - 0.07f * noticed + c.F.Flare * 0.3f * intensify);
-            block.SetColor(PMatter, c.T.Matter);
+            // The colour it goes MORE itself toward is the element's light, not its material swatch:
+            // water's swatch is a flat blue and obsidian's nearly black, and those would intensify
+            // into royal blue and a pale lilac instead of aqua and deep violet.
+            block.SetColor(PMatter, c.F.Light);
             block.SetFloat(PIntensify, intensify);
             block.SetFloat(PSink, sink);
             block.SetFloat(PRim, contact);

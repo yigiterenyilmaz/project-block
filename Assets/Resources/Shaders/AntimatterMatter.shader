@@ -162,11 +162,13 @@ Shader "ProjectBlock/AntimatterMatter"
 
                 // THE PULL: sample further out, harder toward the rim, so the face is drawn into
                 // its own middle and the silhouette gives way from the edge. A little twist on
-                // top for a liquid (water pulls in like something draining).
+                // top for a liquid (water pulls in like something draining) - a VORTEX, strongest
+                // in the middle and nothing at the rim: turning the rim turns the whole square,
+                // and a cube that spins is not a liquid draining.
                 float r = length(l);
                 float2 dir = r > 1e-4 ? l / r : float2(0.0, 0.0);
                 float2 s = l + dir * (_Pull * (0.35 + 1.6 * r));
-                float tw = _Twist * saturate(r * 2.0);
+                float tw = _Twist * pow(saturate(1.0 - r * 2.0), 1.5);
                 float cs = cos(tw);
                 float sn = sin(tw);
                 s = float2(s.x * cs - s.y * sn, s.x * sn + s.y * cs);
