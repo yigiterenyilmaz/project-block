@@ -689,7 +689,42 @@ namespace ProjectBlock.View
                 }
                 return voidMaterial;
             }
+            if (tile == Tile("block_dynamite"))
+            {
+                // THE CHARGE PACK: a refined casing and a graphite strap, and - through a property
+                // block "Barut tedarikçisi" writes - the powder it has taken (DynamiteCasing.shader,
+                // PowderMagazineView). Null without the shader, and the tile draws plain.
+                return DynamiteMaterial;
+            }
             return null;
+        }
+
+        private static Material dynamiteMaterial;
+
+        private static bool dynamiteLooked;
+
+        /// <summary>The ONE shared dynamite casing material; per-cube charge rides in a property
+        /// block. Null when the shader cannot be had.</summary>
+        public static Material DynamiteMaterial
+        {
+            get
+            {
+                if (!dynamiteLooked)
+                {
+                    dynamiteLooked = true;
+                    Shader shader = Shader.Find("ProjectBlock/DynamiteCasing");
+                    if (shader == null)
+                    {
+                        shader = Resources.Load<Shader>("Shaders/DynamiteCasing");
+                    }
+                    if (shader != null && shader.isSupported)
+                    {
+                        dynamiteMaterial = new Material(shader);
+                        dynamiteMaterial.hideFlags = HideFlags.HideAndDontSave;
+                    }
+                }
+                return dynamiteMaterial;
+            }
         }
 
         /// <summary>
