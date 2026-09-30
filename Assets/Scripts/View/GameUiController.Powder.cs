@@ -1,5 +1,4 @@
-// PURPOSE: "Barut tedarikçisi" wired up - the one place PowderMagazineView is reached from (and the
-// lab's legacy PowderChargeView, kept only for its before/after scene).
+// PURPOSE: "Barut tedarikçisi" wired up - the one place PowderMagazineView is reached from.
 //
 // TWO MOMENTS, the pickaxe's way:
 //   THE REPAINT   (SyncPowder) - the turn's charges are restated as one magazine per block, and a
@@ -24,9 +23,6 @@ namespace ProjectBlock.View
 {
     partial class GameUiController
     {
-        /// <summary>The lab's before/after only - the game draws the magazine.</summary>
-        private PowderChargeView powder;
-
         private PowderMagazineView magazine;
 
         /// <summary>The last reports actually played, matched BY IDENTITY - never by a serial. A
@@ -180,27 +176,6 @@ namespace ProjectBlock.View
                     sfx.Explode(fullness >= 0.99f ? 3 : fullness >= 0.6f ? 2 : 1, 0);
                     break;
             }
-        }
-
-        /// <summary>The legacy view, for the lab's before/after scene only.</summary>
-        private void EnsurePowder()
-        {
-            if (powder != null)
-            {
-                return;
-            }
-            var go = new GameObject("PowderChargeLegacy");
-            go.transform.SetParent(boardView.transform, false);
-            powder = go.AddComponent<PowderChargeView>();
-            powder.Build(boardView);
-            powder.BlastPeaked = delegate
-            {
-                if (sfx != null)
-                {
-                    sfx.Explode(2, 0);
-                    sfx.Fuse(1f);
-                }
-            };
         }
     }
 }

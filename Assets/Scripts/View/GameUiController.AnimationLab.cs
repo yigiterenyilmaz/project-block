@@ -958,10 +958,6 @@ namespace ProjectBlock.View
             jokerBar.SetHoldProgress(-1, 0f);
             powerBar.SetHoldProgress(-1, 0f);
             jokerBar.SetAttentionForLab(0, false);
-            if (powder != null)
-            {
-                powder.Clear();
-            }
             if (confetti != null)
             {
                 confetti.Clear();
