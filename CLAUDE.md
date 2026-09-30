@@ -1265,9 +1265,12 @@ dropped that way once each.
   while `TurnReport.Score.Total` is what the turn EARNED; they differ only on the crossing turn.
 - **"Enflasyon" HOLDS a round's money and pays it DEFLATED** (designer's call, 2026-09-30;
   `EnflasyonBoss`, `GameSession.Inflation.cs`). The bar rises every turn by 5% of what is still
-  MISSING to it (against `PassBar`, rounded up) - 2000 with 1000 scored becomes 2050 - so it runs
-  hardest from a player far behind and stops the moment it is reached; it never moves in
-  overtime. The boss answers `DefersRoundPayout`, and while it does NOTHING the meter banks
+  MISSING to it (rounded up) - 2000 with 1000 scored becomes 2050 - so it runs hardest from a
+  player far behind and stops the moment it is reached; it never moves in overtime. **Only the
+  round's OWN bar inflates**: "missing" is measured against `OwnBar`, never `PassBar`, so a "Kredi
+  kartı" minimum is a FIXED addition on top - not inflated, never feeding the rise, and once the
+  own bar is reached the bar holds still while the minimum is still being earned
+  (`Enflasyon_NeverInflatesACreditMinimum`). The boss answers `DefersRoundPayout`, and while it does NOTHING the meter banks
   reaches the purse or a debt: `BankRoundScore` holds it (booked as taken by an effect, so the
   books balance mid-round), and every claw-back that follows the meter (`ChargeScore`,
   `HalveRoundScore`, both caps, the final-round replay) leaves the purse alone - the METER is the
