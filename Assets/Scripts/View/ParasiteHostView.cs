@@ -1161,13 +1161,18 @@ namespace ProjectBlock.View
                 && Vector2.Dot(new Vector2(Mathf.Cos(a), Mathf.Sin(a)), spot.normalized) > -0.2f)
             {
                 a += Mathf.PI;
-                r += 0.04f;
             }
             float radius = Mathf.Lerp(Style.WindowRadiusMin, Style.WindowRadiusMax,
                 Random01(cell, 440 + index));
             // NEVER A MATCHED PAIR: one is a tear the film has pulled open, the other a nick. Two
             // holes the same size on one face read as a pair of lights however torn their edges.
             radius *= index == 0 ? 1f : Style.WindowSecondScale;
+            // And far enough out that the whole hole clears the icon, at the largest size an icon
+            // can be drawn - otherwise its far edge still opens under the imprint.
+            float iconHalf = (ImprintStyle.IconScale + ImprintStyle.IconScaleRange) * 0.5f;
+            Vector2 dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+            float clear = iconHalf + Vector2.Dot(spot, dir) + radius * 0.8f;
+            r = Mathf.Min(Mathf.Max(r, clear), 0.4f);
             return new Vector4(0.5f + Mathf.Cos(a) * r, 0.5f + Mathf.Sin(a) * r, 0f, radius);
         }
 

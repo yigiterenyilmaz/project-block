@@ -9,7 +9,7 @@
 // into its living tissue:
 //
 //   THE ICON      the joker's own art (never a generic symbol, never redrawn in code), fitted by its
-//                 real silhouette (ParasiteIconProfile) to about a third of the cube and set a
+//                 real silhouette (ParasiteIconProfile) to about half the cube and set a
 //                 little off centre in the film. Its colour is partly drained and pulled toward the
 //                 membrane's hue - Midas is still gold and Yangın still warm, but both have been
 //                 taken - and a thin film lies over it with one or two bites out of its edges
@@ -74,10 +74,12 @@ namespace ProjectBlock.View
             // ---- the icon ----
             /// <summary>The icon's visible silhouette, as a share of the cube's width
             /// (parasiteIconScale). A busy icon gets up to IconScaleRange more, a simple one up to
-            /// that much less - 0.28..0.40 of the cube at the defaults.</summary>
-            public static float IconScale = 0.34f;
+            /// that much less - 0.42..0.52 of the cube at the defaults. The design's first number
+            /// was 0.34, and on the board at a cell's real size that left the joker too small to
+            /// tell apart; it was raised on sight (2026-09-30).</summary>
+            public static float IconScale = 0.47f;
 
-            public static float IconScaleRange = 0.06f;
+            public static float IconScaleRange = 0.05f;
 
             /// <summary>Where it sits, in the cube's normalised space (0..1). Off centre, where the
             /// nest has stepped aside for it; one point per host, chosen inside this box.</summary>
@@ -136,7 +138,8 @@ namespace ProjectBlock.View
             /// side of the icon.</summary>
             public static float NestScaleWithIcon = 0.78f;
 
-            public static float NestAway = 0.25f;
+            /// <summary>Far enough that the nest still clears the (larger) icon.</summary>
+            public static float NestAway = 0.3f;
 
             // ---- the fibers ----
             public static int FiberCountMin = 5;

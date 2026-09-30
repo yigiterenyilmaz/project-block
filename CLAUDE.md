@@ -1087,7 +1087,8 @@ dropped that way once each.
   The passenger's icon used to be stuck on the host — a pod the nest grew round it on the board, a
   dark disc on the mini cube in the hand, a well in the attach panel — and every one of them read as
   a badge. Now the joker's REAL icon (never a generic symbol, never redrawn) is pressed INTO the
-  film: fitted by its real silhouette to about a third of the cube and set a little off centre (the
+  film: fitted by its real silhouette to about half the cube (0.34 was too small to tell jokers
+  apart at a cell's real size) and set a little off centre (the
   nest draws in and steps to the far side), colour partly drained and pulled toward the membrane's
   hue so Midas is still gold and Yangın still warm but both have been TAKEN, a thin veil of film over
   it, one of four deterministic bites out of its edges, its inner edge sunk two pixels, and a darker
