@@ -1752,35 +1752,45 @@ Runic, Eclipse, Cosmic, Inferno, Cage, Creature, Decree. A boss missing from the
 in real boss stages" plays the chosen pair whenever a boss round appears (watched per frame,
 not called from the round flow). Once one is picked, delete the losers rather than tuning them.
 
-**THE BACKGROUND IS A DARK PLAYROOM, NOT A WALLPAPER** (2026-09-30; `GameBackgroundPresentationController`,
+**THE BACKGROUND IS A LIVING GAME SURFACE, NOT A WALLPAPER** (2026-09-30; `GameBackgroundPresentationController`,
 `GameBackgroundBake`, `GameUiController.Background.cs`). The old backdrop (`BackdropView`, kept untouched
-as the LEGACY look and the lab's comparison) was a smooth blue-grey gradient under a white pool - it read
-as car paint, and as a dark board laid on a wallpaper. The new one is a deep PETROL-TEAL ground with a
-teal lift behind the board, cooler navy to the top right, warmer teal low on the left, a plum undertone
-nobody should name in a far corner, a breath of honey by the board's lower left and behind the deck (so
-the cream cards and the gold score belong to its palette), two broad S-curve streams, and matte pigment
-texture (a cloud a quarter of the screen across, a ~46 px mottle, a static 1-3 px grain). **The base is
-BAKED in PERCEPTUAL colour and drawn OPAQUE** - the linear-colour trap BackdropView documents made every
-translucent tone land somewhere else - and only what moves or answers a mood is a sprite blended in
-linear space, with its alpha converted (`LinearAlpha` for dark overlays, `LiftAlpha` for lighter ones;
-one alpha is not the same move for both). Round the board: a soft teal AURA (separation, never a glow)
-and an environment STAGE shadow heavier underneath; a dark GROUNDING zone behind the hand and contacts
-under both piles - never panels. Everything sits BELOW the boss atmospheres, so a boss look replaces it
-exactly as it replaced the old one; only the vignette (very dark petrol, centred between the board and
-the screen's middle) is where the old one was. **It reads no gameplay**: `SetStage` (the board's
-VISIBLE rect, the hand, the piles - never a hard-coded centre), `SetSafeRects` (where a mote may not be
-born) and `SetMood(owner, multipliers)` - the debt pressure sends "debt" (colour and warmth out, a hair
-darker). Motion is the last 5-10%: two masses drift ~16 px on smooth noise over 12-20 s (never a sine),
-the aura breathes 1 -> 1.08 -> 0.98 -> 1 over 6-9 s, and 6-12 motes (pale teal, a few muted gold)
-wander at 4-15 px/s, 85% of the time refused over the board and always refused over the UI. LOD
-High / Medium / Low; no shader, no RenderTexture, no blur, and a bake of about a tenth of a second on a
-resize only. Tuned against a render of the whole screen with a board, blocks and cream cards in it
-(`bg_new.png` / `bg_old.png` in the session scratchpad). The lab's "background / main game scene"
-section has the SIDE BY SIDE (legacy left, new right, split by a `SpriteMask`), 35 scenes (each layer
-alone and taken away, static / animated, the three qualities, 16:9 / 16:10 / 4:3 previews with bars,
-21:9 by its middle, a 720-line window, colour / water / fire / gold / obsidian / dense / empty boards
-of its own, cards alone, and debt pressure, overtime and a boss look over it), the nine layer switches
-and the five global knobs.
+as the LEGACY look) was a smooth blue-grey gradient under a white pool - car paint, and a dark board laid
+on a wallpaper. Its replacement went through TWO passes the same day, and the second is the lesson. The
+first got the COLOUR right (deep petrol-teal) and the DEPTH wrong: in the game it read as ONE flat teal
+wall - left and right negative spaces the same tone, a texture nobody could see, no warmth, the board a
+dark rectangle floating on it. **The corrective pass keeps the colour and adds STRUCTURE, measured**
+against the ground beside the board on a render of the whole screen (`c_c.png` in the session
+scratchpad): the left space ~0.72 of it and colder navy-teal, the right ~0.78 and navy with a breath of
+plum (upper right, 0.015-0.035 - felt, never named), the far corners ~0.61-0.67, the card zone ~1.2 and
+warmer, a soft lift behind the board (an ellipse 1.2-1.5x its bounds, desaturated, never a white glow).
+Every number is a PRESET (`GameBackgroundLook.Corrective()` - the game's; `FirstPass()` survives only for
+the lab's A/B), not a scatter of statics. **The base is BAKED in PERCEPTUAL colour and drawn OPAQUE** (the
+linear-colour trap BackdropView documents); only what moves or answers a mood is a sprite, and each
+sprite's alpha is SOLVED for linear blending - `LinearAlpha` is exact only for a black overlay, so a navy
+mass over the petrol uses the luminance solve (`LiftAlpha`) or it lands darker than the tone it was tuned
+to. The layers, bottom up: the baked field (lift, ORGANIC edge depth - deeper left, a darker bottom-left
+pocket, never a round mask - the warmer lower zone, two broad S-curve streams, a ~65 px mid pigment, the
+score line's fade); its grey twin (the saturation multiplier); the LARGE PIGMENT CLOUD (~225 px) as its own
+layer so it can drift a few pixels; the two side masses (drifting 10-25 px over ~18 s with +-2.5% scale and
++-6% opacity, on smooth noise, never a sine); the plum; honey by the board's lower corners, in the card
+band and behind both piles (0.02-0.04 - warmth felt, not seen); the board's AURA (just past the stage,
++-6% over 7-11 s), its ENVIRONMENT stage shadow (60-110 px wider, soft, heavier below) and a separate
+tight CONTACT shadow a hair below the plate - an object shadow and an environment shadow are two things;
+the card GROUNDING band and deck contacts; a static grain at one texel per pixel; 6-10 motes (70% pale
+teal, 20% grey-aqua, 10% muted gold, 5-12 s, drifting 10-30 px in their whole life, never over the board
+or the UI); and an asymmetric vignette, deeper left and right than top and bottom. Everything sits BELOW
+the boss atmospheres (orders -239..-228; the vignette at -205, where the old one was). **It reads no
+gameplay**: `SetStage` (the board's VISIBLE rect, the hand, the piles), `SetSafeRects` (where a mote may
+not be born) and `SetMood(owner, multipliers)` - Brightness, Saturation, Warmth, TealStrength,
+PlumStrength, Vignette, MoteStrength, MotionStrength; the debt pressure sends "debt". LOD High / Medium /
+Low; no shader, no RenderTexture, no blur; a bake of about a tenth of a second on a resize only. The
+lab's "background / corrective pass" section has the SIDE-BY-SIDE (A: the first pass, drawn by a second,
+lab-owned instance outside the split mask - B: the corrective one, over the SAME board and cards), the
+39 scenes (the surface built up one mass at a time on bare petrol, the material alone, the board's and
+the cards' seats piece by piece, static / motion / motes, each piece taken away, high / low motion,
+full / empty / gold / water / fire / obsidian / green / pink-purple boards of its own, and debt, overtime
+and a boss look over it), the legacy split, qualities and aspect previews as extras, sixteen layer
+switches and the eight multipliers.
 
 **F9 opens the SOUND LAB** (`GameUiController.SoundLab.cs`, on a second `AnimationLabView` - the F3
 panel, with its own title and remembered place via `PrefsKey`), built for comparing FAST: every
