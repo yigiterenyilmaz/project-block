@@ -2924,6 +2924,38 @@ namespace ProjectBlock.View
                     ? messageText.text + "\n" + statementLine
                     : statementLine;
             }
+            // "Enflasyon": what the round earned on its inflated meter, and what that was worth.
+            string inflationLine = InflationStatementLine(session.LastInflationSettlement);
+            if (inflationLine.Length > 0)
+            {
+                messageText.text = messageText.text.Length > 0
+                    ? messageText.text + "\n" + inflationLine
+                    : inflationLine;
+            }
+        }
+
+        /// <summary>The market's line for an "Enflasyon" round that just paid out: the bar it
+        /// started at and ended at, what the meter earned, and what reached the wallet. Empty
+        /// unless the settlement is for the stage this market follows. Every number is Core's
+        /// (GameSession.LastInflationSettlement); nothing is deflated here.</summary>
+        private string InflationStatementLine(InflationSettlement s)
+        {
+            if (s == null || session == null || session.Phase != GamePhase.Market
+                || s.RoundNumber != session.RoundNumber || s.BossStage != session.InBossStage)
+            {
+                return string.Empty;
+            }
+            string line = Loc.Pick(
+                "INFLATION: bar " + s.OwnBarThen + " -> " + s.OwnBarNow + "  ·  round earned "
+                    + s.Meter + ", paid " + s.TotalPaid,
+                "ENFLASYON: eşik " + s.OwnBarThen + " -> " + s.OwnBarNow + "  ·  raunt " + s.Meter
+                    + " puan topladı, cüzdana " + s.TotalPaid);
+            if (s.OvertimeEarned > 0)
+            {
+                line += Loc.Pick("  (overtime " + s.OvertimeEarned + " -> " + s.OvertimePaid + ")",
+                    "  (uzatma " + s.OvertimeEarned + " -> " + s.OvertimePaid + ")");
+            }
+            return line;
         }
 
         private void UpdateHud()
