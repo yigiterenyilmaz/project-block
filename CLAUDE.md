@@ -1571,6 +1571,68 @@ are remembered every frame, because Core has taken them by the time this plays).
 "kredi / borç / haciz" has 47 scenes and 16 switches; its foreclosures are RUN BY CORE on a scratch
 session of its own (`GameSession.ForecloseForLab`), so their order and values are the rules'.
 
+**AND THE WHOLE SCREEN IS IN DEBT, NOT ONE PANEL** (corrective pass 2026-09-30; `DebtPressurePresentationController`,
+`DebtLedgerView`, `GameUiController.Credit.cs`). The first ledger was a 230 x 70 px strip with ASGARİ /
+VADE / FAİZ stacked in 8 px type, and nothing else on screen knew about the loan - the player read
+"there is a debt widget", never "I am playing this round in debt". Three levels now, connected:
+INFORMATION (the ledger), PRESSURE (the screen) and CONSEQUENCE (final due, then HACİZ). **The ledger
+has room**: its zones are BORÇ (hero, bold, fitted to its zone, a burgundy band with a brass cap),
+ASGARİ (the value, the real "312 / 648", a small brass track - never an HP bar; paid, it clicks full,
+no green tick), VADE (a big number and its unit) and FAİZ, with a full-width MATURITY track of
+embossed segments. **VADE says AŞAMA, not "tur"**: the term counts STAGES and "tur" on this HUD is
+a turn - "3 TUR" would be exactly the fake countdown the design forbids. It has TWO FORMS, chosen by
+`SolveLedgerPlacement` (the one place, and the lab asks it about screens that are not in front of it):
+WIDE (3.6 x 1.06, three zones side by side) for the market strip, a phone and any window whose gap
+beside the board holds it; STACKED (debt + term over minimum + rate) for the 16:9 desktop, where the
+gap between the board and the joker column is 264 px - the brief's 300-380 px strip does not fit
+there, measured. Narrower still (16:10) the term drops a row so the debt keeps its whole row;
+squeezed beside the term it lost a third of its size. Its top sits 0.13 under the board's top and its
+left edge just clear of the corner bracket. Zone widths were MEASURED in Fredoka (advances off the
+TTF), not guessed. LEGACY is the first pass's strip, drawn by the same view for the lab's before/after.
+**PRESSURE IS ONE PRESENTATION NUMBER** (`Pressure01`, never a rule): Core's `CreditDeadline` sets a
+ceiling (SAFE 0.15, PRESSURE 0.42, WARNING 0.68, FINAL 1), the share of the loan still owed moves it
+within that (`Target`: a quarter left sits near 60% of the ceiling, interest can push past), and a
+paid minimum eases it a tenth - so paying BREATHES and interest brings the weight back, and a paid
+loan in its last stage is not frightening for the term alone. "The share still owed" is measured
+against what the loan opened at (`creditLoanBase`, presentation memory; a load starts it at the debt
+as it stands). It drives, all OUTSIDE the grid: a burgundy-charcoal VIGNETTE at order -8 (over the
+backdrop and any boss atmosphere, under the board plate; shaped from the screen's edges times a
+clear zone round the arena), the backdrop's DESATURATION (`BackdropView.SetDesaturation`: a grey
+twin of the ground laid over it at k, which in linear space is exactly lerp(colour, its luminance,
+k)), a deeper board OUTER SHADOW from WARNING, four matte LEGAL BRACKETS outside the board's corners
+(faint at PRESSURE, 2 px in at WARNING, 5 at FINAL; heaviest at the corner, a turned foot at each end
+- a one-weight L is a viewfinder), a burgundy UNDERLINE under the TOTAL's number (the same colour as
+the ledger's head tab, which is how the two say they are one system), and under "raunt 0 / 1548" a
+SPLIT bar - the round's own share in the score's cream, the burden in burgundy behind a brass seam,
+filled by the round's progress - with a legible "900 + [648 BORÇ]" beside the line. The burden is
+Core's (`RoundEngine.OwnBar`, reporting only, `PassBar == OwnBar + CreditInstallment`).
+**THE BRIEF'S OPACITIES ARE PERCEPTUAL** (SAFE <= 0.03 ... FINAL 0.11-0.15): blended in linear colour
+0.13 of a near-black is a 6% drop nobody sees (the Tılsım trap), so each is converted,
+`a_lin = 1 - (1 - a)^2.2`. Relief and pain are transients ON the steady state (`Breath`: in over a
+fifth, out over the rest - never a step): a payment lets the vignette go 10-20% past its new level
+and the brackets out 1-2 px; the minimum takes 0.015-0.025 more and the burden plate answers
+"secured"; interest adds 0.02-0.04 and pulls the brackets in a pixel. **Events**: a stage that starts
+in debt does not open at minus - the TOTAL shows the purse, the ledger sends a dark-red slip, and the
+number rolls down when it lands (`CreditShownBalance`, a 1 -> 0.97 -> 1 dip through
+`TickScoreResponse`, which stays the score line's one writer); a spent stage is a TICK (the segment
+brass -> burgundy -> charcoal, a dry tick, the panel sits a pixel, the digit rolls) told after the
+interest in the statement's order; the last stage steps the panel forward under a SON VADE stamp
+(1.35 -> 0.94 -> 1, three degrees, a dry thud) after the carry, never over it; and a term run out
+closes the contract first (`PlayContractLock`: the last segment expires, 100 ms of nothing, the
+digits sit down) - then HACİZ, which therefore arrives as a payoff rather than a popup. While a
+statement is being told the screen KEEPS its weight (Core has already moved the term on); the
+pressure follows when the tick is told. Idle is per named state and never a blink: SAFE a sheen
+every 6-10 s, PRESSURE a shimmer on the band's end, WARNING the term swelling 1.04 every 4-6 s and ink
+walking up the trim ONCE at the transition, FINAL a 1.025 beat on the debt every 2.2-3.2 s, a rare
+pixel of inward squeeze and a distant dry paper creak every 5-8 s (`SoundFx.DebtCreak` - no clock).
+The old final-due dim over the WHOLE screen (`ForeclosureView.SetFinalDueAtmosphere`) is gone: it dimmed
+the cells. The lab's corrective scenes are A-V plus the brief's MAIN ACCEPTANCE TEST (the ledger
+hidden, debt-free and dangerous alternating), each whole screen fed through the same seam the game
+uses (`FeedPressure`) with its books on the real score line (`creditLabHud`), plus ten debug readouts.
+**Not done**: the haptic tap on the final-due stamp has only its cue (the game has no haptics layer),
+and no `Tools/UiLayoutCheck` script was added - this machine has no Python; the layout was checked
+with a Node script over the font's own advances instead.
+
 **The block shelf has a RUN-LONG cap: half the starting deck.** `GameSession.CardPurchaseLimit`
 is `Config.Deck.Size / 2`, and `TryBuyOffer` / `TrySmuggleOffer` refuse a block past it — in Core,
 so no UI route can slip by. What it counts is `PurchasedCardCount`, walked over `OwnedCards`
