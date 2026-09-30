@@ -107,7 +107,7 @@ Markette bir jokeri destendeki bir bloğun küpüne takarsın. O joker slot işg
 Raunt başına 1 kez, harcanmış bir gücü temizlik beklemeden doldurur.
 
 36. *Tutumluluk*
-Destendeki kart sayısı ne kadar az ise her tur o kadar fazla puan kazanırsın.
+Destendeki kart sayısı ne kadar az ise her tur o kadar fazla puan kazanırsın. Elementli bloklar iki kart sayılır.
 
 37. *Genel Temizlik*
 Jokerler ve güçler tarafından tetiklenen temizlikler de gerçek temizlik sayılır - tıpkı blok koyarak tahtayı boşaltmak gibi temizlik bonusunu verir ve güçlerini şarj eder. Normalde blok koymalar arasındaki böyle bir temizlik sayılmaz.

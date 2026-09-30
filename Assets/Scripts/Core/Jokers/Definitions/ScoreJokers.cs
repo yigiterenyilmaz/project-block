@@ -119,6 +119,14 @@ namespace ProjectBlock.Core
     /// down on THE DECK YOU STARTED THE RUN WITH, so what it rewards is thinning: sell a card
     /// and the next turn pays more, buy one and it pays less.
     ///
+    /// AN ELEMENTAL BLOCK WEIGHS TWO (designer's call, 2026-09-30). Every card in the deck that
+    /// carries a block type - fire, water, gold, a two-element weld, a targeted mark, anything in
+    /// BlockCard.Elements - counts as TWO cards in the tally, however many elements it has. So a
+    /// deck thinned by selling plain blocks and then filled back up with elemental ones gives the
+    /// bonus back twice as fast: thinning is the plan, and a deck of special blocks is not thin.
+    /// The reference is still the deck the run was dealt, which is all plain blocks. One
+    /// definition, WeightedDeckSize, read by every sample.
+    ///
     /// Measured against Config.Deck.Size rather than a fixed number (it used to be a flat 20,
     /// against decks of 18 to 26). An absolute reference means the joker is dead on a big deck
     /// and free money on a small one, and it went quietly dead altogether when the archetypes
@@ -178,10 +186,12 @@ namespace ProjectBlock.Core
             SetDescription(
                 "Every card your deck is down on the one you started with raises ALL your score - "
                     + "every source, not just one - and each card is worth more than the last: "
-                    + "+4%, then +5%, then +6%... Up to +114% for twelve cards.",
+                    + "+4%, then +5%, then +6%... Up to +114% for twelve cards. An elemental block "
+                    + "counts as two cards.",
                 "Destendeki kart sayısı, başladığın desteye göre ne kadar azsa TÜM puanın o "
                     + "kadar artar - tek bir kaynak değil, hepsi. Her kart bir öncekinden daha "
-                    + "çok değer: +%4, sonra +%5, sonra +%6... On iki kart için en fazla +%114.");
+                    + "çok değer: +%4, sonra +%5, sonra +%6... On iki kart için en fazla +%114. "
+                    + "Elementli bloklar iki kart sayılır.");
         }
 
         public override string StatusText
@@ -317,7 +327,19 @@ namespace ProjectBlock.Core
             {
                 startingDeckSize = session.Config.Deck.Size;
             }
-            lastDeckSize = session.OwnedCards.Count;
+            lastDeckSize = WeightedDeckSize(session.OwnedCards);
+        }
+
+        /// <summary>How many cards the deck counts as: an elemental block is two, a plain one is
+        /// one. Internal so the rule can be pinned on cards that are not in any deck.</summary>
+        internal static int WeightedDeckSize(System.Collections.Generic.IReadOnlyList<BlockCard> cards)
+        {
+            int size = 0;
+            for (int i = 0; i < cards.Count; i++)
+            {
+                size += cards[i] != null && cards[i].Elements.Count > 0 ? 2 : 1;
+            }
+            return size;
         }
 
         /// <summary>

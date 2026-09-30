@@ -47,6 +47,7 @@ public static partial class JokerTests
         Market_NeverOffersOwnedJokers();
         Market_RefusesJokerWhenSlotsFull();
         Tutumluluk_LiftsTheWholeTurnAsTheDeckThins();
+        Tutumluluk_AnElementalBlockCountsAsTwo();
         Market_BlockPurchasesAreCappedAtHalfTheStartingDeck();
         Market_SellingADeckCardFreesNoBuyingSlot();
         HileliZar_DealsTheOpeningHandOncePerMarket();
@@ -9275,6 +9276,32 @@ public static partial class JokerTests
             + joker.PercentGrowthPerCard * joker.MaxCardsCounted * (joker.MaxCardsCounted - 1) / 2;
         Check(joker.StatusText.Contains("" + capped),
             "a stripped deck pays the cap and no more", joker.StatusText);
+    }
+
+    /// <summary>
+    /// "Tutumluluk" counts an elemental block as TWO cards (designer's call, 2026-09-30): a plain
+    /// block is one, anything carrying a block type is two - one element or two, a targeted mark
+    /// included. A deck refilled with special blocks is not a thin deck.
+    /// </summary>
+    private static void Tutumluluk_AnElementalBlockCountsAsTwo()
+    {
+        Section("tutumluluk / an elemental block weighs two cards");
+        var session = NewSession(9301, 6, 1000000, 20, 1, 2);
+        BlockCard plain = session.CreateCard(Bar(2), null);
+        BlockCard fire = session.CreateCard(Bar(2), new List<BlockElement> { BlockElement.Fire });
+        BlockCard weld = session.CreateCard(Bar(2),
+            new List<BlockElement> { BlockElement.Fire, BlockElement.Water });
+        BlockCard aimed = session.CreateCard(Bar(2), new List<BlockElement> { BlockElement.Targeted });
+        Check(TutumlulukJoker.WeightedDeckSize(new List<BlockCard> { plain }) == 1, "a plain block is one card");
+        Check(TutumlulukJoker.WeightedDeckSize(new List<BlockCard> { fire }) == 2, "an elemental block is two");
+        Check(TutumlulukJoker.WeightedDeckSize(new List<BlockCard> { weld }) == 2,
+            "a two-element weld is still two, not three");
+        Check(TutumlulukJoker.WeightedDeckSize(new List<BlockCard> { aimed }) == 2, "a targeted block is two");
+        int mixed = TutumlulukJoker.WeightedDeckSize(new List<BlockCard> { plain, fire, weld, plain });
+        Check(mixed == 6, "and a deck adds them up", "" + mixed);
+        // The dealt deck is all plain, so the weighted deck the joker starts from is its size.
+        Check(TutumlulukJoker.WeightedDeckSize(session.OwnedCards) == session.OwnedCards.Count,
+            "a starting deck of plain blocks weighs exactly its size");
     }
 
     /// <summary>The multiplier one source contributed, or 1.0 - the multiplier twin of
