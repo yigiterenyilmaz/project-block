@@ -199,6 +199,25 @@ namespace ProjectBlock.View
             return -1;
         }
 
+        /// <summary>
+        /// "Kredi kartı" foreclosure: fades the whole strip. The bar is on the overlay canvas and
+        /// draws over the world, so while the bailiff's proxies fly out of where the panels stood
+        /// the strip has to step back or it covers them. 1 is normal.
+        /// </summary>
+        public void SetPresentationAlpha(float alpha)
+        {
+            if (root == null)
+            {
+                return;
+            }
+            CanvasGroup group = root.GetComponent<CanvasGroup>();
+            if (group == null)
+            {
+                group = root.gameObject.AddComponent<CanvasGroup>();
+            }
+            group.alpha = Mathf.Clamp01(alpha);
+        }
+
         /// <summary>Screen-space center of a panel (for spawning fx near it), or null.</summary>
         public Vector2? PanelScreenCenter(int index)
         {

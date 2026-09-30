@@ -873,13 +873,11 @@ namespace ProjectBlock.View
                     }
                     return;
                 }
-                // "Kredi kartı": bought on credit sounds (and says) like it.
+                // "Kredi kartı": bought on credit sounds like it. What it added to the loan is the
+                // ledger's to tell (it opens the contract or rolls the debt up - see .Credit).
                 if (session.Debt > debtBefore)
                 {
                     sfx.DebtBuy();
-                    FloatingTextFx.Spawn(transform, (offerAt ?? Vector2.zero) + new Vector2(0f, 0.7f),
-                        Loc.Pick("DEBT +", "BORÇ +") + (session.Debt - debtBefore),
-                        new Color(0.95f, 0.35f, 0.3f), 50, 0.07f);
                 }
                 else
                 {

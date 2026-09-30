@@ -687,6 +687,9 @@ namespace ProjectBlock.View
             // Before anything is drawn or read: the window may have been resized, the device may
             // have been turned. Two integer reads on a normal frame (see UiLayout.Refresh).
             WatchScreenShape();
+            // "Kredi kartı": the ledger follows the books every frame - and remembers where the
+            // bars' panels stand BEFORE anything this frame can take them away (see .Credit).
+            TickCreditPresentation();
             SyncPilesForMarket(); // was never called: the piles printed through the market
             // "Midas" warms the score line while its gold is landing on it (see .Midas): one
             // owner for that transform, and it is this one.
@@ -1275,6 +1278,13 @@ namespace ProjectBlock.View
             switch (session.Phase)
             {
                 case GamePhase.Market:
+                    // "Kredi kartı": while the bailiff is at work the shop waits. The rules have
+                    // already resolved the foreclosure; this only keeps the player from shopping
+                    // in the middle of watching their things go (see .Credit).
+                    if (CreditPresentationBlocksInput())
+                    {
+                        break;
+                    }
                     // DIRECT gamepad play steps the shelf rather than pointing at it, and gets
                     // the frame first on the frames it acts (see .PadPlay).
                     if (HandlePadMarket())

@@ -2883,9 +2883,8 @@ namespace ProjectBlock.View
                     PadOr("KAÇAKÇI'ya tıkla, sonra bir ürüne: BEDAVA (defolu çıkabilir)",
                         "KAÇAKÇI'da A, sonra bir ürüne: BEDAVA (defolu çıkabilir)"))
                 : string.Empty;
-            // ...and what the stage just settled: the bank's thanks, the bailiff's list. Played
-            // once per statement, however often the shop is rebuilt.
-            CheckCreditStatement();
+            // ...and what the stage just settled, in words (the ledger and the bailiff tell it on
+            // screen - see .Credit).
             string statementLine = CreditStatementLine(session.LastCreditStatement);
             if (statementLine.Length > 0)
             {
