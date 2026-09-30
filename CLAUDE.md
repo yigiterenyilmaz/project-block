@@ -700,6 +700,50 @@ dropped that way once each.
   sweep over the lab board, then the break), a proxy test, the subtotal mode, 0.5x / 0.25x and nine
   debug views; `Tools/UiLayoutCheck/elmas_kazma.py` holds the lot. See `quarry_mock*.png` in the
   session scratchpad.
+- **"Antimadde" is an ANNIHILATION, never an explosion** (`AntimatterBlastView`, `AntimatterShapes`,
+  `Resources/Shaders/AntimatterMatter` + `AntimatterBeam` + `AntimatterGlow`, `GameUiController.Antimatter.cs`,
+  `SoundFx.Antimatter.cs`). The legendary key's blast used to be a purple charge, a flash and a ring
+  - a power effect. Now matter meets its antimatter and turns into LIGHT, and the motion language is
+  the design: INWARD, INWARD, INWARD, SILENCE, MASSIVE OUTWARD ENERGY, OUTWARD SHOCK, SPIRAL INWARD
+  RESIDUE, about 1.1 s plus the payoff. Per cube, off one clock staggered ±25 ms by a hash (one event,
+  never a domino): reality NOTICES (a few percent dimmer and greyer, a pixel of chromatic split), an
+  ANTIMATTER TWIN separates 2-5 px (the same silhouette in deep ultraviolet, nearly clear in the middle
+  so the real gold stays warm gold through it), broken lavender TENSION FILAMENTS link near targets
+  only (1-2 a cube, 18 at most - never a web), a singularity core compresses its brightness steadily,
+  a ring in the element's own colour closes from the cube's EDGE on its centre, the face is PULLED into
+  its middle (a radial uv pull in the shader - never a scale), the twin comes back and a lavender
+  contact line runs round the cube's real outline, then the silent IMPLOSION (0.95 -> 0.74, the colour
+  briefly more itself toward the element's LIGHT - gold deep gold, water aqua, obsidian deep violet -
+  then sinking into the centre). At the PEAK: a near-white LAVENDER core per cell (never white - the
+  glow and beam shaders cap it), tapered, turbulent, four-layer RAYS from a spatially spread set of
+  HERO cells (farthest-point, 16 at most), a crown and a hot centre at the centroid, a soft light
+  column, a violet edge at the screen's rim, an energy LENS, a thin three-layer SHOCKWAVE that only
+  LIGHTS the rims of the cubes that stay, one pressure IMPULSE of the arena (`SetImpulse`, never the
+  camera), then spectral motes spiralling back and a NEGATIVE ECHO of each cube dissolving from its
+  centre. **Two things are the whole difference between this and "a bigger purple blast", and a CPU mock
+  of the shader math found both**: a pale violet in LINEAR space is lavender paint - the first twin and
+  notice band turned the gold pink - and a WIDE soft band at a board's radius is a violet fog over the
+  arena, which the design forbids outright; the wave and the lens are thin rings (`RingThin`/`RingMid`)
+  and the lens is dark only while it is small. A water VORTEX is strongest in the middle and nothing at
+  the rim: twisting the rim spun the whole square. **The annihilated cells skip the cluster burst**
+  (`WithoutAnnihilated`) - no debris, no smoke - and are raised as proxies on the repaint
+  (`SyncAntimatter`) and played from `PlayExplosionFeedback`. The view lives OUTSIDE the board's
+  transform (`BoardView.Rebuild` destroys the board's children, and the lab rebuilds right before it
+  plays) and copies it every frame. **A sweep the annihilation caused WAITS** (`DeferSweepForAntimatter`,
+  `Style.CleanupDelay`): the sweep's sound, shake, popup and wave play after the shockwave has crossed,
+  and "Elmas Kazma" waits for both. **THE VIEW DECIDES NOTHING**: `AntimaddeJoker.LastAnnihilation`
+  (`AntimatterVisuals`, `[NotSaved]`, a new object per landed key) carries the cells billed, the cube in
+  each, the rot and the per-cube price, and the payment MEASURED off the breakdown - the rot shrinks the
+  number, never the blast. It is matched by identity AND by its cells; a key nobody paid for still
+  blasts, with no number. The payoff is one "+TOTAL" (per-cube shares too for two or three cubes) that
+  gathers into a lavender core and lands on the TOTAL through `TickScoreResponse` (1 -> 1.10 -> 0.98 ->
+  1, lavender-gold). The background dims a few percent through the buildup through its `SetMood`
+  ("antimatter"). Ten sound beats; the implosion's clip ends ~30 ms before the peak on purpose. Quality
+  High / Medium / Low (mobile starts at Medium). The lab section "antimadde - annihilation event" has the
+  brief's 43 scenes (each local and global layer alone, 1-30 targets, four elements, rewards, cleanup
+  sequencing, speeds, qualities) on a board of its own and 16 debug switches. Mocks: `am_*.png` in the
+  session scratchpad. **Not done**: the haptics have beats but no layer to go to, and the grid itself
+  is never bent (no grab pass) - the refraction is drawn as light and dark doublets.
 - **"Hazine" is two DRAWN bursts with code around them, and the code is what makes them true**
   (`HazineRevealView`, `FrameSequenceFx`, `HazineShapes`, `GameUiController.Hazine.cs`). The art is
   two eight-frame sheets at `Resources/Art/Fx/hazine_treasure_sheet` / `hazine_dynamite_sheet`,
