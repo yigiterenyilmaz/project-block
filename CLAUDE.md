@@ -1113,6 +1113,42 @@ dropped that way once each.
   lab section "parazit - konaktaki joker izi" has 31 scenes, the side-by-side acceptance (old sticker
   vs imprint), a replay that keeps the switches, and 14 switches (`ImprintLayers`); its 0.5x/0.25x
   attach slows only the lab's own riders, never the market's bind.
+- **"Barut tedarikçisi" is a POWDER MAGAZINE, not a glow** (`PowderMagazineView`,
+  `Resources/Shaders/DynamiteCasing`, `GameUiController.Powder.cs`). The charge used to be an orange
+  glow, a fuse spark and a heat rim laid over EACH cube (the legacy `PowderChargeView`, now kept only
+  for the lab's before/after): a grid of red lights getting more orange, stage 4 and 5 told apart by
+  brightness, the fog swallowing the red casing. Now **every dynamite tile is drawn through
+  `DynamiteCasing`** (`ViewUtil.TileMaterial`): the art's flat black band is redrawn as a narrower
+  graphite TENSION STRAP (its old band re-filled with casing sampled from just outside it, so no red
+  is painted), the casing is a deeper lacquered red, and - only through a property block the
+  magazine writes on the board's own renderers - heat comes up the seams in BROKEN hairlines, soot
+  gathers at the junctions, a pressure knot warms, a sub-pixel haze runs at the top stages and the
+  whole cube swells a percent under pressure (in the vertex stage, so no board-owned transform is
+  touched). The tile's geometry is MEASURED off `block_dynamite.png` (band v 0.408-0.600, seams u
+  0.325 / 0.669) and lives in the shader and the view; redraw the tile and those are what change.
+  **One block is one magazine**: cells are grouped by the CARD Core reports (`PowderVisuals.CardIds`
+  - two blocks side by side at one charge stay two), a graphite bridge closes the gap between two
+  cubes of one run so the strap reads as one, strap ends round off only where the block ends, and
+  the block's longest run carries a rail of **primer chambers - as many as the cap Core reports**
+  (`PowderVisuals.Cap`, five today; never a hard-coded five), dark when empty, amber when loaded,
+  thin ember notches when the run is too short to hold them. A charge is a **load cycle** (~0.42s:
+  grains in two or three clusters drawn in on curves, the chamber igniting dark -> ember -> amber
+  with a 1.12 punch, heat running a short way along the strap, a percent of swell, settle), never a
+  brightness step; reaching the cap plays a small LOCK. Idle is rare and stage-dependent. A block
+  that goes up **cooks off**: the repaint that emptied its cells raises a copy of the pack
+  (`Prepare`, before `Show`), and when the line reaches its first cube (`Begin`, the Hazine break
+  timing) its loaded chambers fire in physical order 35 ms apart, their heat races INWARD, the pack
+  compresses to 0.975 and blows (amber core never white, powder, red casing fragments, torn strap
+  slivers, a broken secondary ring at stage 4-5, at most 1.24x the footprint), then ONE compact
+  "+TOTAL" and, for a full block, the chambers' light gathers into a seed that flies to the score
+  (`ScoreClaim`, `TickScoreResponse`). Six moments are announced through `Sounded`; only the load,
+  the cap and the blast have sounds yet. The view counts nothing: `PowderPayoutVisuals` carries the
+  card and the charges each cube went up with, and `CubeValues` what a cube is worth now (dev label
+  only). The lab section has 32 scenes (six static stages, five loads, four one-beat loads, three
+  idles, the lock, three detonations, slow pre-ignition, the reward, small / large / irregular
+  blocks, a five-pack stress test, 0.5x / 0.25x) and the old-vs-new acceptance at stages 1 / 3 / 5
+  (the old side drawn on the untouched tile through `SetRawCells`), plus twelve switches; its slow
+  motion is set per call (`PlaybackRate`), and the game always sets 1.
 - `Assets/Scripts/View/PowerFxView.cs` — activation animations for powers without a view of
   their own: Totem (carved pole out of a rune circle), İkinci Şans (a four-leaf clover whose
   plucked leaves each take their quadrant of cubes), Soğuk Füzyon, Aşırma / Yedekleme (one card
