@@ -4,10 +4,12 @@
 //
 //   THE PURSE GOES NEGATIVE. Buying past what you have borrows the shortfall, without a limit.
 //     Balance (TotalScore - Debt) is what the player sees, so 2000 borrowed is a purse of -2000.
-//   A ROUND PAYS IN ORDER (BankRoundScore, designer's call 2026-09-30): what the round earns up
-//     to its OWN threshold is the player's and goes to the purse; what it earns above that - the
-//     minimum payment, then overtime - pays the debt first. Money from outside a round (a sale,
-//     an effect's grant) pays the debt first too (Receive). There is no manual repayment.
+//   A ROUND PAYS IN ORDER (BankRoundScore, designer's calls 2026-09-30): what the round earns up
+//     to its OWN threshold only passes it - while in debt it goes neither to the purse nor to
+//     the debt, because THE PURSE IS NEVER ABOVE ZERO WHILE ANYTHING IS OWED; what it earns above
+//     the threshold - the minimum payment, then overtime - pays the debt. Money from outside a
+//     round (a sale, an effect's grant) pays the debt first too (Receive), and nothing that takes
+//     money back may push the purse below zero while in debt. There is no manual repayment.
 //   THE MINIMUM PAYMENT ("asgari"): a stage that STARTS in debt has to earn a share of that debt
 //     (CreditMinimumPaymentPercent, 25%) ON TOP of its own bar before it can be passed
 //     (RoundEngine.CreditInstallment - the bar rises, the threshold the jokers scale off does
@@ -271,16 +273,17 @@ namespace ProjectBlock.Core
                 DebtRepaidThisStage -= back;
                 rest -= back;
             }
-            TotalScore -= rest;
+            TotalScore -= PurseShareWhileInDebt(rest);
         }
 
         /// <summary>
-        /// A ROUND'S EARNINGS, split by where they land on the round's meter (designer's call,
-        /// 2026-09-30): whatever lands under the round's own threshold is the PLAYER'S and goes to
-        /// the purse, debt or no debt - that is what the round is for. What lands above it - the
-        /// minimum payment between the threshold and the bar, and everything overtime earns past
-        /// the bar - goes through Receive, so it pays the debt first. With nothing owed both halves
-        /// reach the purse and this is exactly TotalScore += amount.
+        /// A ROUND'S EARNINGS, split by where they land on the round's meter (designer's calls,
+        /// 2026-09-30). What lands under the round's own threshold is what PASSES the round: with
+        /// nothing owed it is the player's, but WHILE IN DEBT it goes nowhere - neither to the
+        /// purse (there is never money in the purse while anything is owed) nor to the debt. What
+        /// lands above the threshold - the minimum payment between it and the bar, and everything
+        /// overtime earns past the bar - goes through Receive, so it pays the debt first. With
+        /// nothing owed both halves reach the purse and this is exactly TotalScore += amount.
         /// </summary>
         /// <param name="roundScoreAfter">The round's meter once this amount is on it.</param>
         internal void BankRoundScore(long amount, long roundScoreAfter)
@@ -302,8 +305,19 @@ namespace ProjectBlock.Core
                 own = Math.Min(roundScoreAfter, threshold) - Math.Max(before, 0L);
                 own = Math.Max(0L, Math.Min(amount, own));
             }
-            TotalScore += own;
+            if (Debt <= 0)
+            {
+                TotalScore += own;
+            }
             Receive(amount - own);
+        }
+
+        /// <summary>The purse may never go below zero while anything is owed: what is taken back
+        /// beyond what had gone to the debt comes out of the threshold's share, which was never
+        /// banked. With nothing owed this is the old behaviour, unchanged.</summary>
+        private long PurseShareWhileInDebt(long rest)
+        {
+            return Debt > 0 ? Math.Min(rest, Math.Max(0L, TotalScore)) : rest;
         }
 
         /// <summary>
@@ -324,7 +338,7 @@ namespace ProjectBlock.Core
                 Debt += back;
                 DebtRepaidThisStage -= back;
             }
-            TotalScore -= amount - back;
+            TotalScore -= PurseShareWhileInDebt(amount - back);
             CurrencyTakenByEffects += amount;
         }
 

@@ -5640,9 +5640,9 @@ public static partial class JokerTests
         Check(round.PassBar == 30 * scale + installment, "but the bar is threshold + minimum",
             round.PassBar + " vs " + (30 * scale + installment));
 
-        // THE ROUND PAYS IN ORDER: its own threshold first, and that is the player's; the minimum
-        // on top of it goes to the debt; overtime past the bar goes to the debt too.
-        int threshold = 30 * scale;
+        // THE ROUND PAYS IN ORDER: its own threshold first, which only passes it - while in debt it
+        // goes neither to the purse nor to the debt; the minimum on top of it goes to the debt;
+        // overtime past the bar goes to the debt too. The purse stays empty throughout.
         int guard = 0;
         while (round.Status == RoundStatus.InProgress && guard++ < 400)
         {
@@ -5653,15 +5653,17 @@ public static partial class JokerTests
         }
         Check(round.Status == RoundStatus.AwaitingAdvanceDecision, "the stage reached its bar",
             "status " + round.Status);
-        Check(session.TotalScore == threshold, "what the round's own threshold earned is the player's",
-            session.TotalScore + " vs " + threshold);
-        Check(session.DebtRepaidThisStage == installment, "the minimum on top of it went to the debt",
+        Check(session.TotalScore == 0, "the threshold's points did not reach the purse",
+            "purse " + session.TotalScore);
+        Check(session.Debt == owed - installment, "nor the debt - only the minimum on top paid it",
+            owed + " -> " + session.Debt + " (minimum " + installment + ")");
+        Check(session.DebtRepaidThisStage == installment, "exactly the minimum was paid",
             session.DebtRepaidThisStage + " vs " + installment);
         long beforeOvertime = session.Debt;
         round.AddScoreOutsideTurn(20); // overtime earnings, as a power's between turns
         Check(session.Debt == beforeOvertime - 20 * scale, "overtime's points went to the debt",
             beforeOvertime + " -> " + session.Debt);
-        Check(session.TotalScore == threshold, "and not to the purse", "purse " + session.TotalScore);
+        Check(session.TotalScore == 0, "and not to the purse", "purse " + session.TotalScore);
         round.DecideAdvance(true);
         Check(session.Phase == GamePhase.Market, "the stage was passed", "phase " + session.Phase);
 
@@ -5679,7 +5681,7 @@ public static partial class JokerTests
             statement.Interest + " vs " + interest);
         Check(session.Debt == left + interest, "and it went onto the debt",
             session.Debt + " vs " + (left + interest));
-        Check(session.TotalScore == threshold, "the threshold's points are still the player's",
+        Check(session.TotalScore == 0, "the purse is still empty while anything is owed",
             "purse " + session.TotalScore);
         Check(session.CreditTermLeft == session.Config.Market.CreditTermStages - 1,
             "one stage of the term is gone", "left " + session.CreditTermLeft);
