@@ -71,6 +71,10 @@ namespace ProjectBlock.View
         private static readonly Color FrameColor = new Color(0.16f, 0.17f, 0.21f);
         private static readonly Color AffordablePriceColor = new Color(1f, 0.92f, 0.45f);
         private static readonly Color TooExpensiveColor = new Color(1f, 0.45f, 0.4f);
+
+        /// <summary>"Kredi kartı": a bank campaign's tag over its price - a cool cyan, so it reads
+        /// as the bank's rather than as another shade of the price.</summary>
+        private static readonly Color CampaignColor = new Color(0.45f, 0.9f, 1f);
         private static readonly Color SoldColor = new Color(0.55f, 0.55f, 0.55f);
         private static readonly Color SectionHeaderColor = new Color(0.70f, 0.75f, 0.82f);
         private static readonly Color JokerBodyColor = new Color(0.30f, 0.22f, 0.40f);
@@ -422,6 +426,18 @@ namespace ProjectBlock.View
                         Loc.Pick("LIMIT", "LIMIT"), 60, 0.05f, TooExpensiveColor, 38,
                         TextAnchor.MiddleCenter);
                 }
+                // "Kredi kartı": the bank's campaign on this one offer. The price above is
+                // already the campaign price (MarketOffer.Price); this says why it is lower.
+                if (offer.CampaignActive)
+                {
+                    float lift = card ? 0.075f * tileSize.x : 0.11f;
+                    ViewUtil.MakeText3D(transform, "Campaign_" + i, priceAt + new Vector2(0f, lift),
+                        Loc.Pick("CARD -" + offer.CampaignPercent + "%",
+                            "KARTLA -%" + offer.CampaignPercent),
+                        60, (onPlate ? paintedPriceSize[i]
+                            : frameless ? DesktopPriceSize : card ? 0.042f * tileSize.x : 0.060f) * 0.62f,
+                        CampaignColor, frameless ? 40 : 38, TextAnchor.MiddleCenter);
+                }
             }
         }
 
@@ -432,7 +448,7 @@ namespace ProjectBlock.View
         {
             float sideX = FrameCenter.x - FramePixelWidth / FramePpu * 0.5f - 0.55f;
             ViewUtil.MakeText3D(transform, "Balance", new Vector2(sideX, FrameCenter.y + 2.0f),
-                Loc.Pick("You have ", "Paran: ") + session.TotalScore,
+                Loc.Pick("You have ", "Paran: ") + session.Balance,
                 90, 0.032f, new Color(1f, 0.86f, 0.42f), 38, TextAnchor.MiddleRight);
             ViewUtil.MakeText3D(transform, "SellHint", new Vector2(sideX, FrameCenter.y + 1.4f),
                 Loc.Pick("Hold a joker or a power to sell it",
@@ -1582,7 +1598,7 @@ namespace ProjectBlock.View
                 60, 0.085f, PanelCreamColor, 38, TextAnchor.MiddleLeft);
             y -= 0.75f;
             ViewUtil.MakeText3D(transform, "DemoBalance", new Vector2(x, y),
-                Loc.Pick("You have ", "Paran: ") + session.TotalScore,
+                Loc.Pick("You have ", "Paran: ") + session.Balance,
                 90, 0.034f, AffordablePriceColor, 38, TextAnchor.MiddleLeft);
             y -= 0.38f;
             ViewUtil.MakeText3D(transform, "DemoCardLimit", new Vector2(x, y),
@@ -1656,7 +1672,7 @@ namespace ProjectBlock.View
                 60, 0.085f, PanelCreamColor, 38, TextAnchor.MiddleLeft);
             ViewUtil.MakeText3D(transform, "DemoBalance",
                 new Vector2(panel.xMax - DemoPad, y + 0.08f),
-                Loc.Pick("You have ", "Paran: ") + session.TotalScore,
+                Loc.Pick("You have ", "Paran: ") + session.Balance,
                 90, 0.038f, AffordablePriceColor, 38, TextAnchor.MiddleRight);
             // How much of the run's BLOCK allowance is left, under the balance and in the same
             // corner: it is the other number that decides whether a block on the shelf can be

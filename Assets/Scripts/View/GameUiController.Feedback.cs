@@ -2818,17 +2818,19 @@ namespace ProjectBlock.View
                 return;
             }
             var sb = new StringBuilder();
-            sb.Append(Loc.Pick("TOTAL ", "TOPLAM ")).Append(session.TotalScore);
+            // The BALANCE, not the purse: in debt ("Kredi kartı") it reads negative, which is
+            // exactly how the player is meant to think of it.
+            sb.Append(Loc.Pick("TOTAL ", "TOPLAM ")).Append(session.Balance);
             RoundEngine round = session.CurrentRound;
             if (round != null)
             {
-                // RoundEngine.ScoreThreshold, never Config's: a boss may ask for less
-                // ("Alacakaranlık" cutting the bar to 60%, "Taş ve sopa" by a quarter) and the
-                // number the player is chasing must be the one the rules will check. The round
-                // dump below already had this right; this line did not.
+                // RoundEngine.PassBar, never Config's threshold: a boss may ask for less
+                // ("Alacakaranlık" cutting the bar to 60%, "Taş ve sopa" by a quarter), a loan's
+                // minimum payment asks for more, and the number the player is chasing must be
+                // the one the rules will check.
                 sb.Append(Loc.Pick("        round ", "        raunt "))
                     .Append(round.RoundScore).Append(" / ")
-                    .Append(round.ScoreThreshold * session.Config.Scoring.ScoreScale);
+                    .Append(round.PassBar);
             }
             totalText.text = sb.ToString();
         }
@@ -2866,12 +2868,10 @@ namespace ProjectBlock.View
             sb.Append(Loc.Pick("Cards ", "Kart ")).Append(session.OwnedCards.Count)
                 .Append(Loc.Pick("   Jokers ", "   Joker ")).Append(session.Jokers.Count)
                 .Append(Loc.Pick("   Powers ", "   Güç ")).Append(session.Powers.Count).Append('\n');
-            // "Kredi kartı": paying the debt down is a MARKET action, so its prompt belongs
-            // here and nowhere else - the round HUD only names the debt and its deadline.
+            // "Kredi kartı": the loan, its term and what the next stage will ask for.
             if (session.Debt > 0)
             {
-                sb.Append(Loc.Pick("DEBT ", "BORÇ ")).Append(session.Debt)
-                    .Append(Loc.Pick(PadOr("   [O] pay", "   R3 pay"), PadOr("   [O] öde", "   R3 öde"))).Append('\n');
+                sb.Append(CreditDebtLine()).Append('\n');
             }
             sb.Append(DebugKeyLine());
             infoText.text = sb.ToString();
@@ -2883,6 +2883,16 @@ namespace ProjectBlock.View
                     PadOr("KAÇAKÇI'ya tıkla, sonra bir ürüne: BEDAVA (defolu çıkabilir)",
                         "KAÇAKÇI'da A, sonra bir ürüne: BEDAVA (defolu çıkabilir)"))
                 : string.Empty;
+            // ...and what the stage just settled: the bank's thanks, the bailiff's list. Played
+            // once per statement, however often the shop is rebuilt.
+            CheckCreditStatement();
+            string statementLine = CreditStatementLine(session.LastCreditStatement);
+            if (statementLine.Length > 0)
+            {
+                messageText.text = messageText.text.Length > 0
+                    ? messageText.text + "\n" + statementLine
+                    : statementLine;
+            }
         }
 
         private void UpdateHud()
@@ -2932,9 +2942,17 @@ namespace ProjectBlock.View
 
             // RoundScore lives in the scaled economy; lift the threshold to match for display.
             sb.Append(Loc.Pick("Score ", "Puan ")).Append(round.RoundScore)
-                // RoundEngine.ScoreThreshold, not the config's: a boss may ask for less
-                // ("Taş ve sopa") and the bar on screen has to be the bar the rules use.
-                .Append(" / ").Append(round.ScoreThreshold * session.Config.Scoring.ScoreScale);
+                // RoundEngine.PassBar, not the config's: a boss may ask for less ("Taş ve sopa"),
+                // a loan's minimum payment for more, and the bar on screen has to be the bar the
+                // rules use.
+                .Append(" / ").Append(round.PassBar);
+            if (round.CreditInstallment > 0)
+            {
+                sb.Append(Loc.Pick("  (bar ", "  (eşik "))
+                    .Append(round.ScoreThreshold * session.Config.Scoring.ScoreScale)
+                    .Append(Loc.Pick(" + minimum ", " + asgari ")).Append(round.CreditInstallment)
+                    .Append(')');
+            }
             if (round.ThresholdPassed)
             {
                 sb.Append(Loc.Pick("  [threshold passed]", "  [eşik geçildi]"));
@@ -2943,19 +2961,10 @@ namespace ProjectBlock.View
             // The run total is NOT repeated here - it has its own line at the top of the screen
             // (UpdateScoreHud), because it is real UI rather than debug furniture. The DEBT is,
             // though: "Kredi kartı" is the one number the player must not lose track of, and its
-            // deadline has to be spelled out. Paying is a MARKET action, so the [O] prompt lives
-            // in BuildMarketHud instead - this method returns early in the market.
+            // term has to be spelled out.
             if (session.Debt > 0)
             {
-                sb.Append(Loc.Pick("DEBT ", "BORÇ ")).Append(session.Debt);
-                int next = NextBossRound(session);
-                if (next > 0)
-                {
-                    sb.Append(Loc.Pick("  (pay before round ", "  (raunt "))
-                        .Append(next)
-                        .Append(Loc.Pick(" or lose)", " bitmeden öde yoksa kaybedersin)"));
-                }
-                sb.Append('\n');
+                sb.Append(CreditDebtLine()).Append('\n');
             }
             else if (session.CreditAvailable)
             {
@@ -3164,26 +3173,6 @@ namespace ProjectBlock.View
             }
         }
 
-        /// <summary>The number of the round whose BOSS STAGE is the next one coming - the
-        /// deadline the market debt has to be settled by, because a boss stage that ends with the
-        /// debt open ends the run. 0 when the progression has no boss stages at all.</summary>
-        private static int NextBossRound(GameSession session)
-        {
-            // Already in one: this is the deadline.
-            if (session.InBossStage)
-            {
-                return session.RoundNumber;
-            }
-            for (int round = session.RoundNumber; round <= session.Config.TotalRounds; round++)
-            {
-                if (session.Config.Progression.HasBossStageAfter(round))
-                {
-                    return round;
-                }
-            }
-            return 0;
-        }
-
         private static string DescribeLoss(LossReason? loss)
         {
             switch (loss)
@@ -3209,8 +3198,8 @@ namespace ProjectBlock.View
                     return Loc.Pick("you reached the threshold - Çıkmaz forbids it",
                         "puan eşiğine ulaştın - Çıkmaz buna izin vermiyor");
                 case LossReason.DebtNotRepaid:
-                    return Loc.Pick("a boss round ended with your market debt still open",
-                        "patron raundu bitti, market borcun hâlâ açıktı");
+                    return Loc.Pick("the run ended owing more than the bailiff could take",
+                        "oyun, hacizle bile kapanmayan bir borçla bitti");
                 case LossReason.OutOfTurns:
                     return Loc.Pick("the turn limit ran out (Saatçi)",
                         "tur sınırı doldu (Saatçi)");
