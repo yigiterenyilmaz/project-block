@@ -48,7 +48,7 @@ dropped that way once each.
      the next round. Bends are **queries** the engine asks live (`IgnoresBlockElements`,
      `BlocksPowerRecharge`, `DisablesJoker/Power`, `BlocksPlacementOn`, `ScoreLineExplosion`,
      `ScoreCleanSweep`, `OnlyCleanSweepsScore`, `FilterScoreThreshold`, `InvertsJokerScore`,
-     `LocksHandCard`, `HidesHandCards`).
+     `LocksHandCard`, `HidesHandCards`, `DefersRoundPayout`).
      The ONE exception that cannot be a query is `FilterRoundConfig`: the board is built once, and
      "Dört kutup" has to change its SIZE, so a boss is **drawn before the engine exists** and gets
      to reshape the round first (via `RoundConfig.WithBoard`, never a hand-written `new`).
@@ -1263,6 +1263,21 @@ dropped that way once each.
   crossing points — in-turn step 9 and `AddScoreOutsideTurn`). Scoring past the bar is what
   **overtime** is for, and the only way to it. So `TurnReport.ScoreGained` is what was BANKED
   while `TurnReport.Score.Total` is what the turn EARNED; they differ only on the crossing turn.
+- **"Enflasyon" HOLDS a round's money and pays it DEFLATED** (designer's call, 2026-09-30;
+  `EnflasyonBoss`, `GameSession.Inflation.cs`). The bar rises every turn by 5% of what is still
+  MISSING to it (against `PassBar`, rounded up) - 2000 with 1000 scored becomes 2050 - so it runs
+  hardest from a player far behind and stops the moment it is reached; it never moves in
+  overtime. The boss answers `DefersRoundPayout`, and while it does NOTHING the meter banks
+  reaches the purse or a debt: `BankRoundScore` holds it (booked as taken by an effect, so the
+  books balance mid-round), and every claw-back that follows the meter (`ChargeScore`,
+  `HalveRoundScore`, both caps, the final-round replay) leaves the purse alone - the METER is the
+  one record of what the round earned. When the round ends Advanced, `SettleHeldRoundScore` splits
+  the meter the way `BankRoundScore` does and deflates by `UninflatedOwnBar / OwnBar`: the own
+  share (a bar inflated 1000 -> 3000 pays 1000; nothing while in debt), a credit minimum's band
+  1:1 (it is a real debt payment, not inflated money), and overtime at the same rate (600 -> 200),
+  all rounded down and granted through `GrantCurrency`. A lost round forfeits what it held.
+  `LastInflationSettlement` (reporting, not saved) is what the market's message line reads.
+  Save format 25 (the boss saves what it ADDED, not the turns it counted).
 - **A TURN IS NEVER WORTH LESS THAN NOTHING.** Negative score is real ("Terslik" inverting every
   joker, "Besleme" billing you for a starving creature) but it may only eat what the turn earned.
   Two guards, and both are needed: `ScoreBreakdown.Total` floors at 0 for score settled before
