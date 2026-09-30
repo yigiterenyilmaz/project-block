@@ -416,6 +416,7 @@ namespace ProjectBlock.View
             StopHazine();
             StopChallenge();
             StopQuarry();
+            StopAntimatter();
             StopIgnition();
             StopFlood();
             StopRebate();
@@ -835,26 +836,6 @@ namespace ProjectBlock.View
                 yield return new WaitForSecondsRealtime(0.5f);
             }
             AnimMetamorphosis(0, 1);
-        }
-
-        /// <summary>"Antimadde": the key lands and every cube of that element goes. There is no
-        /// effect of its own - the annihilation is an ordinary group destruction - so this drives
-        /// FlashCells exactly as the turn does, in the element's own colour.</summary>
-        private void AnimAntimatter(int cubes)
-        {
-            var cells = new List<GridPos>();
-            for (int i = 0; i < cubes; i++)
-            {
-                cells.Add(new GridPos(1 + (i % 5), 1 + (i / 5)));
-            }
-            FlashCells(cells, ViewUtil.ElementColor(BlockElement.Fire));
-            var faces = new List<Color>();
-            foreach (GridPos c in cells)
-            {
-                faces.Add(ViewUtil.ElementColor(BlockElement.Fire));
-            }
-            PlayAntimatterCells(cells, faces);
-            animLastLabel = Loc.Pick(cubes + " annihilated", cubes + " yok edildi");
         }
 
         private void AnimConfetti(bool heavy)
@@ -3990,21 +3971,8 @@ namespace ProjectBlock.View
                 "metamorfoz: her aşamadan biri aynı anda",
                 delegate { AnimMetamorphosisSpread(); });
 
-            AddAnimSub("jokers", "antimadde", "antimadde", "antimadde");
-            AddAnim("antimadde: the key annihilates 4 cubes",
-                "antimadde: anahtar 4 küpü yok eder",
-                delegate { AnimAntimatter(4); });
-            AddAnim("antimadde: a big wipe - 12 cubes", "antimadde: büyük silme - 12 küp",
-                delegate { AnimAntimatter(12); });
-            AddAnim("antimadde: one lonely cube", "antimadde: tek küp",
-                delegate { AnimAntimatter(1); });
-            AddAnim("antimadde: the payout popup", "antimadde: puan yazısı",
-                delegate
-                {
-                    FloatingTextFx.Spawn(transform, new Vector2(0f, 2.0f),
-                        Loc.Pick("ANNIHILATED  +3000", "YOK EDİLDİ  +3000"),
-                        new Color(0.72f, 0.55f, 1f), 60, 0.08f);
-                });
+            // "Antimadde" - the annihilation event, its own section (GameUiController.AntimatterLab).
+            AddAntimatterLab();
 
             AddAnimSub("jokers", "simetri", "simetri", "simetri");
             AddAnim("simetri: the arena lights for a symmetric board",

@@ -165,13 +165,17 @@ namespace ProjectBlock.View
             // "Kredi kartı"'s carried debt landing: 1.00 -> 0.97 -> 1, through a muted
             // cream-burgundy - the debt pulling the TOTAL down, never a celebration.
             float debtClaim = debtPressure != null ? debtPressure.ScoreClaim : 0f;
+            // "Antimadde"'s energy landing: 1.00 -> 1.10 -> 0.98 -> 1, a breath of lavender-gold.
+            float antimatterClaim = antimatter != null ? antimatter.ScoreClaim : 0f;
             float claim = Mathf.Max(Mathf.Max(Mathf.Max(hazineClaim, ignitionClaim),
-                Mathf.Max(challengeClaim, quarryClaim)), Mathf.Max(powderClaim, debtClaim));
+                Mathf.Max(challengeClaim, quarryClaim)),
+                Mathf.Max(Mathf.Max(powderClaim, debtClaim), antimatterClaim));
             if (claim > warm && claim > 0.001f)
             {
                 float hs;
                 Color ink;
                 if (claim == debtClaim) { hs = debtPressure.ScoreScale; ink = debtPressure.ScoreInk; }
+                else if (claim == antimatterClaim) { hs = antimatter.ScoreScale; ink = antimatter.ScoreInk; }
                 else if (claim == hazineClaim) { hs = hazine.ScoreScale; ink = hazine.ScoreInk; }
                 else if (claim == challengeClaim) { hs = challenge.ScoreScale; ink = challenge.ScoreInk; }
                 else if (claim == quarryClaim) { hs = quarry.ScoreScale; ink = quarry.ScoreInk; }

@@ -190,7 +190,10 @@ namespace ProjectBlock.View
             // sweep that IS the hole's collapse is drawn by the hole, not by the ordinary wave.
             sweepIsHoleCollapse = TakeHoleCollapse(report);
             PlayBlackHole(report);
-            if (report.CleanSweep)
+            // "Antimadde": a sweep the annihilation caused is played AFTER it, never over it -
+            // its sound, shake, popup and wave all come from DeferSweepForAntimatter.
+            sweepWaitsForAntimatter = report.CleanSweep && DeferSweepForAntimatter(round, report);
+            if (report.CleanSweep && !sweepWaitsForAntimatter)
             {
                 // the sweep bling rises in pitch with every sweep this round
                 sfx.CleanSweep(1f + 0.12f * Mathf.Min(round.CleanSweepCount - 1, 8));
@@ -449,7 +452,7 @@ namespace ProjectBlock.View
             // A turn whose only explosion was a loose group ("Hedefli" payout, a late reshape
             // clear) does not shake: the group explosion keeps the screen still. A cleared line,
             // TNT and a clean sweep keep theirs.
-            bool ordinarySweep = report.CleanSweep && !sweepIsHoleCollapse;
+            bool ordinarySweep = report.CleanSweep && !sweepIsHoleCollapse && !sweepWaitsForAntimatter;
             if (report.CubesExploded > 0 || report.DynamiteTriggered || ordinarySweep)
             {
                 ShakeForBlast(report.DynamiteTriggered, ordinarySweep, comboStreak);
@@ -466,7 +469,7 @@ namespace ProjectBlock.View
                 SpawnComboPopup(report.ComboCount, report.ComboBridged,
                     report.ComboMultiplier);
             }
-            if (report.CleanSweep)
+            if (report.CleanSweep && !sweepWaitsForAntimatter)
             {
                 SpawnSweepPopup();
             }
@@ -694,7 +697,9 @@ namespace ProjectBlock.View
             // Late board-reshape clears (inflation deflate, board powers) blast their exact
             // absolute cells - ExplodedRows/Columns never covered them. The board has already
             // been rebuilt to its new size by RefreshAll, so CellToWorld maps these correctly.
-            FlashCells(report.ExtraExplodedCells, BlastColor);
+            // An "Antimadde" annihilation's cells are not among them: matter turning into energy
+            // throws no debris, and AntimatterBlastView draws those cubes itself.
+            FlashCells(WithoutAnnihilated(report, report.ExtraExplodedCells), BlastColor);
             // A "Hedefli" payout keeps its cells in a list of its own (so "Antimadde" cannot be
             // billed for them). It goes off in the lime that belongs to nothing else on the
             // board, so the cube the player was aiming at is what they see break.
@@ -720,7 +725,7 @@ namespace ProjectBlock.View
             // the arena and off the bottom of the screen - nothing landed, so there is nothing to
             // blast, only something to drop.
             DropFellThroughCubes(report);
-            if (report.CleanSweep && !sweepIsHoleCollapse)
+            if (report.CleanSweep && !sweepIsHoleCollapse && !sweepWaitsForAntimatter)
             {
                 EmitSweepConfetti();
             }
@@ -2561,6 +2566,7 @@ namespace ProjectBlock.View
             SyncQuake();
             SyncChallenge();
             SyncQuarry();
+            SyncAntimatter(report);
             SyncIgnition();
             SyncPowder();
             SyncMetamorphosis();

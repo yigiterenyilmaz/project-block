@@ -60,7 +60,12 @@ namespace ProjectBlock.View
                 return;
             }
             EnsureQuarry();
-            quarry.Begin(joker.LastQuarry, report != null && report.CleanSweep ? QuarryAfterSweep() : QuarryBreath());
+            // A sweep an "Antimadde" annihilation caused is itself held back until that event has
+            // been seen through, so the pickaxe waits for both.
+            float antimatterFirst = IsAnnihilation(report) && report.CleanSweep
+                ? AntimatterBlastView.Style.CleanupDelay : 0f;
+            quarry.Begin(joker.LastQuarry, antimatterFirst
+                + (report != null && report.CleanSweep ? QuarryAfterSweep() : QuarryBreath()));
         }
 
         /// <summary>How long the sweep takes to be seen through, plus a breath.</summary>
