@@ -58,15 +58,15 @@ namespace ProjectBlock.View
         public static class Style
         {
             // ---- the primer chambers ----
-            public static float PrimerSizePixels = 7f;
+            public static float PrimerSizePixels = 8f;
             public static float PrimerMinPixels = 4f;
-            public static float PrimerStrapShare = 0.82f;
+            public static float PrimerStrapShare = 0.9f;
             public static float PrimerJitter = 0.06f;
             public static float PrimerActiveBrightness = 1f;
             /// <summary>gunpowderPrimerHalo: radius in pixels and opacity.</summary>
-            public static float PrimerHaloPixels = 10f;
-            public static float PrimerHaloAlpha = 0.13f;
-            public static float PrimerVeinAlpha = 0.45f;
+            public static float PrimerHaloPixels = 12f;
+            public static float PrimerHaloAlpha = 0.17f;
+            public static float PrimerVeinAlpha = 0.55f;
 
             // ---- the load cycle ----
             public static float LoadDuration = 0.42f;
@@ -77,13 +77,13 @@ namespace ProjectBlock.View
             public static float GrainRadiusMaxPixels = 18f;
             public static float IgnitionAt = 0.18f;
             public static float IgnitionDuration = 0.09f;
-            public static float IgnitionPunch = 0.12f;
+            public static float IgnitionPunch = 0.15f;
             /// <summary>The new pocket blooming after its chamber ignites.</summary>
             public static float PocketBloomDuration = 0.15f;
             public static float PocketBloomFrom = 0.7f;
             public static float StrapHeatAt = 0.22f;
             public static float StrapHeatDuration = 0.12f;
-            public static float StrapHeatStrength = 0.16f;
+            public static float StrapHeatStrength = 0.2f;
             public static float StrapHeatReach = 1.5f;
             public static float PressureAt = 0.30f;
             public static float PressureDuration = 0.09f;
@@ -91,15 +91,15 @@ namespace ProjectBlock.View
             public static float PressureCinch = 0.03f;
 
             // ---- the stage look (gunpowderInternalFillStageN, gunpowderPocketRadius, ...) ----
-            public static float[] PocketStrength = { 0f, 0.05f, 0.08f, 0.13f, 0.18f, 0.22f };
+            public static float[] PocketStrength = { 0f, 0.065f, 0.1f, 0.16f, 0.22f, 0.27f };
             /// <summary>As a share of a cube: small and separate at 3, meeting at 4, one fill at 5.
             /// </summary>
-            public static float[] PocketRadius = { 0f, 0.24f, 0.27f, 0.31f, 0.37f, 0.45f };
-            public static float[] Fill = { 0f, 0f, 0f, 0.02f, 0.05f, 0.1f };
-            public static float[] Embers = { 0f, 0.025f, 0.03f, 0.04f, 0.05f, 0.06f };
-            public static float[] Underglow = { 0f, 0.05f, 0.08f, 0.11f, 0.15f, 0.18f };
-            public static float[] SeamHeat = { 0f, 0.02f, 0.05f, 0.08f, 0.12f, 0.16f };
-            public static float[] ChannelHeat = { 0f, 0.02f, 0.04f, 0.07f, 0.1f, 0.13f };
+            public static float[] PocketRadius = { 0f, 0.27f, 0.3f, 0.34f, 0.41f, 0.49f };
+            public static float[] Fill = { 0f, 0f, 0f, 0.025f, 0.06f, 0.12f };
+            public static float[] Embers = { 0f, 0.03f, 0.036f, 0.048f, 0.06f, 0.072f };
+            public static float[] Underglow = { 0f, 0.065f, 0.1f, 0.14f, 0.19f, 0.23f };
+            public static float[] SeamHeat = { 0f, 0.025f, 0.06f, 0.1f, 0.14f, 0.19f };
+            public static float[] ChannelHeat = { 0f, 0.025f, 0.05f, 0.085f, 0.12f, 0.155f };
             public static float[] Soot = { 0f, 0f, 0.2f, 0.4f, 0.6f, 0.75f };
             public static float[] StrapTension = { 0f, 0.1f, 0.2f, 0.35f, 0.5f, 0.65f };
             public static float[] Warmth = { 0f, 0f, 0.01f, 0.02f, 0.03f, 0.04f };
@@ -109,7 +109,7 @@ namespace ProjectBlock.View
             // ---- idle: rare, and nothing trembles ----
             public static float FlickMin = 2.0f;
             public static float FlickMax = 3.5f;
-            public static float FlickBoost = 0.10f;
+            public static float FlickBoost = 0.12f;
             public static float SeamPulseMin = 4f;
             public static float SeamPulseMax = 6f;
             public static float EmberDriftMin = 2.5f;
@@ -140,7 +140,7 @@ namespace ProjectBlock.View
             /// <summary>The heat drawn IN before the blast: the pockets' scale and brightness.</summary>
             public static float PocketCompression = 0.75f;
             public static float PocketCompressionBoost = 0.2f;
-            public static float ExplosionSupportIntensity = 0.06f;
+            public static float ExplosionSupportIntensity = 0.08f;
             public static float SecondaryRingDelay = 0.08f;
             public static float TextDelay = 0.1f;
             public static float RewardHold = 0.35f;
@@ -151,16 +151,16 @@ namespace ProjectBlock.View
             public static float[] OldSeamShare = { 0f, 0.08f, 0.2f, 0.4f, 0.6f, 0.75f };
             public static float[] OldHazePixels = { 0f, 0f, 0f, 0f, 0.5f, 0.9f };
 
-            public static readonly Color PrimerAmber = new Color(1f, 0.64f, 0.26f);
+            public static readonly Color PrimerAmber = new Color(1f, 0.6f, 0.2f);
             public static readonly Color PrimerEmber = new Color(0.55f, 0.18f, 0.06f);
-            public static readonly Color PrimerHot = new Color(1f, 0.8f, 0.45f);
+            public static readonly Color PrimerHot = new Color(1f, 0.78f, 0.38f);
             public static readonly Color Brass = new Color(0.52f, 0.41f, 0.24f);
             public static readonly Color SocketDark = new Color(0.09f, 0.07f, 0.06f);
             public static readonly Color Graphite = new Color(0.11f, 0.115f, 0.13f);
             public static readonly Color CasingRed = new Color(0.62f, 0.13f, 0.14f);
             public static readonly Color GrainDark = new Color(0.2f, 0.13f, 0.09f);
             public static readonly Color Smoke = new Color(0.22f, 0.18f, 0.16f);
-            public static readonly Color BlastCore = new Color(1f, 0.84f, 0.52f);
+            public static readonly Color BlastCore = new Color(1f, 0.82f, 0.46f);
             public static readonly Color TextIvory = new Color(1f, 0.95f, 0.84f);
             public static readonly Color TextAmber = new Color(1f, 0.7f, 0.28f);
             public static readonly Color TextShadow = new Color(0.2f, 0.09f, 0.04f);
@@ -1898,7 +1898,7 @@ namespace ProjectBlock.View
             core.EndSize = extent * 1.6f;
             core.Colour = Style.BlastCore;
             core.EndColour = Style.PrimerAmber;
-            core.Alpha = Mathf.Lerp(0.55f, 0.85f, (stage - 1f) / 4f);
+            core.Alpha = Mathf.Lerp(0.65f, 0.92f, (stage - 1f) / 4f);
 
             int powder = 6 + 3 * (int)stage;
             for (int i = 0; i < powder; i++)
@@ -2045,7 +2045,7 @@ namespace ProjectBlock.View
             root.SetParent(transform, false);
             root.localPosition = new Vector3(at.x, at.y, 0f);
             total.Root = root;
-            float size = 0.034f;
+            float size = 0.038f;
             TextMesh shadow = ViewUtil.MakeText3D(root, "Shadow", new Vector2(Px(1.5f), -Px(1.5f)),
                 text, 96, size, Style.TextShadow, TextOrder, TextAnchor.MiddleCenter);
             TextMesh edge = ViewUtil.MakeText3D(root, "Edge", Vector2.zero, text, 96, size * 1.05f,
