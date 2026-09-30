@@ -130,8 +130,8 @@ namespace ProjectBlock.View
         private static AudioClip BuildAmCharge()
         {
             var rng = new System.Random(41003);
-            // 0.34 s - started 0.02 s before the charge, it stops ~0.04 s before the implosion's
-            // own suck is at its loudest, and the implosion stops ~0.03 s before the peak.
+            // 0.34 s - started just before the charge, it is gone by the time the implosion's own
+            // suck is at its loudest, and the suck itself ends ~0.03 s before the peak.
             float[] b = Buffer(0.34f);
             Swell(b, 0f, 0.34f, 52f, 74f, 0.7f, 1.3f);             // the sub drone, climbing
             Swell(b, 0f, 0.34f, 104f, 148f, 0.18f, 1.5f);          // its octave, for small speakers

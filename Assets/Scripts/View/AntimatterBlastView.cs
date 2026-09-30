@@ -1434,8 +1434,10 @@ namespace ProjectBlock.View
                 SayAt(t, Style.GhostStart, Beat.Ghost);
             }
             SayAt(t, Style.ChargeStart - 0.02f, Beat.Charge);
-            SayAt(t, Style.CollisionStart + Style.CollisionDuration - 0.005f, Beat.Contact);
-            SayAt(t, Style.ImplosionStart - 0.005f, Beat.Implosion);
+            SayAt(t, Style.CollisionStart + Style.CollisionDuration - 0.01f, Beat.Contact);
+            // Early enough that the suck (75 ms) is over ~30 ms before the peak: the hole the
+            // peak lands in.
+            SayAt(t, Style.ImplosionStart - 0.015f, Beat.Implosion);
             SayAt(t, Style.Peak, Beat.Peak);
             if (rays.Count > 0)
             {
@@ -1834,7 +1836,7 @@ namespace ProjectBlock.View
                     f.P[i] = p + normal * bend;
                     // Grown from both ends at once, meeting in the middle.
                     float fromEnd = Mathf.Min(u, 1f - u) * 2f;
-                    float grown = Mathf.Clamp01((build * 1.1f - fromEnd) / 0.12f);
+                    float grown = Mathf.Clamp01((build * 1.15f - fromEnd) / 0.1f);
                     // A few broken sections.
                     float broken = Hash01(req.Seed, f.A * 31 + i, f.B, 7) < 0.18f ? 0.15f : 1f;
                     Color col = Color.Lerp(Lavender, Color.Lerp(Violet, Lavender, 0.3f), 0.5f + 0.5f * Mathf.Sin(u * 7f + f.Seed * 5f));
