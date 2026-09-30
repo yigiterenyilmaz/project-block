@@ -47,7 +47,7 @@ namespace ProjectBlock.View
             PxOldHud, PxNewHud, PxFit1080, PxFit768, PxResponsive, PxSafe, PxPressure, PxWarning,
             PxFinal, PxFreeVsSafe, PxSafeVsFinal, PxRelief, PxLargeRelief, PxInterest, PxMinimum,
             PxStamp, PxBracketsOnly, PxVignetteOnly, PxHeaderOnly, PxCarry, PxToForeclosure,
-            PxHalfSpeed, PxAcceptance
+            PxHalfSpeed, PxAcceptance, PxInflation, PxInflationSlow
         }
 
         private Coroutine animCredit;
@@ -81,6 +81,9 @@ namespace ProjectBlock.View
             AddCred(CredScene.PxHalfSpeed, "V. Pressure transitions 0.5x", "V. Baskı geçişleri 0.5x");
             AddCred(CredScene.PxAcceptance, "ACCEPTANCE: ledger hidden, no debt vs danger",
                 "KABUL: panel gizli, borçsuz / tehlike");
+            AddCred(CredScene.PxInflation, "W. Enflasyon: the minimum pays the debt its real worth",
+                "W. Enflasyon: asgari borca gerçek değeriyle ödeniyor");
+            AddCred(CredScene.PxInflationSlow, "X. Enflasyon payment 0.5x", "X. Enflasyon ödemesi 0.5x");
             // --- DEBT HUD ---
             AddCred(CredScene.Closed, "1. Debt panel closed", "1. Borç paneli kapalı");
             AddCred(CredScene.Open, "2. Debt panel open", "2. Borç paneli açık");
@@ -861,6 +864,33 @@ namespace ProjectBlock.View
                 case CredScene.PxHalfSpeed:
                     yield return LabEscalation(0.5f);
                     break;
+                case CredScene.PxInflation:
+                case CredScene.PxInflationSlow:
+                {
+                    // The design's own numbers: 300 earned toward the minimum on a bar inflated
+                    // 1000 -> 3000. What it is really worth is Core's arithmetic, not the lab's.
+                    float rate = scene == CredScene.PxInflationSlow ? 0.5f : 1f;
+                    ledger.PlaybackRate = rate;
+                    const long gross = 300;
+                    long net = GameSession.DeflatedWorth(gross, 1000, 3000);
+                    int left = Mathf.Max(3, term - 1);
+                    LabScreen(CreditDeadline.Pressure, 2000, 2000, 2000, 0, left, true);
+                    LabLabel("W: " + gross + " earned toward the minimum on a bar inflated 1000 -> 3000",
+                        "W: eşiği 1000 -> 3000 şişmiş bir rauntta asgariye " + gross + " toplandı");
+                    yield return LabWait(0.8f, rate);
+                    ledger.PlayInflatedPayment(net, gross, CreditRoundAnchor(),
+                        LabState(2000 - net, 2000, net, left, CreditDeadline.Pressure, true));
+                    while (ledger.Busy)
+                    {
+                        yield return null;
+                    }
+                    LabScreen(CreditDeadline.Pressure, 2000 - net, 2000, 2000, net, left, false);
+                    LabLabel("W: " + gross + " earned, " + (gross - net) + " lost to inflation, " + net + " off the debt"
+                            + (rate < 0.99f ? "  0.5x" : ""),
+                        "W: " + gross + " toplandı, " + (gross - net) + " enflasyona gitti, borçtan " + net + " düştü"
+                            + (rate < 0.99f ? "  0.5x" : ""));
+                    break;
+                }
                 case CredScene.PxAcceptance:
                 {
                     // THE MAIN ACCEPTANCE TEST: the ledger hidden; A is debt-free, B is a large

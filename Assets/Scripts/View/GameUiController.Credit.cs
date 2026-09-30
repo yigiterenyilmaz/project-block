@@ -269,7 +269,10 @@ namespace ProjectBlock.View
         private IEnumerator PresentStatement(CreditStatement statement)
         {
             creditPresenting = true;
-            // 1. what the stage's last turn paid, if the ledger has not shown it yet
+            // 1. what the stage's last turn paid, if the ledger has not shown it yet - and, for an
+            //    "Enflasyon" round, the held payout first: earned in inflated points, the
+            //    inflation burned off on the way, the real value off the debt (Core's numbers,
+            //    InflationSettlement.DebtRepaidEarned -> DebtRepaid)
             long unshown = statement.Repaid - creditRepaidShown;
             if (unshown > 0 && ledgerView.IsOpen)
             {
@@ -277,8 +280,25 @@ namespace ProjectBlock.View
                 paid.Debt = statement.DebtBeforeInterest > 0 ? statement.DebtBeforeInterest
                     : statement.DebtAtStart - statement.Repaid;
                 paid.InRound = true;
-                ledgerView.PlayPayment(unshown, CreditRoundAnchor(), paid);
-                yield return WaitForLedger();
+                InflationSettlement inflation = session.LastInflationSettlement;
+                long inflated = inflation != null && inflation.RoundNumber == statement.RoundNumber
+                    && inflation.BossStage == statement.BossStage
+                    ? System.Math.Min(inflation.DebtRepaid, unshown) : 0;
+                if (inflated > 0)
+                {
+                    long rest = unshown - inflated;
+                    DebtLedgerView.State afterInflation = paid;
+                    afterInflation.Debt = paid.Debt + rest;
+                    ledgerView.PlayInflatedPayment(inflated, inflation.DebtRepaidEarned,
+                        CreditRoundAnchor(), afterInflation);
+                    yield return WaitForLedger();
+                    unshown = rest;
+                }
+                if (unshown > 0)
+                {
+                    ledgerView.PlayPayment(unshown, CreditRoundAnchor(), paid);
+                    yield return WaitForLedger();
+                }
             }
             creditRepaidShown = 0;
             // 2. the interest - the debt grew by itself
@@ -814,6 +834,7 @@ namespace ProjectBlock.View
                 // this same cue once the game has a haptics layer.
                 case DebtLedgerView.Cue.FinalDue: sfx.DebtThud(); break;
                 case DebtLedgerView.Cue.TermTick: sfx.DebtTick(); break;
+                case DebtLedgerView.Cue.Inflation: sfx.DebtDeflate(); break;
                 case DebtLedgerView.Cue.Settled: sfx.DebtPaid(); break;
                 case DebtLedgerView.Cue.Bonus: sfx.Chime(1.2f); break;
             }

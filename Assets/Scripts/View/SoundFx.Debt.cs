@@ -13,6 +13,8 @@
 //   DebtClick    the minimum paid: a two-part mechanical click, no chime.
 //   DebtRelease  a payment letting the pressure go: a soft exhale of filtered air.
 //   DebtCreak    the final stage's only bed: a low, distant, dry paper creak, now and then.
+//   DebtDeflate  "Enflasyon" burning value off a payment on its way to the ledger: a short
+//                falling glide over a dry hiss that darkens as it goes - value going out of it.
 
 using UnityEngine;
 
@@ -28,6 +30,13 @@ namespace ProjectBlock.View
         private AudioClip debtClickClip;
         private AudioClip debtReleaseClip;
         private AudioClip debtCreakClip;
+        private AudioClip debtDeflateClip;
+
+        public void DebtDeflate()
+        {
+            if (debtDeflateClip == null) debtDeflateClip = BuildDebtDeflate();
+            PlayWithPitch(debtDeflateClip, 0.98f, 1.02f, 0.55f);
+        }
 
         public void DebtTick()
         {
@@ -153,6 +162,20 @@ namespace ProjectBlock.View
             HighPass(b, 80f);
             Room(b, 0.15f, 0.6f);
             return PFinish("debtRelease", b, 0.6f);
+        }
+
+        private static AudioClip BuildDebtDeflate()
+        {
+            var rng = new System.Random(32016);
+            float[] b = Buffer(0.6f);
+            // the value going out of it: a soft glide down, a dry hiss that darkens behind it
+            PSine(b, 0f, 0.45f, 620f, 170f, 0.14f, 0.3f, 0.01f, 0.2f);
+            PNoiseSweep(b, 0.01f, 0.45f, 0.28f, 0.02f, 0.16f, 400f, 5200f, 700f, rng);
+            ResonantClick(b, 0f, 1500f, 1200f, 14f, 0.25f, 0.0012f, rng);
+            Saturate(b, 1.1f);
+            HighPass(b, 100f);
+            Room(b, 0.12f, 0.5f);
+            return PFinish("debtDeflate", b, 0.65f);
         }
 
         private static AudioClip BuildDebtCreak()

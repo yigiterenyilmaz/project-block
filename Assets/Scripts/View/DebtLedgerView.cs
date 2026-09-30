@@ -30,7 +30,10 @@
 // THE MOTION SAYS WHICH WAY THE BOOKS MOVED. A payment's digits slide DOWN and the band's end
 // takes a brief amber edge as it retracts; interest's slide UP behind red ink creeping in from the
 // right, the RATE's value giving way to what it just cost ("FAİZ +150", written where the rate
-// stands) and a breath of muted red on the number - never a shake.
+// stands) and a breath of muted red on the number - never a shake. A payment earned in an
+// "Enflasyon" round stops halfway (PlayInflatedPayment): the inflation is burned off it - a
+// scorched slip with the lost value peels away, the chip's number counts down to its real worth
+// - and only what is left reaches the ledger.
 // Opening is a contract laid down with a burgundy seal; settling drains the band into a warm
 // KAPANDI. A stage turning is a TICK: one segment goes brass -> burgundy -> charcoal, the panel
 // settles a pixel, the term's digit rolls. The last stage steps the panel forward under a SON
@@ -99,6 +102,13 @@ namespace ProjectBlock.View
             public static readonly Color MutedRed = new Color(0.86f, 0.5f, 0.46f);
             public static readonly Color GoldIvory = new Color(1f, 0.9f, 0.62f);
             public static readonly Color Ink = new Color(0.16f, 0.06f, 0.07f);
+            /// <summary>"Enflasyon": the heat of the inflation burning value off a payment, the
+            /// scorched slip it peels away as, the ash it ends in, and the chip's cream once it
+            /// has lost what it lost.</summary>
+            public static readonly Color Ember = new Color(0.9f, 0.5f, 0.22f);
+            public static readonly Color Scorch = new Color(0.28f, 0.11f, 0.06f);
+            public static readonly Color Ash = new Color(0.36f, 0.32f, 0.3f);
+            public static readonly Color CreamSpent = new Color(0.82f, 0.76f, 0.68f);
 
             /// <summary>The debt's own mark: the tab on the panel's head and the underline under
             /// the TOTAL are this one colour, which is what says they are one system.</summary>
@@ -120,6 +130,13 @@ namespace ProjectBlock.View
             public static float OpenRoll = 0.14f;
             public static float PaymentTravel = 0.23f;
             public static float PaymentRoll = 0.22f;
+            /// <summary>An inflated payment: out to where it stops (a share of the way), the burn
+            /// there, and on to the ledger. Slower than a plain payment on purpose - the sum has
+            /// to be read.</summary>
+            public static float InflationLeg = 0.26f;
+            public static float InflationStop = 0.5f;
+            public static float InflationBurn = 0.62f;
+            public static float InflationLeg2 = 0.2f;
             public static float Coalesce = 0.15f;
             public static float InterestCreep = 0.3f;
             public static float InterestRoll = 0.22f;
@@ -228,7 +245,9 @@ namespace ProjectBlock.View
             /// <summary>The term ran out with money owed: the contract closes.</summary>
             ContractLock,
             /// <summary>The final stage's rare squeeze - a paper creak goes on it.</summary>
-            Squeeze
+            Squeeze,
+            /// <summary>"Enflasyon" burning value off a payment on its way to the ledger.</summary>
+            Inflation
         }
 
         public Action<Cue> Sounded;
@@ -938,7 +957,7 @@ namespace ProjectBlock.View
                 {
                     Transform c = transform.parent.GetChild(i);
                     if (c.name == "PaymentChip" || c.name == "CarrySlip" || c.name == "BonusToken"
-                        || c.name == "LedgerFleck")
+                        || c.name == "LedgerFleck" || c.name == "InflationSlip")
                     {
                         Destroy(c.gameObject);
                     }
@@ -1035,14 +1054,9 @@ namespace ProjectBlock.View
             }
 
             // The chip: cream/brass, "-250 BORÇ", flying in on a short curve.
-            var chipGo = new GameObject("PaymentChip").transform;
-            chipGo.SetParent(transform.parent, false);
-            SpriteRenderer plate = Sprite(chipGo, "Plate", ViewUtil.RoundedSprite, Style.Order + 12);
-            TextMesh label = Text(chipGo, "Label", "-" + Money(amount) + " " + Loc.Pick("DEBT", "BORÇ"),
-                0.016f, Style.Ink, Style.Order + 13, TextAnchor.MiddleCenter);
-            float plateW = TextWidth(label, label.text) + 0.22f;
-            Place(plate, Vector2.zero, plateW, 0.3f);
-            plate.color = Style.Cream;
+            TextMesh label;
+            SpriteRenderer plate;
+            Transform chipGo = MakeChip(amount, out plate, out label);
             Vector2 to = DebtNumberWorld;
             Vector2 ctrl = (from + to) * 0.5f + new Vector2(0f, 0.9f);
             float t = 0f;
@@ -1053,8 +1067,33 @@ namespace ProjectBlock.View
                 chipGo.position = Bezier(from, ctrl, to, u);
                 yield return null;
             }
-            // Contact: absorbed, the band retracts behind a brief amber edge, the digits slide
-            // DOWN - and the share it took is published for whoever lets the screen breathe.
+            yield return Absorb(chipGo, 1f, amount, to, after);
+            running--;
+        }
+
+        /// <summary>A payment chip: a cream plate with "-X BORÇ" in ink.</summary>
+        private Transform MakeChip(long amount, out SpriteRenderer plate, out TextMesh label)
+        {
+            var chipGo = new GameObject("PaymentChip").transform;
+            chipGo.SetParent(transform.parent, false);
+            plate = Sprite(chipGo, "Plate", ViewUtil.RoundedSprite, Style.Order + 12);
+            label = Text(chipGo, "Label", ChipText(amount), 0.016f, Style.Ink, Style.Order + 13,
+                TextAnchor.MiddleCenter);
+            Place(plate, Vector2.zero, TextWidth(label, label.text) + 0.22f, 0.3f);
+            plate.color = Style.Cream;
+            return chipGo;
+        }
+
+        private static string ChipText(long amount)
+        {
+            return "-" + Money(amount) + " " + Loc.Pick("DEBT", "BORÇ");
+        }
+
+        /// <summary>CONTACT: the chip is absorbed, the band retracts behind a brief amber edge,
+        /// the digits slide DOWN - and the share it took is published for whoever lets the screen
+        /// breathe. <paramref name="startScale"/> is the chip's size as it arrives.</summary>
+        private IEnumerator Absorb(Transform chipGo, float startScale, long amount, Vector2 to, State after)
+        {
             long before = Math.Max(debtNumber.Value, after.Debt + amount);
             LastPaymentShare = before > 0 ? Mathf.Clamp01(amount / (float)before) : 1f;
             Emit(Cue.Payment);
@@ -1069,6 +1108,7 @@ namespace ProjectBlock.View
                 k += Dt;
                 float u = Mathf.Clamp01(k / Style.PaymentRoll);
                 float s = u < 0.4f ? Mathf.Lerp(1f, 0.4f, u / 0.4f) : Mathf.Lerp(0.4f, 0f, (u - 0.4f) / 0.6f);
+                s *= startScale;
                 chipGo.localScale = new Vector3(s, s, 1f);
                 shownFraction = Mathf.Lerp(fromFraction, toFraction, EaseOut(u));
                 edgeFlash = Mathf.Sin(u * Mathf.PI);
@@ -1081,6 +1121,117 @@ namespace ProjectBlock.View
             {
                 yield return MinimumSatisfied();
             }
+        }
+
+        /// <summary>
+        /// "ENFLASYON": a payment earned in INFLATED points (Core's two numbers, from
+        /// InflationSettlement). The chip leaves the round carrying what the round earned -
+        /// "-300 BORÇ" - and stops halfway to the ledger. There the inflation is burned off it:
+        /// an ENFLASYON tag lights over it, the difference peels away as a scorched slip with its
+        /// own number on it and falls, and the chip's number counts down to the real value while
+        /// the chip shrinks and dulls. Only then does it go on to the ledger, where what is left -
+        /// "-100 BORÇ" - comes off the debt exactly as any other payment does. The reader sees
+        /// the whole sum: earned, lost to inflation, paid.
+        /// </summary>
+        public void PlayInflatedPayment(long net, long gross, Vector2 from, State after)
+        {
+            Build();
+            if (net <= 0)
+            {
+                ShowState(after);
+                return;
+            }
+            if (gross <= net)
+            {
+                PlayPayment(net, from, after);
+                return;
+            }
+            StartCoroutine(InflatedPayment(net, gross, from, after));
+        }
+
+        private IEnumerator InflatedPayment(long net, long gross, Vector2 from, State after)
+        {
+            running++;
+            if (!IsOpen)
+            {
+                ShowState(after);
+            }
+            TextMesh label;
+            SpriteRenderer plate;
+            Transform chipGo = MakeChip(gross, out plate, out label);
+            float plateW = TextWidth(label, label.text) + 0.22f;
+            Vector2 to = DebtNumberWorld;
+            Vector2 ctrl = (from + to) * 0.5f + new Vector2(0f, 0.9f);
+
+            // 1. out of the round, halfway to the ledger
+            float t = 0f;
+            while (t < Style.InflationLeg)
+            {
+                t += Dt;
+                chipGo.position = Bezier(from, ctrl, to, Style.InflationStop * EaseOut(Mathf.Clamp01(t / Style.InflationLeg)));
+                yield return null;
+            }
+            Vector2 stop = Bezier(from, ctrl, to, Style.InflationStop);
+            chipGo.position = stop;
+
+            // 2. the inflation is burned off: a tag, a scorched slip with the lost value on it
+            //    peeling away and falling, the number counting down to what it is really worth
+            Emit(Cue.Inflation);
+            TextMesh tag = Text(chipGo, "InflationTag", Loc.Pick("INFLATION", "ENFLASYON"), 0.013f,
+                Style.Ember, Style.Order + 13, TextAnchor.LowerCenter);
+            tag.transform.localPosition = new Vector3(0f, 0.2f, 0f);
+            long lost = gross - net;
+            var slip = new GameObject("InflationSlip").transform;
+            slip.SetParent(transform.parent, false);
+            SpriteRenderer slipPlate = Sprite(slip, "Plate", ViewUtil.RoundedSprite, Style.Order + 11);
+            TextMesh slipText = Text(slip, "Label", "-" + Money(lost), 0.0145f, Style.Ember,
+                Style.Order + 12, TextAnchor.MiddleCenter);
+            float slipW = TextWidth(slipText, slipText.text) + 0.18f;
+            Place(slipPlate, Vector2.zero, slipW, 0.25f);
+            Vector2 slipFrom = stop + new Vector2(plateW * 0.5f - slipW * 0.35f, -0.02f);
+            float endScale = Mathf.Lerp(0.72f, 1f, net / (float)gross);
+            bool flecked = false;
+            t = 0f;
+            while (t < Style.InflationBurn)
+            {
+                t += Dt;
+                float k = Mathf.Clamp01(t / Style.InflationBurn);
+                float count = EaseInOut(Mathf.Clamp01((t - 0.08f) / (Style.InflationBurn * 0.62f)));
+                SetText(label, ChipText((long)Mathf.Lerp(gross, net, count)));
+                float s = Mathf.Lerp(1f, endScale, count);
+                chipGo.localScale = new Vector3(s, s, 1f);
+                plate.color = Color.Lerp(Style.Cream, Style.CreamSpent, count);
+                float tagIn = Mathf.Clamp01(t / 0.08f) * (1f - Mathf.Clamp01((k - 0.8f) / 0.2f));
+                ViewUtil.SetTextColor(tag, WithAlpha(Style.Ember, tagIn));
+                // the slip: peels off the chip's right edge, drifts out and falls, and goes out
+                float peel = Mathf.Clamp01((t - 0.06f) / (Style.InflationBurn * 0.9f));
+                slip.position = slipFrom + new Vector2(0.35f * peel, 0.12f * peel - 1.1f * peel * peel);
+                slip.localRotation = Quaternion.Euler(0f, 0f, -24f * peel);
+                float ss = Mathf.Lerp(1f, 0.7f, peel);
+                slip.localScale = new Vector3(ss, ss, 1f);
+                slipPlate.color = WithAlpha(Color.Lerp(Style.Scorch, Style.Ash, peel), 1f - peel * peel);
+                ViewUtil.SetTextColor(slipText, WithAlpha(Color.Lerp(Style.Ember, Style.Ash, peel), 1f - peel));
+                if (!flecked && t >= 0.1f)
+                {
+                    flecked = true;
+                    Flecks(slipFrom, 4, Style.Ember);
+                }
+                yield return null;
+            }
+            SetText(label, ChipText(net));
+            Destroy(slip.gameObject);
+            Destroy(tag.gameObject);
+
+            // 3. what is left goes on to the ledger, and comes off the debt
+            t = 0f;
+            while (t < Style.InflationLeg2)
+            {
+                t += Dt;
+                float u = Mathf.Clamp01(t / Style.InflationLeg2);
+                chipGo.position = Bezier(from, ctrl, to, Mathf.Lerp(Style.InflationStop, 1f, u * u));
+                yield return null;
+            }
+            yield return Absorb(chipGo, endScale, net, to, after);
             running--;
         }
 
