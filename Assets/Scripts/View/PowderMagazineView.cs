@@ -769,7 +769,11 @@ namespace ProjectBlock.View
         /// </summary>
         private void Layout(Magazine m)
         {
-            string key = LayoutKeyOf(m.Cells, m.Cap);
+            // The board's own geometry is part of the key: an inflation power resizes the arena
+            // under the same cells, and a layout kept from before would float off its block.
+            Vector2 origin = board.CellToWorld(new GridPos(0, 0));
+            string key = LayoutKeyOf(m.Cells, m.Cap) + "|" + CellSize.ToString("0.0000") + "|"
+                + origin.x.ToString("0.000") + "," + origin.y.ToString("0.000");
             if (key == m.LayoutKey)
             {
                 return;
