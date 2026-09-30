@@ -1511,9 +1511,11 @@ call, 2026-09-30; `GameSession.Credit.cs`). The joker is only the switch that tu
 `CreditAvailable` on; the terms are `MarketConfig.Credit*` balance placeholders. **The purse goes
 negative**: `Spend` takes the purse first and borrows the rest without a limit, and `Balance`
 (`TotalScore - Debt`) is what the HUD and the market print. **A round pays IN ORDER**
-(`GameSession.BankRoundScore`, designer's call 2026-09-30): what it earns up to its OWN threshold
-is the player's and goes to the purse; what lands above it - the minimum payment, then every point
-of overtime - pays the debt first. Every way round score reaches the purse goes through it (the
+(`GameSession.BankRoundScore`, designer's calls 2026-09-30): what it earns up to its OWN threshold
+only passes it - while in debt it goes neither to the purse nor to the debt, because **the purse
+is never above zero while anything is owed** (nothing that takes money back may push it below zero
+then either); what lands above the threshold - the minimum payment, then every point of overtime -
+pays the debt. Every way round score reaches the purse goes through it (the
 turn's banked score, a between-turn score, a boss beaten on its own terms), and score clawed back
 from the TOP of the meter (the crossing's excess, an overtime cap) goes back onto the debt first
 (`UnbankRoundScoreFromTop`). Money from outside a round - a sale, an effect's grant - still pays
