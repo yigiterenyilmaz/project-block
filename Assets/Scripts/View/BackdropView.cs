@@ -1,4 +1,7 @@
-// PURPOSE: The BACKDROP - the surface the whole game sits on. Camera-parented, so it covers
+// PURPOSE: The LEGACY backdrop (2026-09-30: GameBackgroundPresentationController is what the game
+// draws now; this stays untouched as the look the lab compares against, and as the fallback with
+// the new one switched to Legacy). Kept exactly as it was designed:
+// The BACKDROP - the surface the whole game sits on. Camera-parented, so it covers
 // the view at any aspect, and drawn far below everything else (negative sorting orders; the
 // board's own background is 0).
 //
@@ -225,6 +228,20 @@ namespace ProjectBlock.View
             if (root != null)
             {
                 root.gameObject.SetActive(visible);
+            }
+        }
+
+        /// <summary>The lab's side-by-side (GameBackgroundPresentationController.ViewMode.Split):
+        /// the legacy look is drawn only OUTSIDE the split mask, the new one inside it.</summary>
+        public void SetMaskInteraction(SpriteMaskInteraction interaction)
+        {
+            SpriteRenderer[] layers = { ground, grey, pool, dither, vignette };
+            for (int i = 0; i < layers.Length; i++)
+            {
+                if (layers[i] != null)
+                {
+                    layers[i].maskInteraction = interaction;
+                }
             }
         }
 

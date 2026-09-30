@@ -3944,6 +3944,7 @@ namespace ProjectBlock.View
             // the switches (GameUiController.PowderMagazineLab).
             AddPowderMagazineAnims();
             AddCreditLabAnims();
+            AddBackgroundLabAnims();
 
             AddAnimSub("jokers", "mikrodalga", "mikrodalga", "mikrodalga");
             AddAnim("mikrodalga: an ORDINARY combo (combo knob)",
@@ -7337,6 +7338,7 @@ namespace ProjectBlock.View
             StopAnimImprintRoutine();
             StopAnimMagazine();
             StopAnimCredit();
+            StopAnimBackground();
             boardView.StopParasite();
         }
 

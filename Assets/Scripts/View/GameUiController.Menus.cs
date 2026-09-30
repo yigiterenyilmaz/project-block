@@ -403,6 +403,10 @@ namespace ProjectBlock.View
             jokerBar.SetVisible(visible);
             powerBar.SetVisible(visible);
             SetBossBadgeVisible(visible);
+            if (background != null)
+            {
+                background.SetRunVisible(visible);
+            }
             if (visible)
             {
                 return;

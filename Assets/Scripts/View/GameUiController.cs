@@ -690,6 +690,8 @@ namespace ProjectBlock.View
             // "Kredi kartı": the ledger follows the books every frame - and remembers where the
             // bars' panels stand BEFORE anything this frame can take them away (see .Credit).
             TickCreditPresentation();
+            // The background is told where the board, the hand and the piles are this frame.
+            TickBackground();
             SyncPilesForMarket(); // was never called: the piles printed through the market
             // "Midas" warms the score line while its gold is landing on it (see .Midas): one
             // owner for that transform, and it is this one.

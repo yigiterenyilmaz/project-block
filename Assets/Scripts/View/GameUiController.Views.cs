@@ -72,6 +72,9 @@ namespace ProjectBlock.View
             backdropGo.transform.SetParent(transform, false);
             backdrop = backdropGo.AddComponent<BackdropView>();
             backdrop.Build(cam);
+            // ...and the background the game actually shows now, which keeps the legacy backdrop
+            // above only for the lab's comparison (see GameBackgroundPresentationController).
+            BuildBackground();
 
             var boardGo = new GameObject("BoardView");
             boardGo.transform.SetParent(transform, false);

@@ -95,6 +95,8 @@ namespace ProjectBlock.View
                 {
                     backdrop.SetDesaturation(k);
                 }
+                // the new background takes it as its "debt" mood (see .Background)
+                SetBackgroundDebtMood(k);
             };
 
             var fgo = new GameObject("Foreclosure");

@@ -182,8 +182,9 @@ namespace ProjectBlock.View
             {
                 return false;
             }
+            // The background lab's boss-overlay scene holds a look on screen with the lab open.
             bool onScreen = screen == AppScreen.Playing && session != null && !GalleryOpen
-                && !AnimLabOpen;
+                && (!AnimLabOpen || bgLabBossLook != BossAmbience.None);
             bossIdentity.SetVisible(onScreen);
             if (!onScreen)
             {
@@ -214,6 +215,10 @@ namespace ProjectBlock.View
             else if (bossLookApplyReal && boss != null)
             {
                 look = BossThemes.Look(BossThemes.For(boss.DefId));
+            }
+            if (bgLabBossLook != BossAmbience.None)
+            {
+                look = bgLabBossLook;
             }
             bossIdentity.SetAmbience(look);
             bossIdentity.SetAtmosphere(look != BossAmbience.None);
