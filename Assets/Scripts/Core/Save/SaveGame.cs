@@ -72,7 +72,10 @@ namespace ProjectBlock.Core
         // 24 (2026-09-30): "Kredi kartı" became a loan - the session saves the term it is into and
         // the stage's books (credit.*), every market offer its bank campaign, and the round its
         // minimum payment (creditInstallment). A 23 is short all three.
-        public const int FormatVersion = 24;
+        // 25 (2026-09-30): "Enflasyon" raises the bar by a share of what is still missing rather
+        // than by a compounding rate, so the boss saves what it has ADDED (and its new rate) where
+        // it used to save the turns it had counted. A 24's boss block goes out of step.
+        public const int FormatVersion = 25;
 
         private const string VersionKey = "version";
 

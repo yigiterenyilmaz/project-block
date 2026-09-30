@@ -139,6 +139,19 @@ namespace ProjectBlock.Core
             get { return false; }
         }
 
+        /// <summary>
+        /// True when the round's money is HELD BACK until the round ends ("Enflasyon"): nothing
+        /// the meter banks reaches the purse (or the debt) turn by turn, and when the round is won
+        /// the session pays it out DEFLATED - what the round's own bar was worth before the boss
+        /// inflated it, and every overtime point at the same rate (GameSession.Inflation.cs). A
+        /// query like every other bend: the engine and the session ask it; the boss never touches
+        /// the purse. A round that is lost forfeits what it held.
+        /// </summary>
+        public virtual bool DefersRoundPayout
+        {
+            get { return false; }
+        }
+
         /// <summary>True while nothing may put a charge back into a power ("Tükenmişlik") -
         /// clean sweeps and "Powerbank" alike. The round-start recharge already happened.</summary>
         public virtual bool BlocksPowerRecharge

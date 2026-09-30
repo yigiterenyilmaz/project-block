@@ -332,7 +332,9 @@ namespace ProjectBlock.Core
                 return;
             }
             RoundScore -= scaled;
-            if (session != null)
+            // A round that holds its money back ("Enflasyon") paid none of it out: the charge is
+            // the meter going down, and the payout at the round's end follows the meter.
+            if (session != null && !DefersPayout)
             {
                 session.AddCurrency(-scaled);
             }
@@ -360,7 +362,7 @@ namespace ProjectBlock.Core
                 return 0;
             }
             RoundScore -= taken;
-            if (session != null)
+            if (session != null && !DefersPayout)
             {
                 session.AddCurrency(-taken);
             }
@@ -444,10 +446,11 @@ namespace ProjectBlock.Core
                 currentReport.ScoreGained -= excess;
                 currentReport.RoundScoreAfter = RoundScore;
             }
-            else if (session != null)
+            else if (session != null && !DefersPayout)
             {
                 // Between turns there is no report to trim, so the currency is given back - from
-                // the TOP of the meter, where a debt's share landed.
+                // the TOP of the meter, where a debt's share landed. (A round holding its money
+                // back paid none out: trimming the meter is all there is to do.)
                 session.UnbankRoundScoreFromTop(excess);
             }
         }
@@ -508,7 +511,7 @@ namespace ProjectBlock.Core
                 return;
             }
             RoundScore = ScaledThreshold;
-            if (session != null)
+            if (session != null && !DefersPayout)
             {
                 // excess is already in scaled units (RoundScore is scaled), so no extra scale.
                 // remove the overtime-farmed excess from the run - from the top of the meter,

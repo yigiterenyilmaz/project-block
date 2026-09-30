@@ -120,6 +120,33 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
+        /// "Enflasyon": the round's own bar as it stood BEFORE the boss inflated it, in the same
+        /// scaled units - the round's config threshold (a mirror world's rise included), with no
+        /// boss filter. Only meaningful while DefersPayout: that boss is the round's only one, so
+        /// the one filter left out is the inflation. What reaching the inflated bar is worth.
+        /// </summary>
+        public int UninflatedOwnBar
+        {
+            get
+            {
+                int threshold = Config.ScoreThreshold;
+                if (HasMirrorWorld)
+                {
+                    threshold = (int)Math.Ceiling(threshold * MirrorThresholdFactor);
+                }
+                return threshold * scorer.ScoreScale;
+            }
+        }
+
+        /// <summary>True when this round's money is held back until it ends and paid out
+        /// deflated (BossRound.DefersRoundPayout). Every place that moves run currency along with
+        /// the meter asks this and leaves the purse alone.</summary>
+        public bool DefersPayout
+        {
+            get { return Boss != null && Boss.DefersRoundPayout; }
+        }
+
+        /// <summary>
         /// "Kredi kartı": the minimum payment ("asgari") on the run's debt that this stage has to
         /// earn ON TOP of its own threshold, in the scaled economy. Set once by the session before
         /// the first turn and fixed for the stage. It raises the bar, not ScoreThreshold: the

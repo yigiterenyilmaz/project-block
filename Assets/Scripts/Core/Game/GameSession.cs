@@ -1163,7 +1163,8 @@ namespace ProjectBlock.Core
             }
             // Un-bank the voided attempt. Clamped: an effect may already have emptied the purse
             // ("Cana geleceğine mala"), and the run currency never goes negative.
-            long banked = CurrentRound.RoundScore;
+            // A round that held its money back ("Enflasyon") banked none of it: nothing to undo.
+            long banked = CurrentRound.DefersPayout ? 0 : CurrentRound.RoundScore;
             if (banked > TotalScore)
             {
                 banked = TotalScore;
@@ -1242,6 +1243,10 @@ namespace ProjectBlock.Core
         {
             if (status == RoundStatus.Advanced)
             {
+                // "Enflasyon": a round that held its money back pays it out now, deflated - first,
+                // so the round-end effects and the credit books below see the money it earned.
+                SettleHeldRoundScore();
+
                 // Round-end effects pay out either way - a run-winning round must still settle
                 // the kumbara jokers - so this runs BEFORE the win check.
                 Jokers.DispatchRoundEnded(CurrentRound, RoundOutcome.Advanced);

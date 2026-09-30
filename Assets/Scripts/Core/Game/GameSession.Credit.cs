@@ -288,6 +288,14 @@ namespace ProjectBlock.Core
         /// <param name="roundScoreAfter">The round's meter once this amount is on it.</param>
         internal void BankRoundScore(long amount, long roundScoreAfter)
         {
+            // "Enflasyon": the round holds its money back and pays it out, deflated, when it ends
+            // (GameSession.Inflation.cs). Nothing reaches the purse or the debt now; the books
+            // hold it as taken by the effect, and the payout is granted back.
+            if (CurrentRound != null && CurrentRound.DefersPayout)
+            {
+                HoldRoundScore(amount);
+                return;
+            }
             if (amount < 0)
             {
                 TakeBack(-amount);

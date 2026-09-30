@@ -258,7 +258,9 @@ public static partial class JokerTests
         Antimadde_PaysForEveryCubeItAnnihilates();
         Eforsuz_PaysOnAPowerFreeRound();
         Eforsuz_DoublesForAPowerFreeOvertime();
-        Enflasyon_RaisesTheBarEveryTurn();
+        Enflasyon_RaisesTheBarByAShareOfWhatIsMissing();
+        Enflasyon_TheBarHoldsStillOnceReached();
+        Enflasyon_PaysWhatTheOriginalBarWasWorth();
         Enflasyon_CannotInflatePastWhatFits();
         Hiclik_BillsForEveryCubeStanding();
         Hiclik_CannotEatScoreAlreadyBanked();
@@ -9276,26 +9278,105 @@ public static partial class JokerTests
         return total;
     }
 
-    private static void Enflasyon_RaisesTheBarEveryTurn()
+    private static void Enflasyon_RaisesTheBarByAShareOfWhatIsMissing()
     {
-        Section("enflasyon / the bar climbs 3% per turn, compounding");
-        var session = NewBossSession(6100, 5, 1000, "enflasyon");
-        var boss = (EnflasyonBoss)session.CurrentRound.Boss;
+        Section("enflasyon / every turn the bar rises by 5% of what is still missing");
+        var session = NewBossSession(6100, 5, 2000, "enflasyon");
         RoundEngine round = session.CurrentRound;
-        Check(round.ScoreThreshold == 1000, "turn 0: the bar is the round's own",
+        int scale = session.Config.Scoring.ScoreScale;
+        Check(round.ScoreThreshold == 2000, "turn 0: the bar is the round's own",
             "" + round.ScoreThreshold);
 
+        // The design's own example: a bar of 2000 with 1000 scored rises by 5% of the 1000 left.
+        round.AddScoreOutsideTurn(1000);
         PlayOneCard(round);
-        int afterOne = round.ScoreThreshold;
-        Check(afterOne == 1030, "after one turn it is 3% higher", "" + afterOne);
+        long missing = 2000L * scale - round.RoundScore;
+        int expected = 2000 + (int)Math.Max(1L, (long)Math.Ceiling(missing * 5.0 / 100.0 / scale));
+        Check(round.ScoreThreshold == expected, "2000 with 1000 scored -> " + expected,
+            round.ScoreThreshold + " (scored " + round.RoundScore / scale + ")");
+        Check(round.RoundScore != 1000L * scale || round.ScoreThreshold == 2050,
+            "exactly 2050 when the turn itself scored nothing", "" + round.ScoreThreshold);
+
+        // ...and the next turn measures what is missing against the risen bar.
+        int barBefore = round.ScoreThreshold;
         PlayOneCard(round);
-        Check(round.ScoreThreshold == 1061, "after two it COMPOUNDS (1030 -> 1061, not 1060)",
-            "" + round.ScoreThreshold);
+        long missing2 = (long)barBefore * scale - round.RoundScore;
+        int expected2 = barBefore + (int)Math.Max(1L, (long)Math.Ceiling(missing2 * 5.0 / 100.0 / scale));
+        Check(round.ScoreThreshold == expected2, "the second rise is 5% of what is missing then",
+            round.ScoreThreshold + " vs " + expected2);
 
         // Whatever the bar is, the engine and the config must not disagree about it.
-        Check(round.Config.ScoreThreshold == 1000, "the config still names the base bar");
+        Check(round.Config.ScoreThreshold == 2000, "the config still names the base bar");
         Check(round.ScoreThreshold > round.Config.ScoreThreshold,
             "and the LIVE bar is the one that moved - read RoundEngine, never Config");
+    }
+
+    private static void Enflasyon_TheBarHoldsStillOnceReached()
+    {
+        Section("enflasyon / a reached bar stops rising - overtime is measured against it");
+        var session = NewBossSession(6103, 5, 1000, "enflasyon");
+        RoundEngine round = session.CurrentRound;
+        round.AddScoreOutsideTurn(round.PassBar / session.Config.Scoring.ScoreScale + 5);
+        Check(round.ThresholdPassed && round.Status == RoundStatus.AwaitingAdvanceDecision,
+            "the bar was reached", "" + round.Status);
+        int bar = round.ScoreThreshold;
+        round.DecideAdvance(false);
+        PlayOneCard(round);
+        PlayOneCard(round);
+        Check(round.ScoreThreshold == bar, "overtime turns do not move it", round.ScoreThreshold + " vs " + bar);
+    }
+
+    private static void Enflasyon_PaysWhatTheOriginalBarWasWorth()
+    {
+        Section("enflasyon / the round's money is held, then paid at the ORIGINAL bar's value");
+        var session = NewBossSession(6104, 5, 1000, "enflasyon");
+        var boss = (EnflasyonBoss)session.CurrentRound.Boss;
+        RoundEngine round = session.CurrentRound;
+        int scale = session.Config.Scoring.ScoreScale;
+        boss.InflateForTest(2000); // inflation has eaten the bar up from 1000 to 3000
+        Check(round.ScoreThreshold == 3000 && round.UninflatedOwnBar == 1000 * scale,
+            "the bar is 3000, and was 1000", round.ScoreThreshold + " / " + round.UninflatedOwnBar);
+        long purse = session.TotalScore;
+        long taken = session.CurrencyTakenByEffects;
+        round.AddScoreOutsideTurn(3000);
+        Check(round.ThresholdPassed, "3000 reached the bar");
+        Check(session.TotalScore == purse, "nothing reached the purse while the round was running",
+            (session.TotalScore - purse) + " arrived");
+        Check(session.CurrencyTakenByEffects == taken + 3000L * scale,
+            "the books hold it as taken, so they still balance", "" + (session.CurrencyTakenByEffects - taken));
+        round.DecideAdvance(true);
+        Check(session.TotalScore - purse == 1000L * scale, "finishing at 3000 paid the original 1000",
+            "" + (session.TotalScore - purse) / scale);
+        InflationSettlement s = session.LastInflationSettlement;
+        Check(s != null && s.OwnEarned == 3000L * scale && s.OwnPaid == 1000L * scale && s.OvertimePaid == 0,
+            "and the settlement says so", s == null ? "none" : s.OwnEarned + " -> " + s.OwnPaid);
+
+        Section("enflasyon / overtime points are deflated at the same rate");
+        var session2 = NewBossSession(6105, 5, 1000, "enflasyon");
+        var boss2 = (EnflasyonBoss)session2.CurrentRound.Boss;
+        RoundEngine round2 = session2.CurrentRound;
+        boss2.InflateForTest(2000);
+        long purse2 = session2.TotalScore;
+        round2.AddScoreOutsideTurn(3000);
+        round2.DecideAdvance(false); // on into overtime instead of the market
+        Check(round2.Status == RoundStatus.InProgress, "overtime is being played", "" + round2.Status);
+        round2.AddScoreOutsideTurn(600);
+        Check(session2.TotalScore == purse2, "overtime points are held too", "" + (session2.TotalScore - purse2));
+        round2.DeclareRoundWon();
+        Check(session2.TotalScore - purse2 == 1200L * scale,
+            "1000 for the bar + 600 overtime at 1000/3000 = 200", "" + (session2.TotalScore - purse2) / scale);
+        InflationSettlement s2 = session2.LastInflationSettlement;
+        Check(s2 != null && s2.OvertimeEarned == 600L * scale && s2.OvertimePaid == 200L * scale,
+            "the settlement names the overtime part", s2 == null ? "none" : s2.OvertimeEarned + " -> " + s2.OvertimePaid);
+
+        Section("enflasyon / a lost round forfeits what it held");
+        var session3 = NewBossSession(6106, 5, 1000, "enflasyon");
+        RoundEngine round3 = session3.CurrentRound;
+        long purse3 = session3.TotalScore;
+        round3.AddScoreOutsideTurn(400);
+        round3.DeclareLoss(LossReason.BetFailed);
+        Check(session3.TotalScore == purse3 && session3.LastInflationSettlement == null,
+            "nothing was paid and nothing was taken back from the purse", "" + (session3.TotalScore - purse3));
     }
 
     private static void Enflasyon_CannotInflatePastWhatFits()
@@ -9303,10 +9384,11 @@ public static partial class JokerTests
         Section("enflasyon / a very long round cannot overflow the bar");
         var session = NewBossSession(6101, 5, 1000000, "enflasyon");
         var boss = (EnflasyonBoss)session.CurrentRound.Boss;
-        // 400 turns of 3% is 1.03^400 - astronomically past what an int holds once scaled.
+        // Nothing scored: every turn adds 5% of a bar that keeps growing - compounding in effect,
+        // and 400 turns of it is far past what an int holds once scaled.
         for (int i = 0; i < 400; i++)
         {
-            boss.AfterTurnScored(FakeTurn(Bar(1), new ScoreBreakdown()));
+            boss.AfterTurnScored(FakeTurnWithRound(session, new ScoreBreakdown()));
         }
         int bar = boss.FilterScoreThreshold(1000000);
         Check(bar > 0, "the bar is still a positive number, not an overflow", "" + bar);

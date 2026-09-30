@@ -297,74 +297,98 @@ namespace ProjectBlock.Core
     }
 
     /// <summary>
-    /// "Enflasyon" - the bar will not hold still. Every turn you take, the score threshold rises
-    /// 3%, compounding, so a round you drift through gets away from you: ten turns in it is a third
-    /// higher than it started, twenty turns in it is nearly double.
+    /// "Enflasyon" - the bar will not hold still, and the money is worth less by the time it is
+    /// paid (designer's call, 2026-09-30).
     ///
-    /// It is a pure THRESHOLD filter - it destroys nothing, takes nothing and pays nothing
-    /// differently. The pressure is entirely on the clock: score fast or do not score at all.
+    /// THE BAR: at the end of every turn it rises by 5% of what is still MISSING to reach it - a
+    /// bar of 2000 with 1000 scored rises by 50. So it runs hardest from a player who is far
+    /// behind, eases as they close in, and stops the moment it is reached: a turn that reaches the
+    /// bar leaves nothing missing, and once the bar is passed it never moves again. Rounded UP, so
+    /// it always moves while anything is missing. "Missing" is measured against the bar the player
+    /// is actually chasing (RoundEngine.PassBar, a credit minimum included); what rises is the
+    /// round's own threshold.
     ///
-    /// The rise is counted in turns TAKEN, so the first turn is already measured against a raised
-    /// bar - the boss moves before the threshold check, which is what makes the pressure real.
-    /// Read live off RoundEngine.ScoreThreshold, so the bar on screen is always the bar the rules
-    /// use.
+    /// THE MONEY: the round holds it back (DefersRoundPayout) and the session pays it out when the
+    /// round ends, DEFLATED - reaching a bar inflated 1000 -> 3000 pays the original 1000, and
+    /// overtime points past it pay at the same rate, so 600 of them pay 200
+    /// (GameSession.Inflation.cs). The boss itself never touches the purse.
+    ///
+    /// The boss moves before the threshold check, so the bar a turn is measured against already
+    /// carries that turn's rise - which is what makes the pressure real. Read live off
+    /// RoundEngine.ScoreThreshold, so the bar on screen is always the bar the rules use.
     ///
     /// The rate is a BALANCE PLACEHOLDER.
     /// </summary>
     public sealed class EnflasyonBoss : BossRound
     {
-        /// <summary>How much the bar climbs per turn, in percent, compounding.</summary>
-        public double PercentPerTurn = 3.0;
+        /// <summary>How much of what is still missing to the bar is added to it every turn, in
+        /// percent.</summary>
+        public double MissingPercentPerTurn = 5.0;
 
-        private int turnsTaken;
+        /// <summary>What inflation has added to the round's own threshold so far (logical points).</summary>
+        private int added;
+
+        /// <summary>The threshold the filter was last handed - the round's own, before inflation.
+        /// For the status line only; the filter is asked constantly, so it is never stale.</summary>
+        [NotSaved]
+        private int lastBase;
 
         public EnflasyonBoss()
             : base("enflasyon", "Enflasyon")
         {
             SetDescription(
-                "The score threshold rises 3% with every turn you take, compounding. Take your "
-                    + "time and the bar runs away from you.",
-                "Puan eşiği attığın her turda %3 yükselir, bileşik olarak. Oyalanırsan eşik "
-                    + "senden kaçar.");
+                "Every turn the score threshold rises by 5% of what you still need to reach it. "
+                    + "The round's money is held back: when it ends you are paid what the ORIGINAL "
+                    + "bar was worth, and overtime points are deflated at the same rate.",
+                "Puan eşiği her turda, eşiğe kalan puanın %5'i kadar yükselir. Raunttaki para "
+                    + "cüzdana doğrudan gitmez: raunt bitince eşiğin İLK değeri kadar ödenir, "
+                    + "uzatmada toplanan puan da aynı oranda eritilir.");
         }
 
-        /// <summary>Turns taken so far, for the UI.</summary>
-        public int TurnsTaken
+        /// <summary>What inflation has added to the round's own threshold (logical points).</summary>
+        public int Added
         {
-            get { return turnsTaken; }
+            get { return added; }
+        }
+
+        /// <summary>TEST SEAM: as if inflation had already added this much to the bar.</summary>
+        internal void InflateForTest(int points)
+        {
+            added = System.Math.Max(0, points);
+        }
+
+        public override bool DefersRoundPayout
+        {
+            get { return true; }
         }
 
         public override string StatusText
         {
             get
             {
-                if (turnsTaken == 0)
+                if (added == 0 || lastBase <= 0)
                 {
-                    return Loc.Pick("+3%/turn", "tur başına %3");
+                    return Loc.Pick("+5% of what is left / turn", "tur başına kalanın %5'i");
                 }
-                int percent = (int)System.Math.Round((Multiplier - 1.0) * 100.0);
-                return "+" + percent + "%";
+                int risen = (int)System.Math.Round(added * 100.0 / lastBase);
+                int worth = (int)System.Math.Round(lastBase * 100.0 / (lastBase + (double)added));
+                return Loc.Pick("+" + risen + "%  (pays " + worth + "%)",
+                    "+%" + risen + "  (cüzdana %" + worth + ")");
             }
-        }
-
-        private double Multiplier
-        {
-            get { return System.Math.Pow(1.0 + PercentPerTurn / 100.0, turnsTaken); }
         }
 
         public override void OnRoundStarted(RoundContext ctx)
         {
-            turnsTaken = 0;
+            added = 0;
         }
 
-        /// <summary>Rounded UP, so the bar always actually moves - a small threshold must not be
-        /// immune to inflation. Capped, because compounding has no natural ceiling: a round that
-        /// drags on for hundreds of turns would otherwise inflate the bar past what an int can
-        /// hold once RoundEngine scales it, and an overflowed threshold is a bar of nonsense
-        /// rather than a hard one. The cap is far beyond reachable either way.</summary>
+        /// <summary>Capped, because a round that drags on could otherwise inflate the bar past what
+        /// an int can hold once RoundEngine scales it; an overflowed threshold is a bar of
+        /// nonsense rather than a hard one. The cap is far beyond reachable either way.</summary>
         public override int FilterScoreThreshold(int threshold)
         {
-            double inflated = System.Math.Ceiling(threshold * Multiplier);
+            lastBase = threshold;
+            long inflated = (long)threshold + added;
             return inflated > MaxThreshold ? MaxThreshold : (int)inflated;
         }
 
@@ -373,7 +397,20 @@ namespace ProjectBlock.Core
 
         public override void AfterTurnScored(TurnContext turn)
         {
-            turnsTaken++;
+            RoundEngine round = turn.Round;
+            if (round == null || round.ThresholdReached)
+            {
+                return; // reached, or passed: the bar holds still from here on
+            }
+            long missing = (long)round.PassBar - round.RoundScore;
+            if (missing <= 0)
+            {
+                return;
+            }
+            // PassBar and RoundScore are scaled; the threshold the rise lands on is logical.
+            int scale = turn.Session != null ? System.Math.Max(1, turn.Session.Config.Scoring.ScoreScale) : 1;
+            long rise = (long)System.Math.Ceiling(missing * MissingPercentPerTurn / 100.0 / scale);
+            added = (int)System.Math.Min((long)added + System.Math.Max(1L, rise), MaxThreshold);
         }
     }
 
