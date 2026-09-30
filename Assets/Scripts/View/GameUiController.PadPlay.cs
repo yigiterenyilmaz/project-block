@@ -598,7 +598,7 @@ namespace ProjectBlock.View
                 }
             }
             bool valid = round.CanPlaceCard(card, padCell);
-            boardView.ShowPreview(shape, padCell, valid);
+            boardView.ShowPreview(shape, padCell, valid, round.StampedKinds(card, shape));
             if (!pad.buttonSouth.wasPressedThisFrame)
             {
                 return acted;

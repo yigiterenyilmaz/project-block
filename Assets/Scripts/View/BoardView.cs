@@ -2680,6 +2680,15 @@ namespace ProjectBlock.View
         /// legal placements, tints every cell of the rows/columns that would explode.</summary>
         public void ShowPreview(BlockShape shape, GridPos origin, bool valid)
         {
+            ShowPreview(shape, origin, valid, null);
+        }
+
+        /// <summary>As above, knowing what each arriving cube will be (RoundEngine.StampedKinds):
+        /// a gold block locks every line it lands in, so it must never be shown clearing one.
+        /// Null is the old guess - every arriving cube ordinary.</summary>
+        public void ShowPreview(BlockShape shape, GridPos origin, bool valid,
+            IReadOnlyList<CubeKind> stampedKinds)
+        {
             ClearPreview();
             if (board == null)
             {
@@ -2712,7 +2721,7 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            LineExplosionResult predicted = board.PredictExplosions(shape, origin);
+            LineExplosionResult predicted = board.PredictExplosions(shape, origin, stampedKinds);
             foreach (GridPos pos in predicted.ExplodedCells)
             {
                 PaintPreviewCell(pos, ExplosionPreviewColor, true);

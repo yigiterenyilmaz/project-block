@@ -1094,8 +1094,10 @@ namespace ProjectBlock.View
                             + "satır veya sütun bonus puan öder - patlamada yok olmadığı için de "
                             + "her seferinde yeniden öder.");
                 case BlockElement.Gold:
-                    return Loc.Pick("Indestructible and sweep-exempt; pays a bonus every turn on the board.",
-                        "Yok edilemez ve temizliği bozmaz; alanda durduğu her tur bonus öder.");
+                    return Loc.Pick("Indestructible and sweep-exempt; pays a bonus every turn on the board. "
+                            + "Its row and column cannot explode while it stands.",
+                        "Yok edilemez ve temizliği bozmaz; alanda durduğu her tur bonus öder. "
+                            + "Durduğu sürece satırı ve sütunu patlamaz.");
                 case BlockElement.Transparent:
                     return Loc.Pick("A block can be placed on top of it; the new cube replaces it.",
                         "Üstüne blok konabilir; yeni küp onun yerini alır.");

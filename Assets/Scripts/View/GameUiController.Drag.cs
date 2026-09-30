@@ -368,7 +368,7 @@ namespace ProjectBlock.View
                 // cursor instead of hanging off its right.
                 origin = boardView.WorldToCenteredOrigin(world, shape.Width, shape.Height);
                 valid = round.CanPlaceCard(slotCard, origin);
-                boardView.ShowPreview(shape, origin, valid);
+                boardView.ShowPreview(shape, origin, valid, round.StampedKinds(slotCard, shape));
             }
             else
             {

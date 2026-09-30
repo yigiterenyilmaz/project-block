@@ -512,7 +512,8 @@ namespace ProjectBlock.View
             // Centred on the cursor exactly as the main board is (BoardView.WorldToCenteredOrigin)
             // - the mirror is the same placement gesture, so it must not aim differently.
             var origin = mirrorBoardView.WorldToCenteredOrigin(world, shape.Width, shape.Height);
-            mirrorBoardView.ShowPreview(shape, origin, round.CanPlaceMirrorCard(picked, origin));
+            mirrorBoardView.ShowPreview(shape, origin, round.CanPlaceMirrorCard(picked, origin),
+                round.StampedKinds(picked, shape));
         }
 
         /// <summary>[M]: resolves the turn with the mirror alone, for when the MAIN world has

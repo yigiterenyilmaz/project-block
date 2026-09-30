@@ -564,7 +564,8 @@ namespace ProjectBlock.View
                 case BlockElement.Obsidian:
                     return Loc.Pick("unbreakable, pays in every line", "kırılmaz, geçtiği her satırda puan");
                 case BlockElement.Gold:
-                    return Loc.Pick("unbreakable, pays every turn", "kırılmaz, her tur puan verir");
+                    return Loc.Pick("unbreakable, pays every turn, locks its lines",
+                        "kırılmaz, her tur puan verir, satırını ve sütununu kilitler");
                 case BlockElement.Transparent:
                     return Loc.Pick("other blocks can go on top", "üstüne başka blok konabilir");
                 default:
