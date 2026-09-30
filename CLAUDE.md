@@ -1113,42 +1113,66 @@ dropped that way once each.
   lab section "parazit - konaktaki joker izi" has 31 scenes, the side-by-side acceptance (old sticker
   vs imprint), a replay that keeps the switches, and 14 switches (`ImprintLayers`); its 0.5x/0.25x
   attach slows only the lab's own riders, never the market's bind.
-- **"Barut tedarikçisi" is a POWDER MAGAZINE, not a glow** (`PowderMagazineView`,
-  `Resources/Shaders/DynamiteCasing`, `GameUiController.Powder.cs`). The charge used to be an orange
-  glow, a fuse spark and a heat rim laid over EACH cube (the legacy `PowderChargeView`, now kept only
-  for the lab's before/after): a grid of red lights getting more orange, stage 4 and 5 told apart by
-  brightness, the fog swallowing the red casing. Now **every dynamite tile is drawn through
-  `DynamiteCasing`** (`ViewUtil.TileMaterial`): the art's flat black band is redrawn as a narrower
-  graphite TENSION STRAP (its old band re-filled with casing sampled from just outside it, so no red
-  is painted), the casing is a deeper lacquered red, and - only through a property block the
-  magazine writes on the board's own renderers - heat comes up the seams in BROKEN hairlines, soot
-  gathers at the junctions, a pressure knot warms, a sub-pixel haze runs at the top stages and the
-  whole cube swells a percent under pressure (in the vertex stage, so no board-owned transform is
-  touched). The tile's geometry is MEASURED off `block_dynamite.png` (band v 0.408-0.600, seams u
-  0.325 / 0.669) and lives in the shader and the view; redraw the tile and those are what change.
+- **"Barut tedarikçisi" is a POWDER MAGAZINE, and its charge is LIGHT WITH A SOURCE**
+  (`PowderMagazineView`, `Resources/Shaders/DynamiteCasing`, `GameUiController.Powder.cs`). Three
+  passes are buried here, and the second is the one to learn from. The first was an orange glow, a
+  fuse spark and a heat rim over EACH cube: a grid of red lights getting more orange. The second
+  (the first magazine) told the charge through STRESS - crisp broken hairlines in the seams, which
+  read as CRACKS; a haze that wobbled the whole cube frame and all, which read as the block
+  TREMBLING; six-pixel chambers; and none of the light the glow had - so stage 1 and stage 5 were
+  the same red block, one of them shaking. **Jitter is not how a charge is told.** Now **every
+  dynamite tile is drawn through `DynamiteCasing`** (`ViewUtil.TileMaterial`): the art's black band
+  redrawn as a narrower graphite strap (its old band re-filled with casing sampled from just outside
+  it), a deeper lacquered red, and - only through a property block the magazine writes on the
+  board's own renderers - the accumulation. Its core is up to five **INTERNAL AMBER POCKETS**
+  (`_PocketA`..`_PocketE`: uv centre, radius, strength), one per LOADED CHAMBER, placed by the view
+  in the casing beside its chamber on alternating sides of the strap and handed to each cube in its
+  OWN uv, so a pocket crosses cube boundaries and stops where the block does. They are summed as a
+  field and SATURATED (`1 - exp(-2.5 f)`), and the mix toward amber is capped: stage 1 is one hot
+  point with a small warm pocket, 3 is three that do not meet, 4 touch, 5 is one connected fill -
+  none of it coded for "connect" - and **red stays dominant at every stage**. The light comes from
+  UNDER the red (vermilion first, only the heart reaches burnt amber, the stick's shading survives)
+  with a few still ember specks in it. Heat leaks out in a broken band under the strap's lower edge
+  (`_Underglow`, strongest where the field reaches the strap, with a warm reflection inside the
+  strap's bottom edge), the seams warm SOFTLY (`_SeamHeat`, a gaussian leak brightened by the field,
+  never a hairline), stages 4-5 get one short pressure crease per cube (a fold with a warm lip,
+  never a crack), and the haze (`_LocalHeatDistortion`, 0.4 / 0.8 px) bends the casing ONLY inside
+  the pockets, away from the frame, slowly. A chamber is a 7 px recessed brass socket with a 10 px
+  halo at 0.13 and a short vein of heat running DOWN into the strap. **Motion is almost nil**: no
+  jitter at stages 0-3, a chamber flick now and then, a seam pulse at 2, ember drift inside the
+  pockets at 3+, a rare half-strength settle at 4, and at 5 a controlled PRESSURE PULSE every
+  2.5-4s (`_Squash` 1.006 x 0.997 in the vertex stage, 150 ms) with a chamber sweep riding it
+  (+10%, 30 ms apart) and a wisp of soot every 4-7s. The tile's geometry is MEASURED off
+  `block_dynamite.png` (band v 0.408-0.600, seams u 0.325 / 0.669) and lives in the shader and
+  the view; redraw the tile and those are what change.
   **One block is one magazine**: cells are grouped by the CARD Core reports (`PowderVisuals.CardIds`
   - two blocks side by side at one charge stay two), a graphite bridge closes the gap between two
-  cubes of one run so the strap reads as one, strap ends round off only where the block ends, and
-  the block's longest run carries a rail of **primer chambers - as many as the cap Core reports**
-  (`PowderVisuals.Cap`, five today; never a hard-coded five), dark when empty, amber when loaded,
-  thin ember notches when the run is too short to hold them. A charge is a **load cycle** (~0.42s:
-  grains in two or three clusters drawn in on curves, the chamber igniting dark -> ember -> amber
-  with a 1.12 punch, heat running a short way along the strap, a percent of swell, settle), never a
-  brightness step; reaching the cap plays a small LOCK. Idle is rare and stage-dependent. A block
-  that goes up **cooks off**: the repaint that emptied its cells raises a copy of the pack
-  (`Prepare`, before `Show`), and when the line reaches its first cube (`Begin`, the Hazine break
-  timing) its loaded chambers fire in physical order 35 ms apart, their heat races INWARD, the pack
-  compresses to 0.975 and blows (amber core never white, powder, red casing fragments, torn strap
-  slivers, a broken secondary ring at stage 4-5, at most 1.24x the footprint), then ONE compact
-  "+TOTAL" and, for a full block, the chambers' light gathers into a seed that flies to the score
-  (`ScoreClaim`, `TickScoreResponse`). Six moments are announced through `Sounded`; only the load,
-  the cap and the blast have sounds yet. The view counts nothing: `PowderPayoutVisuals` carries the
-  card and the charges each cube went up with, and `CubeValues` what a cube is worth now (dev label
-  only). The lab section has 32 scenes (six static stages, five loads, four one-beat loads, three
-  idles, the lock, three detonations, slow pre-ignition, the reward, small / large / irregular
-  blocks, a five-pack stress test, 0.5x / 0.25x) and the old-vs-new acceptance at stages 1 / 3 / 5
-  (the old side drawn on the untouched tile through `SetRawCells`), plus twelve switches; its slow
-  motion is set per call (`PlaybackRate`), and the game always sets 1.
+  cubes of one run, strap ends round off only where the block ends, and the block's longest run
+  carries **as many chambers as the cap Core reports** (`PowderVisuals.Cap`, five today; never a
+  hard-coded five), thin ember notches when the run is too short to hold them. A charge is a
+  **load cycle** (~0.42s): dark grains in two or three clusters drawn in on curves, the chamber
+  igniting dark -> ember -> amber with a 1.12 punch, ITS POCKET BLOOMING in the casing (0.7 -> 1.0
+  over 0.15s - the new pocket is what says "powder went in"), heat along the strap, a percent of
+  pressure, settle. Reaching the cap plays a small LOCK (chambers +15%, pockets +10%, the strap a
+  pixel tighter, 1.01, one wisp, ~0.21s). A block that goes up **cooks off**: the repaint that
+  emptied its cells raises a copy of the pack (`Prepare`, before `Show`), and when the line reaches
+  its first cube (`Begin`, the Hazine break timing) its loaded chambers fire in physical order 30 ms
+  apart while the POCKETS ARE DRAWN IN toward the centre (0.75, 20% brighter), the pack compresses
+  and blows (amber core never white, powder, red casing fragments, torn strap slivers, a broken
+  secondary ring at 4-5), then ONE "+TOTAL" 0.1s after the blast (a few powder flecks round it at
+  stage 5 - no coins) and, for a full block, the chambers' light gathers into a seed that flies to
+  the score (`ScoreClaim`, `TickScoreResponse`). Six moments are announced through `Sounded`; only
+  the load, the cap and the blast have sounds yet. The view counts nothing: `PowderPayoutVisuals`
+  carries the card and the charges each cube went up with, and `CubeValues` what a cube is worth
+  now (dev label only). The lab section is the corrective pass's A-V - six stages standing, five
+  loads, each light source ALONE on three packs at stages 1 / 3 / 5 (primers, pockets, underglow,
+  seam heat; the "only" scenes switch the other features off and put them back when stopped), the
+  pressure pulse and the haze alone on a full pack, the stage 5 idle, the lock, the cook-off at
+  0.25x and at speed, and the before/after - plus ten extras and fourteen switches. **The OLD side
+  of the before/after is the previous pass drawn by the same view** (`SetOldLook`, the shader's
+  `_OldLook`: crisp hairlines, the whole-cube wobble, no pockets, the jittering straps), so the two
+  columns differ only in language; the legacy glow view is gone. Slow motion is set per call
+  (`PlaybackRate`), and the game always sets 1.
 - `Assets/Scripts/View/PowerFxView.cs` — activation animations for powers without a view of
   their own: Totem (carved pole out of a rune circle), İkinci Şans (a four-leaf clover whose
   plucked leaves each take their quadrant of cubes), Soğuk Füzyon, Aşırma / Yedekleme (one card
