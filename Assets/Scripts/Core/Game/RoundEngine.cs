@@ -108,7 +108,15 @@ namespace ProjectBlock.Core
         /// is part of the bar in every sense and there is no second definition to drift.</summary>
         private int ScaledThreshold
         {
-            get { return ScoreThreshold * scorer.ScoreScale + CreditInstallment; }
+            get { return OwnBar + CreditInstallment; }
+        }
+
+        /// <summary>The round's OWN share of the bar, in the same scaled units as RoundScore:
+        /// the threshold without any credit installment. Reporting only - the HUD shows the bar
+        /// as "own + debt burden", and PassBar is always exactly OwnBar + CreditInstallment.</summary>
+        public int OwnBar
+        {
+            get { return ScoreThreshold * scorer.ScoreScale; }
         }
 
         /// <summary>

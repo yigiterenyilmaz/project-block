@@ -5639,6 +5639,9 @@ public static partial class JokerTests
             "threshold " + round.ScoreThreshold);
         Check(round.PassBar == 30 * scale + installment, "but the bar is threshold + minimum",
             round.PassBar + " vs " + (30 * scale + installment));
+        // What the HUD splits the bar into: the round's own share and the debt's burden.
+        Check(round.OwnBar == 30 * scale && round.OwnBar + round.CreditInstallment == round.PassBar,
+            "the bar reports its own share and the debt's share", "own " + round.OwnBar);
 
         // THE ROUND PAYS IN ORDER: its own threshold first, which only passes it - while in debt it
         // goes neither to the purse nor to the debt; the minimum on top of it goes to the debt;
