@@ -11,7 +11,7 @@
 //     (RoundEngine.CreditInstallment - the bar rises, the threshold the jokers scale off does
 //     not). Anything past it is overtime's to earn, and overtime keeps paying the debt.
 //   INTEREST at the end of every stage on what is still owed (CreditInterestPermille, 12.5%).
-//   THE TERM ("vade"): a debt may be carried through CreditTermStages stages (3), counted from
+//   THE TERM ("vade"): a debt may be carried through CreditTermStages stages (4), counted from
 //     the first one it was carried into; borrowing more on an open loan does not reset it.
 //   FORECLOSURE ("haciz") when the term runs out with money still owed: jokers, powers and
 //     elemental blocks are taken MOST VALUABLE FIRST at half their shelf price; with those gone,

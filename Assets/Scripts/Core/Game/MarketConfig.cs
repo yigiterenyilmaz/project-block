@@ -61,7 +61,7 @@ namespace ProjectBlock.Core
 
         /// <summary>The term ("vade"): how many stages a debt may be carried before the bailiff
         /// comes. Counted from the first stage played in debt; borrowing more does not reset it.</summary>
-        public int CreditTermStages = 3;
+        public int CreditTermStages = 4;
 
         /// <summary>What a seized joker, power or elemental block is credited at ("haciz"), as a
         /// share of what it would cost on the shelf.</summary>

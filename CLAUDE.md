@@ -1518,7 +1518,7 @@ its bar: `RoundEngine.CreditInstallment`, added to the private `ScaledThreshold`
 the ceiling and a boss beaten on its own terms all use it) and shown as `PassBar` - NOT to
 `ScoreThreshold`, which the jokers scale off and must not grow because the player is in debt.
 Past the bar is overtime's, and overtime keeps paying. **Interest** (12.5%) on what is left at
-the end of every stage. **The term** (3 stages, counted from the first stage the loan is carried
+the end of every stage. **The term** (4 stages, counted from the first stage the loan is carried
 into; borrowing more does not reset it). **Foreclosure** when it runs out: jokers, powers and
 elemental blocks most valuable first at half their shelf price, then plain blocks at a tenth,
 never below the hand size, the excess handed back; what is still owed with nothing left to take
