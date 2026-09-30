@@ -1,6 +1,9 @@
-// PURPOSE: "Barut tedarikçisi" - a dynamite block VISIBLY filling with powder, and paying it out.
-// The joker's whole proposition is "leave this standing and it gets worth more", so the block on
-// the board has to say so where the player is actually looking.
+// PURPOSE: LEGACY - "Barut tedarikçisi"'s FIRST presentation, kept only so the animation lab can
+// stand it beside its replacement (PowderMagazineView). The game no longer draws this: it put a
+// glow over each cube that only got more orange with every charge, and the refinement pass that
+// replaced it is recorded in PowderMagazineView's header. Do not wire it back into a round.
+//
+// What it was: a dynamite block VISIBLY filling with powder, and paying it out.
 //
 // THREE THINGS, and they are different on purpose:
 //

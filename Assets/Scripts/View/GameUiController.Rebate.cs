@@ -160,7 +160,10 @@ namespace ProjectBlock.View
             float challengeClaim = challenge != null ? challenge.ScoreClaim : 0f;
             float quarryClaim = quarry != null ? quarry.ScoreClaim : 0f;
             float ignitionClaim = ignition != null ? ignition.ScoreClaim : 0f;
-            float claim = Mathf.Max(Mathf.Max(hazineClaim, ignitionClaim), Mathf.Max(challengeClaim, quarryClaim));
+            // "Barut tedarikçisi"'s powder landing: 1.00 -> 1.085 -> 0.985 -> 1, warm amber.
+            float powderClaim = magazine != null ? magazine.ScoreClaim : 0f;
+            float claim = Mathf.Max(Mathf.Max(Mathf.Max(hazineClaim, ignitionClaim),
+                Mathf.Max(challengeClaim, quarryClaim)), powderClaim);
             if (claim > warm && claim > 0.001f)
             {
                 float hs;
@@ -168,6 +171,7 @@ namespace ProjectBlock.View
                 if (claim == hazineClaim) { hs = hazine.ScoreScale; ink = hazine.ScoreInk; }
                 else if (claim == challengeClaim) { hs = challenge.ScoreScale; ink = challenge.ScoreInk; }
                 else if (claim == quarryClaim) { hs = quarry.ScoreScale; ink = quarry.ScoreInk; }
+                else if (claim == powderClaim) { hs = magazine.ScoreScale; ink = magazine.ScoreInk; }
                 else { hs = ignition.ScoreScale; ink = ignition.ScoreInk; }
                 totalText.rectTransform.localScale = new Vector3(hs, hs, 1f);
                 totalText.color = Color.Lerp(midasScoreInk, ink, claim * 0.8f);

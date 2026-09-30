@@ -58,6 +58,7 @@ Shader "ProjectBlock/DynamiteCasing"
         _Swell ("Pressure swell (negative compresses)", Float) = 0
         _Seed ("Per-cube seed", Float) = 0
         _Flash ("Cook-off heat over the whole casing", Float) = 0
+        _Raw ("Draw the untouched art (the lab's before/after)", Float) = 0
     }
 
     SubShader
@@ -116,6 +117,7 @@ Shader "ProjectBlock/DynamiteCasing"
                 float _Swell;
                 float _Seed;
                 float _Flash;
+                float _Raw;
             CBUFFER_END
 
             // The art's geometry, measured off block_dynamite.png (see the header).
@@ -155,6 +157,10 @@ Shader "ProjectBlock/DynamiteCasing"
             half4 Frag(Varyings input) : SV_Target
             {
                 float2 uv = input.uv;
+                if (_Raw > 0.5)
+                {
+                    return SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv) * input.color;
+                }
                 float bandMid = (BandLow + BandHigh) * 0.5;
                 float bandHalf = (BandHigh - BandLow) * 0.5;
                 // The strap narrows under tension - a hair, it is holding, not crushing.
