@@ -592,7 +592,10 @@ namespace ProjectBlock.View
                 case PetHungerStage.Angry:
                     strength = Tuning.AngryAuraStrength; colour = TamagotchiArt.Berry; break;
                 case PetHungerStage.Furious:
-                    strength = Tuning.FuriousAuraStrength; colour = TamagotchiArt.DeepRaspberry; break;
+                    // a perceptual strength, for blending in linear colour
+                    strength = 1f - Mathf.Pow(1f - Tuning.FuriousAuraStrength, 2.2f);
+                    colour = TamagotchiArt.DeepRaspberry;
+                    break;
                 case PetHungerStage.Satisfied:
                     strength = 0.04f; colour = TamagotchiArt.WarmPink; break;
                 default:
@@ -613,8 +616,9 @@ namespace ProjectBlock.View
             auraShadow.transform.localScale = new Vector3(2.6f * S / 0.32f, 1.2f * S / 0.32f, 1f);
             Color plum = TamagotchiArt.Plum;
             auraShadow.color = new Color(plum.r, plum.g, plum.b, (furious ? 0.3f : 0f) * presence);
-            // the local dark-magenta vignette: the fury's, never the whole screen's
-            float v = Mathf.Max(furious ? 0.14f : 0f, vignetteBoost);
+            // the local dark-magenta vignette round the pet - light now, because the hatred field
+            // carries the screen's (the legacy fury still puffs it through vignetteBoost)
+            float v = Mathf.Max(furious ? 0.07f : 0f, vignetteBoost);
             vignette.transform.position = centre;
             vignette.transform.localScale = Vector3.one * (5.2f * S / 0.32f);
             Color m = TamagotchiArt.DarkMagenta;

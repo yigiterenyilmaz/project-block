@@ -380,7 +380,7 @@ namespace ProjectBlock.View
             public static float PatienceRingAlpha = 0.32f;
             public static float ImpatientIdleRate = 0.68f;
             public static float AngryAuraStrength = 0.30f;
-            public static float FuriousAuraStrength = 0.42f;
+            public static float FuriousAuraStrength = 0.12f;  // perceptual (the brief's 0.08-0.14): the screen carries the rest
             public static float FuryTransitionDuration = 0.92f;   // the LEGACY fury only (the lab's comparison)
 
             // FURY (the corrective pass; seconds at 1x - the whole thing runs ~1.55 s)
