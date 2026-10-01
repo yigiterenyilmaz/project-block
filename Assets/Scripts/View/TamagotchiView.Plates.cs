@@ -356,6 +356,9 @@ namespace ProjectBlock.View
         {
             float scale = PlateWorldScale;
             Color tint = PlateTint();
+            // a move: the plates fold away where they are and unfold beside the pet's new place
+            platesAway = Mathf.MoveTowards(platesAway, platesAwayWanted ? 1f : 0f, Dt / (platesAwayWanted ? 0.11f : 0.16f));
+            float away = Smooth(platesAway);
             for (int i = 0; i < plates.Count; i++)
             {
                 PlateView p = plates[i];
@@ -450,6 +453,12 @@ namespace ProjectBlock.View
                 }
                 p.Highlight = Mathf.MoveTowards(p.Highlight, p.HighlightTarget, Dt / 0.12f);
                 p.Root.localScale *= 1f + 0.06f * p.Highlight;
+                if (away > 0.001f)
+                {
+                    Vector3 ls = p.Root.localScale;
+                    p.Root.localScale = new Vector3(ls.x * (1f - 0.3f * away), ls.y * (1f - away), 1f);
+                    alpha *= 1f - away;
+                }
                 p.Root.position = rest + offset;
                 p.Root.rotation = Quaternion.Euler(0f, 0f, rot);
                 Color plateColour = p.Fed ? new Color(0.86f, 0.78f, 0.80f) : tint;
@@ -509,7 +518,7 @@ namespace ProjectBlock.View
         private void TickRing()
         {
             bool show = plates.Count > 0 && plates[0].PopAt >= 0f && clock >= plates[0].PopAt
-                && State.Wants && !platesFolded;
+                && State.Wants && !platesFolded && platesAway < 0.5f;
             float alpha = Tuning.PatienceRingAlpha * (State.Stage == PetHungerStage.Impatient ? 1.3f
                 : State.Stage == PetHungerStage.Angry ? 1.45f : 1f);
             int alive = Mathf.CeilToInt((1f - Mathf.Clamp01(State.Progress)) * RingBeads - 0.001f);
@@ -738,7 +747,9 @@ namespace ProjectBlock.View
                 drag.Band = band;
                 drag.BandSince = clock;
             }
-            Vector2 dir = toCard.sqrMagnitude > 0.0001f ? toCard.normalized : new Vector2(F, 0f);
+            Vector2 worldDir = toCard.sqrMagnitude > 0.0001f ? toCard.normalized : new Vector2(F, 0f);
+            // the lean is a WORLD offset; the head, the tilt and the paws are in the pet's own frame
+            Vector2 dir = ToLocal(worldDir);
             dragLook = LookTo(card) * (band >= 2 ? 1.15f : 1f);
 
             // a content pet only watches; a furious one glares at what it could take
@@ -787,7 +798,7 @@ namespace ProjectBlock.View
                     // medium: the head turns, the body leans 2 px
                     dragEmotion = PetEmotion.Curious;
                     dragEmotionWeight = Mathf.MoveTowards(dragEmotionWeight, 0.6f, Dt / 0.1f);
-                    lean = dir * 2f * px;
+                    lean = worldDir * 2f * px;
                     dragHead = dir * 0.012f;
                     dragTilt = -dir.x * Tuning.HeadLeanMax;
                     break;
@@ -798,7 +809,7 @@ namespace ProjectBlock.View
                     dragIris = 1.1f + 0.1f * noticeBoost;
                     dragMouth = "medium";
                     dragMouthOpen = 0.45f * Tuning.MouthNearScale;
-                    lean = dir * 5f * px;
+                    lean = worldDir * 5f * px;
                     dragHead = dir * 0.018f;
                     dragTilt = -dir.x * Tuning.HeadLeanMax;
                     dragPawL = Paw(0.02f, 0.05f, 38f);
@@ -811,7 +822,7 @@ namespace ProjectBlock.View
                     dragIris = 1.16f;
                     dragMouth = "wide";
                     dragMouthOpen = Mathf.Lerp(0.85f, 1f, Bell(Mathf.Repeat(clock * 1.4f, 1f))) * Tuning.MouthNearScale;
-                    lean = dir * Tuning.NearFoodLean * px;
+                    lean = worldDir * Tuning.NearFoodLean * px;
                     dragHead = dir * 0.024f;
                     dragTilt = -dir.x * Tuning.HeadLeanMax * 1.2f;
                     dragPawL = Paw(0.05f + Mathf.Max(0f, dir.x) * 0.06f, 0.08f, 58f);

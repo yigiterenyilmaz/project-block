@@ -1,22 +1,25 @@
-// PURPOSE: "Tamagotchi"'s voice and its eating - one cue per audio hook the brief names
-// (TamagotchiView.Sounded raises them; PetSound is the list). The creature is CUTE, not a baby:
-// soft chirps and squeaks built from short pitch glides with a little vibrato and two quiet
-// harmonics, never a voice. Eating is STYLIZED: a soft chomp (a low "thock" under a short crunch of
-// band noise), a nom (a closed-mouth glide), a tiny rounded gulp (a pitch-dropping bloop). Furious
-// it is the SAME creature: the chirp goes higher and raspy. The board bite is a low chunky crunch,
-// a joker or power a cardboard crunch with a glint of magic in it, a pile snack rapid little paper
-// snaps.
+// PURPOSE: "Tamagotchi" HEARD - the playing half of the pet's audio. The sounds themselves are
+// synthesized in TamagotchiVoice (a throat, grains of material, staged layers - see there); this
+// file bakes them into AudioClips once, plays them, and mixes the rest of the game under them.
 //
-// SPAM CONTROL. A five-card snack is not five full chomps: the first is the hero, the rest are the
-// LIGHT takes at a lower level, and the meal ends on one gulp (the view chooses which). The same
-// cue inside 35 ms is dropped here as well. Every cue plays through the pooled sources
-// (PlayPolished), so a re-pitched chirp never bends one still ringing.
+//   VARIANTS. A cue heard in runs has 3-5 takes; the same one is never played twice running, and
+//   each play is moved a few percent in pitch and level (chomps +-3-6%, the voice +-5-9%). The takes
+//   already differ by a few milliseconds of lead, so a run of bites never lines up like a machine.
+//   STEMS. A growl is two clips played together - the low throat and the rasp - so their balance
+//   (PetAudio.GrowlLowLayer / GrowlRaspLayer) is a live knob in the lab instead of a rebake.
+//   A POOL OF ITS OWN. The pet plays on its own sources: the game's other effects are DUCKED under
+//   a major pet event (DuckForPet: 15-30%, back over 180-350 ms) by lowering the sources they are
+//   ringing on - which is only possible because the pet is not on them. Nothing clips: every take is
+//   normalised below full scale and the categories are levelled here.
+//   SPAM CONTROL. The same cue inside 35 ms is one cue. A five-card snack is not five full chomps:
+//   the view asks for the hero take first and the light ones after.
 //
-// Built on first use, like the rest of the late cues. The haptic beats the brief lists (a small
-// happy tap on a feed, a medium pulse for the fury and the board bite, a sharp tap for a lost
-// joker, one aggregated pulse for a pile meal) are announced by the view (TamagotchiView.Haptics)
-// and have no layer to go to yet - the game has no haptics.
+// The clips are built in the background when the pet first appears (WarmTamagotchi, a few a frame),
+// and on demand before that - never per frame. The haptic beats the brief lists are announced by the
+// view (TamagotchiView.Haptics) and have no layer to go to yet: the game has no haptics.
+// EXTENSION POINT: a new cue needs a recipe in TamagotchiVoice and a line in PetLevels.
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -24,11 +27,66 @@ namespace ProjectBlock.View
 {
     public sealed partial class SoundFx
     {
-        private readonly Dictionary<PetSound, AudioClip> petClips = new Dictionary<PetSound, AudioClip>();
+        /// <summary>The brief's audio tuning (168). Live: every one is read when a cue plays.</summary>
+        public static class PetAudio
+        {
+            public static float VoiceVolume = 0.62f;
+            public static float GrowlVolume = 0.8f;
+            public static float GrowlLowLayer = 1f;
+            public static float GrowlRaspLayer = 0.85f;
+            public static float ChompVolume = 0.72f;
+            public static float BoardCrunchVolume = 0.95f;
+            public static float FuryImpactVolume = 0.95f;
+            public static float MusicDuckAmount = 0.28f;
+            public static float MusicDuckAttack = 0.06f;
+            public static float MusicDuckRelease = 0.26f;
+        }
+
+        private sealed class PetTake
+        {
+            public AudioClip[] Clips;
+            public TamagotchiVoice.StemKind[] Kinds;
+            public string[] Layers;
+        }
+
+        private enum PetGroup
+        {
+            Voice,
+            Growl,
+            Chomp,
+            Board,
+            Impact
+        }
+
+        private readonly Dictionary<PetSound, PetTake[]> petTakes = new Dictionary<PetSound, PetTake[]>();
+        private readonly Dictionary<PetSound, int> petLastTake = new Dictionary<PetSound, int>();
         private readonly Dictionary<PetSound, float> petLastPlayed = new Dictionary<PetSound, float>();
+        private AudioSource[] petPool;
+        private int petPoolNext;
+        private float petDuck;
+        private float petDuckTarget;
+        private float petDuckUntil;
+        private Coroutine petWarm;
+
+        /// <summary>The last pet cue played, and what it is made of (the lab's readouts).</summary>
+        public string PetLastCue { get; private set; }
+
+        public string PetLastLayers { get; private set; }
+
+        /// <summary>How far the rest of the game is ducked right now, 0..1.</summary>
+        public float PetDuckNow
+        {
+            get { return petDuck; }
+        }
 
         /// <summary>Plays one of the pet's cues.</summary>
         public void Tamagotchi(PetSound cue)
+        {
+            Tamagotchi(cue, 1f);
+        }
+
+        /// <summary>Plays one of the pet's cues at a share of its own level.</summary>
+        public void Tamagotchi(PetSound cue, float level)
         {
             float last;
             if (petLastPlayed.TryGetValue(cue, out last) && Time.unscaledTime - last < 0.035f)
@@ -36,282 +94,224 @@ namespace ProjectBlock.View
                 return;
             }
             petLastPlayed[cue] = Time.unscaledTime;
-            AudioClip clip;
-            if (!petClips.TryGetValue(cue, out clip) || clip == null)
-            {
-                clip = BuildPet(cue);
-                petClips[cue] = clip;
-            }
-            if (clip == null)
+            PetTake[] takes = PetTakes(cue);
+            if (takes == null || takes.Length == 0)
             {
                 return;
             }
+            // never the same take twice running
+            int was;
+            int pick = 0;
+            if (takes.Length > 1)
+            {
+                pick = Random.Range(0, takes.Length - 1);
+                if (petLastTake.TryGetValue(cue, out was) && pick >= was)
+                {
+                    pick++;
+                }
+            }
+            petLastTake[cue] = pick;
+            PetTake take = takes[pick];
             float volume;
-            float detune;
+            float semis;
+            PetGroup group;
+            PetLevels(cue, out volume, out semis, out group);
+            float groupGain = group == PetGroup.Voice ? PetAudio.VoiceVolume
+                : group == PetGroup.Growl ? PetAudio.GrowlVolume
+                : group == PetGroup.Board ? PetAudio.BoardCrunchVolume
+                : group == PetGroup.Impact ? PetAudio.FuryImpactVolume : PetAudio.ChompVolume;
+            float pitch = Detune(semis);
+            float gain = volume * groupGain * level * Random.Range(0.95f, 1.05f);
+            EnsurePetPool();
+            for (int i = 0; i < take.Clips.Length; i++)
+            {
+                float stem = take.Kinds[i] == TamagotchiVoice.StemKind.GrowlLow ? PetAudio.GrowlLowLayer * PetAudio.GrowlVolume / Mathf.Max(0.01f, groupGain)
+                    : take.Kinds[i] == TamagotchiVoice.StemKind.GrowlRasp ? PetAudio.GrowlRaspLayer * PetAudio.GrowlVolume / Mathf.Max(0.01f, groupGain) : 1f;
+                AudioSource s = petPool[petPoolNext];
+                petPoolNext = (petPoolNext + 1) % petPool.Length;
+                s.pitch = pitch;
+                s.PlayOneShot(take.Clips[i], Mathf.Clamp01(FullVolume * 2f * masterVolume * gain * stem));
+            }
+            PetLastCue = cue + (takes.Length > 1 ? " #" + (pick + 1) + "/" + takes.Length : "");
+            PetLastLayers = string.Join(" + ", take.Layers);
+        }
+
+        /// <summary>What a cue is made of, without playing it (the lab's layer readout).</summary>
+        public string PetLayersOf(PetSound cue)
+        {
+            PetTake[] takes = PetTakes(cue);
+            return takes != null && takes.Length > 0 ? string.Join(" + ", takes[0].Layers) : "-";
+        }
+
+        /// <summary>Level (before the group's own knob), pitch spread in semitones, and the group.</summary>
+        private static void PetLevels(PetSound cue, out float volume, out float semis, out PetGroup group)
+        {
             switch (cue)
             {
-                case PetSound.ChompLight:
-                case PetSound.PileSnackLight:
-                    volume = 0.38f; detune = 1.2f; break;
-                case PetSound.Chew:
-                    volume = 0.42f; detune = 1.0f; break;
-                case PetSound.Idle:
-                case PetSound.Tap:
-                    volume = 0.32f; detune = 0.8f; break;
-                case PetSound.BoardBite:
+                // ---- the voice: +-5-9%
+                case PetSound.Enter: volume = 0.95f; semis = 0.6f; group = PetGroup.Voice; break;
+                case PetSound.Peek: volume = 0.7f; semis = 1.2f; group = PetGroup.Voice; break;
+                case PetSound.Idle: volume = 0.6f; semis = 1.4f; group = PetGroup.Voice; break;
+                case PetSound.Hungry: volume = 0.8f; semis = 1.2f; group = PetGroup.Voice; break;
+                case PetSound.NoticeDraggedCard: volume = 0.8f; semis = 1.2f; group = PetGroup.Voice; break;
+                case PetSound.ValidFoodNear: volume = 0.85f; semis = 1f; group = PetGroup.Voice; break;
+                case PetSound.WrongFoodNear: volume = 0.8f; semis = 0.9f; group = PetGroup.Voice; break;
+                case PetSound.Request: volume = 0.8f; semis = 0.5f; group = PetGroup.Voice; break;
+                case PetSound.Satisfied: volume = 0.9f; semis = 0.9f; group = PetGroup.Voice; break;
+                case PetSound.Impatient: volume = 0.8f; semis = 0.9f; group = PetGroup.Voice; break;
+                case PetSound.Smug: volume = 0.7f; semis = 0.9f; group = PetGroup.Voice; break;
+                case PetSound.Disappointed: volume = 0.75f; semis = 0.4f; group = PetGroup.Voice; break;
+                case PetSound.PileHero: volume = 0.7f; semis = 0.4f; group = PetGroup.Voice; break;
+                case PetSound.Bubble: volume = 0.6f; semis = 1.2f; group = PetGroup.Voice; break;
+                case PetSound.BubbleFurious: volume = 0.7f; semis = 0.8f; group = PetGroup.Voice; break;
+                // ---- the pushed throat
+                case PetSound.GrowlStart: volume = 0.9f; semis = 0.3f; group = PetGroup.Growl; break;
+                case PetSound.GrowlIdle: volume = 0.42f; semis = 0.7f; group = PetGroup.Growl; break;
                 case PetSound.Furious:
-                    volume = 0.85f; detune = 0.3f; break;
-                default:
-                    volume = 0.6f; detune = 0.6f; break;
+                case PetSound.FuryBreak: volume = 1f; semis = 0.25f; group = PetGroup.Growl; break;
+                case PetSound.Grunt: volume = 0.7f; semis = 0.7f; group = PetGroup.Growl; break;
+                case PetSound.FuriousBreath: volume = 0.42f; semis = 0.7f; group = PetGroup.Growl; break;
+                case PetSound.MoveFurious: volume = 0.5f; semis = 0.6f; group = PetGroup.Growl; break;
+                case PetSound.TargetAsset: volume = 0.8f; semis = 0.3f; group = PetGroup.Growl; break;
+                // ---- the screen
+                case PetSound.HatredWave: volume = 0.85f; semis = 0.15f; group = PetGroup.Impact; break;
+                case PetSound.FuryImpact: volume = 1f; semis = 0.15f; group = PetGroup.Impact; break;
+                // ---- the board
+                case PetSound.BoardSuction: volume = 0.7f; semis = 0.3f; group = PetGroup.Board; break;
+                case PetSound.BoardBite: volume = 1f; semis = 0.5f; group = PetGroup.Board; break;
+                case PetSound.BoardGrind: volume = 0.75f; semis = 0.8f; group = PetGroup.Board; break;
+                // ---- eating and moving: +-3-6%
+                case PetSound.ChompLight:
+                case PetSound.PileSnackLight: volume = 0.62f; semis = 1f; group = PetGroup.Chomp; break;
+                case PetSound.Chew:
+                case PetSound.ChewFurious: volume = 0.66f; semis = 1f; group = PetGroup.Chomp; break;
+                case PetSound.Tap:
+                case PetSound.TeethClack: volume = 0.5f; semis = 0.9f; group = PetGroup.Chomp; break;
+                case PetSound.Move:
+                case PetSound.Hide: volume = 0.55f; semis = 0.9f; group = PetGroup.Chomp; break;
+                case PetSound.AssetBite:
+                case PetSound.ChompFurious: volume = 1f; semis = 0.7f; group = PetGroup.Chomp; break;
+                case PetSound.AssetStrain: volume = 0.75f; semis = 0.8f; group = PetGroup.Chomp; break;
+                case PetSound.AssetPull: volume = 0.7f; semis = 0.4f; group = PetGroup.Chomp; break;
+                case PetSound.GulpDeep: volume = 0.95f; semis = 0.5f; group = PetGroup.Chomp; break;
+                default: volume = 0.85f; semis = 0.8f; group = PetGroup.Chomp; break;
+            }
+        }
+
+        private PetTake[] PetTakes(PetSound cue)
+        {
+            PetTake[] takes;
+            if (petTakes.TryGetValue(cue, out takes))
+            {
+                return takes;
+            }
+            int n = TamagotchiVoice.Variants(cue);
+            takes = new PetTake[n];
+            for (int v = 0; v < n; v++)
+            {
+                takes[v] = BakePet(cue, v);
+            }
+            petTakes[cue] = takes;
+            return takes;
+        }
+
+        private static PetTake BakePet(PetSound cue, int variant)
+        {
+            TamagotchiVoice.Take take = TamagotchiVoice.Build(cue, variant);
+            if (take == null)
+            {
+                return new PetTake { Clips = new AudioClip[0], Kinds = new TamagotchiVoice.StemKind[0], Layers = new string[0] };
+            }
+            var baked = new PetTake
+            {
+                Clips = new AudioClip[take.Stems.Length],
+                Kinds = new TamagotchiVoice.StemKind[take.Stems.Length],
+                Layers = take.Layers
+            };
+            for (int i = 0; i < take.Stems.Length; i++)
+            {
+                float[] samples = take.Stems[i].Samples;
+                AudioClip clip = AudioClip.Create("pet" + cue + variant + "_" + i, samples.Length, 1, TamagotchiVoice.Rate, false);
+                clip.SetData(samples, 0);
+                baked.Clips[i] = clip;
+                baked.Kinds[i] = take.Stems[i].Kind;
+            }
+            return baked;
+        }
+
+        /// <summary>Builds every pet clip in the background, a few a frame (called when the pet
+        /// appears, so the first growl of a round is never built on the frame it is needed).</summary>
+        public void WarmTamagotchi()
+        {
+            if (petWarm == null && isActiveAndEnabled)
+            {
+                petWarm = StartCoroutine(WarmPet());
+            }
+        }
+
+        private IEnumerator WarmPet()
+        {
+            foreach (PetSound cue in System.Enum.GetValues(typeof(PetSound)))
+            {
+                if (!petTakes.ContainsKey(cue))
+                {
+                    PetTakes(cue);
+                    yield return null;
+                }
+            }
+        }
+
+        private void EnsurePetPool()
+        {
+            if (petPool != null)
+            {
+                return;
+            }
+            petPool = new AudioSource[10];
+            for (int i = 0; i < petPool.Length; i++)
+            {
+                petPool[i] = gameObject.AddComponent<AudioSource>();
+                petPool[i].playOnAwake = false;
+            }
+        }
+
+        // ================================================================== the mix
+
+        /// <summary>
+        /// A major pet event takes the foreground: everything else is lowered by
+        /// <paramref name="amount"/> (0..1 of PetAudio.MusicDuckAmount's scale - pass 1 for the
+        /// tuned amount) for <paramref name="seconds"/>, then comes back over the release.
+        /// </summary>
+        public void DuckForPet(float amount, float seconds)
+        {
+            petDuckTarget = Mathf.Clamp01(PetAudio.MusicDuckAmount * amount);
+            petDuckUntil = Mathf.Max(petDuckUntil, Time.unscaledTime + seconds);
+        }
+
+        private void Update()
+        {
+            float want = Time.unscaledTime < petDuckUntil ? petDuckTarget : 0f;
+            if (Mathf.Approximately(petDuck, want))
+            {
+                return;
+            }
+            float speed = want > petDuck ? 1f / Mathf.Max(0.01f, PetAudio.MusicDuckAttack) : 1f / Mathf.Max(0.01f, PetAudio.MusicDuckRelease);
+            petDuck = Mathf.MoveTowards(petDuck, want, Mathf.Max(0.05f, PetAudio.MusicDuckAmount) * speed * Time.unscaledDeltaTime);
+            float gain = 1f - petDuck;
+            if (source != null)
+            {
+                source.volume = gain;
             }
             if (pool != null)
             {
-                PlayPolished(clip, Detune(detune), volume);
+                for (int i = 0; i < pool.Length; i++)
+                {
+                    pool[i].volume = gain;
+                }
             }
-            else
+            if (humSource != null)
             {
-                PlayWithPitch(clip, 0.98f, 1.02f, volume);
-            }
-        }
-
-        private static AudioClip BuildPet(PetSound cue)
-        {
-            var rng = new System.Random(52000 + (int)cue);
-            float[] b;
-            switch (cue)
-            {
-                case PetSound.Enter:
-                    // "pip-pip!" and a soft pop as it lands
-                    b = Buffer(0.42f);
-                    PetChirp(b, 0.00f, 0.09f, 880f, 1320f, 0.32f, 18f, 0.02f, 0f);
-                    PetChirp(b, 0.11f, 0.11f, 990f, 1560f, 0.30f, 20f, 0.02f, 0.06f);
-                    Thump(b, 0.22f, 0.35f, 220f, 120f, 0.03f);
-                    PNoise(b, 0.22f, 0.04f, 0.1f, 0.001f, 0.012f, 600f, 2400f, rng);
-                    Room(b, 0.16f, 0.45f);
-                    return PFinish("petEnter", b, 0.55f);
-                case PetSound.Request:
-                    // two soft plate pops, 70 ms apart
-                    b = Buffer(0.34f);
-                    Marimba(b, 0.00f, 783.99f, 0.32f, 0.06f);
-                    Marimba(b, 0.07f, 987.77f, 0.30f, 0.06f);
-                    PNoise(b, 0.0f, 0.02f, 0.06f, 0.0005f, 0.006f, 1500f, 5000f, rng);
-                    PNoise(b, 0.07f, 0.02f, 0.06f, 0.0005f, 0.006f, 1500f, 5000f, rng);
-                    Room(b, 0.15f, 0.4f);
-                    return PFinish("petRequest", b, 0.45f);
-                case PetSound.Idle:
-                    b = Buffer(0.18f);
-                    PetChirp(b, 0f, 0.12f, 1480f, 1180f, 0.26f, 22f, 0.025f, 0.05f);
-                    Room(b, 0.12f, 0.35f);
-                    return PFinish("petIdle", b, 0.35f);
-                case PetSound.NoticeDraggedCard:
-                    // "hm?" - a curious rising chirp with a bend
-                    b = Buffer(0.22f);
-                    PetChirp(b, 0f, 0.16f, 720f, 1150f, 0.3f, 14f, 0.02f, 0.08f);
-                    Room(b, 0.12f, 0.35f);
-                    return PFinish("petNotice", b, 0.42f);
-                case PetSound.ValidFoodNear:
-                    // an excited little trill
-                    b = Buffer(0.3f);
-                    for (int i = 0; i < 4; i++)
-                    {
-                        PetChirp(b, i * 0.055f, 0.05f, 1050f + 90f * i, 1350f + 120f * i, 0.24f, 0f, 0f, 0f);
-                    }
-                    Room(b, 0.12f, 0.35f);
-                    return PFinish("petValidNear", b, 0.45f);
-                case PetSound.WrongFoodNear:
-                    // "mm-mm": two low closed-mouth glides
-                    b = Buffer(0.36f);
-                    PetHum(b, 0f, 0.13f, 420f, 380f, 0.3f);
-                    PetHum(b, 0.17f, 0.15f, 400f, 330f, 0.3f);
-                    Room(b, 0.1f, 0.3f);
-                    return PFinish("petWrongNear", b, 0.4f);
-                case PetSound.GrabFood:
-                    b = Buffer(0.14f);
-                    PNoise(b, 0f, 0.06f, 0.22f, 0.002f, 0.02f, 400f, 2200f, rng);
-                    Thump(b, 0f, 0.2f, 260f, 160f, 0.02f);
-                    return PFinish("petGrab", b, 0.35f);
-                case PetSound.Chomp:
-                case PetSound.ChompLight:
-                    // a soft chomp: a low thock under a short crunch, a tiny click on top
-                    bool light = cue == PetSound.ChompLight;
-                    b = Buffer(0.2f);
-                    Thump(b, 0f, light ? 0.3f : 0.45f, 210f, 95f, 0.025f);
-                    PNoise(b, 0.004f, 0.06f, light ? 0.18f : 0.3f, 0.001f, 0.015f, 900f, 3800f, rng);
-                    PNoise(b, 0.018f, 0.04f, 0.12f, 0.001f, 0.01f, 1600f, 5200f, rng);
-                    ResonantClick(b, 0f, 2600f, 2100f, 10f, 0.12f, 0.0008f, rng);
-                    HighPass(b, 60f);
-                    Room(b, 0.08f, 0.25f);
-                    return PFinish(light ? "petChompLight" : "petChomp", b, light ? 0.4f : 0.6f);
-                case PetSound.Chew:
-                    // "nom": a closed-mouth glide with a soft squish
-                    b = Buffer(0.14f);
-                    PetHum(b, 0f, 0.1f, 330f, 270f, 0.32f);
-                    PNoise(b, 0.01f, 0.05f, 0.06f, 0.004f, 0.02f, 300f, 1400f, rng);
-                    return PFinish("petChew", b, 0.4f);
-                case PetSound.Gulp:
-                case PetSound.GulpBig:
-                    // a tiny rounded gulp: a bloop dropping in pitch, a bubble behind it
-                    bool big = cue == PetSound.GulpBig;
-                    b = Buffer(big ? 0.3f : 0.2f);
-                    PSine(b, 0f, big ? 0.16f : 0.11f, big ? 420f : 520f, big ? 140f : 190f, 0.04f, 0.42f, 0.003f, big ? 0.06f : 0.04f);
-                    PSine(b, big ? 0.07f : 0.05f, 0.05f, 700f, 900f, 0.02f, 0.08f, 0.002f, 0.015f);
-                    Room(b, 0.1f, 0.3f);
-                    return PFinish(big ? "petGulpBig" : "petGulp", b, big ? 0.55f : 0.45f);
-                case PetSound.Satisfied:
-                    // a happy coo, and a breath of sparkle
-                    b = Buffer(0.5f);
-                    PetChirp(b, 0f, 0.28f, 700f, 820f, 0.28f, 7f, 0.03f, 0.18f);
-                    Marimba(b, 0.05f, 1046.5f, 0.14f, 0.1f);
-                    Sparkle(b, 0.08f, 0.2f, 4, 0.04f, rng);
-                    Room(b, 0.2f, 0.5f);
-                    return PFinish("petSatisfied", b, 0.45f);
-                case PetSound.Impatient:
-                    // a huff: a puff of breath and a short low grunt
-                    b = Buffer(0.3f);
-                    PNoise(b, 0f, 0.16f, 0.22f, 0.01f, 0.06f, 300f, 2400f, rng);
-                    PetHum(b, 0.02f, 0.12f, 300f, 250f, 0.22f);
-                    Room(b, 0.08f, 0.3f);
-                    return PFinish("petImpatient", b, 0.45f);
-                case PetSound.Furious:
-                    // a short furious squeal - higher, raspy, still the same small creature
-                    b = Buffer(0.55f);
-                    PetChirp(b, 0f, 0.36f, 980f, 1250f, 0.4f, 34f, 0.05f, 0.35f);
-                    PetRasp(b, 0f, 0.36f, 0.22f, rng);
-                    Thump(b, 0f, 0.25f, 160f, 80f, 0.05f);
-                    Saturate(b, 1.6f);
-                    HighPass(b, 90f);
-                    Room(b, 0.16f, 0.5f);
-                    return PFinish("petFurious", b, 0.75f);
-                case PetSound.BoardBite:
-                    // a low chunky crunch and the chomp: the ground of the board coming away
-                    b = Buffer(0.5f);
-                    Thump(b, 0f, 0.8f, 110f, 42f, 0.07f);
-                    for (int i = 0; i < 4; i++)
-                    {
-                        PNoise(b, 0.006f + i * 0.028f, 0.05f, 0.32f - i * 0.05f, 0.001f, 0.018f, 140f, 1500f, rng);
-                    }
-                    PNoise(b, 0.0f, 0.08f, 0.16f, 0.001f, 0.02f, 1500f, 4200f, rng);
-                    ResonantClick(b, 0f, 900f, 520f, 8f, 0.25f, 0.002f, rng);
-                    Saturate(b, 1.3f);
-                    HighPass(b, 32f);
-                    Room(b, 0.14f, 0.55f);
-                    return PFinish("petBoardBite", b, 0.85f);
-                case PetSound.AssetSnatch:
-                    // "thwip" - the tongue or the paw shooting out - then a sticky tap
-                    b = Buffer(0.24f);
-                    PNoiseSweep(b, 0f, 0.1f, 0.25f, 0.002f, 0.04f, 600f, 1800f, 7000f, rng);
-                    PSine(b, 0f, 0.08f, 500f, 1400f, 0.03f, 0.12f, 0.001f, 0.03f);
-                    ResonantClick(b, 0.1f, 1800f, 1500f, 12f, 0.16f, 0.001f, rng);
-                    Room(b, 0.1f, 0.3f);
-                    return PFinish("petSnatch", b, 0.45f);
-                case PetSound.AssetBite:
-                    // cardboard and a glint of magic: a papery crunch with a sparkle in it
-                    b = Buffer(0.3f);
-                    Thump(b, 0f, 0.35f, 190f, 90f, 0.03f);
-                    PNoise(b, 0.003f, 0.08f, 0.3f, 0.001f, 0.02f, 700f, 3200f, rng);
-                    PNoise(b, 0.02f, 0.05f, 0.14f, 0.001f, 0.012f, 2500f, 6500f, rng);
-                    Sparkle(b, 0.02f, 0.12f, 5, 0.06f, rng);
-                    PSine(b, 0.01f, 0.18f, 1760f, 1975f, 0.05f, 0.05f, 0.002f, 0.06f);
-                    Room(b, 0.12f, 0.4f);
-                    return PFinish("petAssetBite", b, 0.55f);
-                case PetSound.PileSnack:
-                case PetSound.PileSnackLight:
-                    // a rapid little paper snap
-                    bool soft = cue == PetSound.PileSnackLight;
-                    b = Buffer(0.1f);
-                    PNoise(b, 0f, 0.03f, soft ? 0.2f : 0.32f, 0.0005f, 0.008f, 2000f, 7500f, rng);
-                    ResonantClick(b, 0f, 3200f, 2600f, 9f, soft ? 0.1f : 0.16f, 0.0006f, rng);
-                    Thump(b, 0f, soft ? 0.12f : 0.22f, 240f, 150f, 0.015f);
-                    return PFinish(soft ? "petSnackLight" : "petSnack", b, soft ? 0.35f : 0.5f);
-                case PetSound.Smug:
-                    // "heh": two short low-mid chirps
-                    b = Buffer(0.26f);
-                    PetChirp(b, 0f, 0.07f, 600f, 540f, 0.24f, 0f, 0f, 0f);
-                    PetChirp(b, 0.1f, 0.08f, 640f, 520f, 0.22f, 0f, 0f, 0f);
-                    Room(b, 0.1f, 0.3f);
-                    return PFinish("petSmug", b, 0.38f);
-                case PetSound.Tap:
-                    b = Buffer(0.08f);
-                    ResonantClick(b, 0f, 1300f, 1100f, 14f, 0.22f, 0.001f, rng);
-                    PNoise(b, 0f, 0.015f, 0.08f, 0.0005f, 0.004f, 800f, 3000f, rng);
-                    return PFinish("petTap", b, 0.3f);
-                case PetSound.Stomp:
-                    // a soft low thud - never a shake
-                    b = Buffer(0.2f);
-                    Thump(b, 0f, 0.5f, 140f, 60f, 0.04f);
-                    PNoise(b, 0f, 0.05f, 0.08f, 0.001f, 0.02f, 80f, 600f, rng);
-                    return PFinish("petStomp", b, 0.45f);
-                default:
-                    return null;
-            }
-        }
-
-        /// <summary>The creature's voice: a sine gliding f0 -> f1 (eased), bent up through its
-        /// middle by <paramref name="bend"/>, with vibrato and two quiet harmonics - small and
-        /// round, never formant-shaped enough to read as a baby talking.</summary>
-        private static void PetChirp(float[] b, float atSec, float seconds, float f0, float f1, float amp,
-            float vibHz, float vibDepth, float bend)
-        {
-            int start = (int)(atSec * SampleRate);
-            int n = Mathf.Min((int)(seconds * SampleRate), b.Length - start);
-            double phase = 0.0;
-            for (int i = 0; i < n; i++)
-            {
-                float t = i / (float)SampleRate;
-                float u = t / seconds;
-                float glide = u * u * (3f - 2f * u);
-                float f = Mathf.Lerp(f0, f1, glide) * (1f + bend * Mathf.Sin(Mathf.PI * u))
-                    * (1f + vibDepth * Mathf.Sin(2f * Mathf.PI * vibHz * t));
-                phase += 2.0 * Mathf.PI * f / SampleRate;
-                float env = Mathf.Clamp01(t / 0.008f) * Mathf.Pow(1f - u, 1.3f);
-                float s = Mathf.Sin((float)phase) + 0.26f * Mathf.Sin((float)(2.0 * phase))
-                    + 0.07f * Mathf.Sin((float)(3.0 * phase));
-                b[start + i] += s * amp * env;
-            }
-        }
-
-        /// <summary>A closed-mouth hum (the "nom", the "mm-mm"): a low glide, rounded off by a
-        /// one-pole low-pass so it has no edge.</summary>
-        private static void PetHum(float[] b, float atSec, float seconds, float f0, float f1, float amp)
-        {
-            int start = (int)(atSec * SampleRate);
-            int n = Mathf.Min((int)(seconds * SampleRate), b.Length - start);
-            double phase = 0.0;
-            float lp = 0f;
-            float a = 1f - Mathf.Exp(-2f * Mathf.PI * 900f / SampleRate);
-            for (int i = 0; i < n; i++)
-            {
-                float t = i / (float)SampleRate;
-                float u = t / seconds;
-                float f = Mathf.Lerp(f0, f1, u);
-                phase += 2.0 * Mathf.PI * f / SampleRate;
-                float s = Mathf.Sin((float)phase) + 0.5f * Mathf.Sin((float)(2.0 * phase)) + 0.3f * Mathf.Sin((float)(3.0 * phase));
-                lp += (s - lp) * a;
-                float env = Mathf.Clamp01(t / 0.012f) * Mathf.Clamp01((1f - u) / 0.3f);
-                b[start + i] += lp * amp * env;
-            }
-        }
-
-        /// <summary>The rasp of the furious squeal: band noise that flutters at a rough rate.</summary>
-        private static void PetRasp(float[] b, float atSec, float seconds, float amp, System.Random rng)
-        {
-            int start = (int)(atSec * SampleRate);
-            int n = Mathf.Min((int)(seconds * SampleRate), b.Length - start);
-            float lp = 0f;
-            float hp = 0f;
-            float aLo = 1f - Mathf.Exp(-2f * Mathf.PI * 3800f / SampleRate);
-            float aHi = 1f - Mathf.Exp(-2f * Mathf.PI * 900f / SampleRate);
-            for (int i = 0; i < n; i++)
-            {
-                float t = i / (float)SampleRate;
-                float u = t / seconds;
-                float noise = (float)rng.NextDouble() * 2f - 1f;
-                lp += (noise - lp) * aLo;
-                hp += (lp - hp) * aHi;
-                float band = lp - hp;
-                float flutter = 0.5f + 0.5f * Mathf.Sin(2f * Mathf.PI * 46f * t);
-                float env = Mathf.Clamp01(t / 0.01f) * Mathf.Pow(1f - u, 1.4f);
-                b[start + i] += band * amp * flutter * env;
+                humSource.volume = HumVolume * masterVolume * gain;
             }
         }
     }

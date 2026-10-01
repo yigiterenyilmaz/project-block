@@ -72,7 +72,8 @@ namespace ProjectBlock.View
         {
             Vector3 mouth = rig.MouthWorld;
             float half = CardVisual.BodyHeight * scale * 0.5f;
-            return mouth + new Vector3(F * 0.02f * S, -half - 0.035f * S, 0f);
+            // "under" is the pet's own down: it may be leaning in round a side or hanging from the top
+            return mouth + new Vector3(F * 0.02f * S, 0f, 0f) - (Vector3)(PetUp * (half + 0.035f * S));
         }
 
         /// <summary>The bite line: at the mouth, turned with the head.</summary>
@@ -82,14 +83,23 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            Vector3 mouth = rig.MouthWorld + new Vector3(0f, -0.012f * S, 0f);
-            // the line turns with the head (half of its tilt: the jaw is not the whole head)
-            food.SetBite(mouth, pose.HeadTilt * Mathf.Deg2Rad * 0.5f, true);
+            Vector3 mouth = rig.MouthWorld - (Vector3)(PetUp * (0.012f * S));
+            // the line turns with the body and the head (half of the head's tilt: the jaw is not
+            // the whole head)
+            food.SetBite(mouth, (pose.RootTilt + pose.HeadTilt * 0.5f) * Mathf.Deg2Rad, true);
+        }
+
+        /// <summary>The pet's own up in the world, this frame.</summary>
+        private Vector2 PetUp
+        {
+            get { return rig.UpWorld; }
         }
 
         private IEnumerator FeedRoutine(TamagotchiFeedVisuals r, Vector2 from, float fromScale)
         {
             SetState(PetViewState.Eating);
+            // a peeking pet comes all the way out to eat
+            act.Presence = 1f;
             SetParticleBudget(8);
             float m = FeedMultiplier(r.Tier);
             bool high = r.Tier == CardValueTier.High;
@@ -230,7 +240,7 @@ namespace ProjectBlock.View
                 act.LookAt = PlateWorld(other);
                 HeadToward(PlateWorld(other), 0.8f);
                 act.Mouth = "nom";
-                Say("Bir lokma! Öbürünü de istiyor.", "One down - it wants the other one too.");
+                Speak("Bir tane daha!", "One more!", true);
                 yield return Wait(0.38f);
             }
             else
@@ -264,7 +274,7 @@ namespace ProjectBlock.View
                 float s = Mathf.Lerp(scaleFrom, scaleTo, Mathf.Clamp01((t - 0.55f) / 0.45f)) * hold;
                 FoodScale(food, s, s);
                 // the card rides up across the line: what has gone in is above the mouth
-                Vector3 c = HoldPoint(s) + new Vector3(0f, bite * cardH * s, 0f);
+                Vector3 c = HoldPoint(s) + (Vector3)(PetUp * (bite * cardH * s));
                 food.transform.position = c;
                 food.BiteProgress = bite;
                 if (food.ShaderBites)
@@ -392,6 +402,7 @@ namespace ProjectBlock.View
         private IEnumerator FullSatisfaction()
         {
             Say("Tamagotchi doydu - bu raunt sana dokunmayacak.", "Fed in full - it will leave you alone this round.");
+            Speak("Doydum!", "I'm full!", true);
             act.Emotion = PetEmotion.Happy;
             act.LookAt = rig.BellyWorld;
             act.Look = new Vector2(0f, -0.9f);
@@ -452,6 +463,8 @@ namespace ProjectBlock.View
         private IEnumerator WrongFood(Vector2 card)
         {
             ClearDrag();
+            act.Presence = 1f;
+            Speak("O değil!", "Not that one!", false);
             act.Emotion = PetEmotion.Confused;
             act.Mouth = "frown";
             Vector2 dir = (card - (Vector2)rig.MouthWorld).normalized;

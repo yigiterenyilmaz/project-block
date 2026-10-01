@@ -37,6 +37,9 @@ namespace ProjectBlock.View
         private float petHomeAspect;
         private Rect petHomeBoard;
         private Vector2? petHandFocus;
+        private string petHomeName;
+        private int petTurnSeen = -1;
+        private Vector3 petLastMouse;
 
         /// <summary>True while the animation lab is driving the pet (the round's state stays out).</summary>
         private bool petLabDriving;
@@ -60,16 +63,41 @@ namespace ProjectBlock.View
                     };
                     petView.DimBar += (dim, jokers) =>
                     {
+                        // the others step back a fifth: the one it is after is what is looked at
                         if (jokers)
                         {
-                            jokerBar.SetPresentationAlpha(dim ? 0.55f : 1f);
+                            jokerBar.SetPresentationAlpha(dim ? 0.8f : 1f);
                         }
                         else
                         {
-                            powerBar.SetPresentationAlpha(dim ? 0.55f : 1f);
+                            powerBar.SetPresentationAlpha(dim ? 0.8f : 1f);
+                        }
+                    };
+                    petView.HoldBarSlot += (jokers, index) =>
+                    {
+                        if (jokers)
+                        {
+                            jokerBar.SetHeldGap(index);
+                        }
+                        else
+                        {
+                            powerBar.SetHeldGap(index);
                         }
                     };
                     petView.BoardImpulse += offset => boardView.SetImpulse(offset);
+                    petView.HomeCandidates = furious => SolvePetHomes(furious);
+                    petView.HomeToward = target => PetHomeToward(target);
+                    petView.MovedHome += home =>
+                    {
+                        if (home != null)
+                        {
+                            petHomeName = home.Name;
+                            if (home.Side != 0)
+                            {
+                                petHomeSide = home.Side;
+                            }
+                        }
+                    };
                 }
                 return petView;
             }
@@ -96,8 +124,15 @@ namespace ProjectBlock.View
         /// </summary>
         private void TickTamagotchi()
         {
-            if (session == null || petLabDriving)
+            if (session == null)
             {
+                return;
+            }
+            if (petLabDriving)
+            {
+                // the lab drives the pet; the screen it stands on and the mood it sends are still real
+                RememberPetAnchors();
+                SendPetHatredMood();
                 return;
             }
             RoundEngine round = session.Phase == GamePhase.Round ? session.CurrentRound : null;
@@ -108,6 +143,7 @@ namespace ProjectBlock.View
             }
             TamagotchiView view = PetView;
             RememberPetAnchors();
+            SendPetHatredMood();
             bool introHolding = bossIdentity != null && bossIdentity.IntroPlaying;
             bool active = pet != null && screen == AppScreen.Playing
                 && (round.Status == RoundStatus.InProgress || round.Status == RoundStatus.AwaitingAdvanceDecision);
@@ -116,6 +152,10 @@ namespace ProjectBlock.View
                 // a new round with a pet: a new home and a clean slate of reports
                 petRound = round;
                 petHomeSide = 0;
+                petHomeName = null;
+                petTurnSeen = round.TurnNumber;
+                view.Anchors.PanelMemory.Clear();
+                view.Anchors.PanelIndexMemory.Clear();
                 lastPetFeed = pet.LastFeed;
                 lastPetHunger = pet.LastHungerChange;
                 lastPetFury = pet.LastFury;
@@ -136,6 +176,23 @@ namespace ProjectBlock.View
             SolvePetHomeIfNeeded();
             view.Sync(BuildPetState(round, pet));
             PlayPetReports(round, pet);
+            // the roaming's two clocks: turns played, and the player sitting idle
+            if (round.TurnNumber != petTurnSeen)
+            {
+                petTurnSeen = round.TurnNumber;
+                view.NoteTurn();
+            }
+            // (the new Input System only: the legacy Input class throws in this project)
+            UnityEngine.InputSystem.Mouse pointer = UnityEngine.InputSystem.Mouse.current;
+            UnityEngine.InputSystem.Keyboard keys = UnityEngine.InputSystem.Keyboard.current;
+            Vector3 mouse = pointer != null ? (Vector3)pointer.position.ReadValue() : petLastMouse;
+            bool pressed = (pointer != null && (pointer.leftButton.isPressed || pointer.rightButton.isPressed))
+                || (keys != null && keys.anyKey.isPressed);
+            if ((mouse - petLastMouse).sqrMagnitude > 4f || pressed)
+            {
+                petLastMouse = mouse;
+                view.NoteInput();
+            }
         }
 
         private TamagotchiRoundVisualState BuildPetState(RoundEngine round, TamagotchiBoss pet)
@@ -258,6 +315,10 @@ namespace ProjectBlock.View
             a.DiscardPile = cardLayer.PileTopWorld(false);
             float z = -cam.transform.position.z;
             float screenPerCanvas = Screen.width / Mathf.Max(1f, UiLayout.Active.CanvasReference.x);
+            float halfW = UiLayout.Active.HalfWidth;
+            float halfH = UiLayout.Active.OrthoSize;
+            a.Screen = new Rect(cam.transform.position.x - halfW, cam.transform.position.y - halfH, halfW * 2f, halfH * 2f);
+            a.DebtVignette = debtPressure != null && session.Debt > 0 ? debtPressure.VignetteStrength : 0f;
             a.JokerPanels.Clear();
             Vector2 jokerSum = Vector2.zero;
             int jokers = 0;
@@ -270,6 +331,8 @@ namespace ProjectBlock.View
                 }
                 Rect r = ScreenRectToWorld(c.Value, UiLayout.Active.JokerPanel * screenPerCanvas, z);
                 a.JokerPanels[session.Jokers.Jokers[i].InstanceId] = r;
+                a.PanelMemory[session.Jokers.Jokers[i].InstanceId] = r;
+                a.PanelIndexMemory[session.Jokers.Jokers[i].InstanceId] = i;
                 jokerSum += r.center;
                 jokers++;
             }
@@ -285,6 +348,8 @@ namespace ProjectBlock.View
                 }
                 Rect r = ScreenRectToWorld(c.Value, UiLayout.Active.PowerPanel * screenPerCanvas, z);
                 a.PowerPanels[session.Powers.Powers[i].InstanceId] = r;
+                a.PanelMemory[session.Powers.Powers[i].InstanceId + PetPowerKey] = r;
+                a.PanelIndexMemory[session.Powers.Powers[i].InstanceId + PetPowerKey] = i;
                 powerSum += r.center;
                 powers++;
             }
@@ -292,6 +357,35 @@ namespace ProjectBlock.View
             float oh = UiLayout.Active.OrthoSize;
             a.JokerBar = jokers > 0 ? jokerSum / jokers : new Vector2(hw * 0.8f, oh * 0.75f);
             a.PowerBar = powers > 0 ? powerSum / powers : new Vector2(-hw * 0.8f, oh * 0.75f);
+        }
+
+        /// <summary>Powers are remembered beside the jokers under their id plus this.</summary>
+        private const int PetPowerKey = TamagotchiView.PowerMemoryKey;
+
+        /// <summary>
+        /// The furious pet's mood goes to the BACKGROUND as multipliers (it is never replaced):
+        /// a few percent darker and greyer, its warmth out, a little plum in.
+        /// </summary>
+        private void SendPetHatredMood()
+        {
+            if (background == null || petView == null)
+            {
+                return;
+            }
+            TamagotchiView.HatredMoodValues m = petView.HatredMood;
+            if (!m.Active)
+            {
+                background.SetMood("tamagotchi", null);
+                return;
+            }
+            GameBackgroundPresentationController.Mood mood = GameBackgroundPresentationController.Mood.Neutral;
+            mood.Brightness = m.Brightness;
+            mood.Saturation = m.Saturation;
+            mood.PlumStrength = m.Plum;
+            mood.Warmth = m.Warmth;
+            mood.Vignette = m.Vignette;
+            mood.MoteStrength = m.Motes;
+            background.SetMood("tamagotchi", mood);
         }
 
         private Rect ScreenRectToWorld(Vector2 centre, Vector2 size, float z)
@@ -325,8 +419,24 @@ namespace ProjectBlock.View
             petHomeShape = UiLayout.Active.Shape;
             petHomeAspect = aspect;
             petHomeBoard = board;
-            TamagotchiHome home = SolvePetHome(petHomeSide, TamagotchiView.Tuning.BodyScale);
-            petHomeSide = home.Facing < 0 ? 1 : -1;
+            TamagotchiHome home = null;
+            // it had moved house: the same place again, as the new screen lays it out
+            if (!string.IsNullOrEmpty(petHomeName))
+            {
+                foreach (TamagotchiHome candidate in SolvePetHomes(false))
+                {
+                    if (candidate.Name == petHomeName)
+                    {
+                        home = candidate;
+                    }
+                }
+            }
+            if (home == null)
+            {
+                home = SolvePetHome(petHomeSide, TamagotchiView.Tuning.BodyScale);
+                petHomeName = null;
+            }
+            petHomeSide = home.Side != 0 ? home.Side : (home.Facing < 0 ? 1 : -1);
             PetView.Home = home;
         }
 
@@ -407,6 +517,8 @@ namespace ProjectBlock.View
             UiLayout layout = UiLayout.Active;
             var h = new TamagotchiHome();
             h.Name = side > 0 ? "behind the right pile" : "behind the left pile";
+            h.Kind = "pile";
+            h.Side = side;
             h.UnitScale = cells * cell / TamagotchiArt.TotalWidth;
             h.PxToWorld = layout.WorldPerCanvasPixel;
             float s = h.UnitScale;
@@ -435,6 +547,8 @@ namespace ProjectBlock.View
             UiLayout layout = UiLayout.Active;
             var h = new TamagotchiHome();
             h.Name = side > 0 ? "bottom-right corner" : "bottom-left corner";
+            h.Kind = "corner";
+            h.Side = side;
             h.UnitScale = cells * cell / TamagotchiArt.TotalWidth;
             h.PxToWorld = layout.WorldPerCanvasPixel;
             float s = h.UnitScale;
@@ -463,6 +577,8 @@ namespace ProjectBlock.View
             UiLayout layout = UiLayout.Active;
             var h = new TamagotchiHome();
             h.Name = side > 0 ? "hand band, right" : "hand band, left";
+            h.Kind = "corner";
+            h.Side = side;
             h.UnitScale = cells * cell / TamagotchiArt.TotalWidth;
             h.PxToWorld = layout.WorldPerCanvasPixel;
             float s = h.UnitScale;
@@ -481,6 +597,201 @@ namespace ProjectBlock.View
             h.PlatesVertical = false;
             h.EdgeTap = new Vector2(pile.x - side * pileHalfW, h.Base.y + 0.4f * s);
             return h;
+        }
+
+        /// <summary>
+        /// Leaning in round a SIDE of the screen: its feet are off the edge, its head and one paw
+        /// are in, tilted toward the middle. It hides by sliding back out sideways.
+        /// </summary>
+        private TamagotchiHome SideHome(int side, bool upper, float cells, float cell)
+        {
+            UiLayout layout = UiLayout.Active;
+            var h = new TamagotchiHome();
+            h.Name = (side > 0 ? "right edge, " : "left edge, ") + (upper ? "upper" : "lower");
+            h.Kind = "side";
+            h.Side = side;
+            h.Edge = side > 0 ? 1 : 3;
+            h.UnitScale = cells * cell / TamagotchiArt.TotalWidth;
+            h.PxToWorld = layout.WorldPerCanvasPixel;
+            float s = h.UnitScale;
+            float edge = side * layout.HalfWidth;
+            float pileTop = layout.DrawPile.y + (CardVisual.BodyHeight + 0.18f) * layout.PileScale * 0.5f + 0.35f;
+            float y = upper ? layout.BoardCenter.y - 0.25f : pileTop + 0.12f;
+            h.Facing = -side;
+            // a positive tilt turns its up toward -x: the right edge leans left, the left edge right
+            h.Tilt = side * 27f;
+            h.Base = new Vector2(edge - side * 0.14f * s, y);
+            h.HideDir = new Vector2(side, 0f);
+            h.EdgePoint = new Vector2(edge, y);
+            h.HideDepth = 1.3f * s;
+            h.Clip = new Rect(-layout.HalfWidth - 6f, -layout.OrthoSize - 6f, layout.HalfWidth * 2f + 12f, layout.OrthoSize * 2f + 12f);
+            h.Shadow = false;
+            h.PetRect = side > 0 ? Rect.MinMaxRect(edge - 1.0f * s, y - 0.04f * s, edge, y + 1.15f * s)
+                : Rect.MinMaxRect(edge, y - 0.04f * s, edge + 1.0f * s, y + 1.15f * s);
+            float pairW = 2f * 0.55f * 1.3f * s + 0.1f * s;
+            h.PlatesCentre = new Vector2(edge - side * (1.06f * s + pairW * 0.5f), y + 0.66f * s);
+            h.PlatesVertical = false;
+            h.EdgeTap = new Vector2(edge, y + 0.55f * s);
+            return h;
+        }
+
+        /// <summary>
+        /// Hanging over the TOP edge, head down (rare, and never when it is furious): it lies on
+        /// the edge of the screen with its paws over it, beside the HUD's band.
+        /// </summary>
+        private TamagotchiHome TopHome(int side, float cells, float cell)
+        {
+            UiLayout layout = UiLayout.Active;
+            var h = new TamagotchiHome();
+            h.Name = side > 0 ? "top edge, right of centre" : "top edge, left of centre";
+            h.Kind = "top";
+            h.Side = side;
+            h.Edge = 2;
+            h.Inverted = true;
+            h.Tilt = 180f;
+            h.UnitScale = cells * cell / TamagotchiArt.TotalWidth;
+            h.PxToWorld = layout.WorldPerCanvasPixel;
+            float s = h.UnitScale;
+            float top = layout.OrthoSize;
+            float x = side * (layout.HalfWidth * 0.45f + 0.8f * s + 0.12f);
+            h.Facing = -side;
+            h.Base = new Vector2(x, top + 0.2f * s);
+            h.HideDir = Vector2.up;
+            h.EdgePoint = new Vector2(x, top);
+            h.HideDepth = 1.25f * s;
+            h.Clip = new Rect(-layout.HalfWidth - 6f, -layout.OrthoSize - 6f, layout.HalfWidth * 2f + 12f, layout.OrthoSize * 2f + 12f);
+            h.Shadow = false;
+            h.PetRect = Rect.MinMaxRect(x - 0.66f * s, top - 0.95f * s, x + 0.66f * s, top);
+            float plateH = 0.65f * 1.3f * s;
+            h.PlatesCentre = new Vector2(x, top - 0.95f * s - plateH * 0.5f - 0.2f * s);
+            h.PlatesVertical = false;
+            h.EdgeTap = new Vector2(x + side * 0.6f * s, top);
+            return h;
+        }
+
+        /// <summary>
+        /// Every place the pet could live RIGHT NOW with nothing under it or its plates: the
+        /// corners (standing and sitting), behind the piles (out, or only a head), the sides, the
+        /// top. The roaming chooses among them; this only says which are safe. A furious pet is
+        /// offered nothing playful (no sitting, no peeking, no hanging upside down).
+        /// </summary>
+        private List<TamagotchiHome> SolvePetHomes(bool furious)
+        {
+            var safe = new List<TamagotchiHome>();
+            if (boardView == null)
+            {
+                return safe;
+            }
+            UiLayout layout = UiLayout.Active;
+            var obstacles = PetObstacles();
+            float cell = boardView.CellWorldSize > 0f ? boardView.CellWorldSize : layout.BoardWorldSize / 7f;
+            float cells = TamagotchiView.Tuning.BodyScale;
+            foreach (int side in new[] { 1, -1 })
+            {
+                var makers = new List<System.Func<TamagotchiHome>>();
+                if (layout.IsPortrait)
+                {
+                    makers.Add(() => PortraitHome(side, cells, cell));
+                    if (!furious)
+                    {
+                        makers.Add(() => Peeking(PortraitHome(side, cells, cell), "peeking over the hand, " + (side > 0 ? "right" : "left")));
+                    }
+                }
+                else
+                {
+                    makers.Add(() => CornerHome(side, cells, cell));
+                    makers.Add(() => BehindPileHome(side, cells, cell));
+                    makers.Add(() => SideHome(side, false, cells, cell));
+                    makers.Add(() => SideHome(side, true, cells, cell));
+                    if (!furious)
+                    {
+                        makers.Add(() => Sitting(CornerHome(side, cells, cell), side > 0 ? "sitting in the bottom-right corner" : "sitting in the bottom-left corner"));
+                        makers.Add(() => Peeking(BehindPileHome(side, cells, cell), side > 0 ? "peeking over the right pile" : "peeking over the left pile"));
+                        makers.Add(() => TopHome(side, cells, cell));
+                    }
+                }
+                foreach (System.Func<TamagotchiHome> make in makers)
+                {
+                    // the plates as they come, stacked up the edge, or lifted clear - the first that is free
+                    foreach (int plates in new[] { 0, 2, 1 })
+                    {
+                        TamagotchiHome h = make();
+                        if (plates > 0 && (h.Kind == "top" || !ArrangePlates(h, plates, obstacles)))
+                        {
+                            continue;
+                        }
+                        Rect platesRect = furious ? new Rect(0f, 0f, 0f, 0f) : PlatesRect(h);
+                        if (OverlapArea(h.PetRect, obstacles) <= 0.0001f && OverlapArea(platesRect, obstacles) <= 0.0001f
+                            && InsideScreen(platesRect))
+                        {
+                            safe.Add(h);
+                            break;
+                        }
+                    }
+                }
+            }
+            return safe;
+        }
+
+        private static bool InsideScreen(Rect r)
+        {
+            if (r.width <= 0f)
+            {
+                return true;
+            }
+            UiLayout layout = UiLayout.Active;
+            return r.xMin >= -layout.HalfWidth - 0.01f && r.xMax <= layout.HalfWidth + 0.01f
+                && r.yMin >= -layout.OrthoSize - 0.01f && r.yMax <= layout.OrthoSize + 0.01f;
+        }
+
+        /// <summary>The same place, sitting: feet out, paws on its belly.</summary>
+        private static TamagotchiHome Sitting(TamagotchiHome h, string name)
+        {
+            h.Name = name;
+            h.Sit = 1f;
+            return h;
+        }
+
+        /// <summary>The same place with only its head over the edge.</summary>
+        private static TamagotchiHome Peeking(TamagotchiHome h, string name)
+        {
+            h.Name = name;
+            h.Rest = 0.6f;
+            // what has to be free is the part that shows
+            float s = h.UnitScale;
+            h.PetRect = Rect.MinMaxRect(h.PetRect.xMin, h.PetRect.yMin, h.PetRect.xMax, Mathf.Min(h.PetRect.yMax, h.PetRect.yMin + 0.75f * s));
+            h.PlatesCentre = new Vector2(h.PlatesCentre.x, h.PlatesCentre.y - 0.4f * s);
+            return h;
+        }
+
+        /// <summary>
+        /// A place really NEARER a point than where it is (the furious pet going to what it is about
+        /// to take), or null. "Really" is a third closer: it does not shuffle about for nothing.
+        /// </summary>
+        private TamagotchiHome PetHomeToward(Vector2 target)
+        {
+            if (petView == null)
+            {
+                return null;
+            }
+            TamagotchiHome now = petView.Home;
+            float s = now.UnitScale;
+            float best = Vector2.Distance(now.Base + new Vector2(0f, 0.5f * s), target) * 0.67f;
+            TamagotchiHome pick = null;
+            foreach (TamagotchiHome h in SolvePetHomes(true))
+            {
+                if (h.Name == now.Name)
+                {
+                    continue;
+                }
+                float d = Vector2.Distance(h.Base + new Vector2(0f, 0.5f * h.UnitScale), target);
+                if (d < best)
+                {
+                    best = d;
+                    pick = h;
+                }
+            }
+            return pick;
         }
 
         /// <summary>The other two ways to hang the plates: lifted over whatever is under them

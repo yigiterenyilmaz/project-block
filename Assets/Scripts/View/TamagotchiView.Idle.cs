@@ -1,7 +1,9 @@
 // PURPOSE: "Tamagotchi"'s life when nothing is happening to it - the ENTRANCE (antennae, then eyes,
 // a scan of the board, a pop out of the edge, the plates, a paw to each, "nom?"), the IDLE LIBRARY
 // (fourteen small behaviours, five for a satisfied pet, four more for an impatient or angry one,
-// eight for a furious one), and the EXITS.
+// and a library of twelve of its own for a furious one - panting, a jaw twitch, a short growl, claw
+// taps, a side-eye, a lick, a head snap, hunched breathing, a squint, a tension release, a teeth
+// clack, a claw on the screen's edge), and the EXITS.
 //
 // THE IDLE IS CHOSEN, NOT LOOPED. Every 4-6.5 s (shorter when impatient, longer when content) a
 // behaviour is drawn by weight from the set the MOOD calls for - with the last three excluded, so
@@ -29,8 +31,12 @@ namespace ProjectBlock.View
             LittleHop, CardTrack, SnackDream, EdgeTap, MouthOpenWait,
             SleepySmile, BellyRub, SmallYawn, ContentBlink, NapWobble,
             CheekPuff, ArmsCross, Stomp, HeadSnap,
-            AngryPant, SideEye, PawFlex, ToeTap, BoardGlance, JokerGlance, DeckGlance, MouthWipe
+            // the furious library (the corrective brief's twelve)
+            FuryPant, JawTwitch, ShortGrowl, ClawTap, FurySideEye, FuryLick, FuryHeadSnap, HunchBreath,
+            EyeSquint, TensionRelease, TeethClack, ClawGrip
         }
+
+        private float nextGrowlAt;
 
         private readonly List<IdleKind> idleHistory = new List<IdleKind>();
         private float nextIdleAt;
@@ -46,6 +52,7 @@ namespace ProjectBlock.View
             idleHistory.Clear();
             idleRng = new System.Random((int)((lifeSeed * 2654435761u) & 0x7fffffff));
             nextIdleAt = clock + 2.4f;
+            nextGrowlAt = clock + 5f;
         }
 
         private void ScheduleNextIdle(float extra)
@@ -58,7 +65,7 @@ namespace ProjectBlock.View
                 case PetHungerStage.Impatient: k = Tuning.ImpatientIdleRate; break;
                 case PetHungerStage.Angry: k = 0.75f; break;
                 case PetHungerStage.Satisfied: k = 1.3f; break;
-                case PetHungerStage.Furious: min = 2.6f; max = 4.4f; break;
+                case PetHungerStage.Furious: min = Tuning.FuriousIdleMin; max = Tuning.FuriousIdleMax; break;
                 default: k = State.Pending == 1 ? 0.85f : 1f; break;
             }
             nextIdleAt = clock + extra + Mathf.Lerp(min, max, (float)idleRng.NextDouble()) * k;
@@ -70,11 +77,18 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // a move to another edge takes the idle's turn when one is due (.Roam)
+            if (TickRoaming())
+            {
+                ScheduleNextIdle(0f);
+                return;
+            }
             IdleKind? kind = PickIdle();
             ScheduleNextIdle(0f);
             if (kind.HasValue)
             {
                 PlayIdle(kind.Value);
+                MaybeIdleRemark();
             }
         }
 
@@ -93,6 +107,12 @@ namespace ProjectBlock.View
 
         private IdleKind? PickIdle()
         {
+            // the growl has a cadence of its own: every 4-8 s while it is furious
+            if (State.Furious && clock >= nextGrowlAt)
+            {
+                nextGrowlAt = clock + Mathf.Lerp(Tuning.GrowlIdleMin, Tuning.GrowlIdleMax, (float)idleRng.NextDouble());
+                return IdleKind.ShortGrowl;
+            }
             var kinds = new List<IdleKind>();
             var weights = new List<float>();
             IdleWeights(kinds, weights);
@@ -126,6 +146,18 @@ namespace ProjectBlock.View
         {
             System.Action<IdleKind, float> add = (k, w) => { kinds.Add(k); weights.Add(w); };
             bool hand = Anchors.HandFocus.HasValue;
+            // only its head is out (a peek home), or it hangs head-down from the top: the small
+            // things a head can do, none of the ones that need a floor or a belly
+            if (!State.Furious && (Home.Rest < 0.95f || Home.Inverted))
+            {
+                add(IdleKind.DoubleBlink, 3f); add(IdleKind.CardTrack, 3f); add(IdleKind.RequestGlance, 2f);
+                add(IdleKind.Lick, 1.5f);
+                if (Home.Inverted)
+                {
+                    add(IdleKind.HandWave, 2f); add(IdleKind.Yawn, 1f);
+                }
+                return;
+            }
             switch (State.Stage)
             {
                 case PetHungerStage.Satisfied:
@@ -133,9 +165,11 @@ namespace ProjectBlock.View
                     add(IdleKind.ContentBlink, 3f); add(IdleKind.NapWobble, 2f); add(IdleKind.Peek, 0.7f);
                     return;
                 case PetHungerStage.Furious:
-                    add(IdleKind.AngryPant, 3f); add(IdleKind.SideEye, 2.5f); add(IdleKind.PawFlex, 2.5f);
-                    add(IdleKind.ToeTap, 2.5f); add(IdleKind.BoardGlance, 2f); add(IdleKind.JokerGlance, 1.5f);
-                    add(IdleKind.DeckGlance, 1.5f); add(IdleKind.MouthWipe, 2f);
+                    // the cute library is not used here at all
+                    add(IdleKind.FuryPant, 2.5f); add(IdleKind.JawTwitch, 2.5f); add(IdleKind.ClawTap, 2f);
+                    add(IdleKind.FurySideEye, 3f); add(IdleKind.FuryLick, 2f); add(IdleKind.FuryHeadSnap, 2.5f);
+                    add(IdleKind.HunchBreath, 2.5f); add(IdleKind.EyeSquint, 2f); add(IdleKind.TensionRelease, 1.5f);
+                    add(IdleKind.TeethClack, 1.5f); add(IdleKind.ClawGrip, Home.Kind == "top" ? 0f : 1.5f);
                     return;
                 case PetHungerStage.Impatient:
                     add(IdleKind.EdgeTap, 3f); add(IdleKind.CheekPuff, 3f); add(IdleKind.ArmsCross, 3f);
@@ -196,14 +230,18 @@ namespace ProjectBlock.View
                 case IdleKind.ArmsCross: return IdleArmsCross();
                 case IdleKind.Stomp: return IdleStomp();
                 case IdleKind.HeadSnap: return IdleRequestGlance(true);
-                case IdleKind.AngryPant: return IdlePant();
-                case IdleKind.SideEye: return IdleSideEye();
-                case IdleKind.PawFlex: return IdlePawFlex();
-                case IdleKind.ToeTap: return IdleToeTap();
-                case IdleKind.BoardGlance: return IdleGlanceAt(Anchors.BoardCentre, true);
-                case IdleKind.JokerGlance: return IdleGlanceAt(Anchors.JokerBar, true);
-                case IdleKind.DeckGlance: return IdleGlanceAt(Anchors.DrawPile, true);
-                default: return IdleMouthWipe();
+                case IdleKind.FuryPant: return FuryPant();
+                case IdleKind.JawTwitch: return FuryJawTwitch();
+                case IdleKind.ShortGrowl: return FuryShortGrowl();
+                case IdleKind.ClawTap: return FuryClawTap();
+                case IdleKind.FurySideEye: return FurySideEye();
+                case IdleKind.FuryLick: return FuryLick();
+                case IdleKind.FuryHeadSnap: return FuryHeadSnap();
+                case IdleKind.HunchBreath: return FuryHunchBreath();
+                case IdleKind.EyeSquint: return FuryEyeSquint();
+                case IdleKind.TensionRelease: return FuryTensionRelease();
+                case IdleKind.TeethClack: return FuryTeethClack();
+                default: return FuryClawGrip();
             }
         }
 
@@ -216,8 +254,10 @@ namespace ProjectBlock.View
         /// over the edge of its nest (0 = hidden, 1 = fully out).</summary>
         private float PresenceShowing(float units)
         {
-            float clipFloor = Home.Clip.yMin;
-            float hideBy = Home.Base.y + (TopY - units) * S - clipFloor;
+            // the point that far below its top, and how far inside the edge that point is
+            Vector2 point = Home.Base + HomeUp * ((TopY - units) * S);
+            Vector2 edge = Home.EdgePoint ?? new Vector2(Home.Base.x, Home.Clip.yMin);
+            float hideBy = Vector2.Dot(point - edge, -HideDirection);
             return Mathf.Clamp01(1f - hideBy / Mathf.Max(0.01f, Home.HideDepth));
         }
 
@@ -250,7 +290,7 @@ namespace ProjectBlock.View
         private PetPaw PawToward(bool right, Vector3 world, float reach)
         {
             Vector3 shoulder = rig.ShoulderWorld(right);
-            Vector2 d = (Vector2)(world - shoulder);
+            Vector2 d = ToLocal((Vector2)(world - shoulder));
             float a = Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg;
             // the rig's angle is "raised outward": the right paw points along +x at 0, the left
             // along -x
@@ -284,6 +324,7 @@ namespace ProjectBlock.View
             presence = 0f;
             yield return null;
             // A: the ears
+            Sound(PetSound.Peek);
             act.EarWobble = 9f;
             act.Presence = PresenceShowing(0.16f);
             yield return Wait(0.13f);
@@ -338,6 +379,7 @@ namespace ProjectBlock.View
             SetState(PetViewState.Requesting);
             Sound(PetSound.Request);
             RevealPlates();
+            Speak("Bunu istiyorum!", "I want this one!", true);
             for (int i = 0; i < Mathf.Min(2, plates.Count); i++)
             {
                 Vector3 at = PlateWorld(i);
@@ -382,6 +424,7 @@ namespace ProjectBlock.View
         {
             SetState(PetViewState.Exiting);
             ClearDrag();
+            DismissSpeech();
             bool fed = State.Stage == PetHungerStage.Satisfied;
             bool furious = State.Stage == PetHungerStage.Furious;
             FoldPlates();
@@ -389,7 +432,7 @@ namespace ProjectBlock.View
             {
                 act.Emotion = PetEmotion.Smug;
                 act.LookAt = Anchors.HandCentre;
-                Sound(PetSound.Smug);
+                Sound(PetSound.Grunt);
                 yield return Wait(0.3f);
                 yield return Tween(0.65f, t =>
                 {
@@ -422,7 +465,9 @@ namespace ProjectBlock.View
             // how far: just the eyes most of the time, the head or half the body sometimes
             double r = idleRng.NextDouble();
             float showing = r < 0.6 ? 0.56f : r < 0.85 ? 0.74f : 0.86f;
-            yield return Tween(0.45f, t => act.Presence = Mathf.Lerp(1f, PresenceShowing(showing), Smooth(t)));
+            float restAt = RestPresence;
+            showing = Mathf.Min(showing, restAt < 0.99f ? 0.56f : showing);
+            yield return Tween(0.45f, t => act.Presence = Mathf.Lerp(restAt, Mathf.Min(restAt, PresenceShowing(showing)), Smooth(t)));
             float hold = 1.2f + (float)idleRng.NextDouble() * 0.6f;
             yield return Tween(hold, t =>
             {
@@ -435,8 +480,8 @@ namespace ProjectBlock.View
                 yield return Wait(0.4f);
             }
             act.LookAt = null;
-            float from = act.Presence ?? 1f;
-            yield return Tween(0.18f, t => act.Presence = Mathf.Lerp(from, 1f, EaseOut(t)));
+            float from = act.Presence ?? restAt;
+            yield return Tween(0.18f, t => act.Presence = Mathf.Lerp(from, restAt, EaseOut(t)));
             yield return Tween(0.14f, t =>
             {
                 float k = 1f - Back(t, 2f);
@@ -821,70 +866,233 @@ namespace ProjectBlock.View
             });
         }
 
-        // ---- furious
+        // ---- furious (the corrective pass). Twelve, and none of them is cute: the same creature,
+        // kept waiting, with nothing left of its manners. Every 1.8-3.5 s - more often than the
+        // calm set, but each one is short, and between them it only breathes in jolts.
 
-        private IEnumerator IdlePant()
+        /// <summary>Something it could eat: the board, the jokers, the deck, the hand.</summary>
+        private Vector3 FuryInterest()
         {
+            switch (idleRng.Next(4))
+            {
+                case 0: return Anchors.BoardCentre;
+                case 1: return Anchors.JokerPanels.Count > 0 ? Anchors.JokerBar : Anchors.BoardCentre;
+                case 2: return Anchors.DrawPile;
+                default: return Anchors.HandFocus ?? Anchors.HandCentre;
+            }
+        }
+
+        /// <summary>1 - low panting: three short harsh breaths through the teeth.</summary>
+        private IEnumerator FuryPant()
+        {
+            Sound(PetSound.FuriousBreath);
             act.Mouth = "small";
             for (int i = 0; i < 3; i++)
             {
-                yield return Tween(0.17f, t =>
-                {
-                    act.MouthOpen = Mathf.Lerp(0.7f, 1.25f, Bell(t));
-                    act.Squash = new Vector2(1f - 0.015f * Bell(t), 1f + 0.025f * Bell(t));
-                });
-            }
-        }
-
-        private IEnumerator IdleSideEye()
-        {
-            act.Lid = 0.42f;
-            act.Look = new Vector2(-F * 1f, -0.2f);
-            yield return Wait(0.5f);
-            act.LookAt = Anchors.HandCentre;
-            act.Look = null;
-            yield return Wait(0.6f);
-        }
-
-        private IEnumerator IdlePawFlex()
-        {
-            for (int i = 0; i < 2; i++)
-            {
-                yield return Tween(0.16f, t =>
+                yield return Tween(0.19f, t =>
                 {
                     float k = Bell(t);
-                    act.PawL = Paw(0.02f, 0.03f * k, -22f + 40f * k, 1f + 0.08f * k);
-                    act.PawR = Paw(-0.02f, 0.03f * k, -22f + 40f * k, 1f + 0.08f * k);
+                    act.MouthOpen = Mathf.Lerp(0.92f, 1.22f, k);
+                    act.Squash = new Vector2(1f + 0.012f * k, 1f - 0.02f * k);
+                    act.Head = new Vector2(0f, -0.006f * k);
                 });
             }
         }
 
-        private IEnumerator IdleToeTap()
+        /// <summary>2 - jaw twitch: the mouth jerks to one side, twice.</summary>
+        private IEnumerator FuryJawTwitch()
         {
-            for (int i = 0; i < 4; i++)
+            float side = idleRng.NextDouble() < 0.5 ? -1f : 1f;
+            for (int i = 0; i < 2; i++)
             {
-                yield return Tween(0.12f, t =>
+                yield return Tween(0.07f, t =>
                 {
-                    act.Offset = new Vector2(0f, Px(1.2f) * Bell(t));
-                    act.Rot = -F * 1.2f * Bell(t);
+                    act.MouthOffset = new Vector2(side * 0.014f * Bell(t), -0.006f * Bell(t));
+                    act.HeadTilt = side * 1.5f * Bell(t);
+                });
+                act.MouthOffset = Vector2.zero;
+                yield return Wait(i == 0 ? 0.09f : 0.2f);
+            }
+        }
+
+        /// <summary>3 - a short growl: low in the throat, the chest working with it.</summary>
+        private IEnumerator FuryShortGrowl()
+        {
+            Sound(PetSound.GrowlIdle);
+            act.LookAt = FuryInterest();
+            yield return Tween(0.42f, t =>
+            {
+                float k = Bell(t);
+                float tremble = Mathf.Sin(t * 60f) * 0.004f * k;
+                act.Squash = new Vector2(1f + 0.01f * k + tremble, 1f - 0.018f * k - tremble);
+                act.Belly = -0.02f * k;
+                act.Head = new Vector2(0f, -0.012f * k);
+                act.MouthOpen = 1f + 0.12f * k;
+            });
+        }
+
+        /// <summary>4 - claw tap: three hard taps on its edge.</summary>
+        private IEnumerator FuryClawTap()
+        {
+            bool right = EdgePawIsRight;
+            act.LookAt = Anchors.HandCentre;
+            PetPaw rest = IdlePaw(!right);
+            PetPaw up = Paw(right ? 0.07f : -0.07f, 0.03f, 4f, 1.06f);
+            yield return Tween(0.08f, t => SetPaw(right, BlendPaw(rest, up, t)));
+            for (int i = 0; i < 3; i++)
+            {
+                bool tapped = false;
+                yield return Tween(0.1f, t =>
+                {
+                    float k = Bell(t);
+                    SetPaw(right, Paw(right ? 0.07f + 0.035f * k : -0.07f - 0.035f * k, 0.03f - 0.02f * k, 4f + 24f * k, 1.06f));
+                    if (t > 0.5f && !tapped)
+                    {
+                        tapped = true;
+                        Sound(PetSound.Tap);
+                    }
+                });
+            }
+            yield return Tween(0.1f, t => SetPaw(right, BlendPaw(up, rest, t)));
+        }
+
+        /// <summary>5 - a sudden side-eye: only the eyes go, and one of them narrows.</summary>
+        private IEnumerator FurySideEye()
+        {
+            Vector3 at = FuryInterest();
+            act.LookAt = at;
+            bool lookingRight = at.x > rig.MouthWorld.x;
+            act.SquintL = lookingRight ? 0.45f : 0f;
+            act.SquintR = lookingRight ? 0f : 0.45f;
+            yield return Wait(0.55f);
+            act.SquintL = 0f;
+            act.SquintR = 0f;
+            act.LookAt = Anchors.HandCentre;
+            yield return Wait(0.3f);
+        }
+
+        /// <summary>6 - it licks its mouth, grinning.</summary>
+        private IEnumerator FuryLick()
+        {
+            act.Mouth = "smug";
+            act.LookAt = FuryInterest();
+            yield return Tween(0.5f, t =>
+            {
+                act.Lick = Bell(t);
+                act.Head = new Vector2(0f, 0.006f * Bell(t));
+            });
+            act.Lick = 0f;
+        }
+
+        /// <summary>7 - a head snap toward something it could take, held, and back.</summary>
+        private IEnumerator FuryHeadSnap()
+        {
+            Vector3 at = FuryInterest();
+            act.LookAt = at;
+            yield return Tween(0.07f, t =>
+            {
+                HeadToward(at, 1.5f * EaseOut(t));
+                act.Squash = new Vector2(1f - 0.015f * Bell(t), 1f + 0.015f * Bell(t));
+            });
+            act.Squash = Vector2.one;
+            yield return Wait(0.4f);
+            yield return Tween(0.09f, t => HeadToward(at, 1.5f * (1f - t)));
+            act.Head = Vector2.zero;
+            act.HeadTilt = 0f;
+        }
+
+        /// <summary>8 - hunched breathing: two slow heavy breaths, shoulders up.</summary>
+        private IEnumerator FuryHunchBreath()
+        {
+            Sound(PetSound.FuriousBreath);
+            float down = Px(2f) / Mathf.Max(0.01f, S);
+            for (int i = 0; i < 2; i++)
+            {
+                yield return Tween(0.46f, t =>
+                {
+                    float k = Bell(t);
+                    act.Squash = new Vector2(1f + 0.022f * k, 1f - 0.03f * k);
+                    act.Head = new Vector2(0f, -down * k);
+                    act.PawL = Paw(-0.03f - 0.012f * k, -0.02f + 0.02f * k, -30f - 6f * k, 1.04f);
+                    act.PawR = Paw(0.03f + 0.012f * k, -0.02f + 0.02f * k, -30f - 6f * k, 1.04f);
                 });
             }
         }
 
-        /// <summary>A sudden look at something it could eat - the board, the joker bar, the deck.</summary>
-        private IEnumerator IdleGlanceAt(Vector2 at, bool hungry)
+        /// <summary>9 - one eye narrows to a slit while the other stays on you.</summary>
+        private IEnumerator FuryEyeSquint()
         {
-            act.LookAt = at;
-            HeadToward(at, 1f);
-            if (hungry)
+            bool left = idleRng.NextDouble() < 0.5;
+            act.LookAt = Anchors.HandFocus ?? Anchors.HandCentre;
+            yield return Tween(0.8f, t =>
             {
-                act.Lick = 0.6f;
+                float k = Mathf.Clamp01(Bell(t) * 1.6f);
+                act.SquintL = left ? 0.9f * k : 0f;
+                act.SquintR = left ? 0f : 0.9f * k;
+                act.HeadTilt = (left ? 3f : -3f) * k;
+                act.IrisMul = 1f - 0.1f * k;
+            });
+            act.SquintL = 0f;
+            act.SquintR = 0f;
+        }
+
+        /// <summary>10 - body tension release: it winds up, shudders, and lets it go in one drop.</summary>
+        private IEnumerator FuryTensionRelease()
+        {
+            yield return Tween(0.3f, t =>
+            {
+                float k = Smooth(t);
+                act.Squash = new Vector2(1f - 0.012f * k, 1f + 0.014f * k);
+                act.PawL = Paw(-0.03f, -0.02f + 0.025f * k, -30f + 10f * k, 1.04f + 0.06f * k);
+                act.PawR = Paw(0.03f, -0.02f + 0.025f * k, -30f + 10f * k, 1.04f + 0.06f * k);
+            });
+            yield return Tween(0.2f, t => act.Rot = Mathf.Sin(t * 40f) * 1.6f * (1f - t));
+            act.Rot = 0f;
+            act.PawL = null;
+            act.PawR = null;
+            yield return Tween(0.22f, t =>
+            {
+                float k = 1f - Back(t, 2f);
+                act.Squash = new Vector2(1f + 0.03f * k, 1f - 0.035f * k);
+            });
+        }
+
+        /// <summary>11 - a short teeth clack: the jaw opens a crack and shuts, twice.</summary>
+        private IEnumerator FuryTeethClack()
+        {
+            Sound(PetSound.TeethClack);
+            for (int i = 0; i < 2; i++)
+            {
+                act.Mouth = "wide";
+                act.MouthScale = 0.72f;
+                yield return Wait(0.045f);
+                act.Mouth = "chew_b";
+                act.MouthScale = 1f;
+                yield return Tween(0.06f, t => act.Head = new Vector2(0f, -0.008f * Bell(t)));
             }
-            yield return Wait(0.45f);
-            act.Lick = 0f;
-            act.Emotion = PetEmotion.Smug;
-            act.EmotionWeight = 0.5f;
-            yield return Wait(0.3f);
+            act.Mouth = null;
+            yield return Wait(0.12f);
+        }
+
+        /// <summary>12 - a claw grips the screen's edge beside it and it pulls against it.</summary>
+        private IEnumerator FuryClawGrip()
+        {
+            bool right = EdgePawIsRight;
+            PetPaw rest = IdlePaw(!right);
+            PetPaw grip = PawToward(right, Home.EdgeTap, 0.09f);
+            grip.Scale = 1.12f;
+            yield return Tween(0.12f, t => SetPaw(right, BlendPaw(rest, grip, EaseOut(t))));
+            Sound(PetSound.Tap);
+            yield return Tween(0.62f, t =>
+            {
+                float k = Bell(t);
+                PetPaw g = grip;
+                g.Offset += new Vector2(Mathf.Sin(t * 70f) * 0.003f, 0f);
+                SetPaw(right, g);
+                act.Offset = new Vector2(F * Px(2.5f) * k, 0f);
+                act.Rot = -F * 1.2f * k;
+            });
+            yield return Tween(0.12f, t => SetPaw(right, BlendPaw(grip, rest, t)));
         }
 
         private IEnumerator IdleMouthWipe()

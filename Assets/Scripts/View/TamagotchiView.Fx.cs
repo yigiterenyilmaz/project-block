@@ -30,6 +30,8 @@ namespace ProjectBlock.View
             public Color Colour;
             public bool Live;
             public bool FadeIn;
+            public bool Pulled;
+            public Vector2 Pull;
         }
 
         private const int ParticlePool = 24;
@@ -75,13 +77,43 @@ namespace ProjectBlock.View
         private bool Spawn(string sprite, Vector2 at, Vector2 velocity, float life, float size0, float size1,
             Color colour, float gravity, float spin, bool ambient, float drag = 1.5f, bool fadeIn = false)
         {
+            return SpawnParticle(sprite, at, velocity, life, size0, size1, colour, gravity, spin, ambient, drag, fadeIn) != null;
+        }
+
+        /// <summary>A short tapered streak flying along <paramref name="dir"/> (the fury's own
+        /// particle: no sparkles, no hearts). It points the way it goes and never spins.</summary>
+        private void SpawnStreak(Vector2 at, Vector2 dir, float speed, float life, Color colour)
+        {
+            Particle p = SpawnParticle("fx_streak", at, dir * speed, life, 2.2f * S, 1.1f * S, colour, 0f, 0f, false, 6f, false);
+            if (p != null)
+            {
+                p.R.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
+            }
+        }
+
+        /// <summary>A mote drawn toward a point (the board's dust before a bite): it starts slow
+        /// and is gone when it gets there.</summary>
+        private void SpawnPulled(string sprite, Vector2 from, Vector2 to, float life, float size, Color colour)
+        {
+            Vector2 d = to - from;
+            Particle p = SpawnParticle(sprite, from, d / Mathf.Max(0.05f, life) * 0.35f, life, size, size * 0.5f, colour, 0f, 0f, false, 0f, true);
+            if (p != null)
+            {
+                p.Pull = to;
+                p.Pulled = true;
+            }
+        }
+
+        private Particle SpawnParticle(string sprite, Vector2 at, Vector2 velocity, float life, float size0, float size1,
+            Color colour, float gravity, float spin, bool ambient, float drag, bool fadeIn)
+        {
             if (ambient && Lod == PetLod.Low)
             {
-                return false;
+                return null;
             }
             if (LiveParticles >= particleBudget)
             {
-                return false;
+                return null;
             }
             foreach (Particle p in particles)
             {
@@ -104,10 +136,11 @@ namespace ProjectBlock.View
                 p.Size1 = size1;
                 p.Colour = colour;
                 p.FadeIn = fadeIn;
+                p.Pulled = false;
                 Paint(p);
-                return true;
+                return p;
             }
-            return false;
+            return null;
         }
 
         private void TickParticles()
@@ -125,6 +158,13 @@ namespace ProjectBlock.View
                     p.Live = false;
                     p.R.enabled = false;
                     continue;
+                }
+                if (p.Pulled)
+                {
+                    // drawn in: faster the nearer the end of its life, so it arrives as it dies
+                    Vector2 to = p.Pull - (Vector2)p.R.transform.position;
+                    float left = Mathf.Max(0.02f, p.Life - p.Age);
+                    p.Velocity = Vector2.Lerp(p.Velocity, to / left, Mathf.Clamp01(dt * 9f));
                 }
                 p.Velocity += Vector2.down * p.Gravity * dt;
                 p.Velocity *= Mathf.Max(0f, 1f - p.Drag * dt);

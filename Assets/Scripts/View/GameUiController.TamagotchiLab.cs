@@ -102,19 +102,24 @@ namespace ProjectBlock.View
 
             // --- FURY ---
             AddPet("49 full furious transition", "49 tam öfke geçişi", () => PetLabFury(null, PetPunishKind.Board));
-            AddPet("50 eye change", "50 göz değişimi", () => PetLabFury("eye change", PetPunishKind.Board));
-            AddPet("51 body compression", "51 gövde sıkışması", () => PetLabFury("compression", PetPunishKind.Board));
-            AddPet("52 fury burst", "52 öfke patlaması", () => PetLabFury("burst", PetPunishKind.Board));
-            AddPet("53 request destruction", "53 tabakların ısırılması", () => PetLabFury("request destruction", PetPunishKind.Board));
+            AddPet("50 dead silence", "50 ölü sessizlik", () => PetLabFury("silence", PetPunishKind.Board));
+            AddPet("51 disappointment", "51 hayal kırıklığı", () => PetLabFury("disappointment", PetPunishKind.Board));
+            AddPet("52 face break", "52 yüzün bozulması", () => PetLabFury("face break", PetPunishKind.Board));
+            AddPet("53 fury burst", "53 öfke patlaması", () => PetLabFury("burst", PetPunishKind.Board));
+            AddPet("+ target snap + hold", "+ hedefe kilitlenme + bekleme", () => PetLabFury("target", PetPunishKind.Joker));
             AddPet("54 furious idle (library on)", "54 öfkeli bekleme (kütüphane açık)", () => { PetLabShow(PetHungerStage.Furious, 1f); PetView.LabNextIdle(); });
-            AddPetIdle("55 furious side-eye", "55 öfkeli yan bakış", TamagotchiView.IdleKind.SideEye, PetHungerStage.Furious);
-            AddPetIdle("+ angry pant", "+ öfkeli soluma", TamagotchiView.IdleKind.AngryPant, PetHungerStage.Furious);
-            AddPetIdle("+ paw flex", "+ pati germe", TamagotchiView.IdleKind.PawFlex, PetHungerStage.Furious);
-            AddPetIdle("+ toe tap", "+ ayak vurma", TamagotchiView.IdleKind.ToeTap, PetHungerStage.Furious);
-            AddPetIdle("+ board glance", "+ tahtaya bakış", TamagotchiView.IdleKind.BoardGlance, PetHungerStage.Furious);
-            AddPetIdle("+ joker bar glance", "+ joker barına bakış", TamagotchiView.IdleKind.JokerGlance, PetHungerStage.Furious);
-            AddPetIdle("+ deck glance", "+ desteye bakış", TamagotchiView.IdleKind.DeckGlance, PetHungerStage.Furious);
-            AddPetIdle("+ mouth wipe", "+ ağız silme", TamagotchiView.IdleKind.MouthWipe, PetHungerStage.Furious);
+            AddPetIdle("55 furious side-eye", "55 öfkeli yan bakış", TamagotchiView.IdleKind.FurySideEye, PetHungerStage.Furious);
+            AddPetIdle("+ low panting", "+ alçak soluma", TamagotchiView.IdleKind.FuryPant, PetHungerStage.Furious);
+            AddPetIdle("+ jaw twitch", "+ çene seğirmesi", TamagotchiView.IdleKind.JawTwitch, PetHungerStage.Furious);
+            AddPetIdle("+ short growl", "+ kısa hırlama", TamagotchiView.IdleKind.ShortGrowl, PetHungerStage.Furious);
+            AddPetIdle("+ claw tap", "+ pençe tıklatma", TamagotchiView.IdleKind.ClawTap, PetHungerStage.Furious);
+            AddPetIdle("+ mouth lick", "+ ağız yalama", TamagotchiView.IdleKind.FuryLick, PetHungerStage.Furious);
+            AddPetIdle("+ head snap", "+ baş çevirme", TamagotchiView.IdleKind.FuryHeadSnap, PetHungerStage.Furious);
+            AddPetIdle("+ hunched breathing", "+ kambur soluma", TamagotchiView.IdleKind.HunchBreath, PetHungerStage.Furious);
+            AddPetIdle("+ one eye squint", "+ tek göz kısma", TamagotchiView.IdleKind.EyeSquint, PetHungerStage.Furious);
+            AddPetIdle("+ tension release", "+ gerginlik boşalması", TamagotchiView.IdleKind.TensionRelease, PetHungerStage.Furious);
+            AddPetIdle("+ teeth clack", "+ diş takırtısı", TamagotchiView.IdleKind.TeethClack, PetHungerStage.Furious);
+            AddPetIdle("+ screen-edge claw grip", "+ ekran kenarını pençeleme", TamagotchiView.IdleKind.ClawGrip, PetHungerStage.Furious);
 
             // --- BOARD EAT ---
             AddPet("56 single cell target", "56 tek hücre", () => PetLabBoard(PetLabCells(1), null, false));
@@ -317,7 +322,13 @@ namespace ProjectBlock.View
             }
             jokerBar.SetPresentationAlpha(1f);
             powerBar.SetPresentationAlpha(1f);
+            jokerBar.SetHeldGap(-1);
+            powerBar.SetHeldGap(-1);
             boardView.SetImpulse(Vector2.zero);
+            if (background != null)
+            {
+                background.SetMood("tamagotchi", null);
+            }
         }
 
         /// <summary>The pet out with two requests, at a stage. <paramref name="fed"/> is a mask of

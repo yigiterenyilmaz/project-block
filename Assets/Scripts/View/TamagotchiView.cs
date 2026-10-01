@@ -82,14 +82,6 @@ namespace ProjectBlock.View
         Low
     }
 
-    /// <summary>The audio hooks the brief names.</summary>
-    public enum PetSound
-    {
-        Enter, Request, Idle, NoticeDraggedCard, ValidFoodNear, WrongFoodNear, GrabFood, Chomp,
-        ChompLight, Chew, Gulp, GulpBig, Satisfied, Impatient, Furious, BoardBite, AssetSnatch, AssetBite,
-        PileSnack, PileSnackLight, Smug, Tap, Stomp
-    }
-
     /// <summary>The haptic beats the brief names. There is no haptics layer in the game yet, so
     /// they are announced (Haptics) and nothing more.</summary>
     public enum PetHaptic
@@ -163,6 +155,10 @@ namespace ProjectBlock.View
         public float Sit;               // 0..1 sitting
         public bool Shadow = true;      // only a home with a floor under it casts one
         public int Edge;                // 0 bottom, 1 right, 2 top, 3 left (for the roaming)
+        public Vector2? EdgePoint;      // a point on the edge it hides behind (null = under its base, on the clip's floor)
+        public bool Inverted;           // hanging over the top edge, upside down (normal mood only)
+        public string Kind = "corner";  // corner / pile / side / top (the roaming's families)
+        public int Side;                // +1 the right half of the screen, -1 the left
         public Rect PetRect;
         public bool Squeezed;           // no free space: it is sitting over something
     }
@@ -185,8 +181,15 @@ namespace ProjectBlock.View
         public Color GroundColour = new Color(0.17f, 0.19f, 0.25f);
         public readonly Dictionary<int, Rect> JokerPanels = new Dictionary<int, Rect>();
         public readonly Dictionary<int, Rect> PowerPanels = new Dictionary<int, Rect>();
+
+        /// <summary>Where every panel LAST stood, and at which place in its bar - kept through the
+        /// frame Core takes one away, which is the frame the pet needs to know where it was.</summary>
+        public readonly Dictionary<int, Rect> PanelMemory = new Dictionary<int, Rect>();
+        public readonly Dictionary<int, int> PanelIndexMemory = new Dictionary<int, int>();
         public Func<GridPos, Vector2> CellToWorld;
         public Func<int, Vector2?> HandSlotWorld;
+        public Rect Screen = new Rect(-9f, -5f, 18f, 10f);
+        public float DebtVignette;      // perceptual, what "Kredi kartı" already puts on the edges
     }
 
     /// <summary>The presentation queue: FuriousTransition > Punish > Feed > Request > Idle.</summary>
@@ -378,7 +381,71 @@ namespace ProjectBlock.View
             public static float ImpatientIdleRate = 0.68f;
             public static float AngryAuraStrength = 0.30f;
             public static float FuriousAuraStrength = 0.42f;
-            public static float FuryTransitionDuration = 0.92f;
+            public static float FuryTransitionDuration = 0.92f;   // the LEGACY fury only (the lab's comparison)
+
+            // FURY (the corrective pass; seconds at 1x - the whole thing runs ~1.55 s)
+            public static float FurySilence = 0.15f;           // A: dead silence, the stare
+            public static float FuryDisappointment = 0.23f;    // B: "are you serious"
+            public static float FuryGrowlLead = 0.08f;         // the growl starts this long before B ends
+            public static float FuryFaceMorph = 0.27f;         // D: the face breaks
+            public static float FuryBodyCompression = 0.95f;   // C: the body pulled in
+            public static float FuryBurstDuration = 0.26f;     // F: 0.95 -> 1.10 -> 1.03
+            public static float HatredWaveDuration = 0.28f;    // E: the pressure front crossing the screen
+            public static float HatredVignette = 0.24f;        // perceptual, at the surge's peak
+            public static float HatredAmbientVignette = 0.08f; // perceptual, for as long as it is furious
+            public static float HatredDesaturation = 0.11f;    // the background at the peak
+            public static float HatredChromaticOffset = 1.5f;  // px
+            public static float FuryTargetHold = 0.24f;        // the predatory hold before the punish
+            public static float FuriousIdleMin = 1.8f;
+            public static float FuriousIdleMax = 3.5f;
+            public static float GrowlIdleMin = 4f;
+            public static float GrowlIdleMax = 8f;
+
+            // ROAMING
+            public static int MoveTurnIntervalMin = 2;
+            public static int MoveTurnIntervalMax = 4;
+            public static float IdleRelocateSeconds = 15f;     // 12-20, once
+            public static float HideDuration = 0.42f;
+            public static float PeekDuration = 0.34f;
+            public static float ScamperSpeed = 5.5f;           // world units a second
+            public static float HopDuration = 0.36f;
+            public static int PositionCooldown = 2;            // the last N homes are not taken again
+
+            // SPEECH
+            public static float BubbleMinGap = 6.5f;           // seconds between unscripted bubbles
+            public static float BubbleHold = 1.7f;
+
+            // ASSET EAT (the corrective pass)
+            // (the brief's own per-beat ranges add up to more than its total for a joker, 0.9-1.3 s;
+            // these sit at the short end of each range and land a normal joker at ~1.35 s, a
+            // valuable one at ~1.5)
+            public static float AssetLockDuration = 0.15f;
+            public static float AssetThreatDuration = 0.12f;
+            public static float AssetGrabDuration = 0.12f;
+            public static float AssetStruggleDuration = 0.19f;
+            public static float AssetPullDuration = 0.23f;
+            public static float AssetFirstBite = 0.3f;         // the share of it the first bite takes
+            public static float AssetChewDuration = 0.075f;    // one chew
+            public static float AssetSecondBite = 0.35f;
+            public static float AssetGulpDuration = 0.14f;
+
+            // BOARD EAT (the corrective pass)
+            public static float BoardTelegraph = 0.27f;
+            public static float BoardPreSuction = 0.15f;
+            public static float BoardLunge = 0.19f;
+            public static float BoardBite = 0.12f;
+            public static float BoardChunkPull = 0.22f;
+            public static float BoardChew = 0.15f;             // one heavy chew
+            public static float BoardGulp = 0.18f;
+            public static float BoardScar = 0.55f;             // the bite stress on the new edge
+
+            // PILE (the corrective pass)
+            public static float PileLift = 0.1f;
+            public static float PileTravel = 0.13f;
+            public static float PileGap = 0.1f;
+
+            /// <summary>A second punish in the same fury runs a little quicker - never instant.</summary>
+            public static float RepeatPunishPace = 0.86f;
 
             // BOARD EAT
             public static float BoardTelegraphDuration = 0.24f;
@@ -414,6 +481,9 @@ namespace ProjectBlock.View
         private readonly PetPose pose = new PetPose();
         private readonly Act act = new Act();
 
+        /// <summary>Powers share the panel memory with the jokers, under their id plus this.</summary>
+        public const int PowerMemoryKey = 1 << 20;
+
         public const int PetOrder = 11;
         public const int PlatesOrder = 10;
         public const int FlightOrder = 45;
@@ -439,6 +509,11 @@ namespace ProjectBlock.View
         /// <summary>Asked of the controller when the eaten joker/power strip should step back
         /// (true) and come back (false).</summary>
         public event Action<bool, bool> DimBar;
+
+        /// <summary>Asked of the controller: hold the eaten thing's slot OPEN in its bar
+        /// (jokers?, the place it stood at), or -1 to let the bar close up - only after the last
+        /// bite has been swallowed.</summary>
+        public event Action<bool, int> HoldBarSlot;
 
         /// <summary>The arena's own transform term, for the board's 1-2 px settle after a bite.</summary>
         public event Action<Vector2> BoardImpulse;
@@ -475,6 +550,8 @@ namespace ProjectBlock.View
             flightGroup.sortingOrder = FlightOrder;
             BuildDecor();
             BuildParticles();
+            BuildHatred();
+            BuildSpeech();
             rig.SetVisible(false);
             ViewState = PetViewState.Hidden;
         }
@@ -565,15 +642,55 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            kind = FuriousCue(kind);
             lastSound = kind;
             lastSoundAt = clock;
             if (Sounded != null)
             {
                 Sounded(kind);
             }
-            if (sfx != null && PlaybackRate > 0.95f)
+            LastSound = kind;
+            LastSoundAt = clock;
+            if (sfx != null && PlaybackRate > 0.95f && !labFast)
             {
                 sfx.Tamagotchi(kind);
+            }
+        }
+
+        /// <summary>The routines ask for the cue they always did; a furious pet answers with its
+        /// own - a deeper crunch, a heavier chew, a throat that does not swallow cleanly, a grunt
+        /// where the cute one said "heh".</summary>
+        private PetSound FuriousCue(PetSound kind)
+        {
+            if (furyNow < 0.5f || LabLegacy)
+            {
+                return kind;
+            }
+            switch (kind)
+            {
+                case PetSound.Chomp: return PetSound.ChompFurious;
+                case PetSound.Chew: return PetSound.ChewFurious;
+                case PetSound.Gulp:
+                case PetSound.GulpBig: return PetSound.GulpDeep;
+                case PetSound.Smug: return PetSound.Grunt;
+                case PetSound.Hide:
+                case PetSound.Move: return PetSound.MoveFurious;
+                default: return kind;
+            }
+        }
+
+        /// <summary>The last audio hook that fired, and when (the lab's readout).</summary>
+        public PetSound LastSound { get; private set; }
+
+        public float LastSoundAt { get; private set; }
+
+        /// <summary>A major event takes the foreground: the rest of the game's audio steps back
+        /// (<paramref name="amount"/> of the tuned duck) for a while and comes back on its own.</summary>
+        private void Duck(float amount, float seconds)
+        {
+            if (sfx != null && PlaybackRate > 0.95f && !labFast)
+            {
+                sfx.DuckForPet(amount, seconds);
             }
         }
 
@@ -585,6 +702,8 @@ namespace ProjectBlock.View
             }
         }
 
+        /// <summary>A FACT for the message bar - what was eaten, what the rule is. What the pet
+        /// itself says is never put here: it comes out of its mouth as a bubble (Speak, .Speech).</summary>
         private void Say(string tr, string en)
         {
             if (Says != null)
@@ -645,10 +764,14 @@ namespace ProjectBlock.View
             public Vector2 MouthOffset;
             public float? Sit;
             public float Tilt;              // degrees added to the home's own tilt
+            public float Lift;              // 0..1 off the floor (a hop: the shadow lets go)
+            public Vector2 Travel;          // world: where a move between homes has got to
+            public float PresenceHalfLife;  // 0 = the usual spring
 
             public void Clear()
             {
                 Fury = null; SquintL = 0f; SquintR = 0f; MouthOffset = Vector2.zero; Sit = null; Tilt = 0f;
+                Lift = 0f; PresenceHalfLife = 0f; Travel = Vector2.zero;
                 Presence = null; Offset = Vector2.zero; Rot = 0f; Squash = Vector2.one; Scale = 1f;
                 Head = Vector2.zero; HeadTilt = 0f; HeadSquash = 1f; LookAt = null; Look = null;
                 Emotion = null; EmotionWeight = 1f; Mouth = null; MouthOpen = 1f; MouthScale = 1f;
@@ -693,7 +816,13 @@ namespace ProjectBlock.View
             ResetLife(State.Seed);
             rig.SetVisible(true);
             presence = 0f;
+            furyNow = State.Furious ? 1f : 0f;
+            ResetRoaming();
             RebuildPlates();
+            if (sfx != null)
+            {
+                sfx.WarmTamagotchi();
+            }
             Enqueue(PetPresentationPriority.Request, "entrance", Entrance, true, 0f, SkipEntrance);
         }
 
@@ -718,6 +847,8 @@ namespace ProjectBlock.View
             exiting = false;
             rig.SetVisible(false);
             HideDecor();
+            HideHatred();
+            HideSpeech();
             mealsOnTheWay.Clear();
             HideDebug();
             ViewState = PetViewState.Hidden;
@@ -821,10 +952,12 @@ namespace ProjectBlock.View
             ComposePose();
             rig.UnitScale = Home.UnitScale;
             rig.Home = Home.Base;
-            rig.SetClip(Home.Clip);
+            rig.SetClip(ClipNow);
             rig.Apply(pose);
             TickDecor();
             TickParticles();
+            TickHatred();
+            TickSpeech();
             TickDebug();
             ViewState = DeriveState();
         }
@@ -1061,12 +1194,14 @@ namespace ProjectBlock.View
             bool stiff = stage == PetHungerStage.Angry || stage == PetHungerStage.Furious;
 
             // ---- presence: how far out of its nest it is
-            float wantPresence = act.Presence ?? (exiting ? presence : 1f);
-            presence = Damp(presence, wantPresence, 0.045f);
-            Vector2 offset = new Vector2(0f, -(1f - presence) * Home.HideDepth);
+            // a card being carried to a peeking pet brings it out: its mouth has to be there to feed
+            float restWant = drag.Active && State.Wants ? 1f : RestPresence;
+            float wantPresence = act.Presence ?? (exiting ? presence : restWant);
+            presence = Damp(presence, wantPresence, act.PresenceHalfLife > 0f ? act.PresenceHalfLife : 0.045f);
+            Vector2 offset = HideDirection * ((1f - presence) * Home.HideDepth);
 
             // ---- the skin: Core says furious, but the cute one is kept until the fury has been SHOWN
-            float furyTarget = act.Fury ?? (State.Furious && !queue.Has("fury") ? 1f : 0f);
+            float furyTarget = LabLegacy ? 0f : act.Fury ?? (State.Furious && !queue.Has("fury") ? 1f : 0f);
             furyNow = Damp(furyNow, furyTarget, 0.05f);
             bool furious = furyNow > 0.5f;
 
@@ -1092,8 +1227,16 @@ namespace ProjectBlock.View
                 sway = sway * 0.4f + F * -1.6f * furyNow;
             }
 
+            // sitting: it lets itself down a little and spreads
+            if (sitNow > 0.01f)
+            {
+                offset -= HomeUp * (0.035f * S * sitNow);
+                squash = Vector2.Scale(squash, new Vector2(1f + 0.025f * sitNow, 1f - 0.03f * sitNow));
+            }
+
             // ---- act
-            offset += act.Offset;
+            offset += Home.Inverted ? new Vector2(act.Offset.x, -act.Offset.y) : act.Offset;
+            offset += act.Travel;
             float rot = sway + act.Rot;
             squash = Vector2.Scale(squash, act.Squash);
 
@@ -1122,7 +1265,8 @@ namespace ProjectBlock.View
             pose.Offset = offsetNow;
             pose.Rot = rotNow;
             pose.Squash = squashNow;
-            pose.Scale = act.Scale;
+            // the furious body is 3% the bigger: it came out of its burst that way and stays so
+            pose.Scale = act.Scale * (1f + 0.03f * furyNow);
             pose.Head = headNow;
             pose.HeadTilt = tiltNow;
             pose.HeadSquash = act.HeadSquash;
@@ -1228,7 +1372,7 @@ namespace ProjectBlock.View
             pose.SparkleR = act.SparkleR;
             pose.GlowExtra = act.Glow;
             pose.Alpha = act.Alpha;
-            pose.ShadowA = Mathf.Clamp01(presence * 1.2f - 0.1f) * act.Alpha;
+            pose.ShadowA = Home.Shadow ? Mathf.Clamp01(presence * 1.2f - 0.1f) * act.Alpha * (1f - act.Lift) : 0f;
             pose.Tint = Color.white;
             pose.Reach = act.Reach;
             pose.ReachTongue = act.ReachTongue;
@@ -1256,8 +1400,14 @@ namespace ProjectBlock.View
                 case PetHungerStage.Angry:
                     return Paw(left ? 0.02f : -0.02f, -0.02f, -12f);
                 case PetHungerStage.Furious:
-                    return Paw(left ? 0.03f : -0.03f, -0.03f, -22f, 0.92f);
+                    // out from the body and down: shoulders up, claws ready
+                    return Paw(left ? -0.03f : 0.03f, -0.02f, -30f, 1.04f);
                 default:
+                    // sitting, its paws rest on its belly
+                    if (sitNow > 0.5f)
+                    {
+                        return BellyPaw(!left);
+                    }
                     // a little below level: arms held straight out are a scarecrow's
                     return Paw(0f, 0f, -18f);
             }
@@ -1312,7 +1462,7 @@ namespace ProjectBlock.View
                 return Vector2.zero;
             }
             float reach = Mathf.Clamp01(m / Mathf.Max(0.2f, 1.3f * S));
-            return d / m * Mathf.Lerp(0.35f, 1f, reach);
+            return ToLocal(d / m) * Mathf.Lerp(0.35f, 1f, reach);
         }
 
         /// <summary>The head turning a little toward a point (used with LookAt).</summary>
@@ -1323,9 +1473,42 @@ namespace ProjectBlock.View
             {
                 return;
             }
-            Vector2 n = d.normalized;
+            Vector2 n = ToLocal(d.normalized);
             act.Head = n * 0.022f * amount;
             act.HeadTilt = -n.x * 4f * amount;
+        }
+
+        /// <summary>A world direction in the pet's own frame: it may be leaning in round a side of
+        /// the screen or hanging over the top of it, and its eyes, head and paws are told where to
+        /// go in ITS terms.</summary>
+        private Vector2 ToLocal(Vector2 world)
+        {
+            float a = -tiltNow2 * Mathf.Deg2Rad;
+            float c = Mathf.Cos(a);
+            float s = Mathf.Sin(a);
+            return new Vector2(world.x * c - world.y * s, world.x * s + world.y * c);
+        }
+
+        /// <summary>The pet's own "up" where it lives (its home's tilt).</summary>
+        private Vector2 HomeUp
+        {
+            get
+            {
+                float a = Home.Tilt * Mathf.Deg2Rad;
+                return new Vector2(-Mathf.Sin(a), Mathf.Cos(a));
+            }
+        }
+
+        /// <summary>The way it goes to hide behind its edge.</summary>
+        private Vector2 HideDirection
+        {
+            get { return Home.HideDir.sqrMagnitude > 0.0001f ? Home.HideDir.normalized : Vector2.down; }
+        }
+
+        /// <summary>How far out it sits when nothing asks for more (a peek home shows a head).</summary>
+        private float RestPresence
+        {
+            get { return Mathf.Clamp(Home.Rest, 0.05f, 1f); }
         }
 
         /// <summary>The direction toward the board, in x.</summary>

@@ -34,6 +34,10 @@ namespace ProjectBlock.View
         public bool LabBlinks = true;
         public bool LabStill;
 
+        /// <summary>THE OLD LOOK, for the lab's side-by-sides: the first fury (no second skin, no
+        /// growl, nothing on the screen) and the first, fast punishes. The game never sets it.</summary>
+        public bool LabLegacy;
+
         /// <summary>A sequence is entering the named beat.</summary>
         private void Beat(string name)
         {
@@ -90,6 +94,12 @@ namespace ProjectBlock.View
             labFast = false;
             LabBreath = LabBob = LabSway = LabBlinks = true;
             LabStill = false;
+            LabLegacy = false;
+            LabNoHatred = false;
+            LabNoSpeech = false;
+            LabHatredHold = -1f;
+            LabFuryParts = FuryParts.All;
+            LabNoRoam = false;
             IdlesEnabled = true;
             PlaybackRate = 1f;
         }

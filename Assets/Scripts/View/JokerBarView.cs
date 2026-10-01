@@ -134,12 +134,35 @@ namespace ProjectBlock.View
                     showing++;
                 }
             }
+            // "Tamagotchi": a slot held open pushes everything after it one place on
+            int gap = heldGap >= 0 && heldGap <= showing ? heldGap : -1;
             for (int i = 0; i < panels.Count; i++)
             {
                 UiLayout.PlaceBarSlot(panels[i].Root.GetComponent<RectTransform>(),
-                    i, showing, new Vector2(PanelWidth, PanelHeight), PanelGap, true);
+                    gap >= 0 && i >= gap ? i + 1 : i, showing + (gap >= 0 ? 1 : 0),
+                    new Vector2(PanelWidth, PanelHeight), PanelGap, true);
                 panels[i].Layout(new Vector2(PanelWidth, PanelHeight), Compact);
                 panels[i].SyncGlow();
+            }
+        }
+
+        private int heldGap = -1;
+
+        /// <summary>
+        /// "Tamagotchi" eating one of these: Core has already taken it out of the run, but its
+        /// SLOT is held open (the strip laid out as if it were still there) until the pet has been
+        /// seen to swallow the last of it - the loss settles on screen only then. -1 gives it back.
+        /// </summary>
+        public void SetHeldGap(int index)
+        {
+            if (heldGap == index)
+            {
+                return;
+            }
+            heldGap = index;
+            if (root != null)
+            {
+                PlaceSlots();
             }
         }
 

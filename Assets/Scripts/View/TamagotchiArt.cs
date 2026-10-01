@@ -102,8 +102,50 @@ namespace ProjectBlock.View
             { "shadow", new Vector4(240, 72, 120, 36) },
             { "plate", new Vector4(220, 260, 110, 130) },
             { "plate_bitten", new Vector4(220, 260, 110, 130) },
-            { "corner_shade", new Vector4(96, 96, 0, 0) }
+            { "corner_shade", new Vector4(96, 96, 0, 0) },
+            { "body_furious", new Vector4(480, 480, 240, 24) },
+            { "paw_furious", new Vector4(136, 104, 24, 52) },
+            { "ear_furious", new Vector4(96, 112, 48, 26) },
+            { "foot_furious", new Vector4(120, 72, 60, 36) },
+            { "bubble_tail", new Vector4(80, 80, 40, 62) },
+            { "bubble_tail_furious", new Vector4(80, 96, 40, 76) }
         };
+
+        /// <summary>The nine-slice borders of the two speech bubbles, in pixels (left, bottom,
+        /// right, top): the corner's radius plus the soft shadow round it.</summary>
+        private static readonly Dictionary<string, Vector4> Borders = new Dictionary<string, Vector4>
+        {
+            { "bubble", new Vector4(90, 94, 90, 94) },
+            { "bubble_furious", new Vector4(64, 68, 64, 68) }
+        };
+
+        private static readonly Dictionary<string, Sprite> sliced = new Dictionary<string, Sprite>();
+
+        /// <summary>
+        /// A layer as a NINE-SLICED sprite (a speech bubble stretched to its text keeps its corners
+        /// and the weight of its line). Made at runtime over the same texture, because the borders
+        /// are the animator's contract and a sliced SpriteRenderer needs a full-rect mesh.
+        /// </summary>
+        public static Sprite GetSliced(string name)
+        {
+            Sprite sprite;
+            if (sliced.TryGetValue(name, out sprite))
+            {
+                return sprite;
+            }
+            Sprite plain = Get(name);
+            Vector4 border;
+            if (plain == null || !Borders.TryGetValue(name, out border))
+            {
+                sliced[name] = plain;
+                return plain;
+            }
+            Texture2D tex = plain.texture;
+            sprite = Sprite.Create(tex, plain.rect, new Vector2(0.5f, 0.5f), PixelsPerUnit, 0, SpriteMeshType.FullRect, border);
+            sprite.name = name + " (sliced)";
+            sliced[name] = sprite;
+            return sprite;
+        }
 
         /// <summary>A layer by name, or null when the art is missing (that layer simply does not
         /// draw - the character must never throw over a missing PNG).</summary>
