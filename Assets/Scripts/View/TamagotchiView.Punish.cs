@@ -147,7 +147,8 @@ namespace ProjectBlock.View
         {
             act.Presence = 1f;
             ClearDrag();
-            DismissSpeech();
+            // the fury's "BEN ALIRIM." is still being said: it is the punish's own caption (a move
+            // to another edge drops it - StalkToward)
             pace = punishesThisFury == 0 ? 1f : Mathf.Clamp(Tuning.RepeatPunishPace, 0.5f, 1f);
             punishesThisFury++;
             DebugPullPath.Clear();

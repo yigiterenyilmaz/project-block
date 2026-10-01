@@ -268,10 +268,8 @@ dropped that way once each.
   travel - the first version always took "above", and anything arriving from above vanished in
   mid-air. **THE HAND KEEPS THE HOLE** (`CardLayerView.SetPetGap`): the fed card's slot stays open
   in the fan until the next placement's sync, with a bite-ring in it for 0.4 s - the cost has to be
-  seen. **THE FURY** (~0.9 s) is a blank 100 ms stare at the plate it never got, the eyes changing,
-  the body pressed to 0.94, a burst to 1.08 with one dark raspberry puff, one bite at the plates,
-  and a look at the board, the jokers, the deck and then at what the planner already chose; local
-  only - a dark-magenta vignette round the pet, never the screen. **THE BOARD BITE** covers each
+  seen. **THE FURY** was rebuilt by the corrective pass (below): the first version - a stare, a
+  squash, a red puff, local only - is kept as `FuryLegacy` for the lab's comparison. **THE BOARD BITE** covers each
   dead cell with a ground proxy until it lands (`HoldCells` cannot hold a dead cell: it is not
   "inside"), telegraphs with darkened corners and a dark-pink pressure on the region's OUTER edge
   (no red square), lunges as a body proxy sorted over everything, and takes the floor away as 2-4
@@ -286,10 +284,9 @@ dropped that way once each.
   peeking over its top edge - on a 16:10 one, which has no corner left, and on a phone the band
   between the board and the hand, where the hand's top is the edge it hides behind
   (`TamagotchiRig`'s clip masks make any horizontal line an edge). The plates go side by side
-  over it, up the screen's edge, or lifted clear, whichever fits; the side is kept for the round.
-  It never covers the board, and the black ledger is one of its obstacles. Seventeen audio hooks
-  (`PetSound`) with a light take for the repeats of a snack; six haptic beats announced with no
-  layer to go to. The lab section "tamagotchi / boss" has the brief's 98 scenes, driven through
+  over it, up the screen's edge, or lifted clear, whichever fits. That is where a round STARTS: it
+  no longer stays there (ROAMING, below). It never covers the board, and the black ledger is one of
+  its obstacles. Six haptic beats are announced with no layer to go to. The lab section "tamagotchi / boss" has the brief's 98 scenes, driven through
   the game's own methods with fabricated arguments (the tiers are a scratch boss's `TierOf`, the
   board bites happen on a lab board through `GameBoard.MarkDeadOnLabBoard`), BEAT ISOLATION
   (`LabIsolate`: the sequence runs at 40x up to the beat and stops after it - no second copy of
@@ -298,6 +295,114 @@ dropped that way once each.
   checked on renders and a replayed solver, the motion was not; the haptics have no layer; and the
   dead cells a bite leaves are the erosion's own scar tissue (`DeadColor`), not a hole.
   See `docs/tamagotchi-*.png`.
+- **"Tamagotchi" CORRECTIVE PASS: CUTE UNTIL STARVED, THEN THE WHOLE SCREEN HATES YOU** (2026-10-01;
+  `TamagotchiView.Fury` / `.Hatred` / `.Speech` / `.Roam` / `.Punish`, `TamagotchiHatredField`,
+  `Resources/Shaders/TamagotchiHatred`, `TamagotchiVoice`, `TamagotchiRoamingController`). The
+  failure it answers: "it frowned, went red, and something was quickly deleted". Presentation only -
+  no rule, no target choice and no request moved; Core is untouched.
+  **THE FURIOUS PET IS A SECOND SKIN, NOT A TINT** (`TamagotchiRig`, `PetPose.Fury` 0..1): a hunched
+  body wider at the shoulders in dirty raspberry / plum, slit eyes turned down to the nose with
+  small hard pupils and a bruise under them, wedge brows, a dark tension smear where the blush was,
+  clawed paws, and four mouths of its own (snarl / rage / grin / gnash, 1.4-1.8x the cute ones, teeth
+  showing) that the routines get WITHOUT KNOWING (`FuryMouth` maps the names they always used). The
+  furious body comes up OVER the cute one and the cute one goes only when covered, so the morph
+  never shows the screen through a half-faded body. The static test is `docs/tamagotchi-ofke.png`:
+  the old furious face (bottom right) differs from the calm one by brows and red; the new one does
+  not need its aura, its motion or its sound to read as ugly and hungry. Furious, it breathes in
+  short irregular jolts (1.015 x 0.985), never a constant jitter, and stays 3% the bigger.
+  **THE FURY IS ONE CLOCK OF ~1.55 s** (the brief's table 152, every length in `Tuning`): dead
+  silence (no blink, the rest of the game's audio ducked a third), disappointment (head down 4 px,
+  eyes narrowing, a small falling sigh), the GROWL and the body pulled in to 0.95, the face breaking
+  as the second skin comes up through it, the HATRED FIELD leaving the pet, the break (0.95 -> 1.10
+  -> 1.03, a snarl, 8-16 berry streaks and plum specks - no sparkles, no hearts - the plates cracked),
+  the IMPACT (the edge closes in, the arena takes ONE 2 px impulse through `BoardImpulse`, a whump,
+  "BEN ALIRIM." in its furious bubble), the eyes snapping to what Core's planner chose
+  (`PunishTargetPoint` - the bitten cells' middle, the very panel, the pile) with a crooked grin, and
+  a predatory HOLD of a quarter second before anything is taken. Hanging from the top edge, it drops
+  out of sight and comes up somewhere proper first (`GroundForFury`).
+  **THE HATRED FIELD IS THE SCREEN, NEVER THE BOARD** (`TamagotchiHatredField`: one material on two
+  full-screen quads, a property block each, no RenderTexture, no grab pass): a quad at order -6, over
+  the backdrop and the debt's vignette and UNDER the board's plate at -3, carries the berry vignette
+  (heaviest on the pet's side), the irregular pressure front that crosses the whole screen in 0.28 s
+  from the pet, and a veil that greys what is behind; a quad at 58 lights only the screen's last
+  pixel or two as a magenta line and a violet one (the "chromatic split", drawn because nothing reads
+  the frame back); and the arena's own outer shadow deepens (`soft_frame`, -5). The background is
+  NOT replaced: the controller sends it multipliers (`HatredMood` -> `SetMood("tamagotchi")`:
+  brightness 0.94-0.975, saturation 0.89-0.96, plum up, warmth out). Three levels and never a flash:
+  the SURGE of the transition, the IMPACT spike, and the AMBIENT state it settles into for as long as
+  it is furious (vignette +0.08, a few percent greyer, a rare micro pulse at the edge every 6-11 s).
+  The opacities are PERCEPTUAL and converted for linear blending, and "Kredi kartı"'s vignette on the
+  same edges is subtracted (`Anchors.DebtVignette`) so the screen shows the heavier of the two, not
+  a black sum. No full red screen; cells and cards keep every bit of their colour.
+  **THE VOICE IS A THROAT, NOT AN OSCILLATOR** (`TamagotchiVoice`, pure C# so it renders and is
+  MEASURED outside Unity; `SoundFx.Tamagotchi` bakes and plays it). The first pass was sine glides
+  with two harmonics - the "beep / squeak / chomp" the brief threw out. Now a voiced sound is a
+  glottal pulse train with jitter, shimmer and (pushed) a weak every-other pulse, through three high
+  formants (a short throat: a growl at ~140 Hz is THIS creature, not a dog); the formants hear the
+  pulse's SLOPE, not the pulse - the first render put 97% of a chirp in its fundamental, a whistle.
+  A rasp is band noise opened and shut by the pulses, so it belongs to a voice. Eating is MATERIAL: a
+  crunch is irregular GRAINS of band noise over a soft jaw tone, with the snap of the thing bitten -
+  a dry card snap, a faint glassy partial for a joker or power, dense low grains and a deep crack for
+  the board (never a stone explosion). Every layer is brought to a stated peak before it is mixed
+  (`Mix`), so nothing can clip. The first measurements found every bite 70-85% under 250 Hz (a
+  thud, not a crunch); the jaw now sits under the crunch, high-passed. Cues heard in runs have 3-5
+  variants, never the same twice running, +-3-6% pitch and +-5% level on top. A growl is TWO STEMS
+  (low throat, rasp) whose balance is a live knob. A furious pet answers the routines' own cue names
+  with its own (`FuriousCue`: a deeper chomp, a heavier chew, a throat that does not swallow
+  cleanly, a grunt for "heh"). A major event DUCKS the rest of the game 15-30% (`DuckForPet`, back
+  over ~0.26 s) - possible because the pet plays on a pool of its own. ~50 hooks (`PetSound`) cover
+  the brief's list; the haptics still have no layer.
+  **IT SPEAKS FROM ITS MOUTH** (`.Speech`): what the PET says is a bubble with its tail on the mouth
+  (cream with a berry line, popping 0.85 -> 1.04 -> 1; furious: less round, a dirty cream, a deep
+  raspberry line, bold, landing 0.75 -> 1.08 -> 0.98 -> 1 with a few degrees and a tremor), placed
+  away from the board, the plates and its own body, kept on screen, following a moving pet. The
+  message bar keeps the FACTS (what was eaten, the rule); the bubble is the character. Scripted lines
+  always appear; a passing remark is dropped inside 5-10 s of the last. The art is nine-sliced
+  (`TamagotchiArt.GetSliced`) so the line keeps its weight at any length.
+  **IT LIVES ON THE SCREEN** (`TamagotchiRoamingController` decides WHEN and WHERE, `.Roam` the
+  going). Every 2-4 turns, once after 12-20 s of no input, never while eating, being fed, dragged
+  at or furious-transitioning - it moves house among the places the controller says are safe RIGHT
+  NOW (`SolvePetHomes`): the bottom corners standing or SITTING (paws on its belly), behind either
+  pile standing or with only its HEAD over it, leaning in round the left or right edge (tilted, its
+  feet off screen, hiding sideways), and - rarely, never furious - hanging head-down over the top
+  edge. Not the last two places, the same family less likely. Replaying the solver
+  (`roam_sim.js` in the session scratchpad) gives 6-9 safe places on a 16:9 desktop with a normal
+  bar, 4 on a phone, and one on a crowded 8-joker / 5-power screen. HOW comes from the geometry: a
+  short run along the bottom is a SCAMPER or a SNEAK (only the top of its head sliding along), a side
+  down into its corner a HOP, anything else HIDE AND PEEK (the body goes, the eyes stay a beat, the
+  eyes go - and ears, eyes, head somewhere else); furious it is gone at once and its eyes are up
+  elsewhere first. A move seen on screen swaps the home and then walks `act.Travel` from where it
+  was drawn to nothing, so there is no hand-off; the plates fold where they stood and unfold beside
+  it. The first punish of a fury may move it to an edge really nearer its target (`StalkToward`).
+  **EATING IS READ IN THREE STAGES - TARGET, CAPTURE, EAT** (`.Punish`; the first version was the
+  "joker disappeared" the brief fails). A joker: lock (1.06, the rest of the bar a fifth darker, a
+  growl and a dull sting), threat (the mouth opening slowly, the card wobbling, a raspberry shadow),
+  the paw REACHING it, a STRUGGLE (two tugs, the frame creaking, the pet leaning back), the curved
+  pull, a third bitten off, two strong chews, another third (a valuable one a third bite), the gulp -
+  and ONLY THEN does the bar close over the empty slot: the slot is HELD OPEN (`HoldBarSlot` ->
+  `JokerBarView/PowerBarView.SetHeldGap`, from the panel index remembered the frame before Core took
+  it). ~1.4 s, a legendary ~1.55 - a little over the brief's own totals, because its per-beat
+  minimums already add up to more than them. The board (~1.6 s): telegraph, PRE-BITE SUCTION (the region drawn
+  1-3 px toward it, nearest most, motes of its floor running into the mouth), a lunge with the mouth
+  1.65x, the bite with one 2 px impact, the floor torn out as 2-5 SLABS that are still the cells
+  (`slab_a/b/c`, a rounded piece with one fractured side) over a raw dark wound, the slabs pulled to
+  the mouth and HELD there, eaten one chew at a time, a deep gulp - and only then the new board, with
+  a raspberry-charcoal bite stress on the fresh edge for half a second. A pile: each card lifted
+  (100 ms), flown (130 ms) and chomped, the next lifting as the last is eaten, a little quicker each
+  time, the stack thinning per card; one valuable card lifted, locked on, taken by the paw, two big
+  bites. A second punish in the same fury runs at ~86%, never instantly.
+  **THE LAB'S CORRECTIVE SECTION** (in "tamagotchi / boss") has the brief's c1-c38: the OLD fury and
+  the OLD eating drawn by the same view (`LabLegacy`), the fury part by part (`LabFuryParts`: face,
+  body, screen, voice) and beat by beat, the field held with one layer showing, a static normal /
+  furious toggle with no aura, motion or sound, roaming by named place and style and a 10-turn run,
+  every bubble, the eating new and old at 1x / 0.5x, and an AUDIO PANEL that plays every set and
+  whole event's timeline WITHOUT the pet (the mute test's other half) plus each take of a cue dry -
+  then four audio knobs, five field-layer switches, a 1x / 0.75x / 0.5x / 0.25x speed that survives
+  the next scene, and seventeen more debug views (roaming candidates, the chosen anchor, the bubble's
+  anchor, fury face and body numbers, the field's levels and its wave's radius, the vignette, the
+  edge split, the audio event, its layers and the duck, the punish phase, the eating proxies, the
+  bite's progress, the chunk and pull paths). **Not done**: none of it has been seen running in
+  Unity (renders, a replayed solver and measured audio only); the haptics have no layer.
 - **"Yılan" (`SnakeView`)** — the one boss that is a LIVING THING on the board, and the first
   drawn from painted art rather than generated shapes. Six tiles in `Resources/Art/Blocks`
   (`snake_head`, `snake_head_open`, `snake_body`, `snake_bend`, `snake_tail`,
