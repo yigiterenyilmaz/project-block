@@ -326,33 +326,91 @@ namespace ProjectBlock.View
             float cell = boardView.CellWorldSize > 0f ? boardView.CellWorldSize : layout.BoardWorldSize / 7f;
             int[] sides = keepSide != 0 ? new[] { keepSide } : new[] { 1, -1 };
             TamagotchiHome best = null;
-            foreach (float cells in new[] { bodyCells, Mathf.Max(1.4f, bodyCells - 0.2f), 1.4f })
+            float bestCost = float.MaxValue;
+            // a desktop has two nests a side: the corner beside the pile, and - on a narrower
+            // screen, where there is no corner left - behind the pile itself
+            int nests = layout.IsPortrait ? 1 : 2;
+            foreach (float cells in new[] { bodyCells, Mathf.Max(1.4f, bodyCells - 0.2f) })
             {
                 foreach (int side in sides)
                 {
-                    // the plates side by side over it, side by side lifted clear of what is under
-                    // them, or stacked up the screen's edge - whichever fits first
-                    foreach (int plates in new[] { 0, 2, 1 })
+                    for (int nest = 0; nest < nests; nest++)
                     {
-                        TamagotchiHome h = layout.IsPortrait ? PortraitHome(side, cells, cell) : CornerHome(side, cells, cell);
-                        if (plates > 0 && !ArrangePlates(h, plates, obstacles))
+                        // the plates side by side over it, stacked up the screen's edge, or side
+                        // by side lifted clear of what is under them - whichever fits first
+                        foreach (int plates in new[] { 0, 2, 1 })
                         {
-                            continue;
-                        }
-                        bool free = !Overlaps(h.PetRect, obstacles) && !Overlaps(PlatesRect(h), obstacles);
-                        if (free)
-                        {
-                            return h;
-                        }
-                        if (best == null)
-                        {
-                            best = h;
+                            TamagotchiHome h = layout.IsPortrait ? PortraitHome(side, cells, cell)
+                                : nest == 0 ? CornerHome(side, cells, cell) : BehindPileHome(side, cells, cell);
+                            if (plates > 0 && !ArrangePlates(h, plates, obstacles))
+                            {
+                                continue;
+                            }
+                            // the pet standing on something is worse than a plate brushing it
+                            float cost = OverlapArea(h.PetRect, obstacles) * 3f + OverlapArea(PlatesRect(h), obstacles);
+                            if (cost <= 0f)
+                            {
+                                return h;
+                            }
+                            if (cost < bestCost)
+                            {
+                                bestCost = cost;
+                                best = h;
+                            }
                         }
                     }
                 }
             }
+            // nowhere is clear: the least bad place, and it says so (the lab's home readout)
             best.Squeezed = true;
             return best;
+        }
+
+        private static float OverlapArea(Rect r, List<Rect> obstacles)
+        {
+            float area = 0f;
+            foreach (Rect o in obstacles)
+            {
+                float w = Mathf.Min(r.xMax, o.xMax) - Mathf.Max(r.xMin, o.xMin);
+                float h = Mathf.Min(r.yMax, o.yMax) - Mathf.Max(r.yMin, o.yMin);
+                if (w > 0f && h > 0f)
+                {
+                    area += w * h;
+                }
+            }
+            return area;
+        }
+
+        /// <summary>
+        /// Desktop, when the corner is too tight (a 16:10 window has no room beside the pile): the
+        /// pet lives BEHIND a pile and peeks over its top edge - the pile's top is the edge of its
+        /// nest, and the stack draws over what is below it.
+        /// </summary>
+        private TamagotchiHome BehindPileHome(int side, float cells, float cell)
+        {
+            UiLayout layout = UiLayout.Active;
+            var h = new TamagotchiHome();
+            h.Name = side > 0 ? "behind the right pile" : "behind the left pile";
+            h.UnitScale = cells * cell / TamagotchiArt.TotalWidth;
+            h.PxToWorld = layout.WorldPerCanvasPixel;
+            float s = h.UnitScale;
+            Vector2 pile = side > 0 ? layout.DrawPile : layout.DiscardPile;
+            float ph = (CardVisual.BodyHeight + 0.18f) * layout.PileScale;
+            float floor = pile.y + ph * 0.5f - 0.02f;
+            float edge = side * layout.HalfWidth;
+            h.Facing = -side;
+            h.Base = new Vector2(Mathf.Clamp(pile.x, -layout.HalfWidth + 0.7f * s, layout.HalfWidth - 0.7f * s), floor - 0.04f * s);
+            h.Clip = Rect.MinMaxRect(-layout.HalfWidth, floor, layout.HalfWidth, layout.OrthoSize);
+            h.HideDepth = (h.Base.y - floor) + 1.2f * s;
+            // what must be free is what stands over the pile's own margin
+            h.PetRect = Rect.MinMaxRect(h.Base.x - 0.66f * s, floor + 0.38f, h.Base.x + 0.66f * s, h.Base.y + 1.12f * s);
+            float pairW = 2f * 0.55f * 1.3f * s + 0.1f * s;
+            float plateH = 0.65f * 1.3f * s;
+            float cx = Mathf.Clamp(h.Base.x, -layout.HalfWidth + pairW * 0.5f + 0.12f, layout.HalfWidth - pairW * 0.5f - 0.12f);
+            h.PlatesCentre = new Vector2(cx, h.Base.y + 1.2f * s + plateH * 0.5f + 0.16f * s);
+            h.PlatesVertical = false;
+            h.EdgeTap = new Vector2(edge, h.Base.y + 0.4f * s);
+            return h;
         }
 
         /// <summary>Desktop: the bottom corner beside a pile, standing on the screen's edge.</summary>
@@ -399,7 +457,8 @@ namespace ProjectBlock.View
             h.Base = new Vector2(pile.x - side * (pileHalfW + 0.08f + 0.66f * s), handTop - 0.04f * s);
             h.Clip = Rect.MinMaxRect(-layout.HalfWidth, handTop, layout.HalfWidth, layout.OrthoSize);
             h.HideDepth = (h.Base.y - handTop) + 1.2f * s;
-            h.PetRect = Rect.MinMaxRect(h.Base.x - 0.66f * s, handTop, h.Base.x + 0.66f * s, h.Base.y + 1.12f * s);
+            // it stands ON the hand's top edge: what must be free is what is above the fan's lift
+            h.PetRect = Rect.MinMaxRect(h.Base.x - 0.66f * s, handTop + 0.14f, h.Base.x + 0.66f * s, h.Base.y + 1.12f * s);
             float pairW = 2f * 0.55f * 1.15f * s + 0.1f * s;
             h.PlateScale = 1.15f / 1.3f;
             h.PlatesCentre = new Vector2(h.Base.x - side * (0.7f * s + pairW * 0.5f + 0.1f), h.Base.y + 0.55f * s);
