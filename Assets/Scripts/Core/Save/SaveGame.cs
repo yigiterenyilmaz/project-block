@@ -78,7 +78,10 @@ namespace ProjectBlock.Core
         // 26 (2026-09-30): "Tamagotchi" asks for CARDS rather than shapes and goes berserk when it
         // is left hungry, so the boss saves the card ids it is owed, whether a rampage is pending
         // and its new knobs. A 25's boss block goes out of step.
-        public const int FormatVersion = 26;
+        // 27 (2026-10-01): "Tamagotchi" keeps its two requests as fixed SLOTS with a fed flag and
+        // a tier each, goes furious for the rest of the round, and has a punish planner with its own
+        // knobs - the boss block changed shape again.
+        public const int FormatVersion = 27;
 
         private const string VersionKey = "version";
 

@@ -38,19 +38,18 @@ namespace ProjectBlock.View
         {
             switch (rampage.Kind)
             {
-                case PetRampageKind.Board:
+                case PetPunishKind.Board:
                     return Loc.Pick("It ate " + rampage.Count + " cells of the board.",
                         "Tahtadan " + rampage.Count + " hücre yedi.");
-                case PetRampageKind.Collection:
-                    if (rampage.EatenName == null)
-                    {
-                        return Loc.Pick("It found nothing to eat.", "Yiyecek bir şey bulamadı.");
-                    }
-                    return rampage.JokerDefId != null
-                        ? Loc.Pick("It ate your joker " + rampage.EatenName + ".",
-                            rampage.EatenName + " jokerini yedi.")
-                        : Loc.Pick("It ate your power " + rampage.EatenName + ".",
-                            rampage.EatenName + " gücünü yedi.");
+                case PetPunishKind.Joker:
+                    return Loc.Pick("It ate your joker " + rampage.EatenName + ".",
+                        rampage.EatenName + " jokerini yedi.");
+                case PetPunishKind.Power:
+                    return Loc.Pick("It ate your power " + rampage.EatenName + ".",
+                        rampage.EatenName + " gücünü yedi.");
+                case PetPunishKind.DiscardPile:
+                    return Loc.Pick("It ate " + rampage.Count + " card(s) from your discard.",
+                        "Iskartandan " + rampage.Count + " kart yedi.");
                 default:
                     return Loc.Pick("It ate " + rampage.Count + " card(s) from your deck.",
                         "Destenden " + rampage.Count + " kart yedi.");

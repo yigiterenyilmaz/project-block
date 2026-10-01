@@ -229,9 +229,13 @@ public static partial class JokerTests
         Istilaci_EverySweptCubeIsReportedForTheView();
         Tamagotchi_FeedingTakesTheCardForGoodAndLeavesTheSlotEmpty();
         Tamagotchi_OnlyTheDemandedCardIsFood();
-        Tamagotchi_LeftHungryItGoesBerserkInsteadOfLosing();
+        Tamagotchi_FedInFullItStaysSatisfied();
+        Tamagotchi_LeftHungryItGoesFuriousForTheRound();
         Tamagotchi_TheBoardBiteNeverEatsTheLastWayOut();
+        Tamagotchi_ThePlannerWeighsEveryKindAndTakesTheCruellest();
         Tamagotchi_TheDeckBiteEatsOneValuableOrSeveralWorthless();
+        Tamagotchi_ValueTiersAndWeightedRequests();
+        Tamagotchi_HungerRisesWithTheDeadline();
         Tamagotchi_TheCollectionBiteEatsAJokerForGood();
         MayinEsegi_TheCubesAreUntouchedByAShuffle();
         MayinEsegi_SettingItOffCostsAndMovesIt();
@@ -8224,9 +8228,9 @@ public static partial class JokerTests
 
     /// <summary>Puts the pet's first demanded card in hand slot 0 (from wherever it is in the
     /// round), so a feeding test does not depend on the shuffle.</summary>
-    private static BlockCard TamagotchiDemandInHand(RoundEngine round, TamagotchiBoss boss)
+    private static BlockCard TamagotchiDemandInHand(RoundEngine round, TamagotchiBoss boss, int which = 0)
     {
-        int id = boss.DemandedCardIds[0];
+        int id = boss.DemandedCardIds[which];
         for (int i = 0; i < round.Hand.Count; i++)
         {
             if (round.Hand[i].Id == id)
@@ -8239,6 +8243,15 @@ public static partial class JokerTests
         round.Deck.PutOnTopOfDraw(swapped);
         round.Hand.Insert(0, card);
         return card;
+    }
+
+    private static int HandIndexOf(RoundEngine round, BlockCard card)
+    {
+        for (int i = 0; i < round.Hand.Count; i++)
+        {
+            if (round.Hand[i].Id == card.Id) { return i; }
+        }
+        return -1;
     }
 
     /// <summary>The run's own deck list, for a test that needs an OWNED elemental card - nothing
@@ -8257,26 +8270,34 @@ public static partial class JokerTests
         RoundEngine round = session.CurrentRound;
         var boss = (TamagotchiBoss)round.Boss;
 
-        Check(boss.DemandedCardIds.Count == 2, "it asks for two cards at round start",
-            "" + boss.DemandedCardIds.Count);
+        Check(boss.RequestCount == 2 && boss.DemandedCardIds.Count == 2,
+            "it asks for two cards at round start", "" + boss.RequestCount);
         BlockCard meal = TamagotchiDemandInHand(round, boss);
         Check(boss.Accepts(round, meal), "the demanded card is food");
 
         int turnBefore = round.TurnNumber;
         int ownedBefore = session.OwnedCards.Count;
         int handBefore = round.Hand.Count;
-        int index = -1;
-        for (int i = 0; i < round.Hand.Count; i++)
-        {
-            if (round.Hand[i].Id == meal.Id) { index = i; }
-        }
+        int index = HandIndexOf(round, meal);
         Check(round.FeedPet(index), "the pet takes it");
         Check(boss.DemandedCardIds.Count == 1, "one demand off the list", "" + boss.DemandedCardIds.Count);
+        Check(boss.RequestCount == 2, "but the slot stays - fed, not gone", "" + boss.RequestCount);
+        int fedSlot = -1;
+        for (int i = 0; i < boss.RequestCount; i++)
+        {
+            if (boss.Request(round, i).Fed) { fedSlot = i; }
+        }
+        Check(fedSlot >= 0 && boss.Request(round, fedSlot).Card == meal,
+            "and the fed slot still knows the card it ate");
         Check(round.TurnNumber == turnBefore, "feeding costs no turn", "" + round.TurnNumber);
         Check(session.OwnedCards.Count == ownedBefore - 1 && !new List<BlockCard>(session.OwnedCards).Contains(meal),
             "the card left the RUN, not just the round", ownedBefore + " -> " + session.OwnedCards.Count);
         Check(round.Hand.Count == handBefore - 1, "the slot stays empty - no instant refill",
             handBefore + " -> " + round.Hand.Count);
+        TamagotchiFeedVisuals fed = boss.LastFeed;
+        Check(fed != null && fed.Card == meal && fed.HandSlotIndex == index && fed.RequestsRemaining == 1
+            && fed.RequestSlotId == fedSlot,
+            "the View is told what was eaten, from which hand slot, and what is still owed");
 
         TurnReport played = PlayOneCard(round);
         Check(played != null && round.Hand.Count == session.Config.Rules.HandSize,
@@ -8301,9 +8322,29 @@ public static partial class JokerTests
         Check(boss.DemandedCardIds.Count == 2, "and nothing was taken");
     }
 
-    private static void Tamagotchi_LeftHungryItGoesBerserkInsteadOfLosing()
+    private static void Tamagotchi_FedInFullItStaysSatisfied()
     {
-        Section("tamagotchi / an unfed pet rampages at the end of the turn - the round goes on");
+        Section("tamagotchi / fed in full, it is satisfied for the rest of the round");
+        var session = NewBossSession(9748, 5, 1000000, "tamagotchi", 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (TamagotchiBoss)round.Boss;
+        BlockCard first = TamagotchiDemandInHand(round, boss);
+        round.FeedPet(HandIndexOf(round, first));
+        BlockCard second = TamagotchiDemandInHand(round, boss);
+        round.FeedPet(HandIndexOf(round, second));
+        Check(boss.Satisfied && boss.Stage(round) == PetHungerStage.Satisfied, "both fed: satisfied");
+
+        boss.OnDrawPileEmptied(new RoundContext(session, session.Rng, round));
+        Check(!boss.Furious && !boss.RampagePending, "the deadline passes and nothing happens");
+        Check(boss.DemandedCardIds.Count == 0 && boss.RequestCount == 2,
+            "and it asks for nothing more this round");
+        PlayOneCard(round);
+        Check(boss.Rampages == 0 && boss.LastRampage == null, "no punish, ever, this round");
+    }
+
+    private static void Tamagotchi_LeftHungryItGoesFuriousForTheRound()
+    {
+        Section("tamagotchi / left hungry it goes furious, stops asking, and takes at every deadline");
         var session = NewBossSession(9741, 5, 1000000, "tamagotchi", 40, 1);
         RoundEngine round = session.CurrentRound;
         var boss = (TamagotchiBoss)round.Boss;
@@ -8311,14 +8352,23 @@ public static partial class JokerTests
 
         boss.OnDrawPileEmptied(new RoundContext(session, session.Rng, round));
         Check(round.Loss == null, "running the deck dry unfed is NOT a lost round", "" + round.Loss);
-        Check(boss.RampagePending, "it goes berserk");
-        Check(boss.DemandedCardIds.Count == 2, "and asks for two fresh cards at once",
-            "" + boss.DemandedCardIds.Count);
+        Check(boss.Furious && boss.RampagePending, "it goes furious");
+        Check(boss.DemandedCardIds.Count == 0, "and asks for nothing any more - it will take instead");
+        BlockCard any = round.Hand[0];
+        Check(!boss.Accepts(round, any), "a furious pet takes no food");
 
         TurnReport turn = PlayOneCard(round);
+        TamagotchiFuryVisuals fury = boss.LastFury;
         Check(turn != null && boss.LastRampage != null && boss.Rampages == 1,
-            "the rampage lands at the end of the turn", "" + boss.Rampages);
-        Check(!boss.RampagePending, "once");
+            "the first punish lands at the end of the turn", "" + boss.Rampages);
+        Check(fury != null && fury.MissingFeedCount == 2 && fury.PunishKind == boss.LastRampage.Kind,
+            "and the fury is announced once, with what it is missing and what it took");
+        Check(boss.Stage(round) == PetHungerStage.Furious, "it is furious");
+
+        boss.OnDrawPileEmptied(new RoundContext(session, session.Rng, round));
+        PlayOneCard(round);
+        Check(boss.Rampages == 2, "the next deadline brings the next punish", "" + boss.Rampages);
+        Check(ReferenceEquals(boss.LastFury, fury), "without a second fury");
         Check(round.Status == RoundStatus.InProgress || round.Status == RoundStatus.Advanced,
             "and the round is still being played", "" + round.Status);
     }
@@ -8339,8 +8389,10 @@ public static partial class JokerTests
                 round.Board.SetCubeAt(new GridPos(x, y), new Cube(CubeKind.Obsidian, 7900));
             }
         }
-        List<GridPos> chosen = round.ChooseCellsToStarve(2);
+        var scores = new List<PetCellScore>();
+        List<GridPos> chosen = round.ChooseCellsToStarve(3, 3, scores);
         Check(chosen.Count == 1, "only one of the two exits is eaten", "" + chosen.Count);
+        Check(scores.Count == 2, "both exits were weighed as a first bite", "" + scores.Count);
         List<GridPos> eaten = round.EatCellsForGood(chosen);
         Check(eaten.Count == 1 && round.Board.IsDead(eaten[0]), "and it goes dead");
         int left = 0;
@@ -8352,73 +8404,188 @@ public static partial class JokerTests
         round.DebugCheckForDeadEnd();
         Check(round.Loss == null, "and the dead-end check agrees", "" + round.Loss);
 
-        // On an open board it takes its full bite, and every bite costs the player room.
+        // On an open board it takes its full bite, as ONE connected region.
         var open = NewBossSession(9744, 5, 1000000, "tamagotchi", 40, 2);
         RoundEngine r2 = open.CurrentRound;
         ClearBoard(r2.Board);
-        List<GridPos> two = r2.ChooseCellsToStarve(2);
-        Check(two.Count == 2, "an open board loses two cells", "" + two.Count);
-        foreach (GridPos p in two)
+        List<GridPos> bite = r2.ChooseCellsToStarve(3);
+        Check(bite.Count == 3, "an open board loses three cells", "" + bite.Count);
+        bool connected = true;
+        for (int i = 1; i < bite.Count; i++)
         {
-            Check(!r2.Board.GetCube(p).HasValue && r2.Board.IsInside(p), "each an empty play cell");
+            bool touches = false;
+            for (int j = 0; j < i; j++)
+            {
+                if (System.Math.Abs(bite[i].X - bite[j].X) + System.Math.Abs(bite[i].Y - bite[j].Y) == 1) { touches = true; }
+            }
+            connected &= touches;
         }
+        Check(connected, "and they are one bite, not a scatter");
+    }
+
+    private static void Tamagotchi_ThePlannerWeighsEveryKindAndTakesTheCruellest()
+    {
+        Section("tamagotchi / the punish planner weighs board, joker, power and both piles");
+        var session = NewBossSession(9749, 5, 1000000, "tamagotchi", 40, 1);
+        session.Jokers.Add(new TutumlulukJoker());
+        session.Powers.Add(new NesterPower());
+        RoundEngine round = session.CurrentRound;
+        var boss = (TamagotchiBoss)round.Boss;
+        boss.PunishJitterPercent = 0;
+        // Something in the discard, so that pile is a real option.
+        PlayOneCard(round);
+        boss.OnDrawPileEmptied(new RoundContext(session, session.Rng, round));
+        PlayOneCard(round);
+        PetRampageVisuals ate = boss.LastRampage;
+        Check(ate != null && ate.Candidates.Count == 5, "five candidates were weighed",
+            ate == null ? "null" : "" + ate.Candidates.Count);
+        PetPunishCandidate cruellest = null;
+        foreach (PetPunishCandidate c in ate.Candidates)
+        {
+            if (c.Valid && (cruellest == null || c.Pressure > cruellest.Pressure)) { cruellest = c; }
+        }
+        Check(cruellest != null && ate.Kind == cruellest.Kind,
+            "and with no jitter it took the one that hurts most", ate.Kind + " vs " + (cruellest == null ? "-" : "" + cruellest.Kind));
+        bool allKinds = true;
+        foreach (PetPunishKind kind in new[] { PetPunishKind.Board, PetPunishKind.Joker, PetPunishKind.Power,
+            PetPunishKind.DrawPile, PetPunishKind.DiscardPile })
+        {
+            bool found = false;
+            foreach (PetPunishCandidate c in ate.Candidates) { found |= c.Kind == kind && c.Valid; }
+            allKinds &= found;
+        }
+        Check(allKinds, "every kind was a real option");
     }
 
     private static void Tamagotchi_TheDeckBiteEatsOneValuableOrSeveralWorthless()
     {
-        Section("tamagotchi / the deck bite: one valuable card, or several worthless ones");
+        Section("tamagotchi / the pile bite: one valuable card, or several worthless ones");
         // Worthless only: it chews through its whole appetite in plain cards.
         var plainRun = NewBossSession(9745, 5, 1000000, "tamagotchi", 40, 1);
         RoundEngine round = plainRun.CurrentRound;
         var boss = (TamagotchiBoss)round.Boss;
-        boss.ForcedRampage = (int)PetRampageKind.Deck;
+        boss.ForcedRampage = (int)PetPunishKind.DrawPile;
         int ownedBefore = plainRun.OwnedCards.Count;
         boss.OnDrawPileEmptied(new RoundContext(plainRun, plainRun.Rng, round));
         PlayOneCard(round);
         PetRampageVisuals ate = boss.LastRampage;
-        Check(ate != null && ate.Kind == PetRampageKind.Deck, "it ate out of the deck");
-        Check(ate != null && ate.Count == boss.RampageDeckAppetite,
+        Check(ate != null && ate.Kind == PetPunishKind.DrawPile, "it ate off the draw pile");
+        Check(ate != null && ate.Count == boss.RampageDeckAppetite && ate.CardTiers[0] == CardValueTier.Low,
             "worthless cards count for little, so it takes a whole appetite of them",
             ate == null ? "null" : "" + ate.Count);
         Check(plainRun.OwnedCards.Count == ownedBefore - boss.RampageDeckAppetite,
             "and they left the run", ownedBefore + " -> " + plainRun.OwnedCards.Count);
+        Check(ate != null && ate.CountBefore - ate.CountAfter == ate.Count, "the pile counts say so");
 
-        // A valuable card on the menu: one bite satisfies it.
+        // A pile of valuable cards: one bite satisfies it.
         var richRun = NewBossSession(9746, 5, 1000000, "tamagotchi", 40, 1);
         RoundEngine rich = richRun.CurrentRound;
         var pet = (TamagotchiBoss)rich.Boss;
-        pet.ForcedRampage = (int)PetRampageKind.Deck;
-        pet.ValuableDemandWeight = 100000; // so the valuable card is the one it goes for
+        pet.ForcedRampage = (int)PetPunishKind.DrawPile;
+        while (rich.Deck.DrawPile.Count > 0)
+        {
+            rich.Deck.TakeCard(rich.Deck.DrawPile[0].Id);
+        }
         List<BlockCard> owned = OwnedCardsOf(richRun);
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 4; i++)
         {
             BlockCard gold = richRun.CreateCard(Bar(1), new List<BlockElement> { BlockElement.Gold });
             owned.Add(gold);
             rich.Deck.PutOnTopOfDraw(gold);
         }
+        // The requests were made from the pile that was just taken away - asked again, they come
+        // from what the round holds now (an unmeetable request is not the player's debt).
+        pet.OnRoundStarted(new RoundContext(richRun, richRun.Rng, rich));
         pet.OnDrawPileEmptied(new RoundContext(richRun, richRun.Rng, rich));
         PlayOneCard(rich);
         PetRampageVisuals feast = pet.LastRampage;
-        Check(feast != null && feast.Count == 1 && feast.CardElementCounts[0] > 0,
+        Check(feast != null && feast.Count == 1 && feast.CardTiers[0] == CardValueTier.High,
             "a valuable card satisfies it on its own",
             feast == null ? "null" : feast.Count + " card(s)");
-        Check(TamagotchiBoss.Worth(richRun.CreateCard(Bar(1), null)) == 1
-            && TamagotchiBoss.Worth(richRun.CreateCard(Bar(1), new List<BlockElement> { BlockElement.Fire })) == 5,
-            "a plain block is worth 1 to it, an elemental one 5");
+        Check(pet.WorthOf(CardValueTier.Low) == 1 && pet.WorthOf(CardValueTier.High) == pet.RampageDeckAppetite,
+            "a worthless card is one bite of its appetite, a valuable one all of it");
+    }
+
+    private static void Tamagotchi_ValueTiersAndWeightedRequests()
+    {
+        Section("tamagotchi / value tiers, and requests that like expensive things");
+        var session = NewBossSession(9750, 5, 1000000, "tamagotchi", 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (TamagotchiBoss)round.Boss;
+        BlockCard plain = round.Deck.DrawPile[0];
+        BlockCard gold = session.CreateCard(Bar(2), new List<BlockElement> { BlockElement.Gold });
+        Check(boss.TierOf(plain, round) == CardValueTier.Low, "a common one-cube block is LOW",
+            "" + boss.ValueScore(plain, round));
+        Check(boss.TierOf(gold, round) == CardValueTier.High, "an elemental block is HIGH",
+            "" + boss.ValueScore(gold, round));
+        BlockCard unique = session.CreateCard(Bar(4), null);
+        Check(boss.TierOf(unique, round) == CardValueTier.Medium, "a big plain block nobody else has is MEDIUM",
+            "" + boss.ValueScore(unique, round));
+
+        // Over many rounds, a deck with a few valuable cards in it gets asked for them far more
+        // often than their share - but not always.
+        int goldAsked = 0;
+        int asked = 0;
+        for (int seed = 0; seed < 40; seed++)
+        {
+            var run = NewBossSession(9800 + seed, 5, 1000000, "tamagotchi", 40, 1);
+            List<BlockCard> deck = OwnedCardsOf(run);
+            RoundEngine r = run.CurrentRound;
+            for (int i = 0; i < 4; i++)
+            {
+                BlockCard g = run.CreateCard(Bar(1), new List<BlockElement> { BlockElement.Gold });
+                deck.Add(g);
+                r.Deck.PutOnTopOfDraw(g);
+            }
+            var pet = (TamagotchiBoss)r.Boss;
+            pet.OnRoundStarted(new RoundContext(run, run.Rng, r));
+            for (int i = 0; i < pet.RequestCount; i++)
+            {
+                asked++;
+                if (pet.Request(r, i).Tier == CardValueTier.High) { goldAsked++; }
+            }
+        }
+        Check(goldAsked > asked / 3 && goldAsked < asked,
+            "4 gold cards in 44 are asked for far beyond their share, but not every time",
+            goldAsked + " of " + asked);
+    }
+
+    private static void Tamagotchi_HungerRisesWithTheDeadline()
+    {
+        Section("tamagotchi / its hunger is the deadline running down");
+        var session = NewBossSession(9751, 5, 1000000, "tamagotchi", 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (TamagotchiBoss)round.Boss;
+        Check(boss.Stage(round) == PetHungerStage.Calm && boss.HungerProgress(round) < 0.01f, "calm at the start");
+        int start = round.Deck.DrawPile.Count;
+        while (round.Deck.DrawPile.Count > start * 0.5f)
+        {
+            round.Deck.TakeCard(round.Deck.DrawPile[0].Id);
+        }
+        Check(boss.Stage(round) == PetHungerStage.Hungry, "half the pile drawn: hungry", "" + boss.Stage(round));
+        while (round.Deck.DrawPile.Count > start * 0.15f)
+        {
+            round.Deck.TakeCard(round.Deck.DrawPile[0].Id);
+        }
+        Check(boss.Stage(round) == PetHungerStage.Angry, "nearly all of it: angry", "" + boss.Stage(round));
+        PlayOneCard(round);
+        Check(boss.LastHungerChange != null && boss.LastHungerChange.Stage == PetHungerStage.Angry,
+            "and the change is reported at the turn's end");
     }
 
     private static void Tamagotchi_TheCollectionBiteEatsAJokerForGood()
     {
-        Section("tamagotchi / the collection bite takes a joker for good");
+        Section("tamagotchi / the joker bite takes a joker for good");
         var session = NewBossSession(9747, 5, 1000000, "tamagotchi", 40, 1);
         session.Jokers.Add(new TutumlulukJoker());
         RoundEngine round = session.CurrentRound;
         var boss = (TamagotchiBoss)round.Boss;
-        boss.ForcedRampage = (int)PetRampageKind.Collection;
+        boss.ForcedRampage = (int)PetPunishKind.Joker;
         boss.OnDrawPileEmptied(new RoundContext(session, session.Rng, round));
         PlayOneCard(round);
-        Check(boss.LastRampage != null && boss.LastRampage.JokerDefId == "tutumluluk",
-            "it ate the joker", boss.LastRampage == null ? "null" : "" + boss.LastRampage.JokerDefId);
+        Check(boss.LastRampage != null && boss.LastRampage.DefId == "tutumluluk" && boss.LastRampage.InventoryIndex == 0,
+            "it ate the joker, and says where it sat",
+            boss.LastRampage == null ? "null" : "" + boss.LastRampage.DefId);
         Check(session.Jokers.Jokers.Count == 0, "and it is gone from the run");
     }
 
