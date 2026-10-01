@@ -1886,7 +1886,11 @@ A/C on offers, N leaves market, S redraws the hand, R restarts. A "Tamagotchi" b
 DRAGGING a card it asked for onto it (F, or R3 on a pad, feeds the card under the cursor). Joker
 debug keys:
 J grants the next joker from the registry, K sells the last one, 1-9 activate (a joker
-that needs a target then waits for a click, Esc cancels).
+that needs a target then waits for a click, Esc cancels). **G opens the debug BOSS PICKER** (from a
+round or the market): it starts any boss's stage through the real path
+(`GameSession.DebugStartBossStage`), its first row is the boss picked last time (kept in
+`PlayerPrefs`), "back..." wraps to the last page, and **shift+G** starts that last boss again with
+no picker - which is how a boss is tested without waiting for the run to draw it.
 
 A **gamepad** works everywhere the mouse and those keys do, because it drives exactly them
 (see `GamepadBridge` above): stick aims, A clicks, X right-clicks, B/Start is Escape, Y is the

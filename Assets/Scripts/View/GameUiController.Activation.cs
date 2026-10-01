@@ -392,6 +392,15 @@ namespace ProjectBlock.View
             }
             bossPickerPage = ((bossPickerPage % pages) + pages) % pages;
             int first = bossPickerPage * BossPickerPageSize;
+            // THE ONE YOU ARE WORKING ON, first: testing a boss means starting the same stage over
+            // and over, and it should not cost three pages of "more..." each time.
+            int again = LastDebugBossIndex();
+            if (again >= 0)
+            {
+                pendingChoiceValues.Add(BossPickerAgain);
+                labels.Add(Loc.Pick("AGAIN: ", "TEKRAR: ") + all[again].DisplayName
+                    + Loc.Pick("   (shift+G)", "   (shift+G)"));
+            }
             for (int i = first; i < all.Count && i < first + BossPickerPageSize; i++)
             {
                 pendingChoiceValues.Add(i); // the registry index; -1 and -2 are the two commands
@@ -402,6 +411,9 @@ namespace ProjectBlock.View
                 pendingChoiceValues.Add(BossPickerMore);
                 labels.Add(Loc.Pick("more...  (" + (bossPickerPage + 1) + "/" + pages + ")",
                     "devamı...  (" + (bossPickerPage + 1) + "/" + pages + ")"));
+                // the pages wrap both ways, so the last page is one step BACK from the first
+                pendingChoiceValues.Add(BossPickerBack);
+                labels.Add(Loc.Pick("back...", "geri..."));
             }
             pendingChoiceValues.Add(BossPickerRandom);
             labels.Add(Loc.Pick("RANDOM (draw one normally)", "RASTGELE (normal çekim)"));
@@ -412,6 +424,37 @@ namespace ProjectBlock.View
         private const int BossPickerPageSize = 10;
         private const int BossPickerMore = -2;
         private const int BossPickerRandom = -1;
+        private const int BossPickerBack = -3;
+        private const int BossPickerAgain = -4;
+
+        /// <summary>The boss the debug picker last started, kept across sessions.</summary>
+        private const string LastDebugBossKey = "debug_last_boss";
+
+        private static int LastDebugBossIndex()
+        {
+            string defId = PlayerPrefs.GetString(LastDebugBossKey, string.Empty);
+            if (string.IsNullOrEmpty(defId))
+            {
+                return -1;
+            }
+            IReadOnlyList<BossDefinition> all = BossRegistry.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (all[i].DefId == defId)
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        /// <summary>[shift+G]: the boss stage the picker last started, again, with no picker.
+        /// False when nothing has been picked yet (the caller opens the picker instead).</summary>
+        private bool DebugRestartLastBoss()
+        {
+            int again = LastDebugBossIndex();
+            return again >= 0 && ResolveBossPick(again);
+        }
 
         /// <summary>Settles a picker row. Returns false when the picker was RE-OPENED instead of
         /// answered (the boss list turning a page), so the caller keeps the choice pending.</summary>
@@ -450,14 +493,22 @@ namespace ProjectBlock.View
         /// <summary>One row of the DEBUG boss picker: turn the page, or start a boss stage.</summary>
         private bool ResolveBossPick(int value)
         {
-            if (value == BossPickerMore)
+            if (value == BossPickerMore || value == BossPickerBack)
             {
-                bossPickerPage++;
-                OpenBossPicker(); // wraps at the last page
+                bossPickerPage += value == BossPickerMore ? 1 : -1;
+                OpenBossPicker(); // wraps at either end
                 return false;     // still pending - the picker is open again
+            }
+            if (value == BossPickerAgain)
+            {
+                value = LastDebugBossIndex();
             }
             IReadOnlyList<BossDefinition> all = BossRegistry.All;
             string defId = value >= 0 && value < all.Count ? all[value].DefId : null;
+            if (defId != null)
+            {
+                PlayerPrefs.SetString(LastDebugBossKey, defId);
+            }
             if (!session.DebugStartBossStage(defId))
             {
                 return true;

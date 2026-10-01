@@ -852,8 +852,13 @@ namespace ProjectBlock.View
             if (kb != null && kb.gKey.wasPressedThisFrame && session != null
                 && (session.Phase == GamePhase.Round || session.Phase == GamePhase.Market))
             {
-                bossPickerPage = 0;
-                OpenBossPicker();
+                // shift+G: the boss picked last time, straight away. The picker itself opens on
+                // the page it was left on, with that boss as its first row.
+                bool shift = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
+                if (!shift || !DebugRestartLastBoss())
+                {
+                    OpenBossPicker();
+                }
                 return;
             }
             // The dead-end rescue owns input while the round is paused on it.
