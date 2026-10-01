@@ -54,6 +54,14 @@ namespace ProjectBlock.Core
         private int breaksTopBottom = -1;
         private int breaksRotation = -1;
 
+        /// <summary>
+        /// What it saw and paid THIS TURN, for the animation (SymmetryVisuals): which shapes held,
+        /// the cells that matched under each, and the payment MEASURED around AddFlatScore. A new
+        /// object per payment, written where the payment is made and nowhere else.
+        /// </summary>
+        [field: NotSaved]
+        public SymmetryVisuals LastSymmetry { get; private set; }
+
         public SimetriJoker()
             : base("simetri", "Simetri")
         {
@@ -156,8 +164,17 @@ namespace ProjectBlock.Core
                 ? OneAxisBonus * BothAxesMultiplier
                 : OneAxisBonus;
             paidThisRound += bonus;
+            ScoreBreakdown score = turn.Score;
+            int paidBefore = score != null ? score.FlatBonus + score.LateFlat : 0;
             turn.AddFlatScore(bonus, DefId);
             NoteProc(bonus, turn);
+            // The picture's report: the board as it was judged, and what really landed.
+            SymmetryVisuals seen = SymmetryVisuals.Describe(board);
+            seen.Bonus = bonus;
+            seen.Points = score != null
+                ? (score.FlatBonus + score.LateFlat - paidBefore) * (score.ScoreScale < 1 ? 1 : score.ScoreScale)
+                : bonus;
+            LastSymmetry = seen;
         }
 
         /// <summary>It keeps proc statistics, so the tooltip prints its count even at zero.</summary>

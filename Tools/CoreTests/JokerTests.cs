@@ -259,6 +259,7 @@ public static partial class JokerTests
         Simetri_RotationBreaksCountPairsOnce();
         Simetri_SleepsFiveTurnsAndAgainAfterEverySweep();
         Simetri_PaysOneAxisAndTriplesForBoth();
+        Simetri_ReportsThePairsItPaidFor();
         Barut_ChargesDynamiteThatSurvives();
         Barut_PaysEveryChargeWhenItGoesUp();
         Barut_ReportsTheBlockItsCapAndItsWorth();
@@ -9191,6 +9192,67 @@ public static partial class JokerTests
         TurnReport lopsided = PlayAt(round, new GridPos(3, 2));
         Check(lopsided != null && FlatFrom(lopsided.Score, joker.DefId) == 0,
             "a lopsided board pays nothing");
+    }
+
+    /// <summary>
+    /// THE ANIMATION'S REPORT IS THE RULES' OWN READING. The pairs it lists are exactly the cells
+    /// the mirror / rotation checks compared (occupied on both sides, both real play area), a cell
+    /// on the axis is its own partner, and the payment is MEASURED - one axis 40, both 120, at the
+    /// score's scale.
+    /// </summary>
+    private static void Simetri_ReportsThePairsItPaidFor()
+    {
+        Section("simetri / the report the animation plays is what the rules paid for");
+        var board = new GameBoard(5, 5);
+        board.SetCubeAt(new GridPos(2, 2), new Cube(CubeKind.Normal, 1));
+        var lr = new List<SymmetryPair>();
+        board.CollectSymmetryPairs(SymmetryKind.LeftRight, lr);
+        Check(lr.Count == 1 && lr[0].Self && lr[0].A.Equals(new GridPos(2, 2)),
+            "the centre cell is its own partner", "" + lr.Count);
+        board.SetCubeAt(new GridPos(0, 1), new Cube(CubeKind.Normal, 1));
+        board.SetCubeAt(new GridPos(4, 1), new Cube(CubeKind.Normal, 1));
+        lr.Clear();
+        board.CollectSymmetryPairs(SymmetryKind.LeftRight, lr);
+        Check(lr.Count == 2, "a mirrored pair is listed ONCE", "" + lr.Count);
+        Check(lr.Exists(p => p.A.Equals(new GridPos(0, 1)) && p.B.Equals(new GridPos(4, 1))),
+            "primary first: the left cell, then its mirror");
+        SymmetryVisuals seen = SymmetryVisuals.Describe(board);
+        Check(seen.LeftRight && !seen.TopBottom && !seen.HalfTurn,
+            "and Describe says which shapes held",
+            seen.LeftRight + " " + seen.TopBottom + " " + seen.HalfTurn);
+        Check(seen.TopBottomPairs.Count == 0 && seen.HalfTurnPairs.Count == 0,
+            "with no pairs for the shapes that did not");
+
+        // a real turn: one axis, then both
+        var session = NewSession(7230, 7, 1000000, 40, 1);
+        var joker = (SimetriJoker)session.Jokers.Add(new SimetriJoker());
+        RoundEngine round = session.CurrentRound;
+        session.Jokers.DispatchRoundStarted(round);
+        PlayTurns(session, joker.WakesOnTurn);
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 7231));
+        TurnReport one = PlayAt(round, new GridPos(6, 0));
+        SymmetryVisuals paid = joker.LastSymmetry;
+        Check(one != null && paid != null && paid.LeftRight, "the payment wrote a report");
+        int scale = one.Score.ScoreScale < 1 ? 1 : one.Score.ScoreScale;
+        Check(paid != null && paid.Bonus == joker.OneAxisBonus && paid.Points == joker.OneAxisBonus * scale,
+            "one axis: the bonus and the points that really landed",
+            paid != null ? paid.Bonus + " / " + paid.Points : "-");
+        Check(paid != null && paid.LeftRightPairs.Exists(p => p.A.Equals(new GridPos(0, 0)) && p.B.Equals(new GridPos(6, 0))),
+            "and the pair it was paid for");
+
+        ClearBoard(round.Board);
+        round.Board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 7232));
+        round.Board.SetCubeAt(new GridPos(0, 6), new Cube(CubeKind.Normal, 7232));
+        round.Board.SetCubeAt(new GridPos(6, 6), new Cube(CubeKind.Normal, 7232));
+        TurnReport both = PlayAt(round, new GridPos(6, 0));
+        SymmetryVisuals twice = joker.LastSymmetry;
+        Check(both != null && twice != null && !ReferenceEquals(twice, paid), "a new report per payment");
+        Check(twice != null && twice.BothMirrors && twice.Points == joker.OneAxisBonus * joker.BothAxesMultiplier * scale,
+            "both mirrors: the triple, measured", twice != null ? "" + twice.Points : "-");
+        Check(twice != null && twice.LeftRightPairs.Count == 2 && twice.TopBottomPairs.Count == 2,
+            "two pairs a mirror for four corners",
+            twice != null ? twice.LeftRightPairs.Count + " " + twice.TopBottomPairs.Count : "-");
     }
 
     private static void Barut_ChargesDynamiteThatSurvives()

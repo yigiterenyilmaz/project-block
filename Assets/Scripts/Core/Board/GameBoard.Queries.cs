@@ -633,6 +633,41 @@ namespace ProjectBlock.Core
             return breaks;
         }
 
+        /// <summary>
+        /// Every MATCHED pair under one symmetry ("Simetri"'s report): an occupied cell whose
+        /// partner is occupied too, both real play area - the very comparison the mirror and
+        /// rotation checks make, so a pair listed here is a pair the joker was paid for. Each pair
+        /// is listed once, primary first (the left / bottom / earlier cell, in board coordinates);
+        /// a cell that is its own partner (on the axis, or the centre of a half turn) is listed
+        /// with itself. Reporting only: it reads the board and changes nothing.
+        /// </summary>
+        public void CollectSymmetryPairs(SymmetryKind kind, List<SymmetryPair> into)
+        {
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    int mx = kind == SymmetryKind.TopBottom ? x : Width - 1 - x;
+                    int my = kind == SymmetryKind.LeftRight ? y : Height - 1 - y;
+                    // once per pair: the primary is the one that comes first
+                    if (kind == SymmetryKind.LeftRight ? mx < x
+                        : kind == SymmetryKind.TopBottom ? my < y
+                        : my * Width + mx < y * Width + x)
+                    {
+                        continue;
+                    }
+                    if (!playable[x, y] || dead[x, y] || !playable[mx, my] || dead[mx, my])
+                    {
+                        continue;
+                    }
+                    if (cells[x, y].HasValue && cells[mx, my].HasValue)
+                    {
+                        into.Add(new SymmetryPair(new GridPos(x + MinX, y + MinY), new GridPos(mx + MinX, my + MinY)));
+                    }
+                }
+            }
+        }
+
         private bool ColumnPairComparable(int x, int mirroredX, int y)
         {
             return playable[x, y] && !dead[x, y]
