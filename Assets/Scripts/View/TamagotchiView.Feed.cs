@@ -37,6 +37,7 @@ namespace ProjectBlock.View
                 return;
             }
             ClearDrag();
+            mealsOnTheWay.Add(report.RequestSlotId);
             TamagotchiFeedVisuals r = report;
             Enqueue(PetPresentationPriority.Feed, "feed", () => FeedRoutine(r, from, fromScale), false, 0f, null);
             // the brief's short lock: only for the snap and the grab
@@ -100,6 +101,7 @@ namespace ProjectBlock.View
             }
 
             // ---- A: CARD ACCEPT - from the finger to the paws, ease-in
+            Beat("accept");
             act.Emotion = PetEmotion.Excited;
             act.Mouth = "wide";
             act.MouthOpen = 0.9f;
@@ -120,8 +122,14 @@ namespace ProjectBlock.View
             food.transform.SetParent(rig.FoodRoot, true);
             food.SetOrder(TamagotchiRig.FoodOrder);
             Sound(PetSound.GrabFood);
+            if (StopAfter("accept"))
+            {
+                yield return LabEnd(food);
+                yield break;
+            }
 
             // ---- B: GRAB - both paws on its edges; it gives a pixel or two
+            Beat("grab");
             Haptic(high ? PetHaptic.FeedTapHigh : PetHaptic.FeedTap);
             yield return Tween(Tuning.GrabDuration * m, t =>
             {
@@ -136,34 +144,77 @@ namespace ProjectBlock.View
                 act.Offset = Vector2.Lerp(act.Offset, Vector2.zero, t);
             });
 
+
+            if (StopAfter("grab"))
+            {
+                yield return LabEnd(food);
+                yield break;
+            }
             // ---- C: FIRST CHOMP - mouth snaps open, the head comes forward, 20-35% goes in
+            Beat("first bite");
             float first = low ? 0.25f : high ? 0.35f : 0.3f;
             yield return Chomp(food, 0f, first, 1f, Tuning.BiteDuration * m, true);
 
+            if (StopAfter("first bite"))
+            {
+                yield return LabEnd(food);
+                yield break;
+            }
             // ---- D: CHEW - two or three, cheeks bulging left and right in turn
+            Beat("chew");
             int chews = Tuning.ChewCount + (high ? 1 : 0);
             yield return Chew(food, chews, Tuning.ChewDuration * m, null);
 
+            if (StopAfter("chew"))
+            {
+                yield return LabEnd(food);
+                yield break;
+            }
             // ---- E: NEXT CHOMP - further in, a little smaller
+            Beat("next bite");
             yield return Chomp(food, first, 0.7f, 0.85f, Tuning.BiteDuration * 0.85f * m, false);
             if (!low)
             {
                 yield return Chew(food, 1, Tuning.ChewDuration * m, null);
             }
+            if (StopAfter("next bite"))
+            {
+                yield return LabEnd(food);
+                yield break;
+            }
 
             // ---- the last little strip: quick
+            Beat("final");
             yield return Chomp(food, 0.7f, 1.0f, 0.55f, Tuning.BiteDuration * 0.6f * m, false);
             DropFood(food);
+            if (StopAfter("final"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
 
             // ---- F: GULP - mouth shut, head up a touch, a wave from the face down to the belly
+            Beat("gulp");
             yield return Gulp(Tuning.GulpDuration * m, high);
 
+            if (StopAfter("gulp"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- SATISFACTION
+            Beat("satisfaction");
             CollapsePlate(r.RequestSlotId);
             yield return Satisfied(Tuning.SatisfiedDuration * m, high);
 
+            if (StopAfter("satisfaction"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             if (r.RequestsRemaining > 0)
             {
+                Beat("glance");
                 // the other plate, briefly: "one down - I want that one too"
                 int other = FirstPending();
                 act.Emotion = PetEmotion.Hungry;
@@ -177,6 +228,7 @@ namespace ProjectBlock.View
             }
             else
             {
+                Beat("full");
                 yield return FullSatisfaction();
             }
         }

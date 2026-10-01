@@ -370,6 +370,9 @@ namespace ProjectBlock.View
             animDark = false;
             animRetro = false;
             jokerBar.SetVisible(true);
+            // the pet goes back to the round, and its debug views go off with the lab
+            StopPetLab();
+            TamagotchiDebug.AllOff();
             StopAnimFallSequence();
             StopAnimBurstSequence();
             // AnimResync below puts the real board back up if a boss scene was showing its own.
@@ -408,6 +411,10 @@ namespace ProjectBlock.View
             }
             StopAnimPress();
             StopAnimHost();
+            if (petLabDriving)
+            {
+                StopPetLab();
+            }
             StopAnimTalisman();
             StopAnimMidas();
             StopAnimFire();
@@ -1158,10 +1165,6 @@ namespace ProjectBlock.View
             AddAnim("bonus card vanishes", "bonus kart yok olur",
                 delegate { sfx.Vanish(); AnimCards(CardLayerView.DebugAnim.VanishOne); });
             AddAnim("reveal beat (Şaşırtmaca)", "açılış anı (Şaşırtmaca)", AnimRevealBeat);
-            AddAnim("pet demands in (Tamagotchi)", "evcil istekleri (Tamagotchi)",
-                delegate { cardLayer.ShowPetDemands(AnimDemandShapes()); });
-            AddAnim("pet demands out", "evcil istekleri kalksın",
-                delegate { cardLayer.ShowPetDemands((IReadOnlyList<BlockShape>)null); });
 
             AddAnimSub("general", "board", "board", "oyun alanı");
             AddAnim("water fall", "su akışı", AnimWaterFall);
@@ -1501,12 +1504,6 @@ namespace ProjectBlock.View
             AddAnim("CLEAN SWEEP!", "TEMİZLİK!", delegate { SpawnSweepPopup(); });
             AddAnim("DYNAMITE!", "DİNAMİT!", delegate { SpawnDynamitePopup(); });
             AddAnim("TARGET HIT!", "HEDEF VURULDU!", delegate { SpawnTargetPopup(); });
-            AddAnim("FED (Tamagotchi)", "YEDİ (Tamagotchi)",
-                delegate
-                {
-                    FloatingTextFx.Spawn(transform, new Vector2(0f, -2.2f),
-                        Loc.Pick("FED", "YEDİ"), new Color(0.6f, 0.9f, 0.5f), 54, 0.05f);
-                });
             AddAnim("+score (a sale)", "+puan (satış)",
                 delegate
                 {
@@ -3973,6 +3970,9 @@ namespace ProjectBlock.View
 
             // "Antimadde" - the annihilation event, its own section (GameUiController.AntimatterLab).
             AddAntimatterLab();
+
+            // "Tamagotchi" - the pet boss, its own section (GameUiController.TamagotchiLab).
+            AddTamagotchiLab();
 
             AddAnimSub("jokers", "simetri", "simetri", "simetri");
             AddAnim("simetri: the arena lights for a symmetric board",

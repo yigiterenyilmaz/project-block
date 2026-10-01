@@ -471,7 +471,7 @@ namespace ProjectBlock.View
 
         private float Dt
         {
-            get { return Time.deltaTime * Mathf.Max(0f, PlaybackRate); }
+            get { return Time.deltaTime * Mathf.Max(0f, PlaybackRate) * (labFast ? 40f : 1f); }
         }
 
         /// <summary>The pet's own time - the lab's slow motion slows all of it together.</summary>
@@ -699,6 +699,8 @@ namespace ProjectBlock.View
             exiting = false;
             rig.SetVisible(false);
             HideDecor();
+            mealsOnTheWay.Clear();
+            HideDebug();
             ViewState = PetViewState.Hidden;
         }
 
@@ -783,6 +785,10 @@ namespace ProjectBlock.View
         private void Update()
         {
             clock += Dt;
+            if (labFast && Time.unscaledTime - labFastSince > 4f)
+            {
+                labFast = false; // a beat that never came: never leave the pet fast-forwarded
+            }
             if (!shown)
             {
                 return;
@@ -976,7 +982,7 @@ namespace ProjectBlock.View
         private void ComposePose()
         {
             float px = Home.PxToWorld;
-            bool still = act.Still;
+            bool still = act.Still || LabStill;
             PetHungerStage stage = State.Stage;
             bool stiff = stage == PetHungerStage.Angry || stage == PetHungerStage.Furious;
 
@@ -986,12 +992,12 @@ namespace ProjectBlock.View
             Vector2 offset = new Vector2(0f, -(1f - presence) * Home.HideDepth);
 
             // ---- life
-            float breath = still ? 0f : Breath();
+            float breath = still || !LabBreath ? 0f : Breath();
             float amount = Tuning.BreathAmount * (stiff ? 0.6f : 1f);
             Vector2 squash = new Vector2(1f - amount * 0.5f * breath, 1f + amount * breath);
             float t = clock;
-            float bob = still ? 0f : Noise(t * 0.9f, 1) * Tuning.IdleBob * px;
-            float sway = still ? 0f : Noise(t * 0.55f, 2) * Tuning.IdleSway * (stiff ? 0.55f : 1f);
+            float bob = still || !LabBob ? 0f : Noise(t * 0.9f, 1) * Tuning.IdleBob * px;
+            float sway = still || !LabSway ? 0f : Noise(t * 0.55f, 2) * Tuning.IdleSway * (stiff ? 0.55f : 1f);
             offset.y += bob;
 
             // ---- act
@@ -1085,7 +1091,7 @@ namespace ProjectBlock.View
             }
             lookNow = Damp(lookNow, look * Tuning.EyeTrackMaxOffset, act.Look.HasValue || act.LookAt.HasValue ? 0.025f : 0.06f);
             pose.Look = lookNow;
-            pose.Blink = act.Blink >= 0f ? act.Blink : (still ? 0f : NaturalBlink());
+            pose.Blink = act.Blink >= 0f ? act.Blink : (still || !LabBlinks ? 0f : NaturalBlink());
 
             // ---- mouth, cheeks, belly, paws, tongue
             mouthOpenNow = Damp(mouthOpenNow, act.MouthOpen * dragMouthOpen, 0.02f);

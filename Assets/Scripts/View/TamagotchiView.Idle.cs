@@ -278,6 +278,7 @@ namespace ProjectBlock.View
         private IEnumerator Entrance()
         {
             SetState(PetViewState.Entering);
+            Beat("peek");
             HidePlatesNow();
             act.Presence = 0f;
             presence = 0f;
@@ -302,7 +303,13 @@ namespace ProjectBlock.View
             yield return Wait(0.05f);
             act.LookAt = Anchors.HandCentre;
             yield return Wait(0.05f);
+            if (StopAfter("peek"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             // B: the body pops out with a small hop
+            Beat("pop");
             Sound(PetSound.Enter);
             act.Presence = 1f;
             presence = Mathf.Max(presence, 0.86f);
@@ -320,7 +327,14 @@ namespace ProjectBlock.View
             });
             act.Squash = Vector2.one;
             act.EarWobble = null;
+            if (StopAfter("pop"))
+            {
+                RevealPlatesNow();
+                yield return LabEnd(null);
+                yield break;
+            }
             // C: the request reveal
+            Beat("reveal");
             SetState(PetViewState.Requesting);
             Sound(PetSound.Request);
             RevealPlates();
@@ -335,6 +349,12 @@ namespace ProjectBlock.View
             SetPaw(BoardPawIsRight, Paw(0f, 0f, -18f));
             act.Head = Vector2.zero;
             act.HeadTilt = 0f;
+            if (StopAfter("reveal"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
+            Beat("look");
             // D: the player's cards, a small "o", a paw on the belly
             act.LookAt = Anchors.HandCentre;
             act.Mouth = "nom";

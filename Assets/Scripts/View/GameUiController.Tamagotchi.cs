@@ -476,6 +476,8 @@ namespace ProjectBlock.View
                     list.Add(Grow(r, 0.08f));
                 }
             }
+            // the lab's crowded-screen scene adds what a full run would have on its edges
+            list.AddRange(petLabExtraObstacles);
             float top = layout.OrthoSize - (layout.MessageTop + layout.MessageFont + 8f) * layout.WorldPerCanvasPixel;
             list.Add(Rect.MinMaxRect(-layout.HalfWidth * 0.45f, top, layout.HalfWidth * 0.45f, layout.OrthoSize));
             return list;

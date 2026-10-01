@@ -267,6 +267,7 @@ namespace ProjectBlock.View
             Color ground = Anchors.GroundColour;
 
             // ---- A: TARGET LOCK - wicked excitement
+            Beat("lock");
             act.LookAt = centroid;
             HeadToward(centroid, 1f);
             act.Emotion = PetEmotion.Excited;
@@ -276,6 +277,8 @@ namespace ProjectBlock.View
 
             // ---- TELEGRAPH: corners darken, a dark-pink bite pressure on the OUTER edge, the
             // region pulls in a pixel. No red square overlay.
+            yield return Wait(0.08f);
+            Beat("telegraph");
             var corners = new List<SpriteRenderer>();
             foreach (GridPos c in cells)
             {
@@ -319,7 +322,13 @@ namespace ProjectBlock.View
                 }
             });
 
+            if (StopAfter("telegraph"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- B: THE LUNGE - out of its corner, over the board, mouth wide
+            Beat("lunge");
             SetState(PetViewState.PunishExecute);
             SetPetOrder(LungeOrder);
             act.Lick = 0f;
@@ -342,7 +351,14 @@ namespace ProjectBlock.View
                 act.LookAt = centroid;
             });
 
+            if (StopAfter("lunge"))
+            {
+                SetPetOrder(PetOrder);
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- C: THE BITE - the cells give and fold in, a short crunch
+            Beat("bite");
             Sound(PetSound.BoardBite);
             Haptic(PetHaptic.BoardBitePulse);
             yield return Tween(Tuning.BoardBiteDuration, t =>
@@ -362,8 +378,15 @@ namespace ProjectBlock.View
                 act.Squash = new Vector2(1f + 0.04f * Bell(t), 1f - 0.05f * Bell(t));
             });
 
+            if (StopAfter("bite"))
+            {
+                SetPetOrder(PetOrder);
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- D: THE CHUNKS - the floor comes away in 2-4 pieces, pulled toward the mouth,
             // then into it
+            Beat("chunks");
             List<TamagotchiFoodProxy> chunks = MakeChunks(cells, centroid, ground);
             foreach (SpriteRenderer g in groundProxies)
             {
@@ -429,7 +452,14 @@ namespace ProjectBlock.View
             }
             StartCoroutine(FadeMarks(residue, 0.42f));
 
+            if (StopAfter("chunks"))
+            {
+                SetPetOrder(PetOrder);
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- E: CHEW going home - twice, heavy, cheeks full of board
+            Beat("chew");
             SetState(PetViewState.PunishRecover);
             Color boardCheeks = Color.Lerp(ground, TamagotchiArt.Plum, 0.35f);
             Vector2 lungeAt = act.Offset;
@@ -465,7 +495,13 @@ namespace ProjectBlock.View
             act.PuffL = 0f;
             act.PuffR = 0f;
 
+            if (StopAfter("chew"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- AFTERMATH: the arena settles a pixel or two; it wipes its mouth, smug
+            Beat("aftermath");
             StartCoroutine(BoardSettle(Tuning.BoardAftermathDuration));
             yield return PostAttack(PetPunishKind.Board);
         }
@@ -590,6 +626,7 @@ namespace ProjectBlock.View
             Vector3 slot = itemRect.center;
 
             // ---- A: LOCK - it looks; the others are dim already; the target swells and wobbles
+            Beat("lock");
             act.LookAt = slot;
             HeadToward(slot, 1f);
             act.Emotion = PetEmotion.Furious;
@@ -602,7 +639,13 @@ namespace ProjectBlock.View
                 item.transform.position = slot + new Vector3(Mathf.Sin(t * 53f) * Px(1.2f), 0f, 0f);
             });
 
+            if (StopAfter("lock"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- B: THE TONGUE OR THE PAW reaches it
+            Beat("reach");
             SetState(PetViewState.PunishExecute);
             act.Mouth = paw ? "furious" : "wide";
             act.Reach = true;
@@ -620,7 +663,14 @@ namespace ProjectBlock.View
             // the sticky tap / the grab
             yield return Tween(0.06f, t => item.transform.localScale = Vector3.one * (Tuning.AssetTargetScale - 0.05f * Bell(t)));
 
+            if (StopAfter("reach"))
+            {
+                act.Reach = false;
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- C: THE SNATCH - out of the slot fast, on a curve, turning a little
+            Beat("snatch");
             Vector3 from = item.transform.position;
             Vector3 side = Vector3.Cross((rig.MouthWorld - from).normalized, Vector3.forward) * 0.6f;
             float spin = joker ? 18f : -14f;
@@ -647,6 +697,11 @@ namespace ProjectBlock.View
             item.SetOrder(TamagotchiRig.FoodOrder);
             Haptic(PetHaptic.JokerLossTap);
 
+            if (StopAfter("snatch"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- D: THE BITES - recognisable until the last one
             int bites = high ? Mathf.Max(3, Tuning.AssetBiteCount) : r.Tier == CardValueTier.Medium ? 2 : (joker ? 2 : 1);
             float[] steps = bites >= 3 ? new[] { 0.35f, 0.7f, 1f } : bites == 2 ? new[] { 0.5f, 1f } : new[] { 1f };
@@ -660,8 +715,15 @@ namespace ProjectBlock.View
                     act.Mouth = "smug";
                     yield return Wait(0.09f);
                 }
+                string biteBeat = i == 0 ? "first bite" : i == steps.Length - 1 ? "final bite" : "second bite";
+                Beat(biteBeat);
                 yield return ItemChomp(item, last, steps[i], i == 0);
                 last = steps[i];
+                if (StopAfter(biteBeat))
+                {
+                    yield return LabEnd(null);
+                    yield break;
+                }
                 if (i < steps.Length - 1)
                 {
                     yield return Chew(item, 1, Tuning.ChewDuration, null);
@@ -669,7 +731,9 @@ namespace ProjectBlock.View
             }
             Destroy(item.gameObject);
             itemProxy = null;
+            Beat("gulp");
             yield return Gulp(Tuning.GulpDuration, high);
+            Beat("residue");
             // ---- the loss residue: a bite-shaped berry shadow where the slot was
             SpriteRenderer shadow = Mark("bite_mask", slot, 0f, Vector2.one * (itemRect.width / 0.4f) * 0.7f,
                 new Color(0.4f, 0.1f, 0.24f, 0.55f), 6);
@@ -681,7 +745,13 @@ namespace ProjectBlock.View
             {
                 DimBar(false, joker);
             }
+            if (StopAfter("residue"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- a valuable one is savoured: sparkling eyes, a smug grin, eyes shut, belly rub
+            Beat("reaction");
             if (high)
             {
                 act.Emotion = PetEmotion.Smug;
@@ -788,6 +858,7 @@ namespace ProjectBlock.View
             bool single = n == 1 && r.CardTiers.Count > 0 && r.CardTiers[0] == CardValueTier.High;
 
             // the pile wiggles; the eyes go wide; a tiny lick
+            Beat("notice");
             if (Cards != null)
             {
                 Cards.WigglePile(draw);
@@ -798,7 +869,13 @@ namespace ProjectBlock.View
             act.IrisMul = 1.12f;
             act.Mouth = "nom";
             yield return Tween(0.32f, t => act.Lick = Bell(t));
+            if (StopAfter("notice"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             SetState(PetViewState.PunishExecute);
+            Beat("eat");
 
             if (single)
             {

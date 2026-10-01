@@ -198,7 +198,8 @@ namespace ProjectBlock.View
 
             // the nest's edge: the pet is drawn only inside these
             clipLow = MakeClip("ClipLow", -1, FoodOrder - 1);
-            clipHigh = MakeClip("ClipHigh", FoodOrder + 5, FxOrder + 40);
+            // a mask's range is back-exclusive: the food band is 14..18, the paws start at 19
+            clipHigh = MakeClip("ClipHigh", FoodOrder + 4, FxOrder + 40);
             foreach (SpriteRenderer r in all)
             {
                 r.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;

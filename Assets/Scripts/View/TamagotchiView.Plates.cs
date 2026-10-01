@@ -62,6 +62,10 @@ namespace ProjectBlock.View
         private float auraBoost;
         private Color auraBoostColour = TamagotchiArt.WarmPink;
         private bool platesFolded;
+
+        /// <summary>Slots whose meal is queued or playing: Core marks them fed at once, but the
+        /// plate only collapses when the meal reaches it.</summary>
+        private readonly HashSet<int> mealsOnTheWay = new HashSet<int>();
         private string platesKey = "";
 
         /// <summary>The plate sprite's width in its own units (220 px at 400 ppu).</summary>
@@ -286,6 +290,7 @@ namespace ProjectBlock.View
         /// <summary>A fed plate: its card shrinks in, the plate takes a bite and goes muted.</summary>
         private void CollapsePlate(int slotId)
         {
+            mealsOnTheWay.Remove(slotId);
             int i = PlateIndexOf(slotId);
             if (i < 0)
             {
@@ -354,10 +359,16 @@ namespace ProjectBlock.View
                 }
                 // a plate fed without the meal being shown (a load, the lab) just shows as fed
                 PetRequest? req = RequestFor(p.SlotId);
-                if (req.HasValue && req.Value.Fed && !p.Fed && p.CollapseAt < 0f)
+                if (req.HasValue && req.Value.Fed && !p.Fed && p.CollapseAt < 0f && !mealsOnTheWay.Contains(p.SlotId))
                 {
                     p.Fed = true;
                     p.CollapseAt = clock - 10f;
+                }
+                // furious with no fury being shown (a loaded game): the pending plates are simply gone
+                if (State.Furious && !p.Fed && !p.Destroyed && !queue.Has("fury"))
+                {
+                    p.Destroyed = true;
+                    p.DropAt = clock - 10f;
                 }
                 if (p.PopAt < 0f || clock < p.PopAt)
                 {

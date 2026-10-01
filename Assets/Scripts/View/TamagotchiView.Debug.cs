@@ -91,6 +91,18 @@ namespace ProjectBlock.View
             }
         }
 
+        private void HideDebug()
+        {
+            foreach (SpriteRenderer l in debugLines)
+            {
+                l.enabled = false;
+            }
+            foreach (TextMesh t in debugTexts)
+            {
+                t.gameObject.SetActive(false);
+            }
+        }
+
         private void DrawDebug()
         {
             Color cyan = new Color(0.4f, 0.95f, 1f);

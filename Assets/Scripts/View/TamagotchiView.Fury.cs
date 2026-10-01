@@ -131,6 +131,7 @@ namespace ProjectBlock.View
             act.Presence = 1f;
 
             // ---- A: REALIZATION - it looks at the plate it never got. Blank. Nothing for 100 ms.
+            Beat("realization");
             int missing = FirstPending();
             act.LookAt = plates.Count > 0 ? PlateWorld(missing) : (Vector3)Anchors.HandCentre;
             act.Emotion = PetEmotion.Neutral;
@@ -143,8 +144,14 @@ namespace ProjectBlock.View
             act.Still = true;
             yield return Wait(0.1f * k);
 
-            // ---- B + C: the eyes change, the body is pressed down, the paws clench
-            yield return Tween(0.15f * k, t =>
+            if (StopAfter("realization"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
+            // ---- B: the eyes change - catchlights shrink, pupils small, brows down, cheeks berry
+            Beat("eye change");
+            yield return Tween(0.08f * k, t =>
             {
                 float e = Smooth(t);
                 act.Emotion = PetEmotion.Furious;
@@ -154,13 +161,37 @@ namespace ProjectBlock.View
                 act.IrisMul = Mathf.Lerp(1f, 0.92f, e);
                 act.Cheek = Color.Lerp(TamagotchiArt.CheekRose, TamagotchiArt.CheekBerry, e);
                 act.CheekA = Mathf.Lerp(0.55f, 0.85f, e);
+            });
+            if (StopAfter("eye change"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
+            // ---- C: the body is pressed down, the paws clench, the ears go stiff
+            Beat("compression");
+            yield return Tween(0.15f * k, t =>
+            {
+                float e = Smooth(t);
+                // the eyes keep what B gave them; the body takes the pressure
+                act.Emotion = PetEmotion.Furious;
+                act.EmotionWeight = 1f;
+                act.CatchMul = 0.6f;
+                act.IrisMul = 0.92f;
+                act.Cheek = TamagotchiArt.CheekBerry;
+                act.CheekA = 0.85f;
                 act.Squash = new Vector2(1f + 0.03f * e, 1f - 0.06f * e);
                 act.PawL = Paw(0.05f * e, -0.04f * e, -30f * e, 1f - 0.08f * e);
                 act.PawR = Paw(-0.05f * e, -0.04f * e, -30f * e, 1f - 0.08f * e);
                 act.Ear = -14f * e;
             });
 
+            if (StopAfter("compression"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- D: THE BURST - 0.94 -> 1.08 -> 1, a dark raspberry puff, the mouth wide, a squeal
+            Beat("burst");
             act.Still = false;
             Sound(PetSound.Furious);
             Haptic(PetHaptic.FuryPulse);
@@ -181,7 +212,13 @@ namespace ProjectBlock.View
             });
             act.Squash = Vector2.one;
 
+            if (StopAfter("burst"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- E: one fast bite at the plates - they crack and drop away
+            Beat("request destruction");
             Vector3 plateAt = plates.Count > 0 ? PlateWorld(missing) : rig.MouthWorld;
             Vector2 dir = ((Vector2)(plateAt - rig.MouthWorld)).normalized;
             Say("Artık senden istemiyor - kendisi alacak.", "It is not asking any more - it will take it itself.");
@@ -206,7 +243,13 @@ namespace ProjectBlock.View
             act.Offset = Vector2.zero;
             act.Head = Vector2.zero;
 
+            if (StopAfter("request destruction"))
+            {
+                yield return LabEnd(null);
+                yield break;
+            }
             // ---- F: SETTLE - the board, the jokers, the deck... and what it is going to take
+            Beat("settle");
             act.Mouth = "smug";
             act.Emotion = PetEmotion.Furious;
             act.EmotionWeight = 1f;
