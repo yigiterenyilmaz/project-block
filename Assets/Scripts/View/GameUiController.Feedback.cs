@@ -186,6 +186,8 @@ namespace ProjectBlock.View
             // turn's other events - a flash on the repaint frame lands before the line it was
             // paid for has even broken.
             PlayJokerProcs(report);
+            // "Simetri": the board's symmetry recognised, paired, locked and paid - after the lines.
+            PlaySymmetryPayout(report);
             // "Kara Delik": the gravity after the turn's own lines, the devour after the gravity. A
             // sweep that IS the hole's collapse is drawn by the hole, not by the ordinary wave.
             sweepIsHoleCollapse = TakeHoleCollapse(report);
@@ -343,10 +345,12 @@ namespace ProjectBlock.View
             {
                 return;
             }
+            // "Simetri" used to light the arena from here (PlaySymmetryProc, kept for the lab's
+            // comparison); its payout is now an event of its own (PlaySymmetryPayout).
             Joker fired = session.Jokers.Find(instanceId);
-            if (fired is SimetriJoker)
+            if (fired == null)
             {
-                PlaySymmetryProc();
+                return;
             }
         }
 

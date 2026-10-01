@@ -167,14 +167,17 @@ namespace ProjectBlock.View
             float debtClaim = debtPressure != null ? debtPressure.ScoreClaim : 0f;
             // "Antimadde"'s energy landing: 1.00 -> 1.10 -> 0.98 -> 1, a breath of lavender-gold.
             float antimatterClaim = antimatter != null ? antimatter.ScoreClaim : 0f;
+            // "Simetri"'s payout landing: 1.00 -> 1.07 -> 1 (1.10 for the triple), warm gold.
+            float symmetryClaim = symmetry != null ? symmetry.ScoreClaim : 0f;
             float claim = Mathf.Max(Mathf.Max(Mathf.Max(hazineClaim, ignitionClaim),
                 Mathf.Max(challengeClaim, quarryClaim)),
-                Mathf.Max(Mathf.Max(powderClaim, debtClaim), antimatterClaim));
+                Mathf.Max(Mathf.Max(powderClaim, debtClaim), Mathf.Max(antimatterClaim, symmetryClaim)));
             if (claim > warm && claim > 0.001f)
             {
                 float hs;
                 Color ink;
                 if (claim == debtClaim) { hs = debtPressure.ScoreScale; ink = debtPressure.ScoreInk; }
+                else if (claim == symmetryClaim) { hs = symmetry.ScoreScale; ink = symmetry.ScoreInk; }
                 else if (claim == antimatterClaim) { hs = antimatter.ScoreScale; ink = antimatter.ScoreInk; }
                 else if (claim == hazineClaim) { hs = hazine.ScoreScale; ink = hazine.ScoreInk; }
                 else if (claim == challengeClaim) { hs = challenge.ScoreScale; ink = challenge.ScoreInk; }

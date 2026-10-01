@@ -373,6 +373,7 @@ namespace ProjectBlock.View
             // the pet goes back to the round, and its debug views go off with the lab
             StopPetLab();
             TamagotchiDebug.AllOff();
+            SymmetryRewardView.DebugFlags.AllOff();
             StopAnimFallSequence();
             StopAnimBurstSequence();
             // AnimResync below puts the real board back up if a boss scene was showing its own.
@@ -423,6 +424,7 @@ namespace ProjectBlock.View
             StopHazine();
             StopChallenge();
             StopQuarry();
+            StopSymmetry();
             StopAntimatter();
             StopIgnition();
             StopFlood();
@@ -3974,10 +3976,8 @@ namespace ProjectBlock.View
             // "Tamagotchi" - the pet boss, its own section (GameUiController.TamagotchiLab).
             AddTamagotchiLab();
 
-            AddAnimSub("jokers", "simetri", "simetri", "simetri");
-            AddAnim("simetri: the arena lights for a symmetric board",
-                "simetri: simetrik tahtada alan ışıldar",
-                delegate { PlaySymmetryProc(); });
+            // "Simetri" - the symmetry payout, its own section (GameUiController.Symmetry).
+            AddSymmetryLab();
 
             AddAnimSub("jokers", "besleme", "besleme", "besleme");
             AddAnim("besleme: a FEED procs (nest + card + points)",
