@@ -157,6 +157,12 @@ namespace ProjectBlock.View
         public bool PlatesVertical;
         public float PlateScale = 1f;
         public Vector2 EdgeTap;         // a point on the screen edge beside it (edge finger tap)
+        public float Tilt;              // degrees the whole pet leans (round a side, over the top)
+        public Vector2 HideDir = Vector2.down; // the way it goes when it hides behind its edge
+        public float Rest = 1f;         // how far out it sits at rest here (1 all of it, ~0.6 a head)
+        public float Sit;               // 0..1 sitting
+        public bool Shadow = true;      // only a home with a floor under it casts one
+        public int Edge;                // 0 bottom, 1 right, 2 top, 3 left (for the roaming)
         public Rect PetRect;
         public bool Squeezed;           // no free space: it is sitting over something
     }
@@ -633,9 +639,16 @@ namespace ProjectBlock.View
             public Vector3 ReachTarget;
             public float Reach01;
             public float Ear = float.NaN;
+            public float? Fury;             // the skin: 0 cute, 1 furious (null = what Core says)
+            public float SquintL;
+            public float SquintR;
+            public Vector2 MouthOffset;
+            public float? Sit;
+            public float Tilt;              // degrees added to the home's own tilt
 
             public void Clear()
             {
+                Fury = null; SquintL = 0f; SquintR = 0f; MouthOffset = Vector2.zero; Sit = null; Tilt = 0f;
                 Presence = null; Offset = Vector2.zero; Rot = 0f; Squash = Vector2.one; Scale = 1f;
                 Head = Vector2.zero; HeadTilt = 0f; HeadSquash = 1f; LookAt = null; Look = null;
                 Emotion = null; EmotionWeight = 1f; Mouth = null; MouthOpen = 1f; MouthScale = 1f;
@@ -882,6 +895,57 @@ namespace ProjectBlock.View
         private float lickNow;
         private float earWobbleNow;
         private PetEmotion moodShown = PetEmotion.Neutral;
+        private float furyNow;
+        private float sitNow;
+        private float tiltNow2;
+        private float furyBeatAt;
+        private float furyBeatNext;
+
+        /// <summary>How furious it LOOKS right now (0 cute skin, 1 furious skin).</summary>
+        public float FuryShown
+        {
+            get { return furyNow; }
+        }
+
+        /// <summary>
+        /// The furious idle's body: short irregular beats (1.015 wide, 0.985 tall), a second or so
+        /// apart and never the same gap twice - tension let out in jolts, never a constant jitter.
+        /// </summary>
+        private float FuryBeat()
+        {
+            if (clock >= furyBeatNext)
+            {
+                furyBeatAt = clock;
+                furyBeatNext = clock + Rand(0.75f, 1.7f);
+            }
+            float since = clock - furyBeatAt;
+            return since < 0.2f ? Bell(since / 0.2f) : 0f;
+        }
+
+        /// <summary>The drawing a furious mouth uses in place of a cute one: the routines name the
+        /// mouths they always did, and a furious pet makes them with its own face.</summary>
+        private static string FuryMouth(string mouth)
+        {
+            switch (mouth)
+            {
+                case "closed":
+                case "frown":
+                case "chew_a":
+                case "nom":
+                case "small":
+                    return "snarl";
+                case "smug":
+                    return "grin";
+                case "chew_b":
+                    return "gnash";
+                case "wide":
+                case "furious":
+                case "medium":
+                    return "rage";
+                default:
+                    return mouth;
+            }
+        }
 
         private void ResetLife(uint seed)
         {
@@ -1001,14 +1065,32 @@ namespace ProjectBlock.View
             presence = Damp(presence, wantPresence, 0.045f);
             Vector2 offset = new Vector2(0f, -(1f - presence) * Home.HideDepth);
 
+            // ---- the skin: Core says furious, but the cute one is kept until the fury has been SHOWN
+            float furyTarget = act.Fury ?? (State.Furious && !queue.Has("fury") ? 1f : 0f);
+            furyNow = Damp(furyNow, furyTarget, 0.05f);
+            bool furious = furyNow > 0.5f;
+
             // ---- life
             float breath = still || !LabBreath ? 0f : Breath();
             float amount = Tuning.BreathAmount * (stiff ? 0.6f : 1f);
             Vector2 squash = new Vector2(1f - amount * 0.5f * breath, 1f + amount * breath);
+            if (furious && !still && LabBreath)
+            {
+                // hunched, sharp, in jolts
+                float beat = FuryBeat();
+                squash = new Vector2(1f + 0.015f * beat, 1f - 0.015f * beat);
+            }
             float t = clock;
             float bob = still || !LabBob ? 0f : Noise(t * 0.9f, 1) * Tuning.IdleBob * px;
             float sway = still || !LabSway ? 0f : Noise(t * 0.55f, 2) * Tuning.IdleSway * (stiff ? 0.55f : 1f);
             offset.y += bob;
+
+            // a furious pet hangs forward over whatever it is looking at
+            if (furious)
+            {
+                offset.x += F * Px(2f) * furyNow;
+                sway = sway * 0.4f + F * -1.6f * furyNow;
+            }
 
             // ---- act
             offset += act.Offset;
@@ -1029,6 +1111,14 @@ namespace ProjectBlock.View
             headNow = Damp(headNow, act.Head + dragHead, 0.04f);
             tiltNow = Damp(tiltNow, act.HeadTilt + dragTilt, 0.05f);
 
+            pose.Fury = furyNow;
+            pose.SquintL = act.SquintL;
+            pose.SquintR = act.SquintR;
+            pose.MouthOffset = act.MouthOffset;
+            sitNow = Damp(sitNow, act.Sit ?? Home.Sit, 0.06f);
+            pose.Sit = sitNow;
+            tiltNow2 = Damp(tiltNow2, Home.Tilt + act.Tilt, 0.05f);
+            pose.RootTilt = tiltNow2;
             pose.Offset = offsetNow;
             pose.Rot = rotNow;
             pose.Squash = squashNow;
@@ -1083,6 +1173,13 @@ namespace ProjectBlock.View
             // point at which Lerp would switch it - so it is taken straight from the target, and
             // the rig's pop covers the swap.
             face.Mouth = target.Mouth;
+            if (furious)
+            {
+                // the same act, made with the furious face. Its mouths are already half as wide
+                // again, so a beat's own widening is taken at less than face value.
+                face.Mouth = FuryMouth(target.Mouth);
+                face.MouthScale = Mathf.Lerp(1f, face.MouthScale, 0.45f);
+            }
             pose.Face = face;
 
             // ---- eyes

@@ -172,32 +172,42 @@ function toyShade(sdf, x, y, depth, opts) {
     const nl = Math.sqrt(nx * nx + ny * ny + nz * nz); nx /= nl; ny /= nl; const nzz = nz / nl;
     const L = [-0.46, 0.58, 0.67], Ll = len3(L);
     const dot = (nx * L[0] + ny * L[1] + nzz * L[2]) / Ll;
-    const wrap = clamp01((dot + 0.4) / 1.4);
-    let col = wrap < 0.35 ? mix(C.plum, C.raspberry, wrap / 0.35)
-        : wrap < 0.68 ? mix(C.raspberry, C.dusty, (wrap - 0.35) / 0.33)
-        : mix(C.dusty, C.rose, (wrap - 0.68) / 0.32);
+    const P = opts.pal || NORMAL_PAL;
+    const wrap = clamp01((dot + P.wrap) / (1 + P.wrap));
+    let col = wrap < 0.35 ? mix(P.shadow, P.mid, wrap / 0.35)
+        : wrap < 0.68 ? mix(P.mid, P.light, (wrap - 0.35) / 0.33)
+        : mix(P.light, P.hi, (wrap - 0.68) / 0.32);
     if (opts.tint) col = mix(col, opts.tint, opts.tintAmount || 0.5);
     // the light wrapping round the shadow edge: warm, a little saturated - the gummy toy
     const rimDirShadow = clamp01(gx * 0.55 + gy * -0.83);
-    col = mix(col, C.raspberry, (1 - nzz) * (1 - nzz) * rimDirShadow * 0.55);
+    col = mix(col, P.rimShadow, (1 - nzz) * (1 - nzz) * rimDirShadow * 0.55);
     // a pale rim where the light catches the edge
     const rimDirLit = clamp01(gx * -0.62 + gy * 0.78);
-    col = mix(col, C.peach, Math.pow(1 - nzz, 3) * rimDirLit * 0.6);
+    col = mix(col, P.rimLit, Math.pow(1 - nzz, 3) * rimDirLit * P.rimLitAmount);
     // soft specular
     const hx = L[0] / Ll, hy = L[1] / Ll, hz = L[2] / Ll + 1, hl = len3([hx, hy, hz]);
     const spec = Math.pow(clamp01((nx * hx + ny * hy + nzz * hz) / hl), opts.specPow || 26) * (opts.spec || 0.42);
-    col = mix(col, C.shine, spec);
+    col = mix(col, P.shine, spec * P.specAmount);
     // contact occlusion toward the base
-    if (opts.aoFloor !== undefined) col = mix(col, C.plum, (1 - smooth(opts.aoFloor, opts.aoFloor + 0.2, y)) * 0.32);
+    if (opts.aoFloor !== undefined) col = mix(col, P.shadow, (1 - smooth(opts.aoFloor, opts.aoFloor + 0.2, y)) * P.ao);
     // plush grain, very faint
-    const g = (noise(x * 90, y * 90) - 0.5) * 0.05 + (noise(x * 14 + 7, y * 14) - 0.5) * 0.04;
+    const g = ((noise(x * 90, y * 90) - 0.5) * 0.05 + (noise(x * 14 + 7, y * 14) - 0.5) * 0.04) * P.grain;
     col = col.map(v => v * (1 + g));
     // inked inner edge - a soft darker line, not a black outline
     const ink = clamp01(1 - (-d) / (opts.inkWidth || 2.4 * PX));
-    col = mix(col, C.lineInk, ink * (opts.ink === undefined ? 0.75 : opts.ink));
+    col = mix(col, P.ink, ink * (opts.ink === undefined ? 0.75 : opts.ink));
     return [col, a];
 }
 function len3(v) { return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
+
+// The two skins. NORMAL is the cute one: warm dusty pink, plum only in the deep shade. FURY is the
+// same creature starved: dirty raspberry and bruised magenta, the light gone grey-rose, the shade
+// reaching most of the way round (wrap), a rougher grain, a heavier ink line and a deeper contact
+// shadow. It is a different PALETTE, never a red tint laid over the cute one.
+const NORMAL_PAL = { shadow: C.plum, mid: C.raspberry, light: C.dusty, hi: C.rose, rimShadow: C.raspberry, rimLit: C.peach,
+    rimLitAmount: 0.6, shine: C.shine, specAmount: 1, ink: C.lineInk, wrap: 0.4, ao: 0.32, grain: 1 };
+const FURY_PAL = { shadow: [52, 16, 42], mid: [128, 40, 80], light: [178, 78, 108], hi: [204, 118, 134], rimShadow: [104, 22, 62],
+    rimLit: [222, 160, 158], rimLitAmount: 0.4, shine: [226, 186, 182], specAmount: 0.45, ink: [58, 14, 38], wrap: 0.16, ao: 0.5, grain: 1.9 };
 
 // ------------------------------------------------------------------ the character, in units
 // Body: a pear / mochi - a wide low ellipse melted into a narrower head ellipse, the base a little
@@ -548,6 +558,300 @@ function bakeEffects() {
     return L;
 }
 
+// ------------------------------------------------------------------ FURY: the same creature, starved
+// What a furious pet is made of. None of it is the cute art recoloured: the BODY is its own
+// silhouette (hunched - the head sunk into shoulders that push out, so the upper half is the wide
+// one and the belly is pinched), the EYES are the round eyes crushed under heavy lids into slits
+// that slant down toward the nose, with a small hard pupil and a bruise under each, the BROWS are
+// thick wedges, the blush is gone and a dark TENSION SMEAR runs where it was, and the MOUTHS are
+// half as wide again with the corners dragged out and down and the teeth showing. No gore, no
+// blood, nothing realistic - an ugly hungry creature, not a horror mask.
+const furyBodySdf = (x, y) => {
+    const low = sdEllipse(x, y, 0, 0.33, 0.455, 0.335);
+    const high = sdEllipse(x, y, 0, 0.67, 0.40, 0.33);
+    const shoulders = Math.min(sdCircle(x, y, -0.34, 0.50, 0.17), sdCircle(x, y, 0.34, 0.50, 0.17));
+    const ridge = sdEllipse(x, y, 0, 0.84, 0.31, 0.15);
+    let d = smin(low, high, 0.09);
+    d = smin(d, shoulders, 0.07);
+    d = smin(d, ridge, 0.06);
+    return Math.max(d, 0.012 - y);
+};
+const furyPawSdf = (x, y) => smin(sdEllipse(x, y, 0.075, 0, 0.095, 0.078), sdCircle(x, y, 0.125, 0.055, 0.032), 0.03);
+function bakeFury() {
+    const L = [];
+    const fury = { pal: FURY_PAL, inkWidth: 3.4 * PX, ink: 0.9 };
+    L.push(layer('body_furious', 480, 480, [240, 24], (x, y) => toyShade(furyBodySdf, x, y, 0.2, Object.assign({ aoFloor: 0.03 }, fury))));
+    // the paw, clenched and with three blunt claws
+    L.push(layer('paw_furious', 136, 104, [24, 52], (x, y) => {
+        let r = toyShade(furyPawSdf, x, y, 0.055, Object.assign({ spec: 0.2 }, fury));
+        const claws = [[0.156, 0.036], [0.168, -0.002], [0.156, -0.04]];
+        for (const [cx, cy] of claws) {
+            const d = sdCapsule(x, y, cx - 0.008, cy, cx + 0.008, cy * 1.1, 0.0165);
+            const a = cover(d);
+            if (a > 0) {
+                const edge = clamp01(1 - (-d) / (2.4 * PX));
+                const col = mix(mix([214, 190, 178], [236, 220, 204], clamp01((y - cy + 0.016) / 0.03)), [84, 34, 54], edge * 0.85);
+                r = r ? [mix(r[0], col, a), Math.max(r[1], a)] : [col, a];
+            }
+        }
+        return r;
+    }));
+    L.push(layer('ear_furious', 96, 112, [48, 26], (x, y) => toyShade(earSdf, x, y, 0.05, Object.assign({ spec: 0.1 }, fury))));
+    L.push(layer('foot_furious', 120, 72, [60, 36], (x, y) => toyShade(footSdf, x, y, 0.05, Object.assign({ spec: 0.1 }, fury))));
+
+    // THE EYES. One sprite per side: the skin of the furious face over where the round eye was,
+    // the slit left open in it, a heavy lid line, and the bruise under it reaching past the eye.
+    const eyeAt = { L: [-0.155, 0.64], R: [0.155, 0.64] };
+    const furySkin = (side, x, y) => {
+        const r = toyShade(furyBodySdf, x + eyeAt[side][0], y + eyeAt[side][1], 0.2, Object.assign({ aoFloor: 0.03 }, fury));
+        return r ? r[0] : FURY_PAL.light;
+    };
+    ['L', 'R'].forEach(side => {
+        const m = side === 'R' ? -1 : 1;            // mirror: +X is toward the nose for the left eye
+        L.push(layer('eye_fury_' + side, 176, 176, [88, 88], (x, y) => {
+            const X = x * m;
+            const hole = sdEllipse(x, y, 0, 0, 0.088, 0.108);
+            // the opening: under a lid that drops toward the nose, over a lower lid pushed up
+            const top = 0.052 - X * 0.62;
+            const bottom = -0.052 + 0.02 * (1 - (X / 0.088) * (X / 0.088)) + X * 0.10;
+            const open = Math.max(hole, Math.max(y - top, bottom - y));
+            // the bruise: a soft dark crescent hanging under the eye, wider than it
+            const bag = sdEllipse(x, y, 0.012 * m, -0.085, 0.118, 0.062);
+            const bagA = clamp01(0.5 - bag / 0.05) * 0.62 * clamp01((-0.02 - y) / 0.05 + 0.6);
+            const inHole = cover(hole - 0.008);
+            let col = null, a = 0;
+            if (inHole > 0) {
+                // skin over the old eye, sunk: darker all through, darkest at the lids
+                let skin = furySkin(side, x, y);
+                skin = mix(skin, [70, 18, 50], 0.38 + 0.3 * clamp01(1 - Math.abs(y - (top + bottom) * 0.5) / 0.1));
+                col = skin; a = inHole;
+                const o = cover(open);
+                if (o > 0) {
+                    const depth = clamp01((top - y) / 0.07);
+                    col = mix(col, mix([14, 4, 14], [44, 12, 36], 1 - depth), o);
+                }
+                const upper = Math.abs(y - top) - 0.0105, lower = Math.abs(y - bottom) - 0.0055;
+                col = mix(col, [34, 6, 24], cover(Math.max(upper, hole)) * 0.95);
+                col = mix(col, [52, 12, 36], cover(Math.max(lower, hole)) * 0.8);
+                // the bruise comes up over the lower lid too
+                if (y < bottom) col = mix(col, [58, 14, 44], bagA * 0.8);
+            }
+            if (bagA > 0.004 && a < 1) {
+                col = col ? mix([70, 18, 52], col, a) : [70, 18, 52];
+                a = Math.max(a, bagA);
+            }
+            return a > 0.003 ? [col, a] : null;
+        }));
+    });
+    // the pupil: small and hard, a dull magenta ring round a black point, with a shard of light
+    L.push(layer('eye_fury_pupil', 56, 56, [28, 28], (x, y) => {
+        const d = sdCircle(x, y, 0, 0, 0.03);
+        const a = cover(d);
+        if (a <= 0) return null;
+        let col = mix([196, 56, 110], [120, 26, 70], clamp01(len(x, y) / 0.03));
+        col = mix(col, [10, 2, 10], cover(sdCircle(x, y, 0, 0, 0.0165)));
+        const shard = sdCapsule(x, y, -0.012, 0.01, -0.006, 0.017, 0.0042);
+        col = mix(col, [255, 226, 210], cover(shard) * 0.9);
+        return [col, a];
+    }));
+    // the brow: a thick wedge, heavy at the nose
+    L.push(layer('brow_furious', 128, 64, [64, 32], (x, y) => {
+        const t = clamp01((x + 0.11) / 0.22);
+        const r = lerp(0.012, 0.034, t);
+        const d = sdCapsule(x, y, -0.11, 0.0, 0.11, 0.0, 0) - r;
+        const a = cover(d);
+        return a > 0 ? [mix([46, 10, 30], [84, 24, 52], clamp01((y + r) / (2 * r))), a] : null;
+    }));
+    // where the blush was: a dark diagonal smear of tension (white, for tinting)
+    L.push(layer('cheek_tension', 128, 96, [64, 48], (x, y) => {
+        const d = sdCapsule(x, y, -0.07, 0.035, 0.07, -0.03, 0.03);
+        const a = clamp01(0.5 - d / 0.04) * 0.9;
+        return a > 0.003 ? [[255, 255, 255], a] : null;
+    }));
+
+    // THE MOUTHS, on a bigger canvas: they are half as wide again as the cute ones.
+    const fmouth = (name, fn) => L.push(layer('mouth_' + name, 192, 144, [96, 72], fn));
+    const tooth = [240, 228, 212], toothShade = [176, 150, 150];
+    // RAGE: wide open, the corners dragged out and down, two rows of blunt teeth, a heavy lower lip
+    fmouth('rage', (x, y) => {
+        const rx = 0.165, ry = 0.088;
+        let d = sdEllipse(x, y, 0, -0.004, rx, ry);
+        d = smin(d, Math.min(sdCircle(x, y, -0.158, -0.04, 0.042), sdCircle(x, y, 0.158, -0.04, 0.042)), 0.035);
+        // the chin crease under the jaw
+        const crease = sdCurve(x, y, X => -0.125 + 1.6 * X * X, -0.1, 0.1, 0.006, 18);
+        const ca = cover(crease) * 0.55;
+        const a = cover(d);
+        if (a <= 0) return ca > 0 ? [[70, 18, 46], ca] : null;
+        const depth = clamp01(-d / 0.07);
+        let col = mix([58, 12, 36], [16, 3, 14], depth);
+        // a dark tongue lying low
+        const tongue = sdEllipse(x, y, 0, -0.085, 0.085, 0.045);
+        col = mix(col, mix([120, 34, 66], [156, 58, 86], clamp01((y + 0.09) / 0.04)), cover(tongue) * 0.9);
+        const edgeTop = X => -0.004 + ry * Math.sqrt(Math.max(0, 1 - (X / rx) * (X / rx)));
+        const edgeBot = X => -0.004 - ry * Math.sqrt(Math.max(0, 1 - (X / rx) * (X / rx)));
+        for (let i = 0; i < 7; i++) {
+            const tx = (i - 3) * 0.041, ty = edgeTop(tx);
+            const len2 = (i === 1 || i === 5) ? 0.046 : 0.034;
+            const td = sdCapsule(x, y, tx, ty + 0.01, tx, ty - len2, 0.0165);
+            const ta = cover(td);
+            if (ta > 0) col = mix(col, mix(tooth, toothShade, clamp01((ty - y) / len2) * 0.7), ta);
+        }
+        for (let i = 0; i < 6; i++) {
+            const tx = (i - 2.5) * 0.044, ty = edgeBot(tx);
+            const len2 = (i === 0 || i === 5) ? 0.04 : 0.027;
+            const td = sdCapsule(x, y, tx, ty - 0.01, tx, ty + len2, 0.0155);
+            const ta = cover(td);
+            if (ta > 0) col = mix(col, mix(tooth, toothShade, clamp01((y - ty) / len2) * 0.7), ta);
+        }
+        const lip = clamp01(1 - (-d) / (5.5 * PX));
+        col = mix(col, [44, 8, 28], lip);
+        return [col, Math.max(a, ca * (1 - a))];
+    });
+    // SNARL: shut, the teeth clenched and bared, two lower tusks over the lip
+    fmouth('snarl', (x, y) => {
+        const top = X => 0.03 - 2.4 * X * X, bot = X => -0.03 - 3.0 * X * X;
+        const inside = Math.max(Math.abs(x) - 0.128, Math.max(y - top(x), bot(x) - y));
+        const a = cover(inside);
+        let col = null;
+        if (a > 0) {
+            const mid = (top(x) + bot(x)) * 0.5 - 0.004 + 0.004 * Math.sin(x * 85);
+            col = mix(tooth, toothShade, clamp01(Math.abs(y - mid) / 0.035) * 0.65);
+            // seven big teeth above and below, staggered, meeting on an uneven line
+            const gapTop = Math.abs((((x + 0.128) % 0.0366) + 0.0366) % 0.0366 - 0.0183);
+            const gapBot = Math.abs((((x + 0.146) % 0.0366) + 0.0366) % 0.0366 - 0.0183);
+            const g = y > mid ? gapTop : gapBot;
+            col = mix(col, [62, 14, 40], clamp01(1 - (g - 0.0006) / 0.0042) * 0.92);
+            col = mix(col, [40, 8, 26], cover(Math.abs(y - mid) - 0.0042) * 0.95);
+            col = mix(col, [44, 8, 28], clamp01(1 - (-inside) / (5.5 * PX)));
+        }
+        let aa = a;
+        for (const tx of [-0.094, 0.094]) {
+            const td = sdCapsule(x, y, tx, bot(tx) + 0.006, tx * 0.97, top(tx) + 0.004, 0.0145);
+            const ta = cover(td);
+            if (ta > 0) {
+                const c = mix(tooth, [84, 34, 54], clamp01(1 - (-td) / (2.6 * PX)) * 0.85);
+                col = col ? mix(col, c, ta) : c; aa = Math.max(aa, ta);
+            }
+        }
+        return aa > 0 ? [col, aa] : null;
+    });
+    // GRIN: the crooked hungry one - a band of teeth that climbs to one side
+    fmouth('grin', (x, y) => {
+        const mid = X => -0.012 + 0.9 * X * X + (X > 0 ? 2.6 * X * X : 0) + 0.05 * X;
+        const half = X => 0.021 * (1 - Math.pow(Math.abs(X) / 0.15, 3));
+        const inside = Math.max(Math.abs(x + 0.005) - 0.14, Math.abs(y - mid(x)) - half(x));
+        const a = cover(inside);
+        if (a <= 0) return null;
+        let col = mix(tooth, toothShade, clamp01((mid(x) + half(x) - y) / 0.04) * 0.6);
+        const gap = Math.abs(((x + 0.15) % 0.028) - 0.014);
+        col = mix(col, [70, 18, 44], clamp01(1 - (gap - 0.0005) / 0.0038) * 0.9);
+        const lip = clamp01(1 - (-inside) / (5 * PX));
+        col = mix(col, [44, 8, 28], lip);
+        return [col, a];
+    });
+    // BITE: rage, shut on something - for the chew
+    fmouth('gnash', (x, y) => {
+        const top = X => 0.03 - 2.0 * X * X, bot = X => -0.04 - 1.0 * X * X;
+        const inside = Math.max(Math.abs(x) - 0.12, Math.max(y - top(x), bot(x) - y));
+        const a = cover(inside);
+        if (a <= 0) return null;
+        let col = mix(tooth, toothShade, clamp01(Math.abs(y - (top(x) + bot(x)) * 0.5) / 0.03) * 0.5);
+        const gap = Math.abs(((x + 0.12) % 0.034) - 0.017);
+        col = mix(col, [60, 14, 38], clamp01(1 - (gap - 0.0005) / 0.004) * 0.9);
+        col = mix(col, [40, 8, 26], cover(Math.abs(y - (top(x) + bot(x)) * 0.5 + 0.003 * Math.sin(x * 190)) - 0.0045));
+        col = mix(col, [44, 8, 28], clamp01(1 - (-inside) / (5 * PX)));
+        return [col, a];
+    });
+    return L;
+}
+
+// ------------------------------------------------------------------ speech, the hatred's shadow, torn floor
+function bakeSpeech() {
+    const L = [];
+    const box = (hx, hy, r) => (x, y) => { const bx = Math.abs(x) - (hx - r), by = Math.abs(y) - (hy - r); return len(Math.max(bx, 0), Math.max(by, 0)) + Math.min(Math.max(bx, by), 0) - r; };
+    // NORMAL: soft and round, cream going to pale pink, a berry line
+    const soft = box(0.46, 0.2, 0.17);
+    L.push(layer('bubble', 400, 208, [200, 104], (x, y) => {
+        const sh = soft(x - 0.006, y + 0.014);
+        const sa = clamp01(0.5 - sh / 0.03) * 0.28;
+        const d = soft(x, y);
+        const a = cover(d);
+        if (a <= 0) return sa > 0.003 ? [[60, 20, 40], sa] : null;
+        let col = mix([255, 236, 236], [255, 248, 240], clamp01((y + 0.2) / 0.4));
+        col = mix(col, [150, 58, 96], clamp01(0.5 - (-d - 0.016) / PX));
+        return [col, Math.max(a, sa)];
+    }));
+    L.push(layer('bubble_tail', 80, 80, [40, 62], (x, y) => {
+        // a little curved tail pointing down; its top is open (it sits over the bubble's edge)
+        const w = 0.05 * clamp01((y + 0.13) / 0.13) + 0.004;
+        const cx = 0.03 * Math.pow(clamp01(-y / 0.13), 1.6);
+        const d = Math.max(Math.abs(x - cx) - w, Math.max(-(y + 0.13), y - 0.03));
+        const a = cover(d);
+        if (a <= 0) return null;
+        const side = Math.abs(x - cx) - (w - 0.016);
+        const line = clamp01(0.5 + side / PX) * (y < 0.0 ? 1 : 0);
+        return [mix(mix([255, 236, 236], [255, 244, 238], 0.5), [150, 58, 96], line), a];
+    }));
+    // FURIOUS: the same family gone wrong - less round, an uneven edge, dirty cream, a deep raspberry line
+    const hard = box(0.46, 0.2, 0.07);
+    const rough = (x, y) => hard(x, y) + (noise(x * 9 + 3, y * 9) - 0.5) * 0.03 + (noise(x * 23, y * 23 + 5) - 0.5) * 0.012;
+    L.push(layer('bubble_furious', 416, 224, [208, 112], (x, y) => {
+        const sh = rough(x - 0.008, y + 0.016);
+        const sa = clamp01(0.5 - sh / 0.03) * 0.34;
+        const d = rough(x, y);
+        const a = cover(d);
+        if (a <= 0) return sa > 0.003 ? [[40, 8, 26], sa] : null;
+        let col = mix([232, 208, 204], [244, 230, 218], clamp01((y + 0.2) / 0.4));
+        col = col.map(v => v * (1 + (noise(x * 60, y * 60) - 0.5) * 0.05));
+        col = mix(col, [124, 28, 64], clamp01(0.5 - (-d - 0.022) / PX));
+        return [col, Math.max(a, sa)];
+    }));
+    L.push(layer('bubble_tail_furious', 80, 96, [40, 76], (x, y) => {
+        const w = 0.046 * clamp01((y + 0.17) / 0.17) + 0.002;
+        const cx = 0.045 * Math.pow(clamp01(-y / 0.17), 1.3);
+        const d = Math.max(Math.abs(x - cx) - w, Math.max(-(y + 0.17), y - 0.03));
+        const a = cover(d);
+        if (a <= 0) return null;
+        const side = Math.abs(x - cx) - (w - 0.02);
+        const line = clamp01(0.5 + side / PX) * (y < 0.0 ? 1 : 0);
+        return [mix([238, 220, 212], [124, 28, 64], line), a];
+    }));
+    // the board's outer shadow, deepened: a soft frame that is nothing inside the board
+    L.push(layer('soft_frame', 256, 256, [128, 128], (x, y) => {
+        const d = box(0.25, 0.25, 0.02)(x, y);
+        if (d <= 0) return null;
+        const a = Math.exp(-d / 0.022) * 0.9 * clamp01(1 - (d - 0.055) / 0.012);
+        return a > 0.003 ? [[255, 255, 255], a] : null;
+    }));
+    // a short tapered streak (the fury's particles - no sparkles, no hearts)
+    L.push(layer('fx_streak', 96, 24, [48, 12], (x, y) => {
+        const t = clamp01((x + 0.11) / 0.22);
+        const d = Math.abs(y) - 0.011 * Math.sin(t * Math.PI) * (0.4 + 0.6 * t);
+        const a = cover(d) * clamp01(1 - Math.abs(x) / 0.115 * 0.2);
+        return a > 0.003 && Math.abs(x) < 0.11 ? [[255, 255, 255], a] : null;
+    }));
+    // THE BOARD'S FLOOR, TORN OUT: pieces the size of a cell that still read as cells - a rounded
+    // slab with a fractured side and a chipped corner, lit along its top-left, in greys for tinting
+    const slab = (name, chip, jag) => L.push(layer(name, 128, 128, [64, 64], (x, y) => {
+        let d = box(0.125, 0.125, 0.022)(x, y);
+        d = Math.max(d, -(len(x - chip[0], y - chip[1]) - chip[2]));
+        // one side comes away ragged
+        const rag = 0.012 * Math.sin(y * jag[0] + 1.3) + 0.008 * Math.sin(y * jag[1]) + 0.006 * Math.sin(y * jag[2] + 0.7);
+        d = Math.max(d, jag[3] * x - 0.105 - rag);
+        const a = cover(d);
+        if (a <= 0) return null;
+        let v = 150 + 40 * clamp01((y - x) / 0.25);
+        v += 70 * clamp01(1 - (-d) / 0.014) * clamp01((y - x) / 0.12 + 0.2);
+        v -= 60 * clamp01(1 - (-d) / 0.01) * clamp01((x - y) / 0.12);
+        v *= 1 + (noise(x * 110, y * 110) - 0.5) * 0.12;
+        return [[v, v, v * 1.03], a];
+    }));
+    slab('slab_a', [0.125, 0.125, 0.05], [61, 97, 143, 1]);
+    slab('slab_b', [-0.125, -0.125, 0.045], [53, 89, 131, -1]);
+    slab('slab_c', [0.125, -0.125, 0.06], [71, 103, 157, 1]);
+    return L;
+}
+
 // ------------------------------------------------------------------ preview compositor
 // Composes the rig in the same units and layout TamagotchiRig uses, so the look can be judged.
 const RIG = {
@@ -591,6 +895,7 @@ function composite(layers, pose, size) {
         }
     };
     const P = pose;
+    if (P.fury) { furyComposite(put, P); return cv; }
     put('shadow', [0, 0.01], { sx: 1.05 });
     put('foot', RIG.footL, {}); put('foot', RIG.footR, {});
     put('ear', RIG.earL, { rot: RIG.earTilt + (P.ear || 0) }); put('ear', RIG.earR, { rot: -RIG.earTilt - (P.ear || 0), flip: true });
@@ -623,7 +928,55 @@ function composite(layers, pose, size) {
     put('paw', [RIG.pawR[0] + ro[0], RIG.pawR[1] + ro[1]], { rot: ra });
     return cv;
 }
+// The furious rig, as TamagotchiRig draws it at Fury = 1: its own body, the head sunk and forward,
+// stiff ears, the slit eyes turned down toward the nose, wedge brows, the tension smear, a wide mouth.
+const FURY = { headDy: -0.035, eyeTilt: 9, eyeDy: -0.012, browY: -0.108, browRot: 27, earRot: -6, mouthDy: -0.03 };
+function furyComposite(put, P) {
+    const hd = FURY.headDy;
+    put('shadow', [0, 0.01], { sx: 1.12, alpha: 1 });
+    put('foot_furious', RIG.footL, {}); put('foot_furious', RIG.footR, {});
+    put('ear_furious', [RIG.earL[0] - 0.015, RIG.earL[1] + hd], { rot: RIG.earTilt + FURY.earRot });
+    put('ear_furious', [RIG.earR[0] + 0.015, RIG.earR[1] + hd], { rot: -RIG.earTilt - FURY.earRot, flip: true });
+    put('body_furious', [0, 0], { sx: P.bodySx || 1, sy: P.bodySy || 1 });
+    put('cheek_tension', [RIG.cheekL[0] + 0.02, RIG.cheekL[1] + hd - 0.01], { tint: [96, 20, 58], alpha: 0.62 });
+    put('cheek_tension', [RIG.cheekR[0] - 0.02, RIG.cheekR[1] + hd - 0.01], { tint: [96, 20, 58], alpha: 0.62, flip: true });
+    const look = P.look || [0, 0];
+    const eL = [RIG.eyeL[0], RIG.eyeL[1] + hd + FURY.eyeDy], eR = [RIG.eyeR[0], RIG.eyeR[1] + hd + FURY.eyeDy];
+    put('eye_fury_L', eL, { rot: -FURY.eyeTilt, sy: P.squintL || 1 });
+    put('eye_fury_R', eR, { rot: FURY.eyeTilt, sy: P.squintR || 1 });
+    put('eye_fury_pupil', [eL[0] + 0.012 + look[0], eL[1] - 0.012 + look[1]], {});
+    put('eye_fury_pupil', [eR[0] - 0.012 + look[0], eR[1] - 0.012 + look[1]], {});
+    put('brow_furious', [RIG.browL[0] + 0.01, RIG.browL[1] + hd + FURY.browY], { rot: -FURY.browRot });
+    put('brow_furious', [RIG.browR[0] - 0.01, RIG.browR[1] + hd + FURY.browY], { rot: FURY.browRot, flip: true });
+    put('mouth_' + (P.mouth || 'snarl'), [RIG.mouth[0], RIG.mouth[1] + hd + FURY.mouthDy], { sx: P.mouthS || 1, sy: P.mouthS || 1 });
+    const lo = P.pawLO || [0.03, -0.03], ro = P.pawRO || [-0.03, -0.03];
+    const la = P.pawLA !== undefined ? -P.pawLA : 22, ra = P.pawRA !== undefined ? P.pawRA : -22;
+    put('paw_furious', [RIG.pawL[0] + lo[0], RIG.pawL[1] + lo[1]], { flip: true, rot: la });
+    put('paw_furious', [RIG.pawR[0] + ro[0], RIG.pawR[1] + ro[1]], { rot: ra });
+}
+function sheet(tiles, cols, size) {
+    const rows = Math.ceil(tiles.length / cols), W = size * cols, H = size * rows, cv = canvas(W, H);
+    for (let i = 0; i < W * H; i++) { cv.d[i * 4] = 34; cv.d[i * 4 + 1] = 40; cv.d[i * 4 + 2] = 54; cv.d[i * 4 + 3] = 1; }
+    tiles.forEach((t, i) => {
+        const gx = (i % cols) * size, gy = (rows - 1 - Math.floor(i / cols)) * size;
+        for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+            const a = (y * size + x) * 4, b = ((gy + y) * W + gx + x) * 4;
+            for (let c = 0; c < 4; c++) cv.d[b + c] = t.d[a + c];
+        }
+    });
+    return cv;
+}
 function writePreview(layers, dir) {
+    // THE STATIC TEST (the corrective brief's 169): cute beside furious, no aura, no motion.
+    const fury = [
+        { name: 'normal', mouth: 'closed' },
+        { fury: true, mouth: 'snarl' },
+        { fury: true, mouth: 'rage', pawLA: 30, pawRA: 30, pawLO: [-0.03, 0.04], pawRO: [0.03, 0.04] },
+        { fury: true, mouth: 'grin', look: [-0.012, -0.004], squintR: 0.7 },
+        { fury: true, mouth: 'gnash', bodySx: 1.03, bodySy: 0.95 },
+        { name: 'old angry', mouth: 'furious', angry: true, brow: 24, browY: -0.03, browA: 1, irisScale: 0.86, catch: 0.45, glow: true, ear: -30, cheekTint: [190, 46, 92], cheekA: 0.8 }
+    ];
+    writePng(sheet(fury.map(p => composite(layers, p, 420)), 3, 420), path.join(dir, 'tama_fury.png'));
     const poses = [
         { name: 'calm', mouth: 'closed' },
         { name: 'hungry', mouth: 'nom', ear: -8, brow: -6, browY: 0.01 },
@@ -671,7 +1024,7 @@ function writePreview(layers, dir) {
 }
 
 // ------------------------------------------------------------------ main
-const all = bakeCharacter().concat(bakeEffects());
+const all = bakeCharacter().concat(bakeEffects()).concat(bakeFury()).concat(bakeSpeech());
 fs.mkdirSync(OUT, { recursive: true });
 for (const l of all) {
     const file = path.join(OUT, l.name + '.png');

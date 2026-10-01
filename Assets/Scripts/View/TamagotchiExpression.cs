@@ -126,7 +126,8 @@ namespace ProjectBlock.View
                 case PetEmotion.Furious:
                     f.Mouth = "furious"; f.Angry = 1f; f.Iris = 0.84f; f.Catch = 0.45f; f.Brow = 24f;
                     f.BrowY = -0.03f; f.BrowA = 1f; f.Cheek = TamagotchiArt.CheekBerry; f.CheekA = 0.8f;
-                    f.Ear = -14f; f.EarLift = 0.02f;
+                    // rigid, a little in: the furious skin (TamagotchiRig) draws the rest of this face
+                    f.Ear = -6f; f.EarLift = 0.012f;
                     break;
                 case PetEmotion.Smug:
                     f.Mouth = "smug"; f.Lid = 0.36f; f.LowLid = 1f; f.Brow = -4f; f.BrowA = 0.6f;
