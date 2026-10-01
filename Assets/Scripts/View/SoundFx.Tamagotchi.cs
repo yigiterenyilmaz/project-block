@@ -130,9 +130,40 @@ namespace ProjectBlock.View
                 AudioSource s = petPool[petPoolNext];
                 petPoolNext = (petPoolNext + 1) % petPool.Length;
                 s.pitch = pitch;
-                s.PlayOneShot(take.Clips[i], Mathf.Clamp01(FullVolume * 2f * masterVolume * gain * stem));
+                // the pet is the foreground of its own events: a step over the game's other effects
+                s.PlayOneShot(take.Clips[i], Mathf.Clamp01(FullVolume * 1.4f * masterVolume * gain * stem));
             }
             PetLastCue = cue + (takes.Length > 1 ? " #" + (pick + 1) + "/" + takes.Length : "");
+            PetLastLayers = string.Join(" + ", take.Layers);
+        }
+
+        /// <summary>Plays one NAMED take of a cue (the lab's "chomp A / B / C"), dry: no pitch or
+        /// level spread, so the takes themselves can be told apart.</summary>
+        public void TamagotchiTake(PetSound cue, int index)
+        {
+            PetTake[] takes = PetTakes(cue);
+            if (takes == null || takes.Length == 0)
+            {
+                return;
+            }
+            PetTake take = takes[Mathf.Abs(index) % takes.Length];
+            float volume;
+            float semis;
+            PetGroup group;
+            PetLevels(cue, out volume, out semis, out group);
+            float groupGain = group == PetGroup.Voice ? PetAudio.VoiceVolume
+                : group == PetGroup.Growl ? PetAudio.GrowlVolume
+                : group == PetGroup.Board ? PetAudio.BoardCrunchVolume
+                : group == PetGroup.Impact ? PetAudio.FuryImpactVolume : PetAudio.ChompVolume;
+            EnsurePetPool();
+            for (int i = 0; i < take.Clips.Length; i++)
+            {
+                AudioSource s = petPool[petPoolNext];
+                petPoolNext = (petPoolNext + 1) % petPool.Length;
+                s.pitch = 1f;
+                s.PlayOneShot(take.Clips[i], Mathf.Clamp01(FullVolume * 1.4f * masterVolume * volume * groupGain));
+            }
+            PetLastCue = cue + " #" + (Mathf.Abs(index) % takes.Length + 1) + "/" + takes.Length;
             PetLastLayers = string.Join(" + ", take.Layers);
         }
 

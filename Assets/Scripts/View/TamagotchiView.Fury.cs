@@ -185,6 +185,7 @@ namespace ProjectBlock.View
                 yield return FuryLegacy(fury);
                 yield break;
             }
+            yield return GroundForFury();
             SetState(PetViewState.FuriousTransition);
             SetParticleBudget(16);
             ClearDrag();

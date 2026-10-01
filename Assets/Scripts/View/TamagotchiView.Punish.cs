@@ -1505,7 +1505,7 @@ namespace ProjectBlock.View
                 Vector3 lifted = pile + new Vector2(0f, 0.3f * S);
                 float turn = i % 2 == 0 ? 1f : -1f;
                 // LIFT: off the stack, plainly
-                yield return Tween(Tuning.PileLift * quick, t =>
+                yield return Tween(Tuning.PileLift * (i == 0 ? 1f : quick), t =>
                 {
                     f.transform.position = Vector3.Lerp(pile, lifted, EaseOut(t));
                     f.transform.rotation = Quaternion.Euler(0f, 0f, 6f * turn * t);
@@ -1536,7 +1536,7 @@ namespace ProjectBlock.View
                 if (lastCard)
                 {
                     // the hero bite
-                    yield return Tween(0.11f * pace, t =>
+                    yield return Tween(0.1f * pace, t =>
                     {
                         float k = Bell(t);
                         act.Mouth = t < 0.45f ? "furious" : "chew_b";
@@ -1546,12 +1546,15 @@ namespace ProjectBlock.View
                 }
                 else
                 {
+                    // the chomp's squash runs on its own while the next card is already lifting
                     StartCoroutine(SnackSquash());
-                    yield return Wait(Mathf.Max(0f, Tuning.PileGap * quick - 0.06f));
+                    if (Tuning.PileGap > 0.1f)
+                    {
+                        yield return Wait((Tuning.PileGap - 0.1f) * quick);
+                    }
                 }
             }
             act.Head = Vector2.zero;
-            yield return Chew(null, 1, 0.09f * pace, null);
             yield return Gulp(Tuning.PileFinalGulpDuration * pace, true);
         }
 

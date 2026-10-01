@@ -112,15 +112,20 @@ namespace ProjectBlock.View
             }
             TamagotchiHome target = to;
             PetMoveStyle how = style;
+            // only a teardown can cut a move (it is not interruptible), and a teardown puts the pet
+            // somewhere of its own: the move is DROPPED, never finished behind its back
             Enqueue(PetPresentationPriority.Request, "roam: " + style, () => RoamRoutine(target, how), false, 0f,
-                delegate { FinishMove(target); });
+                DropMove);
         }
 
         private IEnumerator RoamRoutine(TamagotchiHome to, PetMoveStyle style)
         {
             LastMoveStyle = style;
             MovingTo = to;
-            DismissSpeech();
+            if (style != PetMoveStyle.Hop && style != PetMoveStyle.Scamper)
+            {
+                DismissSpeech();
+            }
             ClearDrag();
             platesAwayWanted = true;
             switch (style)
@@ -191,6 +196,47 @@ namespace ProjectBlock.View
             {
                 MovedHome(to);
             }
+        }
+
+        private void DropMove()
+        {
+            MovingTo = null;
+            travelClip = null;
+            platesAwayWanted = false;
+        }
+
+        /// <summary>
+        /// The fury is never played hanging upside down from the top edge: it drops out of sight
+        /// and comes up in a proper place first (a fifth of a second of the silence it is about to
+        /// keep anyway).
+        /// </summary>
+        private IEnumerator GroundForFury()
+        {
+            if (!Home.Inverted || HomeCandidates == null)
+            {
+                yield break;
+            }
+            TamagotchiHome to = null;
+            foreach (TamagotchiHome h in HomeCandidates(true))
+            {
+                if (!h.Inverted)
+                {
+                    to = h;
+                    break;
+                }
+            }
+            if (to == null)
+            {
+                yield break;
+            }
+            MovingTo = to;
+            float rest = RestPresence;
+            yield return Tween(0.12f, t => act.Presence = Mathf.Lerp(rest, 0f, EaseIn(t)));
+            SwitchHomeHidden(to);
+            act.Presence = 0f;
+            yield return null;
+            yield return Tween(0.14f, t => act.Presence = EaseOut(t));
+            FinishMove(to);
         }
 
         /// <summary>The home changes while nothing of the pet is visible.</summary>

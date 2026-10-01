@@ -253,8 +253,8 @@ namespace ProjectBlock.View
             float w = PlateArtWidth * PlateWorldScale;
             float h = PlateArtHeight * PlateWorldScale;
             float gap = 0.1f * S;
-            Vector2 size = Home.PlatesVertical ? new Vector2(w, plates.Count * h + gap) : new Vector2(plates.Count * w + gap, h);
-            return new Rect(Home.PlatesCentre - size * 0.5f, size);
+            Vector2 size = platesVerticalNow ? new Vector2(w, plates.Count * h + gap) : new Vector2(plates.Count * w + gap, h);
+            return new Rect(PlatesCentreNow - size * 0.5f, size);
         }
 
         private void TickSpeech()

@@ -239,9 +239,9 @@ namespace ProjectBlock.View
             float w = PlateArtWidth * PlateWorldScale;
             float h = PlateArtHeight * PlateWorldScale;
             float gap = 0.1f * S;
-            Vector2 c = Home.PlatesCentre;
+            Vector2 c = PlatesCentreNow;
             float k = i - (n - 1) * 0.5f;
-            return Home.PlatesVertical
+            return platesVerticalNow
                 ? new Vector3(c.x, c.y - k * (h + gap), 0f)
                 : new Vector3(c.x + k * (w + gap), c.y, 0f);
         }
@@ -249,7 +249,30 @@ namespace ProjectBlock.View
         /// <summary>World units per plate-art unit.</summary>
         private float PlateWorldScale
         {
-            get { return 1.3f * S * Home.PlateScale; }
+            get { return 1.3f * S * plateScaleNow; }
+        }
+
+        // where the plates are SHOWN: the home's, except that a move leaves them where they were
+        // until they have folded away, so they never fly across the screen with the pet
+        private Vector2 platesCentreNow;
+        private bool platesVerticalNow;
+        private float plateScaleNow = 1f;
+        private bool platesPlaced;
+
+        private Vector2 PlatesCentreNow
+        {
+            get { return platesPlaced ? platesCentreNow : Home.PlatesCentre; }
+        }
+
+        private void FollowHomeWithPlates()
+        {
+            if (!platesPlaced || !platesAwayWanted || platesAway >= 0.999f)
+            {
+                platesCentreNow = Home.PlatesCentre;
+                platesVerticalNow = Home.PlatesVertical;
+                plateScaleNow = Home.PlateScale;
+                platesPlaced = true;
+            }
         }
 
         private int PlateIndexOf(int slotId)
@@ -358,6 +381,7 @@ namespace ProjectBlock.View
             Color tint = PlateTint();
             // a move: the plates fold away where they are and unfold beside the pet's new place
             platesAway = Mathf.MoveTowards(platesAway, platesAwayWanted ? 1f : 0f, Dt / (platesAwayWanted ? 0.11f : 0.16f));
+            FollowHomeWithPlates();
             float away = Smooth(platesAway);
             for (int i = 0; i < plates.Count; i++)
             {
@@ -522,10 +546,10 @@ namespace ProjectBlock.View
             float alpha = Tuning.PatienceRingAlpha * (State.Stage == PetHungerStage.Impatient ? 1.3f
                 : State.Stage == PetHungerStage.Angry ? 1.45f : 1f);
             int alive = Mathf.CeilToInt((1f - Mathf.Clamp01(State.Progress)) * RingBeads - 0.001f);
-            Vector2 c = Home.PlatesCentre;
-            float pairW = Home.PlatesVertical ? PlateArtWidth * PlateWorldScale
+            Vector2 c = PlatesCentreNow;
+            float pairW = platesVerticalNow ? PlateArtWidth * PlateWorldScale
                 : plates.Count * PlateArtWidth * PlateWorldScale + 0.1f * S;
-            float pairH = Home.PlatesVertical ? plates.Count * PlateArtHeight * PlateWorldScale + 0.1f * S
+            float pairH = platesVerticalNow ? plates.Count * PlateArtHeight * PlateWorldScale + 0.1f * S
                 : PlateArtHeight * PlateWorldScale;
             float rx = pairW * 0.5f + 0.14f * S;
             float ry = pairH * 0.5f + 0.16f * S;

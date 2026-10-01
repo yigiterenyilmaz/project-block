@@ -1,4 +1,8 @@
 // PURPOSE: "Tamagotchi"'s DEVELOPMENT VIEW - the brief's 22 debug toggles and its punish view,
+// plus the corrective pass's seventeen (where it could live and where it is going, the bubble's
+// anchor, the furious face and body as numbers, the hatred field's levels and its wave's radius, the
+// audio event, its layers and the duck, the punish's phase, the bite's progress and the paths the
+// asset and the chunks took),
 // drawn by the pet itself (lines, rects, circles and text in its flight layer) so the animation lab
 // can switch each one on and see why the pet did what it did. Every number shown is Core's or the
 // view's own state; nothing here is computed for the display alone except where it is drawn.
@@ -40,6 +44,36 @@ namespace ProjectBlock.View
         public static bool ShowPresentationQueue;
         public static bool ShowPunishView;
 
+        // the corrective pass (brief 164)
+        public static bool ShowRoamingCandidates;
+        public static bool ShowChosenRoamingAnchor;
+        public static bool ShowSpeechBubbleAnchor;
+        public static bool ShowFuryFaceRig;
+        public static bool ShowFuryBodyDeform;
+        public static bool ShowHatredField;
+        public static bool ShowHatredWaveProgress;
+        public static bool ShowScreenVignette;
+        public static bool ShowChromaticEdge;
+        public static bool ShowCurrentAudioEvent;
+        public static bool ShowAudioLayerNames;
+        public static bool ShowAudioDuckAmount;
+        public static bool ShowPunishPhase;
+        public static bool ShowEatingProxy;
+        public static bool ShowBiteProgress;
+        public static bool ShowBoardChunkPath;
+        public static bool ShowAssetPullPath;
+
+        private static bool AnyCorrective
+        {
+            get
+            {
+                return ShowRoamingCandidates || ShowChosenRoamingAnchor || ShowSpeechBubbleAnchor || ShowFuryFaceRig
+                    || ShowFuryBodyDeform || ShowHatredField || ShowHatredWaveProgress || ShowScreenVignette
+                    || ShowChromaticEdge || ShowCurrentAudioEvent || ShowAudioLayerNames || ShowAudioDuckAmount
+                    || ShowPunishPhase || ShowEatingProxy || ShowBiteProgress || ShowBoardChunkPath || ShowAssetPullPath;
+            }
+        }
+
         public static bool Any
         {
             get
@@ -49,7 +83,8 @@ namespace ProjectBlock.View
                     || ShowCurrentAnimationState || ShowPunishType || ShowBoardEatCandidates || ShowBoardEatScores
                     || ShowRejectedHardLockCandidates || ShowChosenBoardEatCells || ShowJokerEatCandidateValues
                     || ShowPowerEatCandidateValues || ShowPileEatCandidates || ShowCardValueTier
-                    || ShowFoodProxyBounds || ShowBiteMask || ShowPresentationQueue || ShowPunishView;
+                    || ShowFoodProxyBounds || ShowBiteMask || ShowPresentationQueue || ShowPunishView
+                    || AnyCorrective;
             }
         }
 
@@ -61,6 +96,10 @@ namespace ProjectBlock.View
             ShowRejectedHardLockCandidates = ShowChosenBoardEatCells = ShowJokerEatCandidateValues = false;
             ShowPowerEatCandidateValues = ShowPileEatCandidates = ShowCardValueTier = false;
             ShowFoodProxyBounds = ShowBiteMask = ShowPresentationQueue = ShowPunishView = false;
+            ShowRoamingCandidates = ShowChosenRoamingAnchor = ShowSpeechBubbleAnchor = ShowFuryFaceRig = false;
+            ShowFuryBodyDeform = ShowHatredField = ShowHatredWaveProgress = ShowScreenVignette = false;
+            ShowChromaticEdge = ShowCurrentAudioEvent = ShowAudioLayerNames = ShowAudioDuckAmount = false;
+            ShowPunishPhase = ShowEatingProxy = ShowBiteProgress = ShowBoardChunkPath = ShowAssetPullPath = false;
         }
     }
 
@@ -184,6 +223,7 @@ namespace ProjectBlock.View
                 }
                 sb.Append('\n');
             }
+            DrawCorrectiveDebug(sb);
             PetRampageVisuals p = LastPunish;
             if (TamagotchiDebug.ShowPunishType)
             {
@@ -229,7 +269,7 @@ namespace ProjectBlock.View
             {
                 DrawBoardDebug(p);
             }
-            if (TamagotchiDebug.ShowFoodProxyBounds)
+            if (TamagotchiDebug.ShowFoodProxyBounds || TamagotchiDebug.ShowEatingProxy)
             {
                 foreach (TamagotchiFoodProxy f in GetComponentsInChildren<TamagotchiFoodProxy>())
                 {
@@ -249,6 +289,158 @@ namespace ProjectBlock.View
                 DebugCircle(m + new Vector2(-1.55f * tooth, -0.05f * tooth), 0.95f * tooth, pink);
                 DebugCircle(m + new Vector2(0f, -0.32f * tooth), 1.08f * tooth, pink);
                 DebugCircle(m + new Vector2(1.55f * tooth, -0.05f * tooth), 0.95f * tooth, pink);
+            }
+        }
+
+        private List<TamagotchiHome> debugCandidates;
+        private float debugCandidatesAt = -10f;
+
+        /// <summary>The corrective pass's readouts: lines into the shared text block, shapes on the
+        /// screen where the thing they are about is.</summary>
+        private void DrawCorrectiveDebug(StringBuilder sb)
+        {
+            Color cyan = new Color(0.4f, 0.95f, 1f);
+            Color green = new Color(0.45f, 1f, 0.55f);
+            Color berry = new Color(1f, 0.35f, 0.65f);
+            Color amber = new Color(1f, 0.75f, 0.3f);
+            if (TamagotchiDebug.ShowRoamingCandidates && HomeCandidates != null)
+            {
+                // asked twice a second: it is the controller's whole solver
+                if (clock - debugCandidatesAt > 0.5f || debugCandidates == null)
+                {
+                    debugCandidates = HomeCandidates(State.Furious);
+                    debugCandidatesAt = clock;
+                }
+                foreach (TamagotchiHome h in debugCandidates)
+                {
+                    bool here = h.Name == Home.Name;
+                    DebugRect(h.PetRect, here ? cyan : green);
+                    DebugText(new Vector2(h.PetRect.center.x, h.PetRect.yMax + 0.1f), h.Name + (h.Sit > 0f ? " [sit]" : "")
+                        + (h.Rest < 0.95f ? " [peek]" : ""), here ? cyan : green);
+                }
+                sb.Append("roaming: ").Append(debugCandidates.Count).Append(" safe places, turn ")
+                    .Append(Roaming.TurnsSinceMove).Append('/').Append(Roaming.NextMoveInTurns).Append('\n');
+            }
+            if (TamagotchiDebug.ShowChosenRoamingAnchor)
+            {
+                if (MovingTo != null)
+                {
+                    DebugCross(MovingTo.Base, 0.25f, amber);
+                    DebugRect(MovingTo.PetRect, amber);
+                    DebugLine(rig.BellyWorld, MovingTo.Base + HomeUp * (0.5f * S), amber);
+                }
+                sb.Append("move: ").Append(MovingTo != null ? LastMoveStyle + " -> " + MovingTo.Name : "at " + Home.Name)
+                    .Append("  (last style ").Append(LastMoveStyle).Append(")\n");
+                sb.Append("lived at: ").Append(string.Join(" > ", new List<string>(Roaming.History).ToArray())).Append('\n');
+            }
+            if (TamagotchiDebug.ShowSpeechBubbleAnchor)
+            {
+                DebugCross(rig.MouthWorld, 0.1f, berry);
+                if (SpeechShowing != null)
+                {
+                    DebugRect(SpeechRect, berry);
+                    DebugLine(SpeechRect.center, rig.MouthWorld, berry);
+                }
+                sb.Append("speech: ").Append(SpeechShowing != null ? "\"" + SpeechShowing.Replace("\n", " ") + "\"" : "-")
+                    .Append("  next remark in ").Append(Mathf.Max(0f, nextBubbleGap - (clock - lastBubbleAt)).ToString("0.0")).Append(" s\n");
+            }
+            if (TamagotchiDebug.ShowFuryFaceRig)
+            {
+                DebugCross(rig.EyeWorld(true), 0.06f, berry);
+                DebugCross(rig.EyeWorld(false), 0.06f, berry);
+                DebugCross(rig.MouthWorld, 0.08f, berry);
+                sb.Append("fury face: skin ").Append(furyNow.ToString("0.00")).Append("  mouth ").Append(face.Mouth)
+                    .Append(" x").Append(face.MouthScale.ToString("0.00")).Append("  squint L").Append(act.SquintL.ToString("0.0"))
+                    .Append(" R").Append(act.SquintR.ToString("0.0")).Append("  iris ").Append(face.Iris.ToString("0.00")).Append('\n');
+            }
+            if (TamagotchiDebug.ShowFuryBodyDeform)
+            {
+                sb.Append("fury body: squash ").Append(squashNow.x.ToString("0.000")).Append(" x ").Append(squashNow.y.ToString("0.000"))
+                    .Append("  scale ").Append(pose.Scale.ToString("0.000")).Append("  lean ").Append(rotNow.ToString("0.0"))
+                    .Append(" deg  offset ").Append((offsetNow.x / Mathf.Max(0.0001f, Home.PxToWorld)).ToString("0.0")).Append(',')
+                    .Append((offsetNow.y / Mathf.Max(0.0001f, Home.PxToWorld)).ToString("0.0")).Append(" px\n");
+            }
+            if (TamagotchiDebug.ShowHatredField)
+            {
+                DebugCross(hatredSource, 0.2f, berry);
+                sb.Append("hatred: ambient ").Append(hatredAmbient.ToString("0.00")).Append("  surge ").Append(hatredSurge.ToString("0.00"))
+                    .Append("  impact ").Append(hatredImpact.ToString("0.00")).Append("  level ").Append(HatredLevel.ToString("0.00"))
+                    .Append(hatred != null && !hatred.Supported ? "  (NO SHADER: nothing drawn)" : "").Append('\n');
+            }
+            if (TamagotchiDebug.ShowHatredWaveProgress)
+            {
+                if (hatredWave >= 0f)
+                {
+                    float reach = 0f;
+                    Rect sc = Anchors.Screen;
+                    foreach (Vector2 corner in new[] { new Vector2(sc.xMin, sc.yMin), new Vector2(sc.xMax, sc.yMin),
+                        new Vector2(sc.xMin, sc.yMax), new Vector2(sc.xMax, sc.yMax) })
+                    {
+                        reach = Mathf.Max(reach, Vector2.Distance(corner, hatredSource));
+                    }
+                    DebugCircle(hatredSource, hatredWave * reach * 1.08f, berry);
+                }
+                sb.Append("wave: ").Append(hatredWave >= 0f ? hatredWave.ToString("0.00") : "-").Append('\n');
+            }
+            if (TamagotchiDebug.ShowScreenVignette)
+            {
+                sb.Append("vignette: ").Append(HatredVignetteNow.ToString("0.000")).Append(" perceptual")
+                    .Append(Anchors.DebtVignette > 0.001f ? "  (debt already shows " + Anchors.DebtVignette.ToString("0.000") + ": the heavier wins)" : "")
+                    .Append('\n');
+            }
+            if (TamagotchiDebug.ShowChromaticEdge)
+            {
+                Rect sc = Anchors.Screen;
+                float inset = Px(Tuning.HatredChromaticOffset * 2.6f);
+                DebugRect(new Rect(sc.xMin + inset, sc.yMin + inset, sc.width - inset * 2f, sc.height - inset * 2f),
+                    new Color(1f, 0.35f, 0.65f, 0.25f + 0.75f * HatredChromaticNow));
+                sb.Append("edge split: ").Append(HatredChromaticNow.ToString("0.00")).Append("  offset ")
+                    .Append(Tuning.HatredChromaticOffset.ToString("0.0")).Append(" px\n");
+            }
+            if (TamagotchiDebug.ShowCurrentAudioEvent)
+            {
+                sb.Append("audio: ").Append(sfx != null && sfx.PetLastCue != null ? sfx.PetLastCue : LastSound.ToString())
+                    .Append("  ").Append((clock - LastSoundAt).ToString("0.00")).Append(" s ago\n");
+            }
+            if (TamagotchiDebug.ShowAudioLayerNames && sfx != null)
+            {
+                sb.Append("layers: ").Append(sfx.PetLastLayers ?? "-").Append('\n');
+            }
+            if (TamagotchiDebug.ShowAudioDuckAmount && sfx != null)
+            {
+                sb.Append("duck: ").Append((sfx.PetDuckNow * 100f).ToString("0")).Append("% of the rest of the game\n");
+            }
+            if (TamagotchiDebug.ShowPunishPhase)
+            {
+                sb.Append("phase: ").Append(Playing).Append(" / ").Append(CurrentBeat ?? "-").Append("  pace ")
+                    .Append(pace.ToString("0.00")).Append("  last punish ").Append(LastPunishSeconds.ToString("0.00")).Append(" s\n");
+            }
+            if (TamagotchiDebug.ShowBiteProgress)
+            {
+                Vector2 at = (Vector2)rig.MouthWorld + new Vector2(-0.4f * S, -0.75f * S);
+                DebugLine(at, at + new Vector2(0.8f * S, 0f), new Color(1f, 1f, 1f, 0.35f));
+                DebugLine(at, at + new Vector2(0.8f * S * Mathf.Clamp01(BiteProgressNow), 0f), berry);
+                sb.Append("bite: ").Append((BiteProgressNow * 100f).ToString("0")).Append("%\n");
+            }
+            if (TamagotchiDebug.ShowBoardChunkPath)
+            {
+                int half = DebugChunkPaths.Count / 2;
+                for (int i = 0; i < half; i++)
+                {
+                    DebugLine(DebugChunkPaths[i], DebugChunkPaths[half + i], amber);
+                    DebugCross(DebugChunkPaths[i], 0.1f, amber);
+                }
+            }
+            if (TamagotchiDebug.ShowAssetPullPath)
+            {
+                for (int i = 1; i < DebugPullPath.Count; i++)
+                {
+                    DebugLine(DebugPullPath[i - 1], DebugPullPath[i], amber);
+                }
+                if (itemRect.width > 0f && prepared != null)
+                {
+                    DebugRect(itemRect, amber);
+                }
             }
         }
 

@@ -422,12 +422,12 @@ namespace ProjectBlock.View
             public static float AssetLockDuration = 0.15f;
             public static float AssetThreatDuration = 0.12f;
             public static float AssetGrabDuration = 0.12f;
-            public static float AssetStruggleDuration = 0.19f;
-            public static float AssetPullDuration = 0.23f;
+            public static float AssetStruggleDuration = 0.18f;
+            public static float AssetPullDuration = 0.22f;
             public static float AssetFirstBite = 0.3f;         // the share of it the first bite takes
-            public static float AssetChewDuration = 0.075f;    // one chew
+            public static float AssetChewDuration = 0.065f;    // one chew
             public static float AssetSecondBite = 0.35f;
-            public static float AssetGulpDuration = 0.14f;
+            public static float AssetGulpDuration = 0.13f;
 
             // BOARD EAT (the corrective pass)
             public static float BoardTelegraph = 0.27f;
@@ -849,6 +849,8 @@ namespace ProjectBlock.View
             HideDecor();
             HideHatred();
             HideSpeech();
+            DropMove();
+            platesPlaced = false;
             mealsOnTheWay.Clear();
             HideDebug();
             ViewState = PetViewState.Hidden;
@@ -1235,7 +1237,7 @@ namespace ProjectBlock.View
             }
 
             // ---- act
-            offset += Home.Inverted ? new Vector2(act.Offset.x, -act.Offset.y) : act.Offset;
+            offset += act.Offset;
             offset += act.Travel;
             float rot = sway + act.Rot;
             squash = Vector2.Scale(squash, act.Squash);

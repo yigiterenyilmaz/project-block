@@ -9,6 +9,10 @@
 //   - SHOW NOW: the pet out of its nest with its plates up, no entrance (most scenes start there).
 //   - LIFE MASKS: breathing, bob, sway and blinks switched off one at a time, and a still pose,
 //     so "weight shift" and "breathing" can each be seen alone.
+//   - THE CORRECTIVE PASS: the first fury and the first, fast punishes (LabLegacy) for a side by
+//     side with the new ones; the fury's parts one at a time (LabFuryParts); the hatred field held
+//     at a level with its layers switched off one by one; a line said on demand; a move to a named
+//     place by a named style.
 // Nothing here is used by the game.
 
 using System.Collections;
@@ -119,6 +123,39 @@ namespace ProjectBlock.View
             RebuildPlates();
             RevealPlatesNow();
             nextIdleAt = clock + 1.5f;
+            // a scene starts clean: the skin it should be wearing, no field, no bubble, at home
+            furyNow = State.Furious && !LabLegacy ? 1f : 0f;
+            HideHatred();
+            HideSpeech();
+            lastBubbleAt = -100f;
+            DropMove();
+            platesPlaced = false;
+            ResetRoaming();
+            punishesThisFury = 0;
+        }
+
+        /// <summary>The pressure front alone, from where the pet stands.</summary>
+        public void LabHatredWave()
+        {
+            StartHatredWave();
+        }
+
+        /// <summary>The impact alone: the edge's spike and the arena's one impulse.</summary>
+        public void LabHatredImpact()
+        {
+            HatredImpact();
+        }
+
+        /// <summary>A line out of its mouth, now (a scripted bubble).</summary>
+        public void LabSpeak(string tr, string en, float hold)
+        {
+            Speak(tr, en, true, hold);
+        }
+
+        /// <summary>Counts the next punish as a repeat (the 86% pace) or as the first again.</summary>
+        public void LabSetPunishCount(int played)
+        {
+            punishesThisFury = Mathf.Max(0, played);
         }
 
         /// <summary>The pet in from nothing, with its entrance.</summary>
