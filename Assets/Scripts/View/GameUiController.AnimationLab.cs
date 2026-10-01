@@ -4512,24 +4512,6 @@ namespace ProjectBlock.View
             cardLayer.ShowRevealBeat(cards, ShellGameRevealSeconds);
         }
 
-        private List<BlockShape> AnimDemandShapes()
-        {
-            var shapes = new List<BlockShape>();
-            shapes.Add(BlockShape.FromCells(new List<GridPos>
-            {
-                new GridPos(0, 0), new GridPos(1, 0)
-            }));
-            shapes.Add(BlockShape.FromCells(new List<GridPos>
-            {
-                new GridPos(0, 0), new GridPos(0, 1), new GridPos(1, 1)
-            }));
-            shapes.Add(BlockShape.FromCells(new List<GridPos>
-            {
-                new GridPos(0, 0), new GridPos(1, 0), new GridPos(0, 1), new GridPos(1, 1)
-            }));
-            return shapes;
-        }
-
         /// <summary>Synthetic fall frames: a few cubes stepping along the arena's OWN WaterFlow,
         /// so the lab shows the gravity the round is actually under ("Kütleçekim merkezi").</summary>
         private List<IReadOnlyList<WaterMove>> AnimWaterFrames(int steps)

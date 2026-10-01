@@ -51,10 +51,20 @@ namespace ProjectBlock.View
             return tierPace * Tuning.FeedPace;
         }
 
-        /// <summary>How big a card is while the pet holds it: a little over half its body.</summary>
+        /// <summary>
+        /// How big a card is while the pet holds it. It is held UNDER the mouth, on the belly, so
+        /// what it may measure is the height from the mouth to the floor (the mouth is at 0.5 of a
+        /// body unit): a card sized by the body's WIDTH instead came out nearly as tall as the pet
+        /// and hung half of itself below the edge of the screen.
+        /// </summary>
+        private float HoldHeight
+        {
+            get { return 0.46f * S; }
+        }
+
         private float HoldScale
         {
-            get { return 0.62f * S / CardVisual.BodyWidth; }
+            get { return HoldHeight / CardVisual.BodyHeight; }
         }
 
         /// <summary>Where a held card sits: centred under the mouth with its top just below it.</summary>

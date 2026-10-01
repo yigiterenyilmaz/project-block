@@ -341,6 +341,11 @@ namespace ProjectBlock.View
                     RevealPlatesNow();
                 }
             }
+            // fed in full with no meal being shown (a loaded game): the plates are put away
+            if (State.Satisfied && !platesFolded && mealsOnTheWay.Count == 0 && !queue.Has("feed"))
+            {
+                FoldPlates();
+            }
             TickPlates();
             TickRing();
             TickAura();

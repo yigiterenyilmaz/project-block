@@ -405,6 +405,9 @@ namespace ProjectBlock.View
             pawR.transform.localRotation = Quaternion.Euler(0f, 0f, p.PawR.Angle);
             pawL.transform.localScale = new Vector3(p.PawL.Scale, p.PawL.Scale, 1f);
             pawR.transform.localScale = new Vector3(p.PawR.Scale, p.PawR.Scale, 1f);
+            // both there every frame; a reach hides the one that has become the far end of the arm
+            SetAlpha(pawL, 1f);
+            SetAlpha(pawR, 1f);
 
             float lick = Mathf.Clamp01(p.Lick);
             tongueTip.transform.localScale = new Vector3(lick, lick, 1f);

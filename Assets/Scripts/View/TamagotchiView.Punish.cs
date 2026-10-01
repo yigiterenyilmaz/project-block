@@ -780,9 +780,11 @@ namespace ProjectBlock.View
 
         private float ItemHoldScale(TamagotchiFoodProxy item)
         {
-            // held a little smaller than its panel, the width of the pet's grip
+            // held between the paws and above the floor: no wider than its grip, no taller than
+            // the mouth is high
             float w = Mathf.Max(0.001f, item.Size.x);
-            return Mathf.Min(1f, 0.62f * S / w);
+            float h = Mathf.Max(0.001f, item.Size.y);
+            return Mathf.Min(1f, Mathf.Min(0.62f * S / w, HoldHeight / h));
         }
 
         private IEnumerator ItemChomp(TamagotchiFoodProxy item, float from, float to, bool hero)
