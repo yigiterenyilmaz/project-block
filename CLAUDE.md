@@ -1434,6 +1434,39 @@ dropped that way once each.
   `_OldLook`: crisp hairlines, the whole-cube wobble, no pockets, the jittering straps), so the two
   columns differ only in language; the legacy glow view is gone. Slow motion is set per call
   (`PlaybackRate`), and the game always sets 1.
+- **"Simetri" is RECOGNISED, then PAID** (`SymmetryRewardView`, `SymmetryChunks`, `SymmetryShapes`,
+  `SymmetrySound`, `SoundFx.Symmetry.cs`, `Resources/Shaders/SymmetryGlow`, `GameUiController.Symmetry.cs`).
+  It used to be the generic arena proc. Now, only on a turn the joker actually PAID, about a second:
+  a faint detect pause over the board, the matched shape traced as MEDIUM REGIONS IN PAIRS (never one
+  outline round everything, never a cell blinking at a time), each region's partner traced a beat
+  behind it, energy from both into the axis (a half turn: arcs into the centre) and a crystalline
+  LOCK there, one pair after the next; then a short resonance, and the payout - a gold number popping
+  at the board's centre, holding, and carried to the score as a thread (`symmetryClaim` in
+  `TickScoreResponse`, which stays the score line's one writer). Both mirrors at once play two WAVES
+  (left/right, then top/bottom) and their energy collides in a cross on the centre. Occupancy only -
+  the blocks' own colours are never touched; the system is cyan/lavender and only the payout is gold.
+  No shake (one pixel of settle through `SetImpulse`), a handful of sparks, five sounds - detect, the
+  trace's "şiink", the lock's "dışşınk" (climbing a pentatonic ladder pair by pair), the resonance swell
+  and the payout's "ching" - synthesised in pure C# and baked once.
+  **THE REGIONS ARE THE WHOLE DESIGN** (`SymmetryChunks.Build`, pure C#): the matched cells' 4-connected
+  regions are split into balanced compact parts of at most `ChunkMaxCells`, a lone cell is folded into
+  an 8-neighbour, and past the budget (5 events, 3 per wave) the nearest regions merge; the order is
+  top to bottom for left/right, left to right for top/bottom, clockwise from twelve for a half turn,
+  and a cell that is its own partner (on the axis, the centre) is a SELF pair that locks on itself, last.
+  Three things were found on renders, not on paper: energy that left a region's MIDDLE scratched across
+  its own cubes, so it leaves from the region's EDGE facing the axis (`Anchors`); a pair touching the
+  axis had no beam and locked 50 ms early, on top of its neighbour - every pair now keeps the same inner
+  timing, so the locks stay evenly spaced; and two waves' outlines drawn together were a lit GRID, so the
+  first wave steps back while the second is drawn and at the resonance every region hands over to ONE
+  outline of the whole matched shape. **THE VIEW DECIDES NOTHING**: `SimetriJoker.LastSymmetry`
+  (`SymmetryVisuals`, `[NotSaved]`, a new object per payment, matched by identity) carries which
+  symmetries held, every matched pair (`GameBoard.CollectSymmetryPairs`, holes and dead cells never
+  in it) and the points MEASURED off the breakdown, so an inverted ("Terslik") round draws a muted
+  minus. It waits for the turn's lines (`SymmetryAfterLines`). The lab section has the brief's eight
+  entries plus one pair, a cross, inverted, blind, 0.5x / 0.25x, the old proc beside it, the sound
+  phrases, order-mode and chunk-size cycles and six debug overlays (pairs, chunks, order, axis, anchors,
+  type). **Not done**: the optional almost-symmetry hint and sleep-reset feedback; and it has not been
+  seen running in Unity - checked on software renders (`docs/simetri-*.png`) and measured sounds.
 - `Assets/Scripts/View/PowerFxView.cs` — activation animations for powers without a view of
   their own: Totem (carved pole out of a rune circle), İkinci Şans (a four-leaf clover whose
   plucked leaves each take their quadrant of cubes), Soğuk Füzyon, Aşırma / Yedekleme (one card
