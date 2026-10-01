@@ -278,6 +278,18 @@ namespace ProjectBlock.Core
             return progress < 0f ? 0f : progress > 1f ? 1f : progress;
         }
 
+        /// <summary>
+        /// True when the deadline is the NEXT draw: the draw pile is already empty and something
+        /// is still owed, so the refill after the next placement makes it furious. The View's
+        /// last-chance warning reads THIS rather than guessing off the progress number - "one
+        /// more card and it snaps" is a fact of the rules, not of a bar.
+        /// </summary>
+        public bool DeadlineNext(RoundEngine round)
+        {
+            return round != null && !furious && requestIds.Count > 0 && !Satisfied
+                && round.Deck.DrawPile.Count == 0 && StillOwed(round) > 0;
+        }
+
         /// <summary>The pet's mood as the rules mean it.</summary>
         public PetHungerStage Stage(RoundEngine round)
         {

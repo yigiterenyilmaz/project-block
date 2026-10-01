@@ -27,6 +27,7 @@ namespace ProjectBlock.View
             draggedCard.SetAlpha(1f);
             draggedCard = null;
             boardView.ClearPreview();
+            PetDragTick(null, null, Vector2.zero);
             if (session != null && session.CurrentRound != null)
             {
                 cardLayer.Sync(session.CurrentRound, null); // snaps the card home
@@ -346,6 +347,8 @@ namespace ProjectBlock.View
                 return;
             }
             draggedCard.SnapTo(world);
+            // "Tamagotchi" watches the card come closer (see .Tamagotchi)
+            PetDragTick(round, draggedCard, world);
             BlockCard slotCard = CardOfSlot(round, draggedCard.SlotIndex);
             BlockShape shape = slotCard != null ? round.EffectiveShape(slotCard) : null;
             GridPos hovered = default(GridPos);
@@ -381,6 +384,13 @@ namespace ProjectBlock.View
                 draggedCard = null;
                 cardLayer.ReturnToFan(released);
                 released.SetAlpha(1f);
+                PetDragTick(null, null, world);
+                // let go in "Tamagotchi"'s feed zone: a meal (or a refusal), never a placement
+                if (!overBoard && TryDropOnPet(round, released, world))
+                {
+                    boardView.ClearPreview();
+                    return;
+                }
                 // "Öteki dünya": a turn is a card in EACH world, so the main world cannot resolve
                 // one until the mirror has booked its half (the engine throws otherwise). Say so
                 // and hand the card back rather than letting the drop fail.

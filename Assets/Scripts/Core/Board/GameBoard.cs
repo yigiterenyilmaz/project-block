@@ -547,6 +547,14 @@ namespace ProjectBlock.Core
         /// clears the stragglers. Cells that are already dead, or were never playable, are
         /// skipped. Returns the cells actually eaten.
         /// </summary>
+        /// <summary>THE ANIMATION LAB ONLY: eats cells on a board of the lab's OWN exactly as a
+        /// "Tamagotchi" bite or an erosion does (MarkDead), so a lab scene ends on the state the
+        /// rules leave rather than on a drawing of it. Never called on a round's board.</summary>
+        public List<GridPos> MarkDeadOnLabBoard(IEnumerable<GridPos> targets)
+        {
+            return MarkDead(targets);
+        }
+
         internal List<GridPos> MarkDead(IEnumerable<GridPos> targets)
         {
             var eaten = new List<GridPos>();

@@ -153,6 +153,9 @@ namespace ProjectBlock.View
         public void Clear()
         {
             StopAllCoroutines(); // in-flight fx cards still self-destroy on arrival
+            petGapSlot = -1;
+            drawOverride = null;
+            discardOverride = null;
             foreach (CardVisual visual in heldVisuals.Values)
             {
                 if (visual != null)
@@ -511,13 +514,119 @@ namespace ProjectBlock.View
             }
         }
 
+        // ---- "Tamagotchi": the hole a fed card leaves, and a pile drawn as it was ----
+
+        /// <summary>The hand slot a card was FED from, kept open as a gap until the next
+        /// placement's refill (the brief: "the slot stays empty - I really am a card short").
+        /// -1 = none. Cleared by the next turn's sync and by a new round.</summary>
+        private int petGapSlot = -1;
+
+        private RoundEngine lastRound;
+        private List<BlockCard> drawOverride;
+        private List<BlockCard> discardOverride;
+
+        /// <summary>Keeps the hand's slot <paramref name="slot"/> open as an empty place in the fan
+        /// (the cards either side stay where they were). Call before the repaint after a feed.</summary>
+        public void SetPetGap(int slot)
+        {
+            petGapSlot = slot;
+        }
+
+        public void ClearPetGap()
+        {
+            petGapSlot = -1;
+        }
+
+        /// <summary>The world position of the open gap, or null when there is none.</summary>
+        public Vector2? PetGapWorld
+        {
+            get
+            {
+                if (petGapSlot < 0 || lastRound == null)
+                {
+                    return null;
+                }
+                int total = lastRound.Hand.Count + lastRound.BonusHand.Count + 1;
+                return transform.TransformPoint(SlotPosition(petGapSlot, total));
+            }
+        }
+
+        /// <summary>
+        /// PRESENTATION ONLY: draws a pile as <paramref name="shown"/> instead of what the rules
+        /// hold (null gives it back). "Tamagotchi" eats cards off a pile that Core has already
+        /// taken them from; this is what lets the stack and its count fall card by card as the
+        /// cards are actually seen going.
+        /// </summary>
+        public void SetPileOverride(bool draw, IReadOnlyList<BlockCard> shown)
+        {
+            List<BlockCard> copy = shown != null ? new List<BlockCard>(shown) : null;
+            if (draw)
+            {
+                drawOverride = copy;
+            }
+            else
+            {
+                discardOverride = copy;
+            }
+            if (lastRound != null && pilesBuilt)
+            {
+                UpdatePiles(lastRound);
+            }
+        }
+
+        /// <summary>The visible top of a pile, in world space (where a card leaving it starts).</summary>
+        public Vector2 PileTopWorld(bool draw)
+        {
+            int count = lastRound == null ? 0
+                : draw ? (drawOverride != null ? drawOverride.Count : lastRound.Deck.DrawCount)
+                : (discardOverride != null ? discardOverride.Count : lastRound.Deck.DiscardCount);
+            float fan = Mathf.Max(0, LayersFor(count) - 1) * StackOffset * UiLayout.Active.PileScale;
+            Vector2 at = (draw ? DrawPilePos : DiscardPilePos) + new Vector2(fan, fan);
+            return transform.TransformPoint(at);
+        }
+
+        /// <summary>A pile wiggling - something is about to be taken off it.</summary>
+        public void WigglePile(bool draw)
+        {
+            BuildPilesIfNeeded();
+            // the roots follow the ROLES (ApplyPileSlots puts each at its role's slot)
+            Transform root = draw ? drawPileRoot : discardPileRoot;
+            if (root != null && isActiveAndEnabled)
+            {
+                StartCoroutine(PileWiggle(root));
+            }
+        }
+
+        private static IEnumerator PileWiggle(Transform root)
+        {
+            const float duration = 0.32f;
+            float time = 0f;
+            while (time < duration)
+            {
+                time += Time.deltaTime;
+                float k = Mathf.Clamp01(time / duration);
+                root.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(k * Mathf.PI * 6f) * 3.2f * (1f - k));
+                yield return null;
+            }
+            root.localRotation = Quaternion.identity;
+        }
+
         private void SyncInternal(RoundEngine round, TurnReport report, bool animate)
         {
             BuildPilesIfNeeded();
             ApplyPileSlots(round);
+            lastRound = round;
+            // the next turn is the next placement: its refill closes the fed card's gap
+            if (report != null)
+            {
+                petGapSlot = -1;
+            }
 
             int handCount = round.Hand.Count;
             int totalCount = handCount + round.BonusHand.Count;
+            // a fed card's gap is one more slot in the row, and the cards after it move one along
+            int gap = petGapSlot >= 0 && petGapSlot <= totalCount ? petGapSlot : -1;
+            int layoutCount = gap >= 0 ? totalCount + 1 : totalCount;
             var wantedSlots = new Dictionary<int, int>();
             var bonusIds = new HashSet<int>();
             for (int i = 0; i < handCount; i++)
@@ -576,7 +685,7 @@ namespace ProjectBlock.View
             {
                 int id = entry.Key;
                 int slot = entry.Value;
-                Vector2 slotPos = SlotPosition(slot, totalCount);
+                Vector2 slotPos = SlotPosition(gap >= 0 && slot >= gap ? slot + 1 : slot, layoutCount);
                 CardVisual visual;
                 // "Şaşırtmaca" deals the HAND face down - the bonus hand is never part of the
                 // shell game - and turning one card over shows that one and only that one.
@@ -877,6 +986,7 @@ namespace ProjectBlock.View
                     total++;
                 }
             }
+            int gap = petGapSlot >= 0 && petGapSlot <= total ? petGapSlot : -1;
             foreach (CardVisual visual in heldVisuals.Values)
             {
                 if (visual == null || visual.SlotIndex < 0)
@@ -884,7 +994,8 @@ namespace ProjectBlock.View
                     continue;
                 }
                 visual.SetBaseScale(CardScale);
-                visual.SnapTo(SlotPosition(visual.SlotIndex, total));
+                int slot = gap >= 0 && visual.SlotIndex >= gap ? visual.SlotIndex + 1 : visual.SlotIndex;
+                visual.SnapTo(SlotPosition(slot, gap >= 0 ? total + 1 : total));
             }
         }
 
@@ -1263,7 +1374,10 @@ namespace ProjectBlock.View
         private void UpdatePiles(RoundEngine round)
         {
             ApplyPileSlots(round);
-            drawCountLabel.text = round.Deck.DrawCount.ToString();
+            // "Tamagotchi" eating off a pile shows it as it was and takes a card at a time
+            IReadOnlyList<BlockCard> drawShown = drawOverride ?? (IReadOnlyList<BlockCard>)round.Deck.DrawPile;
+            IReadOnlyList<BlockCard> discardShown = discardOverride ?? (IReadOnlyList<BlockCard>)round.Deck.DiscardPile;
+            drawCountLabel.text = drawShown.Count.ToString();
             // The count normally sits ON the pile's face. When the top card is shown face-up
             // ("Insider", "Baba Ocağı", "Büyüteç") that face is information, so the count steps
             // off it to just above the card's top edge - below Büyüteç's peek, which starts
@@ -1275,10 +1389,10 @@ namespace ProjectBlock.View
                 : new Vector3(0f, 0.42f, 0f);
             // The stack fans up-and-right one step per layer, so its visible middle moves as the
             // pile shrinks. The labels ride along, or they would slide off a thinning pile.
-            float fan = (LayersFor(round.Deck.DrawCount) - 1) * StackOffset * 0.5f;
+            float fan = (LayersFor(drawShown.Count) - 1) * StackOffset * 0.5f;
             drawLabelRoot.localPosition = new Vector3(fan, fan, 0f);
-            RebuildStack(drawStackRoot, round.Deck.DrawPile);
-            RebuildStack(discardStackRoot, round.Deck.DiscardPile);
+            RebuildStack(drawStackRoot, drawShown);
+            RebuildStack(discardStackRoot, discardShown);
             UpdateDiscardTop(round);
             UpdateDrawTop(round);
             UpdateRevealFans(round);
@@ -1336,7 +1450,7 @@ namespace ProjectBlock.View
 
         private void UpdateDiscardTop(RoundEngine round)
         {
-            IReadOnlyList<BlockCard> discardPile = round.Deck.DiscardPile;
+            IReadOnlyList<BlockCard> discardPile = discardOverride ?? (IReadOnlyList<BlockCard>)round.Deck.DiscardPile;
             // "Fraksiyon" hides the discard top after a swap (until the next reshuffle), and
             // "Konfüzyon"'s piles are both shuffled every turn - neither has a top worth showing.
             BlockCard top = !round.Rules.HideDiscardTop && !round.Deck.PileRolesAlternate
@@ -1356,7 +1470,7 @@ namespace ProjectBlock.View
             discardTopId = topId;
             if (top != null)
             {
-                int layers = LayersFor(round.Deck.DiscardCount);
+                int layers = LayersFor(discardPile.Count);
                 Vector2 offset = new Vector2(layers * StackOffset, layers * StackOffset);
                 discardTopVisual = CardVisual.Create(discardPileRoot, "DiscardTop",
                     top, true, false, offset, DiscardTopOrder);

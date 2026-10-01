@@ -236,6 +236,7 @@ public static partial class JokerTests
         Tamagotchi_TheDeckBiteEatsOneValuableOrSeveralWorthless();
         Tamagotchi_ValueTiersAndWeightedRequests();
         Tamagotchi_HungerRisesWithTheDeadline();
+        Tamagotchi_DeadlineNextIsTheRulesOwnLastChance();
         Tamagotchi_TheCollectionBiteEatsAJokerForGood();
         MayinEsegi_TheCubesAreUntouchedByAShuffle();
         MayinEsegi_SettingItOffCostsAndMovesIt();
@@ -8571,6 +8572,25 @@ public static partial class JokerTests
         PlayOneCard(round);
         Check(boss.LastHungerChange != null && boss.LastHungerChange.Stage == PetHungerStage.Angry,
             "and the change is reported at the turn's end");
+    }
+
+    private static void Tamagotchi_DeadlineNextIsTheRulesOwnLastChance()
+    {
+        Section("tamagotchi / the last-chance warning is the rules' own: the next draw is the deadline");
+        var session = NewBossSession(9752, 5, 1000000, "tamagotchi", 40, 1);
+        RoundEngine round = session.CurrentRound;
+        var boss = (TamagotchiBoss)round.Boss;
+        Check(!boss.DeadlineNext(round), "not at the start");
+        TamagotchiDemandInHand(round, boss);
+        while (round.Deck.DrawPile.Count > 1)
+        {
+            round.Deck.TakeCard(round.Deck.DrawPile[0].Id);
+        }
+        Check(!boss.DeadlineNext(round), "one card still to draw: not yet");
+        round.Deck.TakeCard(round.Deck.DrawPile[0].Id);
+        Check(boss.DeadlineNext(round), "the pile is dry and a card is still owed: the next draw snaps it");
+        boss.OnDrawPileEmptied(new RoundContext(session, session.Rng, round));
+        Check(boss.Furious && !boss.DeadlineNext(round), "once it has snapped there is nothing left to warn about");
     }
 
     private static void Tamagotchi_TheCollectionBiteEatsAJokerForGood()

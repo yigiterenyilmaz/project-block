@@ -544,6 +544,44 @@ namespace ProjectBlock.View
             return ViewUtil.ColorForCard(card.Id);
         }
 
+        /// <summary>
+        /// "Tamagotchi" eating this card: hands every sprite of it to the caller (who puts the
+        /// shared bite material on them) and hides its printed text, which a TextMesh cannot have
+        /// bitten - the label lives in the band across the top, the first part to go.
+        /// </summary>
+        public void ForEachSprite(Action<SpriteRenderer> act)
+        {
+            for (int i = 0; i < renderers.Count; i++)
+            {
+                if (renderers[i] != null)
+                {
+                    act(renderers[i]);
+                }
+            }
+        }
+
+        public void SetTextVisible(bool visible)
+        {
+            for (int i = 0; i < textRenderers.Count; i++)
+            {
+                if (textRenderers[i] != null)
+                {
+                    textRenderers[i].enabled = visible;
+                }
+            }
+            for (int i = 0; i < textMeshes.Count; i++)
+            {
+                if (textMeshes[i] != null)
+                {
+                    // the outline copies are children of the text; they go with it
+                    foreach (MeshRenderer outline in textMeshes[i].GetComponentsInChildren<MeshRenderer>())
+                    {
+                        outline.enabled = visible;
+                    }
+                }
+            }
+        }
+
         /// <summary>Fades the whole card (1 = opaque). Used while dragging so the board
         /// and placement preview stay visible underneath.</summary>
         public void SetAlpha(float alpha)

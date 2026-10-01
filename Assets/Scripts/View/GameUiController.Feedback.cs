@@ -149,16 +149,16 @@ namespace ProjectBlock.View
                     "Beslemek için elindeki bir kartı işaret et.");
                 return;
             }
-            if (!round.FeedPet(hit.SlotIndex))
+            // the same meal a drag into its feed zone makes: Core first, then the bites
+            if (!FeedPetFromHand(round, hit.SlotIndex, hit.transform.position, hit.transform.lossyScale.x))
             {
-                messageText.text = Loc.Pick("It does not want that card - only the ones it is showing.",
-                    "O kartı istemiyor - sadece gösterdiği kartları ister.");
-                return;
+                if (petView != null)
+                {
+                    petView.PlayWrongFood(hit.transform.position);
+                }
+                messageText.text = Loc.Pick("It does not want that card - only the ones on its plates.",
+                    "O kartı istemiyor - sadece tabaklarındaki kartları ister.");
             }
-            sfx.Vanish();
-            FloatingTextFx.Spawn(transform, world, Loc.Pick("FED", "YEDİ"),
-                new Color(0.6f, 0.9f, 0.5f), 54, 0.05f);
-            RefreshAll(null);
         }
 
         /// <summary>Explosion sound + blast feedback for one turn. Deferred until after the
@@ -2582,12 +2582,10 @@ namespace ProjectBlock.View
             // AFTER the hand is laid out, never before: the payout is drawn on the held cards and
             // they are not where the player will see them until this call has run.
             SyncMidas(round);
-            // "Tamagotchi" lays out what it is still owed, next to the hand it has to come from.
-            var pet = round.Boss as TamagotchiBoss;
-            // The CARDS it wants, dressed as what they are made of - it usually wants the valuable
-            // ones, and the player has to see that. A rampage it went on is announced here too.
-            cardLayer.ShowPetDemands(pet != null ? pet.DemandedCards(round) : null);
-            PlayPetRampage(pet);
+            // "Tamagotchi": what it asks for is on its own plates now (TamagotchiView); this
+            // repaint only covers a punish Core has just resolved, so nothing it is about to eat
+            // vanishes before it is eaten.
+            SyncPetOnRepaint(round);
             RefreshFlames(round.ContinueCount);
             UpdateHud();
             jokerBar.Refresh(session, pendingTargetJokerId);

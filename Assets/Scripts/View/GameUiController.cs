@@ -690,6 +690,9 @@ namespace ProjectBlock.View
             // "Kredi kartı": the ledger follows the books every frame - and remembers where the
             // bars' panels stand BEFORE anything this frame can take them away (see .Credit).
             TickCreditPresentation();
+            // "Tamagotchi": the same - its panels' places taken while they still stand, Core's
+            // state and reports handed to the pet (see .Tamagotchi).
+            TickTamagotchi();
             // The background is told where the board, the hand and the piles are this frame.
             TickBackground();
             SyncPilesForMarket(); // was never called: the piles printed through the market
@@ -802,7 +805,8 @@ namespace ProjectBlock.View
             }
             if (session == null || waterAnimating || supurgeAnimating
                 || (lineSwapAnim != null && lineSwapAnim.Playing)
-                || (powerFx != null && powerFx.Playing))
+                || (powerFx != null && powerFx.Playing)
+                || PetLocksInput)
             {
                 return; // input is locked while a board animation plays
             }

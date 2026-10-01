@@ -503,6 +503,40 @@ function bakeEffects() {
     chunk('chunk_a', [[-0.09, -0.07], [0.08, -0.08], [0.1, 0.03], [0.02, 0.09], [-0.08, 0.06]]);
     chunk('chunk_b', [[-0.07, -0.05], [0.06, -0.09], [0.09, 0.06], [-0.05, 0.08]]);
     chunk('chunk_c', [[-0.1, 0.0], [-0.02, -0.08], [0.09, -0.04], [0.06, 0.07], [-0.06, 0.08]]);
+    // THE BITE, as two layers that share one outline. bite_mask is the hole a bite leaves (three
+    // overlapping round tooth marks), for a SpriteMask - which cuts with an alpha threshold and so
+    // leaves a stair-stepped edge. bite_rim is the anti-aliased band that lies OVER that edge: its
+    // inner border sits a hair inside the hole and is crisp, so the stairs are never seen, and its
+    // outer border fades into the card - a bitten edge, not a stencil.
+    const biteUnion = (x, y) => Math.min(sdCircle(x, y, -0.085, -0.01, 0.085), sdCircle(x, y, 0, 0.012, 0.095),
+        sdCircle(x, y, 0.085, -0.01, 0.085));
+    L.push(layer('bite_mask', 160, 128, [80, 64], (x, y) => {
+        const a = cover(biteUnion(x, y));
+        return a > 0 ? [[255, 255, 255], a] : null;
+    }));
+    L.push(layer('bite_rim', 176, 144, [88, 72], (x, y) => {
+        const d = biteUnion(x, y);
+        const inner = clamp01(0.5 + (d + 0.004) / PX);   // crisp, just inside the hole
+        const outer = clamp01(1 - (d - 0.006) / 0.012);  // soft, into the card
+        const a = inner * outer;
+        return a > 0.003 ? [[255, 255, 255], a] : null;
+    }));
+    // a crack across a request plate the fury bit: one jagged run with a fork, white for tinting
+    L.push(layer('crack', 160, 200, [80, 100], (x, y) => {
+        const pts = [[-0.02, 0.24], [0.03, 0.12], [-0.03, 0.04], [0.04, -0.06], [-0.01, -0.15], [0.03, -0.24]];
+        let d = 1e9;
+        for (let i = 0; i < pts.length - 1; i++) d = Math.min(d, sdCapsule(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 0.006 * (1 - i / 7)));
+        d = Math.min(d, sdCapsule(x, y, -0.03, 0.04, -0.12, 0.0, 0.004), sdCapsule(x, y, 0.04, -0.06, 0.13, -0.1, 0.0035));
+        const a = cover(d);
+        return a > 0 ? [[255, 255, 255], a] : null;
+    }));
+    // a soft corner shade: dark where two cell edges meet, gone a third of a cell in (a cell about
+    // to be bitten darkens at its corners first)
+    L.push(layer('corner_shade', 96, 96, [0, 0], (x, y) => {
+        const dx = x, dy = y;
+        const a = Math.exp(-(dx * dx + dy * dy) / 0.0035) * 0.9;
+        return a > 0.003 ? [[255, 255, 255], a] : null;
+    }));
     // the bitten edge: a strip of rounded tooth scallops, white for tinting
     L.push(layer('fx_scallop', 160, 40, [80, 20], (x, y) => {
         const period = 0.05;

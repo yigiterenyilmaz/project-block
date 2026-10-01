@@ -180,9 +180,19 @@ namespace ProjectBlock.View
                 && session.CurrentRound != null
                 && session.CurrentRound.Status == RoundStatus.InProgress)
             {
+                // "Tamagotchi"'s plates name the cards they hold
+                BlockCard plateCard = petView != null ? petView.PlateCardAt(world) : null;
+                if (plateCard != null)
+                {
+                    cardLayer.SetHoveredCard(-1);
+                    petHandFocus = null;
+                    ShowDeckCardTooltip(plateCard, world);
+                    return;
+                }
                 CardVisual hit = cardLayer.CardAt(world);
                 BlockCard card = hit != null ? CardOfSlot(session.CurrentRound, hit.SlotIndex) : null;
                 cardLayer.SetHoveredCard(card != null ? card.Id : -1);
+                petHandFocus = hit != null ? (Vector2?)hit.transform.position : null;
                 if (card != null) ShowCardTooltip(card, world); else HideTooltip();
                 return;
             }
