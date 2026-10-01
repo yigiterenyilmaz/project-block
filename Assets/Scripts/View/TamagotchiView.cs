@@ -763,8 +763,12 @@ namespace ProjectBlock.View
                 {
                     return true;
                 }
+                // The game must not wait on a long cinematic: Core resolved the punish at once, and
+                // the lock only lasts until the thing has been SEEN to go (the fury, the telegraph,
+                // the bite) - it lifts while the pet is still chewing and gloating.
                 TamagotchiPresentationQueue.Item current = queue.Current;
-                if (current != null && current.Priority >= PetPresentationPriority.Punish && current.Name != "exit")
+                if (current != null && current.Priority >= PetPresentationPriority.Punish && current.Name != "exit"
+                    && !(stateOverridden && stateOverride == PetViewState.PunishRecover))
                 {
                     return true;
                 }

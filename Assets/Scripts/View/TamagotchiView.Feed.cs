@@ -104,7 +104,6 @@ namespace ProjectBlock.View
             food.InitialRect = new Rect(from - new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight) * fromScale * 0.5f,
                 new Vector2(CardVisual.BodyWidth, CardVisual.BodyHeight) * fromScale);
             float hold = HoldScale;
-            float cardH = CardVisual.BodyHeight;
             // the card turns toward the mouth's side as it comes: +-5..12 degrees
             float turnTo = Mathf.Clamp((from.x - rig.MouthWorld.x) * 4f, -12f, 12f);
             if (Mathf.Abs(turnTo) < 5f)

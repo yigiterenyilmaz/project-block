@@ -35,6 +35,7 @@ namespace ProjectBlock.View
         private int petHomeSide;            // +1 right, -1 left; 0 = not chosen yet
         private UiShape petHomeShape;
         private float petHomeAspect;
+        private Rect petHomeBoard;
         private Vector2? petHandFocus;
 
         /// <summary>True while the animation lab is driving the pet (the round's state stays out).</summary>
@@ -48,6 +49,8 @@ namespace ProjectBlock.View
                 {
                     petView = TamagotchiView.Create(transform, sfx);
                     petView.Cards = cardLayer;
+                    // a phone starts a step down: fewer particles, the same acting
+                    petView.Lod = UiLayout.Active.IsPortrait ? PetLod.Medium : PetLod.High;
                     petView.Says += line =>
                     {
                         if (messageText != null)
@@ -303,12 +306,25 @@ namespace ProjectBlock.View
         private void SolvePetHomeIfNeeded()
         {
             float aspect = Screen.height > 0 ? Screen.width / (float)Screen.height : 1.78f;
-            if (petHomeSide != 0 && petHomeShape == UiLayout.Active.Shape && Mathf.Approximately(petHomeAspect, aspect))
+            // the screen changing shape, or the ARENA changing size (an inflation, bonus ground),
+            // re-places it - on the side it already chose
+            Rect board = boardView.ArenaRect;
+            bool boardMoved = Mathf.Abs(board.width - petHomeBoard.width) > 0.05f
+                || Mathf.Abs(board.height - petHomeBoard.height) > 0.05f
+                || (board.center - petHomeBoard.center).sqrMagnitude > 0.0025f;
+            // never mid-beat: a home that moved under a bite would move the bite
+            if (petHomeSide != 0 && boardMoved && PetView.LabBusy)
+            {
+                boardMoved = false;
+            }
+            if (petHomeSide != 0 && petHomeShape == UiLayout.Active.Shape && Mathf.Approximately(petHomeAspect, aspect)
+                && !boardMoved)
             {
                 return;
             }
             petHomeShape = UiLayout.Active.Shape;
             petHomeAspect = aspect;
+            petHomeBoard = board;
             TamagotchiHome home = SolvePetHome(petHomeSide, TamagotchiView.Tuning.BodyScale);
             petHomeSide = home.Facing < 0 ? 1 : -1;
             PetView.Home = home;

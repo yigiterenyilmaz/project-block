@@ -719,7 +719,10 @@ namespace ProjectBlock.View
                 yield break;
             }
             // ---- D: THE BITES - recognisable until the last one
-            int bites = high ? Mathf.Max(3, Tuning.AssetBiteCount) : r.Tier == CardValueTier.Medium ? 2 : (joker ? 2 : 1);
+            // a valuable JOKER is three bites (35%, 35%, the last strip); a valuable POWER two; a
+            // cheap power is a quick snack, one mouthful - never a single-frame disappearance
+            int bites = joker ? (high ? Mathf.Max(3, Tuning.AssetBiteCount) : 2)
+                : (r.Tier == CardValueTier.Low ? 1 : 2);
             float[] steps = bites >= 3 ? new[] { 0.35f, 0.7f, 1f } : bites == 2 ? new[] { 0.5f, 1f } : new[] { 1f };
             float last = 0f;
             for (int i = 0; i < steps.Length; i++)
