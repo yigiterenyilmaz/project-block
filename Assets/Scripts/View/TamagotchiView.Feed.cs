@@ -319,10 +319,7 @@ namespace ProjectBlock.View
 
         private void DropFood(TamagotchiFoodProxy food)
         {
-            if (food != null)
-            {
-                Destroy(food.gameObject);
-            }
+            TamagotchiFoodProxy.Recycle(food);
             if (currentFood == food)
             {
                 currentFood = null;
@@ -467,24 +464,26 @@ namespace ProjectBlock.View
         /// <summary>Everything in flight or in the paws goes (a teardown).</summary>
         private void ClearFoodAndFlights()
         {
-            if (currentFood != null)
-            {
-                Destroy(currentFood.gameObject);
-                currentFood = null;
-            }
+            TamagotchiFoodProxy.Recycle(currentFood);
+            currentFood = null;
             for (int i = flight.childCount - 1; i >= 0; i--)
             {
                 Transform child = flight.GetChild(i);
-                if (child.GetComponent<TamagotchiFoodProxy>() != null)
-                {
-                    Destroy(child.gameObject);
-                }
+                TamagotchiFoodProxy.Recycle(child.GetComponent<TamagotchiFoodProxy>());
             }
             if (rig != null && rig.FoodRoot != null)
             {
                 for (int i = rig.FoodRoot.childCount - 1; i >= 0; i--)
                 {
-                    Destroy(rig.FoodRoot.GetChild(i).gameObject);
+                    TamagotchiFoodProxy held = rig.FoodRoot.GetChild(i).GetComponent<TamagotchiFoodProxy>();
+                    if (held != null)
+                    {
+                        TamagotchiFoodProxy.Recycle(held);
+                    }
+                    else
+                    {
+                        Destroy(rig.FoodRoot.GetChild(i).gameObject);
+                    }
                 }
             }
             ClearParticles();

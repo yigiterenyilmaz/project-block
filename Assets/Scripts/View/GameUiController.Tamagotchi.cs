@@ -476,6 +476,16 @@ namespace ProjectBlock.View
                     list.Add(Grow(r, 0.08f));
                 }
             }
+            // "Kredi kartı": the black ledger, where the one place that decides it puts it
+            if (session != null && session.Debt > 0 && cam != null)
+            {
+                LedgerPlacement ledger = SolveLedgerPlacement(layout.HalfWidth, layout.OrthoSize, false);
+                float lh = (ledger.Form == DebtLedgerView.Form.Wide ? DebtLedgerView.Style.WideHeight
+                    : ledger.Form == DebtLedgerView.Form.Stacked ? DebtLedgerView.Style.StackedHeight
+                    : DebtLedgerView.Style.LegacyHeight) * ledger.Scale;
+                float lw = ledger.Width * ledger.Scale;
+                list.Add(new Rect(ledger.Centre.x - lw * 0.5f, ledger.Centre.y - lh * 0.5f, lw, lh));
+            }
             // the lab's crowded-screen scene adds what a full run would have on its edges
             list.AddRange(petLabExtraObstacles);
             float top = layout.OrthoSize - (layout.MessageTop + layout.MessageFont + 8f) * layout.WorldPerCanvasPixel;

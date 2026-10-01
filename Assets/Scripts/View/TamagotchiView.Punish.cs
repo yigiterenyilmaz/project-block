@@ -143,11 +143,8 @@ namespace ProjectBlock.View
                 }
             }
             punishMarks.Clear();
-            if (itemProxy != null)
-            {
-                Destroy(itemProxy.gameObject);
-                itemProxy = null;
-            }
+            TamagotchiFoodProxy.Recycle(itemProxy);
+            itemProxy = null;
             if (pileOverridden && Cards != null)
             {
                 Cards.SetPileOverride(pileOverrideDraw, null);
@@ -430,10 +427,7 @@ namespace ProjectBlock.View
             });
             foreach (TamagotchiFoodProxy c in chunks)
             {
-                if (c != null)
-                {
-                    Destroy(c.gameObject);
-                }
+                TamagotchiFoodProxy.Recycle(c);
             }
             // the jaw shuts; the board shows what Core made of it
             act.Mouth = "chew_a";
@@ -729,7 +723,7 @@ namespace ProjectBlock.View
                     yield return Chew(item, 1, Tuning.ChewDuration, null);
                 }
             }
-            Destroy(item.gameObject);
+            TamagotchiFoodProxy.Recycle(item);
             itemProxy = null;
             Beat("gulp");
             yield return Gulp(Tuning.GulpDuration, high);
@@ -949,8 +943,11 @@ namespace ProjectBlock.View
             int n = r.Cards.Count;
             var flights = new List<KeyValuePair<TamagotchiFoodProxy, float>>();
             bool stream = n >= 10;
-            int heroesFront = stream ? 3 : n;
-            int heroesBack = stream ? 3 : 0;
+            // ten or more: a handful of hero cards (Tuning.PileHeroCardCount, split front and back)
+            // and one quick stream standing for the middle, the count running down under it
+            int heroes = Mathf.Clamp(Tuning.PileHeroCardCount, 2, 6);
+            int heroesFront = stream ? (heroes + 1) / 2 : n;
+            int heroesBack = stream ? heroes / 2 : 0;
             int middle = n - heroesFront - heroesBack;
             float interval = Mathf.Clamp(Tuning.PileCardInterval, 0.07f, 0.11f);
             float travel = Tuning.PileCardTravelDuration;
@@ -1004,7 +1001,7 @@ namespace ProjectBlock.View
                         // chomp: the first one is the hero, the rest lighter
                         Sound(eaten == 0 ? PetSound.PileSnack : PetSound.PileSnackLight);
                         BiteFlecks(mouth, f.Colour, eaten == 0 ? 3 : 1);
-                        Destroy(f.gameObject);
+                        TamagotchiFoodProxy.Recycle(f);
                         flights.RemoveAt(i);
                         eaten++;
                         StartCoroutine(SnackSquash());

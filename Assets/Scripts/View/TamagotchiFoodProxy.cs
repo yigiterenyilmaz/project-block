@@ -10,6 +10,12 @@
 // line; the view moves the proxy across it a chomp at a time, so the edge left behind is always the
 // scalloped edge of the last bite. Progress is 0 / 0.35 / 0.70 / 1 for a proper meal.
 //
+// POOLED where it can be. A joker, a power or a chunk of floor is a couple of sprites, so those
+// proxies are rented and handed back (Rent / Recycle) and a four-chunk bite allocates nothing
+// after the first. A CARD's face is built by CardVisual for that one card - exactly as every card
+// flight in the game builds one (the deal, the burn, the shuffle) - so that kind is made and
+// destroyed.
+//
 // Without the shader (or at LOW quality) the proxy falls back to a stepped shrink: still a
 // mouthful at a time, never a single-frame disappearance.
 // EXTENSION POINT: a new kind of food is a new factory beside ForCard / ForItem / ForChunk.
@@ -81,15 +87,105 @@ namespace ProjectBlock.View
             return proxy;
         }
 
+        // ---- the pool of sprite proxies (items and chunks)
+        private static readonly Stack<TamagotchiFoodProxy> pool = new Stack<TamagotchiFoodProxy>();
+        private static Transform poolRoot;
+        private int used;
+
+        private static TamagotchiFoodProxy Rent(Transform parent, string name)
+        {
+            TamagotchiFoodProxy proxy = null;
+            while (pool.Count > 0 && proxy == null)
+            {
+                proxy = pool.Pop();
+            }
+            if (proxy == null)
+            {
+                var go = new GameObject(name);
+                proxy = go.AddComponent<TamagotchiFoodProxy>();
+            }
+            proxy.name = name;
+            proxy.transform.SetParent(parent, false);
+            proxy.transform.localPosition = Vector3.zero;
+            proxy.transform.localRotation = Quaternion.identity;
+            proxy.transform.localScale = Vector3.one;
+            proxy.gameObject.SetActive(true);
+            proxy.BiteProgress = 0f;
+            proxy.used = 0;
+            return proxy;
+        }
+
+        /// <summary>The next sprite of a rented proxy (made the first time, reused after).</summary>
+        private SpriteRenderer Next(string name, Sprite sprite, int order)
+        {
+            SpriteRenderer r;
+            if (used < renderers.Count && renderers[used] != null)
+            {
+                r = renderers[used];
+                r.gameObject.SetActive(true);
+            }
+            else
+            {
+                r = Sprite(transform, name, sprite, order);
+                if (used < renderers.Count)
+                {
+                    renderers[used] = r;
+                }
+                else
+                {
+                    renderers.Add(r);
+                }
+            }
+            used++;
+            r.name = name;
+            r.sprite = sprite;
+            r.sortingOrder = order;
+            r.color = Color.white;
+            r.transform.localPosition = Vector3.zero;
+            r.transform.localRotation = Quaternion.identity;
+            r.transform.localScale = Vector3.one;
+            return r;
+        }
+
+        private void HideUnused()
+        {
+            for (int i = used; i < renderers.Count; i++)
+            {
+                if (renderers[i] != null)
+                {
+                    renderers[i].gameObject.SetActive(false);
+                }
+            }
+        }
+
+        /// <summary>Hands a proxy back: a sprite proxy to the pool, a card's face to nothing.</summary>
+        public static void Recycle(TamagotchiFoodProxy proxy)
+        {
+            if (proxy == null)
+            {
+                return;
+            }
+            if (proxy.card != null)
+            {
+                Destroy(proxy.gameObject);
+                return;
+            }
+            if (poolRoot == null)
+            {
+                poolRoot = new GameObject("TamagotchiProxyPool").transform;
+            }
+            proxy.gameObject.SetActive(false);
+            proxy.transform.SetParent(poolRoot, false);
+            pool.Push(proxy);
+        }
+
         /// <summary>A joker or a power: its own card frame with its own icon on it.</summary>
         public static TamagotchiFoodProxy ForItem(Transform parent, bool joker, string defId, Vector2 size,
             int order, bool bites)
         {
-            var go = new GameObject("Food_" + defId);
-            go.transform.SetParent(parent, false);
-            var proxy = go.AddComponent<TamagotchiFoodProxy>();
+            TamagotchiFoodProxy proxy = Rent(parent, "Food_" + defId);
             Sprite frame = ViewUtil.CardSprite(joker ? "card_joker" : "card_power");
-            SpriteRenderer body = Sprite(go.transform, "Frame", frame, order);
+            SpriteRenderer body = proxy.Next("Frame", frame, order);
             if (frame != null)
             {
                 Vector2 art = frame.bounds.size;
@@ -102,17 +198,16 @@ namespace ProjectBlock.View
                 body.color = joker ? new Color(0.20f, 0.22f, 0.30f) : new Color(0.28f, 0.22f, 0.16f);
                 body.transform.localScale = new Vector3(size.x, size.y, 1f);
             }
-            proxy.renderers.Add(body);
             Sprite iconSprite = joker ? ViewUtil.JokerIcon(defId) : ViewUtil.PowerIcon(defId);
             if (iconSprite != null)
             {
-                SpriteRenderer icon = Sprite(go.transform, "Icon", iconSprite, order + 1);
+                SpriteRenderer icon = proxy.Next("Icon", iconSprite, order + 1);
                 float fit = Mathf.Min(size.x * 0.72f / Mathf.Max(0.001f, iconSprite.bounds.size.x),
                     size.y * 0.55f / Mathf.Max(0.001f, iconSprite.bounds.size.y));
                 icon.transform.localScale = new Vector3(fit, fit, 1f);
                 icon.transform.localPosition = new Vector3(0f, joker ? size.y * 0.06f : 0f, 0f);
-                proxy.renderers.Add(icon);
             }
+            proxy.HideUnused();
             proxy.Size = size;
             proxy.Colour = joker ? new Color(0.93f, 0.80f, 0.45f) : new Color(0.95f, 0.62f, 0.30f);
             proxy.Prepare(bites);
@@ -123,14 +218,12 @@ namespace ProjectBlock.View
         public static TamagotchiFoodProxy ForChunk(Transform parent, Sprite sprite, Color colour, float size,
             int order, bool bites)
         {
-            var go = new GameObject("Chunk");
-            go.transform.SetParent(parent, false);
-            var proxy = go.AddComponent<TamagotchiFoodProxy>();
-            SpriteRenderer r = Sprite(go.transform, "Chunk", sprite, order);
+            TamagotchiFoodProxy proxy = Rent(parent, "Chunk");
+            SpriteRenderer r = proxy.Next("Chunk", sprite, order);
             r.color = colour;
             float art = sprite != null ? Mathf.Max(sprite.bounds.size.x, sprite.bounds.size.y) : 1f;
             r.transform.localScale = new Vector3(size / art, size / art, 1f);
-            proxy.renderers.Add(r);
+            proxy.HideUnused();
             proxy.Size = new Vector2(size, size);
             proxy.Colour = colour;
             proxy.Prepare(bites);
@@ -149,16 +242,23 @@ namespace ProjectBlock.View
 
         private void Prepare(bool bites)
         {
-            block = new MaterialPropertyBlock();
+            if (block == null)
+            {
+                block = new MaterialPropertyBlock();
+            }
             Material shared = bites ? BiteMaterial : null;
             ShaderBites = shared != null;
-            if (!ShaderBites)
-            {
-                return;
-            }
             foreach (SpriteRenderer r in renderers)
             {
-                r.sharedMaterial = shared;
+                if (r == null)
+                {
+                    continue;
+                }
+                if (ShaderBites)
+                {
+                    r.sharedMaterial = shared;
+                }
+                // a rented proxy starts whole, whatever its last meal left on it
                 r.GetPropertyBlock(block);
                 block.SetFloat(OnId, 0f);
                 block.SetFloat(SoftId, 0.004f);

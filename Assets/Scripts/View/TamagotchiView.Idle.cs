@@ -498,7 +498,8 @@ namespace ProjectBlock.View
             act.Look = new Vector2(-0.8f, 0.85f);
             yield return Tween(0.2f, t =>
             {
-                SetPaw(right, Paw(right ? -0.24f * t : 0.24f * t, 0.07f * t, Mathf.Lerp(-18f, 112f, Smooth(t))));
+                // the paw comes up under the mouth's corner - the chin, never the eye
+                SetPaw(right, Paw(right ? -0.31f * t : 0.31f * t, -0.10f * t, Mathf.Lerp(-18f, 100f, Smooth(t))));
                 act.HeadTilt = 6f * Smooth(t) * (right ? 1f : -1f);
             });
             act.Mouth = "chew_a";
@@ -507,8 +508,8 @@ namespace ProjectBlock.View
             act.Look = null;
             yield return Tween(0.2f, t =>
             {
-                SetPaw(right, Paw(right ? -0.24f * (1f - t) : 0.24f * (1f - t), 0.07f * (1f - t),
-                    Mathf.Lerp(112f, -18f, Smooth(t))));
+                SetPaw(right, Paw(right ? -0.31f * (1f - t) : 0.31f * (1f - t), -0.10f * (1f - t),
+                    Mathf.Lerp(100f, -18f, Smooth(t))));
                 act.HeadTilt = 6f * (1f - Smooth(t)) * (right ? 1f : -1f);
             });
         }
@@ -611,8 +612,8 @@ namespace ProjectBlock.View
         {
             bool right = BoardPawIsRight;
             // the paw pushes its own side's cheek; the other cheek bulges and that eye squints
-            yield return Tween(0.18f, t => SetPaw(right, Paw(right ? -0.13f * t : 0.13f * t, 0.15f * t,
-                Mathf.Lerp(-18f, 128f, Smooth(t)))));
+            yield return Tween(0.18f, t => SetPaw(right, Paw(right ? -0.06f * t : 0.06f * t, 0.02f * t,
+                Mathf.Lerp(-18f, 115f, Smooth(t)))));
             yield return Tween(0.4f, t =>
             {
                 float k = Bell(t);
@@ -630,8 +631,8 @@ namespace ProjectBlock.View
             });
             act.Mouth = null;
             act.Lid = -1f;
-            yield return Tween(0.16f, t => SetPaw(right, Paw(right ? -0.13f * (1f - t) : 0.13f * (1f - t),
-                0.15f * (1f - t), Mathf.Lerp(128f, -18f, Smooth(t)))));
+            yield return Tween(0.16f, t => SetPaw(right, Paw(right ? -0.06f * (1f - t) : 0.06f * (1f - t),
+                0.02f * (1f - t), Mathf.Lerp(115f, -18f, Smooth(t)))));
         }
 
         private IEnumerator IdleDoubleBlink(bool content)
@@ -890,7 +891,8 @@ namespace ProjectBlock.View
             yield return Tween(0.4f, t =>
             {
                 float sweep = Mathf.Sin(t * Mathf.PI);
-                SetPaw(right, Paw(right ? -0.28f * sweep : 0.28f * sweep, 0.12f * sweep, 140f * sweep - 18f * (1f - sweep)));
+                // across the mouth, from its own side to the middle
+                SetPaw(right, Paw(right ? -0.23f * sweep : 0.23f * sweep, 0.02f * sweep, 150f * sweep - 18f * (1f - sweep)));
                 act.Mouth = "chew_a";
             });
             act.Mouth = null;

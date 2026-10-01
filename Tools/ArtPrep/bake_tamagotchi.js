@@ -614,7 +614,13 @@ function composite(layers, pose, size) {
     put('brow', [RIG.browL[0], RIG.browL[1] + (P.browY || 0)], { rot: -br, alpha: P.browA === undefined ? 0.55 : P.browA });
     put('brow', [RIG.browR[0], RIG.browR[1] + (P.browY || 0)], { rot: br, flip: true, alpha: P.browA === undefined ? 0.55 : P.browA });
     put('mouth_' + (P.mouth || 'closed'), RIG.mouth, { sx: P.mouthS || 1, sy: P.mouthS || 1 });
-    put('paw', RIG.pawL, { flip: true, rot: P.pawL || 0 }); put('paw', RIG.pawR, { rot: P.pawR || 0 });
+    // the rig's convention (TamagotchiRig.Apply): an angle RAISES a paw outward, the left one is
+    // the right one mirrored, and an offset moves it from its shoulder
+    const lo = P.pawLO || [0, 0], ro = P.pawRO || [0, 0];
+    const la = P.pawLA !== undefined ? -P.pawLA : (P.pawL || 0);
+    const ra = P.pawRA !== undefined ? P.pawRA : (P.pawR || 0);
+    put('paw', [RIG.pawL[0] + lo[0], RIG.pawL[1] + lo[1]], { flip: true, rot: la });
+    put('paw', [RIG.pawR[0] + ro[0], RIG.pawR[1] + ro[1]], { rot: ra });
     return cv;
 }
 function writePreview(layers, dir) {
@@ -640,6 +646,28 @@ function writePreview(layers, dir) {
         }
     });
     writePng(cv, path.join(dir, 'tama_preview.png'));
+    // the paws as the animator poses them
+    const rig = [
+        { name: 'rest', pawLA: -18, pawRA: -18 },
+        { name: 'belly', mouth: 'closed', eyes: 'happy', pawLA: -158, pawLO: [0.13, -0.07], pawRA: -158, pawRO: [-0.13, -0.07] },
+        { name: 'wave', pawLA: -18, pawRA: 72, pawRO: [0.02, 0.1] },
+        { name: 'think', pawLA: 100, pawLO: [0.31, -0.10], pawRA: -18, look: [-0.03, 0.03] },
+        { name: 'cross', mouth: 'frown', lid: 2, brow: 10, pawLA: -165, pawLO: [0.26, -0.02], pawRA: -168, pawRO: [-0.26, 0.03] },
+        { name: 'ready', mouth: 'wide', irisScale: 1.12, pawLA: 58, pawLO: [0.05, 0.08], pawRA: 58, pawRO: [-0.05, 0.08] },
+        { name: 'clench', mouth: 'frown', angry: true, brow: 22, browA: 1, pawLA: -30, pawLO: [0.05, -0.04], pawRA: -30, pawRO: [-0.05, -0.04] },
+        { name: 'cheek', mouth: 'smug', pawLA: -18, pawRA: 115, pawRO: [-0.06, 0.02] },
+        { name: 'wipe', mouth: 'chew_a', pawLA: -18, pawRA: 150, pawRO: [-0.23, 0.02] }
+    ];
+    const t2 = rig.map(p => composite(layers, p, 300));
+    const W2 = 300 * 5, H2 = 300 * 2, cv2 = canvas(W2, H2);
+    t2.forEach((t, i) => {
+        const gx = (i % 5) * 300, gy = (1 - Math.floor(i / 5)) * 300;
+        for (let y = 0; y < 300; y++) for (let x = 0; x < 300; x++) {
+            const s2 = (y * 300 + x) * 4, d = ((gy + y) * W2 + gx + x) * 4;
+            for (let c = 0; c < 4; c++) cv2.d[d + c] = t.d[s2 + c];
+        }
+    });
+    writePng(cv2, path.join(dir, 'tama_poses.png'));
 }
 
 // ------------------------------------------------------------------ main
