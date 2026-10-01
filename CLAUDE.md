@@ -56,15 +56,24 @@ dropped that way once each.
      Read the round's bar from `RoundEngine.ScoreThreshold`, never `Config.ScoreThreshold`:
      a boss may ask for less and the two must never disagree.
      The deck taxes are the one exception: taking cards out of `OwnedCards` is their effect,
-     not a rule bend. "Tamagotchi" joins them (designer's call, 2026-09-30): it asks for two
-     specific CARDS (weighted toward the elemental ones), eats what it is fed FOR GOOD
-     (`GameSession.RemoveOwnedCardForGood`, never below the hand size) and leaves the fed slot
-     empty until the next placement refills it. Left hungry when the deck runs dry it no longer
-     loses the round - it goes BERSERK at that turn's end (after the refill, so it knows the hand
-     and the coming cards) and eats one of: board cells chosen by analysis
-     (`RoundEngine.ChooseCellsToStarve`: the bites that squeeze the held and coming cards
-     hardest, never the last way out; they go dead), a joker or power permanently, or cards off
-     the draw pile on an appetite where one elemental card is worth five plain ones.
+     not a rule bend. "Tamagotchi" joins them (designer's calls, 2026-09-30 and 2026-10-01): at
+     the start of the round it asks for two specific CARDS, WEIGHTED by what each is worth to the
+     player right now (`TamagotchiBoss.ValueScore` - elements, size, how rare the shape is, bought,
+     in hand or about to be drawn; the valuable ones likelier, never certain), eats what it is fed
+     FOR GOOD (`GameSession.RemoveOwnedCardForGood`, never below the hand size) and leaves the fed
+     slot empty until the next placement refills it. Fed in full it is SATISFIED for the rest of
+     the round. The deadline is the draw pile first running dry: left owed anything then, it goes
+     FURIOUS for the rest of the round - it asks for nothing more and TAKES, at that deadline and
+     every later one, at the turn's end (after the refill, so it knows the hand and the coming
+     cards). What it takes is never a dice roll: the PUNISH PLANNER builds five candidates - a
+     board bite (`RoundEngine.ChooseCellsToStarve`: one connected bite of empty cells that
+     squeezes the held and coming cards and the nearly-full lines hardest, never the last way out;
+     they go dead), a joker, a power, a meal off the draw pile, a meal off the discard (an appetite
+     where one HIGH card is worth five LOW ones) - scores how much each would hurt and takes the
+     cruellest, a few percent of seeded jitter keeping it from being fully predictable. Everything
+     the View shows of it is reported: `TamagotchiVisuals.cs` (requests and tiers, the feed, the
+     hunger stage and its progress, the fury, the rampage with every candidate the planner weighed)
+     and `DeadlineNext` (the next draw IS the deadline - the rules' fact, not a guess off a bar).
   2. **Silencing is central**, like the overtime gate: `RoundEngine.IsSilencedByBoss` is checked
      by `JokerInventory.IsGated` and `PowerInventory`, so nothing is added/removed and no
      permanent effect gets undone and redone. Never test for a boss inside a joker or power.
@@ -196,6 +205,99 @@ dropped that way once each.
   bloom without the core view's straight tendril. Light in these effects is always a gradient
   clipped to a cell or fading to zero at its own edge — never a flat tinted square laid over
   the grid, and never a full-board overlay.
+- **"Tamagotchi" IS A CHARACTER, NOT A RULE WITH A PICTURE** (`TamagotchiView` + partials,
+  `TamagotchiRig`, `TamagotchiExpression`, `TamagotchiArt`, `TamagotchiFoodProxy`,
+  `Resources/Shaders/TamagotchiBite`, `SoundFx.Tamagotchi`, `GameUiController.Tamagotchi.cs`).
+  The fail the whole pass is built against: "a pink pet is on screen, it asks for two cards, a
+  card dragged onto it is deleted, and if you do not feed it something random is deleted". So the
+  boss is a small pink creature that LIVES AT THE EDGE OF THE SCREEN - no panel, no window - and
+  everything it does is acted. **THE VIEW DECIDES NOTHING**: `TamagotchiRoundVisualState` is
+  built from `TamagotchiBoss` every frame and the per-event reports are matched by identity;
+  Core has always FINISHED by the time a beat starts (the fed card is out of the run, the bitten
+  cells are dead, the eaten joker is gone), so everything it eats is a PROXY and the repaint that
+  follows a punish is met by `PreparePunish` on the same frame (ground proxies over the dead
+  cells, the eaten joker standing where its panel was - every panel's place is REMEMBERED each
+  frame, the foreclosure's trick - and the pile drawn as it WAS, `CardLayerView.SetPileOverride`).
+  **THE ART IS A LAYERED ASSET** baked by `Tools/ArtPrep/bake_tamagotchi.js` (Node: this machine
+  has no Python) into `Resources/Art/Tamagotchi` - body, belly, ears, paws, feet, iris, catchlight,
+  six upper-lid closures per eye, lower and angry lids, happy crescents, brows, cheeks, eleven
+  mouths, the tongue, a stretchy arm, plates, the bite - each a PNG with its pivot in the `.meta`,
+  so a painter can overwrite any of them and the animator never notices (`TamagotchiArt` is the
+  only file that knows the names). A pear/mochi silhouette lit like every tile (upper left), plum
+  in the shade, peach in the light, a warm raspberry where the light wraps the shadow edge, a
+  faint plush grain. **THE LIDS ARE SKIN**: each is shaded with the BODY's own material sampled at
+  the eye it covers, left and right baked apart - the first pass used one flat lid colour and a
+  closing eye read as a pale disc laid over it (goggles). The ears were round cones first and read
+  as HORNS; they are short flaps wider at the tip than the root. **THE PIVOTS ARE THE ACTING**:
+  the body squashes, sways and hops about its BASE (a jelly wobbling about its middle is a blob),
+  the face is its own group, paws turn at the shoulder. **A FRAME IS THREE LAYERS** composed into
+  one `PetPose`: LIFE (breathing on an asymmetric cycle whose length and depth change every
+  breath, a 0.8 px bob and a 0.7 degree sway on VALUE NOISE rather than sines, irregular blinks -
+  "only a sine bob" is the brief's fail), MOOD (the face the hunger stage calls for, BLENDED,
+  never swapped) and ACT (the one presentation playing, cleared when it ends; springs carry the
+  body back). Two things about the blend are load-bearing: the mouth's DRAWING cannot be blended
+  and a per-frame lerp never reaches the half-way point at which `PetFace.Lerp` would switch it,
+  so it is taken straight from the target and the rig's pop hides the swap; and a paw pose is a
+  number that has to be LOOKED AT - "think" and "cheek squish" both put the paw over an eye until
+  the baker's own compositor drew them (`docs/tamagotchi-pozlar.png`).
+  **THE QUEUE** (`TamagotchiPresentationQueue`): FuriousTransition > Punish > Feed > Request >
+  Idle; any event cancels an idle, a feed is never cut, nothing random interrupts the fury, the
+  entrance can be skipped. It steps a beat and every routine it yields on a stack of its OWN, so
+  stopping a beat stops all of it whatever Unity does with nested coroutines. **THE IDLE IS
+  CHOSEN, NOT LOOPED**: every 4-6.5 s one of fourteen behaviours (peek - a real hide behind the
+  nest's edge - wave, yawn, think, request glance, lick, belly pat, cheek squish, double blink,
+  hop, card track, snack dream, edge tap, mouth-open wait), five more when satisfied, four when
+  impatient or angry, eight when furious, drawn by weight from the set the mood calls for with the
+  last three excluded, on a generator seeded from the round. **THE DRAG IS ACTED BY DISTANCE** to
+  the feed zone: far - the eyes; medium - the head and a 2 px lean; near - eyes bigger, paws up,
+  mouth a third open; in the zone - an 8-12 px reach, mouth wide, two or three excited beats, and
+  the PLATE that card answers glows. A card it does not want gets mouth shut, head aside, eyes
+  card -> plate -> card - never a red X. **THE REQUEST IS TWO PLATES, NOT A COUNTER**: each holds
+  the requested card's own face (`CardVisual`); fed, it collapses on its card and takes a bite
+  out of its corner; bitten by the fury, it cracks and drops. Behind them the PATIENCE RING, a
+  broken halo of scalloped beads that fall away with Core's progress - a confirmation, the acting
+  stays the information. **THE BITE IS A SHADER, NOT A MASK** (`TamagotchiBite`, one shared
+  material, a property block per renderer): a world-space line at the mouth with three tooth
+  marks hanging off it, everything beyond it gone, and the food is pushed ACROSS it a chomp at a
+  time (0.35 / 0.70 / 1) so what is left always wears the last bite's edge - never scaled to
+  nothing and faded. A SpriteMask was the first idea and is wrong twice: its alpha-threshold edge
+  is the "pixelated cut" the brief forbids, and it shows every masked sprite in its range, so two
+  cards in the mouth would see through each other's bites. THE LINE FACES THE WAY THE FOOD ARRIVES
+  (`BiteAngleFrom`): held under the mouth it takes what is above; for a card arcing in off a
+  pile or a chunk of the board coming from the side it takes what is BEYOND the mouth along the
+  travel - the first version always took "above", and anything arriving from above vanished in
+  mid-air. **THE HAND KEEPS THE HOLE** (`CardLayerView.SetPetGap`): the fed card's slot stays open
+  in the fan until the next placement's sync, with a bite-ring in it for 0.4 s - the cost has to be
+  seen. **THE FURY** (~0.9 s) is a blank 100 ms stare at the plate it never got, the eyes changing,
+  the body pressed to 0.94, a burst to 1.08 with one dark raspberry puff, one bite at the plates,
+  and a look at the board, the jokers, the deck and then at what the planner already chose; local
+  only - a dark-magenta vignette round the pet, never the screen. **THE BOARD BITE** covers each
+  dead cell with a ground proxy until it lands (`HoldCells` cannot hold a dead cell: it is not
+  "inside"), telegraphs with darkened corners and a dark-pink pressure on the region's OUTER edge
+  (no red square), lunges as a body proxy sorted over everything, and takes the floor away as 2-4
+  big chunks that it draws back to let be SEEN arriving; the arena settles through
+  `BoardView.SetImpulse`, never the camera. A joker or power is snatched by a stretchy paw (HIGH)
+  or a tongue tap (cheaper) and eaten in bites, recognisable to the last; a pile is a snack of
+  cards flying one by one (ten or more: `PileHeroCardCount` heroes and a stream) or one valuable
+  card lifted, shone on and eaten in two - the count falls card by card either way.
+  **WHERE IT LIVES IS SOLVED** (`SolvePetHome`) and the solver was checked by replaying it for
+  eight screens (`home_sim.js` in the session scratchpad): the bottom corner beside the draw pile
+  on a 16:9 desktop (the right preferred, the left when the bars crowd it), BEHIND the pile -
+  peeking over its top edge - on a 16:10 one, which has no corner left, and on a phone the band
+  between the board and the hand, where the hand's top is the edge it hides behind
+  (`TamagotchiRig`'s clip masks make any horizontal line an edge). The plates go side by side
+  over it, up the screen's edge, or lifted clear, whichever fits; the side is kept for the round.
+  It never covers the board, and the black ledger is one of its obstacles. Seventeen audio hooks
+  (`PetSound`) with a light take for the repeats of a snack; six haptic beats announced with no
+  layer to go to. The lab section "tamagotchi / boss" has the brief's 98 scenes, driven through
+  the game's own methods with fabricated arguments (the tiers are a scratch boss's `TierOf`, the
+  board bites happen on a lab board through `GameBoard.MarkDeadOnLabBoard`), BEAT ISOLATION
+  (`LabIsolate`: the sequence runs at 40x up to the beat and stops after it - no second copy of
+  any beat), the 22 debug toggles and the planner's candidate view, LOD and slow motion. **Not
+  done**: nothing here has been seen running in Unity - the art, the paw poses and the layout were
+  checked on renders and a replayed solver, the motion was not; the haptics have no layer; and the
+  dead cells a bite leaves are the erosion's own scar tissue (`DeadColor`), not a hole.
+  See `docs/tamagotchi-*.png`.
 - **"Yılan" (`SnakeView`)** — the one boss that is a LIVING THING on the board, and the first
   drawn from painted art rather than generated shapes. Six tiles in `Resources/Art/Blocks`
   (`snake_head`, `snake_head_open`, `snake_body`, `snake_bend`, `snake_tail`,
@@ -1780,8 +1882,9 @@ Core compiles and runs outside Unity:
 Test files compile INTO the Core assembly, so `internal` members are reachable.
 
 In-editor: open the enes scene and press Play. Drag a card onto the board to place it,
-A/C on offers, N leaves market, S redraws the hand, R restarts, F feeds the card under the
-cursor to a "Tamagotchi" boss. Joker debug keys:
+A/C on offers, N leaves market, S redraws the hand, R restarts. A "Tamagotchi" boss is fed by
+DRAGGING a card it asked for onto it (F, or R3 on a pad, feeds the card under the cursor). Joker
+debug keys:
 J grants the next joker from the registry, K sells the last one, 1-9 activate (a joker
 that needs a target then waits for a click, Esc cancels).
 
