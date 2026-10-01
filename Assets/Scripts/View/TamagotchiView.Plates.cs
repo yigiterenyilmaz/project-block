@@ -161,7 +161,8 @@ namespace ProjectBlock.View
                 p.Root = new GameObject("Plate" + i).transform;
                 p.Root.SetParent(decor, false);
                 p.Glow = SpriteOn(p.Root, "Glow", "fx_soft", 2);
-                p.Glow.transform.localScale = new Vector3(1.25f, 1.4f, 1f);
+                // wider than the plate it sits behind (the plate is 0.55 x 0.65, the glow 0.32)
+                p.Glow.transform.localScale = new Vector3(2.7f, 3.1f, 1f);
                 p.Plate = SpriteOn(p.Root, "Plate", r.Fed ? "plate_bitten" : "plate", 3);
                 if (r.Card != null && !r.Fed)
                 {
@@ -530,7 +531,8 @@ namespace ProjectBlock.View
                 at.y -= (1f - life) * 0.06f * S * (on ? 0f : 1f);
                 ring[i].transform.position = at;
                 ring[i].transform.rotation = Quaternion.Euler(0f, 0f, a * Mathf.Rad2Deg - 90f);
-                float bs = 0.55f * S;
+                // a bead is about three quarters of its place on the ring: scallops, not dots
+                float bs = 1.5f * S;
                 ring[i].transform.localScale = new Vector3(bs, bs, 1f);
                 Color col = Color.Lerp(late, full, Mathf.Clamp01((float)alive / RingBeads));
                 col = Color.Lerp(TamagotchiArt.Berry, col, life);

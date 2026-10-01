@@ -358,8 +358,14 @@ namespace ProjectBlock.View
             public static float ChewDuration = 0.10f;
             public static float GulpDuration = 0.12f;
             public static float SatisfiedDuration = 0.30f;
-            public static float HighValueFeedMultiplier = 1.18f;
+            public static float HighValueFeedMultiplier = 1.06f;
             public static float LowValueFeedMultiplier = 0.82f;
+
+            /// <summary>The brief's own start values (0.11 + 0.08 + 0.11 + 2 x 0.10 + 0.12 + 0.30,
+            /// and the later chomps on top) add up to a little over its own range for a meal
+            /// (0.65-0.90 s). They are kept as written and the whole meal is paced by this:
+            /// a normal card lands at ~0.90 s, a cheap one ~0.74, a valuable one ~1.05.</summary>
+            public static float FeedPace = 0.88f;
 
             // HUNGER
             public static float PatienceRingAlpha = 0.32f;
@@ -1068,7 +1074,11 @@ namespace ProjectBlock.View
             target.MouthScale *= act.MouthScale;
             target.Glow = Mathf.Max(target.Glow, act.Glow);
             face = PetFace.Lerp(face, target, 1f - Mathf.Pow(0.5f, Dt / 0.05f));
-            // the mouth drawing follows the target as soon as the blend passes the middle
+            // THE MOUTH'S DRAWING IS NOT BLENDED. Every other layer eases toward the target a
+            // little each frame; a drawing cannot, and a per-frame blend never reaches the half-way
+            // point at which Lerp would switch it - so it is taken straight from the target, and
+            // the rig's pop covers the swap.
+            face.Mouth = target.Mouth;
             pose.Face = face;
 
             // ---- eyes
@@ -1147,7 +1157,8 @@ namespace ProjectBlock.View
                 case PetHungerStage.Furious:
                     return Paw(left ? 0.03f : -0.03f, -0.03f, -22f, 0.92f);
                 default:
-                    return Paw(0f, 0f, 0f);
+                    // a little below level: arms held straight out are a scarecrow's
+                    return Paw(0f, 0f, -18f);
             }
         }
 

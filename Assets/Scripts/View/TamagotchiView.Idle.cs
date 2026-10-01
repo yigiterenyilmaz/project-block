@@ -361,6 +361,8 @@ namespace ProjectBlock.View
             act.Emotion = PetEmotion.Hungry;
             SetPaw(!BoardPawIsRight, BellyPaw(!BoardPawIsRight));
             yield return Tween(0.2f, t => act.Squash = new Vector2(1f - 0.03f * Bell(t), 1f + 0.01f * Bell(t)));
+            // the one line of help it gets, and it names no key: the plates and the paw said the rest
+            Say("Tabaklarındaki kartları ona sürükleyip bırak.", "Drag the cards on its plates onto it.");
             yield return Wait(0.12f);
         }
 

@@ -46,8 +46,9 @@ namespace ProjectBlock.View
 
         private float FeedMultiplier(CardValueTier tier)
         {
-            return tier == CardValueTier.High ? Tuning.HighValueFeedMultiplier
+            float tierPace = tier == CardValueTier.High ? Tuning.HighValueFeedMultiplier
                 : tier == CardValueTier.Low ? Tuning.LowValueFeedMultiplier : 1f;
+            return tierPace * Tuning.FeedPace;
         }
 
         /// <summary>How big a card is while the pet holds it: a little over half its body.</summary>
@@ -72,7 +73,8 @@ namespace ProjectBlock.View
                 return;
             }
             Vector3 mouth = rig.MouthWorld + new Vector3(0f, -0.012f * S, 0f);
-            food.SetBite(mouth, -pose.HeadTilt * Mathf.Deg2Rad * 0.5f, true);
+            // the line turns with the head (half of its tilt: the jaw is not the whole head)
+            food.SetBite(mouth, pose.HeadTilt * Mathf.Deg2Rad * 0.5f, true);
         }
 
         private IEnumerator FeedRoutine(TamagotchiFeedVisuals r, Vector2 from, float fromScale)
@@ -172,11 +174,7 @@ namespace ProjectBlock.View
             }
             // ---- E: NEXT CHOMP - further in, a little smaller
             Beat("next bite");
-            yield return Chomp(food, first, 0.7f, 0.85f, Tuning.BiteDuration * 0.85f * m, false);
-            if (!low)
-            {
-                yield return Chew(food, 1, Tuning.ChewDuration * m, null);
-            }
+            yield return Chomp(food, first, 0.7f, 0.85f, Tuning.BiteDuration * 0.5f * m, false);
             if (StopAfter("next bite"))
             {
                 yield return LabEnd(food);
@@ -185,7 +183,7 @@ namespace ProjectBlock.View
 
             // ---- the last little strip: quick
             Beat("final");
-            yield return Chomp(food, 0.7f, 1.0f, 0.55f, Tuning.BiteDuration * 0.6f * m, false);
+            yield return Chomp(food, 0.7f, 1.0f, 0.55f, Tuning.BiteDuration * 0.4f * m, false);
             DropFood(food);
             if (StopAfter("final"))
             {

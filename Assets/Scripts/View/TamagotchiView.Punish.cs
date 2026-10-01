@@ -334,8 +334,9 @@ namespace ProjectBlock.View
             act.Mouth = "furious";
             Vector2 mouthTo = BiteMouthPoint(cells, centroid);
             Vector2 restMouth = Home.Base + new Vector2(0f, 0.5f * S);
-            Vector2 travel = mouthTo - restMouth - new Vector2(0f, -0.08f * S);
-            float tilt = Mathf.Clamp(-travel.x * 3f, -18f, 18f);
+            // it grows a little as it lunges (act.Scale), which lifts its mouth by the same share
+            Vector2 travel = mouthTo - restMouth - new Vector2(0f, 0.06f * S);
+            float tilt = Mathf.Clamp(-travel.x * 2f, -10f, 10f);
             yield return Tween(Tuning.BoardLungeDuration, t =>
             {
                 float k = EaseIn(t);
@@ -403,8 +404,13 @@ namespace ProjectBlock.View
                 starts[i] = chunks[i].transform.position;
             }
             act.Mouth = "furious";
+            // It draws back a little so the pieces are SEEN coming, and it sorts under them: a
+            // chunk that slid behind its cheek would be a chunk that vanished, not one it ate.
+            SetPetOrder(FlightOrder - 1);
+            Vector2 biteOffset = act.Offset;
             yield return Tween(Tuning.BoardChunkPullDuration, t =>
             {
+                act.Offset = Vector2.Lerp(biteOffset, biteOffset * 0.76f, Smooth(Mathf.Clamp01(t / 0.45f)));
                 Vector3 mouth = rig.MouthWorld;
                 for (int i = 0; i < chunks.Count; i++)
                 {
@@ -422,7 +428,9 @@ namespace ProjectBlock.View
                     float s = Mathf.Lerp(1f, 0.45f, into);
                     c.transform.localScale = new Vector3(s, s, 1f);
                     c.transform.rotation = Quaternion.Euler(0f, 0f, (i % 2 == 0 ? 25f : -30f) * into);
-                    c.SetBite(mouth + new Vector3(0f, -0.01f * S, 0f), 0f, true);
+                    // the bite line faces the way the piece is coming from: what has passed the
+                    // mouth is gone, whichever side it arrived on
+                    c.SetBite(mouth, BiteAngleFrom(starts[i], mouth), true);
                 }
             });
             foreach (TamagotchiFoodProxy c in chunks)
@@ -498,6 +506,20 @@ namespace ProjectBlock.View
             Beat("aftermath");
             StartCoroutine(BoardSettle(Tuning.BoardAftermathDuration));
             yield return PostAttack(PetPunishKind.Board);
+        }
+
+        /// <summary>The bite line's angle for food arriving at the mouth from
+        /// <paramref name="from"/>: the shader takes everything on the line's far side, so the far
+        /// side has to be the one BEYOND the mouth along the way the food is travelling.</summary>
+        private static float BiteAngleFrom(Vector3 from, Vector3 mouth)
+        {
+            Vector2 dir = (Vector2)(mouth - from);
+            if (dir.sqrMagnitude < 0.000001f)
+            {
+                return 0f;
+            }
+            dir.Normalize();
+            return Mathf.Atan2(-dir.x, dir.y);
         }
 
         private List<TamagotchiFoodProxy> MakeChunks(List<GridPos> cells, Vector2 centroid, Color ground)
@@ -1015,8 +1037,9 @@ namespace ProjectBlock.View
                     float s = Mathf.Lerp(pileScale, HoldScale * 0.55f, k);
                     FoodScale(f, s, s);
                     f.transform.rotation = Quaternion.Euler(0f, 0f, 30f * k * (i % 2 == 0 ? 1f : -1f));
-                    // identifiable only briefly: bitten at the mouth line as it arrives
-                    f.SetBite(mouth + new Vector3(0f, -0.04f * S, 0f), 0f, u > 0.6f);
+                    // identifiable only briefly: bitten as it crosses the mouth, from whichever
+                    // side its arc brings it in
+                    f.SetBite(mouth, BiteAngleFrom(f.transform.position, mouth), u > 0.5f);
                 }
                 act.LookAt = flights.Count > 0 ? flights[0].Key.transform.position : rig.MouthWorld;
                 yield return null;

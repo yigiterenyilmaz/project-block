@@ -76,7 +76,12 @@ namespace ProjectBlock.View
         /// seen). Part of the board-animation lock in Update.</summary>
         private bool PetLocksInput
         {
-            get { return petView != null && !petLabDriving && petView.LocksInput; }
+            get
+            {
+                // only a round in play waits for the pet: a market must never be held up by it
+                return petView != null && !petLabDriving && session != null
+                    && session.Phase == GamePhase.Round && petView.LocksInput;
+            }
         }
 
         // ================================================================== every frame
