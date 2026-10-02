@@ -52,6 +52,7 @@ namespace ProjectBlock.Core
             Register(() => new KutlecekimMerkeziPower());
             Register(() => new PowerbankPower());
             Register(() => new RuzgarPower());
+            Register(() => new CigPower());
         }
 
         /// <summary>All known powers, in design order.</summary>

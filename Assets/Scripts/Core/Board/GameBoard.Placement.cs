@@ -227,7 +227,7 @@ namespace ProjectBlock.Core
                     if (occupant.HasValue && occupant.Value.Kind == CubeKind.Void)
                     {
                         // "Kara Delik": the arriving cube falls in and the hole stays.
-                        LastPlacementSwallows.Add(new DestroyedCube(pos, new Cube(kind, card.Id)));
+                        LastPlacementSwallows.Add(new DestroyedCube(pos, Stamp(kind, card.Id)));
                         continue;
                     }
                     if (occupant.HasValue && occupant.Value.Kind == CubeKind.Mine)
@@ -242,15 +242,22 @@ namespace ProjectBlock.Core
                     {
                         OccupiedCount++; // replaced transparents were already counted
                     }
-                    cells[pos.X - MinX, pos.Y - MinY] = new Cube(kind, card.Id);
+                    cells[pos.X - MinX, pos.Y - MinY] = Stamp(kind, card.Id);
                 }
                 else
                 {
-                    outsideCubes[pos] = new Cube(kind, card.Id);
+                    outsideCubes[pos] = Stamp(kind, card.Id);
                 }
                 placed.Add(pos);
             }
             return placed;
+        }
+
+        /// <summary>The cube a card lays for a kind. Snow is born with its numbers (one layer, the
+        /// full melt time); every other kind is the bare cube it always was.</summary>
+        private static Cube Stamp(CubeKind kind, int cardId)
+        {
+            return kind == CubeKind.Snow ? Cube.FreshSnow(cardId) : new Cube(kind, cardId);
         }
     }
 }

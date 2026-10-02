@@ -4,7 +4,8 @@
 // IMPLEMENTED kinds: Normal, Fire (chain explosion, handled in GameBoard), Obsidian,
 // Gold (both sweep-exempt + indestructible; gold also pays a per-turn bonus, handled
 // in RoundEngine, and LOCKS its row and column shut while it stands - GameBoard.RowIsGoldLocked),
-// PiggyBank (accrues value, pays on destruction - RoundEngine).
+// PiggyBank (accrues value, pays on destruction - RoundEngine), Snow (falls like water, melts,
+// merges into heaps that gain power; its three numbers ride on the cube - GameBoard.Snow).
 // Water and Transparent exist in the enum but their behaviors are NOT implemented yet;
 // keep them out of MarketConfig.ElementPool until they are.
 
@@ -59,7 +60,15 @@ namespace ProjectBlock.Core
         /// it does not block a clean sweep either. The ONLY thing that shortens the snake is the
         /// boss's own rule (one segment off the tail per exploding line it stood in), which goes
         /// through the forced destruction path.</summary>
-        Snake = 14
+        Snake = 14,
+
+        /// <summary>SNOW (the "Kar" block, GameBoard.Snow). An ordinary destructible cube for
+        /// lines and sweeps, but it falls like water, MELTS when its timer runs out, and snow that
+        /// comes to rest on snow is absorbed by the heap under it, which gains POWER. The "Çığ"
+        /// power sends a heap down as many rows as it has power. Its three numbers travel on the
+        /// cube itself (Cube.SnowPower / SnowMelt / SnowPacked), so every move, copy and resize
+        /// carries them.</summary>
+        Snow = 15
     }
 
     /// <summary>A cube occupying one board cell.</summary>
@@ -81,17 +90,51 @@ namespace ProjectBlock.Core
         {
         }
 
+        /// <summary>SNOW only (0 on every other cube): how many layers of snow this heap holds.
+        /// One for a fresh cube; a heap that absorbs another takes its power on top.</summary>
+        public readonly int SnowPower;
+
+        /// <summary>SNOW only: turns left before it melts. Counted down at the top of every turn
+        /// (GameBoard.TickSnowMelt).</summary>
+        public readonly int SnowMelt;
+
+        /// <summary>SNOW only: laid by an avalanche. Two packed cubes never merge with each
+        /// other, so the layers an avalanche leaves stay stacked instead of collapsing back into
+        /// one heap.</summary>
+        public readonly bool SnowPacked;
+
         public Cube(CubeKind kind, int sourceCardId, bool isProtected)
+            : this(kind, sourceCardId, isProtected, 0, 0, false)
+        {
+        }
+
+        public Cube(CubeKind kind, int sourceCardId, bool isProtected, int snowPower, int snowMelt,
+            bool snowPacked)
         {
             Kind = kind;
             SourceCardId = sourceCardId;
             Protected = isProtected;
+            SnowPower = snowPower;
+            SnowMelt = snowMelt;
+            SnowPacked = snowPacked;
         }
 
         /// <summary>A copy of this cube marked as a Parazit host.</summary>
         public Cube AsProtected()
         {
-            return new Cube(Kind, SourceCardId, true);
+            return new Cube(Kind, SourceCardId, true, SnowPower, SnowMelt, SnowPacked);
+        }
+
+        /// <summary>A fresh snow cube for a card: one layer, the full melt time, not packed.</summary>
+        public static Cube FreshSnow(int sourceCardId)
+        {
+            return new Cube(CubeKind.Snow, sourceCardId, false, 1, SnowRules.MeltTurns, false);
+        }
+
+        /// <summary>This snow cube with other numbers; its card and its host mark are kept.</summary>
+        public Cube WithSnow(int power, int melt, bool packed)
+        {
+            return new Cube(CubeKind.Snow, SourceCardId, Protected, power, melt, packed);
         }
     }
 
@@ -169,6 +212,7 @@ namespace ProjectBlock.Core
         {
             if (card.Has(BlockElement.Fire)) return CubeKind.Fire;
             if (card.Has(BlockElement.Water)) return CubeKind.Water;
+            if (card.Has(BlockElement.Snow)) return CubeKind.Snow;
             if (card.Has(BlockElement.Obsidian)) return CubeKind.Obsidian;
             if (card.Has(BlockElement.Gold)) return CubeKind.Gold;
             if (card.Has(BlockElement.Transparent)) return CubeKind.Transparent;
@@ -190,6 +234,7 @@ namespace ProjectBlock.Core
             {
                 case BlockElement.Fire: return CubeKind.Fire;
                 case BlockElement.Water: return CubeKind.Water;
+                case BlockElement.Snow: return CubeKind.Snow;
                 case BlockElement.Obsidian: return CubeKind.Obsidian;
                 case BlockElement.Gold: return CubeKind.Gold;
                 case BlockElement.Transparent: return CubeKind.Transparent;

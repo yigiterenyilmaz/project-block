@@ -218,5 +218,15 @@ namespace ProjectBlock.Core
             BlockElement.Negative,
             BlockElement.Targeted
         };
+
+        /// <summary>
+        /// The share of ELEMENTAL block offers that come as SNOW instead of what was rolled
+        /// (GameSession.AddBlockOffers). Snow is deliberately NOT in ElementPool: growing that
+        /// list re-maps every element roll and adds a draw to the main stream, which moves every
+        /// shuffle after the first market - the regression baseline included. This is rolled on
+        /// a derived generator instead, so a run that never sees snow is the run it always was.
+        /// BALANCE PLACEHOLDER.
+        /// </summary>
+        public double SnowOfferChance = 0.12;
     }
 }

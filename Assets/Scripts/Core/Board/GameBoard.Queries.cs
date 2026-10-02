@@ -52,7 +52,7 @@ namespace ProjectBlock.Core
             {
                 OccupiedCount++;
             }
-            cells[pos.X - MinX, pos.Y - MinY] = cube;
+            cells[pos.X - MinX, pos.Y - MinY] = SnowRules.Sane(cube);
         }
 
         /// <summary>Writes a cell directly, empty (null) included, keeping OccupiedCount
@@ -94,7 +94,8 @@ namespace ProjectBlock.Core
             {
                 return false;
             }
-            cells[pos.X - MinX, pos.Y - MinY] = new Cube(kind, cube.Value.SourceCardId);
+            // A cube retyped INTO snow is fresh snow; retyped out of it, it leaves its numbers.
+            cells[pos.X - MinX, pos.Y - MinY] = SnowRules.Sane(new Cube(kind, cube.Value.SourceCardId));
             return true;
         }
 

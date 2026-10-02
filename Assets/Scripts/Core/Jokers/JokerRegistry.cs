@@ -18,7 +18,6 @@ namespace ProjectBlock.Core
             Register(() => new RenovasyonJoker());
             Register(() => new IadeJoker());
             Register(() => new InsiderJoker());
-            Register(() => new CigJoker());
             Register(() => new DondurmaJoker());
             Register(() => new SiyamJoker());
             Register(() => new BereketJoker());

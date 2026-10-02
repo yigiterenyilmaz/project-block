@@ -31,6 +31,15 @@ namespace ProjectBlock.Core
             // Enough passes for water to cross the whole arena the long way, whichever way it
             // is flowing, plus slack.
             int guard = Width + Height + 2;
+            // SNOW settles in the same passes (GameBoard.Snow): it falls like water, and what
+            // comes to rest on snow is absorbed by it. Asked once - a settle cannot make snow -
+            // so a board without any runs exactly the water-only loop it always has.
+            bool snow = HasSnow;
+            LastSnowMerges.Clear();
+            if (snow)
+            {
+                guard *= 3; // an absorb and the fall behind it are separate passes
+            }
             // Walk the cells in the order the flow DRAINS them - the ones nearest the destination
             // edge first - so one pass shifts a whole column (or row) by one cell instead of
             // leaving the cube behind waiting for the next pass. For the default downward flow
@@ -80,6 +89,11 @@ namespace ProjectBlock.Core
                                 new GridPos(nx + MinX, ny + MinY)));
                         }
                     }
+                }
+                if (snow && SnowPass(ref frame, fallFrames != null))
+                {
+                    moved = true;
+                    anyChange = true;
                 }
                 if (frame != null)
                 {

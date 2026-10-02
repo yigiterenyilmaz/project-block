@@ -86,7 +86,10 @@ namespace ProjectBlock.Core
         // 29 (2026-10-02): "Mapus" keeps several locks at once - a list of cells with the turns
         // each has left and a count toward the next - where it kept one seal and how long it had
         // held it, and its knobs changed. A 28's boss block goes out of step.
-        public const int FormatVersion = 29;
+        // 30 (2026-10-02): SNOW. Every cube writes three more values (its snow power, melt time
+        // and packed flag - zero on anything that is not snow), and the "Çığ" JOKER is gone: it
+        // is a power now, so a 29 could name a joker the registry no longer has.
+        public const int FormatVersion = 30;
 
         private const string VersionKey = "version";
 

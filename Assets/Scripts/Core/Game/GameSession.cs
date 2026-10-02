@@ -1340,6 +1340,10 @@ namespace ProjectBlock.Core
             IRandomSource blockRng = reroll == 0
                 ? rng
                 : new SeededRandom(unchecked(resolvedSeed * 374761393 + RoundNumber * 66037 + reroll * 21179));
+            // SNOW is rolled on a generator of its own (see MarketConfig.SnowOfferChance): the main
+            // stream takes exactly the draws it always took, whether or not snow turns up.
+            IRandomSource snowRng = new SeededRandom(
+                unchecked(resolvedSeed * 962287 + RoundNumber * 40503 + reroll * 7919 + 17));
             for (int i = 0; i < market.BlockOfferCount; i++)
             {
                 bool giveElement = market.ElementPool.Count > 0
@@ -1353,6 +1357,16 @@ namespace ProjectBlock.Core
                         market.ElementPool[blockRng.NextInt(0, market.ElementPool.Count)]
                     }
                     : null;
+                // SNOW replaces some elemental offers, and it is only ever sold as a one-row bar,
+                // 1x1 to 1x4 (designer's call, 2026-10-02): a heap is a ROW of snow, and a block
+                // two rows tall would absorb itself the moment it landed. A "Hedefli" roll is
+                // left alone - it owes the main stream a draw for its target cube further down.
+                if (elements != null && elements[0] != BlockElement.Targeted
+                    && snowRng.NextDouble() < market.SnowOfferChance)
+                {
+                    elements = new List<BlockElement> { BlockElement.Snow };
+                    shape = SnowBar(snowRng.NextInt(1, SnowRules.MaxBarLength + 1));
+                }
                 var card = new BlockCard(nextCardId++, shape, elements);
                 card = Jokers.FilterMarketOffer(card); // "Simya" adds a second element here
                 // "Hedefli": which cube is the target is rolled ONCE, here, and never again -
@@ -1364,6 +1378,18 @@ namespace ProjectBlock.Core
                 newOffers.Add(new MarketOffer(card,
                     Discounted(market.BuyPrice(card) * Config.Scoring.ScoreScale)));
             }
+        }
+
+        /// <summary>A one-row bar of <paramref name="length"/> cubes - the only shape snow is
+        /// sold in.</summary>
+        internal static BlockShape SnowBar(int length)
+        {
+            var cells = new List<GridPos>();
+            for (int i = 0; i < length; i++)
+            {
+                cells.Add(new GridPos(i, 0));
+            }
+            return BlockShape.FromCells(cells);
         }
 
         /// <summary>Marks one cube of a "Hedefli" block as its target. A no-op for every other

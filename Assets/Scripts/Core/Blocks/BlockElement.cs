@@ -61,7 +61,13 @@ namespace ProjectBlock.Core
         /// first explosion that touches the block and it pays a bonus and takes the whole block
         /// with it; break anything else first and the block is spent - it stands there as
         /// ordinary cubes for the rest of its stay. See RoundEngine.Targeted.</summary>
-        Targeted = 12
+        Targeted = 12,
+
+        /// <summary>"Kar": SNOW. Its cubes fall like water and MELT after SnowRules.MeltTurns
+        /// turns; snow that comes to rest on snow is absorbed by the heap under it, which gains
+        /// power, and the "Çığ" power sends a heap down as many rows as it has power. The market
+        /// only ever sells it as a one-row bar (1x1 to 1x4). See GameBoard.Snow.</summary>
+        Snow = 13
 
         // Mirror ("ayna") and PiggyBank ("kumbara") were cut from the design 2026-07-18.
     }

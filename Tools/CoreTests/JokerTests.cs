@@ -20,8 +20,6 @@ public static partial class JokerTests
         RunOvertimeArenaTests();
         Overtime_RegularBaseTrickled_BonusAndJokersFullWeight();
         Overtime_WinBonusAwardedOnEachOvertimeSweep();
-        Streak_Cig_PaysFromMinStreakAndGrows();
-        Streak_Cig_EqualSizeRestartsRun();
         Streak_Dondurma_Decreasing();
         Streak_Siyam_SameShapeOnly();
         Streak_ResetsEachRound();
@@ -30,6 +28,7 @@ public static partial class JokerTests
         KutlecekimMerkezi_TheDirectionIsRoundScoped();
         KutlecekimMerkezi_RefusesAnythingButTheFourSides();
         RunRuzgarTests();
+        RunSnowTests();
         Targeted_TargetFirstPaysAndTakesTheWholeBlock();
         Targeted_PlainCubeFirstSpendsTheBlockForGood();
         Targeted_BonusSurvivesTheSweepItCauses();
@@ -700,46 +699,6 @@ public static partial class JokerTests
             "the win bonus escalates with sequential overtimes");
     }
 
-    private static void Streak_Cig_PaysFromMinStreakAndGrows()
-    {
-        Section("cig / increasing streak");
-        var joker = new CigJoker();
-        joker.MinStreak = 3;
-        joker.PointsPerStreakStep = 15;
-
-        var b1 = new ScoreBreakdown();
-        joker.ModifyScore(FakeTurn(Bar(1), b1));
-        Check(b1.FlatBonus == 0, "first placement pays nothing", "got " + b1.FlatBonus);
-
-        var b2 = new ScoreBreakdown();
-        joker.ModifyScore(FakeTurn(Bar(2), b2));
-        Check(b2.FlatBonus == 0, "streak 2 is still below MinStreak", "got " + b2.FlatBonus);
-
-        var b3 = new ScoreBreakdown();
-        joker.ModifyScore(FakeTurn(Bar(3), b3));
-        Check(b3.FlatBonus == 15, "streak 3 pays one step", "got " + b3.FlatBonus);
-
-        var b4 = new ScoreBreakdown();
-        joker.ModifyScore(FakeTurn(Bar(4), b4));
-        Check(b4.FlatBonus == 30, "streak 4 pays two steps", "got " + b4.FlatBonus);
-        Check(joker.Streak == 4, "streak counter tracks the run", "got " + joker.Streak);
-    }
-
-    private static void Streak_Cig_EqualSizeRestartsRun()
-    {
-        Section("cig / equal size restarts");
-        var joker = new CigJoker();
-        joker.MinStreak = 3;
-        joker.ModifyScore(FakeTurn(Bar(2), new ScoreBreakdown()));
-        joker.ModifyScore(FakeTurn(Bar(3), new ScoreBreakdown()));
-        joker.ModifyScore(FakeTurn(Bar(3), new ScoreBreakdown())); // equal -> restart
-        Check(joker.Streak == 1, "equal size restarts the run at 1", "got " + joker.Streak);
-
-        var next = new ScoreBreakdown();
-        joker.ModifyScore(FakeTurn(Bar(4), next));
-        Check(next.FlatBonus == 0, "run has to be rebuilt from scratch", "got " + next.FlatBonus);
-    }
-
     private static void Streak_Dondurma_Decreasing()
     {
         Section("dondurma / decreasing streak");
@@ -785,9 +744,9 @@ public static partial class JokerTests
     {
         Section("streak / per-round reset");
         var session = NewSession(7, 6, 40, 24, 1, 2, 3);
-        var joker = (CigJoker)session.Jokers.Add(new CigJoker());
-        joker.ModifyScore(FakeTurn(Bar(1), new ScoreBreakdown()));
+        var joker = (DondurmaJoker)session.Jokers.Add(new DondurmaJoker());
         joker.ModifyScore(FakeTurn(Bar(2), new ScoreBreakdown()));
+        joker.ModifyScore(FakeTurn(Bar(1), new ScoreBreakdown()));
         Check(joker.Streak == 2, "streak built up", "got " + joker.Streak);
 
         session.Jokers.DispatchRoundStarted(session.CurrentRound);

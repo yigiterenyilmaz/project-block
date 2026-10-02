@@ -56,6 +56,11 @@ namespace ProjectBlock.Core
             report.DestroyedCubes = destroyedThisTurn;
             report.CardsFullyDestroyed = cardsFullyDestroyedThisTurn;
 
+            // 0. A TURN PASSES FOR THE SNOW: every heap is a turn nearer melting and what ran out
+            //    is gone - before the block lands, so a heap absorbing fresh snow this turn keeps
+            //    exactly the melt time the merge gives it. A no-op on a board without snow.
+            MeltSnowForTurn(report);
+
             // 1. place + score. A NEGATIVE block places nothing - it erases what it covers
             // and goes with it - so it is resolved after the placement score below, which
             // would otherwise overwrite what the erasure earns.

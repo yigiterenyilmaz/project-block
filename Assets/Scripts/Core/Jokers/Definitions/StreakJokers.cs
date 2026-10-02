@@ -1,28 +1,31 @@
-﻿// PURPOSE: The streak jokers. Three of them compare this block with the previous one - çığ
-// (bigger), dondurma (smaller), Siyam (identical shape) - and share StreakJoker, which owns
+﻿// PURPOSE: The streak jokers. Two of them compare this block with the previous one - dondurma
+// (smaller), Siyam (identical shape) - and share StreakJoker, which owns
 // the streak bookkeeping so each joker only answers one question: does this placement
 // continue the run? The fourth, Mikrodalga, is a streak joker of a different kind: it does
 // not count placements at all, it bends the engine's own COMBO streak so it survives a quiet
 // turn.
 //
+// "Çığ" (each block BIGGER than the last) was the third of them until 2026-10-02, when the
+// designer re-cut it as a POWER that works on snow (CigPower, SnowPowers.cs). The joker is gone.
+//
 // CONFIRMED RULES:
 //  - Size means CUBE COUNT (BlockShape.Size), not bounding box.
 //  - A placement that does not continue the run RESTARTS it at 1 with the new card as the
 //    baseline - it never merely pauses. (Otherwise Siyam turns would be free protection
-//    for a çığ streak.)
+//    for a dondurma streak.)
 //  - Bonus-hand plays are turns too, so they take part in every streak.
 //  - "Same shape" is exact normalized-shape equality (BlockShape.CanonicalKey). Rotations
 //    and mirrors are NOT the same shape - the base game never rotates a block.
 //  - Streaks are per round: a new round starts from nothing.
 //
 // BALANCE NOTE: the default generator makes blocks of 1..5 cubes, so a strictly
-// increasing (or decreasing) run can never exceed 5 turns. MinStreak must stay well under
+// decreasing run can never exceed 5 turns. MinStreak must stay well under
 // that ceiling or these jokers can never pay out. Siyam has no such ceiling, so it asks
 // for a shorter streak by default.
 
 namespace ProjectBlock.Core
 {
-    /// <summary>Shared streak counting for çığ / dondurma / Siyam. All numbers are
+    /// <summary>Shared streak counting for dondurma / Siyam. All numbers are
     /// BALANCE PLACEHOLDERS.</summary>
     public abstract class StreakJoker : Joker
     {
@@ -83,23 +86,6 @@ namespace ProjectBlock.Core
             }
             int steps = Streak - MinStreak + 1;
             turn.Score.AddFlat(PointsPerStreakStep * steps, DefId);
-        }
-    }
-
-    /// <summary>"çığ" - each block bigger than the last one.</summary>
-    public sealed class CigJoker : StreakJoker
-    {
-        public CigJoker()
-            : base("cig", "Çığ")
-        {
-            SetDescription(
-                "Score bonus for placing a BIGGER block than last turn; grows as the streak lasts.",
-                "Her tur bir öncekinden BÜYÜK blok koyarsan puan bonusu; seri uzadıkça büyür.");
-        }
-
-        protected override bool Continues(BlockShape previous, BlockShape current)
-        {
-            return current.Size > previous.Size;
         }
     }
 

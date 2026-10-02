@@ -449,6 +449,21 @@ namespace ProjectBlock.Core
             voidSwallows.AddRange(cubes);
         }
 
+        /// <summary>SNOW that melted at the top of this turn (its timer ran out), where it stood
+        /// and what it was. Not a destruction - nothing was scored or logged - so it is in no
+        /// other list; reporting only, for the View's melt.</summary>
+        public IReadOnlyList<DestroyedCube> SnowMelted
+        {
+            get { return snowMelted; }
+        }
+
+        private readonly List<DestroyedCube> snowMelted = new List<DestroyedCube>();
+
+        internal void AddSnowMelted(IEnumerable<DestroyedCube> cubes)
+        {
+            snowMelted.AddRange(cubes);
+        }
+
         public IReadOnlyList<GridPos> TargetedExplodedCells
         {
             get { return targetedExplodedCells; }
