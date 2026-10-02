@@ -81,7 +81,7 @@ namespace ProjectBlock.View
         // harmless if the Full Screen Pass feature/material is not wired yet (see docs/crt-edge-bend.md).
         private static readonly int CrtBendId = Shader.PropertyToID("_CrtBend");
 
-        private enum ChoiceKind { None, GravityDirection, BossStage, CardElement }
+        private enum ChoiceKind { None, GravityDirection, BossStage, CardElement, DuelBet }
 
         /// <summary>"Buldozer" while aiming: which way the blade will run. Switched in place with
         /// right-click, the wheel or R; the hover preview shows the band it will take.</summary>
@@ -837,7 +837,8 @@ namespace ProjectBlock.View
                 || (lineSwapAnim != null && lineSwapAnim.Playing)
                 || (powerFx != null && powerFx.Playing)
                 || RimErosionPlaying
-                || PetLocksInput)
+                || PetLocksInput
+                || DuelHousePlaying)
             {
                 return; // input is locked while a board animation plays
             }
@@ -1433,6 +1434,11 @@ namespace ProjectBlock.View
                     }
                     else if (round.Status == RoundStatus.InProgress)
                     {
+                        // "Blackjack": the table waits for a stake before anything is dealt.
+                        if (TryOfferDuelBet(round))
+                        {
+                            return;
+                        }
                         // DIRECT gamepad play gets the frame first, and only takes it on the
                         // frames it actually acts on - so the mouse, the drag and every debug
                         // key below go on working right beside it (see .PadPlay).

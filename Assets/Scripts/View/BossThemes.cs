@@ -64,6 +64,7 @@ namespace ProjectBlock.View
             { "mayin_esegi", BossTheme.Inferno },        // a hidden mine
             { "tukenmislik", BossTheme.Inferno },        // burnout: powers never refill
             { "enflasyon", BossTheme.Inferno },          // the bar keeps heating up
+            { "blackjack", BossTheme.Inferno },          // the purse is on the table
 
             // CAGE - something of yours is seized, sealed or held
             { "mapus", BossTheme.Cage },                 // cells sealed like a prison

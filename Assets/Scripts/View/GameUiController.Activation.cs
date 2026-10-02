@@ -474,6 +474,11 @@ namespace ProjectBlock.View
                 RefreshAll(null);
                 return true;
             }
+            if (pendingChoice == ChoiceKind.DuelBet)
+            {
+                ResolveDuelBet(pendingChoiceValues[index]);
+                return true;
+            }
             var ctx = new RoundContext(session, session.Rng, session.CurrentRound);
             if (pendingChoice == ChoiceKind.GravityDirection)
             {

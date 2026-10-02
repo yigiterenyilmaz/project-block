@@ -799,10 +799,18 @@ namespace ProjectBlock.View
         /// </summary>
         private void FlashLine(GameBoard board, int line, bool row)
         {
-            if (board == null || boardView == null || boardView.Board == null)
+            FlashLine(board, line, row, boardView);
+        }
+
+        /// <summary>As above, on <paramref name="view"/> - the duel's house arena draws its lines
+        /// with the very same ray (GameUiController.Duel).</summary>
+        private void FlashLine(GameBoard board, int line, bool row, BoardView view)
+        {
+            if (board == null || view == null || view.Board == null)
             {
                 return;
             }
+            BoardView boardView = view;
             var cells = new List<Vector2>();
             int count = row ? board.Width : board.Height;
             for (int i = 0; i < count; i++)
@@ -2607,6 +2615,8 @@ namespace ProjectBlock.View
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();
+            // "Blackjack": the house's arena beside the player's, and its turn played back.
+            RefreshDuelTable(round);
             RefreshInfections(report);
             RefreshParasiteRiders(round);
             cardLayer.Sync(round, report);
@@ -2886,6 +2896,13 @@ namespace ProjectBlock.View
                 // minimum payment asks for more, and the number the player is chasing must be
                 // the one the rules will check.
                 scoreHudRound = Loc.Pick("round ", "raunt ") + roundScore + " / " + passBar;
+                // "Blackjack": the round's points are not money and not the bar here - the
+                // line says what the table is playing for instead.
+                string duelLine = DuelScoreLine(round);
+                if (duelLine != null)
+                {
+                    scoreHudRound = duelLine;
+                }
                 sb.Append("        ").Append(scoreHudRound);
             }
             totalText.text = sb.ToString();
@@ -3322,6 +3339,9 @@ namespace ProjectBlock.View
                 case LossReason.DeadZoneOverran:
                     return Loc.Pick("the dead zone swallowed the arena (the deck ran dry once too often)",
                         "ölü bölge alanı yuttu (deste çok kez bitti)");
+                case LossReason.DuelBankrupt:
+                    return Loc.Pick("your purse ran dry at the table (Blackjack)",
+                        "masada paran bitti (Blackjack)");
                 case LossReason.PetWentHungry:
                     return Loc.Pick("the deck ran dry with the pet still unfed (Tamagotchi)",
                         "deste bitti, Tamagotchi hâlâ açtı");
