@@ -919,10 +919,28 @@ namespace ProjectBlock.Core
                 return;
             }
             bool changed = false;
+            var rim = new RimErosionVisuals
+            {
+                BeforeMinX = Board.MinX,
+                BeforeMinY = Board.MinY,
+                BeforeWidth = Board.Width,
+                BeforeHeight = Board.Height
+            };
+            rimErosionReport = rim;
             while (BoardErosionCount < owed && Loss == null)
             {
                 BoardErosionCount++;
                 changed |= ErodeOnce(BoardErosionCount, mode);
+            }
+            rimErosionReport = null;
+            if (Board.MinX != rim.BeforeMinX || Board.MinY != rim.BeforeMinY
+                || Board.Width != rim.BeforeWidth || Board.Height != rim.BeforeHeight)
+            {
+                rim.AfterMinX = Board.MinX;
+                rim.AfterMinY = Board.MinY;
+                rim.AfterWidth = Board.Width;
+                rim.AfterHeight = Board.Height;
+                LastRimErosion = rim;
             }
             if (changed)
             {
@@ -972,14 +990,51 @@ namespace ProjectBlock.Core
             List<GridPos> band = RimCells(left, right, bottom, top);
             // What the bands WERE, so overtime can grow them back as that (RestoreErodedArena).
             RememberErodedBands(band);
-            DestroyCubes(band, false, true);
+            // The cubes standing in the bands, taken before they go: the View draws them going
+            // down with their ground (RimErosionVisuals).
+            Dictionary<GridPos, Cube> standing = null;
+            if (rimErosionReport != null)
+            {
+                standing = new Dictionary<GridPos, Cube>();
+                foreach (GridPos cell in band)
+                {
+                    Cube? cube = Board.GetCube(cell);
+                    if (cube.HasValue)
+                    {
+                        standing[cell] = cube.Value;
+                    }
+                }
+            }
+            IReadOnlyList<GridPos> gone = DestroyCubes(band, false, true);
             bool reshaped = ReshapeBoard(-left, -right, -bottom, -top);
             if (reshaped)
             {
                 NoteRimEroded(left, right, bottom, top);
             }
+            if (reshaped && rimErosionReport != null)
+            {
+                rimErosionReport.Steps++;
+                foreach (GridPos cell in gone)
+                {
+                    Cube cube;
+                    if (standing != null && standing.TryGetValue(cell, out cube))
+                    {
+                        rimErosionReport.DestroyedCells.Add(cell);
+                        rimErosionReport.DestroyedCubes.Add(cube);
+                    }
+                }
+            }
             return reshaped;
         }
+
+        /// <summary>What the LAST rim erosion took off the arena, for the View to play it. A new
+        /// object per erosion, matched by identity; null until the rim first goes. Reporting only -
+        /// no rule reads it, and it is not saved (a loaded round has nothing left to animate).
+        /// </summary>
+        public RimErosionVisuals LastRimErosion { get; private set; }
+
+        /// <summary>The report being filled while ApplyPendingBoardErosion runs, or null.</summary>
+        private RimErosionVisuals rimErosionReport;
 
         /// <summary>Every cell of the bands about to be removed, in absolute coordinates.</summary>
         private List<GridPos> RimCells(int left, int right, int bottom, int top)

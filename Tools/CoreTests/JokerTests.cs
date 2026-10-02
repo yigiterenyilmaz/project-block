@@ -139,6 +139,7 @@ public static partial class JokerTests
         Erosion_CentreHoleGrowsAndStaysASuperset();
         Erosion_BothStylesHitTogether();
         Erosion_EatenCubesCostNoScoreAndNoSweep();
+        Erosion_ReportsWhatTheRimTook();
         Erosion_EatsThroughIndestructibleAndProtectedCubes();
         Erosion_NoneLeavesTheBoardAlone();
         Erosion_AddedCellsStillDoNotKillLines();
@@ -4397,6 +4398,43 @@ public static partial class JokerTests
             scoreBefore + " -> " + round.RoundScore);
         Check(round.CleanSweepCount == sweepsBefore,
             "emptying the board this way is not a clean sweep");
+    }
+
+    private static void Erosion_ReportsWhatTheRimTook()
+    {
+        Section("erosion / the rim erosion reports the arena before and after, and the cubes it took");
+        var session = NewErodingSession(712, 5, 40, ShuffleErosion.FromOutside, 1);
+        RoundEngine round = session.CurrentRound;
+        round.DebugForceDeckRecycle();
+        round.DebugForceDeckRecycle();
+        Check(round.LastRimErosion == null, "the free recycles report nothing");
+
+        int minX = round.Board.MinX;
+        int minY = round.Board.MinY;
+        var doomed = new GridPos(minX + 1, minY + 4);
+        var kept = new GridPos(minX + 1, minY + 1);
+        round.Board.SetCubeAt(doomed, new Cube(CubeKind.Normal, 9101));
+        round.Board.SetCubeAt(kept, new Cube(CubeKind.Normal, 9102));
+        round.DebugForceDeckRecycle();
+
+        RimErosionVisuals first = round.LastRimErosion;
+        Check(first != null, "an erosion that took the rim is reported");
+        Check(first != null && first.Steps == 1, "one step");
+        Check(first != null && first.BeforeWidth == 5 && first.BeforeHeight == 5
+            && first.AfterWidth == 4 && first.AfterHeight == 4, "5x5 before, 4x4 after");
+        Check(first != null && first.BeforeMinX == minX && first.AfterMinX == minX
+            && first.AfterMinY == minY, "the top row and the right column went");
+        Check(first != null && first.WasRemoved(doomed) && !first.WasRemoved(kept),
+            "the doomed cell was removed, the kept one was not");
+        Check(first != null && first.DestroyedCells.Count == 1 && first.DestroyedCells[0].Equals(doomed),
+            "exactly the cube in the band is reported destroyed");
+
+        round.DebugForceDeckRecycle();
+        Check(round.LastRimErosion != null && !ReferenceEquals(round.LastRimErosion, first),
+            "the next erosion is a new report");
+        Check(round.LastRimErosion != null && round.LastRimErosion.AfterMinX == minX + 1
+            && round.LastRimErosion.BeforeWidth == 4 && round.LastRimErosion.AfterWidth == 3,
+            "the second took the bottom row and the left column");
     }
 
     private static void Erosion_EatsThroughIndestructibleAndProtectedCubes()
