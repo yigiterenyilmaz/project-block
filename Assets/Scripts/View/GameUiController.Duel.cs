@@ -66,6 +66,17 @@ namespace ProjectBlock.View
             get { return houseRoutine != null; }
         }
 
+        /// <summary>True while the LAST hand of the stage is being told - the purse doubled or
+        /// gone. The stage is already over in the rules (the market, or the end of the run), so
+        /// the table is held on screen and input waits until the player has seen how it ended.</summary>
+        private bool duelEnding;
+
+        /// <summary>Everything the duel holds the screen for (the input lock reads it).</summary>
+        private bool DuelHoldsScreen
+        {
+            get { return DuelHousePlaying || duelEnding; }
+        }
+
         /// <summary>The duel of the round in play, or null.</summary>
         private static BlackjackBoss DuelOf(RoundEngine round)
         {
@@ -77,7 +88,16 @@ namespace ProjectBlock.View
         /// switches the second world off).</summary>
         private void RefreshDuelTable(RoundEngine round)
         {
-            BlackjackBoss duel = session != null && session.Phase == GamePhase.Round ? DuelOf(round) : null;
+            BlackjackBoss duel = DuelOf(round);
+            // A stage that has just ENDED at the table is still shown until its last hand is told.
+            bool finalUnseen = duel != null && duel.LastHand != null
+                && !ReferenceEquals(duel.LastHand, duelHandSeen)
+                && (duel.LastHand.StageWon || duel.LastHand.Bankrupt);
+            if (duel != null && session != null && session.Phase != GamePhase.Round
+                && !finalUnseen && !DuelHoldsScreen)
+            {
+                duel = null;
+            }
             if (duel == null)
             {
                 ClearDuelTable();
@@ -254,6 +274,7 @@ namespace ProjectBlock.View
                 return;
             }
             duelHandSeen = hand;
+            duelEnding = hand.StageWon || hand.Bankrupt;
             StartCoroutine(HandResultRoutine(hand));
         }
 
@@ -297,6 +318,21 @@ namespace ProjectBlock.View
             }
             UpdateHud();
             duelBetNotBefore = Time.time + 1.1f;
+            if (duelEnding)
+            {
+                // the last hand: let it be read, then hand the screen to whatever comes next
+                yield return new WaitForSeconds(2.2f);
+                duelEnding = false;
+                if (session != null && session.Phase == GamePhase.Market)
+                {
+                    marketView.ResetScroll();
+                    marketView.Show(session);
+                }
+                if (session != null)
+                {
+                    RefreshAll(null);
+                }
+            }
         }
 
         // ------------------------------------------------------------------ the bet

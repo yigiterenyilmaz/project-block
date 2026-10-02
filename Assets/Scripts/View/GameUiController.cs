@@ -838,7 +838,7 @@ namespace ProjectBlock.View
                 || (powerFx != null && powerFx.Playing)
                 || RimErosionPlaying
                 || PetLocksInput
-                || DuelHousePlaying)
+                || DuelHoldsScreen)
             {
                 return; // input is locked while a board animation plays
             }
