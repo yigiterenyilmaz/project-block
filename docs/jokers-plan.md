@@ -93,7 +93,7 @@ Buldozer gücünün 2 sıralık bandı 5x5'te alanın %40'ı (9x9'da %22); Meyda
 `max(3, satırdaki boş kare)` süresinde ilk bantta taban değer baskın; enflasyon güçlerinin
 +1'i 5x5'te göreli olarak çok daha büyük.
 
-## Güncel — kadro 52 joker / 36 güç / 37 patron (2026-08-10)
+## Güncel — kadro 52 joker / 37 güç / 37 patron (2026-10-02)
 
 Aşağıdaki bölümler ilk 31–35 jokerlik tasarım listesinin tarihçesi; sayıları oradan okuma.
 Kayıtlı içerik sayısı her zaman registry'lerden gelir (`JokerRegistry`, `PowerRegistry`,
@@ -135,6 +135,16 @@ Bu turda eklenenler:
   tahta her raunt yeniden kurulduğu için round-scope böyle bedavaya geliyor. Alandaki su hemen
   akar; tamamladığı satır normal tur-arası kurallarla patlar. Yeni hedefleme modu:
   `ActivationTargeting.Direction` (adım `ActivationTarget.Offset` içinde taşınır).
+- **Rüzgar (güç, 2026-10-02)** — oyuncu alana bir rüzgar çizer: basılan karenin merkezinden başlar,
+  sürüklenen yöne **serbest açıyla** eser, bant hep **3 kare** genişliğinde, en fazla köşegenin
+  %90'ı uzunluğunda. Rüzgardaki **ateş** kıvılcım savurur (küp başına `EmbersPerFire`; her biri
+  `EmberCatchPercent` ihtimalle rüzgar altındaki rastgele bir **düz bloğu** tutuşturur, yoksa uçup
+  gider - boş kare asla yanmaz). **Su** bir engele çarpana kadar sürüklenir (bandın dışına da),
+  sonra yerçekimiyle düşer; yanına geldiği ateş obsidiyene söner, tamamladığı satır patlar.
+  **Enfeksiyon** rüzgar yönündeki ilk bloğa da bulaşır (kaynak kendi enfeksiyonunu korur).
+  Hiçbir şeyi değiştirmeyecek rüzgar reddedilir, şarj harcanmaz. Yeni hedefleme modu:
+  `ActivationTargeting.Stroke` (`ActivationTarget.Swipe`); jokerler için yeni kancalar:
+  `Joker.CanRideWind` / `RideWind`. Nadirlik şimdilik **Nadir** (yer tutucu). Açık: ikon çizimi yok.
 - **Yeni merkezi primitif:** `RoundEngine.DeclareRoundWon` — bir patron **kendi şartıyla** yenilebilir.
   Tam eşik kadar puan yazar, `ThresholdPassed`'i set eder (uzatma açılmasın diye) ve doğrudan markete
   gider. Aynı turdaki bir **kayıp bunu ezer**.

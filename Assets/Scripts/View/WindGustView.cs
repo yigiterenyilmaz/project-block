@@ -343,10 +343,8 @@ namespace ProjectBlock.View
                 }
             }
             spores.Clear();
-            if (lane != null)
-            {
-                lane.enabled = false;
-            }
+            Return(lane);
+            lane = null;
             clock = -1f;
         }
 
@@ -401,13 +399,11 @@ namespace ProjectBlock.View
             float k = clock / (Style.FrontTravel + 0.3f);
             if (k >= 1f)
             {
-                if (lane != null)
-                {
-                    lane.enabled = false;
-                }
+                Return(lane);
+                lane = null;
                 return;
             }
-            if (lane == null || !lane.enabled)
+            if (lane == null)
             {
                 lane = Rent(WindShapes.Band, StreakOrder - 1, false);
             }

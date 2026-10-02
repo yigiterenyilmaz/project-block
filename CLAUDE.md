@@ -1467,6 +1467,42 @@ dropped that way once each.
   phrases, order-mode and chunk-size cycles and six debug overlays (pairs, chunks, order, axis, anchors,
   type). **Not done**: the optional almost-symmetry hint and sleep-reset feedback; and it has not been
   seen running in Unity - checked on software renders (`docs/simetri-*.png`) and measured sounds.
+- **"Rüzgar" is a GUST DRAWN ACROSS THE BOARD** (designer's calls, 2026-10-02; `WindGust`,
+  `RuzgarPower` in `Powers/Definitions/WindPower.cs`, `WindAimView`, `WindGustView`, `WindShapes`,
+  `GameUiController.Wind.cs`). The player presses where it starts and drags the way it blows, at ANY
+  angle; the band is always 3 cells wide and at most `MaxLengthShare` (0.9) of the corner-to-corner
+  diagonal. A new targeting mode carries it: `ActivationTargeting.Stroke` /
+  `ActivationTarget.Swipe(BoardStroke)` - floats in BOARD UNITS (a cell's centre sits at its own
+  GridPos). **`WindGust` is the one definition of the band**: the start snaps to the pressed cell's
+  centre, a cell is in the wind when its CENTRE is inside the band, `IsAhead` is "more than half a
+  cell further along", and `Walk` is the edge-adjacent grid walk water slides along (never a diagonal
+  squeeze between two blocks). The power, its aim and the animation all ask it. Three things ride it:
+  **FIRE** throws `EmbersPerFire` embers; each, at `EmberCatchPercent`, lands on a RANDOM plain block
+  ahead of it in the band (the session rng; collect first, burn after) or is carried off - never an
+  empty cell, and never stone, water, ice or a special cube (`CanCatchEmber`). **WATER** is pushed
+  until it hits something - a block, the edge, a hole, a seal - even past the end of the band, front
+  cube first, then `RoundEngine.SettleAfterWind` runs the board's own between-turn rules once (it
+  falls, a fire beside it goes out to obsidian, a completed line goes off) and hands the push and the
+  fall to the View as ONE sequence of water frames. **A JOKER's marks** ride it through two new hooks,
+  `Joker.CanRideWind` / `RideWind` (gated like every hook, main world only): "Enfeksiyon" carries
+  each infection in the gust to the FIRST block downwind, from scratch, while the source keeps its
+  own - as if the joker had been used twice. **A gust that would change nothing is refused**
+  (`TouchesBoard` + `AnyRidesWind`), and "would change nothing" is asked of a CLONE: water blown
+  against gravity slides away and falls straight back, so `WaterThatMoves` pushes and settles a copy
+  and follows each cube to where it rests. The first version asked only "can it slide one step" and
+  spent the charge on exactly that no-op - found on a render of the aim, not in a test.
+  **On screen**: the aim is the rules' own band (soft on every edge, air streaming down it, a ring on
+  the start, an arrowhead on the end) with a ring on every cube the gust will really move, and it
+  goes grey when `PowerInventory.CanUse` refuses it; press-drag-release, or click then click, or two
+  A presses on a pad. The gust (`WindGustView`, matched by identity on `RuzgarPower.LastGust`) is a
+  front crossing the lane: embers leave each fire when it arrives and flutter to their block or off
+  past the lane, a caught block burns in through Yangın's own `FireBloom` from the side the ember
+  came in (the cell held back until then, its old face captured BEFORE the rules ran), spores carry
+  an infection and its new core is held until they land, and the water is the board's own
+  `PlayWaterAnimation`. `BoardView.BoardPointToWorld` / `WorldToBoardPoint` are the unit bridge.
+  Pinned in `Tools/CoreTests/RuzgarTests.cs`; the lab section "rüzgar" runs `RuzgarPower.BlowOn` on
+  boards of its own. **Not done**: no icon art (`Art/Powers/ruzgar`), no sound of its own (it borrows
+  `Whoosh` and `Flame`), nothing seen running in Unity, and the numbers are balance placeholders.
 - `Assets/Scripts/View/PowerFxView.cs` — activation animations for powers without a view of
   their own: Totem (carved pole out of a rune circle), İkinci Şans (a four-leaf clover whose
   plucked leaves each take their quadrant of cubes), Soğuk Füzyon, Aşırma / Yedekleme (one card
@@ -1656,7 +1692,7 @@ Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.
 
-The roster now stands at **51 jokers, 36 powers and 37 bosses** (registry counts); of the
+The roster now stands at **51 jokers, 37 powers and 37 bosses** (registry counts); of the
 originally planned powers only "Dolly" is left, set aside by the designer.
 See `docs/jokers-plan.md`.
 

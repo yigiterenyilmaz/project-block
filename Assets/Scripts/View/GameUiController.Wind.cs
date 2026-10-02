@@ -340,6 +340,11 @@ namespace ProjectBlock.View
             if (blast != null && blast.Count > 0)
             {
                 PlayPowerBlast(blast);
+                // "Hazine": a mark the gust's line blew open is revealed as the blast breaks it.
+                if (session != null && session.Phase == GamePhase.Round)
+                {
+                    SyncHazine(session.CurrentRound, null);
+                }
             }
         }
 
