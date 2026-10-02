@@ -41,6 +41,15 @@
 // line at all while a boss is
 // suppressing explosions ("Bilinmezlik") is marked Possible = false. Daring the player to clear
 // one of those would be a rigged bet, which is a different thing from a hard one.
+//
+// "MAPUS" READS THE SAME SEA, TWO WAYS DIFFERENT (2026-10-02). It is the antagonist, so it may look
+// at what the player cannot: with knownDrawOrder the pile is NOT shuffled - the cards come in the
+// order they really will, and only a discard that comes back round is still a shuffle. A future
+// with no shuffle in it is the only future there is, so such a line is played once. And it asks
+// HOW SOON as well as whether (LineChance.Urgency), because a lock is laid against the line the
+// player is about to clear, not the one they might manage by the deadline. The board may be the
+// caller's own (the animation lab runs the boss on a board that is not the round's). The joker's
+// call is the old one, sample for sample.
 
 using System;
 using System.Collections.Generic;
@@ -70,6 +79,12 @@ namespace ProjectBlock.Core
         /// <summary>False for a line that cannot go off at all - see the file header. Never a
         /// candidate for a dare, however low its chance.</summary>
         public bool Possible;
+
+        /// <summary>Chance weighed by HOW SOON, 0..1: a future in which the line goes off on the
+        /// very next turn counts in full, one that only makes it on the deadline's last turn counts
+        /// 1/Deadline, one that never does counts nothing. What "Mapus" aims its locks by.
+        /// </summary>
+        public double Urgency;
 
         public override string ToString()
         {
@@ -106,33 +121,45 @@ namespace ProjectBlock.Core
         public static List<LineChance> Measure(RoundEngine round, Func<int, int> deadlineForGaps,
             int samples, uint seed)
         {
+            return Measure(round, round != null ? round.Board : null, deadlineForGaps, samples,
+                seed, false);
+        }
+
+        /// <summary>
+        /// The same sea, for "Mapus" (see the file header): against <paramref name="board"/>, which
+        /// need not be the round's own - the hand, the piles and the rules are still the round's -
+        /// and, with <paramref name="knownDrawOrder"/>, with the draw pile coming in the order it
+        /// really will.
+        /// </summary>
+        public static List<LineChance> Measure(RoundEngine round, GameBoard board,
+            Func<int, int> deadlineForGaps, int samples, uint seed, bool knownDrawOrder)
+        {
             var sea = new List<LineChance>();
-            if (round == null || round.Board == null)
+            if (round == null || board == null)
             {
                 return sea;
             }
-            GameBoard board = round.Board;
             var start = Snapshot.Of(round);
             for (int y = 0; y < board.Height; y++)
             {
-                sea.Add(MeasureLine(round, start, true, y, deadlineForGaps, samples,
-                    seed ^ (uint)(0x9E3779B9u * (uint)(y + 1))));
+                sea.Add(MeasureLine(round, board, start, true, y, deadlineForGaps, samples,
+                    seed ^ (uint)(0x9E3779B9u * (uint)(y + 1)), knownDrawOrder));
             }
             if (!round.Rules.RetroMode)
             {
                 for (int x = 0; x < board.Width; x++)
                 {
-                    sea.Add(MeasureLine(round, start, false, x, deadlineForGaps, samples,
-                        seed ^ (uint)(0x85EBCA6Bu * (uint)(x + 1))));
+                    sea.Add(MeasureLine(round, board, start, false, x, deadlineForGaps, samples,
+                        seed ^ (uint)(0x85EBCA6Bu * (uint)(x + 1)), knownDrawOrder));
                 }
             }
             return sea;
         }
 
-        private static LineChance MeasureLine(RoundEngine round, Snapshot start, bool isRow,
-            int index, Func<int, int> deadlineForGaps, int samples, uint seed)
+        private static LineChance MeasureLine(RoundEngine round, GameBoard board, Snapshot start,
+            bool isRow, int index, Func<int, int> deadlineForGaps, int samples, uint seed,
+            bool knownDrawOrder)
         {
-            GameBoard board = round.Board;
             int gaps = isRow
                 ? board.RowGapCount(index + board.MinY)
                 : board.ColumnGapCount(index + board.MinX);
@@ -148,20 +175,30 @@ namespace ProjectBlock.Core
             line.Deadline = Math.Max(1, deadlineForGaps(gaps));
             int wins = 0;
             int played = 0;
+            double urgency = 0.0;
             var rng = new Xorshift(seed);
             for (int s = 0; s < samples; s++)
             {
-                if (PlaySample(round, start, isRow, index, line.Deadline, rng))
+                bool shuffled;
+                int wonOn = PlaySample(round, board, start, isRow, index, line.Deadline, rng,
+                    knownDrawOrder, out shuffled);
+                if (wonOn >= 0)
                 {
                     wins++;
+                    urgency += (line.Deadline - wonOn) / (double)line.Deadline;
                 }
                 played++;
+                if (!shuffled)
+                {
+                    break; // nothing in it was drawn blind: this is the only future there is
+                }
                 if (played == SettledAfter && (wins == 0 || wins == played))
                 {
                     break; // settled at one end - see SettledAfter
                 }
             }
             line.Chance = played > 0 ? wins / (double)played : 0.0;
+            line.Urgency = played > 0 ? urgency / played : 0.0;
             return line;
         }
 
@@ -177,18 +214,33 @@ namespace ProjectBlock.Core
             public int PlayableFrom;
         }
 
-        private static bool PlaySample(RoundEngine round, Snapshot start, bool isRow, int index,
-            int deadline, Xorshift rng)
+        /// <summary>Plays one future. Returns the 0-based turn the line went off on, or -1 when
+        /// it did not; <paramref name="shuffled"/> says whether anything in it was drawn blind.
+        /// </summary>
+        private static int PlaySample(RoundEngine round, GameBoard board, Snapshot start,
+            bool isRow, int index, int deadline, Xorshift rng, bool knownDrawOrder,
+            out bool shuffled)
         {
-            GameBoard sim = GameBoard.CreateClone(round.Board);
+            GameBoard sim = GameBoard.CreateClone(board);
             var held = new List<Held>(start.Held.Count);
             foreach (Held h in start.Held)
             {
                 held.Add(new Held { Card = h.Card, Bonus = h.Bonus, PlayableFrom = h.PlayableFrom });
             }
-            // The order nobody can see: a fresh shuffle per future.
             var draw = new List<BlockCard>(start.Draw);
-            Shuffle(draw, rng);
+            if (knownDrawOrder)
+            {
+                // The order the cards really come in. RoundDeck.DrawTop takes the LAST card, so
+                // the pile is read back to front.
+                draw.Reverse();
+                shuffled = false;
+            }
+            else
+            {
+                // The order nobody can see: a fresh shuffle per future.
+                Shuffle(draw, rng);
+                shuffled = true;
+            }
             int drawAt = 0;
             var discard = new List<BlockCard>(start.Discard);
             bool retro = round.Rules.RetroMode;
@@ -198,7 +250,7 @@ namespace ProjectBlock.Core
                 Move move = BestMove(round, sim, held, turn, isRow, index);
                 if (move.Card == null)
                 {
-                    return false; // nothing fits anywhere: a dead end, and the dare dies with it
+                    return -1; // nothing fits anywhere: a dead end, and the dare dies with it
                 }
                 sim.Place(move.Card.Card, move.Shape, move.Origin,
                     round.CardHasElement(move.Card.Card, BlockElement.Ghost));
@@ -215,7 +267,7 @@ namespace ProjectBlock.Core
                 {
                     if (Contains(isRow ? blast.Rows : blast.Columns, index))
                     {
-                        return true;
+                        return turn;
                     }
                     sim.SettleWaterAndReact();
                 }
@@ -231,7 +283,7 @@ namespace ProjectBlock.Core
                 {
                     if (round.ThresholdPassed)
                     {
-                        return false; // past the bar a dry pile is the loss
+                        return -1; // past the bar a dry pile is the loss
                     }
                     if (round.Rules.DrawOnlyAvailableNoReshuffle || discard.Count == 0)
                     {
@@ -239,12 +291,13 @@ namespace ProjectBlock.Core
                     }
                     draw = discard;
                     discard = new List<BlockCard>();
-                    Shuffle(draw, rng);
+                    Shuffle(draw, rng); // what comes back round is blind for everybody
+                    shuffled = true;
                     drawAt = 0;
                 }
                 held.Add(new Held { Card = draw[drawAt++], PlayableFrom = turn + 1 });
             }
-            return false;
+            return -1;
         }
 
         private struct Move
