@@ -3591,7 +3591,7 @@ public static partial class JokerTests
             bool hadMark = joker.HasActiveMark;
             bool wasRow = joker.MarkIsRow;
             int wasLine = joker.MarkedLine;
-            int wasBonus = joker.CurrentBonus;
+            int wasBonus = joker.ShownBonus;
             var report = new TurnReport();
             report.Card = new BlockCard(1, Bar(1));
             report.Score = new ScoreBreakdown();
@@ -3613,7 +3613,7 @@ public static partial class JokerTests
             if (ev.HasTarget)
             {
                 Check(joker.HasActiveMark && ev.IsRow == joker.MarkIsRow && ev.Line == joker.MarkedLine
-                        && ev.Bonus == joker.CurrentBonus && ev.TurnsLeft == joker.TurnsLeft
+                        && ev.Bonus == joker.ShownBonus && ev.TurnsLeft == joker.TurnsLeft
                         && ev.Attempt == joker.AttemptsMade && ev.InitialTurns == joker.InitialTurns,
                     "the NEW contract is the joker's live one", ev.Event + " line " + ev.Line);
             }
@@ -3629,21 +3629,23 @@ public static partial class JokerTests
         if (events.Count == 7)
         {
             Check(events[0].Event == ChallengeEvent.Started && events[0].Attempt == 1
-                    && events[0].Bonus == 200 && events[0].TurnsLeft == 2 && events[0].InitialTurns == 2,
+                    && events[0].Bonus == joker.Shown(200) && events[0].TurnsLeft == 2
+                    && events[0].InitialTurns == 2,
                 "laid at full bonus with the whole deadline", seen);
             Check(events[1].Event == ChallengeEvent.Ticked && events[1].TurnsLeft == 1
                     && events[1].Urgency == ChallengeUrgency.Final,
                 "a tick that leaves one turn is the FINAL look", seen);
             Check(events[2].Event == ChallengeEvent.Failed && events[2].HasTarget
-                    && events[2].OldBonus == 200 && events[2].Bonus == 100 && events[2].NextBonus == 100
+                    && events[2].OldBonus == joker.Shown(200) && events[2].Bonus == joker.Shown(100)
+                    && events[2].NextBonus == joker.Shown(100)
                     && events[2].OldAttempt == 1 && events[2].Attempt == 2,
                 "a miss names the old dare, the new line and the halved bonus - in one report", seen);
             Check(!(events[2].OldIsRow == events[2].IsRow && events[2].OldLine == events[2].Line),
                 "and the new line is not the one just missed", seen);
-            Check(events[4].Event == ChallengeEvent.Failed && events[4].Bonus == 50
+            Check(events[4].Event == ChallengeEvent.Failed && events[4].Bonus == joker.Shown(50)
                     && events[4].Attempt == 3, "the second miss halves again", seen);
             Check(events[6].Event == ChallengeEvent.Expired && !events[6].HasTarget
-                    && events[6].OldBonus == 50 && events[6].OldAttempt == 3,
+                    && events[6].OldBonus == joker.Shown(50) && events[6].OldAttempt == 3,
                 "the third miss expires with no new line", seen);
         }
         var distinct = new HashSet<ChallengeVisuals>(events);
@@ -3735,8 +3737,15 @@ public static partial class JokerTests
         {
             return;
         }
-        Check(ev.OldIsRow == row && ev.OldLine == line && ev.OldBonus == bonus && !ev.HasTarget,
+        Check(ev.OldIsRow == row && ev.OldLine == line && ev.OldBonus == joker.Shown(bonus)
+                && !ev.HasTarget,
             "naming the line that was paid, and no new one");
+        // THE TOKEN AND THE SCORE ARE ONE NUMBER. The joker counts in logical points and the
+        // score is lifted by ScoreScale; a token that printed the logical bonus showed +20
+        // for a dare that paid +200, beside a bar the HUD prints at the same scale.
+        Check(session.Config.Scoring.ScoreScale > 1 && ev.OldBonus == ev.ScoreDelta,
+            "the bonus the token showed is the amount the score moved by",
+            ev.OldBonus + " vs " + ev.ScoreDelta);
         Check(ev.ScoreDelta == bonus * session.Config.Scoring.ScoreScale,
             "the measured payment is the bonus at the score's scale",
             ev.ScoreDelta + " vs " + bonus * session.Config.Scoring.ScoreScale);
@@ -4156,6 +4165,12 @@ public static partial class JokerTests
         session.Jokers.DispatchRoundStarted(session.CurrentRound);
         Check(joker.RoundBase == 300, "a bar of 2000 makes the first dare worth 300",
             "base " + joker.RoundBase);
+        // ...and on screen both are lifted together: the token has to read as 15% of the bar
+        // the HUD prints, not of the logical one behind it.
+        RoundEngine round = session.CurrentRound;
+        Check(joker.Shown(joker.RoundBase) * 100 == round.OwnBar * 15,
+            "what the token prints is 15% of the bar the HUD prints",
+            joker.Shown(joker.RoundBase) + " of " + round.OwnBar);
     }
 
     private static void Powerbank_RechargesASpentPower()

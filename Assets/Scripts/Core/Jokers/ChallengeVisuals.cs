@@ -50,6 +50,8 @@ namespace ProjectBlock.Core
         public bool OldIsRow;
         /// <summary>0-based, the space TurnReport.ExplodedRows / ExplodedColumns use.</summary>
         public int OldLine;
+        /// <summary>In SCREEN points, like every bonus here (MeydanOkumaJoker.Shown): the token
+        /// stands beside a bar the HUD prints at the score's scale.</summary>
         public int OldBonus;
         public int OldAttempt;
 
@@ -57,6 +59,7 @@ namespace ProjectBlock.Core
         public bool HasTarget;
         public bool IsRow;
         public int Line;
+        /// <summary>In screen points.</summary>
         public int Bonus;
         /// <summary>1..3.</summary>
         public int Attempt;
@@ -64,7 +67,7 @@ namespace ProjectBlock.Core
         public int TurnsLeft;
         public int InitialTurns;
 
-        /// <summary>Failed: what the next dare is worth, whether or not it has been laid yet.
+        /// <summary>Failed: what the next dare is worth (screen points), laid yet or not.
         /// </summary>
         public int NextBonus;
 

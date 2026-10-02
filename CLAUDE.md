@@ -1925,7 +1925,14 @@ warmer, a 1.025 heartbeat on the last turn) from ONE definition, `ChallengeVisua
 new object per event) says Started / Ticked / Succeeded / Failed / Expired with the contract before
 and after - a miss and its new line are ONE event, the payment is MEASURED around `AddFlatScore`,
 and a miss with no honest line yet carries only `NextBonus`, so the token PARKS on it until a later
-Started moves it. There is no "/ 2" in the view. The deadline a dare started with is kept for the
+Started moves it. There is no "/ 2" in the view. **And every bonus the token prints is in SCREEN
+points** (`MeydanOkumaJoker.Shown` / `ShownBonus` / `ShownPendingBonus`, and the report's `Bonus`
+/ `OldBonus` / `NextBonus`): the joker counts in the logical economy, where round three's bar is
+135 and the dare 20, while the HUD prints that bar as 1350 and the dare pays 200 - the token
+printed the logical 20 until 2026-10-02, a tenth of the 15% it promises and of what it then paid.
+`CurrentBonus` stays logical because it is what `AddFlatScore` is handed; nothing that prints may
+read it. Pinned by "the bonus the token showed is the amount the score moved by". The deadline a
+dare started with is kept for the
 countdown's look only, `[NotSaved]`, so the save format did not change (a loaded run counts what is
 left as the whole deadline). **When matters**: the joker writes its event during the turn and the
 repaint runs before the turn's explosions are drawn, so `RefreshAll` only hands over the joker's

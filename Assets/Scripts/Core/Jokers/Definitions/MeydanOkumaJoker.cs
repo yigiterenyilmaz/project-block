@@ -39,6 +39,10 @@
 //
 // WHAT THE PLAYER SEES comes from LastEvent (ChallengeVisuals): one report per turn that says
 // whether the dare was laid, ticked, paid, missed or ran out, with the contract before and after.
+// EVERY BONUS IN IT IS IN SCREEN POINTS (Shown): the joker does its arithmetic in the logical
+// economy, where round three's bar is 135 and the dare 20, while the HUD prints that bar as 1350
+// and the dare pays 200. The token printed the logical 20 beside that 1350 - a tenth of the 15% it
+// promises, and a tenth of what it then paid.
 // The deadline a dare STARTED with is kept beside it for the countdown's look only, and never
 // saved (a loaded run treats the turns it has left as the whole deadline).
 //
@@ -154,9 +158,32 @@ namespace ProjectBlock.Core
             get { return turnsLeft; }
         }
 
+        /// <summary>The live dare's bonus in LOGICAL points - what the rules pay through the
+        /// score pipeline. Anything that PRINTS it wants ShownBonus.</summary>
         public int CurrentBonus
         {
             get { return currentBonus; }
+        }
+
+        /// <summary>
+        /// A logical bonus as the SCREEN shows it: lifted by the run's ScoreScale, like the bar on
+        /// the HUD and the points the dare then pays. Presentation only - never a payout.
+        /// </summary>
+        public int Shown(int logical)
+        {
+            return logical * (ScoreScale < 1 ? 1 : ScoreScale);
+        }
+
+        /// <summary>The live dare's bonus as the token prints it.</summary>
+        public int ShownBonus
+        {
+            get { return Shown(currentBonus); }
+        }
+
+        /// <summary>PendingBonus as the parked token prints it.</summary>
+        public int ShownPendingBonus
+        {
+            get { return Shown(PendingBonus); }
         }
 
         /// <summary>Dares laid this round (0..3); the live one is this number.</summary>
@@ -243,7 +270,7 @@ namespace ProjectBlock.Core
                 {
                     OldIsRow = markIsRow,
                     OldLine = markedLine,
-                    OldBonus = currentBonus,
+                    OldBonus = Shown(currentBonus),
                     OldAttempt = attemptsMade
                 };
                 // The mark is live: did the player clear it this turn?
@@ -284,7 +311,7 @@ namespace ProjectBlock.Core
                     return;
                 }
                 before.Event = ChallengeEvent.Failed;
-                before.NextBonus = RoundBase >> attemptsMade;
+                before.NextBonus = Shown(RoundBase >> attemptsMade);
                 LastEvent = before;
                 missed = before;
             }
@@ -313,7 +340,7 @@ namespace ProjectBlock.Core
             report.HasTarget = true;
             report.IsRow = markIsRow;
             report.Line = markedLine;
-            report.Bonus = currentBonus;
+            report.Bonus = Shown(currentBonus);
             report.Attempt = attemptsMade;
             report.TurnsLeft = turnsLeft;
             report.InitialTurns = InitialTurns;

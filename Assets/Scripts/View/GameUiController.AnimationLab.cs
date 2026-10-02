@@ -8402,7 +8402,7 @@ namespace ProjectBlock.View
                     c.TurnsLeft = 1;
                     challenge.SetStanding(c);
                     ev = AnimOld(c, ChallengeEvent.Failed);
-                    ev.NextBonus = AnimChallengeBase(joker) >> 1;
+                    ev.NextBonus = AnimChallengeBonus(joker, 1);
                     break;
                 }
                 case AnimChallengeScene.Expire:
@@ -8450,15 +8450,20 @@ namespace ProjectBlock.View
             return new ChallengeContractView.Contract
             {
                 Has = true, IsRow = isRow, Line = line, Attempt = attempt,
-                Bonus = AnimChallengeBase(joker) >> (attempt - 1), TurnsLeft = deadline, InitialTurns = deadline
+                Bonus = AnimChallengeBonus(joker, attempt - 1), TurnsLeft = deadline, InitialTurns = deadline
             };
         }
 
-        /// <summary>The first dare's bonus for a lab contract: the joker's own when it has a
-        /// round, otherwise a stand-in - the lab's jokers are built fresh and have no bar.</summary>
-        private static int AnimChallengeBase(MeydanOkumaJoker joker)
+        /// <summary>A lab contract's bonus after <paramref name="halvings"/> misses, in SCREEN
+        /// points like every number the token prints: the joker's own base, halved the way the
+        /// rules halve it (in logical points) and lifted through its own Shown, when it has a
+        /// round - otherwise a stand-in, since the lab's jokers are built fresh and have no bar.
+        /// </summary>
+        private static int AnimChallengeBonus(MeydanOkumaJoker joker, int halvings)
         {
-            return joker.RoundBase > 0 ? joker.RoundBase : 150;
+            return joker.RoundBase > 0
+                ? joker.Shown(joker.RoundBase >> halvings)
+                : 1500 >> halvings;
         }
 
         private static ChallengeVisuals AnimStarted(MeydanOkumaJoker joker, GameBoard board, bool isRow, int line,

@@ -65,7 +65,7 @@ namespace ProjectBlock.View
             {
                 return; // the turn that changed it has not been drawn yet
             }
-            challenge.SetSteady(ContractOf(joker), joker.PendingBonus);
+            challenge.SetSteady(ContractOf(joker), joker.ShownPendingBonus);
         }
 
         /// <summary>The turn's half: the event, as the turn's lines break.</summary>
@@ -87,7 +87,7 @@ namespace ProjectBlock.View
                 Has = joker.HasActiveMark,
                 IsRow = joker.MarkIsRow,
                 Line = joker.MarkedLine,
-                Bonus = joker.CurrentBonus,
+                Bonus = joker.ShownBonus, // screen points - the token stands beside the HUD's bar
                 Attempt = joker.AttemptsMade,
                 TurnsLeft = joker.TurnsLeft,
                 InitialTurns = joker.InitialTurns
