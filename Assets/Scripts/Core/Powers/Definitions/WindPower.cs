@@ -3,14 +3,17 @@
 // until it hits something, and a joker's marks on the board ride it too ("Enfeksiyon"'s
 // infection reaches the next block downwind - as if the joker had been used twice).
 //
-// The band itself is WindGust's; this file only decides what the wind does to what it touches.
-// The board-only half (embers and water) is a public static so the ANIMATION LAB can blow it on a
-// board of its own and get exactly what a round would get.
+// The band itself is WindGust's; this file only decides what the wind does to what it touches,
+// and REPORTS it: WindPreview for the aim (what a stroke would affect, and whether the power
+// would blow it at all) and WindVisuals for the use (every ember, push, fall, carry and
+// bystander). The View draws from those two and never rescans the board for an outcome.
+// The board-only half (embers, water, the fall) is public static so the ANIMATION LAB can blow it
+// on a board of its own and get exactly what a round would get.
 //
 // All numbers are BALANCE PLACEHOLDERS.
 //
 // EXTENSION POINT: other things a wind should move (ghost traces, the rot) go in BlowOn or answer
-// Joker.CanRideWind / RideWind.
+// Joker.PreviewWindRide / RideWind; a new way of answering it is a WindReactionKind.
 
 using System.Collections.Generic;
 
@@ -43,6 +46,11 @@ namespace ProjectBlock.Core
         [field: NotSaved]
         public WindVisuals LastGust { get; private set; }
 
+        /// <summary>How many gusts this instance has blown since it was made - only ever used to
+        /// number a report, so it is not state.</summary>
+        [field: NotSaved]
+        private int Uses { get; set; }
+
         public RuzgarPower()
             : base("ruzgar", "Rüzgar")
         {
@@ -63,7 +71,7 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>The gust a target blows on <paramref name="board"/>, or null without a
-        /// stroke. The View asks this for its preview, so it aims with the rules' own band.</summary>
+        /// stroke.</summary>
         public static WindGust GustFor(GameBoard board, ActivationTarget target)
         {
             return board != null && target.Stroke.HasValue
@@ -86,7 +94,7 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Would this gust do anything on the board itself - a fire with a block ahead
-        /// to burn, or water with somewhere to go?</summary>
+        /// to burn, or water that ends up somewhere else?</summary>
         public static bool TouchesBoard(GameBoard board, WindGust gust)
         {
             if (board == null || gust == null || !gust.Valid)
@@ -104,8 +112,7 @@ namespace ProjectBlock.Core
             return WaterThatMoves(board, gust).Count > 0;
         }
 
-        /// <summary>Is <paramref name="cell"/> a fire in the gust with a block ahead to burn?
-        /// (The aim marks these.)</summary>
+        /// <summary>Is <paramref name="cell"/> a fire in the gust with a block ahead to burn?</summary>
         public static bool ThrowsEmbers(GameBoard board, WindGust gust, GridPos cell)
         {
             Cube? cube = board.GetCube(cell);
@@ -118,7 +125,7 @@ namespace ProjectBlock.Core
         /// board, pushed and then left to fall exactly as the round would, with each pushed cube
         /// followed to where it comes to rest - because water blown against the arena's gravity
         /// slides away and falls straight back where it was, and a gust that does only that has
-        /// moved nothing and must not spend the charge. (The aim marks these.)
+        /// moved nothing and must not spend the charge.
         /// </summary>
         public static List<GridPos> WaterThatMoves(GameBoard board, WindGust gust)
         {
@@ -138,28 +145,88 @@ namespace ProjectBlock.Core
             {
                 return moved;
             }
-            var frames = new List<IReadOnlyList<WaterMove>>();
-            copy.SettleWaterAndReact(frames);
+            SettleOn(copy, report);
             foreach (WindPush push in report.Pushes)
             {
-                GridPos at = push.To;
-                foreach (IReadOnlyList<WaterMove> frame in frames)
-                {
-                    for (int i = 0; i < frame.Count; i++)
-                    {
-                        if (frame[i].From.Equals(at))
-                        {
-                            at = frame[i].To;
-                            break;
-                        }
-                    }
-                }
-                if (!at.Equals(push.From))
+                if (!push.Rest.Equals(push.From))
                 {
                     moved.Add(push.From);
                 }
             }
             return moved;
+        }
+
+        /// <summary>
+        /// THE AIM'S ANSWER: what this stroke would affect and how, and whether the power would
+        /// blow it. A fire with a block ahead will throw embers (ParticleTransfer) and one without
+        /// only leans; water that ends up somewhere else is carried (PhysicalMove) and water that
+        /// cannot is only pressed; a joker's mark that would reach a block is a DuplicateSpread.
+        /// It changes nothing and rolls nothing.
+        /// </summary>
+        public WindPreview Preview(RoundContext ctx, ActivationTarget target)
+        {
+            GameBoard board = ctx.Round.Board;
+            var preview = new WindPreview { Gust = GustFor(board, target) };
+            WindGust gust = preview.Gust;
+            if (gust == null || !gust.Valid)
+            {
+                preview.Reason = gust != null && gust.StartsOffBoard
+                    ? WindRefusal.OffBoard : WindRefusal.TooShort;
+                return preview;
+            }
+            List<GridPos> moving = WaterThatMoves(board, gust);
+            IReadOnlyList<GridPos> cells = gust.Cells;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                Cube? cube = board.GetCube(cells[i]);
+                if (!cube.HasValue)
+                {
+                    continue;
+                }
+                WindReactionKind reaction = WindReactionKind.None;
+                if (cube.Value.Kind == CubeKind.Fire)
+                {
+                    reaction = FuelAhead(board, gust, cells[i]).Count > 0
+                        ? WindReactionKind.ParticleTransfer : WindReactionKind.LeanOnly;
+                }
+                else if (cube.Value.Kind == CubeKind.Water)
+                {
+                    reaction = moving.Contains(cells[i])
+                        ? WindReactionKind.PhysicalMove : WindReactionKind.LeanOnly;
+                }
+                if (reaction != WindReactionKind.None)
+                {
+                    preview.Affected.Add(new WindAffected
+                    {
+                        Cell = cells[i],
+                        Reaction = reaction,
+                        Cube = cube
+                    });
+                }
+            }
+            if (OnMainWorld(ctx))
+            {
+                foreach (WindCarry ride in ctx.Session.Jokers.CollectWindRides(ctx.Round, gust))
+                {
+                    preview.Affected.Add(new WindAffected
+                    {
+                        Cell = ride.From,
+                        Reaction = WindReactionKind.DuplicateSpread,
+                        Cube = board.GetCube(ride.From),
+                        CarrierId = ride.CarrierId
+                    });
+                }
+            }
+            foreach (WindAffected affected in preview.Affected)
+            {
+                if (affected.Reaction != WindReactionKind.LeanOnly)
+                {
+                    preview.Valid = true;
+                    break;
+                }
+            }
+            preview.Reason = preview.Valid ? WindRefusal.None : WindRefusal.NothingToCarry;
+            return preview;
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)
@@ -177,9 +244,12 @@ namespace ProjectBlock.Core
             }
             WindVisuals report = BlowOn(ctx.Round.Board, gust, ctx.Rng, EmbersPerFire,
                 EmberCatchPercent);
+            Uses++;
+            report.EventId = Uses;
+            report.Seed = SeedOf(gust, Uses);
             // The pushed water falls, a fire beside water goes out, and a line the wind completed
             // goes off - the board's own between-turn rules, run once.
-            ctx.Round.SettleAfterWind(report.PushFrames);
+            ctx.Round.SettleAfterWind(report);
             // What jokers keep ON the board rides the gust last, onto the board as it settled.
             // Their marks belong to the main world, so a gust in the mirror carries none of them.
             if (OnMainWorld(ctx))
@@ -190,12 +260,26 @@ namespace ProjectBlock.Core
             return true;
         }
 
+        /// <summary>A stable number for a gust's decoration, off its own geometry.</summary>
+        public static int SeedOf(WindGust gust, int salt)
+        {
+            unchecked
+            {
+                int h = 17;
+                h = h * 31 + (int)(gust.StartX * 16f);
+                h = h * 31 + (int)(gust.StartY * 16f);
+                h = h * 31 + (int)(gust.EndX * 16f);
+                h = h * 31 + (int)(gust.EndY * 16f);
+                return h * 31 + salt;
+            }
+        }
+
         /// <summary>
         /// THE GUST ON THE BOARD, on any board - embers first, from the board as the wind found it
         /// (collect first, burn after, so a block lit by this gust throws nothing in it), then the
         /// water, front first so the cubes behind slide into the room it leaves. Gravity is NOT
-        /// run here: the round does it through the engine (RoundEngine.SettleAfterWind), the lab
-        /// with GameBoard.SettleWaterAndReact.
+        /// run here: SettleOn does it - through the engine in a round
+        /// (RoundEngine.SettleAfterWind), directly in the lab.
         /// </summary>
         public static WindVisuals BlowOn(GameBoard board, WindGust gust, IRandomSource rng,
             int embersPerFire, int catchPercent)
@@ -205,9 +289,125 @@ namespace ProjectBlock.Core
             {
                 return report;
             }
+            report.Seed = SeedOf(gust, 0);
+            // Who was standing in the wind, before it changes anything.
+            var stood = new Dictionary<GridPos, Cube>();
+            IReadOnlyList<GridPos> cells = gust.Cells;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                Cube? cube = board.GetCube(cells[i]);
+                if (cube.HasValue)
+                {
+                    stood[cells[i]] = cube.Value;
+                }
+            }
             ThrowEmbers(board, gust, rng, embersPerFire, catchPercent, report);
             PushWater(board, gust, report);
+            // The bystanders: everyone the wind neither carried nor changed.
+            var touched = new HashSet<GridPos>();
+            foreach (WindEmber ember in report.Embers)
+            {
+                touched.Add(ember.Source);
+            }
+            foreach (SpreadIgnition ignition in report.Ignitions)
+            {
+                touched.Add(ignition.Cell);
+            }
+            foreach (WindPush push in report.Pushes)
+            {
+                touched.Add(push.From);
+            }
+            for (int i = 0; i < cells.Count; i++)
+            {
+                Cube cube;
+                if (touched.Contains(cells[i]) || !stood.TryGetValue(cells[i], out cube))
+                {
+                    continue;
+                }
+                report.Bystanders.Add(new WindBystander
+                {
+                    Cell = cells[i],
+                    Cube = cube,
+                    Reaction = cube.Kind == CubeKind.Water
+                        ? WindReactionKind.LeanOnly : WindReactionKind.None
+                });
+            }
             return report;
+        }
+
+        /// <summary>
+        /// THE FALL that follows the push, on any board: the board's own SettleWaterAndReact, and
+        /// then the report says what it did - each pushed cube followed through the fall to the
+        /// cell it rests on (WindPush.Fall / Rest), the water that fell without having been pushed
+        /// (OtherFallFrames), and the fires the settled water put out (Doused). Nothing here is a
+        /// second rule: it only reads back what the board did.
+        /// </summary>
+        public static void SettleOn(GameBoard board, WindVisuals report)
+        {
+            var fires = new List<WindDoused>();
+            foreach (GridPos cell in board.CellsOfKind(CubeKind.Fire))
+            {
+                fires.Add(new WindDoused { Cell = cell, Was = board.GetCube(cell).Value });
+            }
+            report.FallFrames.Clear();
+            report.OtherFallFrames.Clear();
+            report.Doused.Clear();
+            board.SettleWaterAndReact(report.FallFrames);
+
+            var claimed = new List<bool[]>();
+            foreach (IReadOnlyList<WaterMove> frame in report.FallFrames)
+            {
+                claimed.Add(new bool[frame.Count]);
+            }
+            foreach (WindPush push in report.Pushes)
+            {
+                push.Fall.Clear();
+                GridPos at = push.To;
+                for (int f = 0; f < report.FallFrames.Count; f++)
+                {
+                    IReadOnlyList<WaterMove> frame = report.FallFrames[f];
+                    for (int i = 0; i < frame.Count; i++)
+                    {
+                        if (!claimed[f][i] && frame[i].From.Equals(at))
+                        {
+                            claimed[f][i] = true;
+                            at = frame[i].To;
+                            push.Fall.Add(at);
+                            break;
+                        }
+                    }
+                }
+                push.Rest = at;
+            }
+            for (int f = 0; f < report.FallFrames.Count; f++)
+            {
+                IReadOnlyList<WaterMove> frame = report.FallFrames[f];
+                List<WaterMove> rest = null;
+                for (int i = 0; i < frame.Count; i++)
+                {
+                    if (claimed[f][i])
+                    {
+                        continue;
+                    }
+                    if (rest == null)
+                    {
+                        rest = new List<WaterMove>();
+                    }
+                    rest.Add(frame[i]);
+                }
+                if (rest != null)
+                {
+                    report.OtherFallFrames.Add(rest);
+                }
+            }
+            foreach (WindDoused fire in fires)
+            {
+                Cube? now = board.GetCube(fire.Cell);
+                if (now.HasValue && now.Value.Kind == CubeKind.Obsidian)
+                {
+                    report.Doused.Add(fire);
+                }
+            }
         }
 
         private static void ThrowEmbers(GameBoard board, WindGust gust, IRandomSource rng,
@@ -229,7 +429,11 @@ namespace ProjectBlock.Core
                 List<GridPos> fuel = FuelAhead(board, gust, source);
                 for (int e = 0; e < embersPerFire; e++)
                 {
-                    var ember = new WindEmber { Source = source };
+                    var ember = new WindEmber
+                    {
+                        Source = source,
+                        Seed = source.X * 7919 + source.Y * 104729 + e * 31 + report.Embers.Count
+                    };
                     report.Embers.Add(ember);
                     // Nothing ahead to burn: it is carried off, and no die is rolled for it.
                     if (fuel.Count == 0 || rng.NextInt(0, 100) >= catchPercent)
@@ -289,7 +493,7 @@ namespace ProjectBlock.Core
                 {
                     continue;
                 }
-                var push = new WindPush { From = cells[i], To = cells[i], Cube = cube.Value };
+                var push = new WindPush { From = cells[i], To = cells[i], Rest = cells[i], Cube = cube.Value };
                 foreach (GridPos next in gust.Walk(cells[i], limit))
                 {
                     if (!board.MoveCube(push.To, next))
@@ -298,6 +502,7 @@ namespace ProjectBlock.Core
                     }
                     push.Path.Add(next);
                     push.To = next;
+                    push.Rest = next;
                 }
                 if (push.Path.Count > 0)
                 {

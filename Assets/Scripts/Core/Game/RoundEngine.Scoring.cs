@@ -967,18 +967,17 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>"Rüzgar": the wind has already pushed its water across the board (the moves
-        /// are <paramref name="pushFrames"/>); now it falls under the arena's own gravity, a fire
+        /// are in <paramref name="report"/>); now it falls under the arena's own gravity, a fire
         /// left beside water goes out, and any line the gust completed goes off - exactly the
-        /// between-turn rules a gravity turn runs. The push and the fall are handed to the View as
-        /// ONE sequence of water frames, push first.</summary>
-        internal void SettleAfterWind(IReadOnlyList<IReadOnlyList<WaterMove>> pushFrames)
+        /// between-turn rules a gravity turn runs. The fall is written into the report cube by
+        /// cube (RuzgarPower.SettleOn), and the push and the fall are also kept as ONE sequence
+        /// of water frames, push first.</summary>
+        internal void SettleAfterWind(WindVisuals report)
         {
             externalWaterFrames.Clear();
-            if (pushFrames != null)
-            {
-                externalWaterFrames.AddRange(pushFrames);
-            }
-            Board.SettleWaterAndReact(externalWaterFrames);
+            externalWaterFrames.AddRange(report.PushFrames);
+            RuzgarPower.SettleOn(Board, report);
+            externalWaterFrames.AddRange(report.FallFrames);
             // Water MOVED; nothing died. Re-baseline or the diff reads a push as a killing.
             ResyncSnapshot();
             ResolveFullLinesOutsideTurn();

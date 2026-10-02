@@ -18,6 +18,142 @@ public static partial class JokerTests
         Ruzgar_PushedWaterFallsAndPutsOutAFire();
         Ruzgar_CarriesAnInfectionToTheNextBlockDownwind();
         Ruzgar_RefusesAGustThatTouchesNothing();
+        Ruzgar_ReportsTheFallTheDousingAndTheBystanders();
+        Ruzgar_TheAimSaysWhatAStrokeWouldAffect();
+    }
+
+    private static void Ruzgar_ReportsTheFallTheDousingAndTheBystanders()
+    {
+        Section("rüzgar / the report follows each pushed cube to where it rests");
+        var session = NewSession(9908, 7, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        GameBoard board = round.Board;
+        ClearBoard(board);
+        var power = (RuzgarPower)session.Powers.Add(new RuzgarPower());
+        // Water on a shelf two cells up; a second water resting ON it; a plain block in the lane
+        // further on, and a fire on the floor beside where the pushed water will land.
+        board.SetCubeAt(new GridPos(0, 0), new Cube(CubeKind.Normal, 1));
+        board.SetCubeAt(new GridPos(0, 1), new Cube(CubeKind.Water, 2));
+        board.SetCubeAt(new GridPos(0, 2), new Cube(CubeKind.Water, 3));
+        board.SetCubeAt(new GridPos(4, 1), new Cube(CubeKind.Normal, 4));
+        board.SetCubeAt(new GridPos(4, 0), new Cube(CubeKind.Normal, 5));
+        board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Fire, 6));
+        board.SetCubeAt(new GridPos(6, 6), new Cube(CubeKind.Normal, 7)); // out of the wind
+        board.SetCubeAt(new GridPos(0, 3), new Cube(CubeKind.Water, 8));  // out of the wind, standing on the water it takes
+        power.EmberCatchPercent = 0; // the fire is here to be put out, not to light anything
+
+        Check(session.Powers.TryUse(power.InstanceId, Gust(0f, 1f, 5f, 1f)), "the gust blows");
+        WindVisuals gust = power.LastGust;
+        WindPush low = null;
+        foreach (WindPush push in gust.Pushes)
+        {
+            if (push.From.Equals(new GridPos(0, 1)))
+            {
+                low = push;
+            }
+        }
+        Check(low != null, "the water on the shelf was pushed");
+        Check(low != null && low.To.Equals(new GridPos(3, 1)),
+            "the wind left it against the block in its lane", low == null ? "" : low.To.X + "," + low.To.Y);
+        Check(low != null && low.Rest.Equals(new GridPos(3, 0)) && low.Fall.Count == 1,
+            "and the report follows it down to the floor it rests on",
+            low == null ? "" : low.Rest.X + "," + low.Rest.Y + " fall " + low.Fall.Count);
+        Check(KindAt(board, 3, 0, CubeKind.Water), "which is where the board has it");
+        Check(gust.EventId == 1 && gust.Seed != 0, "the use is numbered and seeded");
+        bool doused = false;
+        foreach (WindDoused fire in gust.Doused)
+        {
+            doused |= fire.Cell.Equals(new GridPos(2, 0)) && fire.Was.Kind == CubeKind.Fire;
+        }
+        Check(doused && KindAt(board, 2, 0, CubeKind.Obsidian),
+            "the fire the water came to rest beside is reported as put out");
+        var bystanders = new HashSet<GridPos>();
+        foreach (WindBystander by in gust.Bystanders)
+        {
+            bystanders.Add(by.Cell);
+        }
+        Check(bystanders.Contains(new GridPos(0, 0)) && bystanders.Contains(new GridPos(4, 1)),
+            "the plain blocks the wind passed over are bystanders");
+        Check(!bystanders.Contains(new GridPos(0, 1)) && !bystanders.Contains(new GridPos(6, 6)),
+            "a carried cube is not, and neither is a block outside the wind");
+        int accounted = 0;
+        foreach (WindPush push in gust.Pushes)
+        {
+            accounted += push.Fall.Count;
+        }
+        int others = 0;
+        foreach (IReadOnlyList<WaterMove> frame in gust.OtherFallFrames)
+        {
+            others += frame.Count;
+        }
+        int all = 0;
+        foreach (IReadOnlyList<WaterMove> frame in gust.FallFrames)
+        {
+            all += frame.Count;
+        }
+        Check(others > 0 && KindAt(board, 0, 1, CubeKind.Water),
+            "water that only lost its footing is listed apart from the pushed cubes", "" + others);
+        Check(accounted + others == all, "every move of the fall is either a pushed cube's or listed apart",
+            accounted + " + " + others + " / " + all);
+    }
+
+    private static void Ruzgar_TheAimSaysWhatAStrokeWouldAffect()
+    {
+        Section("rüzgar / the aim's answer is the rules' own");
+        var session = NewSession(9909, 7, 1000000, 40, 1);
+        RoundEngine round = session.CurrentRound;
+        GameBoard board = round.Board;
+        ClearBoard(board);
+        var joker = (EnfeksiyonJoker)session.Jokers.Add(new EnfeksiyonJoker());
+        session.Jokers.DispatchRoundStarted(round);
+        var power = (RuzgarPower)session.Powers.Add(new RuzgarPower());
+        board.SetCubeAt(new GridPos(1, 3), new Cube(CubeKind.Fire, 1));   // a block ahead: embers
+        board.SetCubeAt(new GridPos(3, 3), new Cube(CubeKind.Normal, 2));
+        board.SetCubeAt(new GridPos(6, 2), new Cube(CubeKind.Fire, 3));   // nothing ahead: it only leans
+        board.SetCubeAt(new GridPos(2, 4), new Cube(CubeKind.Water, 4));  // slides and falls elsewhere
+        board.SetCubeAt(new GridPos(6, 4), new Cube(CubeKind.Water, 5));  // against the wall: only pressed
+        board.SetCubeAt(new GridPos(6, 3), new Cube(CubeKind.Normal, 6)); // its floor
+        session.Jokers.TryActivate(joker.InstanceId, ActivationTarget.Board(new GridPos(3, 3)));
+
+        string before = WindBoardText(board);
+        WindPreview preview = session.Powers.PreviewWind(power.InstanceId, Gust(0f, 3f, 6f, 3f));
+        Check(preview != null && preview.Valid && preview.Reason == WindRefusal.None,
+            "a gust over fire with fuel is one the power would blow");
+        Check(WindBoardText(board) == before, "asking changed nothing on the board");
+        var kinds = new Dictionary<GridPos, WindReactionKind>();
+        foreach (WindAffected affected in preview.Affected)
+        {
+            kinds[affected.Cell] = affected.Reaction;
+        }
+        Check(kinds.ContainsKey(new GridPos(1, 3)) && kinds[new GridPos(1, 3)] == WindReactionKind.ParticleTransfer,
+            "the fire with a block ahead will throw embers");
+        Check(kinds.ContainsKey(new GridPos(6, 2)) && kinds[new GridPos(6, 2)] == WindReactionKind.LeanOnly,
+            "the fire with nothing ahead only leans");
+        Check(kinds.ContainsKey(new GridPos(2, 4)) && kinds[new GridPos(2, 4)] == WindReactionKind.PhysicalMove,
+            "the water with room is carried");
+        Check(kinds.ContainsKey(new GridPos(6, 4)) && kinds[new GridPos(6, 4)] == WindReactionKind.LeanOnly,
+            "the water against the wall is only pressed");
+        Check(kinds.ContainsKey(new GridPos(3, 3)) && kinds[new GridPos(3, 3)] == WindReactionKind.DuplicateSpread,
+            "the infection with a block downwind will spread");
+
+        WindPreview tap = session.Powers.PreviewWind(power.InstanceId, Gust(3f, 3f, 3.3f, 3f));
+        Check(tap != null && !tap.Valid && tap.Reason == WindRefusal.TooShort, "a tap is too short");
+        WindPreview empty = session.Powers.PreviewWind(power.InstanceId, Gust(0f, 6f, 5f, 6f));
+        Check(empty != null && !empty.Valid && empty.Reason == WindRefusal.NothingToCarry,
+            "a gust over nothing it can carry says so");
+        WindPreview longOne = session.Powers.PreviewWind(power.InstanceId, Gust(0f, 0f, 20f, 20f));
+        Check(longOne != null && longOne.Gust.Clamped, "a stroke past the limit is reported as cut");
+    }
+
+    private static string WindBoardText(GameBoard board)
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (GridPos cell in board.GetOccupiedCells())
+        {
+            text.Append(cell.X).Append(',').Append(cell.Y).Append(':')
+                .Append(board.GetCube(cell).Value.Kind).Append(' ');
+        }
+        return text.ToString();
     }
 
     private static ActivationTarget Gust(float fx, float fy, float tx, float ty)

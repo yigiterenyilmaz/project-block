@@ -204,6 +204,31 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>
+        /// "Rüzgar"'s aim: what a stroke would affect and whether the power would blow it, asked
+        /// against the world the stroke was drawn on (the same window CanUse opens). Null when the
+        /// power is not a wind or no round is running. Charge and the turn's one-power budget are
+        /// CanUse's business; this only answers what the gust itself would do.
+        /// </summary>
+        public WindPreview PreviewWind(int instanceId, ActivationTarget target)
+        {
+            var wind = Find(instanceId) as RuzgarPower;
+            RoundEngine round = session.CurrentRound;
+            if (wind == null || round == null)
+            {
+                return null;
+            }
+            bool previousWorld = round.BeginMirrorTargeting(target.OnMirrorWorld);
+            try
+            {
+                return wind.Preview(RoundCtx(round), target);
+            }
+            finally
+            {
+                round.EndMirrorTargeting(previousWorld);
+            }
+        }
+
         /// <summary>True if the player holds a charged rescue power that could open a gap.
         /// The engine asks this before ending a round, to decide whether to pause instead.
         /// Checked WITHOUT a target, so a power that needs one must accept a bare check.</summary>

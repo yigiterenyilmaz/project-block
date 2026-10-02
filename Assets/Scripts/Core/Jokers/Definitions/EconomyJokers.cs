@@ -458,6 +458,11 @@ namespace ProjectBlock.Core
             return WindCarriesOn(ctx.Round.Board, gust).Count > 0;
         }
 
+        public override void PreviewWindRide(RoundContext ctx, WindGust gust, List<WindCarry> into)
+        {
+            into.AddRange(WindCarriesOn(ctx.Round.Board, gust));
+        }
+
         public override void RideWind(RoundContext ctx, WindGust gust)
         {
             GameBoard board = ctx.Round.Board;
@@ -502,7 +507,13 @@ namespace ProjectBlock.Core
                         continue;
                     }
                     taken.Add(to);
-                    carries.Add(new WindCarry { From = cells[i], To = to, CarrierId = DefId });
+                    carries.Add(new WindCarry
+                    {
+                        From = cells[i],
+                        To = to,
+                        CarrierId = DefId,
+                        Seed = cells[i].X * 7919 + cells[i].Y * 104729 + to.X * 31 + to.Y
+                    });
                     break;
                 }
             }

@@ -516,6 +516,14 @@ namespace ProjectBlock.Core
             return false;
         }
 
+        /// <summary>"Rüzgar", for the AIM: what this joker's marks on the board would do on this
+        /// gust, added to <paramref name="into"/> without changing anything. The same answer
+        /// RideWind then acts on.</summary>
+        public virtual void PreviewWindRide(RoundContext ctx, WindGust gust,
+            System.Collections.Generic.List<WindCarry> into)
+        {
+        }
+
         /// <summary>"Rüzgar" blew: carry what this joker keeps on the board, and write each carry
         /// into gust.Carries for the View. Runs after the gust has settled the board, so a carry
         /// lands on the board as it now stands.</summary>

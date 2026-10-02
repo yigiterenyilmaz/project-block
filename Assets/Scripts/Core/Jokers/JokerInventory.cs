@@ -536,6 +536,27 @@ namespace ProjectBlock.Core
             return false;
         }
 
+        /// <summary>"Rüzgar", for the aim: every carry the jokers' marks would make on this gust,
+        /// gated like the real thing - so the aim never lights up a silenced joker's infection.</summary>
+        public List<WindCarry> CollectWindRides(RoundEngine round, WindGust gust)
+        {
+            var rides = new List<WindCarry>();
+            if (round == null || gust == null)
+            {
+                return rides;
+            }
+            RoundContext ctx = RoundCtx(round);
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
+            {
+                if (!IsGated(batch[i], round))
+                {
+                    batch[i].PreviewWindRide(ctx, gust, rides);
+                }
+            }
+            return rides;
+        }
+
         /// <summary>"Rüzgar" blew: every joker carries what it keeps on the board, in inventory
         /// order.</summary>
         public void DispatchWind(RoundEngine round, WindGust gust)

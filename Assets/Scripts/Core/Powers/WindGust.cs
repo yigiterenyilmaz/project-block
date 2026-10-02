@@ -57,6 +57,13 @@ namespace ProjectBlock.Core
         /// <summary>False for a stroke too short to be a wind.</summary>
         public bool Valid { get; }
 
+        /// <summary>True when the stroke was drawn longer than the board allows and the gust was
+        /// cut to MaxLength - the aim shows its end pressed against that limit.</summary>
+        public bool Clamped { get; private set; }
+
+        /// <summary>The stroke began off the play area (a hole, outside the arena).</summary>
+        public bool StartsOffBoard { get; private set; }
+
         /// <summary>Every play cell in the wind, ordered by how far along the gust it lies, then
         /// across it, then by position - the fixed order every random draw walks.</summary>
         public IReadOnlyList<GridPos> Cells
@@ -111,6 +118,8 @@ namespace ProjectBlock.Core
             float dy = len > 0.0001f ? vy / len : 0f;
             var gust = new WindGust(start.X, start.Y, dx, dy, Math.Min(len, Math.Max(MinLength, max)),
                 max, valid);
+            gust.Clamped = len > Math.Max(MinLength, max) + 0.0001f;
+            gust.StartsOffBoard = !board.IsInside(start);
             if (valid)
             {
                 gust.Collect(board);
@@ -231,22 +240,66 @@ namespace ProjectBlock.Core
         }
     }
 
+    /// <summary>How a thing answers the wind - what the View maps to a presentation. The RULES
+    /// say which; the picture never works it out from a cube's kind.</summary>
+    public enum WindReactionKind
+    {
+        /// <summary>The wind passes over it and it stays exactly as it was (a plain block, stone).</summary>
+        None = 0,
+
+        /// <summary>It feels the wind and gives nothing up (water with nowhere to go).</summary>
+        LeanOnly = 1,
+
+        /// <summary>It stays, and throws part of itself downwind (fire's embers).</summary>
+        ParticleTransfer = 2,
+
+        /// <summary>It is carried somewhere else (water).</summary>
+        PhysicalMove = 3,
+
+        /// <summary>It stays AND a second one appears downwind (an infection).</summary>
+        DuplicateSpread = 4,
+
+        /// <summary>EXTENSION POINT: something with a presentation of its own.</summary>
+        Custom = 5
+    }
+
+    /// <summary>Why a stroke is not a gust the power would blow.</summary>
+    public enum WindRefusal
+    {
+        None = 0,
+
+        /// <summary>Shorter than WindGust.MinLength: a tap.</summary>
+        TooShort = 1,
+
+        /// <summary>It starts off the play area.</summary>
+        OffBoard = 2,
+
+        /// <summary>A real gust, over nothing it could carry.</summary>
+        NothingToCarry = 3
+    }
+
     /// <summary>One ember a fire in the wind threw. Target is the cube it set alight, or null
     /// when it flew off - nothing in its way, or the gust simply carried it past.</summary>
     public sealed class WindEmber
     {
         public GridPos Source;
         public GridPos? Target;
+
+        /// <summary>A stable number for this ember's flutter - decoration, never a rule.</summary>
+        public int Seed;
     }
 
     /// <summary>One water cube the wind pushed: where it stood, every cell it slid through and
-    /// where it stopped (before gravity took it - the fall is in the engine's water frames).</summary>
+    /// where the WIND left it (To), then every cell it fell through under the arena's gravity and
+    /// where it came to REST. Rest is where the cube is on the board afterwards.</summary>
     public sealed class WindPush
     {
         public GridPos From;
         public GridPos To;
+        public GridPos Rest;
         public Cube Cube;
         public readonly List<GridPos> Path = new List<GridPos>();
+        public readonly List<GridPos> Fall = new List<GridPos>();
     }
 
     /// <summary>Something a joker keeps on the board that the wind took somewhere else
@@ -258,6 +311,55 @@ namespace ProjectBlock.Core
 
         /// <summary>The joker that owns what was carried.</summary>
         public string CarrierId;
+
+        /// <summary>A stable number for the carry's wobble - decoration, never a rule.</summary>
+        public int Seed;
+    }
+
+    /// <summary>A cube that stood in the gust and was NOT carried or changed by it: what it was,
+    /// and how it answered (None for a plain block, LeanOnly for water with nowhere to go).</summary>
+    public sealed class WindBystander
+    {
+        public GridPos Cell;
+        public Cube Cube;
+        public WindReactionKind Reaction;
+    }
+
+    /// <summary>A fire the gust's water put out when it came to rest beside it (it is obsidian on
+    /// the board now): the cell and the fire that stood there.</summary>
+    public sealed class WindDoused
+    {
+        public GridPos Cell;
+        public Cube Was;
+    }
+
+    /// <summary>One thing the aim says the gust would affect, and how.</summary>
+    public sealed class WindAffected
+    {
+        public GridPos Cell;
+        public WindReactionKind Reaction;
+        public Cube? Cube;
+
+        /// <summary>The joker whose mark it is, for a DuplicateSpread; null for a cube.</summary>
+        public string CarrierId;
+    }
+
+    /// <summary>
+    /// What a stroke WOULD do, for the aim - the rules' own answer, so the lane the player aims
+    /// with and the things it lights up are the lane and the things the power would act on. It
+    /// names what is affected and how; it never says where anything will end up (the embers are
+    /// a die not yet rolled).
+    /// </summary>
+    public sealed class WindPreview
+    {
+        public WindGust Gust;
+
+        /// <summary>True when the power would blow this gust (charge and turn budget aside).</summary>
+        public bool Valid;
+
+        public WindRefusal Reason;
+
+        public readonly List<WindAffected> Affected = new List<WindAffected>();
     }
 
     /// <summary>
@@ -271,7 +373,26 @@ namespace ProjectBlock.Core
             Gust = gust;
         }
 
+        /// <summary>The corridor: origin, endpoint, direction, width, length and every cell it
+        /// crossed (Gust.Cells), plus what the jokers' marks did on it (Gust.Carries).</summary>
         public WindGust Gust { get; }
+
+        /// <summary>Which use of the power this is, and a stable number for its decoration.</summary>
+        public int EventId;
+        public int Seed;
+
+        /// <summary>Every cube in the gust the wind did not carry or change, as it stood.</summary>
+        public readonly List<WindBystander> Bystanders = new List<WindBystander>();
+
+        /// <summary>The gravity fall that followed the push, every water move of it.</summary>
+        public readonly List<IReadOnlyList<WaterMove>> FallFrames = new List<IReadOnlyList<WaterMove>>();
+
+        /// <summary>The part of that fall that was NOT a pushed cube coming to rest: water that
+        /// lost its footing when the wind took what it stood on.</summary>
+        public readonly List<IReadOnlyList<WaterMove>> OtherFallFrames = new List<IReadOnlyList<WaterMove>>();
+
+        /// <summary>Fires the settled water put out.</summary>
+        public readonly List<WindDoused> Doused = new List<WindDoused>();
 
         /// <summary>Every ember thrown, caught or not, in the order they were thrown.</summary>
         public readonly List<WindEmber> Embers = new List<WindEmber>();
