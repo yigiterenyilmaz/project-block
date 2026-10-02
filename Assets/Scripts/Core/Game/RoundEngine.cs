@@ -143,7 +143,7 @@ namespace ProjectBlock.Core
         /// the meter asks this and leaves the purse alone.</summary>
         public bool DefersPayout
         {
-            get { return Boss != null && Boss.DefersRoundPayout; }
+            get { return Boss != null && (Boss.DefersRoundPayout || Boss.RoundScoreIsNotMoney); }
         }
 
         /// <summary>
@@ -413,7 +413,7 @@ namespace ProjectBlock.Core
         /// <summary>True while the score bar cannot win the round (see BossRound.ThresholdDoesNotWin).</summary>
         public bool ThresholdWinBlocked
         {
-            get { return Boss != null && Boss.ThresholdDoesNotWin; }
+            get { return duelSeat || (Boss != null && Boss.ThresholdDoesNotWin); }
         }
 
         /// <summary>True while every joker pays the player BACKWARDS ("Terslik"): the points and

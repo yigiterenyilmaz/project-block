@@ -15,6 +15,36 @@ namespace ProjectBlock.Core
             this.rng = rng;
         }
 
+        /// <summary>A copy of this deck - the same cards in the same piles and order - drawing
+        /// its randomness from <paramref name="cloneRng"/>. The duel planner plays moves out on
+        /// copies of a round (RoundEngine.CloneForPlanning); the cards themselves are shared,
+        /// exactly as the piles share them with the owned deck.</summary>
+        internal RoundDeck CloneWith(IRandomSource cloneRng)
+        {
+            var clone = new RoundDeck(cloneRng);
+            clone.drawPile.AddRange(drawPile);
+            clone.discardPile.AddRange(discardPile);
+            clone.removedFromRound.AddRange(removedFromRound);
+            clone.ShuffleCount = ShuffleCount;
+            clone.PileRolesAlternate = PileRolesAlternate;
+            clone.PilesSwapped = PilesSwapped;
+            return clone;
+        }
+
+        /// <summary>"Blackjack": empties every pile and lays <paramref name="cards"/> as the draw
+        /// pile in the order given (the LAST is the top card) - no shuffle, the duel has already
+        /// shuffled them. The shuffle counter and the pile roles are left alone.</summary>
+        internal void ResetTo(IEnumerable<BlockCard> cards)
+        {
+            drawPile.Clear();
+            discardPile.Clear();
+            removedFromRound.Clear();
+            if (cards != null)
+            {
+                drawPile.AddRange(cards);
+            }
+        }
+
         internal void Save(SaveWriter w, string key, CardTable cards)
         {
             cards.WriteRefs(w, key + ".draw", drawPile);

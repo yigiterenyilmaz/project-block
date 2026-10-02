@@ -19,6 +19,11 @@ namespace ProjectBlock.Core
         /// may hang off the board). UI and play methods both use this.</summary>
         public bool CanPlaceCard(BlockCard card, GridPos origin)
         {
+            // "Blackjack" between hands: nothing goes on the board until the bet is in.
+            if (PlayIsHeld)
+            {
+                return false;
+            }
             // "Antimadde": it is not a block, it is a key. It only goes where every one of its
             // cubes covers a cube of the kind it annihilates - nothing hanging off, nothing over
             // an empty cell, nothing over the wrong kind. Refusing it everywhere else is what
@@ -447,6 +452,11 @@ namespace ProjectBlock.Core
             BlockCard returned = Hand.RemoveAt(handIndex);
             DiscardUnplayed(returned);
             BlockCard drawn = DrawWithRules();
+            if (drawn == null && PlaysOutItsCards)
+            {
+                CheckForNoPlayableMove(); // a duel side: the hand is one card shorter, no more
+                return null;
+            }
             if (drawn == null)
             {
                 if (Loss == null)
@@ -512,6 +522,10 @@ namespace ProjectBlock.Core
             if (Status != RoundStatus.InProgress)
             {
                 throw new InvalidOperationException("Cannot place a block while round status is " + Status + ".");
+            }
+            if (PlayIsHeld)
+            {
+                throw new InvalidOperationException("Play is held - the boss is waiting for a decision.");
             }
         }
 

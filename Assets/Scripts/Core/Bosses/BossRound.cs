@@ -334,6 +334,37 @@ namespace ProjectBlock.Core
             get { return false; }
         }
 
+        /// <summary>
+        /// The round is a DUEL ("Blackjack"): the player plays out a dealt half of the deck once.
+        /// The draw pile is never refilled from the discard, a hand that cannot be topped up is
+        /// simply shorter, and running out of moves is NOT a loss - the engine asks OnOutOfMoves
+        /// instead, and the boss decides what the end of a hand means.
+        /// </summary>
+        public virtual bool PlaysOutCards
+        {
+            get { return false; }
+        }
+
+        /// <summary>
+        /// While true NOTHING may be placed: the round is waiting for a decision the player has to
+        /// make first ("Blackjack" between hands, waiting for the bet). The engine refuses every
+        /// placement and every card turn; the View reads it to open whatever the boss is asking.
+        /// </summary>
+        public virtual bool HoldsPlay
+        {
+            get { return false; }
+        }
+
+        /// <summary>
+        /// The round's meter is NOT money ("Blackjack": the lines only decide who wins the hand;
+        /// the money is the bet). What the meter banks reaches neither the purse nor a debt, and
+        /// nothing is paid out when the round ends - the boss moves the purse itself.
+        /// </summary>
+        public virtual bool RoundScoreIsNotMoney
+        {
+            get { return false; }
+        }
+
         /// <summary>Shuffle erosion is suspended this round: the arena never shrinks. A round
         /// that cannot be won at the bar is not stalling, so the anti-stalling clock must not
         /// eat the board under it.</summary>
@@ -365,6 +396,30 @@ namespace ProjectBlock.Core
 
         /// <summary>A power was used ("Özel tüketim vergisi" taxes the deck for it).</summary>
         public virtual void OnPowerUsed(RoundContext ctx, string powerId)
+        {
+        }
+
+        /// <summary>A round that PlaysOutCards has nothing left it can place - asked by the
+        /// dead-end check instead of declaring a loss. Inside a turn the boss has usually already
+        /// acted on it from AfterTurnScored; between turns (a power froze the last card) this is
+        /// where it learns of it.</summary>
+        public virtual void OnOutOfMoves(RoundContext ctx)
+        {
+        }
+
+        // ---------------------------------------------------------------------- saving
+
+        /// <summary>
+        /// State the reflection walk cannot carry ("Blackjack"'s second round, which is a whole
+        /// RoundEngine): written after the boss's own fields, read back in the same order. A boss
+        /// that keeps nothing of the kind writes nothing, so every other boss's save is
+        /// unchanged. The field it lives in is [NotSaved].
+        /// </summary>
+        internal virtual void SaveExtra(SaveWriter w, string key, CardTable cards)
+        {
+        }
+
+        internal virtual void LoadExtra(SaveReader r, string key, CardTable cards, RoundEngine round)
         {
         }
 

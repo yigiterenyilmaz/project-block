@@ -97,6 +97,12 @@ namespace ProjectBlock.Core
             {
                 return;
             }
+            // "Blackjack": the meter was never money. It was held like any deferred round (so
+            // the books balance) and is forfeited - the duel paid the purse in bets.
+            if (round.Boss != null && round.Boss.RoundScoreIsNotMoney)
+            {
+                return;
+            }
             long meter = Math.Max(0L, (long)round.RoundScore);
             long ownNow = Math.Max(0L, (long)round.OwnBar);
             long ownThen = Math.Max(0L, (long)round.UninflatedOwnBar);

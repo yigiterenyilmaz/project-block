@@ -92,6 +92,7 @@ namespace ProjectBlock.Core
             if (Boss != null)
             {
                 ContentStateSerializer.Save(w, key + ".bossState", Boss);
+                Boss.SaveExtra(w, key + ".bossExtra", cards);
             }
         }
 
@@ -182,6 +183,7 @@ namespace ProjectBlock.Core
                 // Assigned directly rather than through SetBoss: the board came back with its
                 // own IgnoreElements already set, and SetBoss would overwrite it.
                 round.Boss = boss;
+                boss.LoadExtra(r, key + ".bossExtra", cards, round);
             }
 
             // The per-turn destruction bookkeeping is re-derived from the board that just

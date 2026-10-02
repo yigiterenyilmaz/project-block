@@ -216,6 +216,10 @@ namespace ProjectBlock.Core
                     Boss.OnDrawPileEmptied(new RoundContext(session, rng, this));
                 }
             }
+            if (PlaysOutItsCards)
+            {
+                return null; // "Blackjack": a duel side plays its half once - nothing comes back
+            }
             if (ThresholdPassed)
             {
                 Loss = LossReason.DrawPileEmptyAfterThreshold;
@@ -267,7 +271,8 @@ namespace ProjectBlock.Core
                 {
                     // "İmitasyon": a hand that cannot be topped up is fine, not a loss - it
                     // just holds fewer cards until the next draw source appears.
-                    if (Loss == null && !Rules.DrawOnlyAvailableNoReshuffle)
+                    // Nor on a duel side ("Blackjack"): its cards simply run out.
+                    if (Loss == null && !Rules.DrawOnlyAvailableNoReshuffle && !PlaysOutItsCards)
                     {
                         Loss = LossReason.HandCannotBeRefilled;
                     }
@@ -382,6 +387,17 @@ namespace ProjectBlock.Core
             // round is only lost when BOTH are stuck. All of that is HasAnyPlayableMove.
             if (HasAnyPlayableMove())
             {
+                return;
+            }
+            // "Blackjack": a duel side running out of moves ends NOTHING by itself - its hand is
+            // over, and what that means (the other side plays on, the hand is settled) is the
+            // duel's to decide. Never a loss, never a rescue.
+            if (PlaysOutItsCards)
+            {
+                if (Boss != null && session != null)
+                {
+                    Boss.OnOutOfMoves(new RoundContext(session, rng, this));
+                }
                 return;
             }
             // A boss whose OWN restriction jammed the board undoes it rather than letting the

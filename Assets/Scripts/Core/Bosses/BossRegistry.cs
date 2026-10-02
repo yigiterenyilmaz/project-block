@@ -55,6 +55,7 @@ namespace ProjectBlock.Core
             Register(() => new SnakeBoss());
             Register(() => new IstilaciBoss());
             Register(() => new TamagotchiBoss());
+            Register(() => new BlackjackBoss());
         }
 
         /// <summary>All known bosses, in design order.</summary>

@@ -58,6 +58,9 @@ namespace ProjectBlock.Core
 
         /// <summary>Shuffle erosion: the draw pile ran dry once more after the dead zone had
         /// already reached 5x5 (RoundEngine.ErodeCentre). The arena is past saving.</summary>
-        DeadZoneOverran = 12
+        DeadZoneOverran = 12,
+
+        /// <summary>"Blackjack": the purse ran down to nothing at the duel table.</summary>
+        DuelBankrupt = 13
     }
 }

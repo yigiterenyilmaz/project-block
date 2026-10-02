@@ -18,6 +18,7 @@ public static partial class JokerTests
         ScorePipeline_FlatThenMultiplier_InInventoryOrder();
         Overtime_WinBonus_EscalatesAndRoughlyDoublesBaseline();
         RunOvertimeArenaTests();
+        RunBlackjackTests();
         Overtime_RegularBaseTrickled_BonusAndJokersFullWeight();
         Overtime_WinBonusAwardedOnEachOvertimeSweep();
         Streak_Dondurma_Decreasing();
