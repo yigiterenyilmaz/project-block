@@ -457,6 +457,7 @@ namespace ProjectBlock.View
             RoundEngine round = session != null ? session.CurrentRound : null;
             GameBoard shownBefore = boardView.Board;
             float cellBefore = boardView.CellWorldSize;
+            Vector2 anchorBefore = ArenaAnchor(shownBefore);
             if (round == null || !round.DebugEnterOvertime())
             {
                 Debug.Log("[block_bonk] Debug overtime: the round cannot be pushed from here.");
@@ -470,9 +471,33 @@ namespace ProjectBlock.View
             }
             RefreshAll(null);
             // the continue gave back the arena the erosion ate: unfold it, as the C key does
-            powerFx.PlayBoardResize(boardView, shownBefore, cellBefore, null);
+            PlayArenaRegrowth(shownBefore, cellBefore, anchorBefore);
             Debug.Log("[block_bonk] Debug overtime: continue #" + round.ContinueCount
                 + ", " + round.Hand.Count + " in hand.");
+        }
+
+        /// <summary>Where the view draws the shown board's corner cell right now - taken BEFORE a
+        /// continue, so the regrowth can be unfolded from where the old arena really stood.</summary>
+        private Vector2 ArenaAnchor(GameBoard shown)
+        {
+            return shown != null && boardView.Board == shown
+                ? boardView.CellToWorld(new GridPos(shown.MinX, shown.MinY)) : Vector2.zero;
+        }
+
+        /// <summary>
+        /// Overtime gave back the arena the erosion ate (RoundEngine.RestoreErodedArena): the view
+        /// has been rebuilt for it, and the regrown bands unfold out of the old rim with the
+        /// inflations' own animation. The rim comes back one side at a time, so the old arena is
+        /// held where it STOOD (the anchor), not merely at its old cell size.
+        /// </summary>
+        private void PlayArenaRegrowth(GameBoard shownBefore, float cellBefore, Vector2 anchorBefore)
+        {
+            if (shownBefore == null || boardView.Board == shownBefore)
+            {
+                return; // only the dead zone lifted: the repaint already showed it
+            }
+            powerFx.PlayBoardResize(boardView, shownBefore, cellBefore, null,
+                new GridPos(shownBefore.MinX, shownBefore.MinY), anchorBefore, MainBoardCenter);
         }
 
         /// <summary>Flips EN/TR, persists the choice, and re-texts every open view.</summary>
@@ -1379,6 +1404,7 @@ namespace ProjectBlock.View
                             // the board showed before, so the regrowth unfolds out of it
                             GameBoard shownBefore = boardView.Board;
                             float cellBefore = boardView.CellWorldSize;
+                            Vector2 anchorBefore = ArenaAnchor(shownBefore);
                             bool hadDeadZone = round.Board.BlightedCellCount > 0;
                             round.DecideAdvance(false);
                             // the overtime fire ignites the moment the player chooses to
@@ -1391,7 +1417,7 @@ namespace ProjectBlock.View
                                 if (round.Board != shownBefore || hadDeadZone)
                                 {
                                     RefreshAll(null);
-                                    powerFx.PlayBoardResize(boardView, shownBefore, cellBefore, null);
+                                    PlayArenaRegrowth(shownBefore, cellBefore, anchorBefore);
                                 }
                                 else
                                 {

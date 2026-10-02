@@ -2838,16 +2838,33 @@ namespace ProjectBlock.View
         /// </summary>
         public void PlayBoardResize(BoardView view, GameBoard before, float cellBefore, IList<CubeFace> doomed)
         {
+            PlayBoardResize(view, before, cellBefore, doomed, null, Vector2.zero, Vector2.zero);
+        }
+
+        /// <summary>
+        /// As above, for a growth that is NOT the same on every side (overtime giving back the
+        /// rim the erosion took from one side at a time): the old arena then stood off centre in
+        /// the new one, and holding the old cell size alone would jump every standing cell half a
+        /// cell on the first frame. <paramref name="anchorCell"/> is any cell of the old board,
+        /// <paramref name="anchorBefore"/> where the view drew it (CellToWorld) BEFORE the rebuild
+        /// and <paramref name="centre"/> the point the arena is laid out about; the difference is
+        /// held through BoardView.SetInflateOffset and eased out with the scale.
+        /// </summary>
+        public void PlayBoardResize(BoardView view, GameBoard before, float cellBefore, IList<CubeFace> doomed,
+            GridPos? anchorCell, Vector2 anchorBefore, Vector2 centre)
+        {
             if (view == null || before == null || view.Board == null || view.Board == before)
             {
                 return;
             }
             GameBoard after = view.Board;
             bool grows = after.Width * after.Height > before.Width * before.Height;
-            StartCoroutine(grows ? Grow(view, before, cellBefore) : Shrink(view, before, cellBefore, doomed));
+            StartCoroutine(grows ? Grow(view, before, cellBefore, anchorCell, anchorBefore, centre)
+                : Shrink(view, before, cellBefore, doomed));
         }
 
-        private IEnumerator Grow(BoardView view, GameBoard before, float cellBefore)
+        private IEnumerator Grow(BoardView view, GameBoard before, float cellBefore,
+            GridPos? anchorCell, Vector2 anchorBefore, Vector2 centre)
         {
             running++;
             GameBoard after = view.Board;
@@ -2878,7 +2895,14 @@ namespace ProjectBlock.View
                     delay.Add(0.05f + along * 0.035f);
                 }
             }
+            // Where the old arena stood against where the rebuilt one puts it at the old cell
+            // size: one constant for every cell, so one cell measures it. Zero for a growth that
+            // is the same on every side (the inflations), which pass no anchor.
+            Vector2 shift = anchorCell.HasValue
+                ? (anchorBefore - centre) - s0 * (view.CellToWorld(anchorCell.Value) - centre)
+                : Vector2.zero;
             view.SetInflate(s0);
+            view.SetInflateOffset(shift);
             Play(x => x.Stretch());
             for (int i = 0; i < band.Count; i++)
             {
@@ -2935,7 +2959,9 @@ namespace ProjectBlock.View
                 PlaceSeam(seams[3], new Vector2(r.xMax, r.center.y), new Vector2(thick, r.height), alpha);
                 // The arena eases back to fit, with the lightest overshoot.
                 float fk = Mathf.Clamp01((t - fit0) / (end - fit0));
-                view.SetInflate(Mathf.LerpUnclamped(s0, 1f, EaseOutBack(fk, 0.9f)));
+                float fe = EaseOutBack(fk, 0.9f);
+                view.SetInflate(Mathf.LerpUnclamped(s0, 1f, fe));
+                view.SetInflateOffset(shift * (1f - fe));
                 StepMotes(motes, dt);
                 yield return null;
             }
@@ -2950,6 +2976,7 @@ namespace ProjectBlock.View
             if (view != null)
             {
                 view.SetInflate(1f);
+                view.SetInflateOffset(Vector2.zero);
                 view.ClearCellSquash();
             }
             running--;
