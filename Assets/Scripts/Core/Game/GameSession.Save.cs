@@ -163,6 +163,10 @@ namespace ProjectBlock.Core
                     rng, session.scorer, session, session.Jokers);
                 session.CurrentRound.TurnResolved += session.OnTurnResolved;
                 session.CurrentRound.StatusChanged += session.OnRoundStatusChanged;
+                // The board has just come back from the file: a joker that keeps an unsaved view
+                // of it ("Devre"'s circuit, squeezed into the arena as it is) rebuilds it now, so
+                // the first frame after a load is already right.
+                session.Jokers.DispatchBoardReshaped(session.CurrentRound);
             }
             return session;
         }

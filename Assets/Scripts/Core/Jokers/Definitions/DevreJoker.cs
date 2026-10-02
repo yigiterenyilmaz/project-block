@@ -24,6 +24,15 @@
 // Without that, a placement that completed the circuit AND a row would lose the circuit to its
 // own line clear - the player did the work either way.
 //
+// THE CIRCUIT NEVER LEAVES THE ARENA. The arena can shrink under it mid-round - erosion taking
+// the rim, a deflate, "Tamagotchi" eating cells - and a circuit with a cell off the board can never
+// be completed, and is drawn hanging off the edge. So two circuits are kept: the route as it was
+// TRACED (saved), and the circuit as it stands on the board NOW, which is that route SQUEEZED into
+// whatever the arena has become (Squeeze) - rebuilt on every reshape (Joker.OnBoardReshaped),
+// every turn and after a load. When the arena grows back (the next round's fresh board) the same
+// route unfolds back to what was traced. Only when even a squeeze cannot place it does the circuit
+// go, and a new one is traced on the remaining board a turn later.
+//
 // All numbers are BALANCE PLACEHOLDERS.
 
 using System.Collections.Generic;
@@ -53,7 +62,18 @@ namespace ProjectBlock.Core
 
         private const int GenerationAttempts = 12;
 
+        /// <summary>The circuit as it was TRACED, in route order - on the board it was traced on,
+        /// so after the arena shrinks some of it may lie off the board. Never played directly:
+        /// everything reads <see cref="live"/>.</summary>
         private readonly List<GridPos> path = new List<GridPos>();
+
+        /// <summary>The circuit as it stands on the board RIGHT NOW: the traced route squeezed
+        /// into the arena as it is (Squeeze). The completion check, the break and the View all
+        /// read this one. It is a pure function of the route and the board, rebuilt on every
+        /// reshape and after a load, so it is not state and is not saved.</summary>
+        [NotSaved]
+        private readonly List<GridPos> live = new List<GridPos>();
+
         private int armOnTurn;
         private bool armed;
         private bool brokenThisRound;
@@ -73,11 +93,14 @@ namespace ProjectBlock.Core
                     + "sonraki rauntta da yerinde durur.");
         }
 
-        /// <summary>The circuit's cells IN ROUTE ORDER, for the UI to draw. Empty when nothing is
-        /// traced. Consecutive entries are always one cell apart, never diagonal.</summary>
+        /// <summary>The circuit's cells IN ROUTE ORDER, for the UI to draw - as it stands on the
+        /// board now, so every cell is play area however far the arena has shrunk. Empty when
+        /// nothing is traced. Consecutive entries are always one cell apart, never diagonal.
+        /// (Between a load in the market and the next round there is no board to fit it to, and
+        /// this is the route as traced.)</summary>
         public IReadOnlyList<GridPos> Path
         {
-            get { return path; }
+            get { return live.Count > 0 ? live : path; }
         }
 
         /// <summary>True when the circuit runs left-to-right, false when it runs top-to-bottom.
@@ -120,7 +143,7 @@ namespace ProjectBlock.Core
                 {
                     return Loc.Pick("tracing...", "çiziliyor...");
                 }
-                return path.Count + Loc.Pick(" cells", " kare");
+                return Path.Count + Loc.Pick(" cells", " kare");
             }
         }
 
@@ -129,39 +152,40 @@ namespace ProjectBlock.Core
         /// where it is - the joker's promise is that it waits for you, and a circuit rerolled
         /// every round was really a one-round deadline wearing a different hat.
         ///
-        /// The one thing that forces a redraw is the board changing under it: a boss that
-        /// resizes the arena ("Dört kutup"), or erosion from the round just played, can leave a
-        /// cell of the path off the board, and a circuit that cannot be completed is worse than
-        /// no circuit at all.
+        /// It is laid on the new board the way it is laid on a shrunk one: the traced route,
+        /// squeezed into the arena (Squeeze). On a fresh full arena that is the route itself, so a
+        /// circuit the rim squeezed last round unfolds back to what was traced. Only a board it
+        /// cannot be squeezed into at all ("Dört kutup" resizing the arena round a hole) forces a
+        /// redraw - a circuit that cannot be completed is worse than no circuit at all.
         /// </summary>
         public override void OnRoundStarted(RoundContext ctx)
         {
             brokenThisRound = false;
-            if (armed && PathFitsBoard(ctx.Round.Board))
+            if (armed && Fit(ctx.Round.MainBoard))
             {
                 return;
             }
             path.Clear();
+            live.Clear();
             armed = false;
             int span = MaxArmTurn - MinArmTurn + 1;
             armOnTurn = MinArmTurn + (span > 1 ? ctx.Rng.NextInt(0, span) : 0);
         }
 
-        /// <summary>True when every cell of the standing circuit is still on the board.</summary>
-        private bool PathFitsBoard(GameBoard board)
+        /// <summary>The arena changed shape mid-round (erosion, a deflate, a "Tamagotchi" bite,
+        /// an inflation): the circuit is squeezed into what is left of it at once, so the player
+        /// never sees it - or is asked to fill it - off the board. Runs silenced or not, and
+        /// draws nothing from the rng (see Joker.OnBoardReshaped).</summary>
+        public override void OnBoardReshaped(RoundContext ctx)
         {
-            if (board == null || path.Count == 0)
+            if (!HasCircuit || ctx.Round == null)
             {
-                return false;
+                return;
             }
-            for (int i = 0; i < path.Count; i++)
+            if (!Fit(ctx.Round.MainBoard))
             {
-                if (!board.IsInside(path[i]))
-                {
-                    return false;
-                }
+                Withdraw(ctx.Round.TurnNumber);
             }
-            return true;
         }
 
         public override void AfterTurnScored(TurnContext turn)
@@ -178,6 +202,14 @@ namespace ProjectBlock.Core
                 }
                 return;
             }
+            // Fitted again before it is judged, whatever the reshape hook already did: the
+            // completion check must be asked of the circuit on THIS board, never of one that
+            // runs off it - and a board that grew back since (overtime) unfolds it here.
+            if (!Fit(turn.Round.MainBoard))
+            {
+                Withdraw(turn.Round.TurnNumber);
+                return;
+            }
             if (!IsComplete(turn))
             {
                 return;
@@ -189,14 +221,14 @@ namespace ProjectBlock.Core
         /// already exploded, which counts just the same (see the file header).</summary>
         private bool IsComplete(TurnContext turn)
         {
-            if (path.Count == 0)
+            if (live.Count == 0)
             {
                 return false;
             }
             GameBoard board = turn.Round.Board;
-            for (int i = 0; i < path.Count; i++)
+            for (int i = 0; i < live.Count; i++)
             {
-                GridPos cell = path[i];
+                GridPos cell = live[i];
                 if (board.GetCube(cell).HasValue)
                 {
                     continue;
@@ -228,9 +260,9 @@ namespace ProjectBlock.Core
         private void Break(TurnContext turn)
         {
             brokenThisRound = true;
-            int cells = path.Count;
+            int cells = live.Count;
 
-            IReadOnlyList<GridPos> blown = turn.Round.DestroyCubes(path, true);
+            IReadOnlyList<GridPos> blown = turn.Round.DestroyCubes(live, true);
             // Reported for the view only - it has no other way to know this happened, and
             // nothing in Core reads it back. Scoring below is untouched.
             turn.Report.AddCircuitExplodedCells(blown);
@@ -252,7 +284,93 @@ namespace ProjectBlock.Core
             // joker has actually been worth.
             NoteProc(perCube + circuitBonus, turn);
             path.Clear();
+            live.Clear();
             armed = false;
+        }
+
+        /// <summary>Lays the circuit on <paramref name="board"/> as it stands: the traced route,
+        /// squeezed into it. False when it cannot be placed there at all.</summary>
+        private bool Fit(GameBoard board)
+        {
+            List<GridPos> squeezed = Squeeze(path, pathIsHorizontal, board);
+            live.Clear();
+            if (squeezed == null)
+            {
+                return false;
+            }
+            live.AddRange(squeezed);
+            return true;
+        }
+
+        /// <summary>The arena changed under the circuit and it cannot be squeezed into what is
+        /// left (a cell of it was eaten, or it would come out a plain row or column). A circuit
+        /// that can never be completed is worse than none, so it goes - and a new one is traced on
+        /// the board as it then stands at the end of the NEXT turn, where tracing always happens,
+        /// because the reshape hook may not draw from the rng.</summary>
+        private void Withdraw(int turnNumber)
+        {
+            path.Clear();
+            live.Clear();
+            armed = false;
+            armOnTurn = turnNumber + 1;
+        }
+
+        /// <summary>
+        /// The traced route, squeezed into <paramref name="board"/>. Along the circuit's own axis
+        /// the steps that fell off the board are dropped, so it starts and ends on the new edges;
+        /// across it, every cell is pulled in to the nearest row (or column) still there. A route
+        /// is one contiguous run per step with neighbouring runs sharing a cell, and pulling every
+        /// cell in by the same rule keeps both, so what comes out is still one unbroken line that
+        /// never doubles back - only flatter where the rim took its bends. A route that already
+        /// fits comes back exactly as it is.
+        ///
+        /// Null when it cannot be done: nothing of it is left, a cell of it lands on a hole or an
+        /// eaten cell, or the squeeze flattened it into a plain row or column (which the game
+        /// already explodes on its own, see TryTrace).
+        /// </summary>
+        internal static List<GridPos> Squeeze(IReadOnlyList<GridPos> route, bool horizontal,
+            GameBoard board)
+        {
+            if (board == null || route == null || route.Count == 0)
+            {
+                return null;
+            }
+            int alongMin = horizontal ? board.MinX : board.MinY;
+            int alongMax = alongMin + (horizontal ? board.Width : board.Height) - 1;
+            int acrossMin = horizontal ? board.MinY : board.MinX;
+            int acrossMax = acrossMin + (horizontal ? board.Height : board.Width) - 1;
+            var squeezed = new List<GridPos>(route.Count);
+            for (int i = 0; i < route.Count; i++)
+            {
+                int along = horizontal ? route[i].X : route[i].Y;
+                if (along < alongMin || along > alongMax)
+                {
+                    continue;
+                }
+                int across = Clamp(horizontal ? route[i].Y : route[i].X, acrossMin, acrossMax);
+                GridPos cell = horizontal ? new GridPos(along, across) : new GridPos(across, along);
+                if (squeezed.Count > 0 && squeezed[squeezed.Count - 1].Equals(cell))
+                {
+                    continue; // two cells of a bend pulled onto the same one
+                }
+                if (!board.IsInside(cell))
+                {
+                    return null;
+                }
+                squeezed.Add(cell);
+            }
+            if (squeezed.Count == 0)
+            {
+                return null;
+            }
+            GridPos first = squeezed[0];
+            GridPos last = squeezed[squeezed.Count - 1];
+            int span = horizontal ? last.X - first.X + 1 : last.Y - first.Y + 1;
+            if (squeezed.Count <= span)
+            {
+                return null; // one cell per step: it never leaves its lane any more
+            }
+            return squeezed;
         }
 
         /// <summary>
@@ -330,6 +448,8 @@ namespace ProjectBlock.Core
             }
             path.Clear();
             path.AddRange(traced);
+            live.Clear();
+            live.AddRange(traced);
             pathIsHorizontal = horizontal;
             return true;
         }

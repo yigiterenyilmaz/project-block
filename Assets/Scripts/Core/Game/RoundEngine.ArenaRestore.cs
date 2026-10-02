@@ -94,6 +94,8 @@ namespace ProjectBlock.Core
                     mainBoard = regrown;
                     ResyncSnapshot();
                     CaptureTurnStartCardCounts();
+                    // The circuit a shrunk arena squeezed ("Devre") unfolds with the ground.
+                    NoteBoardReshaped();
                     changed = true;
                 }
                 erodedLeft = 0;

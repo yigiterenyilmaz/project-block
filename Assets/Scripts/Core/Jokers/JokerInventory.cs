@@ -676,6 +676,24 @@ namespace ProjectBlock.Core
             RaiseChanged();
         }
 
+        /// <summary>See Joker.OnBoardReshaped. Deliberately NOT gated (no overtime, no boss
+        /// silence) and no "Terslik" window: it scores nothing, it only keeps what a joker
+        /// remembers about the board true to the board.</summary>
+        public void DispatchBoardReshaped(RoundEngine round)
+        {
+            if (round == null)
+            {
+                return;
+            }
+            RoundContext ctx = RoundCtx(round);
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
+            {
+                batch[i].OnBoardReshaped(ctx);
+            }
+            RaiseChanged();
+        }
+
         public void AfterTurnScored(TurnContext turn)
         {
             List<Joker> batch = Snapshot();

@@ -135,6 +135,10 @@ namespace ProjectBlock.Core
         {
             List<GridPos> eaten = MainBoard.MarkDead(cells);
             ResyncSnapshot();
+            if (eaten.Count > 0)
+            {
+                NoteBoardReshaped();
+            }
             return eaten;
         }
 

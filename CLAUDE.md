@@ -1688,6 +1688,21 @@ dropped that way once each.
    (Buldozer) passes `countsForSweep: false` — that is also what keeps it out of
    "Kayıt defteri"'s ledger.
 
+5. **A joker that remembers CELLS is told when the arena changes shape.** The play area can
+   shrink or grow mid-round (erosion's rim, an inflation or a deflate, a "Tamagotchi" bite,
+   overtime giving the rim back, "Tılsım"'s ground), and whatever does it calls
+   `RoundEngine.NoteBoardReshaped` → `Joker.OnBoardReshaped`. That dispatch is deliberately
+   UNGATED (no overtime, no boss silence): it is bookkeeping, not an effect, so nothing may be
+   scored, added or drawn from the rng there. **"Devre" is the one that uses it** (2026-10-02):
+   its circuit never leaves the arena. The route as TRACED is the saved state (`path`); the
+   circuit actually played and drawn (`Path`, a `[NotSaved]` cache rebuilt on every reshape,
+   every turn and after a load - so no save-format bump) is that route SQUEEZED into the board
+   as it stands (`DevreJoker.Squeeze`: steps that fell off along its axis dropped, every cell
+   pulled in to the nearest row/column still there - still one unbroken monotone line). When the
+   ground comes back the same route unfolds to what was traced. A circuit that cannot be
+   squeezed in (a cell eaten, or flattened into a plain row) is withdrawn and traced afresh on
+   the remaining board at the end of the next turn. Pinned in `Tools/CoreTests/DevreTests.cs`.
+
 Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.

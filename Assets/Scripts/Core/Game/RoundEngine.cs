@@ -674,6 +674,7 @@ namespace ProjectBlock.Core
             }
             ResyncSnapshot();
             CaptureTurnStartCardCounts();
+            NoteBoardReshaped();
             return true;
         }
 
@@ -705,6 +706,7 @@ namespace ProjectBlock.Core
             }
             ResyncSnapshot();
             CaptureTurnStartCardCounts();
+            NoteBoardReshaped();
             return granted;
         }
 

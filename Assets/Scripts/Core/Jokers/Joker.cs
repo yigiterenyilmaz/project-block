@@ -496,6 +496,18 @@ namespace ProjectBlock.Core
         {
         }
 
+        /// <summary>The play area changed SHAPE mid-round: the arena was resized (erosion taking
+        /// the rim, an inflation or a deflate, retro's dead rows) or cells were eaten for good
+        /// ("Tamagotchi"). A joker that remembers cells on the board ("Devre"'s circuit) makes
+        /// them true again here, so it never points at ground that no longer exists.
+        ///
+        /// Dispatched to EVERY joker, silenced or not: this is bookkeeping, not an effect - a
+        /// joker that sat out a reshape under a boss would come back pointing off the board.
+        /// So nothing may be scored, drawn from the rng or added here.</summary>
+        public virtual void OnBoardReshaped(RoundContext ctx)
+        {
+        }
+
         /// <summary>"Rüzgar": would this joker have something on the board for the gust to carry?
         /// A pure question - asked before the power runs, so a gust that would touch nothing is
         /// refused rather than spending its charge. Only asked about the main world.</summary>

@@ -199,6 +199,7 @@ public static partial class JokerTests
         Devre_OnlyOneCircuitPerRound();
         Devre_EveryBrokenCubeIsReportedForTheView();
         Devre_ALineClearOnTheSameTurnStillCounts();
+        RunDevreTests();
         Nester_CutsABlockInTwo();
         Nester_RefusesACutThatWouldNotHoldTogether();
         Lehimleme_WeldsTwoCardsIntoOne();

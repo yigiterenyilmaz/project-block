@@ -335,6 +335,18 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>Tells the jokers that the play area changed shape (see Joker.OnBoardReshaped).
+        /// Called from the places that change WHICH cells are play area mid-round - ReshapeBoard,
+        /// GrantBonusGround, EatCellsForGood, RestoreErodedArena - after the new board is in place.
+        /// EXTENSION POINT: a new way of taking ground away mid-round calls this too.</summary>
+        private void NoteBoardReshaped()
+        {
+            if (session != null)
+            {
+                session.Jokers.DispatchBoardReshaped(this);
+            }
+        }
+
         /// <summary>
         /// Re-asks "is there still a move?" after something changed the HAND between turns (a
         /// penalty that discarded or froze it). A no-op inside a turn, which asks on its own at
