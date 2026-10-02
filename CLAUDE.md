@@ -1215,15 +1215,44 @@ dropped that way once each.
   means what it says (the `_FaceHalf` trap, again). The iron is lit **in WORLD space**: four ribs
   are one sprite at four rotations, and lit in their own local space each highlight points a
   different way, which reads as four separate objects rather than one mechanism.
-  **THE VIEW DECIDES NONE OF IT.** `MapusSealVisuals` (Core, reporting only, `[NotSaved]`) carries
-  which cell, whether this turn MOVED the seal or HELD it, whether the CAP just released one, and
-  how many cubes the row and column still want (`GameBoard.RowGapCount` / `ColumnGapCount` — which
-  count exactly what `ResolveFullLines` waits for, so there is one definition of a nearly-full line
-  in the codebase and not two). Held is the small animation and moved is the big one; the cap's
-  release is its own beat, because that is the one turn the player can finish the line and it has
-  to look like a window rather than a wander. The boss's targeting lives in ONE method (`Choose`)
-  that both the round and the **animation lab** call — the lab seals its own board through
-  `MapusBoss.RetargetOn`, so the cell its sixteen scenes seal is the cell the rules would seal.
+  **THE RULE WAS RE-CUT (designer's call, 2026-10-02): A LOCK EVERY SECOND TURN, EACH FOR THREE,
+  AIMED BY THE PLAYER'S CARDS.** It used to keep ONE seal, re-aimed every turn off the board's gap
+  counts and held up to three turns - which never knew what the player was holding. Now one lock
+  goes up as the round starts and another after every second turn (`TurnsBetweenSeals`), each
+  stands three turns (`SealTurns`) and never moves, so they OVERLAP: the turns are played round
+  one lock, one, two, one, two. **Where** is measured, not guessed: for every row and column the
+  boss plays the next three turns out with the hand and the cards about to be DRAWN, in the order
+  they really come (`LineChanceSea.Measure(round, board, ..., knownDrawOrder: true)` - the
+  antagonist may look at the pile the player cannot; only a discard coming back round is still a
+  shuffle, and a future with no shuffle in it is played once), and takes `LineChance.Urgency` -
+  the chance weighed by HOW SOON, so a line that goes off next turn is a whole threat and one that
+  only makes the deadline a third of one. A cell is worth its row plus its column plus
+  `CrossBonusPercent` (150%) of the two multiplied, which is what sends the lock to the CROSSING
+  of two lines first. A line a standing lock already holds shut measures as impossible, so two
+  locks deny two different things. With no line clearable in time it falls back to the board alone
+  (the old gap-count `Danger`, which is also the tie-break), and ties are broken from the round's
+  rng. Two guards: a cell whose lock ran out THIS turn sits out this turn's pick (so a denied
+  cell is always the player's for one whole turn, whatever the rhythm is tuned to), and it never
+  locks below `MinFreeCells` free cells - a lock it could not lay stays owed. The joker's own call
+  of the sea is untouched, sample for sample; the baseline did not move. Save format 29. Pinned in
+  `Tools/CoreTests/MapusTests.cs`.
+  **THE VIEW DECIDES NONE OF IT.** `MapusSealVisuals` (Core, reporting only, `[NotSaved]`, a new
+  object per turn) carries every lock standing (`Seals`: the cell, its turns left, whether it went
+  up this turn), the cells whose time ran out (`Expired`), whether the cards or the board aimed
+  the new one and what its row and column measured, and how many cubes each lock's row and column
+  still want (`GameBoard.RowGapCount` / `ColumnGapCount` — which count exactly what
+  `ResolveFullLines` waits for, so there is one definition of a nearly-full line in the codebase
+  and not two). A lock standing another turn is the small animation and a new one is the big one,
+  built BESIDE the prison already there; on its LAST turn the grip slackens (the bolts ease back
+  a hair, the wax goes cold - `Style.LastTurn*`), which is how the player sees which of two is
+  about to open without a number on it; and running out is its own beat, because that is the one
+  turn the player can finish the line and it has to look like a window. A loaded save has locks
+  and no report, so the game asks `MapusBoss.ReportFor`, which writes one from the locks as they
+  stand. The boss's turn lives in ONE method (`Step`, with one `Choose`) that both the round and
+  the **animation lab** call — the lab runs `MapusBoss.StartOn` / `AdvanceOn` on a board of its
+  own while reading the ROUND's real hand and draw pile, and hands the report to the same seam
+  the game uses (`PlayMapusReport`), so the cells its seventeen scenes lock are the cells the
+  rules would lock with the cards the player is actually holding.
 - **"Parazit"'s HOST CUBE is a clasp, not a colour** (`ParasiteHostView`,
   `Resources/Shaders/ParasiteHarness`). A host used to be its own colour lerped 55% toward magenta,
   and that wash was the entire visual language of the mechanic: it said "this one is pink" and
