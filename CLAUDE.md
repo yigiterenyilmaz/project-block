@@ -1644,6 +1644,32 @@ dropped that way once each.
   erodes it again: past the bar a dry pile is a loss, never a recycle. Advancing to the market
   touches nothing. The View unfolds the regrowth with the inflations' `PlayBoardResize`.
   Save format 28.
+  **THE RIM COMES OFF ON SCREEN** (2026-10-02; `RimErosionView`, `GameUiController.RimErosion.cs`).
+  The arena used to SNAP: the board object is replaced, the view rebuilt the grid at the new cell
+  count, and a row and a column were gone in one frame with every survivor a sixth bigger and half
+  a cell over. Now it is four overlapping beats, about 1.1 s, and no explosion (the erosion pays
+  nothing): the OLD arena held exactly as it stood, a dark CRACK with a dull wine ember running the
+  seam from the corner the two lost bands share, the bands BREAKING OFF a cell at a time (nearest
+  that corner first: each piece slides outward as it sinks - smaller, darker, a few degrees turned -
+  with a few crumbs and a puff of dust; never a fade in place), and an eased REFIT in which what is
+  left grows into the room. Three things make it work. **The pieces are the old plate's own pixels**:
+  `BoardSurfaceView.Detach` hands the plate and its texture over before the rebuild would destroy
+  them, and each lost cell's ground is a sprite cut from that texture (an edge cell takes the frame
+  and the shadow along). **The rim goes from ONE side at a time**, so holding the old cell size
+  (`SetInflate`) is not enough - the survivors were off centre in the old arena; `SetInflateOffset`
+  is a fifth term on the arena transform that keeps them exactly where they stood, and it eases to
+  nothing with the scale (an asymmetric GROW needs the same term). **The cubes come from the
+  report, not from the board as shown**: the shown board is a turn old, so a block placed into the
+  band on the very turn it went is not on it and a cube a line took this turn still is.
+  `RoundEngine.LastRimErosion` (`RimErosionVisuals`, a new object per erosion, matched by identity,
+  not saved) carries the arena's box before and after and the cubes the bands held; the old arena
+  is TAKEN just before `BoardView.Rebuild` and played right after it, both inside `RefreshAll`, so
+  a placement and a hand redraw are covered by one seam. The proxies live under a root that copies
+  the transform the board HAD, outside the board's own. Placement is locked while it plays (a cell
+  is not where the pointer says until the refit lands). The dead zone's growth is still a repaint.
+  The lab has five scenes under general / board (odd step, even step, two steps at once, empty,
+  full). **Not seen running in Unity**: it compiles against the editor's assemblies and the
+  transform math was checked by hand, the motion was not watched.
 - Turkish design terms → code names: el = `Hand`/turn, çekme destesi = `RoundDeck.DrawPile`,
   ıskarta = discard, oyun destesi = `GameSession.OwnedCards`, raunt = round,
   temizlik = clean sweep, bonus el = bonus hand, eşik = `RoundConfig.ScoreThreshold`,
