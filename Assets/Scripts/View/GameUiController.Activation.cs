@@ -587,6 +587,7 @@ namespace ProjectBlock.View
             cubePicker.Hide();
             nesterEditor.Hide();
             weldPicker.Hide();
+            ClearWindAim();
             boardView.ClearPreview();
             UpdateHud();
             jokerBar.Refresh(session, null);
@@ -1344,6 +1345,9 @@ namespace ProjectBlock.View
             // resize animates FROM.
             GameBoard shownBefore = boardView != null ? boardView.Board : null;
             float cellBefore = boardView != null ? boardView.CellWorldSize : 1f;
+            // "Rüzgar": the faces of everything in the lane, before the embers turn some to fire.
+            Dictionary<GridPos, WindGustView.Face> windFaces = power is RuzgarPower
+                ? CaptureWindFaces(target) : null;
             if (!session.Powers.TryUse(power.InstanceId, target))
             {
                 Debug.Log("[block_bonk] " + power.DisplayName + " could not be used.");
@@ -1390,6 +1394,13 @@ namespace ProjectBlock.View
             // Powers can rewrite the board (inflations replace it wholesale, Kum saati
             // rewinds it) and the piles - a full resync covers every one of them.
             RefreshAll(null);
+            // "RÜZGAR": the gust, its embers and spores, the board's own water animation for the
+            // push and the fall, and only then any line it completed.
+            var wind = power as RuzgarPower;
+            if (wind != null && PlayWind(wind, target, windFaces))
+            {
+                return;
+            }
             // THE BOARD STRIKES: each plays its own lead-in, then its cubes go.
             if (strikes && strikeFaces != null && PlayStrike(power, target, strikeFaces, blastCells, echoCells))
             {

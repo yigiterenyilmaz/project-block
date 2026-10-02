@@ -455,13 +455,13 @@ namespace ProjectBlock.Core
         /// </summary>
         public override bool CanRideWind(RoundContext ctx, WindGust gust)
         {
-            return WindCarries(ctx.Round.Board, gust).Count > 0;
+            return WindCarriesOn(ctx.Round.Board, gust).Count > 0;
         }
 
         public override void RideWind(RoundContext ctx, WindGust gust)
         {
             GameBoard board = ctx.Round.Board;
-            foreach (WindCarry carry in WindCarries(board, gust))
+            foreach (WindCarry carry in WindCarriesOn(board, gust))
             {
                 Cube? cube = board.GetCube(carry.To);
                 infected[carry.To] = new Infection
@@ -474,8 +474,9 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Where each infection in the gust would land, in the gust's own cell order. A
-        /// block one carry takes is no longer free for the next.</summary>
-        private List<WindCarry> WindCarries(GameBoard board, WindGust gust)
+        /// block one carry takes is no longer free for the next. Public so the aim can mark the
+        /// infections a gust would carry before it blows.</summary>
+        public List<WindCarry> WindCarriesOn(GameBoard board, WindGust gust)
         {
             var carries = new List<WindCarry>();
             if (board == null || gust == null || !gust.Valid || infected.Count == 0)

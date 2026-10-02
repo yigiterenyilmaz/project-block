@@ -96,25 +96,70 @@ namespace ProjectBlock.Core
             IReadOnlyList<GridPos> cells = gust.Cells;
             for (int i = 0; i < cells.Count; i++)
             {
-                Cube? cube = board.GetCube(cells[i]);
-                if (!cube.HasValue)
-                {
-                    continue;
-                }
-                if (cube.Value.Kind == CubeKind.Fire && FuelAhead(board, gust, cells[i]).Count > 0)
+                if (ThrowsEmbers(board, gust, cells[i]))
                 {
                     return true;
                 }
-                if (IsBlownWater(cube.Value))
+            }
+            return WaterThatMoves(board, gust).Count > 0;
+        }
+
+        /// <summary>Is <paramref name="cell"/> a fire in the gust with a block ahead to burn?
+        /// (The aim marks these.)</summary>
+        public static bool ThrowsEmbers(GameBoard board, WindGust gust, GridPos cell)
+        {
+            Cube? cube = board.GetCube(cell);
+            return cube.HasValue && cube.Value.Kind == CubeKind.Fire && gust.Covers(cell)
+                && FuelAhead(board, gust, cell).Count > 0;
+        }
+
+        /// <summary>
+        /// The water this gust REALLY moves, by the cell it stands on now. Asked of a COPY of the
+        /// board, pushed and then left to fall exactly as the round would, with each pushed cube
+        /// followed to where it comes to rest - because water blown against the arena's gravity
+        /// slides away and falls straight back where it was, and a gust that does only that has
+        /// moved nothing and must not spend the charge. (The aim marks these.)
+        /// </summary>
+        public static List<GridPos> WaterThatMoves(GameBoard board, WindGust gust)
+        {
+            var moved = new List<GridPos>();
+            if (board == null || gust == null || !gust.Valid)
+            {
+                return moved;
+            }
+            GameBoard copy = GameBoard.CreateClone(board);
+            foreach (GridPos sealedCell in board.SealedCells)
+            {
+                copy.SealCell(sealedCell); // the clone does not carry seals, and water stops at one
+            }
+            var report = new WindVisuals(gust);
+            PushWater(copy, gust, report);
+            if (report.Pushes.Count == 0)
+            {
+                return moved;
+            }
+            var frames = new List<IReadOnlyList<WaterMove>>();
+            copy.SettleWaterAndReact(frames);
+            foreach (WindPush push in report.Pushes)
+            {
+                GridPos at = push.To;
+                foreach (IReadOnlyList<WaterMove> frame in frames)
                 {
-                    GridPos next = gust.Walk(cells[i], 1)[0];
-                    if (board.IsInside(next) && !board.IsSealed(next) && !board.GetCube(next).HasValue)
+                    for (int i = 0; i < frame.Count; i++)
                     {
-                        return true;
+                        if (frame[i].From.Equals(at))
+                        {
+                            at = frame[i].To;
+                            break;
+                        }
                     }
                 }
+                if (!at.Equals(push.From))
+                {
+                    moved.Add(push.From);
+                }
             }
-            return false;
+            return moved;
         }
 
         public override bool CanRun(RoundContext ctx, ActivationTarget target)

@@ -347,8 +347,14 @@ namespace ProjectBlock.View
             {
                 // "Hidrolik pres" confirms twice, and A means a different thing each time - see
                 // HandlePressClick, which is the branch answering this button.
+                bool windArmed = pendingTargetPowerId.HasValue
+                    && session.Powers.Find(pendingTargetPowerId.Value) is RuzgarPower;
                 string confirm = workshopPressAnchor.HasValue
                     ? Loc.Pick("where the cube goes", "küp nereye gitsin")
+                    : windArmed
+                    ? (windStart.HasValue
+                        ? Loc.Pick("blow it here", "buraya es")
+                        : Loc.Pick("start the gust here", "rüzgar buradan başlasın"))
                     : Loc.Pick("confirm", "onayla");
                 // "Gen nakli", once the giving block is chosen: X swaps between the board and the
                 // hand as the place the element goes (HandlePadGene).

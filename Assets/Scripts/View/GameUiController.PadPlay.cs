@@ -887,6 +887,49 @@ namespace ProjectBlock.View
             {
                 return HandlePadGene(round, pad, power);
             }
+            // "Rüzgar": a stroke, in two presses - A on the cell it starts from, then walk the
+            // cursor the way it should blow and A again. The aim itself is drawn by the drag path
+            // (HandleWindAim) off the snapped pointer, exactly as for the mouse.
+            if (targeting == ActivationTargeting.Stroke && power != null)
+            {
+                padFocus = PadFocus.Board;
+                EnsureWind();
+                Vector2Int step = PadStep(pad);
+                if (step.x != 0 || step.y != 0)
+                {
+                    GameBoard board = round.Board;
+                    padCell = new GridPos(
+                        Mathf.Clamp(padCell.X + step.x, board.MinX, board.MinX + board.Width - 1),
+                        Mathf.Clamp(padCell.Y + step.y, board.MinY, board.MinY + board.Height - 1));
+                    return true;
+                }
+                if (!pad.buttonSouth.wasPressedThisFrame)
+                {
+                    return false;
+                }
+                Vector2 at = boardView.CellToWorld(padCell);
+                if (!windStart.HasValue)
+                {
+                    if (BeginWindAt(at))
+                    {
+                        windDragging = false; // no button is held down: the second A says where
+                    }
+                    return true;
+                }
+                ActivationTarget windTarget;
+                WindGust gust = WindAimAt(at, out windTarget);
+                if (gust != null && gust.Valid && session.Powers.CanUse(power.InstanceId, windTarget))
+                {
+                    padFocus = PadFocus.Hand;
+                    FireWind(power, windTarget);
+                }
+                else
+                {
+                    windRefused = gust != null && gust.Valid;
+                    UpdateHud();
+                }
+                return true;
+            }
             bool boardTarget = targeting == ActivationTargeting.BoardCell
                 || targeting == ActivationTargeting.BoardArea;
             // "Olta" marks a card in hand rather than using the power on one, but it picks the

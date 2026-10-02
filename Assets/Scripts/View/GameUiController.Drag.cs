@@ -81,6 +81,11 @@ namespace ProjectBlock.View
             if (pendingTargetPowerId.HasValue)
             {
                 Power aiming = session.Powers.Find(pendingTargetPowerId.Value);
+                // "Rüzgar" is a stroke, not a click: press, drag, let go (GameUiController.Wind).
+                if (aiming != null && HandleWindAim(aiming, world, mouse))
+                {
+                    return;
+                }
                 if (aiming != null && HandleLiveAim(aiming, world, mouse))
                 {
                     return;

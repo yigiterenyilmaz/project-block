@@ -243,6 +243,10 @@ public static partial class JokerTests
         Check(!session.Powers.TryUse(power.InstanceId, Gust(0f, 0f, 6f, 0f)),
             "water already against the wall it is blown at: nothing");
         Check(!session.Powers.TryUse(power.InstanceId, Gust(5f, 3f, 5.3f, 3f)), "a tap: nothing");
+        board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Water, 4));
+        Check(!session.Powers.TryUse(power.InstanceId, Gust(1f, 0f, 1f, 4f)),
+            "water blown straight up against gravity only falls back where it was: nothing");
+        Check(KindAt(board, 1, 0, CubeKind.Water), "and it is still standing there");
         Check(power.Charged, "and the charge is still there");
         Check(session.Powers.TryUse(power.InstanceId, Gust(6f, 3f, 0f, 3f)),
             "turned the other way, the fire has a block ahead and the gust blows");

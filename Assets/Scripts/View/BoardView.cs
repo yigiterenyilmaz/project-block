@@ -2679,6 +2679,50 @@ namespace ProjectBlock.View
         /// <summary>Highlights the shape's target cells (green legal / red illegal) and, for
         /// legal placements, tints every cell of the rows/columns that would explode.</summary>
         public void ShowPreview(BlockShape shape, GridPos origin, bool valid)
+        /// <summary>A point in BOARD UNITS - a cell's centre sits at its own GridPos, so (2.5, 3)
+        /// is the edge cells (2,3) and (3,3) share - in true WORLD space, through the arena's own
+        /// transform (the squeeze, the tremor). The free-angle effects ("Rüzgar") work in these
+        /// units because a stroke at any angle is not made of cells.</summary>
+        public Vector2 BoardPointToWorld(float bx, float by)
+        {
+            if (board == null)
+            {
+                return new Vector2(bx, by);
+            }
+            Vector2 local = bottomLeft + new Vector2((bx - board.MinX + 0.5f) * cellSize,
+                (by - board.MinY + 0.5f) * cellSize);
+            return transform.TransformPoint(local);
+        }
+
+        /// <summary>The inverse: a WORLD point (the pointer) in board units.</summary>
+        public Vector2 WorldToBoardPoint(Vector2 world)
+        {
+            if (board == null)
+            {
+                return world;
+            }
+            Vector2 local = transform.InverseTransformPoint(world);
+            return new Vector2((local.x - bottomLeft.x) / cellSize - 0.5f + board.MinX,
+                (local.y - bottomLeft.y) / cellSize - 0.5f + board.MinY);
+        }
+
+        /// <summary>One cell's edge in WORLD units (the arena's scale included).</summary>
+        public float CellSizeInWorld
+        {
+            get { return cellSize * Mathf.Abs(transform.lossyScale.x); }
+        }
+
+        /// <summary>Holds back the infection cores about to be born on these cells for
+        /// <paramref name="seconds"/>, so whatever carries the infection there ("Rüzgar"'s spores)
+        /// arrives before the core does. See InfectionCoreView.HoldBirth.</summary>
+        public void HoldInfectionBirth(IReadOnlyList<GridPos> cells, float seconds)
+        {
+            if (infectionCores != null)
+            {
+                infectionCores.HoldBirth(cells, seconds);
+            }
+        }
+
         {
             ShowPreview(shape, origin, valid, null);
         }

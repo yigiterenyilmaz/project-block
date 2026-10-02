@@ -3196,6 +3196,8 @@ namespace ProjectBlock.View
                                 "   [karta sol tık / tekerlek / R] çevir   [sağ tık / Enter] onayla")
                     : targeting is CimbizPower
                         ? Loc.Pick("pick the block to turn", "çevireceğin bloğu seç")
+                    : targeting is RuzgarPower
+                        ? WindStep()
                     : targeting != null && targeting.Targeting == ActivationTargeting.BoardCell
                         ? Loc.Pick("pick a cell on the board", "oyun alanından bir hücre seç")
                         : Loc.Pick("pick a block from your hand", "elinden bir blok seç");

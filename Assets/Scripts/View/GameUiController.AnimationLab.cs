@@ -425,6 +425,7 @@ namespace ProjectBlock.View
             StopChallenge();
             StopQuarry();
             StopSymmetry();
+            StopWind();
             StopAntimatter();
             StopIgnition();
             StopFlood();
@@ -3978,6 +3979,9 @@ namespace ProjectBlock.View
 
             // "Simetri" - the symmetry payout, its own section (GameUiController.Symmetry).
             AddSymmetryLab();
+
+            // "Rüzgar" - the gust, on boards of the lab's own (GameUiController.Wind).
+            AddWindLab();
 
             AddAnimSub("jokers", "besleme", "besleme", "besleme");
             AddAnim("besleme: a FEED procs (nest + card + points)",
