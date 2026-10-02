@@ -252,6 +252,10 @@ assembly'lerine karşı temiz derleniyor.
 **Framework kuruldu** (`Assets/Scripts/Core/Jokers/`) ve üç merkezi kural koda geçti:
 envanter sırası, tek merkezi temizlik olayı, merkezi uzatma kapatması. Ayrıntı CLAUDE.md'de.
 
+> **2026-10-02:** "Çığ" artık JOKER DEĞİL, GÜÇ. Seri jokeri kaldırıldı; yeni KAR bloğuyla
+> çalışan çığ gücü oldu (`CigPower`, `GameBoard.Snow.cs`; ayrıntı CLAUDE.md'de). Aşağıdaki
+> "çığ" seri jokeri notları tarihsel.
+
 **1. dalga yazıldı ve test edildi (11 joker):** Renovasyon, İade, Insider, Çığ, Dondurma,
 Siyam, Bereket, Harcama Bonusu, Domuz Kumbarası, Cimri Kumbara, Altın Kumbara.
 Kumbaralar bugün değer biriktiriyor; satış `JokerInventory.Sell` ile çalışıyor, market

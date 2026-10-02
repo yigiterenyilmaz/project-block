@@ -1762,7 +1762,7 @@ Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.
 
-The roster now stands at **51 jokers, 37 powers and 37 bosses** (registry counts); of the
+The roster now stands at **50 jokers, 38 powers and 37 bosses** (registry counts); of the
 originally planned powers only "Dolly" is left, set aside by the designer.
 See `docs/jokers-plan.md`.
 
@@ -1778,6 +1778,53 @@ be confused). Bonus ground may never hold a line up — and by the same token ma
 one: a row that is nothing but optional cells is not a row, however full of cubes it is. A cube
 IN one is ordinary in every other respect: it explodes with the line and it scores. The mask
 travels through `CreateResized`, `CreateClone` and the save file like `WaterFlow` does.
+
+**SNOW IS A BLOCK THAT MELTS, MERGES AND SLIDES, AND "ÇIĞ" IS THE POWER THAT SLIDES IT** (designer's
+calls, 2026-10-02; `GameBoard.Snow.cs`, `RoundEngine.Snow.cs`, `SnowPowers.cs`, `SnowView`,
+`GameUiController.Snow.cs`). "Çığ" used to be a streak JOKER (a bigger block than last turn); that
+joker is GONE and its icon is the power's (`Art/Powers/cig`). **A snow cube carries its three
+numbers ON ITSELF** (`Cube.SnowPower` / `SnowMelt` / `SnowPacked`), so every move, copy, resize,
+rewind and save takes them along without knowing snow exists - a side table keyed by cell would
+have had to be carried by every one of those. The rules:
+- It FALLS like water, cube by cube along `WaterFlow`, INSIDE `SettleWaterAndReact` - so the turn,
+  a gravity turn, the wind and "Meydan Okuma"'s futures all move it without being told to.
+- A HEAP ("kar öbeği") is a run of snow side by side ACROSS the flow (a row, while gravity points
+  down) and it has ONE power and ONE melt time: runs that join take the larger of each
+  (`NormalizeSnow`). The View draws one number per heap for the same reason.
+- Snow that comes to rest ON snow is ABSORBED: the cubes that landed are gone and the heap under
+  them gains the arriving heap's power - ONCE per arriving heap, however many of its cubes landed.
+  The melt time follows the designer's table, `SnowRules.MergedMelt` (three left: five arrives -
+  five; four - four; three - FOUR; two or less - three; never past five).
+- It MELTS: the timer drops at the TOP of every turn (step 0, before the block lands - so a heap
+  absorbing fresh snow this turn keeps exactly the time the merge gives it) and the cube goes at
+  zero. Melting is NOT a destruction: nothing scored, logged or swept, `TurnReport.SnowMelted` only.
+- The market sells it as a ONE-ROW bar, 1x1 to 1x4, never two rows (a block two rows tall would
+  absorb itself as it landed). It is NOT in `MarketConfig.ElementPool`: growing that list re-maps
+  every element roll and adds a draw to the main stream, which moves every shuffle after the first
+  market - the baseline with it. `SnowOfferChance` is rolled on a derived generator instead, and
+  the baseline is byte-identical. It is kept out of "Simya"'s second slot, "Gen nakli" and the
+  block designer for the same one-row reason.
+- **"ÇIĞ"** (a power, aimed at a cell - its LINE across the flow is what is chosen): every heap on
+  that line comes down as many cells as it has power, the whole heap by the same amount, and
+  LEAVES its line. Everything in the way is CRUSHED through `DestroyCubes` (forced: gold and
+  obsidian go too) and pays `PointsPerCrushedCube` - a named reward, so "Genel temizlik" is not
+  asked - except snow, which is only buried. A column stops at the edge of the play area, a sealed
+  cell, a black hole, a "Parazit" host, the snake, a mine and a press capsule; what cannot come
+  down is lost, and a line where nothing can move is refused with the charge kept. The cells it
+  covers hold PACKED snow: one power, `AvalancheMeltTurns` (3). Two packed cubes never merge with
+  each other, so the layers stay stacked when they fall; fresh snow landing on a packed layer is
+  absorbed as usual, and that is what lets the layer slide again (`SnowRules.CanSlide`).
+- On screen: the tile is BAKED (`Tools/ArtPrep/bake_snow_tile.js`, a placeholder a painter can
+  overwrite); the heap's power is a bold number in its middle and its melt time a chip on its
+  corner that warms on the last turn, packed layers wear two faint lines; the avalanche is replayed
+  over a board that has ALREADY settled - the cells are held, the heap shudders and comes down its
+  columns, each cube bursts as the front reaches it (from the face taken before the rules ran),
+  and only then is the fall that followed handed to the board's water animation; a melt sinks
+  into its own cell, never a burst. The lab has five scenes under general / board.
+- Save format 30 (every cube writes three more values). Pinned in `Tools/CoreTests/SnowTests.cs`.
+- **Open / placeholder**: snow blocks a clean sweep like any cube; a snow fall that completes a
+  line earns water's fall bonus (it shares the frames); power of joined heaps is the LARGER one;
+  `SnowOfferChance` 0.12 and 12 points a crushed cube are guesses. Not seen running in Unity.
 
 **Water does not always fall downward.** `GameBoard.WaterFlow` is the one-cell step water
 settles along — `(0,-1)` on every ordinary arena, turned to any of the four sides for the rest
