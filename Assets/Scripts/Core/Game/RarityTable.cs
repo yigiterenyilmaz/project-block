@@ -95,6 +95,7 @@ namespace ProjectBlock.Core
             { "gen_nakli", Rarity.Rare },
             { "hidrolik_pres", Rarity.Rare },
             { "kutlecekim_merkezi", Rarity.Common },
+            { "ruzgar", Rarity.Rare },
             { "halusinasyon", Rarity.Legendary },
             { "karakter_olusturma", Rarity.Legendary },
             { "retro", Rarity.Legendary },

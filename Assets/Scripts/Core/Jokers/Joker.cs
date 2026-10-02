@@ -496,6 +496,21 @@ namespace ProjectBlock.Core
         {
         }
 
+        /// <summary>"Rüzgar": would this joker have something on the board for the gust to carry?
+        /// A pure question - asked before the power runs, so a gust that would touch nothing is
+        /// refused rather than spending its charge. Only asked about the main world.</summary>
+        public virtual bool CanRideWind(RoundContext ctx, WindGust gust)
+        {
+            return false;
+        }
+
+        /// <summary>"Rüzgar" blew: carry what this joker keeps on the board, and write each carry
+        /// into gust.Carries for the View. Runs after the gust has settled the board, so a carry
+        /// lands on the board as it now stands.</summary>
+        public virtual void RideWind(RoundContext ctx, WindGust gust)
+        {
+        }
+
         /// <summary>The board filled up and nothing in hand fits - the round is about to be
         /// lost. A joker with a way to open a gap ("Deprem") acts here and returns true; the
         /// engine then re-checks for a legal move. Return false to let the loss stand.</summary>

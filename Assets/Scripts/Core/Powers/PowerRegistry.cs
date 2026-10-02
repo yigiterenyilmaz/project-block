@@ -51,6 +51,7 @@ namespace ProjectBlock.Core
             Register(() => new HidrolikPresPower());
             Register(() => new KutlecekimMerkeziPower());
             Register(() => new PowerbankPower());
+            Register(() => new RuzgarPower());
         }
 
         /// <summary>All known powers, in design order.</summary>

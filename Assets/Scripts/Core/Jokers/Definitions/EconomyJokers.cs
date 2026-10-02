@@ -447,6 +447,67 @@ namespace ProjectBlock.Core
             AddInfection(board, new GridPos(centre.X, centre.Y - 1));
         }
 
+        /// <summary>
+        /// "Rüzgar" carries the infection: every infected cell in the gust reaches the FIRST block
+        /// downwind of it in the band that is not infected yet, and infects it as if the joker had
+        /// been used there too - from scratch, while the source keeps its own. An infection with no
+        /// block ahead of it stays where it is.
+        /// </summary>
+        public override bool CanRideWind(RoundContext ctx, WindGust gust)
+        {
+            return WindCarries(ctx.Round.Board, gust).Count > 0;
+        }
+
+        public override void RideWind(RoundContext ctx, WindGust gust)
+        {
+            GameBoard board = ctx.Round.Board;
+            foreach (WindCarry carry in WindCarries(board, gust))
+            {
+                Cube? cube = board.GetCube(carry.To);
+                infected[carry.To] = new Infection
+                {
+                    CardId = cube.HasValue ? cube.Value.SourceCardId : -1,
+                    Turns = 0
+                };
+                gust.Carries.Add(carry);
+            }
+        }
+
+        /// <summary>Where each infection in the gust would land, in the gust's own cell order. A
+        /// block one carry takes is no longer free for the next.</summary>
+        private List<WindCarry> WindCarries(GameBoard board, WindGust gust)
+        {
+            var carries = new List<WindCarry>();
+            if (board == null || gust == null || !gust.Valid || infected.Count == 0)
+            {
+                return carries;
+            }
+            var taken = new HashSet<GridPos>();
+            IReadOnlyList<GridPos> cells = gust.Cells;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (!infected.ContainsKey(cells[i]))
+                {
+                    continue;
+                }
+                // gust.Cells runs from the start of the band to its end, so the first match ahead
+                // is the nearest block downwind.
+                for (int j = 0; j < cells.Count; j++)
+                {
+                    GridPos to = cells[j];
+                    if (!gust.IsAhead(cells[i], to) || infected.ContainsKey(to) || taken.Contains(to)
+                        || !board.GetCube(to).HasValue)
+                    {
+                        continue;
+                    }
+                    taken.Add(to);
+                    carries.Add(new WindCarry { From = cells[i], To = to, CarrierId = DefId });
+                    break;
+                }
+            }
+            return carries;
+        }
+
         /// <summary>Infects a cell if it can be. Records the ones that TOOK, so the view shows
         /// the infections that exist rather than the four it assumed - see LastSpreadCells.</summary>
         private void AddInfection(GameBoard board, GridPos cell)

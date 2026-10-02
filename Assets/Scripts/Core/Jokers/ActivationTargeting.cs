@@ -46,6 +46,13 @@ namespace ProjectBlock.Core
         /// <summary>Needs another of the player's own POWERS ("Powerbank" choosing which spent
         /// power to refill). Target carries the power's instance id (ActivationTarget.PowerChoice);
         /// the UI asks for a click on that power's card in the power bar.</summary>
-        OwnedPower = 9
+        OwnedPower = 9,
+
+        /// <summary>Needs a STROKE drawn across the board - a point it starts from and a point it
+        /// is drawn toward, at any angle ("Rüzgar" choosing where its gust starts and which way it
+        /// blows). Target carries ActivationTarget.Stroke; the UI asks for a press and a drag (or
+        /// two clicks), because a direction at a free angle is neither a cell nor one of four
+        /// sides.</summary>
+        Stroke = 10
     }
 }

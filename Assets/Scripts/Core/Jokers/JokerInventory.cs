@@ -516,6 +516,46 @@ namespace ProjectBlock.Core
             RaiseChanged();
         }
 
+        /// <summary>"Rüzgar": does any joker have something on the board this gust would carry?
+        /// Gated like every other hook - a silenced or overtime-disabled joker rides nothing.</summary>
+        public bool AnyRidesWind(RoundEngine round, WindGust gust)
+        {
+            if (round == null || gust == null)
+            {
+                return false;
+            }
+            RoundContext ctx = RoundCtx(round);
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
+            {
+                if (!IsGated(batch[i], round) && batch[i].CanRideWind(ctx, gust))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>"Rüzgar" blew: every joker carries what it keeps on the board, in inventory
+        /// order.</summary>
+        public void DispatchWind(RoundEngine round, WindGust gust)
+        {
+            if (round == null || gust == null)
+            {
+                return;
+            }
+            RoundContext ctx = RoundCtx(round);
+            List<Joker> batch = Snapshot();
+            for (int i = 0; i < batch.Count; i++)
+            {
+                if (!IsGated(batch[i], round))
+                {
+                    batch[i].RideWind(ctx, gust);
+                }
+            }
+            RaiseChanged();
+        }
+
         /// <summary>A card was lost unplayed - see Joker.OnCardLost. <paramref name="round"/>
         /// is null outside a round (a sale in the market).</summary>
         public void DispatchCardLost(RoundEngine round, BlockCard card)

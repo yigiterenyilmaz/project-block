@@ -1,5 +1,6 @@
 ﻿// PURPOSE: What a player-activated joker/power was pointed at - an optional hand
-// index, board cell, or a pair of rows/columns to swap. Built via the factories.
+// index, board cell, a pair of rows/columns to swap, or a free-angle stroke across the
+// board ("Rüzgar"). Built via the factories.
 
 using System.Collections.Generic;
 
@@ -10,6 +11,29 @@ namespace ProjectBlock.Core
     {
         Row = 0,
         Column = 1
+    }
+
+    /// <summary>
+    /// A line drawn across the board, in BOARD units: a cell's centre sits at its own GridPos
+    /// coordinates, so (2, 3) is the middle of cell (2, 3) and (2.5, 3) the edge it shares with
+    /// (3, 3). Free-angle on purpose - "Rüzgar" blows wherever it was drawn - so it is floats,
+    /// not cells. What the stroke MEANS (where it snaps, how long it may be) is the power's rule,
+    /// never the UI's.
+    /// </summary>
+    public readonly struct BoardStroke
+    {
+        public readonly float FromX;
+        public readonly float FromY;
+        public readonly float ToX;
+        public readonly float ToY;
+
+        public BoardStroke(float fromX, float fromY, float toX, float toY)
+        {
+            FromX = fromX;
+            FromY = fromY;
+            ToX = toX;
+            ToY = toY;
+        }
     }
 
     /// <summary>What a player-activated joker was pointed at. All fields optional.</summary>
@@ -45,6 +69,17 @@ namespace ProjectBlock.Core
         /// out of a card in hand ("Neşter" choosing where to cut). Null unless that is the
         /// targeting mode.</summary>
         public readonly IReadOnlyList<GridPos> CellSet;
+
+        /// <summary>A free-angle line drawn across the board ("Rüzgar"). Null unless that is the
+        /// targeting mode.</summary>
+        public readonly BoardStroke? Stroke;
+
+        /// <summary>"Rüzgar": where the gust starts and the way it was drawn.</summary>
+        public static ActivationTarget Swipe(BoardStroke stroke)
+        {
+            return new ActivationTarget(null, null, null, null, null, false, null, null, null,
+                stroke);
+        }
 
         /// <summary>"Neşter": a card and the cubes picked out of it.</summary>
         public static ActivationTarget CardCubes(int handIndex, IReadOnlyList<GridPos> picked)
@@ -112,7 +147,16 @@ namespace ProjectBlock.Core
         public ActivationTarget(int? handIndex, GridPos? cell, LineAxis? axis,
             int? lineA, int? lineB, bool onMirrorWorld, int? secondHandIndex, GridPos? offset,
             IReadOnlyList<GridPos> cellSet)
+            : this(handIndex, cell, axis, lineA, lineB, onMirrorWorld, secondHandIndex, offset,
+                cellSet, null)
         {
+        }
+
+        public ActivationTarget(int? handIndex, GridPos? cell, LineAxis? axis,
+            int? lineA, int? lineB, bool onMirrorWorld, int? secondHandIndex, GridPos? offset,
+            IReadOnlyList<GridPos> cellSet, BoardStroke? stroke)
+        {
+            Stroke = stroke;
             HandIndex = handIndex;
             Cell = cell;
             Axis = axis;
@@ -128,7 +172,7 @@ namespace ProjectBlock.Core
         public ActivationTarget OnWorld(bool mirror)
         {
             return new ActivationTarget(HandIndex, Cell, Axis, LineA, LineB, mirror,
-                SecondHandIndex, Offset, CellSet);
+                SecondHandIndex, Offset, CellSet, Stroke);
         }
 
         public static readonly ActivationTarget None = new ActivationTarget(null, null);

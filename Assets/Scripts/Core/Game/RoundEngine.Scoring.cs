@@ -966,6 +966,24 @@ namespace ProjectBlock.Core
             ResolveFullLinesOutsideTurn();
         }
 
+        /// <summary>"Rüzgar": the wind has already pushed its water across the board (the moves
+        /// are <paramref name="pushFrames"/>); now it falls under the arena's own gravity, a fire
+        /// left beside water goes out, and any line the gust completed goes off - exactly the
+        /// between-turn rules a gravity turn runs. The push and the fall are handed to the View as
+        /// ONE sequence of water frames, push first.</summary>
+        internal void SettleAfterWind(IReadOnlyList<IReadOnlyList<WaterMove>> pushFrames)
+        {
+            externalWaterFrames.Clear();
+            if (pushFrames != null)
+            {
+                externalWaterFrames.AddRange(pushFrames);
+            }
+            Board.SettleWaterAndReact(externalWaterFrames);
+            // Water MOVED; nothing died. Re-baseline or the diff reads a push as a killing.
+            ResyncSnapshot();
+            ResolveFullLinesOutsideTurn();
+        }
+
         /// <summary>Water moves the last power caused, for the View to animate. Empty otherwise;
         /// cleared by BeginExternalCapture like the destruction log it sits beside.</summary>
         public IReadOnlyList<IReadOnlyList<WaterMove>> ExternalWaterFrames

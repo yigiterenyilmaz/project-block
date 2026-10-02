@@ -28,6 +28,7 @@ public static partial class JokerTests
         KutlecekimMerkezi_EverythingFallsWhenItIsUsed();
         KutlecekimMerkezi_TheDirectionIsRoundScoped();
         KutlecekimMerkezi_RefusesAnythingButTheFourSides();
+        RunRuzgarTests();
         Targeted_TargetFirstPaysAndTakesTheWholeBlock();
         Targeted_PlainCubeFirstSpendsTheBlockForGood();
         Targeted_BonusSurvivesTheSweepItCauses();
