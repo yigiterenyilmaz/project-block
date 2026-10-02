@@ -2717,9 +2717,29 @@ namespace ProjectBlock.View
         /// arrives before the core does. See InfectionCoreView.HoldBirth.</summary>
         public void HoldInfectionBirth(IReadOnlyList<GridPos> cells, float seconds)
         {
+            HoldInfectionBirth(cells, seconds, false);
+        }
+
+        /// <summary>The same, and with <paramref name="pop"/> the core arrives with a small
+        /// overshoot (0.35 -> 1.08 -> 1): a seed GROWING where something was planted, rather than
+        /// a core blooming where a tendril reached.</summary>
+        public void HoldInfectionBirth(IReadOnlyList<GridPos> cells, float seconds, bool pop)
+        {
             if (infectionCores != null)
             {
-                infectionCores.HoldBirth(cells, seconds);
+                infectionCores.HoldBirth(cells, seconds, pop);
+            }
+        }
+
+        /// <summary>"Rüzgar" on the infection core at <paramref name="cell"/>: pressed along
+        /// <paramref name="direction"/> (board space) by <paramref name="press"/> 0..1, and
+        /// depleted - smaller and dimmer - by <paramref name="deplete"/> 0..1. Zeroes put it back.
+        /// See InfectionCoreView.SetWind.</summary>
+        public void SetInfectionWind(GridPos cell, Vector2 direction, float press, float deplete)
+        {
+            if (infectionCores != null)
+            {
+                infectionCores.SetWind(cell, direction, press, deplete);
             }
         }
 

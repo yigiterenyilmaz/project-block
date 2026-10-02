@@ -397,6 +397,15 @@ namespace ProjectBlock.View
 
             /// <summary>Seconds this core is still held back from arriving - see HoldBirth.</summary>
             public float BirthHold;
+
+            /// <summary>It arrives with an overshoot - see HoldBirth(cells, seconds, pop).</summary>
+            public bool Pop;
+
+            // ---- "Rüzgar" leaning on it - see SetWind ----
+            public Vector2 WindDir;
+            public float WindPress;
+            public float WindDeplete;
+            public bool WindPosed;
         }
 
         private readonly List<Core> cores = new List<Core>();
@@ -531,6 +540,32 @@ namespace ProjectBlock.View
         /// </summary>
         public void HoldBirth(IReadOnlyList<GridPos> cells, float seconds)
         {
+            HoldBirth(cells, seconds, false);
+        }
+
+        /// <summary>
+        /// "Rüzgar" pressing on a core: the wind squeezes it on its windward side and draws it out
+        /// to leeward (<paramref name="press"/>), and where a piece has been torn off it, it is
+        /// smaller and dimmer for a moment (<paramref name="deplete"/>). Both 0 puts it back. The
+        /// core's own pulse goes on underneath - this is a pose laid over the living thing, set
+        /// every frame by whoever is doing the pressing.
+        /// </summary>
+        public void SetWind(GridPos cell, Vector2 direction, float press, float deplete)
+        {
+            Core c = Find(cell);
+            if (c == null)
+            {
+                return;
+            }
+            c.WindDir = direction;
+            c.WindPress = Mathf.Clamp01(press);
+            c.WindDeplete = Mathf.Clamp01(deplete);
+        }
+
+        /// <summary>As HoldBirth, and with <paramref name="pop"/> the held cores arrive with a
+        /// small overshoot (a seed growing where "Rüzgar" planted it).</summary>
+        public void HoldBirth(IReadOnlyList<GridPos> cells, float seconds, bool pop)
+        {
             if (cells == null || seconds <= 0f)
             {
                 return;
@@ -542,6 +577,7 @@ namespace ProjectBlock.View
                 {
                     continue;
                 }
+                c.Pop = pop;
                 c.BirthHold = Mathf.Max(c.BirthHold, seconds);
                 // Arrives by BLOOM only. The detonation's spores do the travelling the tendril
                 // would, and a tendril on top of them draws the spread as four straight lines out
@@ -665,6 +701,10 @@ namespace ProjectBlock.View
             c.ChargeTimer = 0f;
             c.Charging = false;
             c.BirthHold = 0f;
+            c.Pop = false;
+            c.WindPress = 0f;
+            c.WindDeplete = 0f;
+            c.WindPosed = false;
             c.Root.transform.localScale = Vector3.one;
         }
 
@@ -830,11 +870,17 @@ namespace ProjectBlock.View
             float spreadIn = c.SpreadTimer > 0f
                 ? Mathf.Clamp01(1f - c.SpreadTimer / Style.SpreadBloomSeconds) : 1f;
             intensity *= spreadIn;
+            // a core the wind has just torn a piece from is dimmer until it recovers
+            intensity *= 1f - 0.3f * c.WindDeplete;
 
             // ---- the core body
+            // Arriving: 0.35 up to full - or, planted by the wind, up PAST full and back (Pop).
+            float arriving = !c.Pop ? 0.35f + 0.65f * spreadIn
+                : spreadIn < 0.7f ? Mathf.Lerp(0.35f, 1.08f, Mathf.SmoothStep(0f, 1f, spreadIn / 0.7f))
+                : Mathf.Lerp(1.08f, 1f, Mathf.SmoothStep(0f, 1f, (spreadIn - 0.7f) / 0.3f));
             float size = cellSize * (Style.CoreBaseScale + Style.CoreStageScale * stage)
                 * (dormant ? Style.DormantScale : 1f) * (1f + charge) * flicker
-                * (0.35f + 0.65f * spreadIn);
+                * arriving;
             c.Body.transform.localScale = new Vector3(size * breath, size * breathY, 1f);
             c.Body.transform.localRotation =
                 Quaternion.Euler(0f, 0f, c.Phase * Style.CoreSpin);
@@ -865,6 +911,45 @@ namespace ProjectBlock.View
             TickMotes(c, intensity);
             TickLinks(c);
             TickSpread(c);
+            TickWind(c);
+        }
+
+        /// <summary>"Rüzgar"'s pose, laid over the core's BODY and its light - never its arms,
+        /// which hold it to the block and must keep pointing at it. Turned to the wind, drawn out
+        /// along it and squeezed across it, shrunk where it was torn. Runs after the body has been
+        /// sized for the frame, so the core's own pulse goes on underneath.</summary>
+        private void TickWind(Core c)
+        {
+            if (c.WindPress <= 0.001f && c.WindDeplete <= 0.001f)
+            {
+                if (c.WindPosed)
+                {
+                    c.WindPosed = false;
+                    c.Body.transform.localPosition = Vector3.zero;
+                    c.Aura.transform.localPosition = Vector3.zero;
+                    c.Aura.transform.localRotation = Quaternion.identity;
+                }
+                return;
+            }
+            c.WindPosed = true;
+            float angle = Mathf.Atan2(c.WindDir.y, c.WindDir.x) * Mathf.Rad2Deg;
+            float shrink = 1f - 0.12f * c.WindDeplete;
+            float along = (1f + 0.34f * c.WindPress) * shrink;
+            float across = (1f - 0.2f * c.WindPress) * shrink;
+            // pushed a little to leeward: the windward side gives, the far side is drawn out
+            Vector2 lee = c.WindDir.sqrMagnitude > 1e-6f ? c.WindDir.normalized : Vector2.zero;
+            Vector3 offset = lee * (0.035f * cellSize * c.WindPress);
+            Pose(c.Body.transform, angle, along, across, offset);
+            Pose(c.Aura.transform, angle, along, across, offset);
+        }
+
+        private static void Pose(Transform t, float angle, float along, float across, Vector3 offset)
+        {
+            Vector3 s = t.localScale;
+            float size = Mathf.Max(s.x, s.y);
+            t.localRotation = Quaternion.Euler(0f, 0f, angle);
+            t.localScale = new Vector3(size * along, size * across, 1f);
+            t.localPosition = offset;
         }
 
         /// <summary>The arms holding the core into its cell, with energy running out and back.</summary>

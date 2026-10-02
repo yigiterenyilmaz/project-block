@@ -374,6 +374,7 @@ namespace ProjectBlock.View
             StopPetLab();
             TamagotchiDebug.AllOff();
             SymmetryRewardView.DebugFlags.AllOff();
+            ResetWindLab();
             StopAnimFallSequence();
             StopAnimBurstSequence();
             // AnimResync below puts the real board back up if a boss scene was showing its own.

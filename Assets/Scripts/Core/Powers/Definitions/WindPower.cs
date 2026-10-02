@@ -166,8 +166,18 @@ namespace ProjectBlock.Core
         public WindPreview Preview(RoundContext ctx, ActivationTarget target)
         {
             GameBoard board = ctx.Round.Board;
-            var preview = new WindPreview { Gust = GustFor(board, target) };
-            WindGust gust = preview.Gust;
+            WindGust gust = GustFor(board, target);
+            List<WindCarry> rides = gust != null && gust.Valid && OnMainWorld(ctx)
+                ? ctx.Session.Jokers.CollectWindRides(ctx.Round, gust)
+                : null;
+            return PreviewOn(board, gust, rides);
+        }
+
+        /// <summary>The same answer on any board, with the jokers' rides handed in - what the
+        /// round asks through Preview, and what the animation lab asks of a board of its own.</summary>
+        public static WindPreview PreviewOn(GameBoard board, WindGust gust, IReadOnlyList<WindCarry> rides)
+        {
+            var preview = new WindPreview { Gust = gust };
             if (gust == null || !gust.Valid)
             {
                 preview.Reason = gust != null && gust.StartsOffBoard
@@ -204,9 +214,9 @@ namespace ProjectBlock.Core
                     });
                 }
             }
-            if (OnMainWorld(ctx))
+            if (rides != null)
             {
-                foreach (WindCarry ride in ctx.Session.Jokers.CollectWindRides(ctx.Round, gust))
+                foreach (WindCarry ride in rides)
                 {
                     preview.Affected.Add(new WindAffected
                     {

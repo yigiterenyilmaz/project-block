@@ -724,6 +724,7 @@ namespace ProjectBlock.View
             TickTamagotchi();
             // The background is told where the board, the hand and the piles are this frame.
             TickBackground();
+            TickWind();
             SyncPilesForMarket(); // was never called: the piles printed through the market
             // "Midas" warms the score line while its gold is landing on it (see .Midas): one
             // owner for that transform, and it is this one.

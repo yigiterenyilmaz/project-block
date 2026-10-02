@@ -1520,18 +1520,81 @@ dropped that way once each.
   against gravity slides away and falls straight back, so `WaterThatMoves` pushes and settles a copy
   and follows each cube to where it rests. The first version asked only "can it slide one step" and
   spent the charge on exactly that no-op - found on a render of the aim, not in a test.
-  **On screen**: the aim is the rules' own band (soft on every edge, air streaming down it, a ring on
-  the start, an arrowhead on the end) with a ring on every cube the gust will really move, and it
-  goes grey when `PowerInventory.CanUse` refuses it; press-drag-release, or click then click, or two
-  A presses on a pad. The gust (`WindGustView`, matched by identity on `RuzgarPower.LastGust`) is a
-  front crossing the lane: embers leave each fire when it arrives and flutter to their block or off
-  past the lane, a caught block burns in through Yangın's own `FireBloom` from the side the ember
-  came in (the cell held back until then, its old face captured BEFORE the rules ran), spores carry
-  an infection and its new core is held until they land, and the water is the board's own
-  `PlayWaterAnimation`. `BoardView.BoardPointToWorld` / `WorldToBoardPoint` are the unit bridge.
-  Pinned in `Tools/CoreTests/RuzgarTests.cs`; the lab section "rüzgar" runs `RuzgarPower.BlowOn` on
-  boards of its own. **Not done**: no icon art (`Art/Powers/ruzgar`), no sound of its own (it borrows
-  `Whoosh` and `Flame`), nothing seen running in Unity, and the numbers are balance placeholders.
+  Pinned in `Tools/CoreTests/RuzgarTests.cs`. **Not done**: no icon art (`Art/Powers/ruzgar`), and
+  the numbers are balance placeholders.
+- **"Rüzgar" ON SCREEN IS A DIRECTED STORM - ONE AIRFLOW ACTING ON DIFFERENT MATERIALS** (presentation
+  pass, 2026-10-03; `WindAimView`, `WindStormView`, `WindReactions`, `WindFx`, `WindRibbon`,
+  `WindShapes`, `WindSound` + `SoundFx.Wind.cs`, `Resources/Shaders/WindCorridor` + `WindCarry`,
+  `GameUiController.Wind.cs`). The fail it is built against: "the player draws an arrow, blue lines
+  cross the board, some cells change state". Wind is not an element here, it is the CARRIER.
+  **THE VIEW DECIDES NOTHING, AND CORE NOW SAYS EVERYTHING**: `PowerInventory.PreviewWind` ->
+  `WindPreview` is the aim's answer (the lane, the length cap - `WindGust.Clamped` - what is affected
+  and HOW, a `WindReactionKind` per thing, and why a stroke is refused); `WindVisuals` is the cast
+  (every ember with its target or none, each pushed cube's `Path`, its `Fall` and the cell it comes to
+  `Rest` on, the water that only fell, the fires the settled water `Doused`, the `Bystanders`, the
+  jokers' `Carries`, an `EventId` and a `Seed`). `RuzgarPower.SettleOn` reads the fall back cube by
+  cube after the board's own `SettleWaterAndReact`; it is not a second rule.
+  **ONE CLOCK** (`WindFx.Clock`): 0.13 s of PRESSURE LOCK (the aim's own lane draws in - it never just
+  vanishes), the release (a small compression and a burst of air, not an explosion), then a bowed
+  FRONT crosses the lane in 0.34-0.85 s by length, the lane filling BEHIND it. **Nothing reacts at
+  cast time**: each thing starts when the front REACHES it (`Clock.ReachTime` of its place along the
+  gust - a presentation delay, never an outcome), and every ember, droplet and spore adds the SAME
+  `WindFx.Turbulence` to its own path. Those two things are the whole difference between one wind
+  acting on three materials and three effects fired together.
+  **THE STORM'S BODY IS ONE QUAD** (`WindCorridor`, shared by the aim and the cast): a faint lane that
+  is CLEARER down its middle, two soft BROKEN side edges (they are what says how wide it is), light
+  and dark DOUBLETS running down it - the board seen through moving air, drawn, because nothing reads
+  the frame back (no grab pass; the antimatter's lens is the precedent) - and the front wall. Over it:
+  4-9 pooled flow ribbons (`WindRibbon`: soft strips, 12-30% of the lane long, one slow bow each and a
+  gap in their light), and 12-28 motes sized in screen pixels.
+  **THE MATERIALS ARE A LAYER** (`IWindReactiveVisual`: `OnWindPreview` / `OnWindContact` /
+  `CreateWindTransportVisual` / `OnWindArrival` / `OnWindFinished`; a new carried thing is a
+  `WindReaction` subclass and a case in `WindStormView.Build`). FIRE: the cube stays, its flame is laid
+  over along the wind, torn SCRAPS (never round dots) and embers leave it and ride to the block Core
+  chose; that block HEATS first - a hot spot per strike, the heat crossing the face from the side it
+  was struck on through Yangın's own `FireBloom`, flame tongues, a flare - and one block struck from
+  several fires is still ONE ignition (`WindIgnitions`). An ember that caught nothing is carried off
+  past the lane, the one thing invented here. WATER: pressed first (thin on its leading edge, bulged
+  behind - `WindCarry` does it in the vertex stage, in world space), then a proxy GLIDES the whole
+  reported route - the push, then the fall - in one motion, never cell by cell, and lands with a
+  1.15 -> 0.90 -> 1 compression and a few drops; the cell it rests on is held back until then.
+  INFECTION: the core is squeezed (`InfectionCoreView.SetWind`, on its body and aura only - its arms
+  hold it to the block), a lobed piece tears off with a stream of spores, stains the block from where
+  it struck, and the new core is held back and then GROWS there with an overshoot
+  (`HoldBirth(..., pop)`) while the source recovers. A BYSTANDER only catches the front on its
+  windward edge and never moves - nothing in the rules moved it.
+  **THE AIM** is the storm held still: a pressure knot on the pointer, a ring closing in to pin the
+  origin (its wisps TURN about it - four spokes were a crosshair), the corridor following the drag,
+  a "pressure nose" of two arcs closing on the endpoint, and everything the rules say is affected
+  leaning a little the way it will blow. Refused, the flow stops, the edges go a muted rose and the
+  nose folds - never a red lane; cancelled, the lane folds back into its origin.
+  **FOUR THINGS WERE FOUND BY RUNNING THE REAL VIEW CODE OUTSIDE UNITY** (a UnityEngine stub and a
+  software rasterizer in linear colour stepped the actual `WindStormView` / `WindAimView`, frame by
+  frame - `docs/ruzgar-*.png`): `Mathf.SmoothStep` is (from, to, t), NOT the shader's
+  (edge0, edge1, x) - written the shader's way every baked shape was a hard-edged box (the scraps
+  were playing cards); an edge light TURNED to the wind is a tilted square with its corners on the
+  neighbours, so it is two axis-aligned edges weighted by the wind's components; two unbroken thin
+  side edges were a selection box however soft the lane between them; and the opacities are LINEAR -
+  a PALE overlay behaves the opposite way to the dark ones this game has been bitten by: 0.10 of
+  near-white over the dark board lands at twice the lift the number promises, which is exactly the
+  white haze the brief forbids. It also caught a crash (water the wind presses but cannot move had
+  no route) and a water glide that outlasted the storm by half a second.
+  **SOUND** is synthesized in pure C# and was measured outside Unity: a quiet looping bed while
+  aiming (its level and a few cents of pitch follow the drag), "fup" on the pin, a three-layer
+  release in three baked lengths (the corridor's travel picks one), a tail - all 6-10 dB under the
+  material cues (fwoof / crackle / hiss / tick-fsshh-fwoom; slap / hiss / plup; tchk / whisper / tk /
+  pulse). The first release was 58% above 3 kHz - a hiss with no body - until each layer was brought
+  to its level before the mix. Five haptic beats are announced with no layer to go to.
+  Quality High / Medium / Low (`WindFx.Level`, mobile starts at Medium; Low keeps the lane, a few
+  ribbons and the proxies). The lab section "RÜZGAR / DIRECTED STORM" has the brief's 53 entries -
+  the aim's states, each storm layer alone, every fire / water / infection beat on its own
+  (`WindStormView.Isolate`: the cast runs at 40x up to the beat, plays it and holds - no second copy
+  of any beat), the mixes, speeds and qualities - on boards of its own through `RuzgarPower.BlowOn` /
+  `SettleOn` / `PreviewOn`, plus 25 debug switches and a label. **Not done**: nothing here has been
+  seen running in Unity (the simulator's stand-ins for `FireBloom`, the infection core and the tile
+  materials are approximations); the board itself is never bent - the "refraction" is the drawn
+  doublets; the haptics have no layer; a line the gust completes still blasts from a face that may
+  have aged out of the board's cache by the time the storm has finished.
 - `Assets/Scripts/View/PowerFxView.cs` — activation animations for powers without a view of
   their own: Totem (carved pole out of a rune circle), İkinci Şans (a four-leaf clover whose
   plucked leaves each take their quadrant of cubes), Soğuk Füzyon, Aşırma / Yedekleme (one card
