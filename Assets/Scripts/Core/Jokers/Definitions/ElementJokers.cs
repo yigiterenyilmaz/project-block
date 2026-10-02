@@ -447,7 +447,7 @@ namespace ProjectBlock.Core
         ///
         /// Public and static so the ANIMATION LAB can run it on a board of its own and get
         /// exactly what a round would get, reported the same way: the same bargain
-        /// MapusBoss.RetargetOn makes with the boss's targeting. A lab that reimplements the
+        /// MapusBoss.StartOn makes with the boss's targeting. A lab that reimplements the
         /// rule is a lab that agrees with itself and with nothing else.
         /// </summary>
         public static SpreadVisuals SpreadOn(GameBoard board, CubeKind kind, int serial)
@@ -575,7 +575,7 @@ namespace ProjectBlock.Core
         ///
         /// Public and static so the ANIMATION LAB can run it on a board of its own and get
         /// exactly what a turn would get, reported the same way: the same bargain
-        /// SpreadJoker.SpreadOn and MapusBoss.RetargetOn both make. A lab that reimplements the
+        /// SpreadJoker.SpreadOn and MapusBoss.StartOn both make. A lab that reimplements the
         /// rule is a lab that agrees with itself and with nothing else - and here the thing most
         /// worth agreeing about is WHICH SIDE is the wall, because that is what the picture draws.
         /// </summary>

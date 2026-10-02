@@ -69,7 +69,9 @@ boardview = strip_comments(read('Assets', 'Scripts', 'View', 'BoardView.cs'))
 fb = strip_comments(read('Assets', 'Scripts', 'View', 'GameUiController.Feedback.cs'))
 lab_raw = read('Assets', 'Scripts', 'View', 'GameUiController.AnimationLab.cs')
 lab = strip_comments(lab_raw)
-tests = read('Tools', 'CoreTests', 'JokerTests.cs')
+tests = read('Tools', 'CoreTests', 'MapusTests.cs')
+runner = read('Tools', 'CoreTests', 'JokerTests.cs')
+sea = strip_comments(read('Assets', 'Scripts', 'Core', 'Jokers', 'LineChance.cs'))
 
 print('=== 1. HUCRE BOYANMIYOR, CUKURA CEVRILIYOR ===')
 check('cukur icin ayri bir shader var',
@@ -216,23 +218,57 @@ check('View hangi hucrenin muhurlu oldugunu SECMIYOR',
 check('View "hat tam da bu hucre yuzunden tutuluyor" kararini vermiyor',
       'RowHeldAlone' in view and 'HeldByTheSealAlone' in visuals,
       'View hat durumunu kendi cikariyor')
-check('tasindi mi / tutuldu mu karari Core`dan',
-      'Moved' in visuals and 'Released' in visuals,
+check('hangi kilit YENI, hangisinin suresi DOLDU karari Core`dan',
+      'IsNew' in visuals and 'Expired' in visuals and 'Placed' in visuals,
       'View spawn/despawn karari veriyor')
 check('ayni hucre tekrar gelince prison YENIDEN kurulmuyor',
       'standing' in method(view, 'public void Sync(BoardView view'),
       'her repaint hapishaneyi bastan kuruyor')
+check('kilit ELE ve SIRADAKI kartlara gore hedefleniyor (gercek cekme sirasiyla)',
+      'LineChanceSea.Measure(round, board' in boss and 'knownDrawOrder' in sea
+      and 'draw.Reverse()' in sea,
+      'boss yalnizca tahtaya bakiyor')
+check('NE KADAR YAKINDA da olculuyor (Urgency), sadece olur/olmaz degil',
+      'line.Urgency' in boss and 'Urgency' in sea,
+      'yakin patlayacak hat ile son turda patlayacak hat ayni sayiliyor')
+check('satir + sutun KESISIMI onceliklendiriliyor',
+      'CrossBonusPercent' in boss and 'r * c' in boss,
+      'kesisim onceligi yok')
+check('kartlar bir sey demiyorsa tahtaya dusuyor (eski kural, ayni zamanda esitlik bozucu)',
+      'Danger(board.RowGapCount' in boss and 'bestDanger' in boss,
+      'kartlar sustugunda hedef rastgele')
+check('ayni tur birakilan hucre o turun secimine GIRMIYOR (pencere)',
+      'Holds(justExpired, pos)' in boss,
+      'kilit kalktigi tur ayni hucreye geri konabiliyor')
+check('yuklenen kayit kilitlerini hemen gosteriyor (ReportFor)',
+      'public MapusSealVisuals ReportFor(' in boss and 'boss.ReportFor(' in fb,
+      'yuklenen turda hapishaneler bir sonraki tura kadar gorunmuyor')
 
-print('=== 6. MUHUR 3 TURA KADAR KALIYOR ===')
-check('tutus sayaci kuralin kendisinden',
-      'TurnsHeld' in visuals and 'MaxTurns' in visuals and 'turnsOnCell' in boss,
+print('=== 6. KILIT UC TUR DURUYOR, IKI TURDA BIR YENISI GELIYOR ===')
+check('ritim ve sure kuralin kendi sayilari',
+      'TurnsBetweenSeals = 2' in boss and 'SealTurns = 3' in boss,
+      'ritim degismis ya da View`da')
+check('kalan tur kuralin kendisinden',
+      'TurnsLeft' in visuals and 'SealTurns' in visuals and 'sealTurnsLeft' in boss,
       'View tur sayiyor')
-check('cap birakmasi AYRI bir olay (oyuncunun penceresi)',
-      'Released' in view and 'ReleaseOpenExtra' in view,
-      'cap birakmasi sirandan bir despawn gibi')
+check('View tur SAYMIYOR',
+      'TurnsLeft--' not in view and 'TurnsLeft -=' not in view and 'TurnsLeft++' not in view,
+      'View kendi tur saatini isletiyor')
+check('ayni anda birden fazla kilit duruyor (liste, tek muhur degil)',
+      'IReadOnlyList<Seal> live' in view and 'List<MapusSeal> Seals' in visuals,
+      'View hala tek muhur bekliyor')
+check('suresi dolan kilit AYRI bir olay (oyuncunun penceresi)',
+      'Released' in view and 'ReleaseOpenExtra' in view
+      and 'expired' in method(view, 'public void Sync(BoardView view'),
+      'suresi dolan kilit siradan bir despawn gibi')
 check('birakirken demir gerektiginden GENIS aciliyor',
       'w.Released' in method(view, 'private void PaintSide('),
       'pencere fark edilmiyor')
+check('SON TURDA kilit gevsiyor: surguler geri, mum soguk - sayac yok',
+      'LastTurnRibSlack' in view and 'LastTurnSealHeat' in view
+      and 'w.Loosen' in method(view, 'private void PaintSide(')
+      and 'w.Loosen' in method(view, 'private void PaintSeal('),
+      'hangi kilidin acilmak uzere oldugu okunmuyor')
 
 print('=== 7. HAREKET DILI ===')
 check('kaburga socket`ten DONEREK geliyor (kayarak degil)',
@@ -244,9 +280,9 @@ check('agir duruş: bounce/overshoot yok',
 check('muhur kuyudan YUKSELIYOR (pop degil)',
       'SpawnSealStartScale' in view and 'rises out of the pit' in view_raw.lower(),
       'muhur pop yapiyor')
-check('eski ve yeni hapishane ORTUSUYOR ama iki canli muhur olmuyor',
-      'MoveOverlap' in view and 'DespawnClock = 0f' in view,
-      'iki tam muhur ayni anda')
+check('suresi dolan hapishane INERKEN yenisi yaninda kuruluyor (aninda silinmiyor)',
+      'DespawnClock = 0f' in view and 'DespawnTotal' in view,
+      'kilit bir karede yok oluyor')
 check('idle bir MEKANIZMA kontrolu (nefes alan canli degil)',
       'IdlePairDelay' in view and 'WARDEN CHECK' in view_raw,
       'idle nefes gibi')
@@ -276,11 +312,17 @@ names = [x.strip().rstrip(',') for x in mapus_scenes.group(1).split('\n')
          if x.strip()] if mapus_scenes else []
 check('mapus sahneleri tam (>= 16)', len(names) >= 16, 'sahne sayisi %d' % len(names))
 check('lab GERCEK hedeflemeyi calistiriyor',
-      'boss.RetargetOn(' in lab, 'lab kendi hucresini seciyor')
-check('hedefleme TEK yerde (round ve lab ayni Choose`u cagiriyor)',
-      boss.count('private GridPos? Choose(') == 1
-      and 'Choose(round.Board, rng)' in boss and 'Choose(board, rng)' in boss,
+      'boss.StartOn(' in lab and 'boss.AdvanceOn(' in lab, 'lab kendi hucresini seciyor')
+check('lab round`un GERCEK elini ve destesini okutuyor',
+      'boss.StartOn(board, round, rng)' in lab and 'boss.AdvanceOn(board, round, rng)' in lab,
+      'lab boss`u kartsiz calistiriyor')
+check('hedefleme TEK yerde (round ve lab ayni Step`i ve ayni Choose`u cagiriyor)',
+      boss.count('private GridPos? Choose(') == 1 and boss.count('private void Step(') == 1
+      and 'Step(ctx.Round, ctx.Round.Board' in boss and 'Step(cards, board, rng' in boss,
       'lab ikinci bir hedefleme uygulamasi')
+check('lab ve oyun AYNI seam`den geciyor (PlayMapusReport)',
+      'PlayMapusReport(' in lab and 'private void PlayMapusReport(' in fb,
+      'lab hapishaneleri kendi kuruyor')
 check('AnimRotFill null `reserved` kabul ediyor (mapus sahneleri oyle cagiriyor)',
       'reserved != null && reserved.Contains' in lab,
       'mapus sahneleri NullReferenceException atar - korunacak hucresi olmayan sahne '
@@ -290,7 +332,8 @@ check('lab kendi tahtasini kuruyor (round`un Core state`ine dokunmuyor)',
           lab, 'private IEnumerator MapusRoutine('),
       'lab round tahtasini muhurluyor')
 check('etiket raporun GERCEK icerigini yaziyor',
-      'AnimMapusLabel(' in lab and 'seal.RowGaps' in lab, 'etiket sahnenin niyetini yaziyor')
+      'AnimMapusLabel(' in lab and 'report.AimedByCards' in lab and 'seal.TurnsLeft' in lab,
+      'etiket sahnenin niyetini yaziyor')
 for toggle in ['ShowPit', 'ShowSockets', 'ShowRibs', 'ShowSeal', 'ShowBrand',
                'ShowRowPressure', 'ShowColumnPressure', 'ShowWarmth']:
     check('lab anahtari: %s' % toggle, 'MapusSealView.Layers.' + toggle in lab_raw,
@@ -303,13 +346,21 @@ check('resync mapus sahnesini durduruyor',
       'resync mapus sahnesini durdurmuyor')
 
 print('=== 10. KURAL TESTLERI ===')
-check('hedefli muhur icin Core testi var',
-      'Boss_MapusSealsTheLineNearestCompletion' in tests, 'test yok')
+check('ritim icin Core testi var (iki turda bir, uc tur)',
+      'Mapus_LocksEverySecondTurnAndEachStandsThree' in tests, 'ritim testi yok')
+check('ELI okudugu icin test var',
+      'Mapus_ReadsTheHandNotJustTheBoard' in tests, 'el testi yok')
+check('SIRADAKI kartlari sirasiyla okudugu icin test var',
+      'Mapus_ReadsTheComingCardsInTheOrderTheyCome' in tests, 'cekme sirasi testi yok')
 check('kesisme tercihi icin test var',
-      'Boss_MapusPrefersTheCrossingOfTwoThreats' in tests, 'kesisme testi yok')
+      'Mapus_GoesFirstWhereARowAndAColumnCross' in tests, 'kesisme testi yok')
+check('iki kilit iki AYRI hatti tutuyor testi var',
+      'Mapus_TwoLocksDenyTwoDifferentLines' in tests, 'iki kilit testi yok')
+check('pencere testi var (birakilan hucre o tur geri alinmiyor)',
+      'Mapus_ALiftedCellIsThePlayersForATurn' in tests, 'pencere testi yok')
 check('testler kosucuya bagli',
-      tests.count('Boss_MapusSealsTheLineNearestCompletion') >= 2, 'test cagirilmiyor')
-check('cap testi var', 'past the cap it MUST let go' in tests, 'cap testi yok')
+      tests.count('Mapus_ReadsTheHandNotJustTheBoard') >= 2 and 'RunMapusTests();' in runner,
+      'test cagirilmiyor')
 
 print()
 if fail:

@@ -412,6 +412,9 @@ namespace ProjectBlock.View
             }
             StopAnimPress();
             StopAnimHost();
+            // A Mapus scene plays several turns over several seconds; left running it would put
+            // its prisons back on the round's board after the reset.
+            StopAnimMapus();
             if (petLabDriving)
             {
                 StopPetLab();
@@ -2116,15 +2119,17 @@ namespace ProjectBlock.View
             // acceptance test and 14 switches (GameUiController.ParasiteImprintLab).
             AddParasiteImprintAnims();
             AddAnimSub("bosses", "mapus", "mapus", "mapus");
-            // "MAPUS" - the prison it builds in one empty cell, on a board of the lab's own with
-            // the REAL rules run on it: the boss picks its own target through MapusBoss.Retarget,
-            // and the scene plays whatever it reported. Which cell is sealed, whether the seal
-            // moved or held, and how close the lines are to completion are never fabricated here.
-            AddAnim("Mapus: the seal, standing", "mapus: mühür, duruyor",
+            // "MAPUS" - the prisons it builds in empty cells, on a board of the lab's own with the
+            // REAL rules run on it: the boss picks its own targets through MapusBoss.StartOn /
+            // AdvanceOn, reading the ROUND's real hand and draw pile against the lab's board, and
+            // the scene plays whatever it reported. Which cells are locked, how long each has
+            // left, whose time ran out and how close the lines are to completion are never
+            // fabricated here.
+            AddAnim("Mapus: the lock, standing", "mapus: kilit, duruyor",
                 delegate { AnimMapus(AnimMapusScene.Standing); });
-            AddAnim("Mapus: the seal on an EMPTY board", "mapus: BOŞ tahtada mühür",
+            AddAnim("Mapus: the lock on an EMPTY board", "mapus: BOŞ tahtada kilit",
                 delegate { AnimMapus(AnimMapusScene.EmptyBoard); });
-            AddAnim("Mapus: the seal on a BUSY board", "mapus: DOLU tahtada mühür",
+            AddAnim("Mapus: the lock on a BUSY board", "mapus: DOLU tahtada kilit",
                 delegate { AnimMapus(AnimMapusScene.BusyBoard); });
             AddAnim("Mapus: CELL SENTENCE - the prison goes up",
                 "mapus: HÜCRE CEZASI - hapishane kuruluyor",
@@ -2132,15 +2137,18 @@ namespace ProjectBlock.View
             AddAnim("Mapus: CELL RELEASE - the prison comes down",
                 "mapus: TAHLİYE - hapishane sökülüyor",
                 delegate { AnimMapus(AnimMapusScene.Despawn); });
-            AddAnim("Mapus: the seal MOVES to another cell",
-                "mapus: mühür başka hücreye TAŞINIYOR",
-                delegate { AnimMapus(AnimMapusScene.Move); });
-            AddAnim("Mapus: it HOLDS the same cell for three turns",
-                "mapus: aynı hücreyi üç tur TUTUYOR",
-                delegate { AnimMapus(AnimMapusScene.HoldsThreeTurns); });
-            AddAnim("Mapus HERO: the cap RELEASES the cell - the player's window",
-                "mapus HERO: sınır hücreyi BIRAKIYOR - oyuncunun penceresi",
-                delegate { AnimMapus(AnimMapusScene.CapRelease); });
+            AddAnim("Mapus: a SECOND lock goes up beside the first",
+                "mapus: birincinin yanına İKİNCİ kilit kuruluyor",
+                delegate { AnimMapus(AnimMapusScene.SecondLock); });
+            AddAnim("Mapus: the LAST TURN - the grip slackens",
+                "mapus: SON TUR - kilit gevşiyor",
+                delegate { AnimMapus(AnimMapusScene.LastTurn); });
+            AddAnim("Mapus HERO: TIME IS UP - the cell opens, the player's window",
+                "mapus HERO: SÜRE DOLDU - hücre açılıyor, oyuncunun penceresi",
+                delegate { AnimMapus(AnimMapusScene.TimeUp); });
+            AddAnim("Mapus HERO: it reads YOUR HAND - a pocket against a slot",
+                "mapus HERO: ELİNİ okuyor - cep mi, yarık mı",
+                delegate { AnimMapus(AnimMapusScene.ReadsTheHand); });
             AddAnim("Mapus HERO: the row is held by THIS cell alone",
                 "mapus HERO: satırı tam da BU hücre tutuyor",
                 delegate { AnimMapus(AnimMapusScene.RowHeldAlone); });
@@ -2158,9 +2166,9 @@ namespace ProjectBlock.View
             AddAnim("Mapus: DENIED ENTRY - a block is dragged over it",
                 "mapus: GİRİŞ YOK - üstüne blok sürükleniyor",
                 delegate { AnimMapus(AnimMapusScene.Denied); });
-            AddAnim("Mapus: a WHOLE turn - hold, move, lock, idle",
-                "mapus: TÜM tur - tut, taşı, kilitle, bekle",
-                delegate { AnimMapus(AnimMapusScene.WholeTurn); });
+            AddAnim("Mapus: the RHYTHM - six turns, one lock, two, one, two",
+                "mapus: RİTİM - altı tur; bir kilit, iki, bir, iki",
+                delegate { AnimMapus(AnimMapusScene.Rhythm); });
             AddAnim("Mapus test: readability over many coloured cubes",
                 "mapus testi: bir sürü renkli küpün arasında okunurluk",
                 delegate { AnimMapus(AnimMapusScene.ColourStress); });
@@ -10172,11 +10180,13 @@ namespace ProjectBlock.View
         // ------------------------------------------------------------------ mapus
 
         // "MAPUS" IN THE LAB. Every scene puts up a board of its own and runs the boss's REAL
-        // targeting on it (MapusBoss.RetargetOn - the same Choose the round calls), then hands
-        // what it reported to the same seam the game uses. What the lab fabricates is only the
-        // ARGUMENTS: the shape of the board, and which lines it leaves one cube from full. Which
-        // cell gets sealed, whether the seal moved or held, and whether the cap released one are
-        // the rules' answers.
+        // turn on it (MapusBoss.StartOn / AdvanceOn - the same Step the round calls), reading the
+        // ROUND's real hand and draw pile against the lab's board, then hands what it reported to
+        // the same seam the game uses (PlayMapusReport). What the lab fabricates is only the
+        // ARGUMENTS: the shape of the board, which lines it leaves a cube short, and - for the
+        // scenes that isolate one lock - the boss's own rhythm knob. Which cells get locked,
+        // whether the cards or the board aimed them, and whose time ran out are the rules'
+        // answers.
         //
         // Like every other entry these HOLD what they end on, until RESET or closing the lab puts
         // the round back.
@@ -10188,22 +10198,23 @@ namespace ProjectBlock.View
             BusyBoard,
             Spawn,
             Despawn,
-            Move,
-            HoldsThreeTurns,
-            CapRelease,
+            SecondLock,
+            LastTurn,
+            TimeUp,
+            ReadsTheHand,
             RowHeldAlone,
             ColumnHeldAlone,
             BothHeldAlone,
             WardenCheck,
             DepthIdle,
             Denied,
-            WholeTurn,
+            Rhythm,
             ColourStress
         }
 
         private Coroutine animMapus;
 
-        /// <summary>The lab's own board for the seal - never the round's, so nothing here touches
+        /// <summary>The lab's own board for the locks - never the round's, so nothing here touches
         /// Core state.</summary>
         private GameBoard animMapusBoard;
 
@@ -10251,7 +10262,8 @@ namespace ProjectBlock.View
             animMapusBoard = board;
 
             // THE ARGUMENTS THE LAB FABRICATES: how full the board is, and which lines it leaves
-            // one cube short - which is what decides where the rules will want to seal.
+            // short - which, with the hand the round really holds, is what decides where the
+            // rules will want to lock.
             switch (scene)
             {
                 case AnimMapusScene.EmptyBoard:
@@ -10261,14 +10273,22 @@ namespace ProjectBlock.View
                     AnimRotFill(board, cards, 52u, null);
                     break;
                 case AnimMapusScene.RowHeldAlone:
-                    AnimMapusFillLine(board, cards, h / 2, true, -1);
+                    AnimMapusFillLine(board, cards, h / 2, true, -1, 1);
                     break;
                 case AnimMapusScene.ColumnHeldAlone:
-                    AnimMapusFillLine(board, cards, w / 2, false, -1);
+                    AnimMapusFillLine(board, cards, w / 2, false, -1, 1);
                     break;
                 case AnimMapusScene.BothHeldAlone:
-                    AnimMapusFillLine(board, cards, h / 2, true, w / 2);
-                    AnimMapusFillLine(board, cards, w / 2, false, h / 2);
+                    AnimMapusFillLine(board, cards, h / 2, true, w / 2, 1);
+                    AnimMapusFillLine(board, cards, w / 2, false, h / 2, 1);
+                    break;
+                case AnimMapusScene.ReadsTheHand:
+                    // A POCKET: the bottom row one cube from full, the cell over its gap filled,
+                    // so only a single cube fits. And a SLOT: a row further up four cubes short.
+                    // The board alone says the pocket; a hand that cannot fill it says the slot.
+                    AnimMapusFillLine(board, cards, 0, true, w / 2, 1);
+                    board.SetCubeAt(new GridPos(w / 2, 1), AnimCardCube(w / 2, 1, cards));
+                    AnimMapusFillLine(board, cards, h - 2, true, 0, 4);
                     break;
                 default:
                     AnimRotFill(board, cards, 26u, null);
@@ -10276,115 +10296,105 @@ namespace ProjectBlock.View
             }
             boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
 
-            // The boss itself, with its own rng so a press is repeatable.
+            // The boss itself, with its own rng so a press is repeatable. The scenes that are
+            // about ONE lock ask for no second one - its own knob, and the only thing fabricated.
             var boss = new MapusBoss();
+            if (scene == AnimMapusScene.LastTurn || scene == AnimMapusScene.TimeUp)
+            {
+                boss.TurnsBetweenSeals = 99;
+            }
             animMapusBoss = boss;
             var rng = new SeededRandom(4021);
-            AnimMapusStep(boss, board, rng);
-            if (scene == AnimMapusScene.Despawn || scene == AnimMapusScene.Move
-                || scene == AnimMapusScene.HoldsThreeTurns || scene == AnimMapusScene.CapRelease
-                || scene == AnimMapusScene.WholeTurn)
-            {
-                // Let the first prison finish going up before anything is asked of it.
-                yield return new WaitForSeconds(MapusSealView.Style.SpawnTotal + 0.25f);
-            }
+            AnimMapusPlay(boss.StartOn(board, round, rng));
+            float settle = MapusSealView.Style.SpawnTotal + 0.25f;
+            float turn = 1.1f;
 
             switch (scene)
             {
                 case AnimMapusScene.Despawn:
-                    // Nothing sealed at all: the prison comes down and stays down.
-                    boardView.Mapus.Sync(boardView, null, false);
+                    // Nothing locked at all: the prison comes down and stays down.
+                    yield return new WaitForSeconds(settle);
+                    AnimMapusPlay(null);
                     break;
-                case AnimMapusScene.Move:
-                    // Fill the cell's own row right up, so somewhere else is now the worst place
-                    // on the board and the rules move the seal there themselves.
-                    AnimMapusFillLine(board, cards, (boss.SealedCell.Y + 2) % h, true, -1);
-                    boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
-                    AnimMapusStep(boss, board, rng);
-                    break;
-                case AnimMapusScene.HoldsThreeTurns:
-                case AnimMapusScene.CapRelease:
-                    for (int i = 0; i < 3; i++)
+                case AnimMapusScene.SecondLock:
+                    yield return new WaitForSeconds(settle);
+                    for (int i = 0; i < 2; i++)
                     {
-                        AnimMapusStep(boss, board, rng);
-                        yield return new WaitForSeconds(1.1f);
+                        AnimMapusPlay(boss.AdvanceOn(board, round, rng));
+                        yield return new WaitForSeconds(turn);
                     }
                     break;
-                case AnimMapusScene.WardenCheck:
-                    // Nothing to do: the warden check runs itself, every few seconds.
+                case AnimMapusScene.LastTurn:
+                    yield return new WaitForSeconds(settle);
+                    for (int i = 0; i < 2; i++)
+                    {
+                        AnimMapusPlay(boss.AdvanceOn(board, round, rng));
+                        yield return new WaitForSeconds(turn);
+                    }
                     break;
-                case AnimMapusScene.DepthIdle:
+                case AnimMapusScene.TimeUp:
+                    yield return new WaitForSeconds(settle);
+                    for (int i = 0; i < 3; i++)
+                    {
+                        AnimMapusPlay(boss.AdvanceOn(board, round, rng));
+                        yield return new WaitForSeconds(turn);
+                    }
+                    break;
+                case AnimMapusScene.Rhythm:
+                    yield return new WaitForSeconds(settle);
+                    for (int i = 0; i < 6; i++)
+                    {
+                        AnimMapusPlay(boss.AdvanceOn(board, round, rng));
+                        yield return new WaitForSeconds(turn);
+                    }
                     break;
                 case AnimMapusScene.Denied:
                     yield return new WaitForSeconds(MapusSealView.Style.SpawnTotal + 0.3f);
-                    for (int i = 0; i < 3; i++)
+                    for (int i = 0; i < 3 && boss.HasSeal; i++)
                     {
-                        boardView.Mapus.PlayDenied(boss.SealedCell);
+                        boardView.Mapus.PlayDenied(boss.SealedCells[0]);
                         animLastLabel = Loc.Pick("a block was dragged over it - refused",
                             "üstüne blok sürüklendi - reddedildi");
                         yield return new WaitForSeconds(0.55f);
                     }
                     break;
-                case AnimMapusScene.WholeTurn:
-                    AnimMapusStep(boss, board, rng);
-                    yield return new WaitForSeconds(1.2f);
-                    AnimMapusFillLine(board, cards, (boss.SealedCell.Y + 3) % h, true, -1);
-                    boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
-                    AnimMapusStep(boss, board, rng);
-                    break;
                 default:
+                    // Standing, the boards, the held-alone heroes and the idles: the lock that
+                    // went up as the round started is the whole scene, and the idles run
+                    // themselves every few seconds.
                     break;
             }
             animMapus = null;
         }
 
         /// <summary>
-        /// One turn of the boss, against the lab's own board: the REAL targeting, and its own
-        /// report handed to the same seam the game uses.
+        /// One report of the boss, handed to the same seam the game uses, and the label written
+        /// from what it actually contained. Null clears the board of prisons.
         /// </summary>
-        private void AnimMapusStep(MapusBoss boss, GameBoard board, IRandomSource rng)
+        private void AnimMapusPlay(MapusSealVisuals report)
         {
-            MapusSealVisuals seal = boss.RetargetOn(board, rng);
-            if (seal == null)
-            {
-                return;
-            }
-            if (!seal.HasSeal)
-            {
-                boardView.Mapus.Sync(boardView, null, seal.Released);
-            }
-            else
-            {
-                boardView.Mapus.Sync(boardView, new MapusSealView.Seal
-                {
-                    Cell = seal.Cell,
-                    TurnsHeld = seal.TurnsHeld,
-                    MaxTurns = seal.MaxTurns,
-                    RowGaps = seal.RowGaps,
-                    ColumnGaps = seal.ColumnGaps,
-                    RowHeldAlone = seal.RowHeldByTheSealAlone,
-                    ColumnHeldAlone = seal.ColumnHeldByTheSealAlone
-                }, seal.Released);
-            }
-            animLastLabel = AnimMapusLabel(seal);
+            PlayMapusReport(report);
+            animLastLabel = report != null
+                ? AnimMapusLabel(report)
+                : Loc.Pick("no lock at all", "hiç kilit yok");
             if (AnimLabOpen)
             {
                 RedrawAnimationLab();
             }
         }
 
-        /// <summary>Fills a whole row or column but for one cell, so the rules have a line that is
-        /// genuinely one cube from exploding to aim at. <paramref name="gapAt"/> below zero leaves
-        /// the gap in the middle.</summary>
+        /// <summary>Fills a whole row or column but for <paramref name="gapSize"/> cells in a
+        /// run, so the rules have a line that is genuinely that many cubes from exploding to aim
+        /// at. <paramref name="gapAt"/> below zero puts the gap in the middle.</summary>
         private void AnimMapusFillLine(GameBoard board, List<int> cards, int line, bool row,
-            int gapAt)
+            int gapAt, int gapSize)
         {
             int span = row ? board.Width : board.Height;
             int from = row ? board.MinX : board.MinY;
             int hole = gapAt >= 0 ? gapAt : from + span / 2;
             for (int i = from; i < from + span; i++)
             {
-                if (i == hole)
+                if (i >= hole && i < hole + gapSize)
                 {
                     continue;
                 }
@@ -10398,27 +10408,40 @@ namespace ProjectBlock.View
 
         /// <summary>What the report actually contained - so the label says the rules' answer and
         /// not the scene's intention.</summary>
-        private static string AnimMapusLabel(MapusSealVisuals seal)
+        private static string AnimMapusLabel(MapusSealVisuals report)
         {
-            if (!seal.HasSeal)
+            var text = new System.Text.StringBuilder();
+            if (report.Seals.Count == 0)
             {
-                return seal.Released
-                    ? Loc.Pick("the cap RELEASED the cell - open for a turn",
-                        "sınır hücreyi BIRAKTI - bir tur açık")
-                    : Loc.Pick("no seal this turn - too few free cells",
-                        "bu tur mühür yok - boş hücre az");
+                text.Append(Loc.Pick("no lock standing", "duran kilit yok"));
             }
-            string where = seal.Cell.X + "," + seal.Cell.Y;
-            string held = " " + seal.TurnsHeld + "/" + seal.MaxTurns;
-            string lines = " (" + Loc.Pick("row ", "satır ") + seal.RowGaps
-                + Loc.Pick(", column ", ", sütun ") + seal.ColumnGaps + ")";
-            string what = seal.Moved
-                ? Loc.Pick("sealed ", "mühürledi ")
-                : Loc.Pick("still holding ", "hâlâ tutuyor ");
-            string alone = seal.RowHeldByTheSealAlone || seal.ColumnHeldByTheSealAlone
-                ? Loc.Pick(" - THIS cell is holding the line", " - hattı tam da BU hücre tutuyor")
-                : string.Empty;
-            return what + where + held + lines + alone;
+            for (int i = 0; i < report.Seals.Count; i++)
+            {
+                MapusSeal seal = report.Seals[i];
+                text.Append(i == 0 ? Loc.Pick("locked ", "kilitli ") : ", ");
+                text.Append(seal.Cell.X).Append(',').Append(seal.Cell.Y);
+                text.Append(" (").Append(seal.TurnsLeft).Append('/').Append(report.SealTurns)
+                    .Append(')');
+                if (seal.RowHeldByTheSealAlone || seal.ColumnHeldByTheSealAlone)
+                {
+                    text.Append(Loc.Pick(" HOLDS THE LINE", " HATTI TUTUYOR"));
+                }
+            }
+            if (report.Placed)
+            {
+                text.Append(report.AimedByCards
+                    ? Loc.Pick(" - NEW, aimed by the cards: row ", " - YENİ, kartlara göre: satır ")
+                        + report.PlacedRowThreat.ToString("0.00")
+                        + Loc.Pick(", column ", ", sütun ")
+                        + report.PlacedColumnThreat.ToString("0.00")
+                    : Loc.Pick(" - NEW, aimed by the board alone", " - YENİ, yalnız tahtaya göre"));
+            }
+            for (int i = 0; i < report.Expired.Count; i++)
+            {
+                text.Append(Loc.Pick(" - TIME UP at ", " - SÜRESİ DOLDU: "))
+                    .Append(report.Expired[i].X).Append(',').Append(report.Expired[i].Y);
+            }
+            return text.ToString();
         }
 
         private void AnimMapusToggle(ref bool flag, string english, string turkish)

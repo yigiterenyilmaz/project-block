@@ -1,7 +1,8 @@
-// PURPOSE: "Mapus"'s SEAL - the MAHKÛM HÜCRESİ. The boss picks one empty cell and builds a small
-// prison in it; this draws that prison, and the pressure it puts on the row and the column running
-// through it. Owned by BoardView like the rot, the snake, the press and the parasite, because a
-// seal stands for turns at a time and the board is repainted many times in that.
+// PURPOSE: "Mapus"'s LOCKS - the MAHKÛM HÜCRESİ. Every second turn the boss picks one empty cell
+// and builds a small prison in it that stands three turns, so one or two stand at a time; this
+// draws those prisons, and the pressure each puts on the row and the column running through it.
+// Owned by BoardView like the rot, the snake, the press and the parasite, because a lock stands
+// for turns at a time and the board is repainted many times in that.
 //
 // WHAT IT REPLACES. A sealed cell used to be the empty cell in a different colour - one flat
 // blue-grey instead of the usual one. That said "somebody painted this square" and nothing about
@@ -29,16 +30,18 @@
 //                 through, a faint bracket of shadow. Never a beam, never a coloured stripe, never
 //                 a tint on anybody's block: the line is not lit up, it is being LEANED ON.
 //
-// THE VIEW DECIDES NONE OF IT. MapusSealVisuals (Core, reporting only, [NotSaved]) says which cell
-// is sealed, whether this turn MOVED the seal or HELD it, whether the cap just let a cell go, and
-// how many cubes the row and column still want. All four change what is drawn and not one of them
-// is worked out here - "is this line being held by exactly this cell" in particular is the
-// explosion rule's own question, and there is one answer to it in the codebase.
+// THE VIEW DECIDES NONE OF IT. MapusSealVisuals (Core, reporting only, [NotSaved]) says which
+// cells are locked, how many turns each has left, whose time just RAN OUT, and how many cubes the
+// row and column through each still want. All four change what is drawn and not one of them is
+// worked out here - "is this line being held by exactly this cell" in particular is the explosion
+// rule's own question, and there is one answer to it in the codebase.
 //
-// THE SEAL HOLDS FOR UP TO THREE TURNS, so the big animation is NOT every turn. Held, it plays a
-// warden check and nothing else. Moved, the old prison is dismantled while the new one is built.
-// Released by the cap, the ironwork lets go and the cell is honestly open for one turn - which is
-// the player's window and has to look like one.
+// A LOCK STANDS THREE TURNS AND NEVER MOVES, so the big animation is NOT every turn. Standing, it
+// plays a warden check and nothing else. A new lock is a whole prison going up - beside the one
+// already standing, never instead of it. On its LAST turn the grip slackens: the bolts ease back
+// a hair and the wax goes cold, which is how the player sees which of two is about to open
+// without a number on it. And when its time is up the ironwork lets go and the cell is honestly
+// open for a turn - the player's window, and it has to look like one.
 
 using System.Collections.Generic;
 using ProjectBlock.Core;
@@ -48,16 +51,16 @@ namespace ProjectBlock.View
 {
     public sealed class MapusSealView : MonoBehaviour
     {
-        /// <summary>What the board hands over: one seal, exactly as Core reported it.</summary>
+        /// <summary>What the board hands over: one lock, exactly as Core reported it.</summary>
         public struct Seal
         {
             public GridPos Cell;
 
-            /// <summary>How many turns running this cell has been held, and the most it may be.
+            /// <summary>How many turns this lock still stands, and how many a lock stands in all.
             /// The count is the rules' own; the View never runs a turn clock.</summary>
-            public int TurnsHeld;
+            public int TurnsLeft;
 
-            public int MaxTurns;
+            public int TurnsTotal;
 
             /// <summary>How many cubes this cell's row and column still want, or -1 when the line
             /// can never explode anyway. From GameBoard.RowGapCount / ColumnGapCount.</summary>
@@ -350,6 +353,19 @@ namespace ProjectBlock.View
             /// before it goes, which is the only way the player reads a window rather than a
             /// wander.</summary>
             public static float ReleaseOpenExtra = 0.05f;
+
+            // ---- the last turn ----
+            /// <summary>How far the bolts ease back, as a share of the cell, on the last turn a
+            /// lock stands. A hair: the cell is still shut, the grip on it is going.</summary>
+            public static float LastTurnRibSlack = 0.022f;
+
+            /// <summary>What is left of the seal's warmth on that turn. The wax goes cold before
+            /// the iron lets go.</summary>
+            public static float LastTurnSealHeat = 0.4f;
+
+            /// <summary>Seconds the slackening takes - it is seen happening, not found done.
+            /// </summary>
+            public static float LastTurnEase = 0.35f;
         }
 
         /// <summary>What the lab can switch off one at a time.</summary>
@@ -443,8 +459,8 @@ namespace ProjectBlock.View
             public bool OnCube;
         }
 
-        /// <summary>One cell's prison. There is normally one; there are briefly two while the seal
-        /// is moving, and the retiring one is coming down while the arriving one goes up.</summary>
+        /// <summary>One cell's prison. One or two stand at a time, and a third may briefly be
+        /// coming down beside them when a lock's time has just run out.</summary>
         private sealed class Cellwork
         {
             public GridPos Cell;
@@ -462,17 +478,19 @@ namespace ProjectBlock.View
             public float SpawnClock;
             /// <summary>Seconds into the release, or below zero while it holds.</summary>
             public float DespawnClock = -1f;
-            /// <summary>True when the release is the CAP letting go rather than the seal moving.
-            /// </summary>
+            /// <summary>True when the lock's TIME RAN OUT - the player's window - rather than the
+            /// prison simply being cleared away.</summary>
             public bool Released;
             public float IdleWait;
             public float IdleClock = -1f;
             public float DepthWait;
             public float DepthClock = -1f;
             public float DeniedClock = -1f;
+            /// <summary>0..1: how far the grip has slackened for the lock's last turn.</summary>
+            public float Loosen;
             /// <summary>What Core last said about this cell.</summary>
-            public int TurnsHeld;
-            public int MaxTurns;
+            public int TurnsLeft;
+            public int TurnsTotal;
             public bool RowAlone;
             public bool ColumnAlone;
             public bool RowLive;
@@ -512,14 +530,16 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// The seal as Core reports it. Pass null when there is none - the board had too few free
-        /// cells, or the cap released the only cell worth taking.
+        /// The locks as Core reports them: every one standing now (<paramref name="live"/>, null
+        /// or empty when there is none) and the cells whose time just ran out
+        /// (<paramref name="expired"/>, may be null).
         ///
-        /// A seal on the cell that already has one is HELD: its state is updated and nothing is
-        /// replayed. A seal somewhere else takes the old prison down and puts a new one up, the two
-        /// overlapping. This is the only entry point, so a repaint can call it as often as it likes.
+        /// A lock on a cell that already has a prison STANDS: its state is updated and nothing is
+        /// replayed. A lock on a new cell puts a prison up beside the others. A prison whose cell
+        /// is no longer in the list comes down - as a release when its time ran out. This is the
+        /// only entry point, so a repaint can call it as often as it likes.
         /// </summary>
-        public void Sync(BoardView view, Seal? live, bool released)
+        public void Sync(BoardView view, IReadOnlyList<Seal> live, IReadOnlyList<GridPos> expired)
         {
             if (view == null || view.Board == null)
             {
@@ -529,13 +549,7 @@ namespace ProjectBlock.View
             toWorld = view.CellToWorld;
             board = view.Board;
 
-            GridPos want = default(GridPos);
-            bool wanted = live.HasValue;
-            if (wanted)
-            {
-                want = live.Value.Cell;
-            }
-            Cellwork standing = null;
+            int wanted = live != null ? live.Count : 0;
             for (int i = 0; i < works.Count; i++)
             {
                 Cellwork w = works[i];
@@ -543,36 +557,50 @@ namespace ProjectBlock.View
                 {
                     continue;
                 }
-                if (wanted && w.Cell.Equals(want))
+                bool stays = false;
+                for (int k = 0; k < wanted && !stays; k++)
                 {
-                    standing = w;
+                    stays = w.Cell.Equals(live[k].Cell);
                 }
-                else
+                if (stays)
                 {
-                    // Anything else that is still up is coming down.
-                    w.DespawnClock = 0f;
-                    w.Released = released;
-                    w.IdleClock = -1f;
-                    w.DepthClock = -1f;
+                    continue;
                 }
+                // Anything else that is still up is coming down.
+                w.DespawnClock = 0f;
+                w.Released = false;
+                for (int k = 0; expired != null && k < expired.Count; k++)
+                {
+                    w.Released |= w.Cell.Equals(expired[k]);
+                }
+                w.IdleClock = -1f;
+                w.DepthClock = -1f;
             }
-            if (!wanted)
+            for (int k = 0; k < wanted; k++)
             {
-                return;
+                Seal seal = live[k];
+                Cellwork standing = null;
+                for (int i = 0; i < works.Count && standing == null; i++)
+                {
+                    if (works[i].DespawnClock < 0f && works[i].Cell.Equals(seal.Cell))
+                    {
+                        standing = works[i];
+                    }
+                }
+                if (standing == null)
+                {
+                    standing = Build(seal.Cell);
+                    works.Add(standing);
+                }
+                standing.TurnsLeft = seal.TurnsLeft;
+                standing.TurnsTotal = seal.TurnsTotal;
+                standing.RowAlone = seal.RowHeldAlone;
+                standing.ColumnAlone = seal.ColumnHeldAlone;
+                // A line that can never explode is not being held by anything, so it takes no
+                // pressure - Core says so with -1 and the View does not second-guess it.
+                standing.RowLive = seal.RowGaps >= 0;
+                standing.ColumnLive = seal.ColumnGaps >= 0;
             }
-            if (standing == null)
-            {
-                standing = Build(want);
-                works.Add(standing);
-            }
-            standing.TurnsHeld = live.Value.TurnsHeld;
-            standing.MaxTurns = live.Value.MaxTurns;
-            standing.RowAlone = live.Value.RowHeldAlone;
-            standing.ColumnAlone = live.Value.ColumnHeldAlone;
-            // A line that can never explode is not being held by anything, so it takes no
-            // pressure - Core says so with -1 and the View does not second-guess it.
-            standing.RowLive = live.Value.RowGaps >= 0;
-            standing.ColumnLive = live.Value.ColumnGaps >= 0;
             Paint();
         }
 
@@ -780,6 +808,11 @@ namespace ProjectBlock.View
                         w.DeniedClock = -1f;
                     }
                 }
+                // THE LAST TURN. Core says how many turns are left; the grip only eases toward
+                // what that calls for, so the slackening is seen happening.
+                float loosen = w.TurnsTotal > 1 && w.TurnsLeft == 1 ? 1f : 0f;
+                w.Loosen = Mathf.MoveTowards(w.Loosen, loosen,
+                    dt / Mathf.Max(Style.LastTurnEase, 0.01f));
                 if (w.SpawnClock < Style.SpawnTotal)
                 {
                     continue; // still going up
@@ -1036,6 +1069,8 @@ namespace ProjectBlock.View
                         Style.IdlePairDelay * 2f)));
             }
             reach += cell * bite;
+            // On its last turn the grip slackens: the bolts ease back a hair, all four together.
+            reach -= cell * Style.LastTurnRibSlack * Ease(w.Loosen) * Mathf.Clamp01(outAmount);
             // It ROTATES in from its socket rather than sliding: the root stays put and the tip
             // swings. A piece that slides is a sprite being tweened.
             float tilt = (1f - outAmount) * Style.SpawnRibTilt * (side % 2 == 0 ? 1f : -1f);
@@ -1090,6 +1125,8 @@ namespace ProjectBlock.View
             // The heat DIPS as the warden checks - the seal is being leaned on, not lit up.
             float heat = Style.SealHeat * rise * (1f - idle * Style.IdleSealDim)
                 * (down ? Mathf.Max(0f, 1f - Span(t, 0f, Style.DespawnSealDim) * 1.3f) : 1f);
+            // ...and the wax goes cold on the lock's last turn, before the iron lets go.
+            heat *= Mathf.Lerp(1f, Style.LastTurnSealHeat, Ease(w.Loosen));
             float shown = Mathf.Clamp01(rise * 1.6f);
             if (Layers.SilhouetteTest)
             {

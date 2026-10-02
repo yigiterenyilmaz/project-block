@@ -510,6 +510,22 @@ namespace ProjectBlock.Core
             }
         }
 
+        /// <summary>
+        /// The report the View should be showing: this turn's, or - when there is none, which is
+        /// a LOADED SAVE, where the locks came back and the per-turn report did not - one written
+        /// now from the locks as they stand, with nothing placed and nothing expired in it. So a
+        /// continued run shows its prisons from the first frame instead of from the next turn.
+        /// </summary>
+        public MapusSealVisuals ReportFor(GameBoard board)
+        {
+            if (LastSeal == null && board != null)
+            {
+                LastSeal = new MapusSealVisuals();
+                Report(board, new List<GridPos>(), false, false, 0.0, 0.0);
+            }
+            return LastSeal;
+        }
+
         private static bool Holds(List<GridPos> cells, GridPos cell)
         {
             for (int i = 0; i < cells.Count; i++)

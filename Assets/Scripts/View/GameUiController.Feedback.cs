@@ -1506,41 +1506,57 @@ namespace ProjectBlock.View
         }
 
         /// <summary>
-        /// WHERE "MAPUS" HAS ITS SEAL, asked every repaint - and everything about it comes from the
-        /// boss's own report (MapusSealVisuals): which cell, how many turns it has held it, how
-        /// close the row and the column through it are to completion, and whether the cap has just
-        /// let a cell go. The View works out none of that; it plays it.
+        /// WHERE "MAPUS" HAS ITS LOCKS, asked every repaint - and everything about them comes from
+        /// the boss's own report (MapusSealVisuals): which cells, how many turns each has left, how
+        /// close the row and the column through each are to completion, and whose time has just
+        /// run out. The View works out none of that; it plays it.
         ///
-        /// Calling this on every repaint is safe by design: the same cell twice is the seal being
-        /// HELD, and the seal view answers that by doing nothing rather than by rebuilding a
-        /// prison the player is already looking at.
+        /// Calling this on every repaint is safe by design: a cell that already has its prison is
+        /// a lock STANDING, and the seal view answers that by doing nothing rather than by
+        /// rebuilding a prison the player is already looking at.
         /// </summary>
         private void SyncMapus(RoundEngine round)
         {
             var boss = round != null ? round.Boss as MapusBoss : null;
-            MapusSealVisuals seal = boss != null ? boss.LastSeal : null;
             if (boss == null)
             {
                 boardView.StopMapus();
                 return;
             }
-            if (seal == null || !seal.HasSeal)
+            // ReportFor, not LastSeal: a loaded save has its locks and no turn's report yet.
+            PlayMapusReport(boss.ReportFor(round.Board));
+        }
+
+        private readonly List<MapusSealView.Seal> mapusSeals = new List<MapusSealView.Seal>();
+
+        /// <summary>
+        /// One report of the locks, handed to the seal view. The seam the game and the animation
+        /// lab both go through, so a lab scene's prisons are built from the same fields the
+        /// round's are.
+        /// </summary>
+        private void PlayMapusReport(MapusSealVisuals report)
+        {
+            mapusSeals.Clear();
+            if (report == null)
             {
-                // No seal this turn: too few free cells, or the cap released the only cell worth
-                // taking. Either way the board breathes, and the release is a real beat.
-                boardView.Mapus.Sync(boardView, null, seal != null && seal.Released);
+                boardView.Mapus.Sync(boardView, mapusSeals, null);
                 return;
             }
-            boardView.Mapus.Sync(boardView, new MapusSealView.Seal
+            for (int i = 0; i < report.Seals.Count; i++)
             {
-                Cell = seal.Cell,
-                TurnsHeld = seal.TurnsHeld,
-                MaxTurns = seal.MaxTurns,
-                RowGaps = seal.RowGaps,
-                ColumnGaps = seal.ColumnGaps,
-                RowHeldAlone = seal.RowHeldByTheSealAlone,
-                ColumnHeldAlone = seal.ColumnHeldByTheSealAlone
-            }, seal.Released);
+                MapusSeal seal = report.Seals[i];
+                mapusSeals.Add(new MapusSealView.Seal
+                {
+                    Cell = seal.Cell,
+                    TurnsLeft = seal.TurnsLeft,
+                    TurnsTotal = report.SealTurns,
+                    RowGaps = seal.RowGaps,
+                    ColumnGaps = seal.ColumnGaps,
+                    RowHeldAlone = seal.RowHeldByTheSealAlone,
+                    ColumnHeldAlone = seal.ColumnHeldByTheSealAlone
+                });
+            }
+            boardView.Mapus.Sync(boardView, mapusSeals, report.Expired);
         }
 
         /// <summary>

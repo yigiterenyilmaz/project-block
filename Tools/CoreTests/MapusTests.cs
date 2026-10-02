@@ -21,6 +21,7 @@ public static partial class JokerTests
         Mapus_ALiftedCellIsThePlayersForATurn();
         Mapus_NeverTakesTheLastHole();
         Mapus_StaysInStepWithTheBoardThroughRealTurns();
+        Mapus_ALoadedRunStillHasALockReport();
     }
 
     private static MapusBoss StartMapus(GameSession session)
@@ -416,5 +417,40 @@ public static partial class JokerTests
         Check(inStep, "the board's seals are the boss's locks, turn after turn");
         Check(neverOnACube, "and no lock ever stands on a cube");
         Check(most == 2, "one or two stand at a time, never more", "most " + most);
+    }
+
+    /// <summary>
+    /// The per-turn report is not saved, the locks are. So a loaded run has locks on the board and
+    /// no report to draw them from - and ReportFor writes one from the locks as they stand, with
+    /// nothing "placed" in it, so the View shows the prisons without replaying anything.
+    /// </summary>
+    private static void Mapus_ALoadedRunStillHasALockReport()
+    {
+        Section("boss / mapus: a loaded run still has a report of its locks");
+        GameSession session = MapusCrossing(5164);
+        RoundEngine round = session.CurrentRound;
+        MapusBoss boss = StartMapus(session);
+        boss.AfterTurnScored(FakeTurnFor(session, round));
+        boss.AfterTurnScored(FakeTurnFor(session, round));
+        Check(boss.SealedCells.Count == 2, "two locks stand", MapusCells(boss));
+        Check(ReferenceEquals(boss.ReportFor(round.Board), boss.LastSeal),
+            "with a turn's report in hand, that is the one handed over");
+
+        // What a load leaves behind: the state, and no report.
+        System.Reflection.FieldInfo field = typeof(MapusBoss).GetField(
+            "<LastSeal>k__BackingField",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Check(field != null && field.IsDefined(typeof(NotSavedAttribute), false),
+            "the report is marked as not saved");
+        field.SetValue(boss, null);
+
+        MapusSealVisuals rebuilt = boss.ReportFor(round.Board);
+        Check(rebuilt != null && rebuilt.Seals.Count == 2, "a report is written from the locks",
+            rebuilt == null ? "null" : "seals " + rebuilt.Seals.Count);
+        Check(!rebuilt.Placed && rebuilt.Expired.Count == 0 && !rebuilt.Seals[1].IsNew,
+            "with nothing placed and nothing expired in it - nothing to replay");
+        Check(rebuilt.Seals[0].TurnsLeft == 1 && rebuilt.Seals[1].TurnsLeft == 3,
+            "and each lock's own turns left",
+            rebuilt.Seals[0].TurnsLeft + "/" + rebuilt.Seals[1].TurnsLeft);
     }
 }
