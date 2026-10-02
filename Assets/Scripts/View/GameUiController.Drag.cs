@@ -112,7 +112,7 @@ namespace ProjectBlock.View
                         }
                         else
                         {
-                            boardView.ShowPowerPreview(aiming.PreviewCells(at));
+                            boardView.ShowPowerPreview(PowerPreviewCells(aiming, at));
                         }
                     }
                     else

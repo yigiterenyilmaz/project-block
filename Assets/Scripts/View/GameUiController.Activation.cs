@@ -1348,6 +1348,8 @@ namespace ProjectBlock.View
             // "Rüzgar": the faces of everything in the lane, before the embers turn some to fire.
             Dictionary<GridPos, WindGustView.Face> windFaces = power is RuzgarPower
                 ? CaptureWindFaces(target) : null;
+            // "Çığ": the faces of what the snow is about to crush, before the rules take them.
+            Dictionary<GridPos, ClusterBurstView.Look> avalancheFaces = CaptureAvalancheFaces(power, target);
             if (!session.Powers.TryUse(power.InstanceId, target))
             {
                 Debug.Log("[block_bonk] " + power.DisplayName + " could not be used.");
@@ -1397,6 +1399,12 @@ namespace ProjectBlock.View
             // "RÜZGAR": the gust, its embers and spores, the board's own water animation for the
             // push and the fall, and only then any line it completed.
             var wind = power as RuzgarPower;
+            // "ÇIĞ": the heap comes down its columns, each cube breaking as the snow reaches it,
+            // and the fall that followed plays after it.
+            if (PlayAvalanche(power as CigPower, avalancheFaces))
+            {
+                return;
+            }
             if (wind != null && PlayWind(wind, target, windFaces))
             {
                 return;

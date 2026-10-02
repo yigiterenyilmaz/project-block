@@ -395,6 +395,7 @@ namespace ProjectBlock.View
             {
                 case CubeKind.Fire: return Tile("block_fire");
                 case CubeKind.Water: return Tile("block_water");
+                case CubeKind.Snow: return Tile("block_snow");
                 case CubeKind.Obsidian: return Tile("block_obsidian");
                 case CubeKind.Gold: return Tile("block_gold");
                 case CubeKind.Transparent: return Tile("block_glass");
@@ -416,6 +417,7 @@ namespace ProjectBlock.View
             {
                 case BlockElement.Fire: return Tile("block_fire");
                 case BlockElement.Water: return Tile("block_water");
+                case BlockElement.Snow: return Tile("block_snow");
                 case BlockElement.Obsidian: return Tile("block_obsidian");
                 case BlockElement.Gold: return Tile("block_gold");
                 case BlockElement.Transparent: return Tile("block_glass");
@@ -916,6 +918,8 @@ namespace ProjectBlock.View
             {
                 case BlockElement.Fire: return new Color(1f, 0.45f, 0.15f);
                 case BlockElement.Water: return new Color(0.35f, 0.6f, 1f);
+                // "Kar": a cold near-white - paler than glass, bluer than a plain card.
+                case BlockElement.Snow: return new Color(0.86f, 0.93f, 1f);
                 case BlockElement.Obsidian: return new Color(0.25f, 0.22f, 0.3f);
                 case BlockElement.Gold: return new Color(1f, 0.8f, 0.25f);
                 case BlockElement.Transparent: return new Color(0.75f, 0.85f, 0.9f);
@@ -981,6 +985,7 @@ namespace ProjectBlock.View
             {
                 case CubeKind.Fire: return ElementColor(BlockElement.Fire);
                 case CubeKind.Water: return ElementColor(BlockElement.Water);
+                case CubeKind.Snow: return ElementColor(BlockElement.Snow);
                 case CubeKind.Obsidian: return ElementColor(BlockElement.Obsidian);
                 case CubeKind.Gold: return ElementColor(BlockElement.Gold);
                 case CubeKind.Transparent: return ElementColor(BlockElement.Transparent);
@@ -1014,6 +1019,7 @@ namespace ProjectBlock.View
             {
                 case CubeKind.Fire: return ElementLabel(BlockElement.Fire);
                 case CubeKind.Water: return ElementLabel(BlockElement.Water);
+                case CubeKind.Snow: return ElementLabel(BlockElement.Snow);
                 case CubeKind.Obsidian: return ElementLabel(BlockElement.Obsidian);
                 case CubeKind.Gold: return ElementLabel(BlockElement.Gold);
                 case CubeKind.Transparent: return ElementLabel(BlockElement.Transparent);
@@ -1056,6 +1062,7 @@ namespace ProjectBlock.View
             {
                 case BlockElement.Fire: return Loc.Pick("FIRE", "ATEŞ");
                 case BlockElement.Water: return Loc.Pick("WATER", "SU");
+                case BlockElement.Snow: return Loc.Pick("SNOW", "KAR");
                 case BlockElement.Obsidian: return Loc.Pick("OBSIDIAN", "OBSİDYEN");
                 case BlockElement.Gold: return Loc.Pick("GOLD", "ALTIN");
                 case BlockElement.Transparent: return Loc.Pick("GLASS", "CAM");
@@ -1085,6 +1092,15 @@ namespace ProjectBlock.View
                             + "makes - pays 33% more.",
                         "Her tur düşer ve yayılır; değdiği ateşi obsidyene çevirir. Suyun "
                             + "DÜŞEREK tamamladığı satır - ve yaptığı temizlik - %33 fazla öder.");
+                case BlockElement.Snow:
+                    return Loc.Pick(
+                        "Falls like water and melts after 5 turns. Snow that lands on snow is "
+                            + "absorbed: the heap under it gains POWER and its melt time is "
+                            + "topped up. The Avalanche power sends a heap down as many rows "
+                            + "as it has power.",
+                        "Su gibi düşer ve 5 tur sonra erir. Karın üstüne düşen kar onunla "
+                            + "birleşir: alttaki öbek POWER kazanır ve erime süresi tazelenir. "
+                            + "Çığ gücü bir öbeği power'ı kadar satır aşağı indirir.");
                 case BlockElement.Obsidian:
                     return Loc.Pick(
                         "Indestructible, and ignored by the clean-sweep check. Every row or "

@@ -43,6 +43,8 @@ namespace ProjectBlock.View
             RefreshAll(report);
             PlayPlacedOnMines(round, report);
             PlayEchoRecorded();
+            // Snow whose time ran out this turn sinks into its cell (TurnReport.SnowMelted).
+            PlaySnowMelt(report);
             PlayBukulmeCopy(round);
             // (A rim erosion on the same turn plays the whole resize itself - one writer of the
             // arena's scale at a time.)
@@ -2601,6 +2603,7 @@ namespace ProjectBlock.View
             SyncPowder();
             SyncMetamorphosis();
             SyncBlackHole(round);
+            SyncSnow(round);
             boardView.SetDeadZone(session.Config.Rules.DeadZoneRows);
             boardView.ClearPreview();
             RefreshMirrorWorld();

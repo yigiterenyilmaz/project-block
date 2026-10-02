@@ -550,6 +550,13 @@ namespace ProjectBlock.Core
             return laid;
         }
 
+        /// <summary>ApplyAvalanche for the animation lab, which runs an avalanche on a board of
+        /// its own and does the crushing itself (the engine is what does it in a round).</summary>
+        public List<GridPos> ApplyAvalancheOnLabBoard(AvalanchePlan plan)
+        {
+            return ApplyAvalanche(plan);
+        }
+
         /// <summary>The heap a snow cube belongs to: every cell of its run across the flow. Empty
         /// when the cell holds no snow. For the View (a heap is drawn as one thing) and tests.</summary>
         public List<GridPos> SnowHeapAt(GridPos cell)
