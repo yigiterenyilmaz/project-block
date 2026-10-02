@@ -455,6 +455,8 @@ namespace ProjectBlock.View
         private void DebugEnterOvertime()
         {
             RoundEngine round = session != null ? session.CurrentRound : null;
+            GameBoard shownBefore = boardView.Board;
+            float cellBefore = boardView.CellWorldSize;
             if (round == null || !round.DebugEnterOvertime())
             {
                 Debug.Log("[block_bonk] Debug overtime: the round cannot be pushed from here.");
@@ -467,6 +469,8 @@ namespace ProjectBlock.View
                 cardLayer.AnimateRedraw(round);
             }
             RefreshAll(null);
+            // the continue gave back the arena the erosion ate: unfold it, as the C key does
+            powerFx.PlayBoardResize(boardView, shownBefore, cellBefore, null);
             Debug.Log("[block_bonk] Debug overtime: continue #" + round.ContinueCount
                 + ", " + round.Hand.Count + " in hand.");
         }
@@ -1369,7 +1373,12 @@ namespace ProjectBlock.View
                         }
                         else if (kb != null && kb.cKey.wasPressedThisFrame)
                         {
-                            // continuing costs cards and redraws the hand (see RoundEngine)
+                            // continuing costs cards and redraws the hand (see RoundEngine), and
+                            // gives back the arena the erosion ate (RestoreErodedArena) - what
+                            // the board showed before, so the regrowth unfolds out of it
+                            GameBoard shownBefore = boardView.Board;
+                            float cellBefore = boardView.CellWorldSize;
+                            bool hadDeadZone = round.Board.BlightedCellCount > 0;
                             round.DecideAdvance(false);
                             // the overtime fire ignites the moment the player chooses to
                             // continue, not on their next placement
@@ -1378,7 +1387,15 @@ namespace ProjectBlock.View
                             {
                                 sfx.Shuffle();
                                 cardLayer.AnimateRedraw(round);
-                                UpdateHud();
+                                if (round.Board != shownBefore || hadDeadZone)
+                                {
+                                    RefreshAll(null);
+                                    powerFx.PlayBoardResize(boardView, shownBefore, cellBefore, null);
+                                }
+                                else
+                                {
+                                    UpdateHud();
+                                }
                             }
                             else
                             {

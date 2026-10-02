@@ -17,6 +17,7 @@ public static partial class JokerTests
         ScorePipeline_NoJokers_MatchesBase();
         ScorePipeline_FlatThenMultiplier_InInventoryOrder();
         Overtime_WinBonus_EscalatesAndRoughlyDoublesBaseline();
+        RunOvertimeArenaTests();
         Overtime_RegularBaseTrickled_BonusAndJokersFullWeight();
         Overtime_WinBonusAwardedOnEachOvertimeSweep();
         Streak_Cig_PaysFromMinStreakAndGrows();

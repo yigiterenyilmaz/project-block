@@ -45,6 +45,8 @@ namespace ProjectBlock.Core
             w.Write(key + ".powersUsed", PowersUsedThisTurn);
             w.Write(key + ".recycles", DeckRecycleCount);
             w.Write(key + ".erosions", BoardErosionCount);
+            // What the rim erosion took, so a continue loaded from this file can grow it back.
+            SaveErodedArena(w, key + ".eroded");
             w.Write(key + ".suppressSweep", SuppressNaturalSweep);
             w.Write(key + ".drawEmptyReported", drawPileReportedEmpty);
             w.Write(key + ".cleanSampleLocked", cleanSampleLocked);
@@ -137,6 +139,7 @@ namespace ProjectBlock.Core
             round.PowersUsedThisTurn = r.ReadInt(key + ".powersUsed");
             round.DeckRecycleCount = r.ReadInt(key + ".recycles");
             round.BoardErosionCount = r.ReadInt(key + ".erosions");
+            round.LoadErodedArena(r, key + ".eroded");
             round.SuppressNaturalSweep = r.ReadBool(key + ".suppressSweep");
             round.drawPileReportedEmpty = r.ReadBool(key + ".drawEmptyReported");
             round.cleanSampleLocked = r.ReadBool(key + ".cleanSampleLocked");

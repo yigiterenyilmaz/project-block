@@ -5,8 +5,11 @@
 // The style is per round range, not per round - see DefaultRoundProgression.BoardSizeBands,
 // where each band pairs a board size with the erosion it suffers.
 //
-// EXTENSION POINT: a new style is a new enum entry plus a branch in RoundEngine.ErodeOnce.
-// Nothing else reads this value.
+// Whatever a style takes is given back when the player continues into overtime
+// (RoundEngine.RestoreErodedArena): the clock only runs until the threshold.
+//
+// EXTENSION POINT: a new style is a new enum entry plus a branch in RoundEngine.ErodeOnce -
+// and a way for RestoreErodedArena to undo it. Nothing else reads this value.
 
 namespace ProjectBlock.Core
 {

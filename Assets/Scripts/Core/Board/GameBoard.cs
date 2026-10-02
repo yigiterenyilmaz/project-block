@@ -365,6 +365,55 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>
+        /// CreateResized growing the board back over ground shuffle erosion took (overtime puts
+        /// the arena back - see RoundEngine.RestoreErodedArena). Grown ground is normally plain
+        /// required play area; here each FRESH cell comes back as what it was before it was
+        /// eaten, so a bounding-box hole stays a hole, bonus ground stays optional and a dead
+        /// cell stays dead - growing the box back must not hand the player cells they never had.
+        /// Only fresh cells are touched, so a remembered state can never change ground the board
+        /// already has. Returns null exactly when CreateResized would.
+        /// </summary>
+        internal static GameBoard CreateRegrown(GameBoard source, int left, int right,
+            int bottom, int top, ICollection<GridPos> holes, ICollection<GridPos> optionalCells,
+            ICollection<GridPos> deadCells)
+        {
+            GameBoard board = CreateResized(source, left, right, bottom, top);
+            if (board == null)
+            {
+                return null;
+            }
+            for (int ix = 0; ix < board.Width; ix++)
+            {
+                for (int iy = 0; iy < board.Height; iy++)
+                {
+                    var at = new GridPos(board.MinX + ix, board.MinY + iy);
+                    int sx = at.X - source.MinX;
+                    int sy = at.Y - source.MinY;
+                    if (sx >= 0 && sx < source.Width && sy >= 0 && sy < source.Height)
+                    {
+                        continue; // ground the board already had
+                    }
+                    bool wasDead = deadCells.Contains(at);
+                    if (wasDead || holes.Contains(at))
+                    {
+                        board.playable[ix, iy] = false;
+                        board.PlayableCellCount--;
+                        if (wasDead)
+                        {
+                            board.dead[ix, iy] = true;
+                            board.DeadCellCount++;
+                        }
+                    }
+                    else if (optionalCells.Contains(at))
+                    {
+                        board.optional[ix, iy] = true;
+                    }
+                }
+            }
+            return board;
+        }
+
+        /// <summary>
         /// A copy of <paramref name="source"/> with <paramref name="bonusCells"/> added as BONUS
         /// ground (playable AND optional), MID-ROUND - "Tılsım". The bounding box grows in any
         /// direction to reach them (the origin moves, coordinates never do, exactly as an

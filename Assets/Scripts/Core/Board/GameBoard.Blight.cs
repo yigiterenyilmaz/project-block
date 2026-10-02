@@ -11,6 +11,8 @@
 // is the opposite of that.
 //
 // Stored as absolute coordinates like the seals, so it survives a resize and a clone unchanged.
+// Lifted whole when the player continues into overtime (RoundEngine.RestoreErodedArena): the
+// clock it marks only runs until the threshold.
 
 using System.Collections.Generic;
 
@@ -51,6 +53,15 @@ namespace ProjectBlock.Core
                 }
             }
             return added;
+        }
+
+        /// <summary>Lifts the whole dead zone (overtime puts the arena back - see
+        /// RoundEngine.RestoreErodedArena). Returns how many cells it held.</summary>
+        internal int ClearBlight()
+        {
+            int count = blight.Count;
+            blight.Clear();
+            return count;
         }
 
         /// <summary>True if any cell of row <paramref name="y"/> is in the dead zone.</summary>

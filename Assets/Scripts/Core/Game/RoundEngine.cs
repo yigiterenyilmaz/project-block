@@ -967,8 +967,16 @@ namespace ProjectBlock.Core
             {
                 return false; // nothing left to take - the board is already a sliver
             }
-            DestroyCubes(RimCells(left, right, bottom, top), false, true);
-            return ReshapeBoard(-left, -right, -bottom, -top);
+            List<GridPos> band = RimCells(left, right, bottom, top);
+            // What the bands WERE, so overtime can grow them back as that (RestoreErodedArena).
+            RememberErodedBands(band);
+            DestroyCubes(band, false, true);
+            bool reshaped = ReshapeBoard(-left, -right, -bottom, -top);
+            if (reshaped)
+            {
+                NoteRimEroded(left, right, bottom, top);
+            }
+            return reshaped;
         }
 
         /// <summary>Every cell of the bands about to be removed, in absolute coordinates.</summary>

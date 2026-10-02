@@ -1599,6 +1599,15 @@ dropped that way once each.
   (`RoundEngine.BuildLineScore`). It is not the `dead` mask: a dead cell (`MarkDead`) cannot be
   built on and KILLS its row and column, unlike a plain hole in the bounding box, which is
   merely skipped. Never conflate the three.
+  **OVERTIME GIVES THE ARENA BACK** (designer's call, 2026-10-02; `RoundEngine.ArenaRestore.cs`):
+  the clock is for REACHING the bar, so the moment the player continues (`DecideAdvance(false)`)
+  the eaten rim grows back, empty, and the dead zone lifts (`RestoreErodedArena`). How much grows
+  back is counted PER SIDE (so it composes with an inflation that deflates later), and what each
+  regrown cell was is remembered by position (`GameBoard.CreateRegrown`: a hole stays a hole,
+  bonus ground stays optional) - growing the box back must not hand out cells nobody had. Nothing
+  erodes it again: past the bar a dry pile is a loss, never a recycle. Advancing to the market
+  touches nothing. The View unfolds the regrowth with the inflations' `PlayBoardResize`.
+  Save format 28.
 - Turkish design terms → code names: el = `Hand`/turn, çekme destesi = `RoundDeck.DrawPile`,
   ıskarta = discard, oyun destesi = `GameSession.OwnedCards`, raunt = round,
   temizlik = clean sweep, bonus el = bonus hand, eşik = `RoundConfig.ScoreThreshold`,

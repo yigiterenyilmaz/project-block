@@ -81,7 +81,9 @@ namespace ProjectBlock.Core
         // 27 (2026-10-01): "Tamagotchi" keeps its two requests as fixed SLOTS with a fed flag and
         // a tier each, goes furious for the rest of the round, and has a punish planner with its own
         // knobs - the boss block changed shape again.
-        public const int FormatVersion = 27;
+        // 28 (2026-10-02): overtime grows the eroded rim back, so the round saves what the rim
+        // erosion took off each side and what its cells were (round.eroded.*). A 27 is short it.
+        public const int FormatVersion = 28;
 
         private const string VersionKey = "version";
 

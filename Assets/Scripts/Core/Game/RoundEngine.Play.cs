@@ -349,6 +349,9 @@ namespace ProjectBlock.Core
                 return;
             }
             SetStatus(RoundStatus.InProgress);
+            // Overtime is not played on the arena erosion left behind: the clock that ate it was
+            // the one for REACHING the bar, so the rim grows back and the dead zone lifts now.
+            RestoreErodedArena();
             int continueCost = NextContinueCost; // escalates with every continue
             DiscardHandAndReshuffle();
             Deck.RemoveRandomFromDraw(continueCost);
