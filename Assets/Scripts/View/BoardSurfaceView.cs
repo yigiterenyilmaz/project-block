@@ -189,6 +189,43 @@ namespace ProjectBlock.View
             ViewUtil.FitGeneratedPlate(plate, new Vector2(span, spanY));
         }
 
+        /// <summary>A plate handed over by Detach: the renderer, the texture it now owns, and the
+        /// cell count that texture was painted for.</summary>
+        public sealed class PlateSnapshot
+        {
+            public SpriteRenderer Renderer;
+            public Texture2D Texture;
+            public int CellsWide;
+            public int CellsHigh;
+        }
+
+        /// <summary>
+        /// Hands the CURRENT plate to the caller, who owns it - texture included - from now on; the
+        /// next Build paints a fresh one. The rim erosion (RimErosionView) breaks the lost bands
+        /// out of the old arena's own pixels, which it cannot do once Regenerate has destroyed
+        /// them. Null when there is no plate yet.
+        /// </summary>
+        public PlateSnapshot Detach()
+        {
+            if (plate == null || texture == null)
+            {
+                return null;
+            }
+            var shot = new PlateSnapshot
+            {
+                Renderer = plate,
+                Texture = texture,
+                CellsWide = builtWidth,
+                CellsHigh = builtHeight
+            };
+            plate = null;
+            texture = null;
+            builtWidth = 0;
+            builtHeight = 0;
+            builtResolution = 0;
+            return shot;
+        }
+
         private void OnDestroy()
         {
             if (texture != null)

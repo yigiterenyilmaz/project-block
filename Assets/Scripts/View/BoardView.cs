@@ -919,6 +919,59 @@ namespace ProjectBlock.View
             ApplyArenaTransform();
         }
 
+        /// <summary>
+        /// The rim erosion's resize (RimErosionView) goes with SetInflate, plus a shift: the rim
+        /// is lost from ONE side at a time (top and right, then bottom and left), so the arena
+        /// that survives was off centre in the old one, and holding the old cell size alone would
+        /// still jump it half a cell. In the arena's own units, scaled with the squeeze, and
+        /// eased back to nothing with the scale. SetInflate never touches it.
+        /// </summary>
+        public void SetInflateOffset(Vector2 offset)
+        {
+            inflateOffset = offset;
+            ApplyArenaTransform();
+        }
+
+        /// <summary>Hands the surface plate over (BoardSurfaceView.Detach) - called right before a
+        /// Rebuild that would otherwise throw the old arena's pixels away.</summary>
+        public BoardSurfaceView.PlateSnapshot DetachSurfacePlate()
+        {
+            return surface != null ? surface.Detach() : null;
+        }
+
+        /// <summary>How big this view draws an empty cell's floor and a cube, as a share of a
+        /// cell - so a copy drawn elsewhere (RimErosionView) is the size the board draws them.</summary>
+        public const float EmptyCellShare = EmptyFill;
+
+        public const float CubeCellShare = CubeFill;
+
+        /// <summary>The colour an EMPTY cell of the shown board is painted (the subset of Refresh
+        /// that applies to an empty cell): dark, eroded, the dead zone, bonus ground, sealed.</summary>
+        public Color EmptyFloorColour(GridPos gp)
+        {
+            if (board == null)
+            {
+                return EmptyColor;
+            }
+            if (board.IsDead(gp))
+            {
+                return DeadColor;
+            }
+            if (dark)
+            {
+                return DarkCellColor;
+            }
+            if (board.IsBlighted(gp))
+            {
+                return BlightColor;
+            }
+            if (board.IsOptional(gp))
+            {
+                return BonusGroundColor;
+            }
+            return board.IsSealed(gp) ? SealedColor : EmptyColor;
+        }
+
         /// <summary>Squashes one cell's renderer by <paramref name="factor"/> (x, y) of its own
         /// scale - the resize's unfolding bands and the rim taking the blow. The base is taken the
         /// first time a cell is squashed, so writing every frame never compounds.</summary>
@@ -966,6 +1019,8 @@ namespace ProjectBlock.View
 
         private float inflateScale = 1f;
 
+        private Vector2 inflateOffset;
+
         private float pressureScale = 1f;
         private Vector2 pressureKnock;
         private Vector2 tremorOffset;
@@ -984,7 +1039,8 @@ namespace ProjectBlock.View
             transform.localRotation = turn;
             transform.localPosition = centre - turnedCentre
                 + new Vector3(pressureKnock.x + tremorOffset.x + impulseOffset.x,
-                    pressureKnock.y + tremorOffset.y + impulseOffset.y, 0f);
+                    pressureKnock.y + tremorOffset.y + impulseOffset.y, 0f)
+                + new Vector3(inflateOffset.x, inflateOffset.y, 0f) * pressureScale;
         }
 
         /// <summary>Where the arena stands, kept for SetPressure to squeeze about.</summary>

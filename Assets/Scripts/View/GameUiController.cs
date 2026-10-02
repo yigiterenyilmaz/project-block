@@ -810,6 +810,7 @@ namespace ProjectBlock.View
             if (session == null || waterAnimating || supurgeAnimating
                 || (lineSwapAnim != null && lineSwapAnim.Playing)
                 || (powerFx != null && powerFx.Playing)
+                || RimErosionPlaying
                 || PetLocksInput)
             {
                 return; // input is locked while a board animation plays

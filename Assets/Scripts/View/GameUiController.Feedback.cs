@@ -44,7 +44,9 @@ namespace ProjectBlock.View
             PlayPlacedOnMines(round, report);
             PlayEchoRecorded();
             PlayBukulmeCopy(round);
-            if (doomed != null && boardView.Board != shownBefore)
+            // (A rim erosion on the same turn plays the whole resize itself - one writer of the
+            // arena's scale at a time.)
+            if (doomed != null && boardView.Board != shownBefore && !RimErosionPlaying)
             {
                 powerFx.PlayBoardResize(boardView, shownBefore, cellBefore, doomed);
             }
@@ -2547,7 +2549,15 @@ namespace ProjectBlock.View
                 || !Mathf.Approximately(lastMainBoardSize, mainSize)
                 || (lastMainBoardCenter - mainCenter).sqrMagnitude > 0.000001f)
             {
+                // THE RIM ERODED: the old arena is taken before the rebuild throws it away, and
+                // the rim comes off it over the new one (RimErosionView). Only when the layout
+                // itself has not moved - the animation holds the survivors where they stood.
+                RimErosionView.Capture eroded =
+                    Mathf.Approximately(lastMainBoardSize, mainSize)
+                    && (lastMainBoardCenter - mainCenter).sqrMagnitude <= 0.000001f
+                        ? TakeRimErosion(round) : null;
                 boardView.Rebuild(round.Board, mainSize, mainCenter);
+                PlayRimErosion(eroded, mainCenter);
                 lastMainBoardSize = mainSize;
                 lastMainBoardCenter = mainCenter;
                 // A new arena: the snake in it has not woken up yet, and no turn of its own has

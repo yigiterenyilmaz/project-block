@@ -421,6 +421,7 @@ namespace ProjectBlock.View
             StopAnimFire();
             StopAnimIce();
             StopAnimQuake();
+            StopAnimRim();
             StopHazine();
             StopChallenge();
             StopQuarry();
@@ -1171,6 +1172,17 @@ namespace ProjectBlock.View
 
             AddAnimSub("general", "board", "board", "oyun alanı");
             AddAnim("water fall", "su akışı", AnimWaterFall);
+            // The anti-stalling clock taking the rim (RimErosionView), on a lab board of its own.
+            AddAnim("rim erosion: top + right (odd step)", "kenar erozyonu: üst + sağ (tek adım)",
+                delegate { AnimRimErosion(1, 1, 45); });
+            AddAnim("rim erosion: bottom + left (even step)", "kenar erozyonu: alt + sol (çift adım)",
+                delegate { AnimRimErosion(2, 1, 45); });
+            AddAnim("rim erosion: two steps at once", "kenar erozyonu: iki adım birden",
+                delegate { AnimRimErosion(1, 2, 45); });
+            AddAnim("rim erosion: empty board", "kenar erozyonu: boş alan",
+                delegate { AnimRimErosion(1, 1, 0); });
+            AddAnim("rim erosion: full board", "kenar erozyonu: dolu alan",
+                delegate { AnimRimErosion(1, 1, 100); });
             AddAnim("placement preview: valid", "yerleşim önizleme: geçerli",
                 delegate { AnimPreview(true); });
             AddAnim("placement preview: invalid", "yerleşim önizleme: geçersiz",
