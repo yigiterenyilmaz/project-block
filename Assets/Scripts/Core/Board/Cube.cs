@@ -66,7 +66,7 @@ namespace ProjectBlock.Core
         /// lines and sweeps, but it falls like water, MELTS when its timer runs out, and snow that
         /// comes to rest on snow is absorbed by the heap under it, which gains POWER. The "Çığ"
         /// power sends a heap down as many rows as it has power. Its three numbers travel on the
-        /// cube itself (Cube.SnowPower / SnowMelt / SnowPacked), so every move, copy and resize
+        /// cube itself (Cube.SnowPower / SnowMelt / SnowStratum), so every move, copy and resize
         /// carries them.</summary>
         Snow = 15
     }
@@ -98,43 +98,53 @@ namespace ProjectBlock.Core
         /// (GameBoard.TickSnowMelt).</summary>
         public readonly int SnowMelt;
 
-        /// <summary>SNOW only: laid by an avalanche. Two packed cubes never merge with each
-        /// other, so the layers an avalanche leaves stay stacked instead of collapsing back into
-        /// one heap.</summary>
-        public readonly bool SnowPacked;
+        /// <summary>SNOW only: the AVALANCHE STRATUM this cube belongs to - 0 for snow no
+        /// avalanche laid, otherwise one id shared by every layer one avalanche left behind
+        /// (GameBoard.ApplyAvalanche). Two cubes of the SAME stratum never merge, which is what keeps
+        /// an avalanche's layers stacked as separate strata; anything else - fresh snow, another
+        /// avalanche's layer - merges as usual. It is a BOUNDARY between those layers, not a
+        /// "can never merge" flag: fresh snow landing on a layer is absorbed into it and the layer
+        /// keeps its stratum, so the seam under it still holds.</summary>
+        public readonly int SnowStratum;
+
+        /// <summary>SNOW only: laid by an avalanche (it has a stratum).</summary>
+        public bool SnowPacked
+        {
+            get { return SnowStratum != 0; }
+        }
 
         public Cube(CubeKind kind, int sourceCardId, bool isProtected)
-            : this(kind, sourceCardId, isProtected, 0, 0, false)
+            : this(kind, sourceCardId, isProtected, 0, 0, 0)
         {
         }
 
         public Cube(CubeKind kind, int sourceCardId, bool isProtected, int snowPower, int snowMelt,
-            bool snowPacked)
+            int snowStratum)
         {
             Kind = kind;
             SourceCardId = sourceCardId;
             Protected = isProtected;
             SnowPower = snowPower;
             SnowMelt = snowMelt;
-            SnowPacked = snowPacked;
+            SnowStratum = snowStratum;
         }
 
         /// <summary>A copy of this cube marked as a Parazit host.</summary>
         public Cube AsProtected()
         {
-            return new Cube(Kind, SourceCardId, true, SnowPower, SnowMelt, SnowPacked);
+            return new Cube(Kind, SourceCardId, true, SnowPower, SnowMelt, SnowStratum);
         }
 
-        /// <summary>A fresh snow cube for a card: one layer, the full melt time, not packed.</summary>
+        /// <summary>A fresh snow cube for a card: one layer, the full melt time, no stratum.</summary>
         public static Cube FreshSnow(int sourceCardId)
         {
-            return new Cube(CubeKind.Snow, sourceCardId, false, 1, SnowRules.MeltTurns, false);
+            return new Cube(CubeKind.Snow, sourceCardId, false, 1, SnowRules.MeltTurns, 0);
         }
 
         /// <summary>This snow cube with other numbers; its card and its host mark are kept.</summary>
-        public Cube WithSnow(int power, int melt, bool packed)
+        public Cube WithSnow(int power, int melt, int stratum)
         {
-            return new Cube(CubeKind.Snow, SourceCardId, Protected, power, melt, packed);
+            return new Cube(CubeKind.Snow, SourceCardId, Protected, power, melt, stratum);
         }
     }
 

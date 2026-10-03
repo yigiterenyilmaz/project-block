@@ -180,7 +180,7 @@ namespace ProjectBlock.Core
             // Snow's three numbers ride on the cube (GameBoard.Snow); zero on everything else.
             w.Write(key + ".snowPower", cube.SnowPower);
             w.Write(key + ".snowMelt", cube.SnowMelt);
-            w.Write(key + ".snowPacked", cube.SnowPacked);
+            w.Write(key + ".snowStratum", cube.SnowStratum);
         }
 
         public static Cube ReadCube(SaveReader r, string key)
@@ -190,8 +190,8 @@ namespace ProjectBlock.Core
             bool isProtected = r.ReadBool(key + ".protected");
             int snowPower = r.ReadInt(key + ".snowPower");
             int snowMelt = r.ReadInt(key + ".snowMelt");
-            bool snowPacked = r.ReadBool(key + ".snowPacked");
-            return new Cube(kind, card, isProtected, snowPower, snowMelt, snowPacked);
+            int snowStratum = r.ReadInt(key + ".snowStratum");
+            return new Cube(kind, card, isProtected, snowPower, snowMelt, snowStratum);
         }
 
         // --------------------------------------------------------------- RoundConfig

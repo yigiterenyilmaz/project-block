@@ -344,7 +344,7 @@ namespace ProjectBlock.View
             for (int x = first; x < first + width && x < w; x++)
             {
                 board.SetCubeAt(new GridPos(x, row),
-                    new Cube(CubeKind.Snow, cards[0], false, power, SnowRules.MeltTurns, false));
+                    new Cube(CubeKind.Snow, cards[0], false, power, SnowRules.MeltTurns, 0));
             }
             boardView.Rebuild(board, MainBoardWorldSize, MainBoardCenter);
             SyncSnow(round);

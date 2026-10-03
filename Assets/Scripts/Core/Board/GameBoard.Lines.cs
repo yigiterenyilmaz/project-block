@@ -35,7 +35,6 @@ namespace ProjectBlock.Core
             // comes to rest on snow is absorbed by it. Asked once - a settle cannot make snow -
             // so a board without any runs exactly the water-only loop it always has.
             bool snow = HasSnow;
-            LastSnowMerges.Clear();
             if (snow)
             {
                 guard *= 3; // an absorb and the fall behind it are separate passes

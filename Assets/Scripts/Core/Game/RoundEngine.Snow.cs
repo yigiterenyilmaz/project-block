@@ -82,6 +82,7 @@ namespace ProjectBlock.Core
                 }
             }
             visuals.CubesPaid = paying;
+            visuals.PointsPerCube = pointsPerCrushedCube;
             int before = RoundScore;
             AddScoreOutsideTurn(paying * pointsPerCrushedCube);
             visuals.Points = RoundScore - before;

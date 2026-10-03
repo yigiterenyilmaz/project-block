@@ -1,7 +1,7 @@
 // PURPOSE: SNOW (the "Kar" block) on the board - melting, falling and merging into HEAPS, and the
 // avalanche the "Çığ" power makes of a heap (designer's calls, 2026-10-02).
 //
-// A SNOW CUBE CARRIES THREE NUMBERS ON ITSELF (Cube.SnowPower / SnowMelt / SnowPacked), so every
+// A SNOW CUBE CARRIES THREE NUMBERS ON ITSELF (Cube.SnowPower / SnowMelt / SnowStratum), so every
 // move, copy, resize, rewind and save takes them along without knowing snow exists.
 //
 // THE RULES:
@@ -18,9 +18,11 @@
 //    at zero. Melting is not a destruction - nothing is scored, logged or swept.
 //  - AN AVALANCHE takes every heap in one line across the flow and sends each one down as many
 //    cells as it has power: the heap leaves its line, everything in its way is crushed (gold and
-//    obsidian too), and the cells it covers hold PACKED snow of power 1 that melts sooner. Two
-//    packed cubes never merge with each other, so the layers stay stacked; fresh snow landing on
-//    a packed layer is absorbed as usual, and that is what makes the layer able to slide again.
+//    obsidian too), and the cells it covers hold PACKED snow of power 1 that melts sooner. Every
+//    layer one avalanche lays shares one STRATUM id, and two cubes of the same stratum never merge
+//    - a BOUNDARY between those layers, not a "never merges" flag: fresh snow (or another
+//    avalanche's layer) landing on a layer is absorbed into it as usual and the layer keeps its
+//    stratum, so it gains power, can slide again, and still does not sink into the layer under it.
 //    A black hole, a "Parazit" host, the boss's snake, a "Mayın" trap, a press capsule, a sealed
 //    cell and the edge of the play area stop a column; what cannot come down is lost.
 //
@@ -63,11 +65,24 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Can the "Çığ" power send this cube's heap down? Everything but a packed
-        /// layer that has taken no fresh snow since the avalanche that laid it.</summary>
+        /// layer that has taken no fresh snow since the avalanche that laid it - a SPENT layer.</summary>
         public static bool CanSlide(Cube cube)
         {
-            return cube.Kind == CubeKind.Snow && !cube.Protected
-                && !(cube.SnowPacked && cube.SnowPower <= 1);
+            return cube.Kind == CubeKind.Snow && !cube.Protected && !IsSpent(cube);
+        }
+
+        /// <summary>An avalanche layer nothing has fed since it was laid: it cannot be triggered
+        /// again until fresh snow lands on it.</summary>
+        public static bool IsSpent(Cube cube)
+        {
+            return cube.Kind == CubeKind.Snow && cube.SnowStratum != 0 && cube.SnowPower <= 1;
+        }
+
+        /// <summary>THE MERGE BARRIER: two snow cubes of one avalanche's strata never merge. The
+        /// one place it is decided.</summary>
+        public static bool SameStratum(Cube a, Cube b)
+        {
+            return a.SnowStratum != 0 && a.SnowStratum == b.SnowStratum;
         }
 
         /// <summary>A snow cube with numbers that mean something: one written without them (a
@@ -80,7 +95,7 @@ namespace ProjectBlock.Core
             }
             return new Cube(CubeKind.Snow, cube.SourceCardId, cube.Protected,
                 cube.SnowPower > 0 ? cube.SnowPower : 1,
-                cube.SnowMelt > 0 ? cube.SnowMelt : MeltTurns, cube.SnowPacked);
+                cube.SnowMelt > 0 ? cube.SnowMelt : MeltTurns, cube.SnowStratum);
         }
     }
 
@@ -90,20 +105,72 @@ namespace ProjectBlock.Core
     {
         public GridPos Source;
         public Cube SourceCube;
+
+        /// <summary>Which heap on the line this column belongs to (0, 1, ... in the order they
+        /// stand along it) - the GROUP the View draws as one front.</summary>
+        public int Heap;
+
+        /// <summary>The heap's power: how far it was asked to come down. Covered can be shorter
+        /// when something stopped it.</summary>
+        public int Power;
         public readonly List<GridPos> Covered = new List<GridPos>();
 
         /// <summary>The cubes in the covered cells, by cell - crushed when the snow arrives.</summary>
         public readonly List<DestroyedCube> Crushed = new List<DestroyedCube>();
     }
 
+    /// <summary>Why a line cannot avalanche - what the aim says when it is refused.</summary>
+    public enum AvalancheBlock
+    {
+        None = 0,
+
+        /// <summary>No snow on the line at all.</summary>
+        NoSnow = 1,
+
+        /// <summary>Only spent avalanche layers on it.</summary>
+        Spent = 2,
+
+        /// <summary>Snow that could slide, with nowhere to go (the edge, a hole, a seal, a cube
+        /// the snow cannot cover right under it).</summary>
+        NoRoom = 3
+    }
+
     /// <summary>What an avalanche on one line WOULD do. Planned by the board, applied by the
-    /// engine; also what the View previews and, afterwards, animates.</summary>
+    /// engine; also what the View previews (it IS the preview report) and, afterwards, animates.
+    /// </summary>
     public sealed class AvalanchePlan
     {
         /// <summary>The one-cell step the snow comes down along (the board's WaterFlow).</summary>
         public GridPos Flow;
 
+        /// <summary>The line it was asked about: a row index while gravity points down or up, a
+        /// column index while it points sideways (absolute board coordinates).</summary>
+        public int Line;
+
+        /// <summary>The stratum the laid snow will carry (one per avalanche).</summary>
+        public int Stratum;
+
+        /// <summary>Why nothing would slide; None when something will.</summary>
+        public AvalancheBlock Blocked;
+
+        /// <summary>Snow on the line that will NOT slide because it is a spent layer.</summary>
+        public readonly List<GridPos> SpentCells = new List<GridPos>();
+
         public readonly List<AvalancheColumn> Columns = new List<AvalancheColumn>();
+
+        /// <summary>The deepest a column comes down, in cells.</summary>
+        public int Depth
+        {
+            get
+            {
+                int depth = 0;
+                for (int i = 0; i < Columns.Count; i++)
+                {
+                    depth = Columns[i].Covered.Count > depth ? Columns[i].Covered.Count : depth;
+                }
+                return depth;
+            }
+        }
 
         public bool Any
         {
@@ -136,14 +203,57 @@ namespace ProjectBlock.Core
         }
     }
 
+    /// <summary>One heap absorbing another during a settle - what the View plays as the
+    /// compression merge. Reporting only.</summary>
+    public sealed class SnowMerge
+    {
+        /// <summary>The heap that took the snow, every cell of it, after the merge.</summary>
+        public readonly List<GridPos> Heap = new List<GridPos>();
+
+        /// <summary>The cubes it absorbed: where each was and the heap cell it went into. The same
+        /// moves stand in the settle's frames, so the fall into the heap is part of the water
+        /// animation; this says which of those moves ended in a merge.</summary>
+        public readonly List<WaterMove> Absorbed = new List<WaterMove>();
+
+        public int PowerBefore;
+        public int PowerAfter;
+        public int MeltBefore;
+        public int MeltAfter;
+
+        /// <summary>The melt time the arriving snow had.</summary>
+        public int ArrivingMelt;
+
+        /// <summary>The heap's stratum (0: not an avalanche layer).</summary>
+        public int Stratum;
+
+        /// <summary>The heap's cells that stand on a layer of their own stratum - where the merge
+        /// stopped at the seam rather than sinking through it.</summary>
+        public readonly List<GridPos> BarrierUnder = new List<GridPos>();
+
+        /// <summary>The merge made the heap's snow last longer.</summary>
+        public bool Refreshed
+        {
+            get { return MeltAfter > MeltBefore; }
+        }
+    }
+
     partial class GameBoard
     {
         /// <summary>The snow that melted on the last TickSnowMelt, and where. Reporting only.</summary>
         public readonly List<DestroyedCube> LastSnowMelted = new List<DestroyedCube>();
 
-        /// <summary>The snow cubes the last settle ABSORBED into the heap under them: where each
-        /// stood and the cell it went into. Reporting only, rewritten by every settle.</summary>
-        public readonly List<WaterMove> LastSnowMerges = new List<WaterMove>();
+        /// <summary>Every merge the reported settles made since the engine last cleared it (at the
+        /// top of a turn and before a between-turn effect, ClearSnowReports): which heap took which
+        /// cubes and what its power and melt time went from and to. Reporting only - the View plays
+        /// the compression off it; nothing reads it back.</summary>
+        public readonly List<SnowMerge> SnowMerges = new List<SnowMerge>();
+
+        /// <summary>Forgets the merge report. The engine calls it where it clears its other
+        /// per-turn board reports.</summary>
+        public void ClearSnowReports()
+        {
+            SnowMerges.Clear();
+        }
 
         /// <summary>True if any snow stands on the board.</summary>
         public bool HasSnow
@@ -192,7 +302,7 @@ namespace ProjectBlock.Core
                     }
                     else
                     {
-                        cells[x, y] = snow.WithSnow(snow.SnowPower, snow.SnowMelt - 1, snow.SnowPacked);
+                        cells[x, y] = snow.WithSnow(snow.SnowPower, snow.SnowMelt - 1, snow.SnowStratum);
                     }
                 }
             }
@@ -277,8 +387,8 @@ namespace ProjectBlock.Core
         }
 
         /// <summary>Makes every heap agree with itself: the larger power, the longer melt time,
-        /// packed if any of it is. Runs join when a cube comes to rest beside a heap, and a heap
-        /// has one power and one clock.</summary>
+        /// and the stratum of the avalanche layer in it, if any. Runs join when a cube comes to rest
+        /// beside a heap, and a heap has one power and one clock.</summary>
         private bool NormalizeSnow()
         {
             bool changed = false;
@@ -297,20 +407,20 @@ namespace ProjectBlock.Core
                     SnowRun(line, along, out first, out last);
                     int power = 1;
                     int melt = 1;
-                    bool packed = false;
+                    int stratum = 0;
                     for (int i = first; i <= last; i++)
                     {
                         Cube snow = SnowRules.Sane(SnowAt(line, i).Value);
                         power = snow.SnowPower > power ? snow.SnowPower : power;
                         melt = snow.SnowMelt > melt ? snow.SnowMelt : melt;
-                        packed |= snow.SnowPacked;
+                        stratum = snow.SnowStratum > stratum ? snow.SnowStratum : stratum;
                     }
                     for (int i = first; i <= last; i++)
                     {
                         Cube snow = SnowAt(line, i).Value;
-                        if (snow.SnowPower != power || snow.SnowMelt != melt || snow.SnowPacked != packed)
+                        if (snow.SnowPower != power || snow.SnowMelt != melt || snow.SnowStratum != stratum)
                         {
-                            SnowSet(line, i, snow.WithSnow(power, melt, packed));
+                            SnowSet(line, i, snow.WithSnow(power, melt, stratum));
                             changed = true;
                         }
                     }
@@ -355,6 +465,7 @@ namespace ProjectBlock.Core
                     SnowRun(line, along, out first, out last);
                     Cube arriving = SnowAt(line, first).Value;
                     int lastTarget = int.MinValue; // the heap below already fed by this one
+                    SnowMerge merge = null;
                     for (int i = first; i <= last; i++)
                     {
                         Cube snow = SnowAt(line, i).Value;
@@ -363,7 +474,7 @@ namespace ProjectBlock.Core
                             continue;
                         }
                         Cube under = SnowAt(below, i).Value;
-                        if (snow.SnowPacked && under.SnowPacked)
+                        if (SnowRules.SameStratum(snow, under))
                         {
                             continue; // two layers of one avalanche stay two layers
                         }
@@ -375,17 +486,45 @@ namespace ProjectBlock.Core
                             lastTarget = targetFirst;
                             int power = under.SnowPower + arriving.SnowPower;
                             int melt = SnowRules.MergedMelt(under.SnowMelt, arriving.SnowMelt);
+                            merge = null;
+                            if (report)
+                            {
+                                merge = new SnowMerge
+                                {
+                                    PowerBefore = under.SnowPower,
+                                    PowerAfter = power,
+                                    MeltBefore = under.SnowMelt,
+                                    MeltAfter = melt,
+                                    ArrivingMelt = arriving.SnowMelt,
+                                    Stratum = under.SnowStratum
+                                };
+                                SnowMerges.Add(merge);
+                            }
                             for (int t = targetFirst; t <= targetLast; t++)
                             {
                                 Cube heap = SnowAt(below, t).Value;
-                                SnowSet(below, t, heap.WithSnow(power, melt, heap.SnowPacked));
+                                SnowSet(below, t, heap.WithSnow(power, melt, heap.SnowStratum));
+                                if (merge != null)
+                                {
+                                    merge.Heap.Add(SnowPos(below, t));
+                                    // The seam the merge stopped at: its own stratum under the heap.
+                                    int deeper = below + step;
+                                    if (deeper >= 0 && deeper < SnowLineCount && IsSnow(deeper, t)
+                                        && SnowRules.SameStratum(heap, SnowAt(deeper, t).Value))
+                                    {
+                                        merge.BarrierUnder.Add(SnowPos(below, t));
+                                    }
+                                }
                             }
                         }
                         SnowSet(line, i, null);
                         OccupiedCount--;
                         changed = true;
                         var move = new WaterMove(SnowPos(line, i), SnowPos(below, i));
-                        LastSnowMerges.Add(move);
+                        if (merge != null)
+                        {
+                            merge.Absorbed.Add(move);
+                        }
                         if (report)
                         {
                             if (frame == null)
@@ -444,12 +583,17 @@ namespace ProjectBlock.Core
         /// </summary>
         public AvalanchePlan PlanAvalanche(GridPos cell)
         {
-            var plan = new AvalanchePlan { Flow = WaterFlow };
+            var plan = new AvalanchePlan { Flow = WaterFlow, Stratum = NextSnowStratum() };
             int line = SnowFlowVertical ? cell.Y - MinY : cell.X - MinX;
+            plan.Line = SnowFlowVertical ? cell.Y : cell.X;
+            plan.Blocked = AvalancheBlock.NoSnow;
             if (line < 0 || line >= SnowLineCount)
             {
                 return plan;
             }
+            bool anySnow = false;
+            bool anySlider = false;
+            int heapIndex = 0;
             // Heap by heap rather than cube by cube: the heap's numbers are read off the whole
             // run, so a run that has only just joined still slides as one.
             int along = 0;
@@ -465,14 +609,23 @@ namespace ProjectBlock.Core
                 SnowRun(line, along, out first, out last);
                 int power = 1;
                 bool packed = false;
+                anySnow = true;
                 for (int i = first; i <= last; i++)
                 {
                     Cube snow = SnowRules.Sane(SnowAt(line, i).Value);
                     power = snow.SnowPower > power ? snow.SnowPower : power;
                     packed |= snow.SnowPacked;
                 }
-                if (!(packed && power <= 1))
+                if (packed && power <= 1)
                 {
+                    for (int i = first; i <= last; i++)
+                    {
+                        plan.SpentCells.Add(SnowPos(line, i));
+                    }
+                }
+                else
+                {
+                    anySlider = true;
                     for (int i = first; i <= last; i++)
                     {
                         Cube snow = SnowAt(line, i).Value;
@@ -480,7 +633,13 @@ namespace ProjectBlock.Core
                         {
                             continue;
                         }
-                        var column = new AvalancheColumn { Source = SnowPos(line, i), SourceCube = snow };
+                        var column = new AvalancheColumn
+                        {
+                            Source = SnowPos(line, i),
+                            SourceCube = snow,
+                            Heap = heapIndex,
+                            Power = power
+                        };
                         for (int k = 1; k <= power; k++)
                         {
                             int target = line + SnowLineStep * k;
@@ -509,10 +668,51 @@ namespace ProjectBlock.Core
                             plan.Columns.Add(column);
                         }
                     }
+                    heapIndex++;
                 }
                 along = last + 1;
             }
+            plan.Blocked = plan.Columns.Count > 0 ? AvalancheBlock.None
+                : anySlider ? AvalancheBlock.NoRoom
+                : anySnow ? AvalancheBlock.Spent
+                : AvalancheBlock.NoSnow;
             return plan;
+        }
+
+        /// <summary>A stratum id no layer on the board is using: one past the highest standing.
+        /// Only the strata STANDING matter (two cubes compare ids), so nothing has to be counted
+        /// or saved.</summary>
+        private int NextSnowStratum()
+        {
+            int highest = 0;
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    Cube? cube = cells[x, y];
+                    if (cube.HasValue && cube.Value.Kind == CubeKind.Snow && cube.Value.SnowStratum > highest)
+                    {
+                        highest = cube.Value.SnowStratum;
+                    }
+                }
+            }
+            return highest + 1;
+        }
+
+        /// <summary>True when the snow in <paramref name="cell"/> rests on a layer of its OWN
+        /// stratum - the seam between two layers of one avalanche, which the View draws on that
+        /// cell's gravity-facing edge.</summary>
+        public bool SnowSeamBelow(GridPos cell)
+        {
+            Cube? cube = IsInside(cell) ? GetCube(cell) : null;
+            if (!cube.HasValue || cube.Value.Kind != CubeKind.Snow || cube.Value.SnowStratum == 0)
+            {
+                return false;
+            }
+            var below = new GridPos(cell.X + WaterFlow.X, cell.Y + WaterFlow.Y);
+            Cube? under = IsInside(below) ? GetCube(below) : null;
+            return under.HasValue && under.Value.Kind == CubeKind.Snow
+                && SnowRules.SameStratum(cube.Value, under.Value);
         }
 
         /// <summary>
@@ -542,7 +742,7 @@ namespace ProjectBlock.Core
                         break; // something refused to be crushed: the column ends on it
                     }
                     cells[at.X - MinX, at.Y - MinY] = new Cube(CubeKind.Snow, source.Value.SourceCardId,
-                        false, 1, SnowRules.AvalancheMeltTurns, true);
+                        false, 1, SnowRules.AvalancheMeltTurns, plan.Stratum);
                     OccupiedCount++;
                     laid.Add(at);
                 }

@@ -24,6 +24,9 @@ namespace ProjectBlock.Core
         /// <summary>The cells that took a packed layer, BEFORE the settle that followed.</summary>
         public readonly List<GridPos> Laid = new List<GridPos>();
 
+        /// <summary>What each crushed cube that paid was worth, logical (CigPower.PointsPerCrushedCube).</summary>
+        public int PointsPerCube;
+
         /// <summary>Crushed cubes that paid (everything but snow).</summary>
         public int CubesPaid;
 

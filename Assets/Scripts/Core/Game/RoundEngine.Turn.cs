@@ -37,6 +37,8 @@ namespace ProjectBlock.Core
             // "Parazit": last turn's refusals are last turn's. Reporting only.
             MainBoard.HostRefusals.Clear();
             MainBoard.AnchorRefusals.Clear();
+            // Snow: last turn's merges were last turn's. Reporting only.
+            MainBoard.ClearSnowReports();
             report.TurnNumber = TurnNumber;
             report.Card = card;
             report.PlayedFromBonusHand = fromBonus;

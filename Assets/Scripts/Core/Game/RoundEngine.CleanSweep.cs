@@ -196,6 +196,7 @@ namespace ProjectBlock.Core
         {
             externalDestructionLog.Clear();
             externalWaterFrames.Clear();
+            MainBoard.ClearSnowReports();
         }
 
         /// <summary>Cells destroyed by between-turn effects since the last BeginExternalCapture

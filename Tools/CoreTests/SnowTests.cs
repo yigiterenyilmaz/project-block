@@ -26,6 +26,10 @@ public static partial class JokerTests
         Cig_IsAPowerNowAndTheJokerIsGone();
         Snow_TheMarketSellsOneRowBarsOnly();
         Snow_SurvivesASaveWithItsNumbers();
+        Strata_LaterSnowFeedsTheTopLayerAndTheSeamHolds();
+        Strata_AnotherAvalanchesLayerMergesAsUsual();
+        Snow_TheMergeIsReportedWithItsBeforeAndAfter();
+        Cig_ThePlanSaysWhyALineIsRefused();
     }
 
     private static int snowCardId = 9300;
@@ -171,8 +175,8 @@ public static partial class JokerTests
         for (int i = 0; i < arriving.Length; i++)
         {
             var board = new GameBoard(5, 5);
-            board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Snow, 1, false, 1, 3, false));
-            board.SetCubeAt(new GridPos(2, 2), new Cube(CubeKind.Snow, 2, false, 1, arriving[i], false));
+            board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Snow, 1, false, 1, 3, 0));
+            board.SetCubeAt(new GridPos(2, 2), new Cube(CubeKind.Snow, 2, false, 1, arriving[i], 0));
             board.SettleWaterAndReact();
             Check(IsSnowWith(board, 2, 0, 2, expected[i]),
                 "three left, " + arriving[i] + " arrives: " + expected[i], SnowText(board, 2, 0));
@@ -214,7 +218,7 @@ public static partial class JokerTests
                 board.SetCubeAt(new GridPos(x, y),
                     new Cube(x == 2 && y == 2 ? CubeKind.Gold : CubeKind.Normal, 100 + x * 10 + y));
             }
-            board.SetCubeAt(new GridPos(x, 4), new Cube(CubeKind.Snow, 500, false, power, 5, false));
+            board.SetCubeAt(new GridPos(x, 4), new Cube(CubeKind.Snow, 500, false, power, 5, 0));
         }
         session.CurrentRound.NoteBoardRearranged();
         return session;
@@ -308,8 +312,8 @@ public static partial class JokerTests
         RoundEngine round = session.CurrentRound;
         GameBoard board = round.Board;
         board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Normal, 77));
-        board.SetCubeAt(new GridPos(2, 1), new Cube(CubeKind.Snow, 500, false, 4, 5, false));
-        board.SetCubeAt(new GridPos(5, 0), new Cube(CubeKind.Snow, 501, false, 3, 5, false));
+        board.SetCubeAt(new GridPos(2, 1), new Cube(CubeKind.Snow, 500, false, 4, 5, 0));
+        board.SetCubeAt(new GridPos(5, 0), new Cube(CubeKind.Snow, 501, false, 3, 5, 0));
         round.NoteBoardRearranged();
 
         Check(!session.Powers.CanUse(cig.InstanceId, ActivationTarget.Board(new GridPos(5, 0))),
@@ -327,7 +331,7 @@ public static partial class JokerTests
         var other = NewSession(9813, 7, 1000000, 40, 1);
         GameBoard b2 = other.CurrentRound.Board;
         b2.SetCubeAt(new GridPos(3, 2), new Cube(CubeKind.Void, 1));
-        b2.SetCubeAt(new GridPos(3, 4), new Cube(CubeKind.Snow, 2, false, 3, 5, false));
+        b2.SetCubeAt(new GridPos(3, 4), new Cube(CubeKind.Snow, 2, false, 3, 5, 0));
         AvalanchePlan plan = b2.PlanAvalanche(new GridPos(3, 4));
         Check(plan.Columns.Count == 1 && plan.Columns[0].Covered.Count == 1,
             "a black hole is never covered: the column ends above it",
@@ -392,6 +396,110 @@ public static partial class JokerTests
         Check(seen.Count >= 3, "in more than one length", string.Join(",", seen));
     }
 
+    private static void Strata_LaterSnowFeedsTheTopLayerAndTheSeamHolds()
+    {
+        Section("kar / strata: snow landing on the top layer feeds it; the seam under it holds");
+        CigPower cig;
+        GameSession session = AvalancheSetup(9840, 3, out cig);
+        RoundEngine round = session.CurrentRound;
+        GameBoard board = round.Board;
+        session.Powers.TryUse(cig.InstanceId, ActivationTarget.Board(new GridPos(2, 4)));
+        // Layers stand on rows 0, 1 and 2 (they fell a row after the avalanche).
+        Check(board.SnowSeamBelow(new GridPos(2, 2)) && board.SnowSeamBelow(new GridPos(2, 1)),
+            "a seam under the top two layers");
+        Check(!board.SnowSeamBelow(new GridPos(2, 0)), "none under the floor layer");
+        int stratum = board.GetCube(new GridPos(2, 2)).Value.SnowStratum;
+        Check(stratum != 0 && board.GetCube(new GridPos(2, 0)).Value.SnowStratum == stratum,
+            "one avalanche, one stratum");
+
+        PlayBar(round, 3, true, new GridPos(1, 5));
+        Check(IsSnowWith(board, 2, 2, 2, 5), "the top layer took the fresh bar: power 2, five turns",
+            SnowText(board, 2, 2));
+        Check(board.GetCube(new GridPos(2, 2)).Value.SnowStratum == stratum,
+            "and kept its stratum");
+        Check(board.SnowSeamBelow(new GridPos(2, 2)), "so the seam under it is still there");
+        Check(SnowAtCell(board, 2, 1).HasValue && SnowAtCell(board, 2, 1).Value.SnowPower == 1,
+            "and the layer under it did not take anything", SnowText(board, 2, 1));
+        Check(CountSnow(board) == 9, "nine cells of snow, three layers", "" + CountSnow(board));
+    }
+
+    private static void Strata_AnotherAvalanchesLayerMergesAsUsual()
+    {
+        Section("kar / strata: a layer of ANOTHER avalanche is not a barrier");
+        var board = new GameBoard(5, 5);
+        board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Snow, 1, false, 1, 3, 1));
+        board.SetCubeAt(new GridPos(2, 3), new Cube(CubeKind.Snow, 2, false, 1, 3, 2));
+        board.SettleWaterAndReact();
+        Check(board.OccupiedCount == 1 && IsSnowWith(board, 2, 0, 2, 4),
+            "two strata merge: power 2, three and three make four", SnowText(board, 2, 0));
+        var same = new GameBoard(5, 5);
+        same.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Snow, 1, false, 1, 3, 7));
+        same.SetCubeAt(new GridPos(2, 3), new Cube(CubeKind.Snow, 2, false, 1, 3, 7));
+        same.SettleWaterAndReact();
+        Check(same.OccupiedCount == 2 && IsSnowWith(same, 2, 1, 1, 3),
+            "the same stratum stacks instead", SnowText(same, 2, 1));
+    }
+
+    private static void Snow_TheMergeIsReportedWithItsBeforeAndAfter()
+    {
+        Section("kar / every merge is reported: the heap, the cubes it took, power and melt before and after");
+        var board = new GameBoard(5, 5);
+        board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Snow, 1, false, 2, 3, 0));
+        board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Snow, 1, false, 2, 3, 0));
+        board.SetCubeAt(new GridPos(1, 3), Cube.FreshSnow(2));
+        board.SetCubeAt(new GridPos(2, 3), Cube.FreshSnow(2));
+        var frames = new List<IReadOnlyList<WaterMove>>();
+        board.SettleWaterAndReact(frames);
+        Check(board.SnowMerges.Count == 1, "one heap fed one heap: one merge", "" + board.SnowMerges.Count);
+        if (board.SnowMerges.Count == 1)
+        {
+            SnowMerge m = board.SnowMerges[0];
+            Check(m.PowerBefore == 2 && m.PowerAfter == 3, "power 2 -> 3", m.PowerBefore + " -> " + m.PowerAfter);
+            Check(m.MeltBefore == 3 && m.MeltAfter == 5 && m.Refreshed, "melt 3 -> 5, a refresh");
+            Check(m.Heap.Count == 2 && m.Absorbed.Count == 2, "the two-wide heap took both cubes");
+            bool inFrames = false;
+            foreach (IReadOnlyList<WaterMove> frame in frames)
+            {
+                foreach (WaterMove move in frame)
+                {
+                    inFrames |= move.From.Equals(m.Absorbed[0].From) && move.To.Equals(m.Absorbed[0].To);
+                }
+            }
+            Check(inFrames, "and the absorbing move is in the frames the View plays");
+        }
+        board.ClearSnowReports();
+        Check(board.SnowMerges.Count == 0, "cleared on request");
+        var quiet = new GameBoard(5, 5);
+        quiet.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Snow, 1, false, 1, 5, 0));
+        quiet.SetCubeAt(new GridPos(1, 3), new Cube(CubeKind.Snow, 2, false, 1, 2, 0));
+        quiet.SettleWaterAndReact(new List<IReadOnlyList<WaterMove>>());
+        Check(quiet.SnowMerges.Count == 1 && !quiet.SnowMerges[0].Refreshed,
+            "older snow landing on fresher snow is a merge without a refresh");
+    }
+
+    private static void Cig_ThePlanSaysWhyALineIsRefused()
+    {
+        Section("çığ / the plan names why a line cannot avalanche");
+        var board = new GameBoard(5, 5);
+        Check(board.PlanAvalanche(new GridPos(0, 2)).Blocked == AvalancheBlock.NoSnow, "no snow");
+        board.SetCubeAt(new GridPos(2, 2), new Cube(CubeKind.Snow, 1, false, 1, 3, 4));
+        board.SetCubeAt(new GridPos(2, 1), new Cube(CubeKind.Normal, 3));
+        board.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Normal, 3));
+        AvalanchePlan spent = board.PlanAvalanche(new GridPos(0, 2));
+        Check(spent.Blocked == AvalancheBlock.Spent && spent.SpentCells.Count == 1, "a spent layer");
+        var floor = new GameBoard(5, 5);
+        floor.SetCubeAt(new GridPos(2, 0), new Cube(CubeKind.Snow, 1, false, 3, 5, 0));
+        Check(floor.PlanAvalanche(new GridPos(0, 0)).Blocked == AvalancheBlock.NoRoom, "nowhere to go");
+        var ok = new GameBoard(5, 5);
+        ok.SetCubeAt(new GridPos(1, 3), new Cube(CubeKind.Snow, 1, false, 2, 5, 0));
+        ok.SetCubeAt(new GridPos(3, 3), new Cube(CubeKind.Snow, 1, false, 1, 5, 0));
+        AvalanchePlan two = ok.PlanAvalanche(new GridPos(0, 3));
+        Check(two.Blocked == AvalancheBlock.None && two.Columns.Count == 2 && two.Line == 3 && two.Depth == 2,
+            "two heaps, two groups, two rows deep");
+        Check(two.Columns[0].Heap != two.Columns[1].Heap && two.Columns[0].Power == 2,
+            "each column says which heap it is and that heap's power");
+    }
+
     private static void Snow_SurvivesASaveWithItsNumbers()
     {
         Section("kar / a save carries every cube's snow numbers");
@@ -401,8 +509,8 @@ public static partial class JokerTests
         config.Progression = new FixedProgression(7, 1000000);
         var session = new GameSession(config);
         GameBoard board = session.CurrentRound.Board;
-        board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Snow, 11, false, 3, 2, true));
-        board.SetCubeAt(new GridPos(4, 0), new Cube(CubeKind.Snow, 12, false, 1, 5, false));
+        board.SetCubeAt(new GridPos(1, 0), new Cube(CubeKind.Snow, 11, false, 3, 2, 1));
+        board.SetCubeAt(new GridPos(4, 0), new Cube(CubeKind.Snow, 12, false, 1, 5, 0));
         session.CurrentRound.NoteBoardRearranged();
 
         var template = new GameConfig();
