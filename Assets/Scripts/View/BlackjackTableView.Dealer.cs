@@ -68,6 +68,10 @@ namespace ProjectBlock.View
         private float thinking;
         private float thinkT0;
         private float footprintA, footprintTarget;
+        /// <summary>How many of the pooled footprint lights belong to the card in flight. The rest
+        /// stay dark: a pooled light from an earlier, bigger block must never warm a cell this
+        /// block is not going to.</summary>
+        private int footprintCount;
         private int chosenSlot = -1;
         private Vector2 debugFlightFrom, debugFlightCtrl, debugFlightTo;
         private bool debugFlightOn;
@@ -121,6 +125,7 @@ namespace ProjectBlock.View
             thinking = 0f;
             chosenSlot = -1;
             footprintTarget = footprintA = 0f;
+            footprintCount = 0;
             debugFlightOn = false;
             for (int i = 0; i < footprint.Count; i++)
             {
@@ -253,7 +258,7 @@ namespace ProjectBlock.View
 
         private void TickDealer(float dt)
         {
-            float k = 1f - Mathf.Exp(-dt * 13f * Mathf.Max(0.05f, BlackjackFx.Tuning.Speed));
+            float k = 1f - Mathf.Exp(-dt * 18f * Mathf.Max(0.05f, BlackjackFx.Tuning.Speed));
             float s = L.DealerCardScale * 1.35f;
             for (int i = fan.Count - 1; i >= 0; i--)
             {
@@ -301,9 +306,13 @@ namespace ProjectBlock.View
             footprintA = Mathf.MoveTowards(footprintA, footprintTarget, dt * 5f * BlackjackFx.Tuning.Speed);
             for (int i = 0; i < footprint.Count; i++)
             {
-                if (footprint[i].enabled || footprintA > 0f)
+                if (i < footprintCount && footprintA > 0f)
                 {
                     Alpha(footprint[i], BlackjackFx.LightAlpha(0.55f) * footprintA * (0.85f + 0.15f * Mathf.Sin(clock * 6f + i)));
+                }
+                else
+                {
+                    footprint[i].enabled = false;
                 }
             }
         }
@@ -489,7 +498,7 @@ namespace ProjectBlock.View
                 yield break;
             }
             // the card gives way to its block
-            float fade = T(0.12f);
+            float fade = T(0.08f);
             t0 = Time.time;
             while (true)
             {
@@ -609,6 +618,7 @@ namespace ProjectBlock.View
                     footprint[i].enabled = false;
                 }
             }
+            footprintCount = n;
             footprintA = 0f;
             footprintTarget = n > 0 ? 1f : 0f;
         }

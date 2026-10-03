@@ -29,18 +29,19 @@ namespace ProjectBlock.View
             public static float blackjackPlayerHandOffset = 1f; // share of the way under the player's board
 
             // ---- the house's card
-            public static float dealerThinkMin = 0.25f;
-            public static float dealerThinkMax = 0.55f;
+            // faster since the first pass (2026-10-03: "the house deals too slowly") - about 0.5 s a card
+            public static float dealerThinkMin = 0.15f;
+            public static float dealerThinkMax = 0.30f;
             public static float dealerChosenCardOffset = 0.07f;
-            public static float dealerChosenDuration = 0.12f;
-            public static float dealerRevealDuration = 0.10f;
-            public static float dealerCardTravelDuration = 0.40f;
-            public static float dealerCardFlipDuration = 0.18f;
+            public static float dealerChosenDuration = 0.07f;
+            public static float dealerRevealDuration = 0.04f;
+            public static float dealerCardTravelDuration = 0.26f;
+            public static float dealerCardFlipDuration = 0.12f;
             public static float dealerCardLandSquash = 0.04f;
-            public static float dealerCardLandDuration = 0.12f;
-            public static float dealerGapCloseDuration = 0.16f;
-            public static float dealerRefillDuration = 0.22f;
-            public static float dealerAfterPlace = 0.22f;
+            public static float dealerCardLandDuration = 0.09f;
+            public static float dealerGapCloseDuration = 0.10f;
+            public static float dealerRefillDuration = 0.14f;
+            public static float dealerAfterPlace = 0.12f;
 
             // ---- the bet
             public static float betConfirmPulse = 0.10f;

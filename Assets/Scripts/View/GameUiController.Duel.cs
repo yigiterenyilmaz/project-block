@@ -581,7 +581,7 @@ namespace ProjectBlock.View
         private IEnumerator DuelHouseFlow(BlackjackBoss duel, DuelAiTurns turns)
         {
             // a breath for the player's own placement to be read first
-            yield return new WaitForSeconds(BlackjackFx.Tuning.T(0.22f));
+            yield return new WaitForSeconds(BlackjackFx.Tuning.T(0.12f));
             duelTable.SetActiveSide(BlackjackTableView.Side.Dealer);
             for (int i = 0; i < turns.Plays.Count; i++)
             {
@@ -629,17 +629,24 @@ namespace ProjectBlock.View
             ShowHouseBoard(houseShownBoard);
             sfx.Place(play.PlacedCells.Count);
             Vector2 from = landAt;
+            // the HOUSE's own streak sets its lines' tier - never the player's combo
+            int tier = Mathf.Clamp(play.ComboCount, 1, LineBurstView.MaxTier);
+            int lines = play.ExplodedRows.Count + play.ExplodedColumns.Count;
+            if (lines > 0)
+            {
+                sfx.Explode(lines, play.ComboCount);
+            }
             if (houseBoardView != null && play.BoardAfter != null)
             {
                 GameBoard b = play.BoardAfter;
                 foreach (int y in play.ExplodedRows)
                 {
-                    FlashLine(b, b.MinY + y, true, houseBoardView);
+                    FlashLine(b, b.MinY + y, true, houseBoardView, tier);
                     from = duelTable.transform.InverseTransformPoint(houseBoardView.CellToWorld(new GridPos(b.MinX + b.Width / 2, b.MinY + y)));
                 }
                 foreach (int x in play.ExplodedColumns)
                 {
-                    FlashLine(b, b.MinX + x, false, houseBoardView);
+                    FlashLine(b, b.MinX + x, false, houseBoardView, tier);
                     from = duelTable.transform.InverseTransformPoint(houseBoardView.CellToWorld(new GridPos(b.MinX + x, b.MinY + b.Height / 2)));
                 }
             }

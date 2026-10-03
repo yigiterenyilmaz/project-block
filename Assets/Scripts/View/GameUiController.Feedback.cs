@@ -806,6 +806,13 @@ namespace ProjectBlock.View
         /// with the very same ray (GameUiController.Duel).</summary>
         private void FlashLine(GameBoard board, int line, bool row, BoardView view)
         {
+            FlashLine(board, line, row, view, activeLineTier);
+        }
+
+        /// <summary>As above, at an explicit combo TIER. The duel's house keeps a streak of its own
+        /// (DuelAiPlay.ComboCount) and must never borrow the player's.</summary>
+        private void FlashLine(GameBoard board, int line, bool row, BoardView view, int lineTier)
+        {
             if (board == null || view == null || view.Board == null)
             {
                 return;
@@ -829,7 +836,7 @@ namespace ProjectBlock.View
             }
             // The sweep and the burst take the SAME tier, through the same fallback, so the
             // two can never disagree about which streak the player is on.
-            int tier = LineBurstView.EffectiveTier(activeLineTier);
+            int tier = LineBurstView.EffectiveTier(lineTier);
             Color tone = LineBlastColors[tier];
             // A cleared LINE shares nothing with FlashCells. A whole row of cells going off one
             // by one is a rectangle, and the sheet already flies its own debris out of the
@@ -838,7 +845,7 @@ namespace ProjectBlock.View
             // group goes through ClusterBurstView, which has neither a direction nor a combo
             // tier, so the two can never be mistaken for each other.
             lineSweep.Play(cells, boardView.CellWorldSize, row, tone);
-            lineBurst.Play(cells, boardView.CellWorldSize, row, activeLineTier);
+            lineBurst.Play(cells, boardView.CellWorldSize, row, lineTier);
             if (bossIdentity != null)
             {
                 bossIdentity.ReactLine(cells[0], cells[cells.Count - 1], tier);
