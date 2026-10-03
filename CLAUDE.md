@@ -1877,8 +1877,9 @@ have had to be carried by every one of those. The rules:
   covers hold PACKED snow: one power, `AvalancheMeltTurns` (3). Two packed cubes never merge with
   each other, so the layers stay stacked when they fall; fresh snow landing on a packed layer is
   absorbed as usual, and that is what lets the layer slide again (`SnowRules.CanSlide`).
-- On screen: the tile is BAKED (`Tools/ArtPrep/bake_snow_tile.js`, a placeholder a painter can
-  overwrite); the heap's power is a bold number in its middle and its melt time a chip on its
+- On screen: the tile is the painted "Karlı ve Buzlu Oyun Taşı" drawing, cropped to its body and
+  scaled to the other tiles' 364 px by `Tools/ArtPrep/prep_snow_tile.js` (the loose flakes outside
+  the block are dropped; its near-opaque body is made opaque); the heap's power is a bold number in its middle and its melt time a chip on its
   corner that warms on the last turn, packed layers wear two faint lines; the avalanche is replayed
   over a board that has ALREADY settled - the cells are held, the heap shudders and comes down its
   columns, each cube bursts as the front reaches it (from the face taken before the rules ran),
