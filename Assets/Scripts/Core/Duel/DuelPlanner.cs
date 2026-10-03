@@ -119,6 +119,21 @@ namespace ProjectBlock.Core
                     deep.Add(scored[i]);
                 }
             }
+            // And the move that pays most NOW, always. The position value can rank a big clear
+            // low for what it does to a streak; a second move is exactly what settles whether
+            // that was right, so the clear must not be pruned before it gets one.
+            Candidate richest = null;
+            for (int i = 0; i < scored.Count; i++)
+            {
+                if (richest == null || scored[i].Move.Gain > richest.Move.Gain)
+                {
+                    richest = scored[i];
+                }
+            }
+            if (richest != null && richest.Move.Gain > 0 && !deep.Contains(richest))
+            {
+                deep.Add(richest);
+            }
             Candidate best = null;
             double bestValue = double.NegativeInfinity;
             for (int i = 0; i < deep.Count; i++)

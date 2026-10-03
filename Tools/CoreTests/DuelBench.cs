@@ -199,7 +199,7 @@ public static class DuelBench
         double bestScore = Run(policy, deals, best, firstSeed).Mean;
         Console.Out.Write("start " + bestScore.ToString("0.0") + "\n");
         sb.Append("start ").Append(bestScore.ToString("0.0")).Append('\n');
-        string[] names = { "Ready", "Streak", "Lines", "Theta", "Uncoverable", "DeadHeld",
+        string[] names = { "Ready", "Streak", "StreakGuard", "Lines", "Theta", "Uncoverable", "DeadHeld",
             "DeadFuture", "Mobility", "DeadCell", "Gold", "Dynamite" };
         double[] factors = { 0.5, 0.75, 1.33, 2.0 };
         for (int round = 0; round < rounds; round++)
@@ -268,6 +268,10 @@ public static class DuelBench
             if (field != null && field.FieldType == typeof(double))
             {
                 field.SetValue(weights, double.Parse(kv[1], System.Globalization.CultureInfo.InvariantCulture));
+            }
+            else if (field != null && field.FieldType == typeof(int))
+            {
+                field.SetValue(weights, int.Parse(kv[1], System.Globalization.CultureInfo.InvariantCulture));
             }
         }
         return weights;

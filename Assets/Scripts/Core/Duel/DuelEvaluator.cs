@@ -15,12 +15,15 @@
 //             the unknown draws, times the combo multiplier that clear would get. The combo
 //             ladder (x1.5, then x3 for every clearing turn after) makes "always have a clear
 //             ready" the strongest single habit in this game, and this is where it lives.
-//   STREAK  - what a streak PROMISES: if the next hand can clear, the clear after it is paid
-//             one rung higher on the ladder. Only ever a credit - a streak that cannot go on
-//             simply promises nothing. (Written first as a charge for a streak the next hand
-//             could not continue, it taught the house to put off a clean sweep it could take
-//             now, because taking it "started a streak it would lose" - while the clear put off
-//             never started one. A promise not kept is not a loss.)
+//   STREAK  - two terms. The PROMISE: if the next hand can clear, the clear after it is paid
+//             one rung higher on the ladder (a credit). The GUARD: a live streak the next hand
+//             cannot carry on stands to lose what the ladder would have added (a charge) - which
+//             is what teaches the house to hold a ready line back until it can CHAIN clears on
+//             consecutive turns. Measured over whole hands, the guard alone beat the promise
+//             alone by ~9% and both together are best. The guard's one trap - it can rank a big
+//             clear (a clean sweep, even) LOW on the first look, for "starting a streak it would
+//             lose" - is closed by the planner, which always looks a second move deep at the
+//             move that pays most now (DuelPlanner_GivesTheFoxTheFormThatClears).
 //   LINES   - every live row and column, by how many placements its gaps still need (a greedy
 //             cover over the remaining cards' legal placements) and whether every gap can be
 //             reached at all, times what the line pays (cubes, obsidian in it).
@@ -43,9 +46,10 @@ namespace ProjectBlock.Core
     {
         public double Ready = 1.0;
         public double Streak = 0.5;
-        public double Lines = 0.35;
+        public double StreakGuard = 0.3;
+        public double Lines = 0.466;
         public double Theta = 0.55;
-        public double Uncoverable = 0.03;
+        public double Uncoverable = 0.015;
         public double DeadHeld = 1.2;
         public double DeadFuture = 0.5;
         public double Mobility = 2.0;
@@ -281,7 +285,17 @@ namespace ProjectBlock.Core
                 dynamite += odds * worth * type.Count * w.Dynamite;
             }
 
-            double total = ready + streakPromise + linePotential * w.Lines + mobility + dead + gold + dynamite;
+            // ...and what a live streak the next hand cannot carry on stands to lose. A charge, and a
+            // useful one: it is what teaches the house to hold a ready line back until it can
+            // chain clears on consecutive turns, where the ladder pays x1.5 and then x3.
+            double streakGuard = 0.0;
+            if (streak >= 1 && remaining > 1)
+            {
+                double carried = scorer.ComboMultiplier(streak + 2) - 1.0;
+                streakGuard = -(1.0 - clearChance) * rho * carried * Math.Min(remaining - 1, 3) * w.StreakGuard;
+            }
+
+            double total = ready + streakPromise + streakGuard + linePotential * w.Lines + mobility + dead + gold + dynamite;
             return total * scorer.ScoreScale;
         }
 

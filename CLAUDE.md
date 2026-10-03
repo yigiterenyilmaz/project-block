@@ -1825,7 +1825,7 @@ Add a joker: subclass `Joker`, override only the hooks you need, register it in
 `JokerRegistry`. It appears in the debug joker bar automatically. Jokers do NOT subscribe
 to `TurnResolved` — that event stays a post-fact notification for the UI.
 
-The roster now stands at **50 jokers, 38 powers and 37 bosses** (registry counts); of the
+The roster now stands at **50 jokers, 38 powers and 38 bosses** (registry counts); of the
 originally planned powers only "Dolly" is left, set aside by the designer.
 See `docs/jokers-plan.md`.
 
@@ -1970,6 +1970,64 @@ pile is an ordinary slot. `GameBoard.AnchorRefusals` (reporting only, cleared ea
 "it will not budge" beat. The lab has 23 scenes running `KaraDelikJoker.RunGravity` / `RunCollapse`,
 the real `Place` and `ShiftRowsUp` on its own board, plus layer switches and four debug views;
 `Tools/UiLayoutCheck/karadelik.py` holds the lot. Mocks: `hole_*.png` in the session scratchpad.
+
+**"BLACKJACK" IS A DUEL AGAINST THE HOUSE, FOR THE PURSE** (designer's call, 2026-10-02;
+`BlackjackBoss`, `Core/Duel/`, `RoundEngine.Duel.cs` / `.Clone.cs`, `GameSession.Duel.cs`,
+`GameUiController.Duel.cs`). Every hand the run's deck is shuffled and cut in two equal halves (an
+odd card sits the hand out): one is the player's, the other the HOUSE's, and each plays its half out
+ONCE on its own 7x7 arena - the player sees the house's arena and every card it lays, never its
+hand, pile or discard. Each elemental card goes to the house with `ElementalLean` (0.7). The player
+has jokers; the house has none. **THE MONEY IS THE PURSE**: before every hand the player stakes part
+of it (`GameSession.PlaceDuelBet`, the stakes offered are `BlackjackBoss.BetOptions`); when both
+halves are played out the higher score takes the hand - a win pays the stake back TWICE, a draw
+returns it, a loss burns it. The stage is beaten when the purse reaches twice what it held when the
+stage began (`Target`; an empty purse is staked `StarterStake` = 500 by the house first, so the
+target is then 1000); the run is lost when the purse runs dry (`LossReason.DuelBankrupt`). **The
+round's points are NOT money** (`BossRound.RoundScoreIsNotMoney`): they are held like a deferred
+round's (so the books balance) and forfeited - they only decide who wins each hand. The duel's money
+moves the purse directly, never a "Kredi kartı" debt (`TakeDuelStake` / `PayDuel`). **A DUEL SIDE**
+(`RoundEngine.PlaysOutItsCards`: the player's round through `BossRound.PlaysOutCards`, the house's
+through a session-less engine seated at the table): the discard never comes back, a short hand is
+not a loss, running out of moves is not a loss (the dead-end check asks `BossRound.OnOutOfMoves`),
+and the threshold never wins. Between hands `BossRound.HoldsPlay` refuses every placement until the
+bet is in. **THE TURN**: the player plays; then (the boss moves last) the house plays one card on
+its arena; when the player's half is done - every DEALT card played (bonus-hand cards excepted, so a
+joker that returns played cards cannot make a hand endless), or nothing fits - the house plays out
+the rest and the hand is settled on the spot. Each hand gets fresh arenas (`BeginDuelHand`). The
+second world, the inflations, retro, Totem, İkinci şans and Batak are switched off for the stage.
+**THE HOUSE'S PLAYER IS `DuelPlanner`, AND IT DOES NOT MODEL THE RULES - IT PLAYS THEM.** Every legal
+move (`DuelOptions`: each held card, each element an alchemical card can be, every form a fox can
+take - the round's own `RoundShapes`, the list the dead-end check uses - each turn of a mechanical
+block, every cell the board's own placement rules allow, ghost overhang and negative/void/antimatter
+included) is played on a COPY of the house's round (`RoundEngine.CloneForPlanning`, pinned by a save
+of the copy being text-identical to the original's), so fire chains, falling water, obsidian rent,
+dynamite clears, the combo ladder and every other element are scored by the rules themselves.
+`DuelEvaluator` then values the position in the round's own prices: READY (the best one-move clear
+the next hand can make, in expectation over the unknown draw, times the combo multiplier it would
+get), STREAK (two terms: the PROMISE of the next rung if the next hand can clear, and the GUARD - a
+charge for a live streak the next hand cannot carry on, which is what teaches the house to hold a
+ready line back and CHAIN clears; measured, the guard alone beat the promise alone by ~9% and both
+together are best, and the guard's trap - ranking a big clear low on the first look - is closed by
+the planner always looking a second move deep at the move that pays most NOW), LINES (each live
+line by the placements a greedy cover over the remaining cards needs, zero if a gap cannot be
+reached), MOBILITY (cards with nowhere to go), DEAD cells, GOLD income for the turns left, and
+DYNAMITE (the cubes standing now, at the odds of a whole-block detonation). The best few first moves
+are looked at a second move deep with the cards the house KNOWS it holds - never the order of its
+pile (`DuelPlanner_NeverReadsTheOrderOfItsPile`; the evaluator sorts card types by key so not even
+a tie-break leaks it). The second ply's breadth is a deterministic BUDGET in moves
+(`PlyTwoBudget`), never time. An alchemical choice the house makes is put back on the card after
+the placement (the cards are the player's own). **Measured** (`dotnet run --project Tools/CoreTests
+-- duelbench N`, twelve-card halves of the Classic shapes, a third elemental): random play ~29
+points a hand, greedy ~93, one ply ~207, the planner ~245, at ~11 ms a decision in .NET (worst
+~125 ms - a fox in hand is hundreds of moves). The weights in `DuelWeights` were tuned by coordinate
+search over whole hands (`DuelBench.Tune`) and checked on deals the search never saw.
+**The View** stands the two arenas side by side in the mirror world's layout, plays the house's turn
+back ONE CARD AT A TIME from copies of its board taken around each play (`DuelAiPlay.BoardBefore` /
+`BoardAfter`: its silhouette over the arena, then its lines going off through the player's own
+`FlashLine`), holds input while it plays, says how each hand went, and offers the bet on the shared
+option picker (mouse, keys and both pad schemes). **Not done**: it has not been seen running in
+Unity; the house's decisions are synchronous in the turn (a play-out of the rest of its half is
+several decisions in one frame); the bet is a list of stakes, not a slider.
 
 **"Meydan Okuma" dares a line picked off a MEASURED sea of chances** (`LineChanceSea`, in
 `Core/Jokers/LineChance.cs`). It used to mark any row or column at random, which made the bonus a
