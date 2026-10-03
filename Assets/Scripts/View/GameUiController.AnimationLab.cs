@@ -1188,17 +1188,6 @@ namespace ProjectBlock.View
                 delegate { AnimRimErosion(1, 1, 0); });
             AddAnim("rim erosion: full board", "kenar erozyonu: dolu alan",
                 delegate { AnimRimErosion(1, 1, 100); });
-            // Snow and "Çığ" (SnowView), on lab boards running the real rules.
-            AddAnim("snow: bars drop, absorb, then melt", "kar: bloklar düşer, birleşir, erir",
-                AnimSnowStack);
-            AddAnim("avalanche: 1x3 heap, power 3", "çığ: 1x3 öbek, power 3",
-                delegate { AnimAvalanche(3, 3, false); });
-            AddAnim("avalanche: power 3, then the layers fall", "çığ: power 3, sonra katmanlar düşer",
-                delegate { AnimAvalanche(3, 3, true); });
-            AddAnim("avalanche: one cube, power 1", "çığ: tek küp, power 1",
-                delegate { AnimAvalanche(1, 1, false); });
-            AddAnim("avalanche: 1x4 heap, power 5", "çığ: 1x4 öbek, power 5",
-                delegate { AnimAvalanche(5, 4, false); });
             AddAnim("placement preview: valid", "yerleşim önizleme: geçerli",
                 delegate { AnimPreview(true); });
             AddAnim("placement preview: invalid", "yerleşim önizleme: geçersiz",
@@ -4015,6 +4004,8 @@ namespace ProjectBlock.View
 
             // "Rüzgar" - the gust, on boards of the lab's own (GameUiController.Wind).
             AddWindLab();
+            // Snow and "Çığ" (SnowView): the brief's 53 scenes and its debug switches.
+            AddSnowLab();
 
             AddAnimSub("jokers", "besleme", "besleme", "besleme");
             AddAnim("besleme: a FEED procs (nest + card + points)",

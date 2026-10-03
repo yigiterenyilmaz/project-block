@@ -305,6 +305,47 @@ namespace ProjectBlock.View
             public float SplashAt = -1f;   // when that settle happened, or -1
             public bool Solid;             // not water ("Kütleçekim merkezi" drops everything)
             public Color Face = Color.white;
+            public bool Snow;              // a snow cube: slides, squashes, trails powder
+            public bool Absorbs;           // and its fall ends INSIDE a heap (a merge)
+            public bool Handed;            // the merge has been handed to the snow layer
+        }
+
+        /// <summary>
+        /// SNOW rides the board's own fall (Core settles it with the water, in the same frames), but
+        /// it is a different material and moves like one: no hop and no splash - a slide with powder
+        /// trailing, a squash on arrival - and a fall that ends INSIDE a heap is a MERGE, which the
+        /// snow layer plays. This is how the board tells it; SnowView answers. Null: snow falls
+        /// like any solid cube.
+        /// </summary>
+        public interface ISnowMotion
+        {
+            /// <summary>Gives a drop in flight the snow's own look (its age, its stratum).</summary>
+            void Dress(SpriteRenderer renderer, Cube cube);
+
+            /// <summary>A snow drop is moving: where (board-local), which way, how fast (0..1).</summary>
+            void Trail(Vector2 local, GridPos step, float speed);
+
+            /// <summary>A snow fall came to rest in <paramref name="cell"/>.</summary>
+            void Landed(GridPos cell, GridPos step);
+
+            /// <summary>A snow fall from <paramref name="from"/> reached the heap it merges into, at
+            /// <paramref name="into"/>; the drop has stopped drawing and the merge is the snow
+            /// layer's to play.</summary>
+            void Absorbed(GridPos from, GridPos into, GridPos step);
+
+            /// <summary>The cells of a fall that ends in a merge: true when <paramref name="move"/>
+            /// is one of the absorbing moves Core reported.</summary>
+            bool IsAbsorb(WaterMove move);
+        }
+
+        public ISnowMotion SnowMotion;
+
+        /// <summary>True while the board is NOT drawing this cell's own cube - a fall is carrying
+        /// it, or an effect holds the cell blank. A layer drawn over the board (the snow's numbers)
+        /// asks this so it never labels a cube that is somewhere else on screen.</summary>
+        public bool IsCellCovered(GridPos cell)
+        {
+            return waterHiddenCells.Contains(cell) || heldCells.Contains(cell);
         }
 
         /// <summary>Every cell a running fall covers, blanked for its duration so the settled
@@ -3407,7 +3448,19 @@ namespace ProjectBlock.View
                 // The board has already settled, so the cube at the END of the path is the one
                 // that made the trip - and when gravity turned, that may be anything at all.
                 Cube? landed = board != null ? board.GetCube(drop.Cells[drop.Cells.Count - 1]) : null;
-                if (landed.HasValue && landed.Value.Kind != CubeKind.Water)
+                if (landed.HasValue && landed.Value.Kind == CubeKind.Snow && SnowMotion != null)
+                {
+                    drop.Snow = true;
+                    drop.Solid = true;
+                    drop.Face = Color.white;
+                    int n = drop.Cells.Count;
+                    drop.Absorbs = n >= 2
+                        && SnowMotion.IsAbsorb(new WaterMove(drop.Cells[n - 2], drop.Cells[n - 1]));
+                    ViewUtil.ApplyTile(drop.Sprite, ViewUtil.SnowTile, cellSize * CubeFill);
+                    drop.Sprite.color = Color.white;
+                    SnowMotion.Dress(drop.Sprite, landed.Value);
+                }
+                else if (landed.HasValue && landed.Value.Kind != CubeKind.Water)
                 {
                     Sprite tile;
                     Color colour;
@@ -3421,6 +3474,33 @@ namespace ProjectBlock.View
                 {
                     ViewUtil.ApplyTile(drop.Sprite, ViewUtil.CubeTile(CubeKind.Water),
                         cellSize * CubeFill);
+                }
+            }
+            // A fall that ends INSIDE a heap must not blank the heap: it is standing there the
+            // whole time, waiting to be landed on.
+            foreach (WaterDrop drop in drops)
+            {
+                if (!drop.Absorbs)
+                {
+                    continue;
+                }
+                GridPos into = drop.Cells[drop.Cells.Count - 1];
+                bool crossed = false;
+                foreach (WaterDrop other in drops)
+                {
+                    if (other == drop)
+                    {
+                        continue;
+                    }
+                    int last = other.Absorbs ? other.Cells.Count - 1 : other.Cells.Count;
+                    for (int i = 0; i < last && !crossed; i++)
+                    {
+                        crossed = other.Cells[i].Equals(into);
+                    }
+                }
+                if (!crossed)
+                {
+                    waterHiddenCells.Remove(into);
                 }
             }
             HideWaterCells();
@@ -3543,6 +3623,27 @@ namespace ProjectBlock.View
                     SplashWater(CellToWorld(drop.Cells[drop.Landed]),
                         StepDirection(drop, drop.Landed - 1));
                 }
+                if (drop.Snow && SnowMotion != null && !drop.Handed
+                    && (!drop.Absorbs || drop.Landed < drop.Cells.Count - 1))
+                {
+                    SnowMotion.Landed(drop.Cells[drop.Landed], StepDirection(drop, drop.Landed - 1));
+                }
+            }
+            if (drop.Snow && drop.Absorbs && !drop.Handed && SnowMotion != null && steps > 0
+                && elapsed >= drop.StepFrames[steps - 1] * WaterCellSeconds)
+            {
+                // The fall has reached the heap it merges into: the step INTO the heap is the
+                // merge, and the snow layer plays it - the cube presses on the heap from the cell
+                // it stands in rather than sliding into the heap's own cell.
+                drop.Handed = true;
+                drop.Sprite.enabled = false;
+                SnowMotion.Absorbed(drop.Cells[drop.Cells.Count - 2], drop.Cells[drop.Cells.Count - 1],
+                    StepDirection(drop, steps - 1));
+            }
+            if (drop.Snow)
+            {
+                StepSnowDrop(drop, travelled, speed, elapsed, steps);
+                return;
             }
 
             int index = Mathf.Clamp((int)travelled, 0, drop.Cells.Count - 1);
@@ -3584,6 +3685,54 @@ namespace ProjectBlock.View
                 : Color.Lerp(waterColor, new Color(0.2f, 0.42f, 0.9f),
                     0.3f + 0.3f * Mathf.Sin(Time.time * 2.2f + drop.Cells[index].X * 0.9f));
         }
+
+        /// <summary>
+        /// A snow drop's pose: it SLIDES - low, no hop - leaning a few percent along its travel
+        /// as it gets going, and lands with a short squash along the flow (1.03 -> 0.96 -> 1).
+        /// The powder it trails is the snow layer's (ISnowMotion.Trail).
+        /// </summary>
+        private void StepSnowDrop(WaterDrop drop, float travelled, float speed, float elapsed, int steps)
+        {
+            if (drop.Handed)
+            {
+                return;
+            }
+            int index = Mathf.Clamp((int)travelled, 0, drop.Cells.Count - 1);
+            float frac = travelled - index;
+            Vector2 world = CellToWorld(drop.Cells[index]);
+            if (frac > 0f && index + 1 < drop.Cells.Count)
+            {
+                world = Vector2.Lerp(world, CellToWorld(drop.Cells[index + 1]), frac);
+            }
+            GridPos flow = StepDirection(drop, Mathf.Min(index, Mathf.Max(0, steps - 1)));
+            // the gravity-facing edge presses as it starts: a dip in length before the stretch
+            float along = 1f + 0.06f * speed - 0.05f * Mathf.Sin(Mathf.Clamp01(speed * 2.2f) * Mathf.PI)
+                * (speed < 0.45f ? 1f : 0f);
+            float across = 1f - 0.03f * speed;
+            float sinceLand = elapsed - drop.SplashAt;
+            if (drop.SplashAt >= 0f && sinceLand < SnowLandSeconds)
+            {
+                float k = sinceLand / SnowLandSeconds;
+                along = k < 0.3f ? Mathf.Lerp(1.03f, 0.96f, k / 0.3f) : Mathf.Lerp(0.96f, 1f, (k - 0.3f) / 0.7f);
+                across = 1f + (1f - along) * 0.6f;
+            }
+            // the squash sits on the cube's FOOT, so it presses down rather than shrinking about
+            // its middle
+            float size = cellSize * CubeFill;
+            var foot = new Vector2(flow.X, flow.Y) * (size * 0.5f * (1f - along));
+            drop.Sprite.transform.localPosition = new Vector3(world.x + foot.x, world.y + foot.y, 0f);
+            drop.Sprite.transform.localScale = flow.X != 0
+                ? new Vector3(size * along, size * across, 1f)
+                : new Vector3(size * across, size * along, 1f);
+            drop.Sprite.color = Color.white;
+            if (speed > 0.05f && SnowMotion != null)
+            {
+                SnowMotion.Trail(world, flow, speed);
+            }
+        }
+
+        /// <summary>How long a snow landing's squash lasts.</summary>
+        private const float SnowLandSeconds = 0.2f;
 
         /// <summary>Cells covered after so many cell-times of falling: a brief acceleration from
         /// rest, then a constant one cell per cell-time. Deliberately one-sided - a drop only

@@ -104,7 +104,14 @@ namespace ProjectBlock.View
                         // "Hidrolik pres" has its own aiming language: the 2x2 is ONE mechanical
                         // area under a thin pressure frame, not four cells tinted the colour of an
                         // explosion - it destroys nothing.
-                        if (aiming is HidrolikPresPower)
+                        if (aiming is CigPower)
+                        {
+                            // "Çığ" has its own aiming language: the row in frost, the heaps that
+                            // will go, the real footprint, the blocks it will crush (SnowView).
+                            boardView.ClearPreview();
+                            ShowAvalancheAim(at);
+                        }
+                        else if (aiming is HidrolikPresPower)
                         {
                             boardView.ShowPressPreview(aiming.PreviewCells(at),
                                 aiming.CanRun(new RoundContext(session, session.Rng,
@@ -156,6 +163,12 @@ namespace ProjectBlock.View
                         if (!TryBoardTargetAt(world, out cellTarget))
                         {
                             CancelTargeting();
+                            return;
+                        }
+                        // "Çığ": a line that cannot avalanche is refused where it stands - the aim
+                        // stays up and the snow says no.
+                        if (power is CigPower && RefuseAvalancheAt(cellTarget))
+                        {
                             return;
                         }
                         // "Buldozer": the cell says WHERE, the axis toggled while aiming says which way.

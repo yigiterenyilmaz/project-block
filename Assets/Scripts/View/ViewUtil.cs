@@ -691,6 +691,12 @@ namespace ProjectBlock.View
                 }
                 return voidMaterial;
             }
+            if (tile == Tile("block_snow"))
+            {
+                // SNOW: one shared material whose age, melt, packing, seam and refresh ride in a
+                // property block SnowView writes per cube (SnowAge.shader). Null without the shader.
+                return SnowMaterial;
+            }
             if (tile == Tile("block_dynamite"))
             {
                 // THE CHARGE PACK: a refined casing and a graphite strap, and - through a property
@@ -699,6 +705,40 @@ namespace ProjectBlock.View
                 return DynamiteMaterial;
             }
             return null;
+        }
+
+        private static Material snowMaterial;
+
+        private static bool snowLooked;
+
+        /// <summary>The ONE shared snow material (SnowAge.shader); per-cube state rides in a
+        /// property block. Null when the shader cannot be had - the tile then draws plain.</summary>
+        public static Material SnowMaterial
+        {
+            get
+            {
+                if (!snowLooked)
+                {
+                    snowLooked = true;
+                    Shader shader = Shader.Find("ProjectBlock/SnowAge");
+                    if (shader == null)
+                    {
+                        shader = Resources.Load<Shader>("Shaders/SnowAge");
+                    }
+                    if (shader != null && shader.isSupported)
+                    {
+                        snowMaterial = new Material(shader);
+                        snowMaterial.hideFlags = HideFlags.HideAndDontSave;
+                    }
+                }
+                return snowMaterial;
+            }
+        }
+
+        /// <summary>The snow tile itself (for views that draw snow away from the board).</summary>
+        public static Sprite SnowTile
+        {
+            get { return Tile("block_snow"); }
         }
 
         private static Material dynamiteMaterial;

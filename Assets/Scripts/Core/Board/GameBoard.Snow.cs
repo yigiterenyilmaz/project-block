@@ -750,6 +750,13 @@ namespace ProjectBlock.Core
             return laid;
         }
 
+        /// <summary>The animation lab's way to turn a board of its own sideways (a round turns its
+        /// gravity only through RoundEngine.SetWaterFlow).</summary>
+        public void SetWaterFlowOnLabBoard(GridPos direction)
+        {
+            SetWaterFlow(direction);
+        }
+
         /// <summary>ApplyAvalanche for the animation lab, which runs an avalanche on a board of
         /// its own and does the crushing itself (the engine is what does it in a round).</summary>
         public List<GridPos> ApplyAvalancheOnLabBoard(AvalanchePlan plan)

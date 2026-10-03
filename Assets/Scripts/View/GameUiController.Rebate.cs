@@ -169,15 +169,19 @@ namespace ProjectBlock.View
             float antimatterClaim = antimatter != null ? antimatter.ScoreClaim : 0f;
             // "Simetri"'s payout landing: 1.00 -> 1.07 -> 1 (1.10 for the triple), warm gold.
             float symmetryClaim = symmetry != null ? symmetry.ScoreClaim : 0f;
+            // "Çığ"'s "+TOTAL" landing: 1.00 -> 1.08 -> 1, warm gold.
+            float snowClaim = snow != null ? snow.ScoreClaim : 0f;
             float claim = Mathf.Max(Mathf.Max(Mathf.Max(hazineClaim, ignitionClaim),
                 Mathf.Max(challengeClaim, quarryClaim)),
-                Mathf.Max(Mathf.Max(powderClaim, debtClaim), Mathf.Max(antimatterClaim, symmetryClaim)));
+                Mathf.Max(Mathf.Max(Mathf.Max(powderClaim, debtClaim), Mathf.Max(antimatterClaim, symmetryClaim)),
+                    snowClaim));
             if (claim > warm && claim > 0.001f)
             {
                 float hs;
                 Color ink;
                 if (claim == debtClaim) { hs = debtPressure.ScoreScale; ink = debtPressure.ScoreInk; }
                 else if (claim == symmetryClaim) { hs = symmetry.ScoreScale; ink = symmetry.ScoreInk; }
+                else if (claim == snowClaim) { hs = snow.ScoreScale; ink = snow.ScoreInk; }
                 else if (claim == antimatterClaim) { hs = antimatter.ScoreScale; ink = antimatter.ScoreInk; }
                 else if (claim == hazineClaim) { hs = hazine.ScoreScale; ink = hazine.ScoreInk; }
                 else if (claim == challengeClaim) { hs = challenge.ScoreScale; ink = challenge.ScoreInk; }
