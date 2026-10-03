@@ -2072,13 +2072,48 @@ the placement (the cards are the player's own). **Measured** (`dotnet run --proj
 points a hand, greedy ~93, one ply ~207, the planner ~245, at ~11 ms a decision in .NET (worst
 ~125 ms - a fox in hand is hundreds of moves). The weights in `DuelWeights` were tuned by coordinate
 search over whole hands (`DuelBench.Tune`) and checked on deals the search never saw.
-**The View** stands the two arenas side by side in the mirror world's layout, plays the house's turn
-back ONE CARD AT A TIME from copies of its board taken around each play (`DuelAiPlay.BoardBefore` /
-`BoardAfter`: its silhouette over the arena, then its lines going off through the player's own
-`FlashLine`), holds input while it plays, says how each hand went, and offers the bet on the shared
-option picker (mouse, keys and both pad schemes). **Not done**: it has not been seen running in
-Unity; the house's decisions are synchronous in the turn (a play-out of the rest of its half is
-several decisions in one frame); the bet is a list of stakes, not a slider.
+**ON SCREEN IT IS A HOUSE TABLE - "DOUBLE OR NOTHING"** (presentation pass 2026-10-03;
+`BlackjackTableView` + partials .Hud / .Wager / .Dealer / .Intro / .Bet / .Results / .Debug,
+`BlackjackLayout`, `BlackjackShapes`, `BlackjackFx`, `BlackjackSound` + `SoundFx.Blackjack.cs`,
+`GameUiController.Duel.cs` / `.BlackjackLab.cs`). The fail it is built against: "two boards, a bet
+picker and a toast". **THE LAYOUT IS SOLVED** (`BlackjackLayout.Solve` over a `Frame`): the two
+arenas stand symmetric about the SCREEN's centre (the free room on each side is measured and the
+smaller mirrored - the bars are not symmetric), same size, one gap for the wager and the seam, side
+by side or stacked, whichever gives bigger boards; the HUD hangs off the boards' top edge, the
+house's CLOSED hand sits over its arena's top right, and the player's hand slides under the
+player's side (`CardLayerView.HandShift`, asked live). `MainBoardWorldSize` / `MainBoardCenter`
+answer from it. While the table stands the TOTAL line and the debug readout step aside and the
+table prints the message line, the theme intro and look are skipped (the felt is the background),
+and a power the boss switches off says "MASADA KAPALI" and is refused with a muted click.
+**MONEY IS NEVER CONFUSED WITH POINTS**: the BANK is the hero over a thin LEDGER (nothing ... the
+stage's start ... the target's rings - never a progress bar) and moves only on a stake, a payout,
+a push or the house's 500 advance, with chips and a deeper tick; the hand's SCORE DUEL sits lower
+and lighter in each side's ink, counts with a glassy tick, and a line's energy flies to it, never
+to the bank. **THE FLOW IS A QUEUE** (`duelQueue`, `DuelHoldsScreen`): Core settles a whole turn in
+one call, and the View plays it back in order - the intro (centred, the bank becoming the target,
+"KASA AVANSI +500" flying in when the bank was empty, four pictured rules, waits for a press, folds
+onto the table), the BET TRAY (a TYPED number first, Core's stakes as %10/25/50/75/HEPSİ chip
+shortcuts, past-the-bank clamped with a refusal, ALL-IN its own burgundy state with a thud and a
+music duck, the stake's share warming the tray and tightening the vignette), the money onto the
+plate, the CUT (one stack splitting, no tell of which cards went where), then EACH HOUSE CARD from
+its report (`DuelAiPlay.HandSlot` / `HandBefore` / `HandAfter`, added for this): a deterministic
+0.25-0.55 s think, Core's card forward, a curved flight with a scaleX turn-over at its middle, the
+footprint warming, a squash on landing - and only THEN the block on the arena (`BoardAfter`), its
+lines and its points; the gap closes, the refill slides in face-down. Then the result: a held
+breath, both scores pulse, the verdict; a win DOUBLES the stake on the plate before it flies home,
+a push slides it back, a loss is slid to the house's side (the bank does not move twice). Between
+hands a felt wipe crosses both arenas and they are shown EMPTY (`DuelMainBoard` - the rules keep
+the old boards until the next bet). The stage won opens the light ("HEDEF TAMAMLANDI"), bankruptcy
+puts it out ("KASAN BOŞALDI", the music stripped a stem at a time) - no confetti, no red flash.
+**THE MUSIC** is five synthesized stems of one 88 BPM, eight-bar D minor loop (upright bass,
+brushes and a ride tick, felt piano, sparse vibes, an all-in pulse), built on a worker thread and
+started on one DSP clock; its mix follows the table's mood (betting / hand / all-in / win /
+bankrupt) and ducks for every result. The lab section "BLACKJACK / CASINO BOSS" has the brief's
+44 scenes (the house's play stoppable after any beat - `DealerBeat`, the earlier beats at 6x), 1x /
+0.5x / 0.25x, the music moods, schematics of the solver's answer for a phone and a 21:9 screen, and
+the sixteen debug views. **Not done**: none of it has been seen running in Unity (it type-checks
+against the editor's assemblies; the sounds were measured outside it); the house's decisions are
+still synchronous in the turn.
 
 **"Meydan Okuma" dares a line picked off a MEASURED sea of chances** (`LineChanceSea`, in
 `Core/Jokers/LineChance.cs`). It used to mark any row or column at random, which made the bonus a
