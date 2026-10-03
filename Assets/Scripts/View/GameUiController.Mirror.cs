@@ -213,8 +213,12 @@ namespace ProjectBlock.View
             get
             {
                 RoundEngine round = session != null ? session.CurrentRound : null;
-                // "Blackjack" seats the house in the second world's place.
-                return round != null && (round.HasMirrorWorld || DuelOf(round) != null)
+                // "Blackjack" has a table of its own (BlackjackLayout), centred on the screen.
+                if (round != null && DuelOf(round) != null)
+                {
+                    return DuelLayoutNow.BoardSize;
+                }
+                return round != null && round.HasMirrorWorld
                     ? MirrorBoardWorldSize
                     : MaxBoardWorldSize;
             }
@@ -226,7 +230,11 @@ namespace ProjectBlock.View
             get
             {
                 RoundEngine round = session != null ? session.CurrentRound : null;
-                return round != null && (round.HasMirrorWorld || DuelOf(round) != null)
+                if (round != null && DuelOf(round) != null)
+                {
+                    return DuelLayoutNow.Player;
+                }
+                return round != null && round.HasMirrorWorld
                     ? MainWorldCenter : BoardCenter;
             }
         }

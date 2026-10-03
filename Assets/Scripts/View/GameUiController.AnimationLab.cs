@@ -375,6 +375,7 @@ namespace ProjectBlock.View
             TamagotchiDebug.AllOff();
             SymmetryRewardView.DebugFlags.AllOff();
             ResetWindLab();
+            BlackjackFx.Debug.AllOff();
             StopAnimFallSequence();
             StopAnimBurstSequence();
             // AnimResync below puts the real board back up if a boss scene was showing its own.
@@ -413,6 +414,8 @@ namespace ProjectBlock.View
             }
             StopAnimPress();
             StopAnimHost();
+            // the blackjack table hands the screen back before anything else is put up
+            StopBlackjackLab();
             // A Mapus scene plays several turns over several seconds; left running it would put
             // its prisons back on the round's board after the reset.
             StopAnimMapus();
@@ -4006,6 +4009,8 @@ namespace ProjectBlock.View
             AddWindLab();
             // Snow and "Çığ" (SnowView): the brief's 53 scenes and its debug switches.
             AddSnowLab();
+            // "Blackjack" - the house table (BlackjackTableView): the brief's 44 scenes and its switches.
+            AddBlackjackLab();
 
             AddAnimSub("jokers", "besleme", "besleme", "besleme");
             AddAnim("besleme: a FEED procs (nest + card + points)",

@@ -129,6 +129,12 @@ namespace ProjectBlock.View
         /// </summary>
         private Vector2 ScoreWorldAnchor()
         {
+            // at the blackjack table points land on the HAND's score, never on the bank
+            Vector2 duelAnchor;
+            if (TryDuelScoreAnchor(out duelAnchor))
+            {
+                return duelAnchor;
+            }
             if (totalText == null || cam == null)
             {
                 return new Vector2(0f, 3.6f);

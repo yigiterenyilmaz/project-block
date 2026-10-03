@@ -40,6 +40,7 @@ namespace ProjectBlock.View
                 return false;
             }
             return deckOverlay.IsOpen || choicePicker.IsOpen || lineSwapPicker.IsOpen
+                || (duelTable != null && duelTable.BetTrayOpen)
                 || (screen == AppScreen.DeckSelect && deckSelect.IsOpen);
         }
 
@@ -60,6 +61,10 @@ namespace ProjectBlock.View
             else if (lineSwapPicker.IsOpen)
             {
                 world = lineSwapPicker.ArrowWorldCenter(padPanelIndex);
+            }
+            else if (duelTable != null && duelTable.BetTrayOpen)
+            {
+                world = duelTable.BetItemWorldCenter(padPanelIndex);
             }
             else if (screen == AppScreen.DeckSelect && deckSelect.IsOpen)
             {

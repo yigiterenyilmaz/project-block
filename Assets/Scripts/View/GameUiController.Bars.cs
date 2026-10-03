@@ -45,6 +45,10 @@ namespace ProjectBlock.View
             {
                 return false;
             }
+            if (DuelRefusesPower(session.Powers.Powers[index]))
+            {
+                return true;
+            }
             BeginPowerActivation(session.Powers.Powers[index]);
             return true;
         }

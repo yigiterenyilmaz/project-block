@@ -2571,7 +2571,9 @@ namespace ProjectBlock.View
             // The CENTRE is part of this test, not just the size: the two layouts fit the
             // board into the same 6.5-unit box but put it in different places, so a profile flip
             // changes where the board goes without changing how big it is.
-            if (boardView.Board != round.Board
+            // "Blackjack": between hands the player's arena is shown cleared (.Duel).
+            GameBoard mainShown = DuelMainBoard(round) ?? round.Board;
+            if (boardView.Board != mainShown
                 || !Mathf.Approximately(lastMainBoardSize, mainSize)
                 || (lastMainBoardCenter - mainCenter).sqrMagnitude > 0.000001f)
             {
@@ -2582,7 +2584,7 @@ namespace ProjectBlock.View
                     Mathf.Approximately(lastMainBoardSize, mainSize)
                     && (lastMainBoardCenter - mainCenter).sqrMagnitude <= 0.000001f
                         ? TakeRimErosion(round) : null;
-                boardView.Rebuild(round.Board, mainSize, mainCenter);
+                boardView.Rebuild(mainShown, mainSize, mainCenter);
                 PlayRimErosion(eroded, mainCenter);
                 lastMainBoardSize = mainSize;
                 lastMainBoardCenter = mainCenter;

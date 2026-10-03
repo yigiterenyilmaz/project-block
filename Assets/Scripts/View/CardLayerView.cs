@@ -49,9 +49,17 @@ namespace ProjectBlock.View
         /// from the joker before every sync; this class never asks who is bound to what.</summary>
         public readonly Dictionary<int, RiderMark> Riders = new Dictionary<int, RiderMark>();
 
+        /// <summary>A sideways shift for the hand, asked live ("Blackjack" puts the hand under the
+        /// player's own arena). Null or 0 is the hand where it always was.</summary>
+        public static System.Func<float> HandShift;
+
         private static Vector2 HandCenter
         {
-            get { return UiLayout.Active.HandCenter; }
+            get
+            {
+                float shift = HandShift != null ? HandShift() : 0f;
+                return UiLayout.Active.HandCenter + new Vector2(shift, 0f);
+            }
         }
 
         private static float HandSpacing

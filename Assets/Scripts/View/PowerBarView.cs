@@ -749,6 +749,10 @@ namespace ProjectBlock.View
         {
             if (silenced)
             {
+                if (session.CurrentRound != null && session.CurrentRound.Boss is BlackjackBoss)
+                {
+                    return Loc.Pick("TABLE: off", "MASADA KAPALI");
+                }
                 return Loc.Pick("BOSS: off", "PATRON: kapalı");
             }
             if (!power.Charged && session.CurrentRound != null

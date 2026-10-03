@@ -92,7 +92,8 @@ namespace ProjectBlock.View
             debugButtonLabel.text = debugTextShown
                 ? Loc.Pick("hide debug  [F8]", "debug gizle  [F8]")
                 : Loc.Pick("show debug  [F8]", "debug göster  [F8]");
-            infoText.enabled = debugTextShown;
+            // the blackjack table needs the left of the screen for itself
+            infoText.enabled = debugTextShown && !duelShown;
             infoText.rectTransform.anchoredPosition =
                 new Vector2(inset, -(inset + DebugButtonHeight + 6f));
             return toggled && mouse != null && mouse.leftButton.wasPressedThisFrame;

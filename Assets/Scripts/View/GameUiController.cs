@@ -725,6 +725,8 @@ namespace ProjectBlock.View
             // The background is told where the board, the hand and the piles are this frame.
             TickBackground();
             TickWind();
+            // "Blackjack": the house table follows the stage, runs its queue and the music (.Duel).
+            TickDuelTable();
             SyncPilesForMarket(); // was never called: the piles printed through the market
             // "Midas" warms the score line while its gold is landing on it (see .Midas): one
             // owner for that transform, and it is this one.
@@ -831,6 +833,11 @@ namespace ProjectBlock.View
             if (kb != null && kb.f4Key.wasPressedThisFrame)
             {
                 OpenBlockGallery();
+                return;
+            }
+            // "Blackjack": the bet tray takes its own keys and clicks, ahead of the lock below.
+            if (HandleDuelTableInput(kb, mouse))
+            {
                 return;
             }
             if (session == null || waterAnimating || supurgeAnimating

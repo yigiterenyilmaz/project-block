@@ -193,6 +193,16 @@ namespace ProjectBlock.View
             }
             BossRound boss = ActiveBoss();
             RoundEngine round = session.CurrentRound;
+            // "Blackjack" is dressed by its own table (BlackjackTableView): its intro is the table's
+            // and its felt is the background, so no theme intro or look is laid over it.
+            if (boss is BlackjackBoss && !BossLookOpen)
+            {
+                bossLookSeenRound = round;
+                bossLookLiveIntro = false;
+                bossIdentity.SetAmbience(BossAmbience.None);
+                bossIdentity.SetAtmosphere(false);
+                return false;
+            }
             // A REAL boss stage is always dressed by its THEME (BossThemes) - the lab's hand picks
             // are for previews only - and its title card always waits for a press.
             if (bossLookApplyReal && !BossLookOpen && boss != null && round != bossLookSeenRound)
