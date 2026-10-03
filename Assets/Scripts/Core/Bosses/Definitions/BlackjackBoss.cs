@@ -426,9 +426,11 @@ namespace ProjectBlock.Core
             }
             DuelMove move = planner.Choose(AiRound);
             BlockCard card = null;
+            int slot = -1;
+            int handBefore = AiRound.Hand.Count;
             if (move != null)
             {
-                int slot = DuelMove.SlotOf(AiRound, move.CardId);
+                slot = DuelMove.SlotOf(AiRound, move.CardId);
                 card = slot >= 0 ? AiRound.Hand[slot] : null;
             }
             GameBoard before = GameBoard.CreateClone(AiRound.Board);
@@ -444,6 +446,9 @@ namespace ProjectBlock.Core
                 Move = move,
                 BoardBefore = before,
                 BoardAfter = GameBoard.CreateClone(AiRound.Board),
+                HandSlot = slot,
+                HandBefore = handBefore,
+                HandAfter = AiRound.Hand.Count,
                 Gained = report.ScoreGained,
                 HandScoreAfter = AiRound.RoundScore,
                 ComboCount = report.ComboCount,

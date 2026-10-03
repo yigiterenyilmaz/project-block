@@ -22,6 +22,14 @@ namespace ProjectBlock.Core
         public GameBoard BoardBefore;
         public GameBoard BoardAfter;
 
+        /// <summary>Where in its CLOSED hand the card was held (0 = first), how many cards that
+        /// hand held before the play and how many after its refill - so the View can lift that
+        /// very card out of the fan and slide in a face-down replacement, never showing which
+        /// card that replacement is.</summary>
+        public int HandSlot = -1;
+        public int HandBefore;
+        public int HandAfter;
+
         /// <summary>The cells its cubes landed in, and the lines that went off.</summary>
         public List<GridPos> PlacedCells = new List<GridPos>();
         public List<int> ExplodedRows = new List<int>();
