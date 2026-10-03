@@ -1874,21 +1874,71 @@ have had to be carried by every one of those. The rules:
   asked - except snow, which is only buried. A column stops at the edge of the play area, a sealed
   cell, a black hole, a "Parazit" host, the snake, a mine and a press capsule; what cannot come
   down is lost, and a line where nothing can move is refused with the charge kept. The cells it
-  covers hold PACKED snow: one power, `AvalancheMeltTurns` (3). Two packed cubes never merge with
-  each other, so the layers stay stacked when they fall; fresh snow landing on a packed layer is
-  absorbed as usual, and that is what lets the layer slide again (`SnowRules.CanSlide`).
-- On screen: the tile is the painted "Karlı ve Buzlu Oyun Taşı" drawing, cropped to its body and
-  scaled to the other tiles' 364 px by `Tools/ArtPrep/prep_snow_tile.js` (the loose flakes outside
-  the block are dropped; its near-opaque body is made opaque); the heap's power is a bold number in its middle and its melt time a chip on its
-  corner that warms on the last turn, packed layers wear two faint lines; the avalanche is replayed
-  over a board that has ALREADY settled - the cells are held, the heap shudders and comes down its
-  columns, each cube bursts as the front reaches it (from the face taken before the rules ran),
-  and only then is the fall that followed handed to the board's water animation; a melt sinks
-  into its own cell, never a burst. The lab has five scenes under general / board.
-- Save format 30 (every cube writes three more values). Pinned in `Tools/CoreTests/SnowTests.cs`.
+  covers hold PACKED snow: one power, `AvalancheMeltTurns` (3), and one STRATUM id shared by
+  every layer that avalanche laid (`Cube.SnowStratum`, the next unused id - nothing counted or
+  saved). **The merge barrier is a boundary, not a flag**: two cubes of the SAME stratum never merge
+  (`SnowRules.SameStratum`, the one place it is decided), so the layers stay stacked when they fall;
+  fresh snow or another avalanche's layer landing on a layer is absorbed as usual and the layer KEEPS
+  its stratum - it gains power, may slide again (a layer of power 1 with a stratum is SPENT,
+  `SnowRules.IsSpent`) and still does not sink through the seam under it (`GameBoard.SnowSeamBelow`).
+- Reports, all reporting only: `AvalanchePlan` IS the aim's preview (the line, the stratum, every
+  column with its heap index, power, covered cells and the cubes in them, the spent cells, and
+  `Blocked` - NoSnow / Spent / NoRoom - when nothing can go); `AvalancheVisuals` what was done and
+  paid; `GameBoard.SnowMerges` every merge a reported settle made - the heap, the absorbing moves
+  (which stand in the same water frames), power and melt before and after, `Refreshed`, the cells
+  where it stopped at a seam - cleared by the engine at the top of a turn and before a between-turn
+  effect (`ClearSnowReports`).
+- **ON SCREEN** (2026-10-03, "SNOW ACCUMULATION -> PRESSURE -> AVALANCHE"; `SnowView`, `SnowAge.shader`,
+  `SnowSound` + `SoundFx.Snow`, `GameUiController.Snow.cs`). The tile is the painted "Karlı ve Buzlu
+  Oyun Taşı" drawing (`Tools/ArtPrep/prep_snow_tile.js` crops it to its body at 364 px and makes its
+  near-opaque body opaque), drawn on ONE shared material; every cube's state rides in its renderer's
+  property block, written each frame. **The timer is a MATERIAL, not a number**: `_Age` 0..1 from the
+  melt (5 FRESH, 4 SETTLED, 3 SOFTENING, 2 WET, 1 COLLAPSING) cools and greys it, opens wet pockets and
+  late wet channels, flattens the powder rim and recedes the outline irregularly; it eases to a new
+  value, a turn passing is a breath of settle (a glint at 3 -> 2). `_Packed` grooves avalanche snow,
+  `_Seam` draws the 1-2 px line between two of one avalanche's layers, `_Sweep` is a refresh's cooling
+  band, `_Glow` / `_Mute` the aim, `_Melt` the final melt (wet centre, the outline eaten inward along
+  noise, faded at the end - never a uniform shrink). The heap's POWER is a small bold number in its
+  last cell's corner, deep blue-grey with an off-white rim, one per heap (`GameBoard.SnowHeapAt`), hidden
+  while its cube is covered (`BoardView.IsCellCovered`). **Motion is the board's own fall**: snow is
+  settled in the water's frames, and `BoardView.ISnowMotion` lets the fall ask the snow layer - a snow
+  drop SLIDES (no hop, a dip then a slight stretch, powder trailing, 1.03 -> 0.96 -> 1 on its foot as it
+  lands), and a fall whose last step goes INTO a heap is handed over as that step starts (the heap's
+  cell is not blanked): the incoming cube presses on the heap, the heap flattens to 0.94 along the
+  flow, powder squirts from the seam, the incoming mass thins and spreads into it (never a fade), a
+  cold ring closes in, the number goes old -> pressed -> new with a tick; `Refreshed` adds the
+  cooling sweep from the contact and the age eases fresher; a merge that stopped at a seam lights it.
+  Until a merge is played the heap shows its BEFORE numbers. **The aim** (Drag -> `ShowAvalancheAim`
+  every frame, Core's plan for the hovered line) draws the line in two broken frost traces and a cold
+  haze, brightens the heaps that will go, lays a translucent compressed-snow ghost over every cell the
+  avalanche will REALLY reach, a pressure edge and an inward shadow on every block it will crush, and
+  mutes spent layers with a tiny strata mark; the power card pulses and the background dims a breath
+  ("avalanche" mood). A click on a line that cannot go is REFUSED where it stands, the aim kept (a
+  puff collapsing inward, "ff" / "ffk", and the reason on the message line). **The avalanche** is
+  replayed over the settled board from the report, cells held: 0.22 s of pressure (the heap squashes
+  on its foot, grooves, powder lifting off its back, its number pulsing, a rumble), the release
+  ("WHUFF"), then ROW BY ROW on one rhythm (`avalancheLayerInterval` 0.17): the front leans into the
+  row, the blocks are pressed 1 -> 0.94 with a cold reflection on their snow side, they break through
+  the controller's cluster burst in their own material with white powder (a hero budget per layer), a
+  beat LATER the snow fills the row, a pixel of the arena is knocked along the flow ("THUM-CRSH", a
+  hair higher each row), and the cell it left keeps a layer; then the settle (1.03 -> 0.97 -> 1,
+  "thoom"), the layers held fresh-pressed for 0.3 s before they ease into the 3-turn look, the cells
+  released and the board's own gravity handed back (the soft slide after the heavy fall), with the
+  payout on its own clock over it: an essence left where each paying block broke gathers into one
+  "+TOTAL" (0.65 -> 1.14 -> 0.98 -> 1, gold with a snow-white rim, a warm chime) carried to the TOPLAM,
+  which answers through `TickScoreResponse` (`snow.ScoreClaim`). No camera shake, no fire, no smoke.
+  Every number is in `SnowView.Style` under the brief's names; quality High / Medium / Low
+  (`SnowView.Level`, a particle budget of 40 / 28 / 14, pooled). The lab section "SNOW BLOCK + ÇIĞ" has
+  the brief's 53 scenes on boards laid out from strings and run through the real rules (the
+  beat-isolation ones freeze through `SnowView.HoldAt`), plus the 15 debug views (`SnowView.Show`).
+  **Not done**: none of it has been seen running in Unity (it compiles against the editor's
+  assemblies; the shader is unverified); no haptics layer exists; no music duck (the game has no
+  music bus to duck); the remaining-turns hover readout is the `ShowSnowMeltTimer` debug view only.
+- Save format 31 (every cube writes its snow power, melt and stratum). Pinned in
+  `Tools/CoreTests/SnowTests.cs` (strata, the merge report and the plan's refusals included).
 - **Open / placeholder**: snow blocks a clean sweep like any cube; a snow fall that completes a
   line earns water's fall bonus (it shares the frames); power of joined heaps is the LARGER one;
-  `SnowOfferChance` 0.12 and 12 points a crushed cube are guesses. Not seen running in Unity.
+  `SnowOfferChance` 0.12 and 12 points a crushed cube are guesses.
 
 **Water does not always fall downward.** `GameBoard.WaterFlow` is the one-cell step water
 settles along — `(0,-1)` on every ordinary arena, turned to any of the four sides for the rest
